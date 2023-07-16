@@ -1,1 +1,3 @@
-langchain
+langchain==0.0.234
+Flask==2.3.2
+waitress

@@ -8,4 +8,5 @@ COPY . .
 
 
 CMD ["python3","main.py"]
+#CMD ["waitress-serve","--call","main"]
 

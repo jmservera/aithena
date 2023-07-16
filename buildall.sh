@@ -18,9 +18,6 @@ else
     popd
 fi
 
-pushd embeddings && docker build . --build-arg "TAG=${TAG}" -f Dockerfile.embeddings -t llama-embeddings:$TAG -t llama-embeddings:latest
-popd
+pushd embeddings && docker build . --build-arg "TAG=${TAG}" -f Dockerfile.embeddings -t llama-embeddings:$TAG -t llama-embeddings:latest && popd
 
-pushd ..
-docker run -v $(pwd)/open_llama_7b/:/llama/models/7B/ -it --rm llama-embeddings:$TAG
-popd
+pushd .. && docker run -v $(pwd)/open_llama_7b/:/llama/models/7B/ -it -p 5000:5000 --rm llama-embeddings:$TAG && popd
