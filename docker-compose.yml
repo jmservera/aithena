@@ -1,11 +1,32 @@
 version: "3.8"
 services:
+  redis:
+    image: redis
+    command: redis-server --save 20 1 --loglevel warning
+    expose:
+      - 6379
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "6379" ]
+      interval: 5s
+      timeout: 15s
+      retries: 1
+    networks:
+      default:
+        aliases:
+          - redis
+    volumes:
+      - redis:/data
   rabbitmq:
     image: rabbitmq
     command: rabbitmq-server
+    hostname: rabbitmq
     expose:
       - 5672
       - 15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 30
     healthcheck:
       test: [ "CMD", "nc", "-z", "localhost", "5672" ]
       interval: 5s
@@ -50,24 +71,50 @@ services:
     build: ./document-lister
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
     depends_on:
       - rabbitmq
+      - redis
+    restart: on-failure
     networks:
       - default
+    volumes:
+      - "fdm:/documents"
   document-indexer:
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
+    restart: on-failure
     depends_on:
       - rabbitmq
     networks:
       - default
+    volumes:
+      - "fdm:/documents"
 volumes:
+  rabbitmq-data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/source/volumes/rabbitmq-data'
   qdrant-data:
     driver: local
     driver_opts:
       type: 'none'
       o: 'bind'
       device: '/source/volumes/qdrant-data'
+  redis:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/source/volumes/redis'
+  fdm:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/azureuser/fdm'
 networks:
   default:

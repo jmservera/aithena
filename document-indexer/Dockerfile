@@ -7,5 +7,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
 
+VOLUME ["/documents"]
+
 CMD ["python", "main.py"]
 

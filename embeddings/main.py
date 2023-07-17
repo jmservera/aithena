@@ -17,7 +17,7 @@ def index():
     text = request.args.get('text')
     print(text)
     query_result = llama.embed_query(text)
-    return jsonify(query_result)
+    return jsonify({'text':text,'result':query_result})
     # return json.dumps({'name': 'hello',
     #                    'email': 'world'})
 
@@ -27,7 +27,7 @@ def update_record():
 
     text = record['text']
     query_result = llama.embed_query(text)
-    return jsonify(query_result)
+    return jsonify({'text':text,'result':query_result})
 
 if __name__ == "__main__":
     # run flask app on port 5000
