@@ -26,7 +26,7 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     environment:
-      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 30
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
     healthcheck:
       test: [ "CMD", "nc", "-z", "localhost", "5672" ]
       interval: 5s
@@ -72,6 +72,8 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=redis
+      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
+      - STORAGE_CONTAINER=test-library
     depends_on:
       - rabbitmq
       - redis
@@ -79,13 +81,18 @@ services:
     networks:
       - default
     volumes:
-      - "fdm:/documents"
+      - type: volume
+        source: fdm
+        target: /documents
+        read_only: true
   document-indexer:
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
       - EMBEDDINGS_HOST=llama-embeddings
       - QDRANT_HOST=qdrant
+      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
+      - STORAGE_CONTAINER=test-library
     restart: on-failure
     depends_on:
       - rabbitmq

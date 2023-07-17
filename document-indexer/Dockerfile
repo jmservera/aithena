@@ -9,5 +9,5 @@ COPY . .
 
 VOLUME ["/documents"]
 
-CMD ["python", "main.py"]
+CMD ["python","-m","document_indexer"]
 
