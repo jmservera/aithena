@@ -34,3 +34,5 @@ COPY --from=builder /llama/llamavenv /llama/llamavenv
 
 ENV PATH=/llama/llamavenv/bin:$PATH
 WORKDIR /llama
+
+CMD [ "sleep","infinity" ]

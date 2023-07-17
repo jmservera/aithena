@@ -1,0 +1,73 @@
+version: "3.8"
+services:
+  rabbitmq:
+    image: rabbitmq
+    command: rabbitmq-server
+    expose:
+      - 5672
+      - 15672
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "5672" ]
+      interval: 5s
+      timeout: 15s
+      retries: 1
+    networks:
+      default:
+        aliases:
+          - rabbitmq
+  qdrant:
+    image: qdrant/qdrant
+    environment:
+      - QDRANT__DEBUG=1
+      - QDRANT__SERVICE__HOST=0.0.0.0
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      default:
+        aliases:
+          - qdrant
+  llama-base: # this one is here just to ensure that the base image is created
+    build: ./llama-base
+    image: aithena-llama-base
+    volumes:
+      - "../open_llama_7b/:/llama/models/7B/"
+  llama-embeddings:
+    build: ./embeddings
+    ports:
+      - "5000:5000"    
+    volumes:
+      - "../open_llama_7b/:/llama/models/7B/"
+    depends_on:
+      - llama-base
+    restart: on-failure
+    networks:
+      default:
+        aliases:
+          - llama-embeddings
+  document-lister:
+    build: ./document-lister
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - default
+  document-indexer:
+    build: ./document-indexer
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - default
+volumes:
+  qdrant-data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/source/volumes/qdrant-data'
+networks:
+  default:
