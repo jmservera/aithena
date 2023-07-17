@@ -84,6 +84,8 @@ services:
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - EMBEDDINGS_HOST=llama-embeddings
+      - QDRANT_HOST=qdrant
     restart: on-failure
     depends_on:
       - rabbitmq

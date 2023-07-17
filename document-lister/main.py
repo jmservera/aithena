@@ -28,11 +28,9 @@ def produce():
                 if value is None:
                     print(f"Found new document: {p}")
                     r.set(f'/new_document/{p}', json.dumps({'path': f'{p}', 'processed':False, 'timestamp': datetime.now().isoformat()}))
-                    properties = pika.BasicProperties()
-                    properties.Persistent = True
-                    channel.basic_publish(exchange='', routing_key='new_documents', body=f"{p}", properties=properties)
+                    channel.basic_publish(exchange='', routing_key='new_documents', body=f"{p}", properties=pika.BasicProperties(delivery_mode=2))
 
-            connection.sleep(5)
+            connection.sleep(300)
 
     # Don't recover connections closed by server
     except pika.exceptions.ConnectionClosedByBroker:
