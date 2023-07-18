@@ -111,6 +111,18 @@ services:
       - rabbitmq
     networks:
       - default
+  qdrant-search:
+    build: ./qdrant-search
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - EMBEDDINGS_HOST=llama-server
+      - EMBEDDINGS_PORT=8000
+      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
+      - STORAGE_CONTAINER=test-library
 volumes:
   rabbitmq-data:
     driver: local
