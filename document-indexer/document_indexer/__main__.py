@@ -10,16 +10,7 @@ from qdrant_client import models, QdrantClient
 
 from .blob_storage import BlobStorage
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
-RABBITMQ_PORT = os.environ.get("RABBITMQ_PORT", 5672)
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
-EMBEDDINGS_HOST = os.environ.get("EMBEDDINGS_HOST", "localhost")
-EMBEDDINGS_PORT = os.environ.get("EMBEDDINGS_PORT", 5000)
-QDRANT_HOST = os.environ.get("QDRANT_HOST", "localhost")
-QDRANT_PORT = os.environ.get("QDRANT_PORT", 6333)
-STORAGE_ACCOUNT_NAME = os.environ.get("STORAGE_ACCOUNT_NAME")
-STORAGE_CONTAINER = os.environ.get("STORAGE_CONTAINER")
+from . import *
 
 
 async def heartbeat(channel: BlockingChannel):
@@ -35,14 +26,18 @@ async def heartbeat(channel: BlockingChannel):
 
 
 async def get_embeddings_async(text, channel):
-    async with aiohttp.ClientSession() as session:
+    """Get embeddings for a text from embeddings service"""
+    client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
+    async with aiohttp.ClientSession(timeout=client_timeout) as session:
         hearbeat_task = asyncio.create_task(heartbeat(channel))
-        async with session.get(
-            f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/?text={text}"
-        ) as resp:
-            result = await resp.json()
+        try:
+            async with session.post(
+                f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/v1/embeddings",
+                json={"input": text}
+            ) as resp:
+                return await resp.json()
+        finally:
             hearbeat_task.cancel()
-            return result["result"]
 
 
 def get_embeddings(text, channel):
@@ -56,9 +51,9 @@ def callback(
     body: bytes,
 ):
     """Callback function for RabbitMQ consumer"""
-    msg_count=channel.get_waiting_message_count()    
+    msg_count = channel.get_waiting_message_count()
 
-    count=get_queue(channel)
+    count = get_queue(channel)
     print(f"Received new document: {body}. Remaining messages: {count}")
 
     qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
@@ -83,7 +78,7 @@ def callback(
                 lineNumber = 0
                 for line in text:
                     lineNumber += 1
-                    print(f"Processing line {lineNumber}/{len(text)}")
+                    print(f"Processing line {lineNumber}/{len(text)}: {line}")
                     embedding = get_embeddings(line.strip() + ".", channel)
 
                     qdrant.upsert(
@@ -92,12 +87,13 @@ def callback(
                             models.PointStruct(
                                 id=page.page_number * 10000
                                 + lineNumber,  # TODO: generate id
-                                vector=embedding,
+                                vector=embedding["data"][0]["embedding"],
                                 payload={
                                     "path": filename,
                                     "page": page.page_number,
                                     "line": lineNumber,
                                     "text": line,
+                                    "usage":embedding["usage"]
                                 },
                             )
                         ],
@@ -109,17 +105,24 @@ def callback(
     channel.basic_ack(delivery_tag=method.delivery_tag)
 
 
-queue=None
+queue = None
+
+
 def get_queue(channel: BlockingChannel):
     """Get queue from channel"""
     global queue
     channel.basic_qos(prefetch_count=1)
     if queue is None:
-        queue = channel.queue_declare(queue="new_documents", durable=True, auto_delete=False)
+        queue = channel.queue_declare(
+            queue="new_documents", durable=True, auto_delete=False
+        )
     else:
-        queue = channel.queue_declare(queue="new_documents", durable=True, auto_delete=False, passive=True)
+        queue = channel.queue_declare(
+            queue="new_documents", durable=True, auto_delete=False, passive=True
+        )
 
     return queue.method.message_count
+
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
 def consume():
@@ -139,7 +142,8 @@ def consume():
         pass
 
 
-loop = asyncio.get_event_loop()
+# https://stackoverflow.com/questions/73361664/asyncio-get-event-loop-deprecationwarning-there-is-no-current-event-loop
+loop = asyncio.new_event_loop()
 storage_client = BlobStorage(STORAGE_ACCOUNT_NAME)
 
 if __name__ == "__main__":

@@ -1,12 +1,18 @@
 version: "3.8"
 services:
   redis:
+    # it is importnant to configure OS memory overcommit
+    # https://github.com/nextcloud/all-in-one/discussions/1731
+    # run this in your VM:
+    # echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/nextcloud-aio-memory-overcommit.conf
     image: redis
     command: redis-server --save 20 1 --loglevel warning
     expose:
       - 6379
+    ports:
+      - "6379:6379"
     healthcheck:
-      test: [ "CMD", "nc", "-z", "redis", "6379" ]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 15s
       retries: 1
@@ -24,12 +30,15 @@ services:
     expose:
       - 5672
       - 15672
+    ports:
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     environment:
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
     healthcheck:
-      test: [ "CMD", "nc", "-z", "rabbitmq", "5672" ]
+      test: [ "CMD", "rabbitmqctl", "ping"]
       interval: 5s
       timeout: 15s
       retries: 1
@@ -57,23 +66,24 @@ services:
     image: aithena-llama-base
     volumes:
       - "../open_llama_7b/:/llama/models/7B/"
-  llama-embeddings:
-    build: ./embeddings
+  llama-server:
+    build: ./llama-server
     ports:
-      - "5000:5000"    
+      - "8000:8000" 
     volumes:
-      - "../open_llama_7b/:/llama/models/7B/"
-    depends_on:
-      - llama-base
+      - "../open_llama_7b/:/llama/models/"
     restart: on-failure
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       cpus: "6"
+    cap_add:
+      - IPC_LOCK
+      - SYS_NICE
+    deploy:
+      resources:
+        reservations:
+          memory: 16G
     networks:
       default:
         aliases:
-          - llama-embeddings
+          - llama-server
   document-lister:
     build: ./document-lister
     environment:
@@ -87,16 +97,12 @@ services:
     restart: on-failure
     networks:
       - default
-    volumes:
-      - type: volume
-        source: fdm
-        target: /documents
-        read_only: true
   document-indexer:
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - EMBEDDINGS_HOST=llama-embeddings
+      - EMBEDDINGS_HOST=llama-server
+      - EMBEDDINGS_PORT=8000
       - QDRANT_HOST=qdrant
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
@@ -105,8 +111,6 @@ services:
       - rabbitmq
     networks:
       - default
-    volumes:
-      - "fdm:/documents"
 volumes:
   rabbitmq-data:
     driver: local
@@ -126,11 +130,5 @@ volumes:
       type: 'none'
       o: 'bind'
       device: '/source/volumes/redis'
-  fdm:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/home/azureuser/fdm'
 networks:
   default:
