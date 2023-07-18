@@ -78,26 +78,28 @@ def callback(
                 lineNumber = 0
                 for line in text:
                     lineNumber += 1
-                    print(f"Processing line {lineNumber}/{len(text)}: {line}")
-                    embedding = get_embeddings(line.strip() + ".", channel)
+                    line=line.replace("\n", " ").replace("\r", " ").strip()
+                    if len(line) != 0:
+                        print(f"Processing line {lineNumber}/{len(text)}: {line}.")
+                        embedding = get_embeddings(line + ".", channel)
 
-                    qdrant.upsert(
-                        collection_name="documents",
-                        points=[
-                            models.PointStruct(
-                                id=page.page_number * 10000
-                                + lineNumber,  # TODO: generate id
-                                vector=embedding["data"][0]["embedding"],
-                                payload={
-                                    "path": filename,
-                                    "page": page.page_number,
-                                    "line": lineNumber,
-                                    "text": line,
-                                    "usage":embedding["usage"]
-                                },
-                            )
-                        ],
-                    )
+                        qdrant.upsert(
+                            collection_name="documents",
+                            points=[
+                                models.PointStruct(
+                                    id=page.page_number * 10000
+                                    + lineNumber,  # TODO: generate id
+                                    vector=embedding["data"][0]["embedding"],
+                                    payload={
+                                        "path": filename,
+                                        "page": page.page_number,
+                                        "line": lineNumber,
+                                        "text": line,
+                                        "usage":embedding["usage"]
+                                    },
+                                )
+                            ],
+                        )
                     channel.connection.process_data_events()
     else:
         print(f"Unsupported file type: {filename}")
