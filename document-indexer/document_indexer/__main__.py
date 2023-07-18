@@ -83,12 +83,13 @@ def callback(
                         print(f"Processing line {lineNumber}/{len(text)}: {line}.")
                         embedding = get_embeddings(line + ".", channel)
 
+                        index=redis_client.incr("document_count")
+
                         qdrant.upsert(
                             collection_name="documents",
                             points=[
                                 models.PointStruct(
-                                    id=page.page_number * 10000
-                                    + lineNumber,  # TODO: generate id
+                                    id=index,  # TODO: generate id
                                     vector=embedding["data"][0]["embedding"],
                                     payload={
                                         "path": filename,
@@ -100,6 +101,7 @@ def callback(
                                 )
                             ],
                         )
+                        print(f"Upserted {index} for {line} on page {page.page_number} of {filename}")
                     channel.connection.process_data_events()
     else:
         print(f"Unsupported file type: {filename}")
@@ -128,7 +130,6 @@ def get_queue(channel: BlockingChannel):
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
 def consume():
-    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT)
     )
@@ -147,6 +148,7 @@ def consume():
 # https://stackoverflow.com/questions/73361664/asyncio-get-event-loop-deprecationwarning-there-is-no-current-event-loop
 loop = asyncio.new_event_loop()
 storage_client = BlobStorage(STORAGE_ACCOUNT_NAME)
-
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+print(f"Connection to Redis established {REDIS_HOST}:{REDIS_PORT}")
 if __name__ == "__main__":
     consume()

@@ -19,7 +19,7 @@ STORAGE_CONTAINER = os.environ.get("STORAGE_CONTAINER")
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
 def produce():
-    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT)
@@ -32,10 +32,10 @@ def produce():
         while True:
             blobs=storage.list_blobs_flat(STORAGE_CONTAINER)
             for blob in blobs:                
-                value = r.get(f"/new_document/{blob.name}")
+                value = redis_client.get(f"/new_document/{blob.name}")
                 if value is None:
                     print(f"Found new document: {blob.name}")
-                    r.set(
+                    redis_client.set(
                         f"/new_document/{blob.name}",
                         json.dumps(
                             {

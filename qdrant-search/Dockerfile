@@ -8,7 +8,5 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
 
-VOLUME ["/documents"]
-
-CMD ["sh","-c","python -m waitress main:app --port=$PORT"]
+CMD ["sh","-c","python -m waitress --port=$PORT main:app"]
 

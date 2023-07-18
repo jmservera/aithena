@@ -106,6 +106,7 @@ services:
       - QDRANT_HOST=qdrant
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
+      - REDIS_HOST=redis
     restart: on-failure
     depends_on:
       - rabbitmq
