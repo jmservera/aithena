@@ -101,7 +101,7 @@ def callback(
                                 )
                             ],
                         )
-                        print(f"Upserted {index} for {line} on page {page.page_number} of {filename}")
+                        print(f"Upserted {index} for line {lineNumber} on page {page.page_number} of {filename}")
                     channel.connection.process_data_events()
     else:
         print(f"Unsupported file type: {filename}")
