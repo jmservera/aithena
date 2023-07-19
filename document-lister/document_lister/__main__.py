@@ -1,7 +1,5 @@
 import json
 import pika
-import os
-import io
 import redis
 from retry import retry
 from datetime import datetime
@@ -9,12 +7,7 @@ from pathlib import Path
 
 from .blob_storage import BlobStorage
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
-RABBITMQ_PORT = os.environ.get("RABBITMQ_PORT", 5672)
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
-STORAGE_ACCOUNT_NAME = os.environ.get("STORAGE_ACCOUNT_NAME")
-STORAGE_CONTAINER = os.environ.get("STORAGE_CONTAINER")
+from . import *
 
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
@@ -30,29 +23,30 @@ def produce():
     try:
         storage = BlobStorage(STORAGE_ACCOUNT_NAME)
         while True:
-            blobs=storage.list_blobs_flat(STORAGE_CONTAINER)
-            for blob in blobs:                
-                value = redis_client.get(f"/new_document/{blob.name}")
-                if value is None:
-                    print(f"Found new document: {blob.name}")
-                    redis_client.set(
-                        f"/new_document/{blob.name}",
-                        json.dumps(
-                            {
-                                "path": f"{blob.name}",
-                                "processed": False,
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        ),
-                    )
-                    channel.basic_publish(
-                        exchange="",
-                        routing_key="new_documents",
-                        body=f"{blob.name}",
-                        properties=pika.BasicProperties(delivery_mode=2),
-                    )
-                else:
-                    print(f"Document already processed: {blob.name}")
+            blobs = storage.list_blobs_flat(STORAGE_CONTAINER)
+            for blob in blobs:
+                if blob.name.endswith(DOCUMENT_WILDCARD):
+                    value = redis_client.get(f"/new_document/{blob.name}")
+                    if value is None:
+                        print(f"Found new document: {blob.name}")
+                        redis_client.set(
+                            f"/new_document/{blob.name}",
+                            json.dumps(
+                                {
+                                    "path": f"{blob.name}",
+                                    "processed": False,
+                                    "timestamp": datetime.now().isoformat(),
+                                }
+                            ),
+                        )
+                        channel.basic_publish(
+                            exchange="",
+                            routing_key="new_documents",
+                            body=f"{blob.name}",
+                            properties=pika.BasicProperties(delivery_mode=2),
+                        )
+                    else:
+                        print(f"Document already processed: {blob.name}")
 
             connection.sleep(360000)
 
