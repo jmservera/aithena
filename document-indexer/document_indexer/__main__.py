@@ -55,8 +55,8 @@ def cleanup(text:str):
         # remove multiple spaces after opening brackets
         text = re.sub(r'(\(|\[])\s+', r'\1', text)
         # remove multiple sequential marks
-        text = re.sub(r'([\s.,:;?!-])(\1+)', r'\1', text)   
-        return text
+        text = re.sub(r'([\s.,:;?!-_\(\[\)\])])(\1+)', r'\1', text)
+        return text.strip()
 
 def callback(
     channel: BlockingChannel,
@@ -80,7 +80,7 @@ def callback(
                     f"Processing page {page.page_number}/{len(pdf.pages)} of {filename}"
                 )
                 fulltext = cleanup(page.extract_text())
-                if fulltext.strip() == "":
+                if fulltext == "":
                     print(f"Skipping empty page {filename} {page.page_number}")
                 else:
                     chunks = []
@@ -90,8 +90,11 @@ def callback(
                         if last_period_index == -1:
                             last_period_index = 500
                         chunks.append(fulltext[:last_period_index])
-                        fulltext = fulltext[last_period_index + 1 :]
-                    chunks.append(fulltext)
+                        fulltext = fulltext[last_period_index + 1 :].strip()
+                    if len(fulltext)<100:
+                        chunks[-1] = chunks[-1] + " " + fulltext
+                    else:
+                        chunks.append(fulltext)
                     points = []
                     for chunk in chunks:
                         embedding = get_embeddings(chunk, channel)

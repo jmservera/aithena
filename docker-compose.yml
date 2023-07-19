@@ -110,7 +110,7 @@ services:
       - REDIS_HOST=redis
     restart: on-failure
     deploy:
-      replicas: 2
+      replicas: 3
     depends_on:
       - rabbitmq
     networks:
