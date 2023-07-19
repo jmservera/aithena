@@ -1,5 +1,4 @@
 import os
-from flask import Flask
 
 EMBEDDINGS_HOST = os.environ.get("EMBEDDINGS_HOST", "localhost")
 EMBEDDINGS_PORT = os.environ.get("EMBEDDINGS_PORT", 8000)

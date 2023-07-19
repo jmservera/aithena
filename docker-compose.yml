@@ -80,6 +80,7 @@ services:
       resources:
         reservations:
           memory: 16G
+          cpus: "20"
     networks:
       default:
         aliases:
@@ -108,6 +109,8 @@ services:
       - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
     restart: on-failure
+    deploy:
+      replicas: 2
     depends_on:
       - rabbitmq
     networks:
