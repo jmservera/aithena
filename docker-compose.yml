@@ -76,11 +76,11 @@ services:
     cap_add:
       - IPC_LOCK
       - SYS_NICE
-    deploy:
-      resources:
-        reservations:
-          memory: 16G
-          cpus: "20"
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       memory: 16G
+    #       cpus: "20"
     networks:
       default:
         aliases:
@@ -119,6 +119,7 @@ services:
     build: ./qdrant-search
     ports:
       - "8080:8080"
+    restart: on-failure
     environment:
       - PORT=8080
       - QDRANT_HOST=qdrant

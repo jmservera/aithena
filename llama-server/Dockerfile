@@ -10,8 +10,6 @@ RUN apt update && apt install build-essential -y && \
 
 RUN pip install llama-cpp-python[server]
 
-RUN ulimit -l unlimited
-
 ENV LLAMA_SEED=-1
 
-CMD ["sh","-c","python -m llama_cpp.server --model \"${MODEL_PATH}\" --host \"0.0.0.0\" -s ${LLAMA_SEED}"]
+CMD ["sh","-c","python -m llama_cpp.server --model \"${MODEL_PATH}\" --host \"0.0.0.0\" --seed ${LLAMA_SEED}"]

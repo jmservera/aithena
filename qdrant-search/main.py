@@ -53,7 +53,7 @@ async def question():
         context=""
         for hit in hits:
             context += hit.payload['text'] + "\n---\n"
-            messages.append({"id": hit.id,"payload": hit.payload['text'], "score": hit.score})
+            messages.append({"id": hit.id,"payload": hit.payload['text'], "score": hit.score, "path": hit.payload['path']})
 
         print(context)
         result = await get_chat_completion_async(context,input)
