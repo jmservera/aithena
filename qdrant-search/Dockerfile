@@ -17,6 +17,5 @@ ENV STORAGE_CONTAINER=""
 ENV EMBEDDINGS_TIMEOUT=1800
 ENV CHAT_HOST="localhost"
 ENV CHAT_PORT=8001
-ENV CONTEXT_LIMIT=8
 
 CMD ["sh","-c","python -m uvicorn --port=$PORT --host 0.0.0.0 main:app"]
