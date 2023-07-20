@@ -92,7 +92,7 @@ def callback(
                         chunks[-1] = chunks[-1] + " " + fulltext
                     else:
                         chunks.append(fulltext)
-                    chunks=list(filter(lambda x: len(x)>15,chunks))
+                    chunks=list(filter(lambda x: len(x)>45,chunks))
                     if(len(chunks)==0):
                         print(f"Skipping empty page {filename} {page.page_number}")
                         continue
