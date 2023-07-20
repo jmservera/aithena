@@ -26,14 +26,14 @@ async def heartbeat(channel: BlockingChannel):
         await asyncio.sleep(10)
 
 
-async def get_embeddings_async(text, channel):
+async def get_embeddings_async(text:list[str], channel:BlockingChannel):
     """Get embeddings for a text from embeddings service"""
     client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
         hearbeat_task = asyncio.create_task(heartbeat(channel))
         try:
             async with session.post(
-                f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/v1/embeddings",
+                f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/v1/embeddings/",
                 json={"input": text},
             ) as resp:
                 return await resp.json()
@@ -41,7 +41,7 @@ async def get_embeddings_async(text, channel):
             hearbeat_task.cancel()
 
 
-def get_embeddings(text, channel):
+def get_embeddings(text:list[str], channel:BlockingChannel):
     return loop.run_until_complete(get_embeddings_async(text, channel))
 
 def cleanup(text:str):
@@ -65,10 +65,7 @@ def callback(
     body: bytes,
 ):
     """Callback function for RabbitMQ consumer"""
-    msg_count = channel.get_waiting_message_count()
-
-    count = get_queue(channel)
-    print(f"Received new document: {body}. Remaining messages: {count}")
+    print(f"Received new document: {body}. Remaining messages: {get_queue(channel).method.message_count}")
 
     filename = body.decode("utf-8")
     if filename.endswith(".pdf"):
@@ -91,35 +88,37 @@ def callback(
                             last_period_index = 500
                         chunks.append(fulltext[:last_period_index])
                         fulltext = fulltext[last_period_index + 1 :].strip()
-                    if len(fulltext)<100:
+                    if len(fulltext)<100 and len(chunks)>0:                        
                         chunks[-1] = chunks[-1] + " " + fulltext
                     else:
                         chunks.append(fulltext)
+                    chunks=list(filter(lambda x: len(x)>15,chunks))
+                    if(len(chunks)==0):
+                        print(f"Skipping empty page {filename} {page.page_number}")
+                        continue
                     points = []
-                    for chunk in chunks:
-                        embedding = get_embeddings(chunk, channel)
+                    embeddings = get_embeddings(chunks, channel)
+                    for chunk, embedding in zip(chunks, embeddings["data"]):
                         points.append(
                             models.PointStruct(
                                 id=str(uuid.uuid4()),  # TODO: generate id
-                                vector=embedding["data"][0]["embedding"],
+                                vector=embedding["embedding"],
                                 payload={
                                     "path": filename,
                                     "page": page.page_number,
-                                    "text": chunk,
-                                    "usage": embedding["usage"]
+                                    "text": chunk
                                 },
                             )
                         )
 
                     operation_info = qdrant.upsert(
-                        collection_name="documents", points=points, wait=True
+                        collection_name=QDRANT_COLLECTION, points=points, wait=True
                     )
                     print(f"Upserted {operation_info} for {filename}")
     else:
         print(f"Unsupported file type: {filename}")
 
     channel.basic_ack(delivery_tag=method.delivery_tag)
-
 
 queue = None
 
@@ -137,7 +136,7 @@ def get_queue(channel: BlockingChannel):
             queue="new_documents", durable=True, auto_delete=False, passive=True
         )
 
-    return queue.method.message_count
+    return queue
 
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
@@ -164,12 +163,12 @@ redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=Tr
 print(f"Connection to Redis established {REDIS_HOST}:{REDIS_PORT}")
 
 qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
-if "documents" not in [n.name for n in qdrant.get_collections().collections]:
+if QDRANT_COLLECTION not in [n.name for n in qdrant.get_collections().collections]:
     qdrant.create_collection(
-        collection_name="documents",
+        collection_name=QDRANT_COLLECTION,
         vectors_config=models.VectorParams(
-            size=4096,  # todo: get from service... encoder.get_sentence_embedding_dimension(), # Vector size is defined by used model
-            distance=models.Distance.COSINE,
+            size=QDRANT_VECTOR_DIM,  # todo: get from service... encoder.get_sentence_embedding_dimension(), # Vector size is defined by used model
+            distance=models.Distance.DOT,
         ),
     )
 

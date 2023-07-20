@@ -14,7 +14,7 @@ async def get_embeddings_async(text):
     client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
         async with session.post(
-            f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/v1/embeddings",
+            f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/v1/embeddings/",
             json={"input": text},
         ) as resp:
             return await resp.json()
@@ -31,7 +31,7 @@ async def get_chat_completion_async(context,question):
     client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
         async with session.post(
-            f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/v1/chat/completions",
+            f"http://{CHAT_HOST}:{CHAT_PORT}/v1/chat/completions/",
             json=completionRequest,
         ) as resp:
             return await resp.json()
@@ -44,9 +44,9 @@ async def question():
         embedding = await get_embeddings_async(input)
 
         hits = qdrant.search(
-            collection_name="documents",
+            collection_name=QDRANT_COLLECTION,
             query_vector=embedding["data"][0]["embedding"],
-            limit=8,
+            limit=CONTEXT_LIMIT,
         )
         messages = []
 
@@ -70,7 +70,7 @@ async def index():
         embedding = await get_embeddings_async(text)
 
         hits = qdrant.search(
-            collection_name="documents",
+            collection_name=QDRANT_COLLECTION,
             query_vector=embedding["data"][0]["embedding"],
             limit=5,
         )
@@ -85,5 +85,5 @@ async def index():
 qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
 
 if __name__ == "__main__":
-    # run flask app on port 5001 for debugging
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    # run flask app for debugging
+    app.run(host="0.0.0.0", port=PORT, debug=True)

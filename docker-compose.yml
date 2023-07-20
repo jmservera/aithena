@@ -85,6 +85,17 @@ services:
       default:
         aliases:
           - llama-server
+  embeddings-server:
+    build: ./embeddings-server
+    environment:
+      - PORT=8085
+    ports:
+      - "8085:8085"
+    restart: on-failure
+    networks:
+      default:
+        aliases:
+          - embeddings-server
   document-lister:
     build: ./document-lister
     environment:
@@ -102,9 +113,11 @@ services:
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - EMBEDDINGS_HOST=llama-server
-      - EMBEDDINGS_PORT=8000
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8085
       - QDRANT_HOST=qdrant
+      - QDRANT_COLLECTION=short-embeddings
+      - QDRANT_VECTOR_DIM=768
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
@@ -124,8 +137,12 @@ services:
       - PORT=8080
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-      - EMBEDDINGS_HOST=llama-server
-      - EMBEDDINGS_PORT=8000
+      - QDRANT_COLLECTION=short-embeddings
+      - QDRANT_VECTOR_DIM=768
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8085
+      - CHAT_HOST=llama-server
+      - CHAT_PORT=8000
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
 volumes:
