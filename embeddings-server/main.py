@@ -47,7 +47,7 @@ async def embeddings(sentences: EmbeddingsInput):
         sentences.input = [sentences.input]
     embeddings = model.encode(sentences.input)
     for r in embeddings:
-        result.data.append(EmbeddingsOutput.EmbeddingsList(embedding=r))
+        result.data.append(EmbeddingsOutput.EmbeddingsList(embedding=list(r)))
     return result
 
 
