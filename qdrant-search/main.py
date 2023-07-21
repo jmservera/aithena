@@ -22,47 +22,39 @@ async def get_embeddings_async(text):
 
 
 async def get_chat_completion_async(context, question):
-    stop = ["Question:", "\n"]
-    messages = []
-    messages.append(
-        {
-            "content": "Context: "
-            + context
-            + "\n---\n"
-            + "Question:"
-            + question
-            + "\n---\n"
-            + "Answer:",
-            "role": "user",
-        }
-    )
+    stop = [] # ["Question:"]
+    messages = [
+        { "content": "Generate an answer with a summary of the provided text below, answering the user question.", "role":"user"},
+        { "content": f"\"\"\"{context}\"\"\"", "role": "system" },
+        { "content": f"{question}", "role": "user" }
+    ]
 
-    completionRequest = {"messages": messages, "max_tokens": 1200, "stop": stop}
+    completionRequest = {"messages": messages, "max_tokens": 2048}
     # , "temperature": 0.9, "top_p": 1, "frequency_penalty": 0, "presence_penalty": 0, "best_of": 1, "n": 1, "stream": False, "logprobs": None, "echo": False}
     client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
         async with session.post(
-            f"http://{CHAT_HOST}:{CHAT_PORT}/v1/chat/completions/",
+            f"http://{CHAT_HOST}:{CHAT_PORT}/v1/chat/completions",
             json=completionRequest,
         ) as resp:
             return await resp.json()
 
 
 @app.get("/v1/question/")
-async def question(input: str):
+async def question(input: str, limit: int = 10):
     if not input is None and len(input) > 0:
         embedding = await get_embeddings_async(input)
 
         hits = qdrant.search(
             collection_name=QDRANT_COLLECTION,
             query_vector=embedding["data"][0]["embedding"],
-            limit=CONTEXT_LIMIT,
+            limit=limit,
         )
         messages = []
 
         context = ""
         for hit in hits:
-            context += hit.payload["text"] + "\n---\n"
+            context += f"{hit.payload['text']}\n"
             messages.append(
                 {
                     "id": hit.id,
