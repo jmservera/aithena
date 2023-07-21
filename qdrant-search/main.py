@@ -21,20 +21,18 @@ async def get_embeddings_async(text):
             return await resp.json()
 
 
-async def get_chat_completion_async(context, question):
-    stop = [] # ["Question:"]
-    messages = [
-        { "content": "Generate an answer with a summary of the provided text below, answering the user question.", "role":"user"},
-        { "content": f"\"\"\"{context}\"\"\"", "role": "system" },
-        { "content": f"{question}", "role": "user" }
-    ]
+async def get_completion_async(context, question):
+    completionRequest = { "prompt": "### Context:{context}\n\n###\n Instructions:\n{question}\n\n### Response:\n",
+                          "max_tokens": 2048,
+                          "stop" : ["###"]
+                        }
 
-    completionRequest = {"messages": messages, "max_tokens": 2048}
+    # completionRequest = {"messages": messages, "max_tokens": 2048}
     # , "temperature": 0.9, "top_p": 1, "frequency_penalty": 0, "presence_penalty": 0, "best_of": 1, "n": 1, "stream": False, "logprobs": None, "echo": False}
     client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
         async with session.post(
-            f"http://{CHAT_HOST}:{CHAT_PORT}/v1/chat/completions",
+            f"http://{CHAT_HOST}:{CHAT_PORT}/v1/completions",
             json=completionRequest,
         ) as resp:
             return await resp.json()
@@ -65,7 +63,7 @@ async def question(input: str, limit: int = 10):
             )
 
         print(context)
-        result = await get_chat_completion_async(context, input)
+        result = await get_completion_async(context, input)
         result["messages"] = messages
         return result
     else:
