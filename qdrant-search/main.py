@@ -22,10 +22,12 @@ async def get_embeddings_async(text):
 
 
 async def get_completion_async(context, question):
-    completionRequest = { "prompt": "### Context:{context}\n\n###\n Instructions:\n{question}\n\n### Response:\n",
+    # TODO: create prompts by language (e.g. English, German, Spanish, Catalan, etc.)
+    completionRequest = { "prompt": f"### Context:{context}\n\n###\n Instructions:\n{question}\n\n### Response:\n",
                           "max_tokens": 2048,
                           "stop" : ["###"]
                         }
+    print(completionRequest)
 
     # completionRequest = {"messages": messages, "max_tokens": 2048}
     # , "temperature": 0.9, "top_p": 1, "frequency_penalty": 0, "presence_penalty": 0, "best_of": 1, "n": 1, "stream": False, "logprobs": None, "echo": False}
