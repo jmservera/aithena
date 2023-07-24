@@ -109,6 +109,7 @@ async def generate_question(input: str, limit: int, stream: bool):
 
 @app.get("/v1/question/")
 async def question(input: str, limit: int = 10, stream: bool = False):
+    # todo: receive config from request
     if not input is None and len(input) > 0:
         if stream:
             return StreamingResponse(
