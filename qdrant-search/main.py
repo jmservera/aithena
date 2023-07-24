@@ -7,9 +7,10 @@ from qdrant_client import models, QdrantClient
 from config import *
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+import json
 
-
-app = FastAPI(title=TITLE,version=VERSION)
+app = FastAPI(title=TITLE, version=VERSION)
 
 
 async def get_embeddings_async(text):
@@ -23,12 +24,14 @@ async def get_embeddings_async(text):
             return await resp.json()
 
 
-async def get_completion_async(context, question):
+async def get_completion_async(context: str, question: str, stream: bool):
     # TODO: create prompts by language (e.g. English, German, Spanish, Catalan, etc.)
-    completionRequest = { "prompt": f"### Context:{context}\n\n###\n Instructions:\n{question}\n\n### Response:\n",
-                          "max_tokens": 2048,
-                          "stop" : ["###"]
-                        }
+    completionRequest = {
+        "prompt": f"### Context:{context}\n\n###\n Instructions:\n{question}\n\n### Response:\n",
+        "max_tokens": 2048,
+        "stop": ["###"],
+        "stream": stream,
+    }
     print(completionRequest)
 
     # completionRequest = {"messages": messages, "max_tokens": 2048}
@@ -39,52 +42,81 @@ async def get_completion_async(context, question):
             f"http://{CHAT_HOST}:{CHAT_PORT}/v1/completions",
             json=completionRequest,
         ) as resp:
-            return await resp.json()
+            async for line in resp.content:
+                if line.strip() == b"data: [DONE]":
+                    return
+                yield line.decode("utf-8")
+
 
 @dataclass
 class info_class:
     title: str
     version: str
+
     def __init__(self, title: str, version: str):
         self.title = title
         self.version = version
 
+
 @app.get("/")
-async def info()-> info_class:
+async def info() -> info_class:
     return info_class(TITLE, VERSION)
 
-@app.get("/v1/question/")
-async def question(input: str, limit: int = 10):
-    if not input is None and len(input) > 0:
-        embedding = await get_embeddings_async(input)
 
-        if embedding is not None and "data" in embedding and len(embedding["data"]) > 0:
-            hits = qdrant.search(
-                collection_name=QDRANT_COLLECTION,
-                query_vector=embedding["data"][0]["embedding"],
-                limit=limit,
+async def generate_question(input: str, limit: int, stream: bool):   
+    embedding = await get_embeddings_async(input)
+
+    if embedding is not None and "data" in embedding and len(embedding["data"]) > 0:
+        hits = qdrant.search(
+            collection_name=QDRANT_COLLECTION,
+            query_vector=embedding["data"][0]["embedding"],
+            limit=limit,
+        )
+        messages = []
+
+        context = ""
+        for hit in hits:
+            context += f"{hit.payload['text']}\n"
+            messages.append(
+                {
+                    "id": hit.id,
+                    "payload": hit.payload["text"],
+                    "score": hit.score,
+                    "path": hit.payload["path"],
+                    "page": hit.payload["page"],
+                }
             )
-            messages = []
 
-            context = ""
-            for hit in hits:
-                context += f"{hit.payload['text']}\n"
-                messages.append(
-                    {
-                        "id": hit.id,
-                        "payload": hit.payload["text"],
-                        "score": hit.score,
-                        "path": hit.payload["path"],
-                        "page": hit.payload["page"]
-                    }
-                )
-
-            print(context)
-            result = await get_completion_async(context, input)
-            result["messages"] = messages
-            return result
+        print(context)
+        if stream:
+            yield json.dumps({"messages": messages})
+            yield "\n"
+            async for line in get_completion_async(context, input, stream):
+                yield line
         else:
-            raise HTTPException(status_code=400, detail="embedding is None or has no data")
+            syncresult = ""
+            async for line in get_completion_async(context, input, stream):
+                syncresult += line
+            resp = json.loads(syncresult)
+            resp["messages"] = messages
+            yield json.dumps(resp)
+    else:
+        raise HTTPException(
+            status_code=400, detail="embedding is None or has no data"
+        )
+
+
+
+@app.get("/v1/question/")
+async def question(input: str, limit: int = 10, stream: bool = False):
+    if not input is None and len(input) > 0:
+        if stream:
+            return StreamingResponse(
+                generate_question(input, limit, stream), media_type="text/event-stream"
+            )  # application/json
+        else:
+            async for line in generate_question(input, limit, stream):
+                return line
     else:
         raise HTTPException(status_code=400, detail="no input provided")
 

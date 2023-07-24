@@ -150,6 +150,13 @@ services:
       - CHAT_PORT=8000
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
+  llama-playground:
+    image: ghcr.io/mckaywrigley/chatbot-ui:main
+    ports:
+      - 3000:3000
+    environment:
+      - OPENAI_API_HOST=http://llama-server:8000
+      - OPENAI_API_KEY=""
 volumes:
   rabbitmq-data:
     driver: local
