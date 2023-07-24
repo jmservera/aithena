@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import aiohttp
+from pydantic.dataclasses import dataclass
+from pydantic import BaseModel
 from qdrant_client import models, QdrantClient
 from config import *
 
 from fastapi import FastAPI, HTTPException
 
 
-app = FastAPI(title="𐃆 Aithena Search API")
+app = FastAPI(title=TITLE,version=VERSION)
 
 
 async def get_embeddings_async(text):
@@ -39,35 +41,50 @@ async def get_completion_async(context, question):
         ) as resp:
             return await resp.json()
 
+@dataclass
+class info_class:
+    title: str
+    version: str
+    def __init__(self, title: str, version: str):
+        self.title = title
+        self.version = version
+
+@app.get("/")
+async def info()-> info_class:
+    return info_class(TITLE, VERSION)
 
 @app.get("/v1/question/")
 async def question(input: str, limit: int = 10):
     if not input is None and len(input) > 0:
         embedding = await get_embeddings_async(input)
 
-        hits = qdrant.search(
-            collection_name=QDRANT_COLLECTION,
-            query_vector=embedding["data"][0]["embedding"],
-            limit=limit,
-        )
-        messages = []
-
-        context = ""
-        for hit in hits:
-            context += f"{hit.payload['text']}\n"
-            messages.append(
-                {
-                    "id": hit.id,
-                    "payload": hit.payload["text"],
-                    "score": hit.score,
-                    "path": hit.payload["path"],
-                }
+        if embedding is not None and "data" in embedding and len(embedding["data"]) > 0:
+            hits = qdrant.search(
+                collection_name=QDRANT_COLLECTION,
+                query_vector=embedding["data"][0]["embedding"],
+                limit=limit,
             )
+            messages = []
 
-        print(context)
-        result = await get_completion_async(context, input)
-        result["messages"] = messages
-        return result
+            context = ""
+            for hit in hits:
+                context += f"{hit.payload['text']}\n"
+                messages.append(
+                    {
+                        "id": hit.id,
+                        "payload": hit.payload["text"],
+                        "score": hit.score,
+                        "path": hit.payload["path"],
+                        "page": hit.payload["page"]
+                    }
+                )
+
+            print(context)
+            result = await get_completion_async(context, input)
+            result["messages"] = messages
+            return result
+        else:
+            raise HTTPException(status_code=400, detail="embedding is None or has no data")
     else:
         raise HTTPException(status_code=400, detail="no input provided")
 

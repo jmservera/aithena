@@ -18,7 +18,8 @@ def produce():
         pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT)
     )
     channel = connection.channel()
-    channel.queue_declare(queue="new_documents", durable=True, auto_delete=False)
+    print(f"***** Declaring queue {QUEUE_NAME} *****")
+    channel.queue_declare(queue=QUEUE_NAME, durable=True, auto_delete=False)
 
     try:
         storage = BlobStorage(STORAGE_ACCOUNT_NAME)
@@ -26,11 +27,11 @@ def produce():
             blobs = storage.list_blobs_flat(STORAGE_CONTAINER)
             for blob in blobs:
                 if blob.name.endswith(DOCUMENT_WILDCARD):
-                    value = redis_client.get(f"/new_document/{blob.name}")
+                    value = redis_client.get(f"/{QUEUE_NAME}/{blob.name}")
                     if value is None:
                         print(f"Found new document: {blob.name}")
                         redis_client.set(
-                            f"/new_document/{blob.name}",
+                            f"/{QUEUE_NAME}/{blob.name}",
                             json.dumps(
                                 {
                                     "path": f"{blob.name}",
@@ -41,7 +42,7 @@ def produce():
                         )
                         channel.basic_publish(
                             exchange="",
-                            routing_key="new_documents",
+                            routing_key=QUEUE_NAME,
                             body=f"{blob.name}",
                             properties=pika.BasicProperties(delivery_mode=2),
                         )

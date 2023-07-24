@@ -71,6 +71,7 @@ def callback(
     if filename.endswith(".pdf"):
         stream = storage_client.download_blob_to_stream(STORAGE_CONTAINER, filename)
         fulltext = ""
+        firstPass = True
         with pdfplumber.open(stream) as pdf:
             for page in pdf.pages:
                 print(
@@ -88,16 +89,33 @@ def callback(
                             last_period_index = 500
                         chunks.append(fulltext[:last_period_index])
                         fulltext = fulltext[last_period_index + 1 :].strip()
-                    if len(fulltext)<100 and len(chunks)>0:                        
+                    if len(fulltext)<300 and len(chunks)>0:                        
                         chunks[-1] = chunks[-1] + " " + fulltext
                     else:
                         chunks.append(fulltext)
-                    chunks=list(filter(lambda x: len(x)>45,chunks))
+                    # remove non-relevant chunks, anything less than 300 chars
+                    # will only add noise.
+                    chunks=list(filter(lambda x: len(x)>300,chunks))
                     if(len(chunks)==0):
                         print(f"Skipping empty page {filename} {page.page_number}")
                         continue
                     points = []
                     embeddings = get_embeddings(chunks, channel)
+                    if firstPass:
+                        # check for first embedding similarity of 1.0 in the
+                        # qdrant database, which means
+                        # that this document is already indexed
+                        print("check for similarity for {filename}")
+                        similar_doc=qdrant.search(collection_name=QDRANT_COLLECTION,
+                                      query_vector=embeddings["data"][0]["embedding"],
+                                      limit=1)
+                        print(similar_doc)
+                        if(len(similar_doc)>0 and similar_doc[0].score>=1.0):
+                            print(f"Skipping already indexed document {filename} - Original: {similar_doc[0].payload['path']}")
+                            channel.basic_ack(delivery_tag=method.delivery_tag)
+                            return
+
+                        firstPass = False
                     for chunk, embedding in zip(chunks, embeddings["data"]):
                         points.append(
                             models.PointStruct(
@@ -128,12 +146,14 @@ def get_queue(channel: BlockingChannel):
     global queue
     channel.basic_qos(prefetch_count=1)
     if queue is None:
+        print(f"***** Declaring queue {QUEUE_NAME} *****")
+
         queue = channel.queue_declare(
-            queue="new_documents", durable=True, auto_delete=False
+            queue=QUEUE_NAME, durable=True, auto_delete=False
         )
     else:
         queue = channel.queue_declare(
-            queue="new_documents", durable=True, auto_delete=False, passive=True
+            queue=QUEUE_NAME, durable=True, auto_delete=False, passive=True
         )
 
     return queue
@@ -147,7 +167,7 @@ def consume():
     channel = connection.channel()
     get_queue(channel)
 
-    channel.basic_consume(queue="new_documents", on_message_callback=callback)
+    channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
 
     try:
         channel.start_consuming()

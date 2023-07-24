@@ -14,6 +14,7 @@ ENV REDIS_PORT=6379
 ENV STORAGE_ACCOUNT_NAME=""
 ENV STORAGE_CONTAINER=""
 ENV DOCUMENT_WILDCARD=".pdf"
+ENV QUEUE_NAME="new_documents"
 
 CMD ["python","-m","document_lister"]
 
