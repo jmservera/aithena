@@ -1,5 +1,7 @@
 import os
 
+TITLE="𐃆 Aithena Search API"
+VERSION = "0.1.1"
 EMBEDDINGS_HOST = os.environ.get("EMBEDDINGS_HOST", "localhost")
 EMBEDDINGS_PORT = os.environ.get("EMBEDDINGS_PORT", 8000)
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "localhost")

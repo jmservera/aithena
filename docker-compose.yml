@@ -100,9 +100,10 @@ services:
     build: ./document-lister
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - REDIS_HOST=redis
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
+      - REDIS_HOST=redis
+      - QUEUE_NAME=shortembeddings
     depends_on:
       - rabbitmq
       - redis
@@ -116,16 +117,20 @@ services:
       - EMBEDDINGS_HOST=embeddings-server
       - EMBEDDINGS_PORT=8085
       - QDRANT_HOST=qdrant
-      - QDRANT_COLLECTION=short-embeddings-2
+      - QDRANT_COLLECTION=shortembeddings
       - QDRANT_VECTOR_DIM=768
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
+      - QUEUE_NAME=shortembeddings
     restart: on-failure
     deploy:
-      replicas: 3
+      replicas: 1
     depends_on:
       - rabbitmq
+      - redis
+      - qdrant
+      - embeddings-server
     networks:
       - default
   qdrant-search:
@@ -137,7 +142,7 @@ services:
       - PORT=8080
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-      - QDRANT_COLLECTION=short-embeddings-2
+      - QDRANT_COLLECTION=shortembeddings
       - QDRANT_VECTOR_DIM=768
       - EMBEDDINGS_HOST=embeddings-server
       - EMBEDDINGS_PORT=8085
@@ -145,6 +150,13 @@ services:
       - CHAT_PORT=8000
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
+  llama-playground:
+    image: ghcr.io/mckaywrigley/chatbot-ui:main
+    ports:
+      - 3000:3000
+    environment:
+      - OPENAI_API_HOST=http://llama-server:8000
+      - OPENAI_API_KEY=""
 volumes:
   rabbitmq-data:
     driver: local

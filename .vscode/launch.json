@@ -13,7 +13,10 @@
             "justMyCode": false,
             "env": {
                 "MODEL_PATH":"../open_llama_7b/ggml-model-f16.bin",
-                "APP_PORT":"5050"
+                "APP_PORT":"5050",
+                "QDRANT_HOST":"localhost",
+                "QDRANT_PORT":"6333",
+                "QDRANT_COLLECTION":"short-embeddings-2"                
             }
         }
     ]
