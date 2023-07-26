@@ -12,7 +12,7 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 15s
       retries: 1
@@ -38,7 +38,7 @@ services:
     environment:
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
     healthcheck:
-      test: [ "CMD", "rabbitmqctl", "ping"]
+      test: ["CMD", "rabbitmqctl", "ping"]
       interval: 5s
       timeout: 15s
       retries: 1
@@ -69,7 +69,7 @@ services:
   llama-server:
     build: ./llama-server
     ports:
-      - "8000:8000" 
+      - "8000:8000"
     volumes:
       - "../open_llama_7b/:/llama/models/"
     restart: on-failure
@@ -138,6 +138,9 @@ services:
     ports:
       - "8080:8080"
     restart: on-failure
+    depends_on:
+      - qdrant
+      - llama-server
     environment:
       - PORT=8080
       - QDRANT_HOST=qdrant
@@ -161,20 +164,20 @@ volumes:
   rabbitmq-data:
     driver: local
     driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/source/volumes/rabbitmq-data'
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/rabbitmq-data"
   qdrant-data:
     driver: local
     driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/source/volumes/qdrant-data'
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/qdrant-data"
   redis:
     driver: local
     driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/source/volumes/redis'
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/redis"
 networks:
   default:
