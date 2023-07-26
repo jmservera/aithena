@@ -8,27 +8,34 @@ import {
   Message,
   MessageInput,
 } from "@chatscope/chat-ui-kit-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 function App() {
-  let [index, setIndex] = useState(-1);
-  let [messages, setMessages] = useState<string[]>([]);
+  // let [index, setIndex] = useState(-1);
+  // let [messages, setMessages] = useState<string[]>([]);
+  let [result, setResult] = useState<string | undefined>("");
+  const resultRef = useRef<string>();
+
+  useEffect(() => {
+    // this ensures that resultRef.current is up to date during each render
+    resultRef.current = result;
+  }, [result]);
 
   return (
     <>
       <button
-        onClick={() => {
-          let idx = index + 1;
-          let intermediate = `Answer: `;
-          setIndex(idx);
-          let msgs = [...messages];
-          msgs.push(intermediate);
+        onClick={async () => {
+          // let idx = index + 1;
+          // setIndex(idx);
+          // let msgs = [...messages];
+          // msgs.push(result);
 
           ChatMessage((data: any) => {
             console.log(`setting ${data()}`);
-            intermediate = intermediate + data();
-            msgs[idx] = intermediate;
-            setMessages(msgs);
+            resultRef.current = resultRef.current + data();
+            setResult(resultRef.current);
+            // msgs[idx] = intermediate;
+            // setMessages(msgs);
           }, "Hello");
         }}
       >
@@ -39,17 +46,17 @@ function App() {
           <ChatContainer>
             <MessageInput placeholder="Type your message here" />
             <MessageList>
-              {messages.map((message) => (
-                <Message
-                  model={{
-                    message: message,
-                    sentTime: "just now",
-                    sender: "Joe",
-                    direction: "incoming",
-                    position: "first",
-                  }}
-                />
-              ))}
+              {/* {messages.map((message) => ( */}
+              <Message
+                model={{
+                  message: result,
+                  sentTime: "just now",
+                  sender: "Joe",
+                  direction: "incoming",
+                  position: "first",
+                }}
+              />
+              {/* ))} */}
             </MessageList>
           </ChatContainer>
         </MainContainer>

@@ -4,12 +4,12 @@ const serverBaseURL = "http://localhost:8080/v1/chat/";
 
 type MessageHandler = (data: any) => void;
 
-export const ChatMessage = (onEvent: MessageHandler, message: string) => {
+export const ChatMessage = async (onEvent: MessageHandler, message: string) => {
   console.log(`fetching ${message}`);
   let msg = JSON.stringify({ input: message });
   console.log(`input: ${msg}`);
 
-  fetchEventSource(`${serverBaseURL}`, {
+  await fetchEventSource(`${serverBaseURL}`, {
     method: "POST",
     headers: {
       Accept: "text/event-stream",
