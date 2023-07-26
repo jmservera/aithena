@@ -101,10 +101,9 @@ async def generate_question(input: str, limit: int, stream: bool):
 
         print(context)
         if stream:
-            yield json.dumps({"messages": messages})
-            yield "\n"
+            yield bytes("data: " + json.dumps({"messages": messages}) + "\n\n", "utf-8")
             async for line in get_completion_async(context, input, stream):
-                yield line
+                yield bytes(f"{line}\n", "utf-8")
         else:
             syncresult = ""
             async for line in get_completion_async(context, input, stream):
@@ -139,8 +138,7 @@ async def chat(input: ChatInput):
         raise HTTPException(status_code=400, detail="no input provided")
 
 
-@app.get("/v1/question/")
-async def question(input: str, limit: int = 10, stream: bool = False):
+async def _question(input: str, limit: int = 10, stream: bool = False):
     # todo: receive config from request
     if not input is None and len(input) > 0:
         if stream:
@@ -152,6 +150,16 @@ async def question(input: str, limit: int = 10, stream: bool = False):
                 return line
     else:
         raise HTTPException(status_code=400, detail="no input provided")
+
+
+@app.get("/v1/question/")
+async def question(input: str, limit: int = 10, stream: bool = False):
+    return await _question(input, limit, stream)
+
+
+@app.post("/v1/question/")
+async def question(input: ChatInput):
+    return await _question(input.input, input.limit, input.stream)
 
 
 @app.get("/v1/search/")

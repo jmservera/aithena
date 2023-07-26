@@ -1,12 +1,12 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 
-const serverBaseURL = "http://localhost:8080/v1/chat/";
+const serverBaseURL = "http://localhost:8080/v1/question/";
 
 type MessageHandler = (data: any) => void;
 
 export const ChatMessage = async (onEvent: MessageHandler, message: string) => {
   console.log(`fetching ${message}`);
-  let msg = JSON.stringify({ input: message });
+  let msg = JSON.stringify({ input: message, stream: true });
   console.log(`input: ${msg}`);
 
   await fetchEventSource(`${serverBaseURL}`, {
@@ -15,7 +15,7 @@ export const ChatMessage = async (onEvent: MessageHandler, message: string) => {
       Accept: "text/event-stream",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input: message }),
+    body: msg,
     async onopen(res) {
       if (res.ok && res.status === 200) {
         console.log("Connection made ", res);
@@ -24,9 +24,15 @@ export const ChatMessage = async (onEvent: MessageHandler, message: string) => {
       }
     },
     onmessage(event) {
-      // console.log(event.data);
-      // const parsedData = JSON.parse(event.data);
-      onEvent((data: any) => [data, event.data]); // Important to set the data this way, otherwise old data may be overwritten if the stream is too fast
+      try {
+        if (event.data.trim() !== "") {
+          const parsedData = JSON.parse(event.data);
+          onEvent(parsedData);
+        }
+      } catch (e) {
+        console.log(e);
+        console.log(`|${JSON.stringify(event.data)}| is not a valid JSON`);
+      }
     },
     onclose() {
       console.log("Connection closed by the server");
