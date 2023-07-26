@@ -1,16 +1,28 @@
 #!/usr/bin/env python
 # encoding: utf-8
+import time
 import aiohttp
 from pydantic.dataclasses import dataclass
 from pydantic import BaseModel
 from qdrant_client import models, QdrantClient
 from config import *
+from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 import json
 
 app = FastAPI(title=TITLE, version=VERSION)
+origins = ["http://localhost:5173"]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 async def get_embeddings_async(text):
@@ -63,7 +75,7 @@ async def info() -> info_class:
     return info_class(TITLE, VERSION)
 
 
-async def generate_question(input: str, limit: int, stream: bool):   
+async def generate_question(input: str, limit: int, stream: bool):
     embedding = await get_embeddings_async(input)
 
     if embedding is not None and "data" in embedding and len(embedding["data"]) > 0:
@@ -101,10 +113,30 @@ async def generate_question(input: str, limit: int, stream: bool):
             resp["messages"] = messages
             yield json.dumps(resp)
     else:
-        raise HTTPException(
-            status_code=400, detail="embedding is None or has no data"
-        )
+        raise HTTPException(status_code=400, detail="embedding is None or has no data")
 
+
+def fake_data_streamer() -> str:
+    for i in range(10):
+        yield b"data: some fake data\n\n"
+        time.sleep(0.5)
+
+
+class ChatInput(BaseModel):
+    input: str
+    limit: int = 10
+    stream: bool = False
+
+
+@app.post("/v1/chat/")
+async def chat(input: ChatInput):
+    # todo: receive config from request
+    if not input.input is None and len(input.input) > 0:
+        return StreamingResponse(
+            fake_data_streamer(), media_type="text/event-stream"
+        )  # application/json
+    else:
+        raise HTTPException(status_code=400, detail="no input provided")
 
 
 @app.get("/v1/question/")
