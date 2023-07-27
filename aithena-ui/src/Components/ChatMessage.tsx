@@ -10,7 +10,7 @@ export const ChatMessage = async (onEvent: MessageHandler, message: string) => {
   console.log(`input: ${msg}`);
 
   await fetchEventSource(`${serverBaseURL}`, {
-    openWhenHidden: true,
+    openWhenHidden: true, // https://github.com/Azure/fetch-event-source/issues/17
     method: "POST",
     headers: {
       Accept: "text/event-stream",
