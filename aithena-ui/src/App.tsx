@@ -28,51 +28,58 @@ function App() {
     // this ensures that resultRef.current is up to date during each render
   }, [result]);
 
+  const onSendHandler = async (textContent: string) => {
+    console.log("textContent:" + textContent);
+
+    messagesRef.current.push({
+      message: textContent,
+      sender: "User",
+      direction: "outgoing",
+      time: Date.now().toString(),
+    });
+
+    messagesRef.current.push({
+      message: "",
+      sender: "Assistant",
+      direction: "incoming",
+      time: Date.now().toString(),
+    });
+
+    let current = messagesRef.current.length - 1;
+    let text = "";
+
+    ChatMessage((data: any) => {
+      if (data.choices) {
+        text = text + data.choices[0].text;
+        messagesRef.current[current].message = text;
+        setResult(text);
+      } else {
+        if (data.messages) {
+          text = "The following information was found:\n";
+          data.messages.forEach((message: any) => {
+            text =
+              text +
+              `<b>Path</b>: ${message.path}, page ${message.page}\n<b>Text</b>: ${message.payload}\n`;
+          });
+          text = text + "\n<b>Summary</b>: ";
+          messagesRef.current[current].message = text;
+          setResult(text);
+        }
+        console.log("Other data");
+        console.log(data);
+      }
+    }, textContent);
+  };
+
   return (
     <>
-      <button
-        onClick={async () => {
-          let direction: MessageDirection = "incoming";
-          let sender = "Assistant";
-          if (Math.random() > 0.5) {
-            sender = "User";
-            direction = "outgoing";
-          }
-          messagesRef.current.push({
-            message: "",
-            sender: sender,
-            direction: direction,
-            time: Date.now().toString(),
-          });
-          let current = messagesRef.current.length - 1;
-          let text = "";
-
-          ChatMessage((data: any) => {
-            if (data.choices) {
-              text = text + data.choices[0].text;
-              messagesRef.current[current].message = text;
-              setResult(text);
-            } else {
-              if (data.messages) {
-                data.messages.forEach((message: any) => {
-                  text =
-                    text +
-                    `<b>Path</b>: ${message.path}, page ${message.page}\n<b>Text</b>: ${message.payload}\n`;
-                });
-                text = text + "\n<b>Summary</b>: ";
-              }
-              console.log("Other data");
-              console.log(data);
-            }
-          }, "Hello, how are you doing today? Can you tell me about yourself?");
-        }}
-      >
-        Click me
-      </button>
-      <div style={{ position: "relative", height: "500px" }}>
+      <div style={{ position: "relative", height: "700px" }}>
         <MainContainer>
           <ChatContainer>
-            <MessageInput placeholder="Type your message here" />
+            <MessageInput
+              placeholder="Type your message here"
+              onSend={onSendHandler}
+            />
             <MessageList>
               {messagesRef.current.map((message, index) => (
                 <Message

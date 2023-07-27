@@ -6,7 +6,7 @@ type MessageHandler = (data: any) => void;
 
 export const ChatMessage = async (onEvent: MessageHandler, message: string) => {
   console.log(`fetching ${message}`);
-  let msg = JSON.stringify({ input: message, stream: true });
+  let msg = JSON.stringify({ input: message, stream: true, limit: 8 });
   console.log(`input: ${msg}`);
 
   await fetchEventSource(`${serverBaseURL}`, {
