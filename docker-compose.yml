@@ -162,6 +162,24 @@ services:
     environment:
       - OPENAI_API_HOST=http://llama-server:8000
       - OPENAI_API_KEY=""
+  nginx:
+    image: nginx:1.15-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx-data:/etc/nginx/conf.d
+      - certbot-data-conf:/etc/letsencrypt
+      - certbot-data-www:/var/www/certbot
+    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - certbot-data-conf:/etc/letsencrypt
+      - certbot-data-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 volumes:
   rabbitmq-data:
     driver: local
@@ -175,6 +193,24 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/qdrant-data"
+  nginx-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/nginx-data"
+  certbot-data-conf:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/certbot-data/conf"
+  certbot-data-www:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/certbot-data/www"
   redis:
     driver: local
     driver_opts:

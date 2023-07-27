@@ -77,7 +77,7 @@ function App() {
 
   return (
     <>
-      <div style={{ position: "relative", height: "700px" }}>
+      <div style={{ position: "relative", maxHeight: "100%" }}>
         <MainContainer>
           <ChatContainer>
             <MessageInput

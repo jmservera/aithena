@@ -5,6 +5,13 @@
   text-align: center;
 }
 
+html,
+body,
+#app,
+#app > div {
+  height: 100%;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;
