@@ -48,7 +48,7 @@ function App() {
     let current = messagesRef.current.length - 1;
     let text = "";
 
-    ChatMessage((data: any) => {
+    await ChatMessage((data: any) => {
       if (data.choices) {
         text = text + data.choices[0].text;
         messagesRef.current[current].message = text;

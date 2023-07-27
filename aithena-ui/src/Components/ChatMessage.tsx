@@ -10,6 +10,7 @@ export const ChatMessage = async (onEvent: MessageHandler, message: string) => {
   console.log(`input: ${msg}`);
 
   await fetchEventSource(`${serverBaseURL}`, {
+    openWhenHidden: true,
     method: "POST",
     headers: {
       Accept: "text/event-stream",
