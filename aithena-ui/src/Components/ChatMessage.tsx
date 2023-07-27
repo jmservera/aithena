@@ -1,6 +1,7 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 
-const serverBaseURL = "http://localhost:8080/v1/question/";
+const serverBaseURL = `${import.meta.env.VITE_API_URL}/v1/question/`;
+console.log(`serverBaseURL: ${serverBaseURL}`);
 
 type MessageHandler = (data: any) => void;
 

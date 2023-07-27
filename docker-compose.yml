@@ -134,7 +134,9 @@ services:
     networks:
       - default
   qdrant-search:
-    build: ./qdrant-search
+    build:
+      context: .
+      dockerfile: ./qdrant-search/Dockerfile
     ports:
       - "8080:8080"
     restart: on-failure

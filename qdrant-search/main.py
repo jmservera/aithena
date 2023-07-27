@@ -2,21 +2,25 @@
 # encoding: utf-8
 import time
 import aiohttp
+from fastapi.staticfiles import StaticFiles
 from pydantic.dataclasses import dataclass
 from pydantic import BaseModel
 from qdrant_client import models, QdrantClient
 from config import *
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 import json
 
-app = FastAPI(title=TITLE, version=VERSION)
+app = FastAPI(title="api " + TITLE, version=VERSION)
+api_app = FastAPI(title=TITLE, version=VERSION)
 origins = ["http://localhost:5173"]
 
+app.mount("/v1", api_app)
+app.mount("/", StaticFiles(directory="static", html=True), name="assets")
 
-app.add_middleware(
+api_app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
@@ -70,7 +74,12 @@ class info_class:
         self.version = version
 
 
-@app.get("/")
+# @app.get("/")
+# def serve_home(request: Request):
+#     return templates.TemplateResponse("index.html", context= {"request": request})
+
+
+@api_app.get("/info")
 async def info() -> info_class:
     return info_class(TITLE, VERSION)
 
@@ -127,7 +136,7 @@ class ChatInput(BaseModel):
     stream: bool = False
 
 
-@app.post("/v1/chat/")
+@api_app.post("/chat/")
 async def chat(input: ChatInput):
     # todo: receive config from request
     if not input.input is None and len(input.input) > 0:
@@ -152,17 +161,17 @@ async def _question(input: str, limit: int = 10, stream: bool = False):
         raise HTTPException(status_code=400, detail="no input provided")
 
 
-@app.get("/v1/question/")
+@api_app.get("/question/")
 async def question(input: str, limit: int = 10, stream: bool = False):
     return await _question(input, limit, stream)
 
 
-@app.post("/v1/question/")
+@api_app.post("/question/")
 async def question(input: ChatInput):
     return await _question(input.input, input.limit, input.stream)
 
 
-@app.get("/v1/search/")
+@api_app.get("/search/")
 async def index(input: str, limit: int = 5):
     if not input is None and len(input) != 0:
         embedding = await get_embeddings_async(input)

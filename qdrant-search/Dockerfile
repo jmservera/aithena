@@ -1,12 +1,19 @@
+FROM node:19 as builder
+
+COPY aithena-ui/ .
+RUN npm install && npm run build
+
 FROM python:3.11-slim-bookworm
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
 WORKDIR /app
-COPY requirements.txt .
+COPY qdrant-search/requirements.txt .
 
 RUN pip install -r requirements.txt
-COPY . .
+COPY qdrant-search/ .
+
+COPY --from=builder /dist /app/static
 
 ENV EMBEDDINGS_HOST="localhost"
 ENV EMBEDDINGS_PORT=8000

@@ -59,7 +59,11 @@ function App() {
           data.messages.forEach((message: any) => {
             text =
               text +
-              `<b>Path</b>: ${message.path}, page ${message.page}\n<b>Text</b>: ${message.payload}\n`;
+              `<b>Document</b> (${Math.round(
+                message.score * 100
+              )}% similarity): ${message.path}, page ${
+                message.page
+              }\n<b>Text</b>: ${message.payload}\n`;
           });
           text = text + "\n<b>Summary</b>: ";
           messagesRef.current[current].message = text;
