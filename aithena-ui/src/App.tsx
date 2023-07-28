@@ -77,14 +77,19 @@ function App() {
 
   return (
     <>
-      <div style={{ position: "relative", maxHeight: "100%" }}>
+      <div style={{ position: "relative", height: "700px" }}>
         <MainContainer>
           <ChatContainer>
             <MessageInput
               placeholder="Type your message here"
               onSend={onSendHandler}
             />
-            <MessageList>
+            <MessageList
+              style={{
+                height: "85%",
+                overflowY: "scroll",
+              }}
+            >
               {messagesRef.current.map((message, index) => (
                 <Message
                   key={index}
