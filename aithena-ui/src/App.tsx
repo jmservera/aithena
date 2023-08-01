@@ -1,9 +1,8 @@
 import "./App.css";
-// import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
+// import "bootstrap/dist/css/bootstrap.min.css";
+
 import { ChatMessage } from "./Components/ChatMessage";
 import { useState, useRef, useEffect, FormEvent } from "react";
-// import useGlobalEvent from "beautiful-react-hooks/useGlobalEvent";
-// import useDebouncedCallback from "beautiful-react-hooks/useDebouncedCallback";
 
 interface MessageInfo {
   message: string;
