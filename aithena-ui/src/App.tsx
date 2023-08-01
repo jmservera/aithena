@@ -22,6 +22,7 @@ function App() {
   let [result, setResult] = useState<MessageInfo[]>(messages);
   let [text, setText] = useState<string>("");
   let [input, setInput] = useState("");
+  let [loading, setLoading] = useState<boolean>(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () =>
@@ -29,63 +30,67 @@ function App() {
 
   useEffect(() => {
     // this ensures that resultRef.current is up to date during each render
+    scrollToBottom();
   }, [result, text]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+
     if (input === "") return;
-    const inputText = input;
-    messages.push(
-      {
-        message: inputText,
-        sender: "User",
-        time: Date.now().toString(),
-      },
-      {
-        message: "",
-        sender: "Assistant",
-        time: Date.now().toString(),
-      }
-    );
-    setResult(messages);
-    setText(inputText);
-    setInput("");
-    scrollToBottom();
-
-    let current = messages.length - 1;
-    let text = "";
-
-    await ChatMessage((data: any) => {
-      if (data.choices) {
-        console.log(`Choices ${current} ${text}`);
-        text = text + data.choices[0].text;
-        messages[current].message = text;
-        setText(text);
-        setResult(messages);
-        scrollToBottom();
-      } else {
-        if (data.messages) {
-          console.log("Other data");
-          text = "The following information was found:\n";
-          data.messages.forEach((message: any) => {
-            text =
-              text +
-              `<b>Document</b> (${Math.round(
-                message.score * 100
-              )}% similarity): ${message.path}, page ${
-                message.page
-              }\n<b>Text</b>: ${message.payload}\n`;
-          });
-          text = text + "\n<b>Summary</b>: ";
-          console.log(`Summary ${current} ${text}`);
-          messages[current].message = text;
-          setResult(messages);
-          setText(text);
-          scrollToBottom();
+    setLoading(true);
+    try {
+      const inputText = input;
+      messages.push(
+        {
+          message: inputText,
+          sender: "User",
+          time: Date.now().toString(),
+        },
+        {
+          message: "",
+          sender: "Assistant",
+          time: Date.now().toString(),
         }
-        console.log(data);
-      }
-    }, inputText);
+      );
+      setResult(messages);
+      setText(inputText);
+      setInput("");
+
+      let current = messages.length - 1;
+      let text = "";
+
+      await ChatMessage((data: any) => {
+        if (data.choices) {
+          console.log(data.choices[0].text);
+          text = text + data.choices[0].text;
+          messages[current].message = text;
+          setText(text);
+          setResult(messages);
+        } else {
+          if (data.messages) {
+            console.log("Other data");
+            text = "The following information was found:\n";
+            data.messages.forEach((message: any) => {
+              text =
+                text +
+                `<b>Document</b> (${Math.round(
+                  message.score * 100
+                )}% similarity): ${message.path}, page ${
+                  message.page
+                }\n<b>Text</b>: ${message.payload}\n`;
+            });
+            text = text + "\n<b>Summary</b>: ";
+            console.log(`Summary ${current} ${text}`);
+            messages[current].message = text;
+            setResult(messages);
+            setText(text);
+          }
+          console.log(data);
+        }
+      }, inputText);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -113,12 +118,18 @@ function App() {
                   >
                     {message.sender === "User" ? "👤" : "🤖"}
                   </div>
-                  <div
-                    className="message"
-                    dangerouslySetInnerHTML={{
-                      __html: message.message.replace(/\n/g, "<br />"),
-                    }}
-                  />
+                  <div className="message">
+                    <span
+                      dangerouslySetInnerHTML={{
+                        __html: message.message.replace(/\n/g, "<br />"),
+                      }}
+                    />
+                    {result.length - 1 === index && (
+                      <span className="loading" hidden={!loading}>
+                        ...
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -127,7 +138,9 @@ function App() {
           <div className="chat-input-holder" onSubmit={handleSubmit}>
             <form>
               <input
+                disabled={loading}
                 className="chat-input-text-area"
+                value={input}
                 placeholder="Type your message here"
                 onChange={(e) => setInput(e.target.value)}
               ></input>

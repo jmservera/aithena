@@ -100,3 +100,18 @@
   padding-left: 40px;
   padding-right: 40px;
 }
+
+.loading {
+  display: inline-block;
+  /* font-family: monospace;
+  font-size: 30px; */
+  clip-path: inset(0 1.5ch 0 0);
+  animation: l 1s steps(4) infinite;
+  padding-left: 2px;
+}
+
+@keyframes l {
+  to {
+    clip-path: inset(0 -1ch 0 0);
+  }
+}
