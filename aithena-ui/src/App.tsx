@@ -11,34 +11,32 @@ interface MessageInfo {
   time: string;
 }
 
-// const messages: MessageInfo[] = [
-//   {
-//     message: "How can I help you today?",
-//     sender: "Assistant",
-//     time: Date.now().toString(),
-//   },
-// ];
+const messages: MessageInfo[] = [
+  {
+    message: "Hello!\nHow can I help you today?",
+    sender: "Assistant",
+    time: Date.now().toString(),
+  },
+];
 
 function App() {
-  let [result, setResult] = useState("");
+  let [result, setResult] = useState<MessageInfo[]>(messages);
+  let [text, setText] = useState<string>("");
   let [input, setInput] = useState("");
-  const messagesRef = useRef<MessageInfo[]>([
-    {
-      message: "How can I help you today?",
-      sender: "Assistant",
-      time: Date.now().toString(),
-    },
-  ]);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // useEffect(() => {
-  //   // this ensures that resultRef.current is up to date during each render
-  // }, [result]);
+  const scrollToBottom = () =>
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+
+  useEffect(() => {
+    // this ensures that resultRef.current is up to date during each render
+  }, [result, text]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (input === "") return;
     const inputText = input;
-    messagesRef.current.push(
+    messages.push(
       {
         message: inputText,
         sender: "User",
@@ -50,18 +48,22 @@ function App() {
         time: Date.now().toString(),
       }
     );
-    setResult(inputText);
+    setResult(messages);
+    setText(inputText);
     setInput("");
+    scrollToBottom();
 
-    let current = messagesRef.current.length - 1;
+    let current = messages.length - 1;
     let text = "";
 
     await ChatMessage((data: any) => {
       if (data.choices) {
         console.log(`Choices ${current} ${text}`);
         text = text + data.choices[0].text;
-        messagesRef.current[current].message = text;
-        setResult(text);
+        messages[current].message = text;
+        setText(text);
+        setResult(messages);
+        scrollToBottom();
       } else {
         if (data.messages) {
           console.log("Other data");
@@ -77,8 +79,10 @@ function App() {
           });
           text = text + "\n<b>Summary</b>: ";
           console.log(`Summary ${current} ${text}`);
-          messagesRef.current[current].message = text;
-          setResult(text);
+          messages[current].message = text;
+          setResult(messages);
+          setText(text);
+          scrollToBottom();
         }
         console.log(data);
       }
@@ -95,7 +99,7 @@ function App() {
         </aside>
         <section className="chatbox">
           <div className="chat-log">
-            {messagesRef.current.map((message, index) => (
+            {result.map((message, index) => (
               <div
                 key={index}
                 className={`chat-message ${
@@ -119,6 +123,7 @@ function App() {
                 </div>
               </div>
             ))}
+            <div ref={bottomRef}> </div>
           </div>
           <div className="chat-input-holder" onSubmit={handleSubmit}>
             <form>
