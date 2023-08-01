@@ -1,6 +1,4 @@
 import "./App.css";
-// import "bootstrap/dist/css/bootstrap.min.css";
-
 import { ChatMessage } from "./Components/ChatMessage";
 import { useState, useRef, useEffect, FormEvent } from "react";
 
