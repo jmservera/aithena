@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
 import json
 
 app = FastAPI(title="api " + TITLE, version=VERSION)
@@ -29,6 +30,30 @@ api_app.add_middleware(
 )
 
 
+class ModelProperties(BaseModel):
+    prompt: str = None
+    suffix: str = None
+    max_tokens: int = 2048
+    temperature: float = 0.8
+    top_p: float = 0.95
+    mirostat_mode: int = 0
+    mirostat_tau: int = 5
+    mirostat_eta: float = 0.1
+    stream: bool = False
+    presence_penalty: float = 0
+    frequency_penalty: float = 0
+    n: float = 1
+    best_of: int = 1
+    top_k: int = 40
+    repeat_penalty: float = 1.1
+
+
+class ChatInput(BaseModel):
+    input: str
+    limit: int = 10
+    model_properties: ModelProperties = ModelProperties()
+
+
 async def get_embeddings_async(text):
     """Get embeddings for a text from embeddings service"""
     client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
@@ -40,15 +65,33 @@ async def get_embeddings_async(text):
             return await resp.json()
 
 
-async def get_completion_async(context: str, question: str, stream: bool):
+async def get_completion_async(context: str, question: str, props: ModelProperties):
     # TODO: create prompts by language (e.g. English, German, Spanish, Catalan, etc.)
-    completionRequest = {
-        "prompt": f"### Context:{context}\n\n###\n Instructions:\n{question}\n\n### Response:\n",
-        "max_tokens": 2048,
-        "stop": ["###"],
-        "stream": stream,
-    }
-    print(completionRequest)
+
+    prompts = [
+        f"### Context:{context}\n\n###\n Instructions:\nAnswer the following based on the provided context:\n{question}\n\n### Response:\n",
+        f"### Context:{context}\n\n###\n Instructions:\n{question}\n\n### Response:\n",
+        f"""
+### Instruction:
+
+You are an assistant that summarizes provided content that answers a question from the user. Write a response that appropriately completes the request.
+
+Write a detailed summary from the provided Input that answers the provided Question. Let's think step by step.
+
+### Question:
+
+{question}
+
+### Input:
+
+{context}
+
+### Response:
+""",
+    ]
+
+    props.prompt = prompts[0]
+    print(props)
 
     # completionRequest = {"messages": messages, "max_tokens": 2048}
     # , "temperature": 0.9, "top_p": 1, "frequency_penalty": 0, "presence_penalty": 0, "best_of": 1, "n": 1, "stream": False, "logprobs": None, "echo": False}
@@ -56,7 +99,7 @@ async def get_completion_async(context: str, question: str, stream: bool):
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
         async with session.post(
             f"http://{CHAT_HOST}:{CHAT_PORT}/v1/completions",
-            json=completionRequest,
+            json=jsonable_encoder(props),
         ) as resp:
             async for line in resp.content:
                 if line.strip() == b"data: [DONE]":
@@ -84,7 +127,9 @@ async def info() -> info_class:
     return info_class(TITLE, VERSION)
 
 
-async def generate_question(input: str, limit: int, stream: bool):
+async def generate_question(
+    input: str, limit: int, props: ModelProperties = ModelProperties()
+):
     embedding = await get_embeddings_async(input)
 
     if embedding is not None and "data" in embedding and len(embedding["data"]) > 0:
@@ -96,6 +141,7 @@ async def generate_question(input: str, limit: int, stream: bool):
         messages = []
 
         context = ""
+
         for hit in hits:
             context += f"{hit.payload['text']}\n"
             messages.append(
@@ -109,13 +155,13 @@ async def generate_question(input: str, limit: int, stream: bool):
             )
 
         print(context)
-        if stream:
+        if props.stream:
             yield bytes("data: " + json.dumps({"messages": messages}) + "\n\n", "utf-8")
-            async for line in get_completion_async(context, input, stream):
+            async for line in get_completion_async(context, input, props):
                 yield bytes(f"{line}\n", "utf-8")
         else:
             syncresult = ""
-            async for line in get_completion_async(context, input, stream):
+            async for line in get_completion_async(context, input, props):
                 syncresult += line
             resp = json.loads(syncresult)
             resp["messages"] = messages
@@ -124,51 +170,33 @@ async def generate_question(input: str, limit: int, stream: bool):
         raise HTTPException(status_code=400, detail="embedding is None or has no data")
 
 
-def fake_data_streamer() -> str:
-    for i in range(10):
-        yield b"data: some fake data\n\n"
-        time.sleep(0.5)
-
-
-class ChatInput(BaseModel):
-    input: str
-    limit: int = 10
-    stream: bool = False
-
-
-@api_app.post("/chat/")
-async def chat(input: ChatInput):
-    # todo: receive config from request
-    if not input.input is None and len(input.input) > 0:
-        return StreamingResponse(
-            fake_data_streamer(), media_type="text/event-stream"
-        )  # application/json
-    else:
-        raise HTTPException(status_code=400, detail="no input provided")
-
-
-async def _question(input: str, limit: int = 10, stream: bool = False):
+async def _question(
+    input: str, limit: int = 10, props: ModelProperties = ModelProperties()
+):
     # todo: receive config from request
     if not input is None and len(input) > 0:
-        if stream:
+        if props.stream:
             return StreamingResponse(
-                generate_question(input, limit, stream), media_type="text/event-stream"
+                generate_question(input, limit, props),
+                media_type="text/event-stream",
             )  # application/json
         else:
-            async for line in generate_question(input, limit, stream):
+            async for line in generate_question(input, limit, props):
                 return line
     else:
         raise HTTPException(status_code=400, detail="no input provided")
 
 
 @api_app.get("/question/")
-async def question(input: str, limit: int = 10, stream: bool = False):
-    return await _question(input, limit, stream)
+async def question(
+    input: str, limit: int = 10, props: ModelProperties = ModelProperties()
+):
+    return await _question(input, limit, props)
 
 
 @api_app.post("/question/")
 async def question(input: ChatInput):
-    return await _question(input.input, input.limit, input.stream)
+    return await _question(input.input, input.limit, input.model_properties)
 
 
 @api_app.get("/search/")

@@ -1,5 +1,6 @@
 import "./App.css";
-import { ChatMessage } from "./Components/ChatMessage";
+import { ChatMessage, ChatMessageProps } from "./Components/ChatMessage";
+import Sidebar from "./Components/Sidebar";
 import { useState, useRef, useEffect, FormEvent } from "react";
 
 interface MessageInfo {
@@ -22,6 +23,26 @@ function App() {
   let [input, setInput] = useState("");
   let [loading, setLoading] = useState<boolean>(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [props, setProps] = useState<ChatMessageProps>({
+    message: "",
+    limit: 12,
+    model_properties: {
+      max_tokens: 1200,
+      temperature: 0.5,
+      top_p: 0.95,
+      mirostat_mode: 0,
+      mirostat_tau: 5,
+      mirostat_eta: 0.1,
+      echo: false,
+      stream: true,
+      presence_penalty: 0,
+      frequency_penalty: 0,
+      n: 1,
+      best_of: 1,
+      top_k: 40,
+      repeat_penalty: 1.1,
+    },
+  });
 
   const scrollToBottom = () =>
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,6 +78,8 @@ function App() {
       let current = messages.length - 1;
       let text = "";
 
+      const msgProps = { ...props, ["message"]: inputText };
+
       await ChatMessage((data: any) => {
         if (data.choices) {
           console.log(data.choices[0].text);
@@ -85,7 +108,7 @@ function App() {
           }
           console.log(data);
         }
-      }, inputText);
+      }, msgProps);
     } finally {
       setLoading(false);
     }
@@ -98,6 +121,7 @@ function App() {
           <div className="side-menu-button">
             <span>+</span>New Chat
           </div>
+          <Sidebar props={props} setProps={setProps} />
         </aside>
         <section className="chatbox">
           <div className="chat-log">
