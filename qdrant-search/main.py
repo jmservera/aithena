@@ -100,6 +100,11 @@ Write a detailed summary from the provided Input that answers the provided Quest
         async with session.post(
             f"http://{CHAT_HOST}:{CHAT_PORT}/v1/completions",
             json=jsonable_encoder(props),
+            headers={
+                "Content-Type": "application/json",
+                "X-Accel-Buffering": "no",
+                "Accept": "text/event-stream",
+            },
         ) as resp:
             async for line in resp.content:
                 if line.strip() == b"data: [DONE]":

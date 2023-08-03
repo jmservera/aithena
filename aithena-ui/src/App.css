@@ -14,6 +14,8 @@
   width: 240px;
   padding: 10px;
   background-color: #202123;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .side-menu-button {
@@ -62,7 +64,7 @@
 .chat-log {
   text-align: left;
   scroll-behavior: auto;
-  overflow-y: scroll;
+  overflow-y: auto;
   padding-bottom: 100px;
   height: 100%;
 }
