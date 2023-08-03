@@ -30,17 +30,20 @@ function App() {
   let [loading, setLoading] = useState<boolean>(false);
   const abortControllerRef = useRef(new AbortController());
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [props, setProps] = useState<ChatMessageProps>({
-    ...defaultChatMessageProps,
-  });
-
-  const scrollToBottom = () =>
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  const [props, setProps] = useState<ChatMessageProps>(
+    JSON.parse(localStorage.getItem("props") || "") || {
+      ...defaultChatMessageProps,
+    }
+  );
 
   useEffect(() => {
-    // this ensures that resultRef.current is up to date during each render
-    scrollToBottom();
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [result, text]);
+
+  useEffect(() => {
+    console.log("Storing props to local storage");
+    localStorage.setItem("props", JSON.stringify(props));
+  }, [props]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
