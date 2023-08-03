@@ -31,7 +31,7 @@ function App() {
   const abortControllerRef = useRef(new AbortController());
   const bottomRef = useRef<HTMLDivElement>(null);
   const [props, setProps] = useState<ChatMessageProps>(
-    JSON.parse(localStorage.getItem("props") || "") || {
+    JSON.parse(localStorage.getItem("props") || "null") || {
       ...defaultChatMessageProps,
     }
   );
