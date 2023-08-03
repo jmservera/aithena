@@ -3,7 +3,6 @@ import {
   ChatMessage,
   ChatMessageProps,
   defaultChatMessageProps,
-  defaultCreateCompletionRequest,
 } from "./Components/ChatMessage";
 import Sidebar from "./Components/Sidebar";
 import { useState, useRef, useEffect, FormEvent } from "react";
