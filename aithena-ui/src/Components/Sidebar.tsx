@@ -1,5 +1,5 @@
 import React from "react";
-import { ChatMessageProps } from "./ChatMessage";
+import { ChatMessageProps, defaultChatMessageProps } from "./ChatMessage";
 
 // Define a component for the sidebar
 const Sidebar = ({
@@ -23,8 +23,12 @@ const Sidebar = ({
     }));
   };
 
+  const handleResetClick = () => {
+    setProps({ ...defaultChatMessageProps });
+  };
+
   return (
-    <div className="sidebar">
+    <div>
       <h1>Config</h1>
       <label htmlFor="limit">Query Results Limit:</label>
       <input
@@ -192,7 +196,7 @@ const Sidebar = ({
         id="top_k"
         name="top_k"
         min="0"
-        max="40"
+        max="100"
         value={props.model_properties.top_k}
         onChange={handleModelChange}
       />
@@ -212,6 +216,9 @@ const Sidebar = ({
       />
       <span>{props.model_properties.repeat_penalty}</span>
       <br />
+      <div className="side-menu-button" onClick={handleResetClick}>
+        <span>🧹</span>Reset
+      </div>
     </div>
   );
 };

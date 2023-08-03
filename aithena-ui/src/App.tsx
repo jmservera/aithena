@@ -1,5 +1,10 @@
 import "./App.css";
-import { ChatMessage, ChatMessageProps } from "./Components/ChatMessage";
+import {
+  ChatMessage,
+  ChatMessageProps,
+  defaultChatMessageProps,
+  defaultCreateCompletionRequest,
+} from "./Components/ChatMessage";
 import Sidebar from "./Components/Sidebar";
 import { useState, useRef, useEffect, FormEvent } from "react";
 
@@ -9,7 +14,7 @@ interface MessageInfo {
   time: string;
 }
 
-const messages: MessageInfo[] = [
+const defaultMessages: MessageInfo[] = [
   {
     message: "Hello!\nHow can I help you today?",
     sender: "Assistant",
@@ -17,31 +22,17 @@ const messages: MessageInfo[] = [
   },
 ];
 
+let messages: MessageInfo[] = [...defaultMessages];
+
 function App() {
   let [result, setResult] = useState<MessageInfo[]>(messages);
   let [text, setText] = useState<string>("");
   let [input, setInput] = useState("");
   let [loading, setLoading] = useState<boolean>(false);
+  const abortControllerRef = useRef(new AbortController());
   const bottomRef = useRef<HTMLDivElement>(null);
   const [props, setProps] = useState<ChatMessageProps>({
-    message: "",
-    limit: 12,
-    model_properties: {
-      max_tokens: 1200,
-      temperature: 0.5,
-      top_p: 0.95,
-      mirostat_mode: 0,
-      mirostat_tau: 5,
-      mirostat_eta: 0.1,
-      echo: false,
-      stream: true,
-      presence_penalty: 0,
-      frequency_penalty: 0,
-      n: 1,
-      best_of: 1,
-      top_k: 40,
-      repeat_penalty: 1.1,
-    },
+    ...defaultChatMessageProps,
   });
 
   const scrollToBottom = () =>
@@ -80,45 +71,57 @@ function App() {
 
       const msgProps = { ...props, ["message"]: inputText };
 
-      await ChatMessage((data: any) => {
-        if (data.choices) {
-          console.log(data.choices[0].text);
-          text = text + data.choices[0].text;
-          messages[current].message = text;
-          setText(text);
-          setResult(messages);
-        } else {
-          if (data.messages) {
-            console.log("Other data");
-            text = "The following information was found:\n";
-            data.messages.forEach((message: any) => {
-              text =
-                text +
-                `<b>Document</b> (${Math.round(
-                  message.score * 100
-                )}% similarity): ${message.path}, page ${
-                  message.page
-                }\n<b>Text</b>: ${message.payload}\n`;
-            });
-            text = text + "\n<b>Summary</b>: ";
-            console.log(`Summary ${current} ${text}`);
+      await ChatMessage(
+        (data: any) => {
+          if (data.choices) {
+            console.log(data.choices[0].text);
+            text = text + data.choices[0].text;
             messages[current].message = text;
-            setResult(messages);
             setText(text);
+            setResult(messages);
+          } else {
+            if (data.messages) {
+              console.log("Other data");
+              text = "The following information was found:\n";
+              data.messages.forEach((message: any) => {
+                text =
+                  text +
+                  `<b>Document</b> (${Math.round(
+                    message.score * 100
+                  )}% similarity): ${message.path}, page ${
+                    message.page
+                  }\n<b>Text</b>: ${message.payload}\n`;
+              });
+              text = text + "\n<b>Summary</b>: ";
+              console.log(`Summary ${current} ${text}`);
+              messages[current].message = text;
+              setResult(messages);
+              setText(text);
+            }
+            console.log(data);
           }
-          console.log(data);
-        }
-      }, msgProps);
+        },
+        msgProps,
+        abortControllerRef.current.signal
+      );
     } finally {
+      console.log("Done");
       setLoading(false);
     }
+  }
+
+  function handleNewChatClick() {
+    messages = [...defaultMessages];
+    abortControllerRef.current.abort();
+    setResult(messages);
+    setLoading(false);
   }
 
   return (
     <>
       <div className="App">
         <aside className="sidebar">
-          <div className="side-menu-button">
+          <div className="side-menu-button" onClick={handleNewChatClick}>
             <span>+</span>New Chat
           </div>
           <Sidebar props={props} setProps={setProps} />

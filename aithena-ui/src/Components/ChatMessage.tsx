@@ -24,15 +24,39 @@ export type CreateCompletionRequest = {
   repeat_penalty?: number; // min 0, default 1.1
 };
 
+export const defaultCreateCompletionRequest: CreateCompletionRequest = {
+  max_tokens: 1200,
+  temperature: 0.5,
+  top_p: 0.95,
+  mirostat_mode: 0,
+  mirostat_tau: 5,
+  mirostat_eta: 0.1,
+  echo: false,
+  stream: true,
+  presence_penalty: 0,
+  frequency_penalty: 0,
+  n: 1,
+  best_of: 1,
+  top_k: 40,
+  repeat_penalty: 1.1,
+};
+
 export type ChatMessageProps = {
   message: string;
   limit?: number;
   model_properties: CreateCompletionRequest;
 };
 
+export const defaultChatMessageProps: ChatMessageProps = {
+  message: "",
+  limit: 12,
+  model_properties: defaultCreateCompletionRequest,
+};
+
 export const ChatMessage = async (
   onEvent: MessageHandler,
-  messageProps: ChatMessageProps
+  messageProps: ChatMessageProps,
+  signal: AbortSignal
 ) => {
   const { message, limit = 12, model_properties } = messageProps;
   model_properties.stream = true;
@@ -47,6 +71,7 @@ export const ChatMessage = async (
   console.log(`input: ${msg}`);
 
   await fetchEventSource(`${serverBaseURL}`, {
+    signal: signal,
     openWhenHidden: true, // https://github.com/Azure/fetch-event-source/issues/17
     method: "POST",
     headers: {
@@ -63,6 +88,7 @@ export const ChatMessage = async (
       }
     },
     onmessage(event) {
+      if (onEvent === undefined) return;
       try {
         if (event.data.trim() !== "") {
           const parsedData = JSON.parse(event.data);
