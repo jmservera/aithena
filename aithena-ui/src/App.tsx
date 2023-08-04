@@ -123,9 +123,6 @@ function App() {
     <>
       <div className="App">
         <aside className="sidebar">
-          <div className="side-menu-button" onClick={handleNewChatClick}>
-            <span>+</span>New Chat
-          </div>
           <Sidebar props={props} setProps={setProps} />
         </aside>
         <section className="chatbox">
@@ -164,6 +161,13 @@ function App() {
           </div>
           <div className="chat-input-holder" onSubmit={handleSubmit}>
             <form>
+              <div
+                className="swipe-button"
+                title="New Chat"
+                onClick={handleNewChatClick}
+              >
+                🧹
+              </div>
               <input
                 disabled={loading}
                 className="chat-input-text-area"
