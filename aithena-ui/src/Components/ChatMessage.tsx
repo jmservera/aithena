@@ -17,7 +17,7 @@ export type ChatMessageProps = {
 
 export const defaultChatMessageProps: ChatMessageProps = {
   message: "",
-  limit: 12,
+  limit: 8,
   model_properties: defaultCreateCompletionRequest,
 };
 
@@ -34,7 +34,11 @@ export const ChatMessage = async (
   let msg = JSON.stringify({
     input: message,
     limit: limit,
-    model_properties: model_properties,
+    model_properties: {
+      stream: model_properties.stream,
+      max_tokens: model_properties.max_tokens,
+      temperature: model_properties.temperature,
+    },
   });
   console.log(`input: ${msg}`);
 

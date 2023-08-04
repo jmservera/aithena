@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # encoding: utf-8
-import time
 import aiohttp
 from fastapi.staticfiles import StaticFiles
 from pydantic.dataclasses import dataclass
@@ -35,17 +34,18 @@ class ModelProperties(BaseModel):
     suffix: str = None
     max_tokens: int = 2048
     temperature: float = 0.8
-    top_p: float = 0.95
-    mirostat_mode: int = 0
-    mirostat_tau: int = 5
-    mirostat_eta: float = 0.1
-    stream: bool = False
-    presence_penalty: float = 0
-    frequency_penalty: float = 0
-    n: float = 1
-    best_of: int = 1
-    top_k: int = 40
-    repeat_penalty: float = 1.1
+    top_p: float | None
+    mirostat_mode: int | None
+    mirostat_tau: int | None
+    mirostat_eta: float | None
+    stream: bool | None
+    presence_penalty: float | None
+    frequency_penalty: float | None
+    n: float | None
+    best_of: int | None
+    top_k: int | None
+    repeat_penalty: float | None
+    stop: list | None = ["###"]
 
 
 class ChatInput(BaseModel):
@@ -91,7 +91,9 @@ Write a detailed summary from the provided Input that answers the provided Quest
     ]
 
     props.prompt = prompts[0]
-    print(props)
+    props.stop = ["###"]
+    props_dict = props.dict(exclude_none=True)
+    print(props_dict)
 
     # completionRequest = {"messages": messages, "max_tokens": 2048}
     # , "temperature": 0.9, "top_p": 1, "frequency_penalty": 0, "presence_penalty": 0, "best_of": 1, "n": 1, "stream": False, "logprobs": None, "echo": False}
@@ -99,7 +101,7 @@ Write a detailed summary from the provided Input that answers the provided Quest
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
         async with session.post(
             f"http://{CHAT_HOST}:{CHAT_PORT}/v1/completions",
-            json=jsonable_encoder(props),
+            json=props_dict,
             headers={
                 "Content-Type": "application/json",
                 "X-Accel-Buffering": "no",

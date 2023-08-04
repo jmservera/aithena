@@ -7,7 +7,7 @@ import {
 } from "./types/CreateCompletionRequest";
 
 // Define a component for the sidebar
-const Sidebar = ({
+const Configbar = ({
   props,
   setProps,
 }: {
@@ -36,9 +36,12 @@ const Sidebar = ({
     if (value.type == "number") {
       return (
         <>
-          <label htmlFor={value.key}>{value.key}:</label>
+          <label key={`label-${index}`} htmlFor={value.key}>
+            {value.key}:
+          </label>
           <input
-            key={index}
+            key={`input-${index}`}
+            disabled={index > 1}
             type="range"
             title={value.desc}
             id={value.key}
@@ -51,10 +54,10 @@ const Sidebar = ({
             ]?.toString()}
             onChange={handleModelChange}
           />
-          <span>
+          <span key={`span-${index}`}>
             {props.model_properties[value.key as keyof CreateCompletionRequest]}
           </span>
-          <br />
+          <br key={`br-${index}`} />
         </>
       );
     }
@@ -63,27 +66,34 @@ const Sidebar = ({
   return (
     <div>
       <h1>Config</h1>
-      <label htmlFor="limit">limit:</label>
+      <label key="limit-label" htmlFor="limit">
+        limit:
+      </label>
       <input
+        key="limit-input"
         title="The maximum number of results to generate."
         type="range"
         id="limit"
         name="limit"
         min="1"
-        max="25"
+        max="9"
         value={props.limit}
         onChange={handleChange}
       />
-      <span>{props.limit}</span>
-      <br />
+      <span key="limit-span">{props.limit}</span>
+      <br key="limit-br" />
       {CreateCompletionRequestDef.map((value, index) =>
         renderPropertyEditor(value, index)
       )}
-      <div className="side-menu-button" onClick={handleResetClick}>
+      <div
+        key="side-key"
+        className="side-menu-button"
+        onClick={handleResetClick}
+      >
         <span>🧹</span>Reset
       </div>
     </div>
   );
 };
 
-export default Sidebar;
+export default Configbar;

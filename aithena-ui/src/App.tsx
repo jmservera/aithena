@@ -4,7 +4,7 @@ import {
   ChatMessageProps,
   defaultChatMessageProps,
 } from "./Components/ChatMessage";
-import Sidebar from "./Components/Sidebar";
+import Configbar from "./Components/Configbar";
 import { useState, useRef, useEffect, FormEvent } from "react";
 
 interface MessageInfo {
@@ -123,7 +123,7 @@ function App() {
     <>
       <div className="App">
         <aside className="sidebar">
-          <Sidebar props={props} setProps={setProps} />
+          <Configbar props={props} setProps={setProps} />
         </aside>
         <section className="chatbox">
           <div className="chat-log">
