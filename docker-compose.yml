@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   redis:
     # it is importnant to configure OS memory overcommit
@@ -22,7 +21,7 @@ services:
         aliases:
           - redis
     volumes:
-      - redis:/data
+      - redis-data:/data
   rabbitmq:
     image: rabbitmq
     command: rabbitmq-server
@@ -100,14 +99,14 @@ services:
     build: ./document-lister
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-      - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
       - QUEUE_NAME=shortembeddings
     depends_on:
       - rabbitmq
       - redis
     restart: on-failure
+    volumes:
+      - document-data:/data/documents
     networks:
       - default
   document-indexer:
@@ -211,11 +210,17 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/certbot-data/www"
-  redis:
+  redis-data:
     driver: local
     driver_opts:
       type: "none"
       o: "bind"
       device: "/source/volumes/redis"
+  document-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/document-data"
 networks:
   default:
