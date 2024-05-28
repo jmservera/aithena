@@ -1,3 +1,5 @@
+""" Retrieves the environment variables used in the document lister. """
+
 import os
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
