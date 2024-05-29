@@ -60,30 +60,30 @@ services:
       default:
         aliases:
           - qdrant
-  llama-base: # this one is here just to ensure that the base image is created
-    build: ./llama-base
-    image: aithena-llama-base
-    volumes:
-      - "../open_llama_7b/:/llama/models/7B/"
-  llama-server:
-    build: ./llama-server
-    ports:
-      - "8000:8000"
-    volumes:
-      - "../open_llama_7b/:/llama/models/"
-    restart: on-failure
-    cap_add:
-      - IPC_LOCK
-      - SYS_NICE
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       memory: 16G
-    #       cpus: "20"
-    networks:
-      default:
-        aliases:
-          - llama-server
+  # llama-base: # this one is here just to ensure that the base image is created
+  #   build: ./llama-base
+  #   image: aithena-llama-base
+  #   volumes:
+  #     - "../open_llama_7b/:/llama/models/7B/"
+  # llama-server:
+  #   build: ./llama-server
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - "../open_llama_7b/:/llama/models/"
+  #   restart: on-failure
+  #   cap_add:
+  #     - IPC_LOCK
+  #     - SYS_NICE
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       memory: 16G
+  #   #       cpus: "20"
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - llama-server
   embeddings-server:
     build: ./embeddings-server
     environment:
@@ -141,7 +141,7 @@ services:
     restart: on-failure
     depends_on:
       - qdrant
-      - llama-server
+#      - llama-server
     environment:
       - PORT=8080
       - QDRANT_HOST=qdrant
@@ -154,13 +154,13 @@ services:
       - CHAT_PORT=8000
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
-  llama-playground:
-    image: ghcr.io/mckaywrigley/chatbot-ui:main
-    ports:
-      - 3000:3000
-    environment:
-      - OPENAI_API_HOST=http://llama-server:8000
-      - OPENAI_API_KEY=""
+  # llama-playground:
+  #   image: ghcr.io/mckaywrigley/chatbot-ui:main
+  #   ports:
+  #     - 3000:3000
+  #   environment:
+  #     - OPENAI_API_HOST=http://llama-server:8000
+  #     - OPENAI_API_KEY=""
   nginx:
     image: nginx:1.15-alpine
     restart: unless-stopped
