@@ -89,7 +89,7 @@ services:
     environment:
       - PORT=8085
     ports:
-      - "8085:8085"
+      - "8085:8080"
     restart: on-failure
     networks:
       default:
@@ -179,6 +179,17 @@ services:
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+  solr:
+    image: solr
+    restart: unless-stopped
+    volumes:
+      - solr-data:/var/solr/data
+      - document-data:/var/solr/data/documents
+    environment:
+      - SOLR_MODULES=extraction,langid
+    ports:
+      - "8983:8983"
+    command: solr-precreate books
 volumes:
   rabbitmq-data:
     driver: local
@@ -222,5 +233,11 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/document-data"
+  solr-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data"
 networks:
   default:
