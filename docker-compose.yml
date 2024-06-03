@@ -181,6 +181,9 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
   solr:
     image: solr
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
     restart: unless-stopped
     volumes:
       - solr-data:/var/solr/data
@@ -189,7 +192,8 @@ services:
       - SOLR_MODULES=extraction,langid
     ports:
       - "8983:8983"
-    command: solr-precreate books
+    # command: solr-precreate books
+    entrypoint:  tini -- solr start -c -f
 volumes:
   rabbitmq-data:
     driver: local
