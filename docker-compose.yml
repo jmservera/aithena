@@ -46,20 +46,20 @@ services:
       default:
         aliases:
           - rabbitmq
-  qdrant:
-    image: qdrant/qdrant
-    environment:
-      - QDRANT__DEBUG=1
-      - QDRANT__SERVICE__HOST=0.0.0.0
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant-data:/qdrant/storage
-    restart: on-failure
-    networks:
-      default:
-        aliases:
-          - qdrant
+  # qdrant:
+  #   image: qdrant/qdrant
+  #   environment:
+  #     - QDRANT__DEBUG=1
+  #     - QDRANT__SERVICE__HOST=0.0.0.0
+  #   ports:
+  #     - "6333:6333"
+  #   volumes:
+  #     - qdrant-data:/qdrant/storage
+  #   restart: on-failure
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - qdrant
   # llama-base: # this one is here just to ensure that the base image is created
   #   build: ./llama-base
   #   image: aithena-llama-base
@@ -115,9 +115,9 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - EMBEDDINGS_HOST=embeddings-server
       - EMBEDDINGS_PORT=8085
-      - QDRANT_HOST=qdrant
-      - QDRANT_COLLECTION=shortembeddings
-      - QDRANT_VECTOR_DIM=768
+      # - QDRANT_HOST=qdrant
+      # - QDRANT_COLLECTION=shortembeddings
+      # - QDRANT_VECTOR_DIM=768
       - STORAGE_ACCOUNT_NAME=biblaisourcedocs
       - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
@@ -128,32 +128,32 @@ services:
     depends_on:
       - rabbitmq
       - redis
-      - qdrant
+      # - qdrant
       - embeddings-server
     networks:
       - default
-  qdrant-search:
-    build:
-      context: .
-      dockerfile: ./qdrant-search/Dockerfile
-    ports:
-      - "8080:8080"
-    restart: on-failure
-    depends_on:
-      - qdrant
-#      - llama-server
-    environment:
-      - PORT=8080
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - QDRANT_COLLECTION=shortembeddings
-      - QDRANT_VECTOR_DIM=768
-      - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8085
-      - CHAT_HOST=llama-server
-      - CHAT_PORT=8000
-      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-      - STORAGE_CONTAINER=test-library
+  # qdrant-search:
+  #   build:
+  #     context: .
+  #     dockerfile: ./qdrant-search/Dockerfile
+  #   ports:
+  #     - "8080:8080"
+  #   restart: on-failure
+  #   depends_on:
+  #     - qdrant
+  #   #      - llama-server
+  #   environment:
+  #     - PORT=8080
+  #     - QDRANT_HOST=qdrant
+  #     - QDRANT_PORT=6333
+  #     - QDRANT_COLLECTION=shortembeddings
+  #     - QDRANT_VECTOR_DIM=768
+  #     - EMBEDDINGS_HOST=embeddings-server
+  #     - EMBEDDINGS_PORT=8085
+  #     - CHAT_HOST=llama-server
+  #     - CHAT_PORT=8000
+  #     - STORAGE_ACCOUNT_NAME=biblaisourcedocs
+  #     - STORAGE_CONTAINER=test-library
   # llama-playground:
   #   image: ghcr.io/mckaywrigley/chatbot-ui:main
   #   ports:
@@ -179,6 +179,37 @@ services:
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+  zoo1:
+    image: zookeeper:3.9
+    ports:
+      - 8080:8080
+      - 2181:2181
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+  zoo2:
+    image: zookeeper:3.9
+    ports:
+      - 2182:2181
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+  zoo3:
+    image: zookeeper:3.9
+    ports:
+      - 2183:2181
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
   solr:
     image: solr
     # build:
@@ -189,11 +220,61 @@ services:
       - solr-data:/var/solr/data
       - document-data:/var/solr/data/documents
     environment:
-      - SOLR_MODULES=extraction,langid
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
     ports:
       - "8983:8983"
-    # command: solr-precreate books
-    entrypoint:  tini -- solr start -c -f
+    networks:
+      - default
+    # command: solr-precreate -c books
+    entrypoint: docker-entrypoint.sh solr start -c -f
+    depends_on:
+      - zoo1
+      - zoo2
+      - zoo3
+  # second solr node
+  solr2:
+    image: solr
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - solr-data2:/var/solr/data
+      - document-data:/var/solr/data/documents
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    ports:
+      - "8984:8983"
+    #command: solr-create -c books
+    entrypoint: docker-entrypoint.sh solr start -c -f
+    depends_on:
+      - zoo1
+      - zoo2
+      - zoo3
+      - solr
+  solr3:
+    image: solr
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - solr-data3:/var/solr/data
+      - document-data:/var/solr/data/documents
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    ports:
+      - "8985:8983"
+    #command: solr-create -c books
+    entrypoint: docker-entrypoint.sh solr start -c -f
+    depends_on:
+      - zoo1
+      - zoo2
+      - zoo3
+      - solr2
 volumes:
   rabbitmq-data:
     driver: local
@@ -201,12 +282,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/rabbitmq-data"
-  qdrant-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/qdrant-data"
+  # qdrant-data:
+  #   driver: local
+  #   driver_opts:
+  #     type: "none"
+  #     o: "bind"
+  #     device: "/source/volumes/qdrant-data"
   nginx-data:
     driver: local
     driver_opts:
@@ -243,5 +324,17 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/solr-data"
+  solr-data2:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data2"
+  solr-data3:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data3"
 networks:
   default:
