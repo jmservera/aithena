@@ -190,6 +190,11 @@ services:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data1_logs:/logs
+      - zoo-data1_data:/data
+      - zoo-data1_datalog:/datalog
+      - zoo-backup:/backup
   zoo2:
     image: zookeeper:3.9
     ports:
@@ -200,6 +205,13 @@ services:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data2_logs:/logs
+      - zoo-data2_data:/data
+      - zoo-data2_datalog:/datalog
+      - zoo-backup:/backup
+    depends_on:
+      - zoo1
   zoo3:
     image: zookeeper:3.9
     ports:
@@ -210,6 +222,13 @@ services:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data3_logs:/logs
+      - zoo-data3_data:/data
+      - zoo-data3_datalog:/datalog
+      - zoo-backup:/backup
+    depends_on:
+      - zoo2
   solr:
     image: solr
     # build:
@@ -336,5 +355,65 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/solr-data3"
+  zoo-data1_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/logs"
+  zoo-data1_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/data"
+  zoo-data1_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/datalog"
+  zoo-data2_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/logs"
+  zoo-data2_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/data"
+  zoo-data2_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/datalog"
+  zoo-data3_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/logs"
+  zoo-data3_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/data"
+  zoo-data3_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/datalog"
+  zoo-backup:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-backup"
 networks:
   default:

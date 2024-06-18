@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 init-letsencrypt.sh
 .*env/
+__azurite_db_blob__.json
+__azurite_db_blob_extent__.json

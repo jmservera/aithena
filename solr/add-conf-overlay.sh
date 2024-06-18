@@ -1,6 +1,6 @@
 #!/bin/sh
 
-collection='http://localhost:8983/solr/books/config'
+collection='http://localhost:8983/api/collections/books/config'
 
 
 # add the langid processor, needs MODULES=langid in solrconfig.xml 
@@ -23,7 +23,7 @@ collection='http://localhost:8983/solr/books/config'
 
 # add the pdf extraction handler, needs SOLR_MODULES=extraction in solrconfig.xml
 curl -X POST -H 'Content-type:application/json' -d '{
-  "create-requesthandler": {
+  "update-requesthandler": {
     "name": "/update/extract",
     "class": "solr.extraction.ExtractingRequestHandler",
     "defaults":{ "lowernames": "true", "fmap.content":"_text_", "captureAttr":"true", "update.chain":"langid"}
@@ -39,3 +39,20 @@ curl -X POST -H 'Content-type:application/json' -d '"initParams": {
       }
     }
   }' $collection
+
+# <backup>
+#   <repository name="local_repo"
+#     class="org.apache.solr.core.backup.repository.LocalFileSystemRepository">
+#     <str name="location">/solr/backup_data</str>
+#   </repository>
+# </backup>
+
+curl -X POST -H 'Content-type:application/json' -d '{
+  "create-backup": {
+    "repository": {
+      "name": "local_repo",
+      "class": "org.apache.solr.core.backup.repository.LocalFileSystemRepository",
+      "location": "/backup"
+    }
+  }
+}' $collection
