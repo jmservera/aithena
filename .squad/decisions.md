@@ -382,6 +382,92 @@ Phase 2 needs search results the React UI can consume immediately, including lin
 
 ---
 
+---
+
+## User Directives — Tooling Modernization
+
+### 2026-03-13T22:30: UV, Security Scanning, Linting Initiative
+
+**Captured:** jmservera (via Copilot)
+
+**Directive:**
+1. Move Python projects to astral's `uv` for package management (replace pip + requirements.txt)
+2. Add security scanning tools to CI: bandit, checkov, zizmor, OWASP ZAP
+3. Add linting to CI: ruff (Python), eslint + prettier (TypeScript/React)
+4. These should be part of the project instructions/CI workflows
+
+**Why:** User request — security-first CI, modern Python tooling, consistent code quality
+
+---
+
+## Ripley — UV Migration + Security Scanning + Linting Implementation Plan
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-14  
+**Status:** PROPOSED  
+**Requested by:** jmservera
+
+### Executive Summary
+
+Three parallel initiatives to modernize aithena:
+1. **UV Migration:** Migrate 7 Python services from pip+requirements.txt to astral's `uv`
+2. **Security Scanning:** Add bandit, checkov, and zizmor to CI
+3. **Linting:** Add ruff (Python) and prettier (TypeScript/JS) to CI
+
+**Total Issues:** 22 issues across 3 phases (11 Phase A parallel, 7 Phase B sequential, 4 Phase C validation)
+
+### Phased Approach
+
+**Phase A (Parallel):** 11 issues
+- UV-1 through UV-7: Migrate 7 Python services (admin, solr-search, document-indexer, document-lister, qdrant-search, qdrant-clean, llama-server)
+- SEC-1 through SEC-3: Add bandit, checkov, zizmor security scanning to CI
+- LINT-1: Add ruff configuration and CI job
+
+**Phase B (Sequential):** 7 issues
+- UV-8, UV-9: Update build scripts and CI setup for UV
+- LINT-2 through LINT-4: Add prettier and eslint CI jobs for aithena-ui
+- LINT-5: Remove deprecated pylint/black from document-lister
+- DOC-1: Document UV migration in root README
+
+**Phase C (Validation):** 4 issues
+- SEC-4: Create OWASP ZAP manual audit guide
+- SEC-5: Run scanners, triage findings, validate baselines
+- LINT-6, LINT-7: Run linters, auto-fix, validate clean state
+
+### Services Migrated
+
+- **Migrating:** document-indexer, document-lister, solr-search, qdrant-search, qdrant-clean, admin, llama-server (7 services)
+- **Skipping:** embeddings-server (custom base image), llama-base (complex multi-stage build)
+
+### Architectural Principles
+
+1. **UV as default, pip as fallback** — Keep requirements.txt temporarily for backward compatibility
+2. **Security scanning before production** — All HIGH/CRITICAL findings triaged before release
+3. **Linting as gatekeeper** — CI fails on linting errors to prevent regression
+4. **Incremental adoption** — Per-service migrations allow rollback if needed
+5. **Documentation over automation** — Manual OWASP ZAP guide preferred over complex CI integration
+
+### Key Risks & Mitigations
+
+| Risk | Mitigation |
+|------|-----------|
+| UV alpine compatibility | UV has standalone installer; test early with document-indexer |
+| Security scanners find false positives | Triage in SEC-5, create baseline exceptions, tune thresholds |
+| Ruff finds linting issues | Auto-fix with `ruff check --fix` and `ruff format` |
+| UV lock file merge conflicts | Phase A is per-service, minimal overlap |
+
+### Execution Plan
+
+1. Label Phase A issues (11 in parallel) with `squad:copilot`
+2. Review and merge Phase A PRs
+3. Label Phase B issues (7 sequential) with `squad:copilot`
+4. Review and merge Phase B PRs
+5. Label Phase C issues (4 validation) with `squad:copilot`
+
+**Timeline:** Phase A (1-2 weeks) → Phase B (1 week) → Phase C (1 week) → **Total 3-4 weeks**
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

@@ -150,3 +150,45 @@
 4. If PR deletes files that were recently added, it's DEFINITELY stale
 
 **Triage improvement:** When batching copilot issues, ensure agents pull latest base branch before starting work to avoid this class of conflict.
+
+### 2026-03-14 — Phase 3 PR Review (#68, #69, #70)
+
+**Context:** Reviewed three Phase 3 PRs after #65 (embeddings), #66 (Solr vectors), #67 (chunking) merged.
+
+**ALL THREE PRs NEED CHANGES** — Stale branch + wrong service
+
+**PR #68 — Keyword/Semantic/Hybrid Search** (❌ NEEDS MAJOR CHANGES)
+- **Critical issue:** Modifies `qdrant-search/` instead of `solr-search/`
+- Uses Qdrant for semantic search, but PR #66 added Solr vector fields with kNN handler
+- Architecture (ADR-001, ADR-003) requires Solr-first hybrid search
+- Docker naming confusion: creates service named `solr-search` but uses `qdrant-search/Dockerfile`
+- **What was good:** RRF implementation, normalized models, 22 tests, backward-compatible defaults
+- **Required:** Rebase, target `solr-search/main.py`, use Solr `/knn` handler, combine Solr BM25 + Solr kNN
+
+**PR #69 — Similar Books Endpoint** (❌ NEEDS MAJOR CHANGES)
+- **Critical issue:** Modifies `qdrant-search/`, uses Qdrant `.retrieve()` and `.search()`
+- Should add endpoint to `solr-search/main.py` using Solr kNN on `book_embedding` field
+- Endpoint should accept Solr doc ID, not Qdrant point ID
+- Depends on #68, which is blocked
+- **What was good:** Clean endpoint design, self-exclusion, chunk dedup, 13 tests, error handling
+- **Required:** Wait for #68 fix, rebase, target `solr-search`, query Solr vectors
+
+**PR #70 — Similar Books UI** (⏸️ BLOCKED)
+- **Issue:** Blocked by #69 needing reimplementation
+- API contract mismatch (endpoint path, ID format)
+- **What was good:** Clean React hooks, good UX, proper separation, component quality
+- **Recommendation:** Put on hold; likely needs minor fixes after #69 lands
+
+**Root Cause:**
+All three PRs branched before #66/#67 merged. Agents didn't see:
+- Solr vector fields now exist (PR #66)
+- Architecture established `solr-search` as canonical service (PR #72)
+- Chunking targets Solr (PR #67)
+
+Work based on outdated assumptions (use Qdrant, modify old service).
+
+**Key Learning:**
+When batching copilot issues, ensure agents pull latest base before starting. Stale branch state causes fundamental architecture violations requiring complete rework, not incremental fixes.
+
+**Triage Improvement:**
+Before labeling next Phase 3 batch, wait for these to be reworked and merged. The dependency chain (#45→#46→#47) must flow through correct service.
