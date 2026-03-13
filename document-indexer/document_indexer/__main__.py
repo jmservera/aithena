@@ -15,6 +15,10 @@ from retry import retry
 
 from . import (
     BASE_PATH,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    EMBEDDINGS_HOST,
+    EMBEDDINGS_PORT,
     QUEUE_NAME,
     RABBITMQ_HOST,
     RABBITMQ_PORT,
@@ -24,6 +28,8 @@ from . import (
     SOLR_HOST,
     SOLR_PORT,
 )
+from .chunker import chunk_text
+from .embeddings import get_embeddings
 from .metadata import extract_metadata
 
 logging.basicConfig(level=logging.INFO)
@@ -78,7 +84,15 @@ def save_state(file_path: str, **updates) -> dict:
     return state
 
 
-def mark_failure(path: Path, error: str) -> None:
+def mark_failure(path: Path, error: str, stage: str = "unknown") -> None:
+    """Persist a failure into Redis, recording which *stage* failed.
+
+    Args:
+        path: The file that was being processed.
+        error: Human-readable description of the error.
+        stage: ``"text_indexing"`` when Solr Tika extraction failed, or
+            ``"embedding_indexing"`` when chunk/vector indexing failed.
+    """
     last_modified = path.stat().st_mtime if path.exists() else None
     save_state(
         str(path),
@@ -87,6 +101,7 @@ def mark_failure(path: Path, error: str) -> None:
         processed=False,
         failed=True,
         error=error,
+        error_stage=stage,
         timestamp=now_iso(),
     )
 
@@ -98,6 +113,17 @@ def get_page_count(path: Path) -> int | None:
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.warning("Unable to determine page count for %s: %s", path, exc)
         return None
+
+
+def extract_pdf_text(path: Path) -> str:
+    """Extract all text from a PDF using pdfplumber (for chunk-based embedding indexing)."""
+    pages: list[str] = []
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                pages.append(text)
+    return "\n".join(pages)
 
 
 def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, str]:
@@ -123,6 +149,73 @@ def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, st
     return params
 
 
+def build_chunk_doc(
+    parent_id: str,
+    chunk_index: int,
+    chunk: str,
+    embedding: list[float],
+    metadata: dict,
+) -> dict:
+    """Build a Solr JSON document for a single text chunk."""
+    chunk_id = f"{parent_id}_chunk_{chunk_index:04d}"
+    doc: dict = {
+        "id": chunk_id,
+        "parent_id_s": parent_id,
+        "chunk_index_i": chunk_index,
+        "chunk_text_t": chunk,
+        "embedding_v": embedding,
+        "title_s": metadata["title"],
+        "author_s": metadata["author"],
+        "file_path_s": metadata["file_path"],
+        "folder_path_s": metadata["folder_path"],
+    }
+    if metadata.get("category"):
+        doc["category_s"] = metadata["category"]
+    if metadata.get("year") is not None:
+        doc["year_i"] = metadata["year"]
+    return doc
+
+
+def index_chunks(
+    path: Path,
+    parent_id: str,
+    metadata: dict,
+) -> int:
+    """Chunk the PDF text, obtain embeddings, and index into Solr.
+
+    Returns:
+        The number of chunks successfully indexed.
+
+    Raises:
+        Exception: Propagates any HTTP or embedding error so the caller can
+            record the appropriate Redis failure stage.
+    """
+    text = extract_pdf_text(path)
+    chunks = chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
+    if not chunks:
+        logger.info("No text chunks extracted from %s; skipping embedding indexing.", path)
+        return 0
+
+    embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
+
+    docs = [
+        build_chunk_doc(parent_id, idx, chunk, emb, metadata)
+        for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+    ]
+
+    solr_url = (
+        f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update"
+        "?commitWithin=10000"
+    )
+    response = requests.post(
+        solr_url,
+        json=docs,
+        timeout=SOLR_TIMEOUT,
+    )
+    response.raise_for_status()
+    return len(docs)
+
+
 def index_document(path: Path) -> dict:
     if path.suffix.lower() != ".pdf":
         raise ValueError(f"Unsupported file type: {path.suffix or 'unknown'}")
@@ -134,25 +227,33 @@ def index_document(path: Path) -> dict:
     params = build_literal_params(metadata, page_count)
     solr_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update/extract"
 
-    with path.open("rb") as handle:
-        response = requests.post(
-            solr_url,
-            params=params,
-            files={"file": (path.name, handle, "application/pdf")},
-            timeout=SOLR_TIMEOUT,
-        )
+    # ── Phase 1: full-text indexing via Solr Tika ──────────────────────────
+    try:
+        with path.open("rb") as handle:
+            response = requests.post(
+                solr_url,
+                params=params,
+                files={"file": (path.name, handle, "application/pdf")},
+                timeout=SOLR_TIMEOUT,
+            )
+        response.raise_for_status()
+    except Exception as exc:
+        mark_failure(path, str(exc), stage="text_indexing")
+        raise
 
-    response.raise_for_status()
-
+    parent_id = params["literal.id"]
     save_state(
         str(path),
         path=str(path),
         last_modified=path.stat().st_mtime,
-        processed=True,
+        processed=False,
         failed=False,
         error=None,
+        error_stage=None,
         timestamp=now_iso(),
-        solr_id=params["literal.id"],
+        solr_id=parent_id,
+        text_indexed=True,
+        embedding_indexed=False,
         title=metadata["title"],
         author=metadata["author"],
         year=metadata["year"],
@@ -161,6 +262,20 @@ def index_document(path: Path) -> dict:
         folder_path=metadata["folder_path"],
         file_size=metadata["file_size"],
         page_count=page_count,
+    )
+
+    # ── Phase 2: chunk + embedding indexing ────────────────────────────────
+    try:
+        chunk_count = index_chunks(path, parent_id, metadata)
+    except Exception as exc:
+        mark_failure(path, str(exc), stage="embedding_indexing")
+        raise
+
+    save_state(
+        str(path),
+        processed=True,
+        embedding_indexed=True,
+        chunk_count=chunk_count,
     )
     return metadata
 
@@ -187,7 +302,7 @@ def callback(
     except Exception as exc:  # pragma: no cover - runtime integration path
         logger.exception("Failed to process %s", file_path)
         try:
-            mark_failure(Path(file_path), str(exc))
+            mark_failure(Path(file_path), str(exc), stage="unknown")
         except Exception:
             logger.exception("Unable to persist failed state for %s", file_path)
     finally:
