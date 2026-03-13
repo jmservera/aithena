@@ -115,3 +115,38 @@
 - PR #62 needs one-line fix (`limit` → `page_size`), then merge
 - PR #63 needs full rework (remove qdrant-search changes, rebase on #62, fix API calls)
 - Future Phase 2 PRs should build incrementally on the merged #62 base
+
+### 2026-03-13T23:35 — Phase 2-3 Draft PR Review (#64, #65)
+
+**Context:** Reviewed two @copilot PRs after PR #62 (faceted search UI) merged to `jmservera/solrstreamlitui`.
+
+**PR #64 — "Add Vitest test coverage"** (CLOSED ❌)
+- **Critical blocking issue:** Branched from old state BEFORE PR #72 (solr-search) and PR #62 (faceted UI) merged
+- Would DELETE critical infrastructure if merged:
+  - Entire `solr-search/` service (Dockerfile, main.py, requirements.txt, all tests)
+  - `.github/workflows/ci.yml` (CI workflows just added by Parker)
+  - `.squad/` team metadata
+  - docker-compose.yml Phase 2 changes
+- **Root cause:** PR created when base was at old commit; attempting to merge stale state over fresh work
+- **What was valuable:** 39 vitest tests for search/facets/PDF viewing, proper test infrastructure setup
+- **Verdict:** CLOSED with detailed explanation. If tests still needed, must create NEW PR rebased on current state, ONLY adding test files (no production code overlap with already-merged #62)
+
+**PR #65 — "Align embeddings-server with distiluse model"** (APPROVED ✅)
+- Clean ADR-004 implementation: fixes Dockerfile/main.py model mismatch
+- Changes `use-cmlm-multilingual` → `distiluse-base-multilingual-cased-v2`
+- Single source of truth: `MODEL_NAME` in `config/__init__.py` (env-overridable)
+- New `GET /v1/embeddings/model` endpoint exposes model + dimension for Solr vector field sizing
+- Existing `/v1/embeddings/` contract unchanged (backward compatible)
+- Fail-fast startup with `sys.exit(1)` and `CRITICAL` log on model load failure
+- 8 pytest tests, all mocked (no model download required)
+- **Verdict:** APPROVED and marked ready. This is Phase 3 step 1, independent of Phase 2 UI work.
+
+**Key architectural learning:** When reviewing PRs in rapid succession, ALWAYS check the branch point. PRs branched before recent merges can become "time bombs" that delete fresh work. The git diff stat showing massive deletions of recently-added services was the red flag.
+
+**Stale PR detection pattern:**
+1. Check PR diff stat for unexpected deletions
+2. Compare PR file list against current branch state
+3. If PR adds files that already exist with different content, it's likely stale
+4. If PR deletes files that were recently added, it's DEFINITELY stale
+
+**Triage improvement:** When batching copilot issues, ensure agents pull latest base branch before starting work to avoid this class of conflict.
