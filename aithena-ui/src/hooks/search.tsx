@@ -12,6 +12,7 @@ export interface BookResult {
   page_count?: number;
   file_path?: string;
   highlights?: string[];
+  document_url?: string | null;
 }
 
 export interface FacetValue {

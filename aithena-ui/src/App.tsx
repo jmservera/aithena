@@ -1,11 +1,12 @@
 import "./App.css";
 import { useState, FormEvent } from "react";
-import { useSearch } from "./hooks/search";
+import { useSearch, BookResult } from "./hooks/search";
 import { SearchFilters } from "./hooks/search";
 import FacetPanel from "./Components/FacetPanel";
 import ActiveFilters from "./Components/ActiveFilters";
 import BookCard from "./Components/BookCard";
 import Pagination from "./Components/Pagination";
+import PdfViewer from "./Components/PdfViewer";
 
 const SORT_OPTIONS = [
   { value: "score desc", label: "Relevance" },
@@ -17,6 +18,7 @@ const SORT_OPTIONS = [
 
 function App() {
   const [inputValue, setInputValue] = useState("");
+  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
   const {
     searchState,
     results,
@@ -150,7 +152,12 @@ function App() {
           )}
 
           {results.map((book) => (
-            <BookCard key={book.id} book={book} />
+            <BookCard
+              key={book.id}
+              book={book}
+              onOpenPdf={setSelectedBook}
+              isSelected={selectedBook?.id === book.id}
+            />
           ))}
         </section>
 
@@ -168,8 +175,16 @@ function App() {
           </footer>
         )}
       </main>
+
+      {selectedBook && (
+        <PdfViewer
+          result={selectedBook}
+          onClose={() => setSelectedBook(null)}
+        />
+      )}
     </div>
   );
 }
 
 export default App;
+
