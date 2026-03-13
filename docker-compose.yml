@@ -101,6 +101,7 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=redis
       - QUEUE_NAME=shortembeddings
+      - POLL_INTERVAL=60  # seconds between library scans (default: 60)
     depends_on:
       - rabbitmq
       - redis

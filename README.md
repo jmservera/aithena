@@ -150,6 +150,16 @@ Current branch: `jmservera/solrstreamlitui`
 ### Document Lister not finding files?
 - Check volume mount in `docker-compose.yml` points to actual library directory
 - Verify permissions: `ls -la /home/jmservera/booklibrary`
+- Adjust the scan frequency via the `POLL_INTERVAL` environment variable (default: `60` seconds)
+
+### Document Lister Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POLL_INTERVAL` | `60` | Seconds between library scans. New and modified files are re-queued; unchanged processed files are skipped. |
+| `BASE_PATH` | `/data/documents/` | Root directory to scan for documents. |
+| `DOCUMENT_WILDCARD` | `*` | Glob pattern for files to consider. |
+| `QUEUE_NAME` | `new_documents` | RabbitMQ queue name for discovered documents. |
 
 ### Solr returns empty results?
 - Check collection was created: `http://localhost:8983/solr/#/collections`
