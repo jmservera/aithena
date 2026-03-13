@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-from config import *
+import logging
+import sys
+
+from config import MODEL_NAME, PORT
 from fastapi import FastAPI
 
 from pydantic import BaseModel
@@ -9,9 +12,21 @@ from typing import Union
 
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "sentence-transformers/use-cmlm-multilingual"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-model = SentenceTransformer(MODEL_NAME)
+logger.info("Loading embedding model: %s", MODEL_NAME)
+try:
+    model = SentenceTransformer(MODEL_NAME)
+    embedding_dim = model.get_sentence_embedding_dimension()
+    logger.info(
+        "Model loaded successfully: %s (embedding_dim=%d)", MODEL_NAME, embedding_dim
+    )
+except Exception as exc:
+    logger.critical(
+        "Failed to load embedding model '%s': %s", MODEL_NAME, exc, exc_info=True
+    )
+    sys.exit(1)
 
 app = FastAPI(title="𐃆 Aithena Embeddings API")
 
@@ -37,6 +52,18 @@ class EmbeddingsOutput(BaseModel):
     data: list[EmbeddingsList] = []
     model: str = MODEL_NAME
     usage: Usage = None
+
+
+class ModelInfo(BaseModel):
+    """Active model metadata for downstream consumers (e.g. Solr vector field sizing)."""
+    model: str
+    embedding_dim: int
+
+
+@app.get("/v1/embeddings/model")
+async def model_info() -> ModelInfo:
+    """Returns the active embedding model name and its output dimension."""
+    return ModelInfo(model=MODEL_NAME, embedding_dim=embedding_dim)
 
 
 @app.post("/v1/embeddings/")
