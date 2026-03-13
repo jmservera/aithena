@@ -199,6 +199,21 @@ services:
   #     - CHAT_PORT=8000
   #     - STORAGE_ACCOUNT_NAME=biblaisourcedocs
   #     - STORAGE_CONTAINER=test-library
+  solr-search:
+    build: ./solr-search
+    ports:
+      - "8081:8080"
+    restart: on-failure
+    depends_on:
+      - solr
+    environment:
+      - PORT=8080
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books
+      - SOLR_VECTOR_FIELD=embedding_v
+    networks:
+      - default
   # llama-playground:
   #   image: ghcr.io/mckaywrigley/chatbot-ui:main
   #   ports:
