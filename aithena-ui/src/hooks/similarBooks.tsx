@@ -1,6 +1,9 @@
 import { useState, useCallback } from "react";
 
-const similarBooksBaseURL = `${import.meta.env.VITE_API_URL}/v1/books/`;
+// Aligns with the /v1/similar/?id=&limit=&min_score= contract defined in the
+// search service (see qdrant-search/main.py or its solr-search successor once
+// the backend is reimplemented per the architecture plan).
+const similarEndpointURL = `${import.meta.env.VITE_API_URL}/v1/similar/`;
 
 export interface SimilarBook {
   id: string;
@@ -14,7 +17,6 @@ export interface SimilarBook {
 
 export interface SimilarBooksResponse {
   results: SimilarBook[];
-  total: number;
 }
 
 export type SimilarBooksState = "idle" | "loading" | "success" | "error";
@@ -32,9 +34,8 @@ export const useSimilarBooks = () => {
     setSimilar([]);
 
     try {
-      const url = new URL(
-        `${similarBooksBaseURL}${encodeURIComponent(bookId)}/similar`
-      );
+      const url = new URL(similarEndpointURL);
+      url.searchParams.set("id", bookId);
       url.searchParams.set("limit", String(limit));
 
       const response = await fetch(url.toString(), {
