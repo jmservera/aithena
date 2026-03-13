@@ -30,21 +30,21 @@ api_app.add_middleware(
 
 
 class ModelProperties(BaseModel):
-    prompt: str = None
-    suffix: str = None
+    prompt: str | None = None
+    suffix: str | None = None
     max_tokens: int = 2048
     temperature: float = 0.8
-    top_p: float | None
-    mirostat_mode: int | None
-    mirostat_tau: int | None
-    mirostat_eta: float | None
-    stream: bool | None
-    presence_penalty: float | None
-    frequency_penalty: float | None
-    n: float | None
-    best_of: int | None
-    top_k: int | None
-    repeat_penalty: float | None
+    top_p: float | None = None
+    mirostat_mode: int | None = None
+    mirostat_tau: int | None = None
+    mirostat_eta: float | None = None
+    stream: bool | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    n: float | None = None
+    best_of: int | None = None
+    top_k: int | None = None
+    repeat_penalty: float | None = None
     stop: list | None = ["###"]
 
 
@@ -92,7 +92,7 @@ Write a detailed summary from the provided Input that answers the provided Quest
 
     props.prompt = prompts[0]
     props.stop = ["###"]
-    props_dict = props.dict(exclude_none=True)
+    props_dict = props.model_dump(exclude_none=True)
     print(props_dict)
 
     # completionRequest = {"messages": messages, "max_tokens": 2048}
@@ -222,6 +222,93 @@ async def index(input: str, limit: int = 5):
         return {"text": input, "results": results}
     else:
         raise HTTPException(status_code=400, detail="no input provided")
+
+
+def _build_document_url(payload: dict) -> str | None:
+    """Derive a document URL from a Qdrant point payload."""
+    if payload.get("document_url"):
+        return payload["document_url"]
+    path = payload.get("path")
+    if path and STORAGE_ACCOUNT_NAME and STORAGE_CONTAINER:
+        return (
+            f"https://{STORAGE_ACCOUNT_NAME}.blob.core.windows.net"
+            f"/{STORAGE_CONTAINER}/{path}"
+        )
+    return path or None
+
+
+@api_app.get("/similar/")
+async def similar(id: str, limit: int = 5, min_score: float = 0.0):
+    """Return books similar to the one identified by the given Qdrant point id.
+
+    The source document is excluded from the results.  ``limit`` controls the
+    maximum number of books returned and ``min_score`` filters out results below
+    a given similarity threshold.
+    """
+    # Retrieve the source point together with its vector.
+    try:
+        points = qdrant.retrieve(
+            collection_name=QDRANT_COLLECTION,
+            ids=[id],
+            with_vectors=True,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to retrieve point {id!r}: {exc}"
+        )
+
+    if not points:
+        raise HTTPException(status_code=404, detail=f"No point found with id: {id!r}")
+
+    source_point = points[0]
+    source_vector = source_point.vector
+    source_path = (source_point.payload or {}).get("path")
+
+    # Exclude all chunks that share the same source document path.
+    search_filter = None
+    if source_path:
+        search_filter = models.Filter(
+            must_not=[
+                models.FieldCondition(
+                    key="path",
+                    match=models.MatchValue(value=source_path),
+                )
+            ]
+        )
+
+    # Request more hits than needed so that de-duplication still fills `limit`.
+    raw_hits = qdrant.search(
+        collection_name=QDRANT_COLLECTION,
+        query_vector=source_vector,
+        query_filter=search_filter,
+        limit=limit * 5,
+        score_threshold=min_score if min_score > 0.0 else None,
+    )
+
+    # De-duplicate by document path, keeping only the highest-scoring chunk.
+    seen_paths: set[str] = set()
+    results = []
+    for hit in raw_hits:
+        if len(results) >= limit:
+            break
+        path = (hit.payload or {}).get("path", "")
+        if path and path in seen_paths:
+            continue
+        if path:
+            seen_paths.add(path)
+        results.append(
+            {
+                "id": hit.id,
+                "title": (hit.payload or {}).get("title"),
+                "author": (hit.payload or {}).get("author"),
+                "year": (hit.payload or {}).get("year"),
+                "category": (hit.payload or {}).get("category"),
+                "document_url": _build_document_url(hit.payload or {}),
+                "score": hit.score,
+            }
+        )
+
+    return {"results": results}
 
 
 qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
