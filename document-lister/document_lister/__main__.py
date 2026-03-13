@@ -18,6 +18,7 @@ from . import (
     RABBITMQ_PORT,
     BASE_PATH,
     DOCUMENT_WILDCARD,
+    POLL_INTERVAL,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -134,7 +135,7 @@ def produce():
         while True:
             process_path(BASE_PATH, redis_client, channel)
             # sleep for 10 minutes
-            connection.sleep(600)
+            connection.sleep(POLL_INTERVAL)
 
     # Don't recover connections closed by server
     except pika.exceptions.ConnectionClosedByBroker:
