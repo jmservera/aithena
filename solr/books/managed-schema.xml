@@ -43,6 +43,9 @@
   <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
+  <!-- Phase 3: 512-dim dense vector field type for distiluse-base-multilingual-cased-v2 (ADR-004).
+       HNSW index with cosine similarity for kNN semantic search. -->
+  <fieldType name="knn_vector_512" class="solr.DenseVectorField" vectorDimension="512" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">
     <analyzer>
       <tokenizer name="keyword"/>
@@ -470,6 +473,9 @@
   <field name="dcterms_modified" type="pdates"/>
   <field name="div" type="text_general"/>
   <field name="id" type="string" multiValued="false" indexed="true" required="true" stored="true"/>
+  <!-- Phase 3: dense vector field for kNN semantic search (ADR-004)
+       Model: distiluse-base-multilingual-cased-v2 → 512 dimensions, cosine similarity -->
+  <field name="book_embedding" type="knn_vector_512" indexed="true" stored="true" multiValued="false"/>
   <!-- Phase 1 book metadata fields (ADR-002) -->
   <field name="title_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="title_t" type="text_general" multiValued="false" indexed="true" stored="true"/>

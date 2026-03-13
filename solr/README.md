@@ -16,6 +16,7 @@ This directory contains the SolrCloud configset for the `books` collection.
 - **String fields** (`*_s`): Exact-match, not tokenized. Use for author, category, language codes.
 - **Text fields** (`*_t`): Analyzed, tokenized. Use for title, content. Supports multilingual analyzers.
 - **Integer/Long fields** (`*_i`, `*_l`): Year, page count, file size.
+- **`knn_vector_512`**: Dense 512-dimensional vector field (HNSW, cosine similarity). Used for Phase 3 embedding search.
 - **_text_** (default field): Catch-all for full-text search. Fed by `copyField` from `title_t`, `author_t`, `content`.
 
 ### Book-Specific Fields
@@ -35,6 +36,7 @@ This directory contains the SolrCloud configset for the `books` collection.
 | `folder_path_s` | string | Yes | Yes | Folder path (e.g., `amades`) |
 | `category_s` | string | Yes | Yes | Inferred category/series |
 | `language_detected_s` | string | Yes | Yes | Auto-detected language code |
+| `book_embedding` | knn_vector_512 | Yes | Yes | 512-dim embedding for semantic kNN search (Phase 3) |
 | `_text_` | text | Yes | No | Default query field (copyField from title_t, author_t) |
 
 ### Analyzers
@@ -69,6 +71,88 @@ curl -X POST \
   -F "commit=true"
 ```
 
+## Phase 3: Embeddings and kNN Semantic Search
+
+### Embedding Model
+
+ADR-004 standardises on **`distiluse-base-multilingual-cased-v2`** (512-dimensional vectors,
+multilingual, sentence-transformers family). This model is served by the `embeddings-server`
+service on port **8008**.
+
+### Indexing Embeddings
+
+The embedding pipeline (app-side) generates a 512-float vector for each book's representative
+text (e.g. title + first N content chunks) and POSTs it alongside the other fields:
+
+```bash
+# Index a book with its embedding (JSON update)
+curl -X POST \
+  http://localhost:8983/solr/books/update?commit=true \
+  -H "Content-Type: application/json" \
+  -d '[{
+    "id": "amades/book.pdf",
+    "title_s": "My Book",
+    "author_s": "Joan Amades",
+    "book_embedding": [0.1, -0.05, 0.32, ...]
+  }]'
+```
+
+The `book_embedding` field must receive exactly 512 floats. Omit the field for documents
+where no embedding is available; they will be excluded from kNN results but still match
+full-text queries.
+
+### kNN Search
+
+Use the **`/knn`** request handler (or the `{!knn}` QParser in `/select`/`/query`) to find
+the *k* nearest neighbours to a query vector.
+
+#### Dedicated `/knn` handler
+
+```bash
+# Find 10 books most similar to a query embedding
+curl "http://localhost:8983/solr/books/knn?q={!knn f=book_embedding topK=10}[0.1,-0.05,0.32,...]"
+```
+
+#### Hybrid search (full-text + semantic re-ranking)
+
+Combine BM25 full-text results with kNN re-ranking inside a single `/select` query using
+Solr's `rq` (re-rank) parameter:
+
+```bash
+curl "http://localhost:8983/solr/books/select" \
+  --get \
+  --data-urlencode "q=catalan folklore" \
+  --data-urlencode "rq={!rerank reRankQuery={!knn f=book_embedding topK=100}[0.1,-0.05,0.32,...] reRankDocs=100 reRankWeight=2}" \
+  --data-urlencode "rows=10"
+```
+
+This keeps the BM25 ordering for the top results while boosting documents whose embeddings
+are close to the query vector. Adjust `reRankWeight` to balance keyword vs. semantic signal.
+
+#### Filtering kNN results by metadata
+
+Apply standard Solr filter queries alongside kNN to restrict the candidate set:
+
+```bash
+curl "http://localhost:8983/solr/books/knn" \
+  --get \
+  --data-urlencode "q={!knn f=book_embedding topK=10}[0.1,-0.05,...]" \
+  --data-urlencode "fq=language_detected_s:ca" \
+  --data-urlencode "fq=year_i:[1900 TO *]"
+```
+
+### Generating Query Embeddings
+
+Call the `embeddings-server` to turn a user query into a 512-float vector:
+
+```bash
+curl -X POST http://localhost:8008/v1/embeddings/ \
+  -H "Content-Type: application/json" \
+  -d '{"input": "catalan folklore stories"}'
+```
+
+The response `data[0].embedding` array is the vector to pass to the kNN query.
+
 ## Deployment
 
 ### Create Collection
@@ -100,9 +184,12 @@ docker exec solr solr config-set-upload \
 2. **Faceting**: Add `facet=true&facet.field=author_s&facet.field=category_s&facet.field=language_detected_s` to `/select` queries.
 3. **Sorting**: Use `sort=year_i desc` or `sort=title_s asc` for result ordering.
 4. **Pagination**: Use `start=0&rows=20` for 20 results per page.
+5. **kNN topK**: Set `topK` ≥ `rows` on the kNN QParser. A value of 100–200 is a good starting point for re-ranking hybrid searches.
+6. **HNSW tuning**: The default HNSW parameters (`hnswMaxConnections=16`, `hnswBeamWidth=100`) suit collections up to ~1 M vectors. Increase `hnswMaxConnections` (e.g. 32) for higher recall at the cost of more memory.
 
 ## References
 
 - [Solr Schema](https://solr.apache.org/docs/latest/schema-elements-intro.html)
+- [Solr Dense Vector Search](https://solr.apache.org/docs/latest/query-guide/dense-vector-search.html)
 - [Tika Integration](https://solr.apache.org/docs/latest/indexing-and-basic-data-operations.html#indexing-binary-documents)
 - [Multilingual Search](https://solr.apache.org/docs/latest/language-analyzers.html)
