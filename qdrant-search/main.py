@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import aiohttp
-import os
-import urllib.parse
 from fastapi.staticfiles import StaticFiles
 from pydantic.dataclasses import dataclass
 from pydantic import BaseModel
@@ -11,7 +9,7 @@ from config import *
 from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse
 from fastapi.encoders import jsonable_encoder
 import json
 
@@ -220,44 +218,10 @@ async def index(input: str, limit: int = 5):
         )
         results = []
         for hit in hits:
-            payload = hit.payload
-            path = payload.get("path", "")
-            document_url = None
-            if path:
-                norm = os.path.normpath(path)
-                if norm.startswith(os.path.normpath(DOCUMENTS_PATH)):
-                    rel = os.path.relpath(norm, DOCUMENTS_PATH)
-                else:
-                    rel = path.lstrip("/")
-                document_url = f"/v1/documents/{urllib.parse.quote(rel, safe='/')}"
-            results.append({
-                "id": hit.id,
-                "score": hit.score,
-                "title": payload.get("title", os.path.basename(path)),
-                "author": payload.get("author", ""),
-                "page": payload.get("page"),
-                "snippet": payload.get("text", ""),
-                "document_url": document_url,
-            })
-        return {"query": input, "total": len(results), "results": results}
+            results.append({"payload": hit.payload, "score": hit.score, "id": hit.id})
+        return {"text": input, "results": results}
     else:
         raise HTTPException(status_code=400, detail="no input provided")
-
-
-@api_app.get("/documents/{file_path:path}")
-async def serve_document(file_path: str):
-    """Serve a PDF document from the documents directory."""
-    from pathlib import Path
-
-    if ".." in file_path.split("/") or file_path.startswith("/"):
-        raise HTTPException(status_code=403, detail="Access denied")
-    safe_base = Path(DOCUMENTS_PATH).resolve(strict=True)
-    full_path = (safe_base / file_path).resolve()
-    if not full_path.is_relative_to(safe_base):
-        raise HTTPException(status_code=403, detail="Access denied")
-    if not full_path.is_file():
-        raise HTTPException(status_code=404, detail="Document not found")
-    return FileResponse(str(full_path), media_type="application/pdf")
 
 
 qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")

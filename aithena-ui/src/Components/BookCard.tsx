@@ -2,6 +2,8 @@ import { BookResult } from "../hooks/search";
 
 interface BookCardProps {
   book: BookResult;
+  onOpenPdf?: (book: BookResult) => void;
+  isSelected?: boolean;
 }
 
 /**
@@ -17,9 +19,9 @@ function sanitizeHighlight(raw: string): string {
     .replace(/&lt;\/em&gt;/g, "</em>");
 }
 
-function BookCard({ book }: BookCardProps) {
+function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
   return (
-    <article className="book-card">
+    <article className={`book-card${isSelected ? " book-card--active" : ""}`}>
       <h2 className="book-title">{book.title}</h2>
       <div className="book-meta">
         {book.author && (
@@ -61,9 +63,20 @@ function BookCard({ book }: BookCardProps) {
           ))}
         </div>
       )}
-      {book.file_path && (
-        <p className="book-filepath">{book.file_path}</p>
-      )}
+      <div className="book-card-footer">
+        {book.file_path && (
+          <p className="book-filepath">{book.file_path}</p>
+        )}
+        {book.document_url && onOpenPdf && (
+          <button
+            className="open-pdf-btn"
+            onClick={() => onOpenPdf(book)}
+            aria-label={`Open PDF for ${book.title}`}
+          >
+            📄 Open PDF
+          </button>
+        )}
+      </div>
     </article>
   );
 }

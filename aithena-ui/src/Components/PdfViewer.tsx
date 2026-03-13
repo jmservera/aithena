@@ -23,9 +23,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const pdfUrl = result.document_url
-    ? `${import.meta.env.VITE_API_URL}${result.document_url}`
-    : null;
+  const pdfUrl = result.document_url ?? null;
 
   return (
     <div
