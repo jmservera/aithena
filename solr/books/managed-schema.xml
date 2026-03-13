@@ -470,6 +470,18 @@
   <field name="dcterms_modified" type="pdates"/>
   <field name="div" type="text_general"/>
   <field name="id" type="string" multiValued="false" indexed="true" required="true" stored="true"/>
+  <!-- Phase 1 book metadata fields (ADR-002) -->
+  <field name="title_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="title_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="author_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="author_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="year_i" type="pint" multiValued="false" indexed="true" stored="true"/>
+  <field name="page_count_i" type="pint" multiValued="false" indexed="true" stored="true"/>
+  <field name="file_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="folder_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="category_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="file_size_l" type="plong" multiValued="false" indexed="true" stored="true"/>
+  <field name="language_detected_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="last_modified" type="pdates"/>
   <field name="last_save_date" type="pdates"/>
   <field name="meta" type="text_general"/>
@@ -571,6 +583,8 @@
   <dynamicField name="*_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
   <dynamicField name="*_p" type="location" indexed="true" stored="true"/>
   <copyField source="_text_" dest="content"/>
+  <copyField source="title_t" dest="_text_"/>
+  <copyField source="author_t" dest="_text_"/>
   <copyField source="div" dest="div_str" maxChars="256"/>
   <copyField source="stream_content_type" dest="stream_content_type_str" maxChars="256"/>
   <copyField source="stream_name" dest="stream_name_str" maxChars="256"/>

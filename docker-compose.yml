@@ -113,23 +113,21 @@ services:
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8085
-      # - QDRANT_HOST=qdrant
-      # - QDRANT_COLLECTION=shortembeddings
-      # - QDRANT_VECTOR_DIM=768
-      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-      - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
       - QUEUE_NAME=shortembeddings
+      - BASE_PATH=/data/documents/
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books
     restart: on-failure
     deploy:
       replicas: 1
     depends_on:
       - rabbitmq
       - redis
-      # - qdrant
-      - embeddings-server
+      - solr
+    volumes:
+      - document-data:/data/documents:ro
     networks:
       - default
   # qdrant-search:
@@ -237,7 +235,7 @@ services:
     restart: unless-stopped
     volumes:
       - solr-data:/var/solr/data
-      - document-data:/var/solr/data/documents
+      - document-data:/data/documents:ro
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
@@ -260,7 +258,7 @@ services:
     restart: unless-stopped
     volumes:
       - solr-data2:/var/solr/data
-      - document-data:/var/solr/data/documents
+      - document-data:/data/documents:ro
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
@@ -281,7 +279,7 @@ services:
     restart: unless-stopped
     volumes:
       - solr-data3:/var/solr/data
-      - document-data:/var/solr/data/documents
+      - document-data:/data/documents:ro
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
@@ -336,7 +334,7 @@ volumes:
     driver_opts:
       type: "none"
       o: "bind"
-      device: "/source/volumes/document-data"
+      device: "/home/jmservera/booklibrary"
   solr-data:
     driver: local
     driver_opts:

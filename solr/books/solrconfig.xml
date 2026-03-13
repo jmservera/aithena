@@ -674,6 +674,19 @@ https://solr.apache.org/guide/solr/latest/configuration-guide/configuring-solrco
     </lst>
   </initParams>
 
+  <initParams path="/query,/select">
+    <lst name="defaults">
+      <str name="hl">true</str>
+      <str name="hl.method">unified</str>
+      <str name="hl.fl">content,_text_</str>
+      <str name="hl.requireFieldMatch">false</str>
+      <int name="hl.snippets">3</int>
+      <int name="hl.fragsize">160</int>
+      <str name="f._text_.hl.alternateField">content</str>
+      <int name="f._text_.hl.maxAlternateFieldLength">300</int>
+    </lst>
+  </initParams>
+
   <!-- Spell Check
 
        The spell check component can return a list of alternative spelling
