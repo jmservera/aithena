@@ -206,6 +206,182 @@ To test the current setup locally, spin up the Docker Compose containers and ass
 
 ---
 
+## User Directives — Copilot Enterprise & Issue Routing
+
+### 2026-03-13T20:56: Copilot Enterprise Label Activation
+
+**Captured:** jmservera (via Copilot)
+
+**Directive:**
+@copilot cannot be assigned via gh CLI on personal repos, but will activate via the `squad:copilot` label through GitHub Actions. To trigger @copilot pickup, remove and re-add the `squad:copilot` label after the branch becomes the default.
+
+---
+
+### 2026-03-13T21:05: Staggered @copilot Issue Routing
+
+**Captured:** jmservera (via Copilot)
+
+**Directive:**
+When routing issues to @copilot, use staggered batching instead of labeling everything at once:
+
+1. Identify which issues within a phase can be done in parallel (no inter-dependencies)
+2. Label only that batch with `squad:copilot`
+3. Wait for PRs to be reviewed and merged
+4. Label the next batch
+
+**Why:** Labeling all 18 issues at once caused @copilot to work on Phase 3/4 before Phase 2 foundations existed, resulting in 18 simultaneous draft PRs, dependency violations, and wasted work.
+
+**Batching Pattern:**
+- **Phase 2 batch 1:** #36 (FastAPI search) — foundation, no deps
+- **Phase 2 batch 2:** #37 (API tests), #38 (React search) — depend on #36
+- **Phase 2 batch 3:** #39 (facets), #40 (PDF viewer), #41 (frontend tests) — depend on #38
+- **Phase 3 batch 1:** #42 (embeddings model), #43 (vector fields) — independent infra
+- **Phase 3 batch 2:** #44 (chunking pipeline) — depends on #42+#43
+- (Continue similarly through Phase 4)
+
+---
+
+### 2026-03-13T21:15: Review Workflow Directives
+
+**Captured:** jmservera (via Copilot)
+
+**Directives:**
+1. Let all @copilot PRs run — don't close or restart them.
+2. Don't review next-phase PRs until all previous-phase PRs are reviewed and merged.
+3. To request @copilot fix something in a PR, @ mention it in a PR comment (e.g., `@copilot please fix X`).
+
+---
+
+### 2026-03-13T22:15: CI Workflows & Testing Infrastructure
+
+**Captured:** jmservera (via Copilot)
+
+**Directive:**
+Add GitHub Actions workflows for unit tests and integration tests. Use mocks for integration tests instead of full docker-compose, since the CI runner container is too small for the full stack.
+
+---
+
+## Parker — Phase 2 Implementation Decisions
+
+### CI Workflows for Unit & Integration Tests
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-14  
+**Status:** IMPLEMENTED
+
+**Implementation:** `.github/workflows/ci.yml`
+
+**Jobs:**
+- `document-indexer-tests` — 15 pytest tests for metadata extraction
+- `solr-search-tests` — 8 unit tests + 10 integration tests for FastAPI search service
+- `all-tests-passed` — Summary job requiring all to succeed
+
+**Integration Test Strategy:**
+- Created `solr-search/tests/test_integration.py` with FastAPI TestClient
+- All Solr HTTP calls mocked with `unittest.mock.patch`
+- Covers: search results, faceting, pagination, sorting, error handling, health/info endpoints
+- NO docker-compose, NO real Solr — external dependencies mocked
+
+**Critical Finding:**
+FastAPI 0.99.1 + Starlette 0.27.0 requires `httpx<0.28` for TestClient compatibility. Newer httpx 0.28+ changed the Client API, breaking TestClient initialization. CI workflow explicitly pins `httpx<0.28`.
+
+**Validation:** All tests passing locally (15+8+10 = 33 tests)
+
+**Impact:**
+- Every push validates existing tests pass
+- PRs cannot merge if tests fail (when branch protection enabled)
+- Tests run in parallel (~30-60s total runtime)
+- No infrastructure needed — mocked integration tests avoid docker-compose overhead
+
+---
+
+### FastAPI Search URL & Language Compatibility
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-13T23:00  
+**Status:** DECIDED
+
+**Context:**
+Phase 2 needs search results the React UI can consume immediately, including links that open PDFs without exposing filesystem paths. Solr language data may appear as `language_detected_s` (Phase 1 contract) or `language_s` (current langid output), requiring stable client contract.
+
+**Decision:**
+- Expose `document_url` as `/documents/{token}`, where token is URL-safe base64 encoding of `file_path_s`
+- Serve PDFs after decoding token and verifying resolved path stays under `BASE_PATH`
+- Normalize language by preferring `language_detected_s`, falling back to `language_s`
+
+**Impact:**
+- Dallas and frontend work can open PDFs through stable API route (no filesystem-aware links)
+- Backend maintains compatibility with already-indexed documents during Phase 1→Phase 3 language field standardization
+
+---
+
+## Ripley — Phase 2 Review & Planning Decisions
+
+### PR #72 (FastAPI Search Service) — APPROVED
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-13T23:15  
+**Status:** MERGED
+
+**Review Result:** PR #72 APPROVED — Ready to merge
+
+**Strong Points:**
+- Clean ADR-003-compliant architecture
+- Comprehensive security (path traversal, injection protection)
+- 11 unit tests covering core logic and edge cases
+- Proper Docker integration
+
+**Draft PR Assessment:**
+1. **#54 & #60** — CLOSE — Redundant with PR #72 (same issues, inferior implementations)
+2. **#61** (Search UI) — HOLD — Rebase after PR #72 merges
+3. **#62** (Faceted UI) — HOLD — Clarify overlap with #61 before proceeding
+4. **#63** (PDF viewer) — HOLD — Sequenced after search UI, depends on #72
+5. **#64** (Test suite) — RETHINK — 3.7k lines too high-risk; break into feature-aligned PRs or hold
+
+**Architectural Principle:** When multiple agents generate solutions for the same issue, prefer:
+1. Security-first implementation
+2. Test coverage for edge cases
+3. Clean separation of concerns
+4. Established patterns over novel approaches
+
+---
+
+### Phase 2 Frontend PR Overlap Resolution (#61, #62, #63)
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-13T23:20  
+**Status:** DECIDED
+
+**Problem:**
+- **#61** and **#62** both rewrite `App.tsx` from chat to search — direct conflict
+- **#63** modifies wrong service (qdrant-search instead of solr-search)
+- All three use different/incorrect API contracts
+
+**Decision:**
+
+| PR | Action | Rationale |
+|----|--------|-----------|
+| #61 | CLOSED ❌ | Redundant with #62 (superset); #62 is feature-complete |
+| #62 | APPROVED ✅ | Canonical Phase 2 search UI with facets, pagination, sorting; one-line fix needed (`limit` → `page_size`) |
+| #63 | NEEDS CHANGES ❌ | Must rebase on #62, layer PDF viewer, fix qdrant-search → solr-search |
+
+**Why Close #61?**
+- Both rewrite same `App.tsx` — one must win
+- #62 is feature-complete for Phase 2; #61 would need follow-up PR for facets anyway
+- Simpler to merge one complete PR than sequence two partial ones
+
+**Why Reject #63?**
+- Phase 2 architecture is explicitly Solr-first (ADR-001, decisions.md)
+- qdrant-search is Phase 1 artifact, not Phase 2
+- Mixing backends breaks migration path and creates API inconsistency
+
+**Impact:**
+- PR #62 becomes baseline for all Phase 2 UI work
+- PR #63 must rebase on #62 and add features incrementally
+- Prevents fragmentation: one search UI, not three competing versions
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus
