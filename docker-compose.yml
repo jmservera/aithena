@@ -152,6 +152,24 @@ services:
   #     - CHAT_PORT=8000
   #     - STORAGE_ACCOUNT_NAME=biblaisourcedocs
   #     - STORAGE_CONTAINER=test-library
+  search-api:
+    build:
+      context: .
+      dockerfile: ./qdrant-search/Dockerfile
+    ports:
+      - "8081:8081"
+    restart: on-failure
+    environment:
+      - PORT=8081
+      - LIBRARY_PATH=/data/documents
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8085
+    depends_on:
+      - document-lister
+    volumes:
+      - document-data:/data/documents
+    networks:
+      - default
   # llama-playground:
   #   image: ghcr.io/mckaywrigley/chatbot-ui:main
   #   ports:

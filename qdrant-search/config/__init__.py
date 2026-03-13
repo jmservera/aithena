@@ -14,3 +14,4 @@ CHAT_HOST = os.environ.get("CHAT_HOST", "localhost")
 CHAT_PORT = os.environ.get("CHAT_PORT", 8001)
 CONTEXT_LIMIT = int(os.environ.get("CONTEXT_LIMIT", 8))
 PORT = os.environ.get("PORT", 8081) # DEBUG PORT, DEFAULT 8080
+LIBRARY_PATH = os.environ.get("LIBRARY_PATH", "/data/documents")

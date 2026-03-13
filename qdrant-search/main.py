@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import aiohttp
+import logging
+from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from pydantic.dataclasses import dataclass
 from pydantic import BaseModel
@@ -8,10 +10,27 @@ from qdrant_client import models, QdrantClient
 from config import *
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.encoders import jsonable_encoder
 import json
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Lazy Qdrant client (avoids startup failure when Qdrant is not running)
+# ---------------------------------------------------------------------------
+
+_qdrant_client = None
+
+
+def _get_qdrant() -> QdrantClient:
+    """Return a lazily-initialised Qdrant client."""
+    global _qdrant_client
+    if _qdrant_client is None:
+        _qdrant_client = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
+    return _qdrant_client
+
 
 app = FastAPI(title="api " + TITLE, version=VERSION)
 api_app = FastAPI(title=TITLE, version=VERSION)
@@ -140,7 +159,7 @@ async def generate_question(
     embedding = await get_embeddings_async(input)
 
     if embedding is not None and "data" in embedding and len(embedding["data"]) > 0:
-        hits = qdrant.search(
+        hits = _get_qdrant().search(
             collection_name=QDRANT_COLLECTION,
             query_vector=embedding["data"][0]["embedding"],
             limit=limit,
@@ -211,7 +230,7 @@ async def index(input: str, limit: int = 5):
     if not input is None and len(input) != 0:
         embedding = await get_embeddings_async(input)
 
-        hits = qdrant.search(
+        hits = _get_qdrant().search(
             collection_name=QDRANT_COLLECTION,
             query_vector=embedding["data"][0]["embedding"],
             limit=limit,
@@ -224,7 +243,88 @@ async def index(input: str, limit: int = 5):
         raise HTTPException(status_code=400, detail="no input provided")
 
 
-qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
+# ---------------------------------------------------------------------------
+# Document upload endpoint
+# ---------------------------------------------------------------------------
+
+_ALLOWED_CONTENT_TYPES = {"application/pdf"}
+_ALLOWED_EXTENSIONS = {".pdf"}
+
+
+@api_app.post("/documents/upload")
+async def upload_document(file: UploadFile = File(...), overwrite: bool = True):
+    """
+    Accept a PDF file via multipart upload and write it to the library path.
+
+    The uploaded file is validated (PDF only) and the filename is sanitised to
+    prevent path-traversal attacks.  The ``overwrite`` query parameter controls
+    behaviour when a file with the same name already exists:
+
+    * ``overwrite=true``  (default) — replace the existing file and return
+      ``status: "overwritten"``.
+    * ``overwrite=false`` — return HTTP 409 Conflict without touching the
+      existing file.
+
+    The document-lister service polls ``LIBRARY_PATH`` on a 60-second cycle;
+    once the file lands on disk it will be queued to RabbitMQ and indexed by
+    the document-indexer automatically.
+    """
+    filename = file.filename or ""
+    # Strip any directory component the client may have supplied.
+    safe_name = Path(filename).name
+
+    if not safe_name:
+        raise HTTPException(status_code=422, detail="Invalid filename.")
+
+    # --- Validate file type ---------------------------------------------------
+    # Extension is the primary gate; content-type is an additional guard so
+    # that files claiming to be PDFs via content-type but having a non-.pdf
+    # extension are also rejected.
+    ext = Path(safe_name).suffix.lower()
+    content_type = (file.content_type or "").split(";")[0].strip()
+    if ext not in _ALLOWED_EXTENSIONS or content_type not in _ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unsupported file type '{ext or content_type}'. "
+                "Only PDF files are accepted."
+            ),
+        )
+
+    # --- Resolve destination --------------------------------------------------
+    library = Path(LIBRARY_PATH).resolve()
+    dest = (library / safe_name).resolve()
+
+    # Guard against path-traversal: dest must stay inside library.
+    if not dest.is_relative_to(library):
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+
+    existed = dest.exists()
+    if existed and not overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=f"File '{safe_name}' already exists. Set overwrite=true to replace it.",
+        )
+
+    # --- Write file -----------------------------------------------------------
+    library.mkdir(parents=True, exist_ok=True)
+    content = await file.read()
+    dest.write_bytes(content)
+
+    logger.info(
+        "%s document: %s (%d bytes)",
+        "Overwrote" if existed else "Created",
+        dest,
+        len(content),
+    )
+
+    return {
+        "filename": safe_name,
+        "size": len(content),
+        "status": "overwritten" if existed else "created",
+        "path": str(dest.relative_to(library)),
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
