@@ -130,6 +130,23 @@ services:
       - document-data:/data/documents:ro
     networks:
       - default
+  solr-search:
+    build: ./solr-search
+    ports:
+      - "8080:8080"
+    restart: on-failure
+    depends_on:
+      - zoo1
+    environment:
+      - PORT=8080
+      - SOLR_HOST=solr1
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books
+      - DOCUMENT_BASE_URL=/api/documents
+    networks:
+      default:
+        aliases:
+          - solr-search
   # qdrant-search:
   #   build:
   #     context: .
