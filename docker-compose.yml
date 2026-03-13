@@ -135,11 +135,10 @@ services:
   #     context: .
   #     dockerfile: ./qdrant-search/Dockerfile
   #   ports:
-  #     - "8080:8080"
+  #     - "8082:8080"
   #   restart: on-failure
   #   depends_on:
   #     - qdrant
-  #   #      - llama-server
   #   environment:
   #     - PORT=8080
   #     - QDRANT_HOST=qdrant
@@ -152,6 +151,23 @@ services:
   #     - CHAT_PORT=8000
   #     - STORAGE_ACCOUNT_NAME=biblaisourcedocs
   #     - STORAGE_CONTAINER=test-library
+  solr-search:
+    build:
+      context: .
+      dockerfile: ./solr-search/Dockerfile
+    ports:
+      - "8081:8080"
+    restart: on-failure
+    depends_on:
+      - solr
+    environment:
+      - PORT=8080
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books
+      - DOCUMENTS_BASE_URL=/documents
+    networks:
+      - default
   # llama-playground:
   #   image: ghcr.io/mckaywrigley/chatbot-ui:main
   #   ports:
