@@ -192,4 +192,73 @@ docker exec solr solr config-set-upload \
 - [Solr Schema](https://solr.apache.org/docs/latest/schema-elements-intro.html)
 - [Solr Dense Vector Search](https://solr.apache.org/docs/latest/query-guide/dense-vector-search.html)
 - [Tika Integration](https://solr.apache.org/docs/latest/indexing-and-basic-data-operations.html#indexing-binary-documents)
+
+---
+
+## Search API — Mode Behaviour
+
+The `solr-search` FastAPI service (`qdrant-search/main.py`) wraps this Solr collection and
+supports three search modes via the `?mode=` query parameter.
+
+### `keyword` (default, backward-compatible)
+
+- Queries Solr using the **Extended DisMax** (`edismax`) query parser.
+- Fields boosted: `title_t^2`, `author_t^1.5`, `_text_`.
+- **Facets** — populated from `author_s`, `category_s`, `language_detected_s`.
+- **Highlights** — populated from the `content` field using Solr's Unified Highlighter.
+- **Pagination** — use `?limit=N` (maps to Solr `rows`).
+
+### `semantic`
+
+- Encodes the query via the embeddings server (`distiluse-base-multilingual-cased-v2`).
+- Queries Qdrant for nearest-neighbour chunks.
+- **Facets** — empty (`{}`); Qdrant does not expose Solr-style facet aggregations.
+- **Highlights** — empty (`[]` per result); no snippet extraction is performed.
+- **Pagination** — controlled by `?limit=N`; there is no cursor/offset pagination.
+
+### `hybrid`
+
+- Runs keyword and semantic searches concurrently (`candidate_limit = max(limit*2, 20)`).
+- Fuses results using **Reciprocal Rank Fusion** (RRF, `k=60` by default).
+- **Facets** — sourced from the keyword (Solr) leg only; semantic-only hits will not
+  have facet coverage.
+- **Highlights** — sourced from the keyword (Solr) leg only; results that appear only
+  in the semantic leg will have empty `highlights` arrays.
+- **Pagination** — truncated to `?limit=N` after RRF fusion; no offset pagination.
+- `RRF_K` can be tuned via the `RRF_K` environment variable (default `60`).
+
+### Normalised Response Shape
+
+All three modes return the same JSON envelope:
+
+```json
+{
+  "query": "search text",
+  "mode": "keyword | semantic | hybrid",
+  "total": 42,
+  "results": [
+    {
+      "id": "...",
+      "score": 0.95,
+      "title": "Book Title",
+      "author": "Author Name",
+      "year": 2020,
+      "file_path": "amades/book.pdf",
+      "folder_path": "amades",
+      "category": "History",
+      "language": "ca",
+      "highlights": ["...relevant snippet..."],
+      "payload": {}
+    }
+  ],
+  "facets": {
+    "author_s": {"Author A": 5},
+    "category_s": {"History": 3}
+  },
+  "highlights": {
+    "doc-id": {"content": ["...snippet..."]}
+  }
+}
+```
+
 - [Multilingual Search](https://solr.apache.org/docs/latest/language-analyzers.html)

@@ -153,6 +153,54 @@ services:
       - document-data:/data/documents:ro
     networks:
       - default
+  # qdrant-search is now the unified search API supporting keyword (Solr BM25),
+  # semantic (Qdrant vector), and hybrid (RRF) modes.
+  # Set DEFAULT_SEARCH_MODE to keyword | semantic | hybrid (default: keyword).
+  solr-search:
+    build:
+      context: .
+      dockerfile: ./qdrant-search/Dockerfile
+    ports:
+      - "8081:8081"
+    restart: on-failure
+    depends_on:
+      - solr
+      - embeddings-server
+    environment:
+      - PORT=8081
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION=aithena
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8085
+      - DEFAULT_SEARCH_MODE=keyword
+    networks:
+      - default
+  # qdrant-search:
+  #   build:
+  #     context: .
+  #     dockerfile: ./qdrant-search/Dockerfile
+  #   ports:
+  #     - "8080:8080"
+  #   restart: on-failure
+  #   depends_on:
+  #     - qdrant
+  #   #      - llama-server
+  #   environment:
+  #     - PORT=8080
+  #     - QDRANT_HOST=qdrant
+  #     - QDRANT_PORT=6333
+  #     - QDRANT_COLLECTION=shortembeddings
+  #     - QDRANT_VECTOR_DIM=768
+  #     - EMBEDDINGS_HOST=embeddings-server
+  #     - EMBEDDINGS_PORT=8085
+  #     - CHAT_HOST=llama-server
+  #     - CHAT_PORT=8000
+  #     - STORAGE_ACCOUNT_NAME=biblaisourcedocs
+  #     - STORAGE_CONTAINER=test-library
   # llama-playground:
   #   image: ghcr.io/mckaywrigley/chatbot-ui:main
   #   ports:
