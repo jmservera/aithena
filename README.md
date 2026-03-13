@@ -20,28 +20,40 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 | **Tika (in Solr)** | PDF text extraction & metadata parsing | Via `/update/extract` handler |
 | **RabbitMQ** | Message queue for indexing pipeline | Decouples file discovery from indexing |
 | **Redis** | State tracking (processed, failed files) | Persists indexing progress |
-| **Document Lister** | Scans book library filesystem | Tracks state, queues files to RabbitMQ |
-| **Document Indexer** | Consumes queue, extracts metadata, uploads to Solr | Python service with configurable path heuristics |
+| **Document Lister** | Scans book library filesystem | 60 s polling, tracks state in Redis, queues files to RabbitMQ |
+| **Document Indexer** | Consumes queue, extracts metadata, uploads to Solr | Python service with configurable path heuristics; scales via `replicas` |
 | **Embeddings Server** | Semantic search vectors (Phase 3+) | `distiluse-base-multilingual-cased-v2` |
-| **Streamlit Admin UI** | Basic document management & monitoring | Port 8501 |
-| **React/Vite Frontend** | Search UI with faceting | In development (Phase 2) |
+| **Admin UI** | Document management & indexing monitoring | Streamlit, port 8501 |
+| **React/Vite Frontend** | Search UI with faceting (Phase 2) | In development |
 | **nginx + Certbot** | Reverse proxy, TLS termination | Production-ready |
 
 ### Data Flow
 
 ```
-File Library
+File Library (/data/documents inside containers)
     ↓
-Document Lister (scan + Redis tracking)
+Document Lister (60 s poll + Redis state tracking)
     ↓
-RabbitMQ (queue)
+RabbitMQ (queue: shortembeddings)
     ↓
-Document Indexer (metadata extraction + Solr POST)
+Document Indexer (metadata extraction + Solr Tika POST)
     ↓
 SolrCloud Books Collection (indexed, searchable)
     ↓
 Frontend / Search API
 ```
+
+### Service Port Map
+
+| Service | Host Port | Notes |
+|---------|-----------|-------|
+| Solr (node 1) | 8983 | Admin UI + direct query; restrict in production |
+| RabbitMQ Management | 15672 | Monitoring only; restrict in production |
+| Admin UI | 8501 | Streamlit admin dashboard |
+| Embeddings Server | 8085 | Dev access; internal-only in production |
+| nginx | 80 / 443 | Public entry point for all production traffic |
+
+Internal-only services (no host port mapping): Redis, ZooKeeper (zoo1–zoo3), Solr nodes 2 & 3.
 
 ## Quick Start
 
@@ -61,34 +73,47 @@ volumes:
 
 Default: `/home/jmservera/booklibrary`
 
+You also need to create the persistent volume directories on the host:
+
+```bash
+sudo mkdir -p /source/volumes/{rabbitmq-data,nginx-data,redis,solr-data,solr-data2,solr-data3}
+sudo mkdir -p /source/volumes/{certbot-data/conf,certbot-data/www}
+sudo mkdir -p /source/volumes/{zoo-data1,zoo-data2,zoo-data3}/{logs,data,datalog}
+sudo mkdir -p /source/volumes/zoo-backup
+```
+
 ### 2. Start All Services
 
 ```bash
 docker compose up -d
 ```
 
-This starts:
-- Redis, RabbitMQ (messaging layer)
-- ZooKeeper ensemble (3 nodes)
-- SolrCloud cluster (3 nodes)
-- Document Lister, Document Indexer, Embeddings Server
-- nginx + Certbot (TLS)
-- Admin UI, frontend placeholders
+Services start in dependency order (health-check gated):
+1. Redis, RabbitMQ (messaging layer)
+2. ZooKeeper ensemble (zoo1 → zoo2 → zoo3)
+3. SolrCloud cluster (waits for all ZK nodes to be healthy)
+4. Document Lister, Document Indexer (wait for messaging layer + Solr)
+5. Admin UI (waits for Redis)
+6. nginx + Certbot (TLS)
 
 ### 3. Create Books Collection
 
-Upload the Solr configset to the cluster:
+After Solr is healthy, upload the schema configset and create the `books` collection:
 
 ```bash
-cd solr/books
-# Upload config to ZooKeeper (requires Solr CLI tools installed)
-# Or use the Solr Web UI to create collection: http://localhost:8983
+# Copy the books configset into the running Solr container
+docker compose cp solr/books/. solr:/tmp/books-config
+
+# Upload the config to ZooKeeper
+docker compose exec solr solr zk upconfig -n books -d /tmp/books-config -z zoo1:2181
+
+# Create the collection (1 shard, 3 replicas — one per node)
+docker compose exec solr solr create_collection -c books -n books -shards 1 -replicationFactor 3
 ```
 
-Once the `books` collection is created:
-- Document Lister automatically discovers PDFs in `/home/jmservera/booklibrary`
-- Document Indexer consumes them from RabbitMQ and indexes into Solr
-- Track progress in Redis (`redis-cli`)
+Alternatively, use the Solr Admin UI at http://localhost:8983 to create and configure the collection.
+
+Once created, Document Lister automatically discovers PDFs and Document Indexer uploads them to Solr.
 
 ### 4. Access Interfaces
 
@@ -96,8 +121,24 @@ Once the `books` collection is created:
 |---------|-----|---------|
 | Solr Admin | http://localhost:8983 | Manage collections, view indexed docs |
 | RabbitMQ Admin | http://localhost:15672 | Monitor queue depth |
-| Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
-| Streamlit Admin | http://localhost:8501 | Document management (development) |
+| Admin UI | http://localhost:8501 | Document management (Streamlit) |
+| Redis CLI | `docker compose exec redis redis-cli` | Check `processed` & `failed` keys |
+
+## Environment Variables
+
+Key variables wired in `docker-compose.yml` (override via `.env` or compose `environment` block):
+
+| Variable | Service | Default | Description |
+|----------|---------|---------|-------------|
+| `REDIS_HOST` | lister, indexer, admin | `redis` | Redis service hostname |
+| `RABBITMQ_HOST` | lister, indexer | `rabbitmq` | RabbitMQ service hostname |
+| `QUEUE_NAME` | lister, indexer, admin | `shortembeddings` | Shared queue/namespace; must match across services |
+| `BASE_PATH` | indexer | `/data/documents/` | Mount point inside the indexer container |
+| `SOLR_HOST` | indexer | `solr` | Solr hostname for Tika extraction posts |
+| `SOLR_PORT` | indexer | `8983` | Solr port |
+| `SOLR_COLLECTION` | indexer | `books` | Solr collection name |
+| `ZK_HOST` | solr, solr2, solr3 | `zoo1:2181,zoo2:2181,zoo3:2181` | ZooKeeper ensemble addresses |
+| `SOLR_MODULES` | solr, solr2, solr3 | `extraction,langid` | Solr modules to enable (Tika + language detection) |
 
 ## Solr Schema & Fields
 
@@ -138,10 +179,10 @@ See `document-indexer/tests/test_metadata.py` for test cases and real library ex
 
 ### Project Phases
 
-**Phase 1** (in progress): Core Solr indexing pipeline, metadata extraction, schema  
+**Phase 1** (complete): Core Solr indexing pipeline, metadata extraction, schema  
 **Phase 2**: FastAPI search API, React search UI with faceting, PDF viewer  
 **Phase 3**: Embeddings indexing, hybrid search (keyword + semantic), similar books  
-**Phase 4**: PDF upload, file watcher, admin dashboard, production hardening  
+**Phase 4** (this PR): PDF upload, file watcher, admin dashboard, production hardening  
 
 Current branch: `jmservera/solrstreamlitui`
 
@@ -150,16 +191,23 @@ Current branch: `jmservera/solrstreamlitui`
 ### Document Lister not finding files?
 - Check volume mount in `docker-compose.yml` points to actual library directory
 - Verify permissions: `ls -la /home/jmservera/booklibrary`
+- Check lister logs: `docker compose logs document-lister`
 
 ### Solr returns empty results?
 - Check collection was created: `http://localhost:8983/solr/#/collections`
 - Monitor indexer logs: `docker compose logs document-indexer`
-- Check Redis state: `redis-cli KEYS "*"`
+- Check Redis state: `docker compose exec redis redis-cli KEYS "*"`
 
 ### Indexing stuck or slow?
 - Monitor RabbitMQ queue depth: `http://localhost:15672`
 - Check Solr logs for extraction errors: `docker compose logs solr`
-- Increase document-indexer replicas in `docker-compose.yml`
+- Increase document-indexer replicas: edit `deploy.replicas` in `docker-compose.yml`
+
+### Service health?
+```bash
+docker compose ps          # shows health status for all services
+docker compose logs --tail=50 <service>
+```
 
 ## References
 

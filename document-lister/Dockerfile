@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt .
 
-RUN pip install -r requirements.txt
+RUN apk add --no-cache procps && pip install -r requirements.txt
 COPY . .
 
 ENV RABBITMQ_HOST="localhost"
@@ -15,6 +15,9 @@ ENV STORAGE_ACCOUNT_NAME=""
 ENV STORAGE_CONTAINER=""
 ENV DOCUMENT_WILDCARD=".pdf"
 ENV QUEUE_NAME="new_documents"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD pgrep -f document_lister > /dev/null || exit 1
 
 CMD ["python","-m","document_lister"]
 

@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apk add --no-cache procps && pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ENV RABBITMQ_HOST="localhost"
@@ -16,5 +16,8 @@ ENV BASE_PATH="/data/documents/"
 ENV SOLR_HOST="solr"
 ENV SOLR_PORT=8983
 ENV SOLR_COLLECTION="books"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD pgrep -f document_indexer > /dev/null || exit 1
 
 CMD ["python","-m","document_indexer"]
