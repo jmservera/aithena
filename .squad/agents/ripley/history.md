@@ -55,3 +55,63 @@
 - Multilingual focus: Spanish, Catalan, French, English (including very old texts)
 - Local-first: books on local filesystem, no cloud dependency for core features
 - Phased approach: keyword search first, embeddings later
+
+### 2026-03-13T23:15 — PR #72 Review & Phase 2 Draft PR Assessment
+
+**PR #72 Review (APPROVED):**
+- Reviewed \`solr-search/\` FastAPI service implementation (+867/-65 lines)
+- **Code quality:** Excellent. Clean separation of concerns (config.py, search_service.py, main.py), comprehensive type hints, proper error handling
+- **Security:** Strong. Path traversal protection, local-parameter injection blocking, safe URL encoding, Content-Disposition sanitization
+- **Test coverage:** 11 unit tests covering core logic, security edge cases, pagination, faceting, normalization
+- **Architecture:** Full ADR-003 compliance (FastAPI for search API), integrates cleanly with existing docker-compose and service patterns
+- **Integration:** Properly configured in docker-compose.yml with volume mount, CORS, and dependencies on Solr
+- **Minor notes (non-blocking):** Pinned FastAPI 0.99.1 and uvicorn 0.23.1 are stable but slightly dated; test uses sys.path.append instead of proper package structure
+
+**Phase 2 Draft PR Assessment:**
+- **#54 & #60:** REDUNDANT with PR #72. Both attempt to solve issue #36/#37, but PR #72 is superior implementation with better security and test coverage. Recommended closure.
+- **#61:** Search UI rewrite looks reasonable but blocked on PR #72 merge (needs /search endpoint). Should rebase after #72 lands.
+- **#62:** Faceted search UI likely overlaps with #61 (both claim to "replace chat shell"). Need clarification on relationship—pick one or sequence them.
+- **#63:** PDF viewer panel is appropriately layered on search UI + depends on /documents/{id} from PR #72. Should wait for base UI + backend.
+- **#64:** Large test suite PR (+3.7k lines) should be broken into feature-aligned test PRs or held until UI features stabilize. Risk of maintenance burden if added before features exist.
+
+**Decision outcome:** PR #72 approved and ready to merge. Recommended closing #54/#60, sequencing #61→#63, and clarifying #62 vs #61 overlap. Test suite #64 needs scoping discussion.
+
+**Key architectural insight:** The copilot agents generated multiple overlapping solutions for the same issue (#36). In future, triage should assign issues one-at-a-time to avoid draft PR sprawl.
+
+### 2026-03-13T23:20 — Phase 2 Frontend PR Review (#61, #62, #63)
+
+**Context:** PR #72 (solr-search backend) merged to `jmservera/solrstreamlitui`. Reviewed three Phase 2 frontend PRs from @copilot.
+
+**PR #61 — "Replace chat shell with React search page"** (CLOSED as redundant)
+- Clean implementation: basic search UI (query + results), proper React patterns, good TypeScript
+- Security: Excellent `sanitizeSnippet()` XSS protection (escape all HTML, restore only `<em>`)
+- API mismatch: Uses `limit` instead of `page_size`, missing pagination params
+- **Verdict:** Closed in favor of PR #62 (superset with facets + pagination)
+
+**PR #62 — "Faceted search UI — full search interface"** (APPROVED ✅)
+- Complete Phase 2 implementation: search + facets + filters + pagination + sort
+- Excellent component structure: FacetPanel, ActiveFilters, BookCard, Pagination, useSearch hook
+- API contract: Correctly uses `q`, `page`, `fq_*` filters, consumes facets
+- Minor fix needed: Change `limit` to `page_size` for exact API alignment
+- **Verdict:** APPROVED and marked ready for review. This is the definitive Phase 2 search UI.
+
+**PR #63 — "PDF viewer panel integrated into React search UI"** (NEEDS CHANGES ❌)
+- **Critical issue:** Modifies **qdrant-search** instead of **solr-search** (wrong service!)
+- Phase 2 is Solr-first (ADR-001, architecture plan) — qdrant-search is deprecated
+- API mismatch: Uses `input` param instead of `q`, wrong response shape
+- **Good parts:** PdfViewer.tsx component is well-designed (iframe, escape-to-close, error handling)
+- **Required changes:**
+  1. Remove all qdrant-search modifications
+  2. Rebase on PR #62 (layer PDF viewer on top of faceted search UI)
+  3. Fix useSearch hook to match solr-search API (`q` param, `page_size`, consume `document_url`)
+  4. Use existing `/documents/{document_id}` endpoint from solr-search
+- **Verdict:** NEEDS CHANGES — commented with detailed fix guidance
+
+**Overlap resolution:** #61 and #62 both replace the chat shell. #62 is a superset (adds facets/pagination), so closing #61 eliminates redundancy. #63 should build on #62, not rewrite the UI from scratch.
+
+**Key learning:** The three PRs show different copilot agents solving overlapping issues (#38, #39, #40) independently. #61 (minimal search) and #62 (full search) conflict because both rewrite `App.tsx`. The right sequence is: #62 → #63 (rebase with PDF viewer on top).
+
+**Next steps:**
+- PR #62 needs one-line fix (`limit` → `page_size`), then merge
+- PR #63 needs full rework (remove qdrant-search changes, rebase on #62, fix API calls)
+- Future Phase 2 PRs should build incrementally on the merged #62 base

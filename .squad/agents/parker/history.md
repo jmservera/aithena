@@ -73,3 +73,14 @@
 - Search requests run through `edismax`, reject Solr local-parameter syntax (`{!...}`), and fall back from `language_detected_s` to `language_s` so older indexed docs still facet and render correctly.
 - Validation completed with `python3 -m pytest document-indexer/tests solr-search/tests -q`, `python3 -m compileall solr-search`, `docker compose config -q`, `docker compose build solr-search`, and a container smoke test against `/health`.
 
+### 2026-03-14 — CI Workflows: Unit & Integration Tests
+
+- Created `.github/workflows/ci.yml` with jobs for `document-indexer` and `solr-search` unit + integration tests.
+- Added `solr-search/tests/test_integration.py` with 10 FastAPI endpoint tests using mocked Solr HTTP responses (no docker-compose, no real Solr).
+- Integration tests cover: search results, empty queries, facets, pagination, sorting, error handling (timeout, connection errors, invalid JSON), and health/info endpoints.
+- CI uses Python 3.11, pip caching, pytest with coverage reporting for unit tests.
+- **Critical discovery:** FastAPI 0.99.1 + Starlette 0.27.0 requires `httpx<0.28` for TestClient compatibility. Added this constraint to the CI job installing test dependencies.
+- Workflow triggers on push to `main` and `jmservera/solrstreamlitui` branches, and on PRs to `main`.
+- Used concurrency groups to cancel in-progress runs on same PR.
+- Validation: All 15 document-indexer tests pass, all 8 solr-search unit tests pass, all 10 solr-search integration tests pass locally.
+
