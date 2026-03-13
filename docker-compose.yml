@@ -119,6 +119,8 @@ services:
       - SOLR_HOST=solr
       - SOLR_PORT=8983
       - SOLR_COLLECTION=books
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8085
     restart: on-failure
     deploy:
       replicas: 1
@@ -126,6 +128,7 @@ services:
       - rabbitmq
       - redis
       - solr
+      - embeddings-server
     volumes:
       - document-data:/data/documents:ro
     networks:
