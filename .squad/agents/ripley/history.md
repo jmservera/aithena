@@ -11,6 +11,13 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-13T20:58 — Phase 2-4 Issue Decomposition (`jmservera/solrstreamlitui`)
+
+- **COMPLETED:** Broke the remaining roadmap into 18 single-owner GitHub issues targeted at `squad:copilot`: Phase 2 (#36-#41), Phase 3 (#42-#47), and Phase 4 (#48-#53).
+- Established the dependency spine as search API → UI shell/facets/PDF/tests, embeddings model → Solr vectors → embedding indexing → hybrid search → similar books, and 60s file polling → upload/admin/hardening/E2E.
+- Kept the planned upload endpoint in the FastAPI backend so new ingestion work stays aligned with ADR-003 and the existing Redis/RabbitMQ/Solr pipeline.
+- Recorded decision in `.squad/decisions.md` under "Ripley — Phase 2–4 Issue Decomposition". All 18 issues now tracked with explicit dependencies and milestones.
+
 ### 2026-03-13 — Branch Architecture Review (`jmservera/solrstreamlitui`)
 
 **Architecture decisions made:**

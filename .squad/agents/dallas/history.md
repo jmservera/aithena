@@ -11,7 +11,13 @@
 
 <!-- Append learnings below -->
 
-### 2026-03-13 — Architecture Plan: UI Rewrite (from Ripley review)
+### 2026-03-13T20:58 — Phase 2–4 GitHub Issues Assigned
+
+- Ripley decomposed Phase 2–4 into issues #36–#53, all assigned to `@copilot` with squad labels and release milestones.
+- **Your Phase 2 issues:** #42–#44 (Search UI component rewrite, PDF viewer, frontend tests)
+- **Your Phase 3 issues:** #45–#47 (Similar books feature, semantic search integration)
+- **Your Phase 4 issues:** #48–#51 (PDF upload UI, admin dashboard)
+- Full dependency chain and rationale in `.squad/decisions.md` under "Ripley — Phase 2–4 Issue Decomposition".
 
 **Your assignments (Phase 2–4):**
 - **Phase 2:** Rewrite React UI from chat to search paradigm (keep Vite/TS scaffolding)
