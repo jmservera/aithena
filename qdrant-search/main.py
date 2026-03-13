@@ -247,13 +247,17 @@ async def index(input: str, limit: int = 5):
 @api_app.get("/documents/{file_path:path}")
 async def serve_document(file_path: str):
     """Serve a PDF document from the documents directory."""
-    safe_base = os.path.realpath(DOCUMENTS_PATH)
-    full_path = os.path.realpath(os.path.join(DOCUMENTS_PATH, file_path))
-    if os.path.commonpath([safe_base, full_path]) != safe_base:
+    from pathlib import Path
+
+    if ".." in file_path.split("/") or file_path.startswith("/"):
         raise HTTPException(status_code=403, detail="Access denied")
-    if not os.path.isfile(full_path):
+    safe_base = Path(DOCUMENTS_PATH).resolve(strict=True)
+    full_path = (safe_base / file_path).resolve()
+    if not full_path.is_relative_to(safe_base):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not full_path.is_file():
         raise HTTPException(status_code=404, detail="Document not found")
-    return FileResponse(full_path, media_type="application/pdf")
+    return FileResponse(str(full_path), media_type="application/pdf")
 
 
 qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
