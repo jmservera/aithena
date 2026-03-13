@@ -1,185 +1,174 @@
 import "./App.css";
-import {
-  ChatMessage,
-  ChatMessageProps,
-  defaultChatMessageProps,
-} from "./Components/ChatMessage";
-import Configbar from "./Components/Configbar";
-import { useState, useRef, useEffect, FormEvent } from "react";
+import { useState, FormEvent } from "react";
+import { useSearch } from "./hooks/search";
+import { SearchFilters } from "./hooks/search";
+import FacetPanel from "./Components/FacetPanel";
+import ActiveFilters from "./Components/ActiveFilters";
+import BookCard from "./Components/BookCard";
+import Pagination from "./Components/Pagination";
 
-interface MessageInfo {
-  message: string;
-  sender: string;
-  time: string;
-}
-
-const defaultMessages: MessageInfo[] = [
-  {
-    message: "Hello!\nHow can I help you today?",
-    sender: "Assistant",
-    time: Date.now().toString(),
-  },
+const SORT_OPTIONS = [
+  { value: "score desc", label: "Relevance" },
+  { value: "year_i desc", label: "Year (newest)" },
+  { value: "year_i asc", label: "Year (oldest)" },
+  { value: "title_s asc", label: "Title (A–Z)" },
+  { value: "author_s asc", label: "Author (A–Z)" },
 ];
 
-let messages: MessageInfo[] = [...defaultMessages];
-
 function App() {
-  let [result, setResult] = useState<MessageInfo[]>(messages);
-  let [text, setText] = useState<string>("");
-  let [input, setInput] = useState("");
-  let [loading, setLoading] = useState<boolean>(false);
-  const abortControllerRef = useRef(new AbortController());
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const [props, setProps] = useState<ChatMessageProps>(
-    JSON.parse(localStorage.getItem("props") || "null") || {
-      ...defaultChatMessageProps,
-    }
+  const [inputValue, setInputValue] = useState("");
+  const {
+    searchState,
+    results,
+    facets,
+    total,
+    loading,
+    error,
+    setQuery,
+    setFilter,
+    clearFilters,
+    setPage,
+    setSort,
+    setLimit,
+  } = useSearch();
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setQuery(inputValue.trim());
+  }
+
+  function handleRemoveFilter(key: keyof SearchFilters) {
+    setFilter(key, undefined);
+  }
+
+  const hasActiveFilters = Object.values(searchState.filters).some(
+    (v) => v !== undefined && v !== ""
   );
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [result, text]);
-
-  useEffect(() => {
-    console.log("Storing props to local storage");
-    localStorage.setItem("props", JSON.stringify(props));
-  }, [props]);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-
-    if (input === "") return;
-    setLoading(true);
-    try {
-      const inputText = input;
-      messages.push(
-        {
-          message: inputText,
-          sender: "User",
-          time: Date.now().toString(),
-        },
-        {
-          message: "",
-          sender: "Assistant",
-          time: Date.now().toString(),
-        }
-      );
-      setResult(messages);
-      setText(inputText);
-      setInput("");
-
-      let current = messages.length - 1;
-      let text = "";
-
-      const msgProps = { ...props, ["message"]: inputText };
-
-      await ChatMessage(
-        (data: any) => {
-          if (data.choices) {
-            console.log(data.choices[0].text);
-            text = text + data.choices[0].text;
-            messages[current].message = text;
-            setText(text);
-            setResult(messages);
-          } else {
-            if (data.messages) {
-              console.log("Other data");
-              text = "The following information was found:\n";
-              data.messages.forEach((message: any) => {
-                text =
-                  text +
-                  `<b>Document</b> (${Math.round(
-                    message.score * 100
-                  )}% similarity): ${message.path}, page ${
-                    message.page
-                  }\n<b>Text</b>: ${message.payload}\n`;
-              });
-              text = text + "\n<b>Summary</b>: ";
-              console.log(`Summary ${current} ${text}`);
-              messages[current].message = text;
-              setResult(messages);
-              setText(text);
-            }
-            console.log(data);
-          }
-        },
-        msgProps,
-        abortControllerRef.current.signal
-      );
-    } finally {
-      console.log("Done");
-      setLoading(false);
-    }
-  }
-
-  function handleNewChatClick() {
-    messages = [...defaultMessages];
-    abortControllerRef.current.abort();
-    setResult(messages);
-    setLoading(false);
-  }
+  const totalPages = Math.ceil(total / searchState.limit);
 
   return (
-    <>
-      <div className="App">
-        <aside className="sidebar">
-          <Configbar props={props} setProps={setProps} />
-        </aside>
-        <section className="chatbox">
-          <div className="chat-log">
-            {result.map((message, index) => (
-              <div
-                key={index}
-                className={`chat-message ${
-                  message.sender === "Assistant" && "chatgpt"
-                }`}
-              >
-                <div className="chat-message-center">
-                  <div
-                    className={`avatar ${
-                      message.sender === "Assistant" && "chatgpt"
-                    }`}
-                  >
-                    {message.sender === "User" ? "👤" : "🤖"}
-                  </div>
-                  <div className="message">
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: message.message.replace(/\n/g, "<br />"),
-                      }}
-                    />
-                    {result.length - 1 === index && (
-                      <span className="loading" hidden={!loading}>
-                        ...
-                      </span>
-                    )}
-                  </div>
-                </div>
+    <div className="App">
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <h1 className="sidebar-title">📚 Aithena</h1>
+          <p className="sidebar-subtitle">Book Library Search</p>
+        </div>
+        <FacetPanel
+          facets={facets}
+          filters={searchState.filters}
+          onFilterChange={setFilter}
+        />
+      </aside>
+
+      <main className="search-main">
+        <header className="search-header">
+          <form className="search-form" onSubmit={handleSubmit}>
+            <input
+              className="search-input"
+              type="search"
+              value={inputValue}
+              placeholder="Search books by title, author, or content…"
+              onChange={(e) => setInputValue(e.target.value)}
+              aria-label="Search query"
+            />
+            <button className="search-btn" type="submit" disabled={loading}>
+              {loading ? "…" : "Search"}
+            </button>
+          </form>
+
+          {searchState.query && (
+            <div className="search-controls">
+              <span className="search-result-count">
+                {loading
+                  ? "Searching…"
+                  : `${total.toLocaleString()} result${total !== 1 ? "s" : ""} for "${searchState.query}"`}
+              </span>
+              <div className="search-sort-limit">
+                <label htmlFor="sort-select" className="control-label">
+                  Sort:
+                </label>
+                <select
+                  id="sort-select"
+                  className="sort-select"
+                  value={searchState.sort}
+                  onChange={(e) => setSort(e.target.value)}
+                >
+                  {SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+
+                <label htmlFor="limit-select" className="control-label">
+                  Per page:
+                </label>
+                <select
+                  id="limit-select"
+                  className="sort-select"
+                  value={searchState.limit}
+                  onChange={(e) => setLimit(Number(e.target.value))}
+                >
+                  {[10, 20, 50].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ))}
-            <div ref={bottomRef}> </div>
-          </div>
-          <div className="chat-input-holder" onSubmit={handleSubmit}>
-            <form>
-              <div
-                className="swipe-button"
-                title="New Chat"
-                onClick={handleNewChatClick}
-              >
-                🧹
-              </div>
-              <input
-                disabled={loading}
-                className="chat-input-text-area"
-                value={input}
-                placeholder="Type your message here"
-                onChange={(e) => setInput(e.target.value)}
-              ></input>
-            </form>
-          </div>
+            </div>
+          )}
+
+          {hasActiveFilters && (
+            <ActiveFilters
+              filters={searchState.filters}
+              onRemove={handleRemoveFilter}
+              onClearAll={clearFilters}
+            />
+          )}
+        </header>
+
+        <section className="search-results">
+          {error && (
+            <div className="search-error" role="alert">
+              ⚠️ {error}
+            </div>
+          )}
+
+          {!loading && !error && searchState.query && results.length === 0 && (
+            <div className="search-empty">
+              No results found for "{searchState.query}"
+              {hasActiveFilters && " with the selected filters"}.
+            </div>
+          )}
+
+          {!searchState.query && !loading && (
+            <div className="search-empty">
+              Enter a search term above to find books.
+            </div>
+          )}
+
+          {results.map((book) => (
+            <BookCard key={book.id} book={book} />
+          ))}
         </section>
-      </div>
-    </>
+
+        {total > 0 && (
+          <footer className="search-footer">
+            <Pagination
+              page={searchState.page}
+              limit={searchState.limit}
+              total={total}
+              onPageChange={setPage}
+            />
+            <p className="pagination-info">
+              Page {searchState.page} of {totalPages}
+            </p>
+          </footer>
+        )}
+      </main>
+    </div>
   );
 }
 
