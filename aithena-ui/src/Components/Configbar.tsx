@@ -32,7 +32,10 @@ const Configbar = ({
     setProps({ ...defaultChatMessageProps });
   };
 
-  const renderPropertyEditor = (value: any, index: number) => {
+  const renderPropertyEditor = (
+    value: (typeof CreateCompletionRequestDef)[number],
+    index: number
+  ) => {
     if (value.type == "number") {
       return (
         <>

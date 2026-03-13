@@ -7,7 +7,7 @@ import {
 const serverBaseURL = `${import.meta.env.VITE_API_URL}/v1/question/`;
 console.log(`serverBaseURL: ${serverBaseURL}`);
 
-type MessageHandler = (data: any) => void;
+type MessageHandler = (data: Record<string, unknown>) => void;
 
 export type ChatMessageProps = {
   message: string;
@@ -15,6 +15,7 @@ export type ChatMessageProps = {
   model_properties: CreateCompletionRequest;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const defaultChatMessageProps: ChatMessageProps = {
   message: "",
   limit: 8,
@@ -31,7 +32,7 @@ export const ChatMessage = async (
   console.log(`message limit: ${limit}`);
 
   console.log(`fetching ${message}`);
-  let msg = JSON.stringify({
+  const msg = JSON.stringify({
     input: message,
     limit: limit,
     model_properties: {
@@ -63,7 +64,7 @@ export const ChatMessage = async (
       if (onEvent === undefined) return;
       try {
         if (event.data.trim() !== "") {
-          const parsedData = JSON.parse(event.data);
+          const parsedData = JSON.parse(event.data) as Record<string, unknown>;
           onEvent(parsedData);
         }
       } catch (e) {
