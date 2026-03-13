@@ -12,7 +12,7 @@
 #   - document-data volume points to E2E_LIBRARY_PATH (default /tmp/aithena-e2e-library)
 #     instead of /home/jmservera/booklibrary, isolating the test run from the
 #     real book corpus.
-#   - document-lister polls every 10 seconds (POLL_INTERVAL=10) instead of 600 s,
+#   - document-lister polls every 10 seconds (POLL_INTERVAL=10) instead of the default 60 s,
 #     so new files are discovered quickly during tests.
 #   - nginx and certbot are disabled to reduce resource usage in dev/CI.
 

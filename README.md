@@ -22,6 +22,7 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 | **Redis** | State tracking (processed, failed files) | Persists indexing progress |
 | **Document Lister** | Scans book library filesystem | Tracks state, queues files to RabbitMQ |
 | **Document Indexer** | Consumes queue, extracts metadata, uploads to Solr | Python service with configurable path heuristics |
+| **Solr Search API** | FastAPI wrapper around the `books` collection | Normalized results, facets, highlights, PDF document URLs |
 | **Embeddings Server** | Semantic search vectors (Phase 3+) | `distiluse-base-multilingual-cased-v2` |
 | **Streamlit Admin UI** | Basic document management & monitoring | Port 8501 |
 | **React/Vite Frontend** | Search UI with faceting | In development (Phase 2) |
@@ -71,7 +72,7 @@ This starts:
 - Redis, RabbitMQ (messaging layer)
 - ZooKeeper ensemble (3 nodes)
 - SolrCloud cluster (3 nodes)
-- Document Lister, Document Indexer, Embeddings Server
+- Document Lister, Document Indexer, Solr Search API, Embeddings Server
 - nginx + Certbot (TLS)
 - Admin UI, frontend placeholders
 
@@ -95,13 +96,14 @@ Once the `books` collection is created:
 | Service | URL | Purpose |
 |---------|-----|---------|
 | Solr Admin | http://localhost:8983 | Manage collections, view indexed docs |
+| Search API | http://localhost:8080/search?q=historia | Query books with facets, pagination, sorting, and highlights |
 | RabbitMQ Admin | http://localhost:15672 | Monitor queue depth |
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
 | Streamlit Admin | http://localhost:8501 | Document management (development) |
 
 ## Solr Schema & Fields
 
-See [`solr/README.md`](solr/README.md) for schema design details. Key fields:
+See [`solr/README.md`](solr/README.md) for schema design details. The FastAPI service in `solr-search/` exposes `/search`, `/facets`, and client-safe `/documents/{token}` URLs against these fields. Key fields:
 
 - `title_s`, `title_t` — Book title (string + text)
 - `author_s`, `author_t` — Author (string + text)
@@ -114,7 +116,7 @@ See [`solr/README.md`](solr/README.md) for schema design details. Key fields:
 
 ## Development
 
-### Unit Tests
+### Testing
 
 ```bash
 cd document-indexer
@@ -150,12 +152,6 @@ pip install -r e2e/requirements.txt
 
 ```bash
 cd e2e && pytest
-```
-
-Or from the repo root:
-
-```bash
-pytest e2e/ --solr-url http://localhost:8983/solr/books
 ```
 
 #### What the suite tests
@@ -209,6 +205,16 @@ Current branch: `jmservera/solrstreamlitui`
 ### Document Lister not finding files?
 - Check volume mount in `docker-compose.yml` points to actual library directory
 - Verify permissions: `ls -la /home/jmservera/booklibrary`
+- Adjust the scan frequency via the `POLL_INTERVAL` environment variable (default: `60` seconds)
+
+### Document Lister Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POLL_INTERVAL` | `60` | Seconds between library scans. New and modified files are re-queued; unchanged processed files are skipped. |
+| `BASE_PATH` | `/data/documents/` | Root directory to scan for documents. |
+| `DOCUMENT_WILDCARD` | `*` | Glob pattern for files to consider. |
+| `QUEUE_NAME` | `new_documents` | RabbitMQ queue name for discovered documents. |
 
 ### Solr returns empty results?
 - Check collection was created: `http://localhost:8983/solr/#/collections`
