@@ -1,0 +1,18 @@
+{
+  "history_version": "1.0",
+  "assignments": [
+    {
+      "assignment_id": "aithena-alien-001",
+      "universe": "Alien",
+      "created_at": "2026-03-13T18:28:00Z",
+      "agents": [
+        { "name": "Ripley", "role": "Lead" },
+        { "name": "Parker", "role": "Backend Dev" },
+        { "name": "Dallas", "role": "Frontend Dev" },
+        { "name": "Ash", "role": "Search Engineer" },
+        { "name": "Lambert", "role": "Tester" }
+      ],
+      "reason": "Initial team cast for book library search engine project"
+    }
+  ]
+}
