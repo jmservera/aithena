@@ -70,6 +70,76 @@ Solid SolrCloud infrastructure exists, but the indexing pipeline is Qdrant-bound
 
 ---
 
+## Phase 1 Implementation Decisions
+
+### Ash — Schema Field Design
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2026-03-13  
+**Status:** IMPLEMENTED
+
+**Decision:**
+- Add explicit single-value fields for title, author, year, page count, file path, folder path, category, file size, and detected language.
+- Copy `title_t` and `author_t` into `_text_` so the catch-all default query field includes book metadata.
+- Keep `_text_` unstored in Phase 1 to avoid duplicating the full extracted body; use `content` as the stored highlight source and configure `_text_` highlighting with `f._text_.hl.alternateField=content`.
+
+**Impact:**
+- Parker can populate stable Solr field names directly from filesystem metadata extraction.
+- Search clients can use `/select` or `/query` with default highlighting and receive snippets from `content` while still querying against `_text_`.
+- Existing Tika/PDF metadata remains available for later tuning and faceting work.
+
+---
+
+### Parker — Solr Indexer Rewrite
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-13  
+**Status:** IMPLEMENTED
+
+**Context:**
+Phase 1 required the indexer to stop treating the library as Azure/Qdrant-backed storage and instead process local PDFs mounted into the containers.
+
+**Decision:**
+The rewritten `document-indexer` now treats RabbitMQ messages as local filesystem paths under `/data/documents` and sends the raw PDF to Solr's `/update/extract` handler with `literal.*` metadata fields.
+
+**Metadata Heuristic:**
+For single-folder paths, infer the parent folder as the author only when the filename does not look like a journal/category pattern. Journal/category signals currently include:
+- Uppercase underscore series names
+- Explicit year ranges like `1885 - 1886`
+- Category-like folder names echoed in the filename (e.g., `balearics/ESTUDIS_BALEARICS_01.pdf`)
+
+Otherwise, use the parent folder as author and strip repeated author tokens from the title (e.g., `amades/... amades.pdf`).
+
+**Impact:**
+- Keeps Phase 1 indexing working with the real mounted library while preserving support for requested `Author/Title.pdf` and `Category/Author - Title (Year).pdf` conventions.
+- Avoids coupling indexing to Azure Blob Storage or Qdrant, which are no longer part of the Solr-first pipeline.
+
+---
+
+### Lambert — Metadata Extraction Test Contract
+
+**Author:** Lambert (Tester)  
+**Date:** 2026-03-13  
+**Status:** IMPLEMENTED
+
+**Test-Facing Decisions:**
+
+1. `extract_metadata()` should return `file_path` and `folder_path` relative to `base_path`.
+2. Real library conventions are mixed:
+   - `amades/` should be treated as an author folder.
+   - `balearics/` should be treated as a category/series folder.
+   - `bsal/` is a category-like folder, but filenames containing year ranges such as `1885 - 1886` must not trigger `author - title` parsing or set `year`.
+3. Unknown or unsupported shapes should stay conservative:
+   - title = raw filename stem
+   - author = `Unknown`
+   - extra nesting must not invent an author from intermediate folders
+4. Fallback title handling should preserve the original stem for unknown patterns (including underscores), because the spec explicitly says `title=filename`.
+
+**Impact:**
+These expectations are now encoded in `document-indexer/tests/test_metadata.py`. Parker and Ash should align implementation + Solr field usage to this contract so metadata is stable for indexing, faceting, and UI display.
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

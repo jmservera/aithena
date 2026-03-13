@@ -33,10 +33,17 @@ When building a document search engine on SolrCloud with PDF files stored on the
    - Always have fallbacks: filename → title, parent folder → author, "Unknown" for missing fields
 
 5. **Schema design for book search:**
+   - Explicitly declare domain fields even if dynamic suffixes already exist; this locks in names and intent for the indexer (`title_s`, `title_t`, `author_s`, `author_t`, `year_i`, `page_count_i`, `file_path_s`, `folder_path_s`, `category_s`, `file_size_l`, `language_detected_s`)
    - Use `*_s` (string) suffix for facetable fields (author, language, category)
    - Use `*_t` (text_general) for searchable text fields
    - Use `*_i` (int) for numeric facets (year, page count)
+   - Use `*_l` (long) for byte-size filtering (`file_size_l`)
    - Keep Tika auto-generated fields — they hold useful PDF metadata
+
+6. **Feed title/author into catch-all search and highlight from stored content:**
+   - Add `copyField` rules from `title_t` and `author_t` into `_text_` so general search finds title/author matches
+   - Keep `_text_` as the default query field, but drive snippets from stored `content`
+   - In `solrconfig.xml`, set `/query` and `/select` highlight defaults with `hl.method=unified`, `hl.fl=content,_text_`, and `f._text_.hl.alternateField=content`
 
 ## Examples
 
