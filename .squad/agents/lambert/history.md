@@ -22,7 +22,14 @@
 - Unknown patterns are tested with conservative fallbacks: keep the filename stem as title, set author to `Unknown`, and avoid guessing from extra nested folders.
 - The new pytest suite currently lands at **11 passing / 4 failing**, with the remaining failures intentionally flagging parser bugs in fallback handling, deep nested paths, and year-range parsing.
 
-### 2026-03-13 — Architecture Plan: QA & Testing (from Ripley review)
+### 2026-03-13T20:58 — Phase 1–4 GitHub Issues Assigned
+
+- Ripley decomposed the entire remaining roadmap into 18 single-owner issues (#36–#53), all assigned to `@copilot` with squad labels and release milestones.
+- **Your Phase 1 issues:** Metadata extraction tests already written (11 passing, 4 intentional fails)
+- **Your Phase 2 issues:** #36–#41 (API + UI integration tests, faceting validation, PDF serving tests)
+- **Your Phase 3 issues:** #42–#47 (Embedding quality tests, semantic search benchmarks, kNN performance)
+- **Your Phase 4 issues:** #48–#53 (E2E tests, production hardening, health checks, error scenarios)
+- Full dependency chain and rationale in `.squad/decisions.md` under "Ripley — Phase 2–4 Issue Decomposition".
 
 **Your assignments (Phase 1–4):**
 - **Phase 1:** Write integration tests for end-to-end indexing (PDF in → verify Solr with correct metadata)

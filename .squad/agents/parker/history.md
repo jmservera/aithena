@@ -29,7 +29,14 @@
   - `bsal/Bolletí ... 1885 - 1886.pdf` behaves like a category/journal folder; year ranges should not be mistaken for `Author - Title` splits, but the first year is still useful metadata.
 - Validation completed with `python3 -m compileall` plus metadata smoke tests against required synthetic patterns and real sample paths from the mounted library.
 
-### 2026-03-13 — Architecture Plan: Solr Migration (from Ripley review)
+### 2026-03-13T20:58 — Phase 2 GitHub Issues Assigned
+
+- Ripley decomposed Phase 2 into issues #36–#41, all assigned to `@copilot` with squad labels and v0.4.0 milestone.
+- **Your Phase 2 issues:**
+  - #36: Solr FastAPI search service foundation (core `/search`, `/facets` endpoints)
+  - #37–#39: Search API enhancement (filtering, PDF serving, error handling)
+  - #40–#41: Integration & documentation
+- Full dependency chain and rationale in `.squad/decisions.md` under "Ripley — Phase 2–4 Issue Decomposition".
 
 **Your assignments (Phase 1–4):**
 - **Phase 1:** Rewrite document-indexer for Solr Tika extraction (drop Qdrant), build metadata extraction module (path → author/title/year/category), fix docker-compose.yml volume mounting
@@ -57,4 +64,12 @@
 **From Lambert's test suite:**
 - Lambert wrote 15 metadata extraction tests (11 passing, 4 failing). Review `document-indexer/tests/test_metadata.py` to validate your parser handles real library conventions (amades/ author, balearics/ category, bsal/ journal).
 - Test expectations: `file_path` and `folder_path` relative to `base_path`, year ranges (1885 - 1886) must stay in title, unknown patterns conservatively fallback to title=filename, author=Unknown.
+
+### 2026-03-13 — Phase 2 backend: Solr search service foundation
+
+- Added `solr-search/` as a FastAPI wrapper for the `books` collection with `/search`, `/facets`, `/documents/{token}`, `/health`, and `/info` endpoints.
+- Normalized Solr documents to UI-friendly JSON fields (`title`, `author`, `year`, `category`, `language`, `file_path`) and surfaced facet buckets plus highlight snippets from `content` / `_text_`.
+- `document_url` now uses a URL-safe base64 token over `file_path_s`, and PDF serving validates the resolved path stays under `BASE_PATH` before streaming inline.
+- Search requests run through `edismax`, reject Solr local-parameter syntax (`{!...}`), and fall back from `language_detected_s` to `language_s` so older indexed docs still facet and render correctly.
+- Validation completed with `python3 -m pytest document-indexer/tests solr-search/tests -q`, `python3 -m compileall solr-search`, `docker compose config -q`, `docker compose build solr-search`, and a container smoke test against `/health`.
 

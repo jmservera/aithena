@@ -140,6 +140,72 @@ These expectations are now encoded in `document-indexer/tests/test_metadata.py`.
 
 ---
 
+---
+
+## Phase 1 Polish & Metadata Decisions
+
+### Parker — Metadata Extraction Heuristic Refinements
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-13  
+**Status:** IMPLEMENTED
+
+**Decision:**
+Refined metadata extraction to handle real library conventions more robustly:
+
+1. **Preserve raw filename stem** as the fallback title for unknown patterns so special characters like underscores are not normalized away.
+2. **Only infer `category/author`** from directory structure when the relative path is exactly two levels deep; deeper archive paths should keep the top-level category and leave author unknown unless the filename supplies one.
+3. **Treat year ranges** such as `1885 - 1886` as series metadata rather than a single publication year.
+4. **Normalize category acronyms** like `bsal` to uppercase when used as categories.
+
+**Impact:**
+- Metadata extraction now handles edge cases in the real library structure (`amades/`, `balearics/`, `bsal/`) consistently.
+- Fallback title behavior is explicit and preserved; title=filename for unknown patterns.
+- Indexing pipeline produces stable, predictable field values for Solr schema and UI display.
+
+---
+
+## Ripley — Phase 2–4 Issue Decomposition
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-13  
+**Status:** ACTIVE
+
+**Decision:**
+Track the remaining Solr migration work as 18 single-owner GitHub issues assigned to `@copilot`, ordered by dependency and release:
+
+- **v0.4.0 / Phase 2:** Issues #36–#41 (Solr FastAPI search service)
+- **v0.5.0 / Phase 3:** Issues #42–#47 (React search, embeddings, hybrid search)
+- **v0.6.0 / Phase 4:** Issues #48–#53 (File watcher, upload endpoint, admin, E2E)
+
+**Dependency Backbone:**
+1. Solr FastAPI search service first.
+2. React search rewrite, faceting, PDF viewing, and frontend tests on that service.
+3. Embeddings model alignment before Solr vector schema, before indexer chunk/vector indexing, before hybrid search and similar-books.
+4. 60s polling in `document-lister` before upload/admin polish, with E2E tests last.
+
+**Team-Level Scope Choice:**
+The PDF upload endpoint lives in the FastAPI backend (not a new service) to reuse the existing Redis/RabbitMQ/Solr ingestion path and avoid unnecessary service sprawl.
+
+**Impact:**
+- Squad triage can route Phase 2 work immediately without reopening architecture questions.
+- Later semantic and polish work references concrete dependencies instead of broad phase notes.
+- Future PR reviewers can validate against the numbered dependency chain rather than the epic-style roadmap.
+
+---
+
+## User Directive — Local Testing Setup
+
+**Captured:** 2026-03-13T19:47:58Z  
+**Source:** jmservera (via Copilot)
+
+**Directive:**
+To test the current setup locally, spin up the Docker Compose containers and assign a volume to `/home/jmservera/booklibrary` so the team has access to the local books.
+
+**Why:** Critical context for all testing and development work in Phases 1–4.
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

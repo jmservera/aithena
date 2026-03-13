@@ -130,28 +130,25 @@ services:
       - document-data:/data/documents:ro
     networks:
       - default
-  # qdrant-search:
-  #   build:
-  #     context: .
-  #     dockerfile: ./qdrant-search/Dockerfile
-  #   ports:
-  #     - "8080:8080"
-  #   restart: on-failure
-  #   depends_on:
-  #     - qdrant
-  #   #      - llama-server
-  #   environment:
-  #     - PORT=8080
-  #     - QDRANT_HOST=qdrant
-  #     - QDRANT_PORT=6333
-  #     - QDRANT_COLLECTION=shortembeddings
-  #     - QDRANT_VECTOR_DIM=768
-  #     - EMBEDDINGS_HOST=embeddings-server
-  #     - EMBEDDINGS_PORT=8085
-  #     - CHAT_HOST=llama-server
-  #     - CHAT_PORT=8000
-  #     - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-  #     - STORAGE_CONTAINER=test-library
+  solr-search:
+    build:
+      context: .
+      dockerfile: ./solr-search/Dockerfile
+    ports:
+      - "8080:8080"
+    restart: on-failure
+    depends_on:
+      - solr
+    environment:
+      - PORT=8080
+      - SOLR_URL=http://solr:8983/solr
+      - SOLR_COLLECTION=books
+      - BASE_PATH=/data/documents
+      - CORS_ORIGINS=http://localhost:5173
+    volumes:
+      - document-data:/data/documents:ro
+    networks:
+      - default
   # llama-playground:
   #   image: ghcr.io/mckaywrigley/chatbot-ui:main
   #   ports:

@@ -17,7 +17,12 @@
 - Added `copyField` rules from `title_t` and `author_t` into `_text_` so general catch-all queries include book title and author terms without removing any Tika-generated metadata fields.
 - Updated `solr/books/solrconfig.xml` to default `/query` and `/select` highlighting to the unified highlighter, with `content` as the stored snippet source and `_text_` configured with an alternate-field fallback. This keeps highlight support aligned with catch-all search without duplicating stored full text in `_text_`.
 
-### 2026-03-13 — Architecture Plan: Solr Schema Evolution (from Ripley review)
+### 2026-03-13T20:58 — Phase 2–3 GitHub Issues Assigned
+
+- Ripley decomposed Phase 2 and 3 into issues #36–#47, all assigned to `@copilot` with squad labels and release milestones.
+- **Your Phase 2 issues:** #42–#44 (Search API tuning, faceting, highlighting)
+- **Your Phase 3 issues:** #45–#47 (Vector field config, kNN setup, performance benchmarking)
+- Full dependency chain and rationale in `.squad/decisions.md` under "Ripley — Phase 2–4 Issue Decomposition".
 
 **Your assignments (Phase 1–3):**
 - **Phase 1 (URGENT):** Add book-specific fields to managed-schema.xml:
