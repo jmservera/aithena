@@ -1,157 +1,348 @@
+/* ── Layout ───────────────────────────────────────────────── */
 .App {
-  text-align: center;
   display: flex;
-  position: absolute;
-  color: white;
-  background-color: #282c34;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  left: 0;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #1a1d23;
+  color: #e8eaf0;
+  font-family: system-ui, sans-serif;
 }
 
-.sidebar {
-  width: 240px;
-  padding: 10px;
-  background-color: #202123;
-  height: 100%;
-  overflow-y: auto;
+/* ── Header / Search bar ─────────────────────────────────── */
+.search-header {
+  background-color: #202330;
+  padding: 2rem 1.5rem 1.5rem;
+  text-align: center;
+  border-bottom: 1px solid #2e3340;
 }
 
-.side-menu-button {
-  padding: 12px;
-  border: 1px solid white;
-  border-radius: 5px;
-  text-align: left;
-  transition: ease 0.25s all;
+.search-title {
+  margin: 0 0 0.25rem;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
 }
 
-.side-menu-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+.search-subtitle {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  color: #8b92a5;
 }
 
-.side-menu-button span {
-  padding-left: 6px;
-  padding-right: 12px;
+.search-form {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
-.chatbox {
+.search-input {
   flex: 1;
-  background-color: #343541;
-  position: relative;
-}
-
-.chat-input-holder {
-  padding: 24px;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-}
-
-.chat-input-text-area {
-  background-color: #40414f;
-  width: 100%;
-  padding: 12px;
-  color: white;
-  font-size: 1.25em;
-  border-radius: 5px;
-  border: none;
+  padding: 0.65rem 1rem;
+  background-color: #2c3040;
+  border: 1px solid #3a3f52;
+  border-radius: 6px;
+  color: #e8eaf0;
+  font-size: 1rem;
   outline: none;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s;
 }
 
-.chat-input-text-area:focus {
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+.search-input:focus {
+  border-color: #5b8dee;
 }
 
-.swipe-button {
-  border-radius: 8px;
-  /* border: olive 1px solid; */
-  outline: rgb(99, 69, 13) 1px solid;
-  background-color: rgba(0, 0, 0, 0.25);
-  height: 38px;
-  width: 38px;
-  position: absolute;
-  right: 24px;
-  bottom: 84px;
-  padding: 2px;
-  font-size: 1.5em;
-  text-align: center;
-  transition: ease 0.25s all;
+.search-input::placeholder {
+  color: #5a6075;
 }
-.swipe-button:hover {
-  background-color: rgba(0, 0, 0, 0.5);
-  outline: orange 1px solid;
+
+.search-button {
+  padding: 0.65rem 1.25rem;
+  background-color: #5b8dee;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
 }
 
-.swipe-button:active {
-  background-color: rgba(255, 255, 255, 0.5);
+.search-button:hover:not(:disabled) {
+  background-color: #4a7de0;
 }
 
-.chat-log {
-  text-align: left;
-  scroll-behavior: auto;
-  overflow-y: auto;
-  padding-bottom: 100px;
-  height: 100%;
+.search-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.chat-message.chatgpt {
-  background-color: #444654;
-  /* rgba(255, 255, 255, 0.1); */
-}
-
-.chat-message-center {
-  max-width: 1280px;
-  margin-left: auto;
-  margin-right: auto;
+/* ── Content area (results + related books side-by-side) ─── */
+.content-area {
   display: flex;
-  padding: 12px;
-  padding-left: 24px;
-  padding-right: 24px;
+  flex: 1;
+  gap: 0;
+  align-items: flex-start;
 }
 
-.avatar {
-  background-color: white;
-  border-radius: 50%;
-  min-width: 40px;
-  width: 40px;
-  height: 40px;
-  font-size: 1.5em;
+/* ── Results area ────────────────────────────────────────── */
+.search-results {
+  flex: 1;
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+  min-width: 0;
+}
+
+.results-summary {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: #8b92a5;
+}
+
+.results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.results-list-item {
+  display: contents;
+}
+
+/* ── State messages ──────────────────────────────────────── */
+.state-message {
   text-align: center;
-  padding-top: 4px;
+  padding: 3rem 1rem;
+  color: #8b92a5;
+  font-size: 1rem;
 }
 
-.avatar.chatgpt {
-  background-color: #0da37f;
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
 }
 
-.message {
-  padding-left: 40px;
-  padding-right: 40px;
-}
-
-.loading {
+.spinner {
   display: inline-block;
-  /* font-family: monospace;
-  font-size: 30px; */
-  clip-path: inset(0 1.5ch 0 0);
-  animation: l 1s steps(4) infinite;
-  padding-left: 2px;
+  width: 1.2em;
+  height: 1.2em;
+  border: 2px solid #3a3f52;
+  border-top-color: #5b8dee;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
 }
 
-@keyframes l {
+@keyframes spin {
   to {
-    clip-path: inset(0 -1ch 0 0);
+    transform: rotate(360deg);
   }
 }
 
-.sidebar label,
-.sidebar input {
-  text-align: left;
+.error-state {
+  color: #e06c6c;
+}
+
+/* ── Book result card ────────────────────────────────────── */
+.book-result-card {
+  background-color: #252936;
+  border: 1px solid #2e3340;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  transition: border-color 0.2s;
+}
+
+.book-result-card:hover {
+  border-color: #5b8dee;
+}
+
+.book-result-card--clickable {
+  cursor: pointer;
+}
+
+.book-result-card--clickable:focus-visible {
+  outline: 2px solid #5b8dee;
+  outline-offset: 2px;
+}
+
+.book-result-card--selected {
+  border-color: #5b8dee;
+  background-color: #2a3050;
+}
+
+.book-result-header {
+  margin-bottom: 0.5rem;
+}
+
+.book-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #c8d0e7;
+}
+
+.book-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.book-author,
+.book-year,
+.book-category,
+.book-pages {
+  background-color: #2e3340;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  color: #8b92a5;
+}
+
+.book-author {
+  color: #a8c4f0;
+}
+
+.book-year {
+  color: #90c9a0;
+}
+
+.book-snippet {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: #9ba3b8;
+  line-height: 1.5;
+}
+
+/* Solr highlight tags */
+.book-snippet em {
+  color: #f0c070;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* ── Related books panel ─────────────────────────────────── */
+.related-books-panel {
+  width: 300px;
+  flex-shrink: 0;
+  background-color: #202330;
+  border-left: 1px solid #2e3340;
+  padding: 1.25rem 1rem;
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+.related-books-title {
+  margin: 0 0 1rem;
+  font-weight: 600;
+  color: #c8d0e7;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.related-books-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #8b92a5;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}
+
+.related-books-error {
+  color: #e06c6c;
+  font-size: 0.88rem;
+  padding: 0.5rem 0;
+}
+
+.related-books-empty {
+  color: #8b92a5;
+  font-size: 0.88rem;
+  padding: 0.5rem 0;
+}
+
+.related-books-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 0.6rem;
+}
+
+.related-books-item {
+  display: contents;
+}
+
+.related-book-card {
+  display: block;
   width: 100%;
+  background-color: #252936;
+  border: 1px solid #2e3340;
+  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.related-book-card:hover {
+  border-color: #5b8dee;
+  background-color: #2a3050;
+}
+
+.related-book-card:focus-visible {
+  outline: 2px solid #5b8dee;
+  outline-offset: 2px;
+}
+
+.related-book-title {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #c8d0e7;
+  margin-bottom: 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.related-book-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.related-book-score {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b8ee8;
+  font-weight: 500;
+}
+
+/* ── Responsive — stack panel below results on narrow screens */
+@media (max-width: 768px) {
+  .content-area {
+    flex-direction: column;
+  }
+
+  .related-books-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid #2e3340;
+    position: static;
+    max-height: none;
+  }
 }

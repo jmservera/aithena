@@ -1,185 +1,141 @@
 import "./App.css";
-import {
-  ChatMessage,
-  ChatMessageProps,
-  defaultChatMessageProps,
-} from "./Components/ChatMessage";
-import Configbar from "./Components/Configbar";
-import { useState, useRef, useEffect, FormEvent } from "react";
-
-interface MessageInfo {
-  message: string;
-  sender: string;
-  time: string;
-}
-
-const defaultMessages: MessageInfo[] = [
-  {
-    message: "Hello!\nHow can I help you today?",
-    sender: "Assistant",
-    time: Date.now().toString(),
-  },
-];
-
-let messages: MessageInfo[] = [...defaultMessages];
+import BookResultCard from "./Components/BookResult";
+import RelatedBooks from "./Components/RelatedBooks";
+import { useSearch } from "./hooks/search";
+import { useSimilarBooks } from "./hooks/similarBooks";
+import { BookResult } from "./hooks/search";
+import { SimilarBook } from "./hooks/similarBooks";
+import { useState, useEffect, FormEvent } from "react";
 
 function App() {
-  let [result, setResult] = useState<MessageInfo[]>(messages);
-  let [text, setText] = useState<string>("");
-  let [input, setInput] = useState("");
-  let [loading, setLoading] = useState<boolean>(false);
-  const abortControllerRef = useRef(new AbortController());
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const [props, setProps] = useState<ChatMessageProps>(
-    JSON.parse(localStorage.getItem("props") || "null") || {
-      ...defaultChatMessageProps,
+  const [input, setInput] = useState("");
+  const { results, total, state, error, lastQuery, search } = useSearch();
+  const {
+    similar,
+    state: similarState,
+    error: similarError,
+    fetchSimilar,
+    reset: resetSimilar,
+  } = useSimilarBooks();
+  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+
+  // When a book is selected, fetch related books
+  useEffect(() => {
+    if (selectedBook) {
+      fetchSimilar(selectedBook.id);
+    } else {
+      resetSimilar();
     }
-  );
+  }, [selectedBook, fetchSimilar, resetSimilar]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [result, text]);
-
-  useEffect(() => {
-    console.log("Storing props to local storage");
-    localStorage.setItem("props", JSON.stringify(props));
-  }, [props]);
-
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
-
-    if (input === "") return;
-    setLoading(true);
-    try {
-      const inputText = input;
-      messages.push(
-        {
-          message: inputText,
-          sender: "User",
-          time: Date.now().toString(),
-        },
-        {
-          message: "",
-          sender: "Assistant",
-          time: Date.now().toString(),
-        }
-      );
-      setResult(messages);
-      setText(inputText);
-      setInput("");
-
-      let current = messages.length - 1;
-      let text = "";
-
-      const msgProps = { ...props, ["message"]: inputText };
-
-      await ChatMessage(
-        (data: any) => {
-          if (data.choices) {
-            console.log(data.choices[0].text);
-            text = text + data.choices[0].text;
-            messages[current].message = text;
-            setText(text);
-            setResult(messages);
-          } else {
-            if (data.messages) {
-              console.log("Other data");
-              text = "The following information was found:\n";
-              data.messages.forEach((message: any) => {
-                text =
-                  text +
-                  `<b>Document</b> (${Math.round(
-                    message.score * 100
-                  )}% similarity): ${message.path}, page ${
-                    message.page
-                  }\n<b>Text</b>: ${message.payload}\n`;
-              });
-              text = text + "\n<b>Summary</b>: ";
-              console.log(`Summary ${current} ${text}`);
-              messages[current].message = text;
-              setResult(messages);
-              setText(text);
-            }
-            console.log(data);
-          }
-        },
-        msgProps,
-        abortControllerRef.current.signal
-      );
-    } finally {
-      console.log("Done");
-      setLoading(false);
-    }
+    search(input);
+    setSelectedBook(null);
   }
 
-  function handleNewChatClick() {
-    messages = [...defaultMessages];
-    abortControllerRef.current.abort();
-    setResult(messages);
-    setLoading(false);
+  function handleSelectBook(book: BookResult) {
+    setSelectedBook((prev) => (prev?.id === book.id ? null : book));
+  }
+
+  function handleSelectSimilar(book: SimilarBook) {
+    // Convert SimilarBook to BookResult shape and select it
+    const asBookResult: BookResult = {
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      year: book.year,
+      category: book.category,
+      document_url: book.document_url,
+    };
+    setSelectedBook(asBookResult);
   }
 
   return (
-    <>
-      <div className="App">
-        <aside className="sidebar">
-          <Configbar props={props} setProps={setProps} />
-        </aside>
-        <section className="chatbox">
-          <div className="chat-log">
-            {result.map((message, index) => (
-              <div
-                key={index}
-                className={`chat-message ${
-                  message.sender === "Assistant" && "chatgpt"
-                }`}
-              >
-                <div className="chat-message-center">
-                  <div
-                    className={`avatar ${
-                      message.sender === "Assistant" && "chatgpt"
-                    }`}
-                  >
-                    {message.sender === "User" ? "👤" : "🤖"}
-                  </div>
-                  <div className="message">
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: message.message.replace(/\n/g, "<br />"),
-                      }}
+    <div className="App">
+      <header className="search-header">
+        <h1 className="search-title">📚 Aithena</h1>
+        <p className="search-subtitle">Book Library Search</p>
+        <form className="search-form" onSubmit={handleSubmit}>
+          <input
+            className="search-input"
+            type="search"
+            value={input}
+            placeholder="Search for books by title, author, or content…"
+            onChange={(e) => setInput(e.target.value)}
+            disabled={state === "loading"}
+            aria-label="Search query"
+          />
+          <button
+            className="search-button"
+            type="submit"
+            disabled={state === "loading" || !input.trim()}
+            aria-label="Search"
+          >
+            {state === "loading" ? "Searching…" : "Search"}
+          </button>
+        </form>
+      </header>
+
+      <div className="content-area">
+        <main className="search-results">
+          {state === "loading" && (
+            <div className="state-message loading-state" role="status">
+              <span className="spinner" aria-hidden="true" />
+              Searching…
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="state-message error-state" role="alert">
+              <strong>Search failed:</strong> {error}
+            </div>
+          )}
+
+          {state === "success" && results.length === 0 && (
+            <div className="state-message empty-state" role="status">
+              No results found for <em>"{lastQuery}"</em>. Try a different
+              query.
+            </div>
+          )}
+
+          {state === "success" && results.length > 0 && (
+            <>
+              <p className="results-summary">
+                {total} result{total !== 1 ? "s" : ""} for{" "}
+                <em>"{lastQuery}"</em>
+              </p>
+              <ul className="results-list" aria-label="Search results">
+                {results.map((result) => (
+                  <li key={result.id} className="results-list-item">
+                    <BookResultCard
+                      result={result}
+                      onSelect={handleSelectBook}
+                      selected={selectedBook?.id === result.id}
                     />
-                    {result.length - 1 === index && (
-                      <span className="loading" hidden={!loading}>
-                        ...
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div ref={bottomRef}> </div>
-          </div>
-          <div className="chat-input-holder" onSubmit={handleSubmit}>
-            <form>
-              <div
-                className="swipe-button"
-                title="New Chat"
-                onClick={handleNewChatClick}
-              >
-                🧹
-              </div>
-              <input
-                disabled={loading}
-                className="chat-input-text-area"
-                value={input}
-                placeholder="Type your message here"
-                onChange={(e) => setInput(e.target.value)}
-              ></input>
-            </form>
-          </div>
-        </section>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {state === "idle" && (
+            <div className="state-message idle-state">
+              Enter a search query to find books in the library.
+            </div>
+          )}
+        </main>
+
+        {selectedBook && (
+          <RelatedBooks
+            state={similarState}
+            error={similarError}
+            similar={similar}
+            onSelect={handleSelectSimilar}
+          />
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
