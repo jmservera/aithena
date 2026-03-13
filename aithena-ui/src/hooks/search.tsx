@@ -115,7 +115,7 @@ export function useSearch() {
   }, [searchState, runSearch]);
 
   const setQuery = useCallback((query: string) => {
-    setSearchState((prev) => ({ ...prev, query, page: 1, filters: {} }));
+    setSearchState((prev) => ({ ...prev, query, page: 1 }));
   }, []);
 
   const setFilter = useCallback(

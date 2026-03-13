@@ -4,6 +4,19 @@ interface BookCardProps {
   book: BookResult;
 }
 
+/**
+ * Sanitize Solr highlight snippets to allow only <em> tags.
+ * Solr uses <em>…</em> to wrap matched terms; all other HTML is stripped.
+ */
+function sanitizeHighlight(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/&lt;em&gt;/g, "<em>")
+    .replace(/&lt;\/em&gt;/g, "</em>");
+}
+
 function BookCard({ book }: BookCardProps) {
   return (
     <article className="book-card">
@@ -41,7 +54,9 @@ function BookCard({ book }: BookCardProps) {
             <p
               key={i}
               className="book-highlight-snippet"
-              dangerouslySetInnerHTML={{ __html: `…${snippet}…` }}
+              dangerouslySetInnerHTML={{
+                __html: `\u2026${sanitizeHighlight(snippet)}\u2026`,
+              }}
             />
           ))}
         </div>
