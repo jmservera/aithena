@@ -3,14 +3,16 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
 WORKDIR /app
-COPY solr-search/requirements.txt .
-
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY solr-search/ .
 
-ENV SOLR_URL="http://solr:8983/solr"
+COPY . .
+
+ENV SOLR_HOST="localhost"
+ENV SOLR_PORT=8983
 ENV SOLR_COLLECTION="books"
-ENV BASE_PATH="/data/documents"
-ENV CORS_ORIGINS="http://localhost:5173"
+ENV EMBEDDINGS_HOST="localhost"
+ENV EMBEDDINGS_PORT=8085
+ENV DEFAULT_SEARCH_MODE="keyword"
 
-CMD ["sh","-c","python -m uvicorn --port=$PORT --host 0.0.0.0 main:app"]
+CMD ["python", "-m", "uvicorn", "--port", "8080", "--host", "0.0.0.0", "main:app"]

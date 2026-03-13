@@ -192,50 +192,68 @@ docker exec solr solr config-set-upload \
 - [Solr Schema](https://solr.apache.org/docs/latest/schema-elements-intro.html)
 - [Solr Dense Vector Search](https://solr.apache.org/docs/latest/query-guide/dense-vector-search.html)
 - [Tika Integration](https://solr.apache.org/docs/latest/indexing-and-basic-data-operations.html#indexing-binary-documents)
+- [Solr Dense Vector Search (kNN)](https://solr.apache.org/docs/latest/query-guide/dense-vector-search.html)
+
+---
+
+## Phase 3 — Dense Vector Field (`embedding`)
+
+The `embedding` field (type `knn_vector`, 512-dim cosine similarity, HNSW index) is used for
+semantic and hybrid search.
+
+- **Type:** `solr.DenseVectorField` with `vectorDimension=512`, `similarityFunction=cosine`
+- **Indexing:** The document-indexer chunks each PDF post-Tika and calls the embeddings server
+  (`distiluse-base-multilingual-cased-v2`) to populate the `embedding` field (ADR-004).
+- **Query syntax:** `{!knn f=embedding topK=10}[0.1,0.2,...,0.512]`
 
 ---
 
 ## Search API — Mode Behaviour
 
-The `solr-search` FastAPI service (`qdrant-search/main.py`) wraps this Solr collection and
+The `solr-search` FastAPI service (`solr-search/main.py`) wraps this Solr collection and
 supports three search modes via the `?mode=` query parameter.
 
 ### `keyword` (default, backward-compatible)
 
 - Queries Solr using the **Extended DisMax** (`edismax`) query parser.
 - Fields boosted: `title_t^2`, `author_t^1.5`, `_text_`.
-- **Facets** — populated from `author_s`, `category_s`, `language_detected_s`.
+- **Facets** — populated from `author_s`, `category_s`, `language_detected_s`, `year_i`.
 - **Highlights** — populated from the `content` field using Solr's Unified Highlighter.
-- **Pagination** — use `?limit=N` (maps to Solr `rows`).
+- **Pagination** — use `?page=N&limit=N` (maps to Solr `start`/`rows`).
+- **Filtering** — `?fq_author=`, `?fq_category=`, `?fq_language=`, `?fq_year=`.
 
 ### `semantic`
 
 - Encodes the query via the embeddings server (`distiluse-base-multilingual-cased-v2`).
-- Queries Qdrant for nearest-neighbour chunks.
-- **Facets** — empty (`{}`); Qdrant does not expose Solr-style facet aggregations.
+- Queries Solr with `{!knn f=embedding topK=N}[vec...]` for nearest-neighbour retrieval.
+- **Facets** — empty (Solr kNN does not aggregate facets in the same pass); returned as
+  empty lists in the `facets` object.
 - **Highlights** — empty (`[]` per result); no snippet extraction is performed.
-- **Pagination** — controlled by `?limit=N`; there is no cursor/offset pagination.
+- **Pagination** — controlled by `?limit=N`; cursor pagination is not supported.
 
 ### `hybrid`
 
-- Runs keyword and semantic searches concurrently (`candidate_limit = max(limit*2, 20)`).
+- Runs keyword (BM25) and semantic (kNN) searches concurrently
+  (`candidate_limit = max(limit*2, 20)` per leg).
 - Fuses results using **Reciprocal Rank Fusion** (RRF, `k=60` by default).
-- **Facets** — sourced from the keyword (Solr) leg only; semantic-only hits will not
+- **Facets** — sourced from the keyword (BM25) leg only; semantic-only hits will not
   have facet coverage.
-- **Highlights** — sourced from the keyword (Solr) leg only; results that appear only
+- **Highlights** — sourced from the keyword (BM25) leg only; results that appear only
   in the semantic leg will have empty `highlights` arrays.
 - **Pagination** — truncated to `?limit=N` after RRF fusion; no offset pagination.
 - `RRF_K` can be tuned via the `RRF_K` environment variable (default `60`).
 
 ### Normalised Response Shape
 
-All three modes return the same JSON envelope:
+All three modes return the same JSON envelope so the UI can consume them uniformly:
 
 ```json
 {
   "query": "search text",
   "mode": "keyword | semantic | hybrid",
   "total": 42,
+  "page": 1,
+  "limit": 10,
   "results": [
     {
       "id": "...",
@@ -248,15 +266,14 @@ All three modes return the same JSON envelope:
       "category": "History",
       "language": "ca",
       "highlights": ["...relevant snippet..."],
-      "payload": {}
+      "document_url": "http://host/docs/amades/book.pdf"
     }
   ],
   "facets": {
-    "author_s": {"Author A": 5},
-    "category_s": {"History": 3}
-  },
-  "highlights": {
-    "doc-id": {"content": ["...snippet..."]}
+    "author":   [{"value": "Author A", "count": 5}],
+    "category": [{"value": "History",  "count": 3}],
+    "language": [],
+    "year":     []
   }
 }
 ```

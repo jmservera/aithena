@@ -153,27 +153,24 @@ services:
       - document-data:/data/documents:ro
     networks:
       - default
-  # qdrant-search is now the unified search API supporting keyword (Solr BM25),
-  # semantic (Qdrant vector), and hybrid (RRF) modes.
+  # solr-search: Unified search API supporting keyword (Solr BM25), semantic (Solr kNN),
+  # and hybrid (RRF) modes.
   # Set DEFAULT_SEARCH_MODE to keyword | semantic | hybrid (default: keyword).
   solr-search:
     build:
-      context: .
-      dockerfile: ./qdrant-search/Dockerfile
+      context: ./solr-search
+      dockerfile: Dockerfile
     ports:
-      - "8081:8081"
+      - "8080:8080"
     restart: on-failure
     depends_on:
       - solr
       - embeddings-server
     environment:
-      - PORT=8081
+      - PORT=8080
       - SOLR_HOST=solr
       - SOLR_PORT=8983
       - SOLR_COLLECTION=books
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - QDRANT_COLLECTION=aithena
       - EMBEDDINGS_HOST=embeddings-server
       - EMBEDDINGS_PORT=8085
       - DEFAULT_SEARCH_MODE=keyword
