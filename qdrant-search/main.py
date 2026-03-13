@@ -224,9 +224,11 @@ async def index(input: str, limit: int = 5):
             path = payload.get("path", "")
             document_url = None
             if path:
-                rel = path.lstrip("/")
-                if rel.startswith("data/documents/"):
-                    rel = rel[len("data/documents/"):]
+                norm = os.path.normpath(path)
+                if norm.startswith(os.path.normpath(DOCUMENTS_PATH)):
+                    rel = os.path.relpath(norm, DOCUMENTS_PATH)
+                else:
+                    rel = path.lstrip("/")
                 document_url = f"/v1/documents/{urllib.parse.quote(rel, safe='/')}"
             results.append({
                 "id": hit.id,
@@ -247,7 +249,7 @@ async def serve_document(file_path: str):
     """Serve a PDF document from the documents directory."""
     safe_base = os.path.realpath(DOCUMENTS_PATH)
     full_path = os.path.realpath(os.path.join(DOCUMENTS_PATH, file_path))
-    if not full_path.startswith(safe_base + os.sep) and full_path != safe_base:
+    if os.path.commonpath([safe_base, full_path]) != safe_base:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=404, detail="Document not found")
