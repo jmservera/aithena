@@ -11,6 +11,12 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-13 — Metadata parser test fixes
+
+- Fixed unknown-pattern fallback titles to preserve the original filename stem instead of replacing underscores with spaces.
+- Stopped deep nested paths from inferring the second folder as an author; only two-level `category/author/title` paths now do that.
+- Fixed real `bsal` year-range handling so `1885 - 1886` does not become a single-year value, and category acronyms like `bsal` are emitted as `BSAL`.
+
 ### 2026-03-13 — Phase 1 backend: Solr indexer rewrite
 
 - Rewrote `document-indexer/document_indexer/__main__.py` into a RabbitMQ consumer that reads local PDFs from `/data/documents`, extracts path metadata, uploads binaries to Solr `/update/extract`, and updates Redis state with `processed` / `failed` outcomes.
