@@ -667,6 +667,18 @@ https://solr.apache.org/guide/solr/latest/configuration-guide/configuring-solrco
     </lst>
   </requestHandler>
 
+  <!-- Phase 3: kNN semantic search handler.
+       Query with the knn QParser: q={!knn f=book_embedding topK=10}[0.1,0.2,...] -->
+  <requestHandler name="/knn" class="solr.SearchHandler">
+    <lst name="defaults">
+      <str name="echoParams">explicit</str>
+      <str name="wt">json</str>
+      <str name="indent">true</str>
+      <int name="rows">10</int>
+      <str name="fl">id,title_s,author_s,year_i,file_path_s,category_s,language_detected_s,score</str>
+    </lst>
+  </requestHandler>
+
   <!-- Shared parameters for multiple Request Handlers -->
   <initParams path="/update/**,/query,/select,/spell">
     <lst name="defaults">
