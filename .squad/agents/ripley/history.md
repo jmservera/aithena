@@ -192,3 +192,24 @@ When batching copilot issues, ensure agents pull latest base before starting. St
 
 **Triage Improvement:**
 Before labeling next Phase 3 batch, wait for these to be reworked and merged. The dependency chain (#45→#46→#47) must flow through correct service.
+
+### 2026-07-14 — PR Triage & Prioritization
+
+**Merged:** #55 (E2E test harness), #101 (dependabot esbuild/vite), #102 (dependabot js-yaml)
+
+**Assigned @copilot with fix instructions:**
+- #63 (PDF viewer, Phase 2, HIGH) — surgical PdfViewer.tsx extraction
+- #68 (hybrid search, Phase 3, HIGH) — rebase + retarget to Solr kNN
+- #69 (similar books endpoint, Phase 3, MEDIUM) — BLOCKED on #68
+- #56 (docker hardening, Phase 4, LOW) — additive health checks only
+
+**Closed as unfixable:**
+- #70 (similar books UI) — old chat UI base, needs full rewrite
+- #58 (PDF upload endpoint) — targets qdrant-search/, wrong service
+- #59 (PDF upload UI) — old chat UI base, needs full rewrite
+
+**Key learning:** Two classes of stale PRs emerged:
+1. **Rebaseable** — PRs touching solr-search/ or adding new components. Conflicts are mechanical (already-merged code in diff). Worth fixing.
+2. **Unrebaseable** — PRs built on pre-#62 chat UI or targeting qdrant-search/. The foundation changed fundamentally. Cheaper to close and re-create.
+
+**Triage heuristic:** Check the file list. If a PR modifies `ChatMessage.tsx`, `Configbar.tsx`, `chat.tsx`, or `qdrant-search/`, it's stale beyond repair. Close it.
