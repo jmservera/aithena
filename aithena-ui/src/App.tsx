@@ -7,6 +7,9 @@ import ActiveFilters from "./Components/ActiveFilters";
 import BookCard from "./Components/BookCard";
 import Pagination from "./Components/Pagination";
 import PdfViewer from "./Components/PdfViewer";
+import IndexingStatus from "./Components/IndexingStatus";
+
+type Tab = "search" | "status";
 
 const SORT_OPTIONS = [
   { value: "score desc", label: "Relevance" },
@@ -17,6 +20,7 @@ const SORT_OPTIONS = [
 ];
 
 function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("search");
   const [inputValue, setInputValue] = useState("");
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
   const {
@@ -56,123 +60,154 @@ function App() {
           <h1 className="sidebar-title">📚 Aithena</h1>
           <p className="sidebar-subtitle">Book Library Search</p>
         </div>
-        <FacetPanel
-          facets={facets}
-          filters={searchState.filters}
-          onFilterChange={setFilter}
-        />
+        <nav className="tab-nav" aria-label="Main navigation">
+          <button
+            className={`tab-btn${activeTab === "search" ? " tab-btn--active" : ""}`}
+            onClick={() => setActiveTab("search")}
+            aria-current={activeTab === "search" ? "page" : undefined}
+          >
+            🔍 Search
+          </button>
+          <button
+            className={`tab-btn${activeTab === "status" ? " tab-btn--active" : ""}`}
+            onClick={() => setActiveTab("status")}
+            aria-current={activeTab === "status" ? "page" : undefined}
+          >
+            📊 Status
+          </button>
+        </nav>
+        {activeTab === "search" && (
+          <FacetPanel
+            facets={facets}
+            filters={searchState.filters}
+            onFilterChange={setFilter}
+          />
+        )}
       </aside>
 
       <main className="search-main">
-        <header className="search-header">
-          <form className="search-form" onSubmit={handleSubmit}>
-            <input
-              className="search-input"
-              type="search"
-              value={inputValue}
-              placeholder="Search books by title, author, or content…"
-              onChange={(e) => setInputValue(e.target.value)}
-              aria-label="Search query"
-            />
-            <button className="search-btn" type="submit" disabled={loading}>
-              {loading ? "…" : "Search"}
-            </button>
-          </form>
-
-          {searchState.query && (
-            <div className="search-controls">
-              <span className="search-result-count">
-                {loading
-                  ? "Searching…"
-                  : `${total.toLocaleString()} result${total !== 1 ? "s" : ""} for "${searchState.query}"`}
-              </span>
-              <div className="search-sort-limit">
-                <label htmlFor="sort-select" className="control-label">
-                  Sort:
-                </label>
-                <select
-                  id="sort-select"
-                  className="sort-select"
-                  value={searchState.sort}
-                  onChange={(e) => setSort(e.target.value)}
-                >
-                  {SORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-
-                <label htmlFor="limit-select" className="control-label">
-                  Per page:
-                </label>
-                <select
-                  id="limit-select"
-                  className="sort-select"
-                  value={searchState.limit}
-                  onChange={(e) => setLimit(Number(e.target.value))}
-                >
-                  {[10, 20, 50].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        {activeTab === "status" ? (
+          <div className="status-main">
+            <header className="status-header">
+              <h2 className="status-title">Indexing Status</h2>
+            </header>
+            <div className="status-content">
+              <IndexingStatus />
             </div>
-          )}
+          </div>
+        ) : (
+          <>
+            <header className="search-header">
+              <form className="search-form" onSubmit={handleSubmit}>
+                <input
+                  className="search-input"
+                  type="search"
+                  value={inputValue}
+                  placeholder="Search books by title, author, or content…"
+                  onChange={(e) => setInputValue(e.target.value)}
+                  aria-label="Search query"
+                />
+                <button className="search-btn" type="submit" disabled={loading}>
+                  {loading ? "…" : "Search"}
+                </button>
+              </form>
 
-          {hasActiveFilters && (
-            <ActiveFilters
-              filters={searchState.filters}
-              onRemove={handleRemoveFilter}
-              onClearAll={clearFilters}
-            />
-          )}
-        </header>
+              {searchState.query && (
+                <div className="search-controls">
+                  <span className="search-result-count">
+                    {loading
+                      ? "Searching…"
+                      : `${total.toLocaleString()} result${total !== 1 ? "s" : ""} for "${searchState.query}"`}
+                  </span>
+                  <div className="search-sort-limit">
+                    <label htmlFor="sort-select" className="control-label">
+                      Sort:
+                    </label>
+                    <select
+                      id="sort-select"
+                      className="sort-select"
+                      value={searchState.sort}
+                      onChange={(e) => setSort(e.target.value)}
+                    >
+                      {SORT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
 
-        <section className="search-results">
-          {error && (
-            <div className="search-error" role="alert">
-              ⚠️ {error}
-            </div>
-          )}
+                    <label htmlFor="limit-select" className="control-label">
+                      Per page:
+                    </label>
+                    <select
+                      id="limit-select"
+                      className="sort-select"
+                      value={searchState.limit}
+                      onChange={(e) => setLimit(Number(e.target.value))}
+                    >
+                      {[10, 20, 50].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
-          {!loading && !error && searchState.query && results.length === 0 && (
-            <div className="search-empty">
-              No results found for "{searchState.query}"
-              {hasActiveFilters && " with the selected filters"}.
-            </div>
-          )}
+              {hasActiveFilters && (
+                <ActiveFilters
+                  filters={searchState.filters}
+                  onRemove={handleRemoveFilter}
+                  onClearAll={clearFilters}
+                />
+              )}
+            </header>
 
-          {!searchState.query && !loading && (
-            <div className="search-empty">
-              Enter a search term above to find books.
-            </div>
-          )}
+            <section className="search-results">
+              {error && (
+                <div className="search-error" role="alert">
+                  ⚠️ {error}
+                </div>
+              )}
 
-          {results.map((book) => (
-            <BookCard
-              key={book.id}
-              book={book}
-              onOpenPdf={setSelectedBook}
-              isSelected={selectedBook?.id === book.id}
-            />
-          ))}
-        </section>
+              {!loading && !error && searchState.query && results.length === 0 && (
+                <div className="search-empty">
+                  No results found for "{searchState.query}"
+                  {hasActiveFilters && " with the selected filters"}.
+                </div>
+              )}
 
-        {total > 0 && (
-          <footer className="search-footer">
-            <Pagination
-              page={searchState.page}
-              limit={searchState.limit}
-              total={total}
-              onPageChange={setPage}
-            />
-            <p className="pagination-info">
-              Page {searchState.page} of {totalPages}
-            </p>
-          </footer>
+              {!searchState.query && !loading && (
+                <div className="search-empty">
+                  Enter a search term above to find books.
+                </div>
+              )}
+
+              {results.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  onOpenPdf={setSelectedBook}
+                  isSelected={selectedBook?.id === book.id}
+                />
+              ))}
+            </section>
+
+            {total > 0 && (
+              <footer className="search-footer">
+                <Pagination
+                  page={searchState.page}
+                  limit={searchState.limit}
+                  total={total}
+                  onPageChange={setPage}
+                />
+                <p className="pagination-info">
+                  Page {searchState.page} of {totalPages}
+                </p>
+              </footer>
+            )}
+          </>
         )}
       </main>
 

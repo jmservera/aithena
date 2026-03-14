@@ -572,3 +572,244 @@
   color: #7ec8e3;
   text-decoration: underline;
 }
+
+/* ── Tab navigation ────────────────────────────────────────────── */
+
+.tab-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tab-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  font-size: 0.9em;
+  padding: 8px 12px;
+  text-align: left;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  width: 100%;
+}
+
+.tab-btn:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.tab-btn--active {
+  background-color: rgba(126, 200, 227, 0.15);
+  border-color: rgba(126, 200, 227, 0.4);
+  color: #7ec8e3;
+  font-weight: 600;
+}
+
+/* ── Status main area ──────────────────────────────────────────── */
+
+.status-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.status-header {
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.status-title {
+  margin: 0;
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #e8e8f0;
+}
+
+.status-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+
+/* ── IndexingStatus component ──────────────────────────────────── */
+
+.indexing-status {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.status-section {
+  background-color: #40414f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.status-section-title {
+  margin: 0 0 12px;
+  font-size: 0.85em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Indexing stats grid ───────────────────────────────────────── */
+
+.indexing-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.stat-label {
+  font-size: 0.75em;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stat-value {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #e8e8f0;
+}
+
+.stat-value--ok {
+  color: #4caf50;
+}
+
+.stat-value--pending {
+  color: #ffd97d;
+}
+
+.stat-value--error {
+  color: #ff6b6b;
+}
+
+/* ── Progress bar ──────────────────────────────────────────────── */
+
+.progress-bar-track {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.progress-bar-fill {
+  background-color: #4caf50;
+  border-radius: 4px;
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+/* ── Service health ────────────────────────────────────────────── */
+
+.services-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.service-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.health-dot {
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  height: 10px;
+  width: 10px;
+}
+
+.health-dot--healthy {
+  background-color: #4caf50;
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.7);
+}
+
+.health-dot--error {
+  background-color: #ff6b6b;
+  box-shadow: 0 0 6px rgba(255, 107, 107, 0.7);
+}
+
+.health-dot--unknown {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.service-name {
+  font-size: 0.9em;
+  font-weight: 600;
+  min-width: 80px;
+}
+
+.service-message {
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Failed documents list ─────────────────────────────────────── */
+
+.failed-docs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.failed-doc-item {
+  background-color: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+}
+
+.failed-doc-path {
+  font-family: monospace;
+  font-size: 0.82em;
+  color: #e8e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failed-doc-stage {
+  font-size: 0.75em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.failed-doc-error {
+  font-size: 0.82em;
+  color: #ff9999;
+}
+
+/* ── Status loading / error ────────────────────────────────────── */
+
+.status-loading {
+  color: rgba(255, 255, 255, 0.45);
+  padding: 24px 0;
+  text-align: center;
+}
+
+.status-error {
+  margin: 0;
+}
