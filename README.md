@@ -276,6 +276,72 @@ author_s:"Medicina Balear" AND year_i:[2010 TO 2014]
 
 ## Development
 
+### Development Setup
+
+This project uses [**uv**](https://docs.astral.sh/uv/) for Python dependency management across all backend services. `uv` replaces `pip` + `requirements.txt` with a fast, reproducible workflow backed by `pyproject.toml` and a locked `uv.lock` file.
+
+#### 1. Install uv
+
+```bash
+# macOS / Linux (standalone installer)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Homebrew
+brew install uv
+
+# pip (if you already have Python)
+pip install uv
+```
+
+See the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for more options.
+
+#### 2. Install dependencies for a service
+
+Each Python service (`document-indexer`, `document-lister`, `solr-search`, `admin`, etc.) has a `pyproject.toml` and a `uv.lock` lockfile. To install all dependencies:
+
+```bash
+cd <service-directory>   # e.g. cd document-indexer
+uv sync                  # installs runtime + dev deps from uv.lock
+```
+
+To install runtime dependencies only (no dev tools):
+
+```bash
+uv sync --no-dev
+```
+
+#### 3. Run tests with uv
+
+```bash
+cd document-indexer
+uv run python -m pytest tests/ -v
+
+cd solr-search
+uv run python -m pytest tests/ -v
+```
+
+#### 4. Run any command in the uv-managed environment
+
+```bash
+uv run python main.py
+uv run ruff check .
+```
+
+#### Note: requirements.txt deprecation
+
+> ⚠️ The `requirements.txt` files in each service directory are **deprecated** and will be removed once the `uv` migration is complete. They are kept temporarily for backward compatibility. **New development should use `uv sync` instead of `pip install -r requirements.txt`.**
+
+Services **not** migrated to `uv` (custom base images): `embeddings-server`, `llama-base`.
+
+#### References
+
+- [uv documentation](https://docs.astral.sh/uv/)
+- [uv project structure](https://docs.astral.sh/uv/concepts/projects/)
+- [pyproject.toml reference](https://docs.astral.sh/uv/reference/pyproject/)
+
 ### Testing
 
 ```bash
