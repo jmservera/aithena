@@ -876,3 +876,75 @@ def test_stats_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
     response = client.get("/v1/stats/")
 
     assert response.status_code == 502
+
+
+# ---------------------------------------------------------------------------
+# Page range support — chunk-level search hits
+# ---------------------------------------------------------------------------
+
+
+@patch("main.requests.get")
+def test_search_chunk_hits_include_page_range(mock_solr_get: MagicMock) -> None:
+    """Chunk documents with page_start_i/page_end_i must expose pages in results."""
+    client = get_client()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "response": {
+            "numFound": 2,
+            "docs": [
+                {
+                    "id": "chunk-1",
+                    "title_s": "Rondalles",
+                    "author_s": "Amades",
+                    "year_i": 1950,
+                    "file_path_s": "amades/rondalles.pdf",
+                    "page_start_i": 5,
+                    "page_end_i": 6,
+                    "score": 9.0,
+                },
+                {
+                    "id": "doc-full",
+                    "title_s": "Full Book",
+                    "author_s": "Amades",
+                    "year_i": 1952,
+                    "file_path_s": "amades/full.pdf",
+                    "score": 5.0,
+                },
+            ],
+        },
+        "highlighting": {},
+        "facet_counts": {"facet_fields": {}},
+    }
+    mock_solr_get.return_value = mock_response
+
+    response = client.get("/search", params={"q": "rondalles"})
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+
+    chunk_result = next(r for r in results if r["id"] == "chunk-1")
+    assert chunk_result["pages"] == [5, 6]
+
+    full_result = next(r for r in results if r["id"] == "doc-full")
+    assert full_result["pages"] is None
+
+
+@patch("main.requests.get")
+def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -> None:
+    """Solr queries must request page_start_i and page_end_i fields."""
+    client = get_client()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "response": {"numFound": 0, "docs": []},
+        "highlighting": {},
+        "facet_counts": {"facet_fields": {}},
+    }
+    mock_solr_get.return_value = mock_response
+
+    client.get("/search", params={"q": "test"})
+
+    params = mock_solr_get.call_args[1]["params"]
+    assert "page_start_i" in params["fl"]
+    assert "page_end_i" in params["fl"]

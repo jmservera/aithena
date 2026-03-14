@@ -26,6 +26,8 @@ SOLR_FIELD_LIST = [
     "folder_path_s",
     "page_count_i",
     "file_size_l",
+    "page_start_i",
+    "page_end_i",
     "score",
 ]
 
@@ -208,6 +210,13 @@ def normalize_book(
     document_url: str | None,
 ) -> dict[str, Any]:
     document_id = document.get("id", "")
+    page_start = document.get("page_start_i")
+    page_end = document.get("page_end_i")
+    pages: list[int] | None = None
+    if page_start is not None or page_end is not None:
+        start = page_start if page_start is not None else page_end
+        end = page_end if page_end is not None else page_start
+        pages = [start, end]
     return {
         "id": document_id,
         "title": document.get("title_s") or Path(document.get("file_path_s", "")).stem,
@@ -219,6 +228,7 @@ def normalize_book(
         "folder_path": document.get("folder_path_s"),
         "page_count": document.get("page_count_i"),
         "file_size": document.get("file_size_l"),
+        "pages": pages,
         "score": document.get("score"),
         "highlights": collect_highlights(document_id, highlighting),
         "document_url": document_url,
