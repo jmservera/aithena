@@ -11,16 +11,6 @@
 
 <!-- Append learnings below -->
 
-### 2026-03-14T16:20 — Advanced Search Builder UI
-
-- Added an opt-in advanced search composer to `aithena-ui` while keeping the default simple text search intact.
-- Created `src/Pages/SearchPage.tsx` so the page shell can evolve independently from `App.tsx`.
-- Implemented `src/Components/AdvancedSearch/` with row-based query building, year/language filters, disabled future semantic/hybrid tabs, and a live Solr preview.
-- Added `buildQuery()` plus Vitest coverage for fuzzy terms, phrase queries, boolean composition, range filters, language filters, and invalid year sanitization.
-- Imported Bootstrap CSS globally and layered dark-theme overrides in `App.css` so the new controls follow Bootstrap patterns without breaking the existing layout.
-- `useSearch()` now tracks a `mode` field and submits it to the backend, preparing the UI for future semantic/hybrid enablement.
-- Validation: `npm run test` ✅, targeted eslint on changed files ✅, `npm run build` ✅. Full `npm run lint` still fails on pre-existing chat/config files outside this feature.
-
 ### 2026-03-13T20:58 — Phase 2–4 GitHub Issues Assigned
 
 - Ripley decomposed Phase 2–4 into issues #36–#53, all assigned to `@copilot` with squad labels and release milestones.

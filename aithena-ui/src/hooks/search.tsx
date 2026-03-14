@@ -34,8 +34,6 @@ export interface SearchFilters {
   year?: string;
 }
 
-export type SearchMode = "keyword" | "semantic" | "hybrid";
-
 export interface SearchResponse {
   results: BookResult[];
   total: number;
@@ -51,7 +49,6 @@ export interface SearchState {
   page: number;
   limit: number;
   sort: string;
-  mode: SearchMode;
 }
 
 const defaultSearchState: SearchState = {
@@ -60,7 +57,6 @@ const defaultSearchState: SearchState = {
   page: 1,
   limit: 10,
   sort: "score desc",
-  mode: "keyword",
 };
 
 export function useSearch() {
@@ -89,7 +85,6 @@ export function useSearch() {
       params.set("limit", state.limit.toString());
       params.set("page", state.page.toString());
       params.set("sort", state.sort);
-      params.set("mode", state.mode);
 
       if (state.filters.author) params.set("fq_author", state.filters.author);
       if (state.filters.category)
@@ -120,13 +115,9 @@ export function useSearch() {
     runSearch(searchState);
   }, [searchState, runSearch]);
 
-  const submitSearch = useCallback((query: string, mode: SearchMode = "keyword") => {
-    setSearchState((prev) => ({ ...prev, query, mode, page: 1 }));
-  }, []);
-
   const setQuery = useCallback((query: string) => {
-    submitSearch(query, "keyword");
-  }, [submitSearch]);
+    setSearchState((prev) => ({ ...prev, query, page: 1 }));
+  }, []);
 
   const setFilter = useCallback(
     (key: keyof SearchFilters, value: string | undefined) => {
@@ -162,7 +153,6 @@ export function useSearch() {
     total,
     loading,
     error,
-    submitSearch,
     setQuery,
     setFilter,
     clearFilters,

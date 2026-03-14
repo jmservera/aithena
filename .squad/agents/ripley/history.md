@@ -317,32 +317,3 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 5. **Open question:** `recharts` for charts vs plain tables. Recommended tables-first, charts in follow-up PR.
 
 **Effort estimate:** ~3 backend endpoints (S+M+M) + 4 frontend components (S+S+M+L) = medium total. Parker and Dallas can parallelize — backend first, frontend follows as endpoints land.
-
-### 2026-03-14 — Page-Level Search Feasibility Assessment
-
-**Request:** Juanma wants search results to show page numbers and open PDFs at the correct page.
-
-**Investigation findings:**
-- Solr Tika `/update/extract` does NOT preserve page boundaries — output is flat text blob (confirmed via Apache docs)
-- pdfplumber `extract_pdf_text()` already iterates per page but discards page numbers at join
-- Chunk docs already exist in Solr (`chunk_index_i`, `chunk_text_t`) — just missing page metadata
-- Browser native PDF viewers support `#page=N` URL fragment — no PDF.js needed
-- Current iframe PdfViewer would work with `#page=N` appended to src URL
-
-**Options evaluated:**
-| Option | Approach | Effort | Verdict |
-|---|---|---|---|
-| A: Nested Docs | Per-page child docs with block-join queries | 🔴 HIGH (3–5d) | Over-engineered, breaks ADR-001 |
-| B: Page Markers | Inject `[PAGE:N]` in Tika content | 🟡 MED-HIGH (2–3d) | Fragile, pollutes search index |
-| C: Page Chunks ★ | Extend existing chunk pipeline with page tracking | 🟢 MEDIUM (1.5–2.5d) | **Recommended** — natural evolution |
-| D: PDF.js | Frontend-only text search after load | 🟢 LOW-MED (1–2d) | Poor UX, no page numbers in results |
-
-**Decision: Option C — Page-Aware Chunks**
-- Modify `extract_pdf_text()` → return `list[tuple[int, str]]` with page numbers
-- Extend chunker to track `page_start` / `page_end` per chunk
-- Add `page_start_i`, `page_end_i` to chunk Solr docs
-- Search API returns page ranges; UI appends `#page=N` to iframe src
-- Preserves ADR-001 (Solr Tika for parent full-text, pdfplumber for chunks)
-- ~3 days across Parker, Ash, Dallas, Lambert (parallelizable)
-
-**Decision written to:** `.squad/decisions/inbox/ripley-page-level-search.md`

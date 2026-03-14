@@ -61,11 +61,3 @@
 - Lambert's 15 metadata extraction tests validate the parser contracts you'll search against. 4 intentional failures expose parser gaps—review `document-indexer/tests/test_metadata.py` for expected shapes before Phase 2 tuning.
 - Test patterns (amades/, balearics/, bsal/) align with your copyField strategy for author/category faceting.
 
-### 2026-03-14 — README search query syntax documented
-
-- Documented a new `README.md` section, `## Search Query Syntax`, based on `solr-search/main.py`, `solr-search/search_service.py`, `solr/books/managed-schema.xml`, and `solr/books/solrconfig.xml`.
-- Captured that the API forwards `q` to Solr with `defType=edismax` and `_text_` as the default field, while blocking Solr local-parameter syntax like `{!knn ...}` from keyword queries.
-- Added practical query examples for basic terms, phrases, boolean logic, fuzzy matching, proximity, wildcards, boosting, grouping, negation, escaping, and match-all queries.
-- Documented the actual field names users should target for fielded queries (`author_s`, `category_s`, `year_i`, etc.), with practical examples from the real collection such as `Amades`, `Balearics`, `BSAL`, and `Medicina Balear`.
-- Verified live behavior against the running search API and Solr instance: `*`/`*:*` return all books, exact fielded queries like `author_s:Amades` and `category_s:Balearics` work, and string fields need exact/case-correct values.
-
