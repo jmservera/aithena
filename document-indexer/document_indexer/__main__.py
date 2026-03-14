@@ -29,7 +29,7 @@ from . import (
     SOLR_HOST,
     SOLR_PORT,
 )
-from .chunker import chunk_text
+from .chunker import chunk_text_with_pages
 from .embeddings import get_embeddings
 from .metadata import extract_metadata
 
@@ -168,15 +168,20 @@ def get_page_count(path: Path) -> int | None:
         return None
 
 
-def extract_pdf_text(path: Path) -> str:
-    """Extract all text from a PDF using pdfplumber (for chunk-based embedding indexing)."""
-    pages: list[str] = []
+def extract_pdf_text(path: Path) -> list[tuple[int, str]]:
+    """Extract text per page from a PDF using pdfplumber (for chunk-based embedding indexing).
+
+    Returns:
+        An ordered list of ``(page_number, text)`` pairs where *page_number*
+        is 1-based.  Pages that yield no text are omitted.
+    """
+    pages: list[tuple[int, str]] = []
     with pdfplumber.open(path) as pdf:
-        for page in pdf.pages:
+        for page_num, page in enumerate(pdf.pages, start=1):
             text = page.extract_text()
             if text:
-                pages.append(text)
-    return "\n".join(pages)
+                pages.append((page_num, text))
+    return pages
 
 
 def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, str]:
@@ -208,6 +213,8 @@ def build_chunk_doc(
     chunk: str,
     embedding: list[float],
     metadata: dict,
+    page_start: int | None = None,
+    page_end: int | None = None,
 ) -> dict:
     """Build a Solr JSON document for a single text chunk."""
     chunk_id = f"{parent_id}_chunk_{chunk_index:04d}"
@@ -226,6 +233,10 @@ def build_chunk_doc(
         doc["category_s"] = metadata["category"]
     if metadata.get("year") is not None:
         doc["year_i"] = metadata["year"]
+    if page_start is not None:
+        doc["page_start_i"] = page_start
+    if page_end is not None:
+        doc["page_end_i"] = page_end
     return doc
 
 
@@ -243,17 +254,18 @@ def index_chunks(
         Exception: Propagates any HTTP or embedding error so the caller can
             record the appropriate Redis failure stage.
     """
-    text = extract_pdf_text(path)
-    chunks = chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
-    if not chunks:
+    pages = extract_pdf_text(path)
+    page_chunks = chunk_text_with_pages(pages, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
+    if not page_chunks:
         logger.info("No text chunks extracted from %s; skipping embedding indexing.", path)
         return 0
 
+    chunks = [chunk for chunk, _, _ in page_chunks]
     embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
 
     docs = [
-        build_chunk_doc(parent_id, idx, chunk, emb, metadata)
-        for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+        build_chunk_doc(parent_id, idx, chunk, emb, metadata, page_start, page_end)
+        for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(page_chunks, embeddings))
     ]
 
     solr_url = (
