@@ -20,6 +20,9 @@ Lead: Architecture, scope decisions, code review, technical direction.
 - Can approve or reject work from any team member
 - Rejection triggers lockout protocol (original author cannot self-revise)
 
+## Model
+Preferred: claude-opus-4.6-1m
+
 ## Project Context
 - **Project:** aithena — Book library search engine
 - **Stack:** Python backend, React/Vite frontend, Docker Compose, Apache Solr, multilingual embeddings
