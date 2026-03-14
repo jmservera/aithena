@@ -38,9 +38,7 @@ def chunk_text_with_pages(
     if overlap < 0:
         raise ValueError(f"overlap must be non-negative, got {overlap}")
     if overlap >= chunk_size:
-        raise ValueError(
-            f"overlap ({overlap}) must be less than chunk_size ({chunk_size})"
-        )
+        raise ValueError(f"overlap ({overlap}) must be less than chunk_size ({chunk_size})")
 
     all_words: list[str] = []
     word_pages: list[int] = []
@@ -92,9 +90,7 @@ def chunk_text(text: str, chunk_size: int = 400, overlap: int = 50) -> list[str]
     if overlap < 0:
         raise ValueError(f"overlap must be non-negative, got {overlap}")
     if overlap >= chunk_size:
-        raise ValueError(
-            f"overlap ({overlap}) must be less than chunk_size ({chunk_size})"
-        )
+        raise ValueError(f"overlap ({overlap}) must be less than chunk_size ({chunk_size})")
 
     # Collapse all whitespace so chunks are reproducible regardless of the
     # original line-ending style.

@@ -1,21 +1,23 @@
 """Scan the local document library and enqueue PDFs for indexing."""
 
+import json
+import logging
 from datetime import datetime
 from pathlib import Path
-import logging
-import json
+
 import pika
 import redis
 from retry import retry
+
 from . import (
-    QUEUE_NAME,
-    REDIS_HOST,
-    REDIS_PORT,
-    RABBITMQ_HOST,
-    RABBITMQ_PORT,
     BASE_PATH,
     DOCUMENT_WILDCARD,
     POLL_INTERVAL,
+    QUEUE_NAME,
+    RABBITMQ_HOST,
+    RABBITMQ_PORT,
+    REDIS_HOST,
+    REDIS_PORT,
 )
 
 logging.basicConfig(level=logging.INFO)

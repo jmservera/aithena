@@ -6,9 +6,7 @@ from pathlib import Path
 from typing import Any
 
 YEAR_PATTERN = re.compile(r"(?<!\d)(1[5-9]\d{2}|20\d{2})(?!\d)")
-AUTHOR_TITLE_YEAR_PATTERN = re.compile(
-    r"^(?P<author>.+?)\s+-\s+(?P<title>.+?)\s+\((?P<year>1[5-9]\d{2}|20\d{2})\)$"
-)
+AUTHOR_TITLE_YEAR_PATTERN = re.compile(r"^(?P<author>.+?)\s+-\s+(?P<title>.+?)\s+\((?P<year>1[5-9]\d{2}|20\d{2})\)$")
 AUTHOR_TITLE_PATTERN = re.compile(r"^(?P<author>.+?)\s+-\s+(?P<title>.+)$")
 YEAR_RANGE_PATTERN = re.compile(r"(?P<start>1[5-9]\d{2}|20\d{2})\s*-\s*(?P<end>1[5-9]\d{2}|20\d{2})")
 
@@ -33,7 +31,6 @@ def display_segment(segment: str) -> str:
 
 
 def display_category_segment(segment: str) -> str:
-    cleaned = clean_text(segment)
     if segment.islower() and segment.isalpha() and len(segment) <= 4:
         return segment.upper()
     return display_segment(segment)
@@ -57,12 +54,12 @@ def strip_author_from_title(title: str, author: str | None) -> str:
 
     author_tokens = normalized_author.split()
     title_tokens = normalized_title.split()
-    if title_tokens[-len(author_tokens):] == author_tokens:
+    if title_tokens[-len(author_tokens) :] == author_tokens:
         raw_tokens = clean_text(title).split()
-        return " ".join(raw_tokens[:-len(author_tokens)]).strip(" -") or clean_text(title)
+        return " ".join(raw_tokens[: -len(author_tokens)]).strip(" -") or clean_text(title)
     if title_tokens[: len(author_tokens)] == author_tokens:
         raw_tokens = clean_text(title).split()
-        return " ".join(raw_tokens[len(author_tokens):]).strip(" -") or clean_text(title)
+        return " ".join(raw_tokens[len(author_tokens) :]).strip(" -") or clean_text(title)
     return clean_text(title)
 
 
@@ -76,9 +73,7 @@ def looks_like_category(folder_name: str, stem: str) -> bool:
         return True
     if (stem.isupper() or "_" in stem) and normalized_folder in normalized_stem:
         return True
-    if normalized_folder.endswith("ics") and normalized_folder in normalized_stem:
-        return True
-    return False
+    return normalized_folder.endswith("ics") and normalized_folder in normalized_stem
 
 
 def is_year_fragment(text: str) -> bool:

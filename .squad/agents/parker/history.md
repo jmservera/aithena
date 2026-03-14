@@ -11,6 +11,12 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-14 — Ruff cleanup across Python services
+
+- Root `ruff.toml` is the single source of truth for Python linting; Python service `pyproject.toml` files do not carry local `[tool.ruff]` overrides.
+- Test suites rely on pytest-style `assert` usage, so Ruff needs per-file ignores for `S101` under `**/tests/*.py` and `e2e/*.py`; service entrypoints also keep targeted ignores for expected container/test patterns (`S104`, `S108`, `S603`).
+- Post-cleanup validation passes for `solr-search`, `document-indexer`, and `document-lister` via `uv run pytest`, and `embeddings-server` passes in a clean temp venv with `huggingface_hub<0.26` plus `httpx<0.28`.
+
 ### 2026-03-14 — API contract + on-prem cleanup
 
 - Added backward-compatible `/v1` aliases in `solr-search` for search, facets, similar-books, document serving, health, and info while keeping the legacy unversioned routes live.

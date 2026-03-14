@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from document_indexer.chunker import chunk_text, chunk_text_with_pages
 
 
@@ -54,7 +53,7 @@ class TestChunkText:
         # chunk 0: a b c d
         # chunk 1: d e f g
         # chunk 2: g h i j
-        for prev, nxt in zip(chunks, chunks[1:]):
+        for prev, nxt in zip(chunks, chunks[1:], strict=False):
             prev_words = prev.split()
             nxt_words = nxt.split()
             assert prev_words[-1] == nxt_words[0]
