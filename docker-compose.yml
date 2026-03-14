@@ -178,8 +178,6 @@ services:
   #     - EMBEDDINGS_PORT=8085
   #     - CHAT_HOST=llama-server
   #     - CHAT_PORT=8000
-  #     - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-  #     - STORAGE_CONTAINER=test-library
   # llama-playground:
   #   image: ghcr.io/mckaywrigley/chatbot-ui:main
   #   ports:

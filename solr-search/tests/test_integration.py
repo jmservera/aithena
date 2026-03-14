@@ -78,8 +78,10 @@ def test_search_returns_results_with_mocked_solr(mock_solr_get: MagicMock) -> No
     data = response.json()
 
     assert data["query"] == "folklore"
+    assert data["total"] == 2
     assert data["total_results"] == 2
     assert data["page"] == 1
+    assert data["limit"] == 10
     assert data["page_size"] == 10
     assert len(data["results"]) == 2
 
@@ -94,6 +96,46 @@ def test_search_returns_results_with_mocked_solr(mock_solr_get: MagicMock) -> No
     assert facets["author"] == [{"value": "Joan Amades", "count": 2}]
     assert facets["category"] == [{"value": "Folklore", "count": 2}]
     assert len(facets["year"]) == 2
+
+
+@patch("main.requests.get")
+def test_v1_search_alias_supports_ui_contract_params(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "response": {"numFound": 2, "docs": []},
+        "highlighting": {},
+        "facet_counts": {"facet_fields": {}},
+    }
+    mock_solr_get.return_value = mock_response
+
+    response = client.get(
+        "/v1/search/",
+        params={
+            "q": "folklore",
+            "page": 2,
+            "limit": 10,
+            "sort": "year_i asc",
+            "fq_author": "Joan Amades",
+            "fq_language": "ca",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["limit"] == 10
+    assert data["total"] == 2
+
+    params = mock_solr_get.call_args[1]["params"]
+    assert params["start"] == 10
+    assert params["rows"] == 10
+    assert params["sort"] == "year_i asc"
+    assert params["fq"] == [
+        r"author_s:Joan\ Amades",
+        "(language_detected_s:ca OR language_s:ca)",
+    ]
 
 
 @patch("main.requests.get")
@@ -216,6 +258,16 @@ def test_info_endpoint_returns_service_info() -> None:
     data = response.json()
     assert "title" in data
     assert "version" in data
+
+
+def test_v1_health_and_info_aliases_return_ok() -> None:
+    client = get_client()
+
+    health_response = client.get("/v1/health")
+    info_response = client.get("/v1/info")
+
+    assert health_response.status_code == 200
+    assert info_response.status_code == 200
 
 
 @patch("main.requests.get")
@@ -519,6 +571,20 @@ def test_similar_returns_200_with_results(mock_solr_get: MagicMock) -> None:
 
 
 @patch("main.requests.get")
+def test_v1_similar_alias_returns_results(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response(SIMILAR_BOOKS_DOCS),
+    ]
+
+    response = client.get("/v1/books/source-doc-id/similar")
+
+    assert response.status_code == 200
+    assert len(response.json()["results"]) == 2
+
+
+@patch("main.requests.get")
 def test_similar_result_contains_required_fields(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -658,3 +724,7 @@ def test_similar_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
     response = client.get("/books/source-doc-id/similar")
 
     assert response.status_code == 502
+
+
+def test_v1_document_alias_is_registered() -> None:
+    assert app.url_path_for("get_document_v1", document_id="token") == "/v1/documents/token"

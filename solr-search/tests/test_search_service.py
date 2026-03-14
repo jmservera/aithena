@@ -6,6 +6,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from search_service import (  # noqa: E402
+    build_filter_queries,
     build_inline_content_disposition,
     build_pagination,
     build_solr_params,
@@ -63,6 +64,16 @@ def test_parse_facet_counts_prefers_detected_language_buckets() -> None:
     assert facets["category"] == [{"value": "Folklore", "count": 4}]
     assert facets["year"] == [{"value": 1901, "count": 1}]
     assert facets["language"] == [{"value": "ca", "count": 3}]
+
+
+def test_build_filter_queries_supports_language_fallback_and_exact_matches() -> None:
+    filters = build_filter_queries({"author": "Joan Amades", "language": "ca", "year": "1950"})
+
+    assert filters == [
+        r"author_s:Joan\ Amades",
+        "(language_detected_s:ca OR language_s:ca)",
+        "year_i:1950",
+    ]
 
 
 def test_normalize_book_collects_fields_and_highlights() -> None:
@@ -142,7 +153,9 @@ def test_build_inline_content_disposition_sanitizes_newlines() -> None:
 def test_build_pagination_handles_empty_results() -> None:
     assert build_pagination(0, page=1, page_size=20) == {
         "page": 1,
+        "limit": 20,
         "page_size": 20,
+        "total": 0,
         "total_results": 0,
         "total_pages": 0,
     }
@@ -168,8 +181,9 @@ def test_build_knn_params_produces_correct_solr_query() -> None:
 
 
 def test_build_knn_params_custom_field() -> None:
-    params = build_knn_params([0.5], top_k=3, knn_field="embedding_v")
+    params = build_knn_params([0.5], top_k=3, knn_field="embedding_v", filters=["author_s:Amades"])
     assert "f=embedding_v" in params["q"]
+    assert params["fq"] == ["author_s:Amades"]
 
 
 def test_reciprocal_rank_fusion_empty_inputs() -> None:

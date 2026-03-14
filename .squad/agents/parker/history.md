@@ -11,6 +11,12 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-14 — API contract + on-prem cleanup
+
+- Added backward-compatible `/v1` aliases in `solr-search` for search, facets, similar-books, document serving, health, and info while keeping the legacy unversioned routes live.
+- Restored the Phase 2 UI search contract on the backend by accepting `limit`, `sort`, and `fq_*` query params and returning `total` / `limit` aliases alongside the existing pagination fields.
+- Removed dormant Azure dependencies from `document-lister` requirements, Dockerfile, and dead blob-storage code; import smoke is clean once the normal local runtime dependencies (`pika`, `redis`, `retry`) are available.
+
 ### 2026-03-13 — Metadata parser test fixes
 
 - Fixed unknown-pattern fallback titles to preserve the original filename stem instead of replacing underscores with spaces.

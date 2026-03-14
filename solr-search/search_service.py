@@ -32,16 +32,32 @@ SOLR_FIELD_LIST = [
 SORT_FIELDS = {
     "score": "score",
     "title": "title_s",
+    "title_s": "title_s",
     "author": "author_s",
+    "author_s": "author_s",
     "year": "year_i",
+    "year_i": "year_i",
     "category": "category_s",
+    "category_s": "category_s",
     "language": "language_s",
+    "language_s": "language_s",
+    "language_detected_s": "language_detected_s",
 }
 
 HIGHLIGHT_FIELDS = ("content", "_text_")
 
 
-def build_sort_clause(sort_by: str, sort_order: str) -> str:
+def build_sort_clause(
+    sort_by: str = "score",
+    sort_order: str = "desc",
+    sort: str | None = None,
+) -> str:
+    if sort is not None:
+        parts = sort.split()
+        if len(parts) != 2:
+            raise ValueError(f"Unsupported sort value: {sort}")
+        sort_by, sort_order = parts
+
     field_name = SORT_FIELDS.get(sort_by)
     if field_name is None:
         raise ValueError(f"Unsupported sort_by value: {sort_by}")
@@ -51,6 +67,28 @@ def build_sort_clause(sort_by: str, sort_order: str) -> str:
         raise ValueError(f"Unsupported sort_order value: {sort_order}")
 
     return f"{field_name} {normalized_order}"
+
+
+def build_filter_queries(filters: dict[str, str] | None) -> list[str]:
+    queries: list[str] = []
+    for filter_name, raw_value in (filters or {}).items():
+        value = raw_value.strip()
+        if not value:
+            continue
+
+        fields = FACET_FIELDS.get(filter_name)
+        if fields is None:
+            raise ValueError(f"Unsupported filter field: {filter_name}")
+
+        escaped_value = solr_escape(value)
+        if len(fields) == 1:
+            queries.append(f"{fields[0]}:{escaped_value}")
+            continue
+
+        joined_fields = " OR ".join(f"{field}:{escaped_value}" for field in fields)
+        queries.append(f"({joined_fields})")
+
+    return queries
 
 
 def normalize_search_query(query: str) -> str:
@@ -69,6 +107,8 @@ def build_solr_params(
     facet_limit: int,
     *,
     rows: int | None = None,
+    sort: str | None = None,
+    filters: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     search_query = normalize_search_query(query)
     start = max(page - 1, 0) * page_size
@@ -76,7 +116,7 @@ def build_solr_params(
         "q": search_query,
         "start": start,
         "rows": page_size if rows is None else rows,
-        "sort": build_sort_clause(sort_by, sort_order),
+        "sort": build_sort_clause(sort_by, sort_order, sort),
         "defType": "edismax",
         "wt": "json",
         "fl": ",".join(SOLR_FIELD_LIST),
@@ -93,6 +133,9 @@ def build_solr_params(
         "f._text_.hl.alternateField": "content",
         "f._text_.hl.maxAlternateFieldLength": 300,
     }
+    filter_queries = build_filter_queries(filters)
+    if filter_queries:
+        params["fq"] = filter_queries
     return params
 
 
@@ -185,7 +228,9 @@ def normalize_book(
 def build_pagination(num_found: int, page: int, page_size: int) -> dict[str, int]:
     return {
         "page": page,
+        "limit": page_size,
         "page_size": page_size,
+        "total": num_found,
         "total_results": num_found,
         "total_pages": math.ceil(num_found / page_size) if num_found else 0,
     }
@@ -200,6 +245,7 @@ def build_knn_params(
     vector: list[float],
     top_k: int,
     knn_field: str,
+    filters: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build Solr parameters for a kNN (dense vector) query.
 
@@ -207,12 +253,15 @@ def build_knn_params(
     ``book_embedding`` DenseVectorField (HNSW, cosine similarity, 512-dim).
     """
     vector_str = "[" + ",".join(str(v) for v in vector) + "]"
-    return {
+    params = {
         "q": f"{{!knn f={knn_field} topK={top_k}}}{vector_str}",
         "rows": top_k,
         "fl": ",".join(SOLR_FIELD_LIST),
         "wt": "json",
     }
+    if filters:
+        params["fq"] = filters
+    return params
 
 
 def get_query_embedding(embeddings_url: str, text: str, timeout: float) -> list[float]:

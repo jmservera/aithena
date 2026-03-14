@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 
 from config import settings
 from search_service import (
+    build_filter_queries,
     build_inline_content_disposition,
     build_knn_params,
     build_pagination,
@@ -85,24 +86,42 @@ def build_document_url(request: Request, file_path: str | None) -> str | None:
     return str(request.url_for("get_document", document_id=document_id))
 
 
+def resolve_page_size(limit: int | None, page_size: int) -> int:
+    return limit or page_size
+
+
+def collect_search_filters(**filters: str | None) -> dict[str, str]:
+    return {name: value.strip() for name, value in filters.items() if value and value.strip()}
+
+
+@app.get("/v1/health", include_in_schema=False, name="health_v1")
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.title, "version": settings.version}
 
 
+@app.get("/v1/info", include_in_schema=False, name="info_v1")
 @app.get("/info")
 def info() -> dict[str, str]:
     return {"title": settings.title, "version": settings.version}
 
 
+@app.get("/v1/search/", include_in_schema=False, name="search_v1")
+@app.get("/v1/search", include_in_schema=False, name="search_v1_no_slash")
 @app.get("/search")
 def search(
     request: Request,
     q: str = Query("", description="Keyword search. Empty values return all indexed books."),
     page: int = Query(1, ge=1),
+    limit: int | None = Query(None, ge=1, le=settings.max_page_size),
     page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size),
+    sort: str | None = Query(None, description="Combined sort clause like `score desc` or `year_i asc`."),
     sort_by: SortBy = Query("score"),
     sort_order: SortOrder = Query("desc"),
+    fq_author: str | None = Query(None),
+    fq_category: str | None = Query(None),
+    fq_language: str | None = Query(None),
+    fq_year: str | None = Query(None),
     mode: SearchMode = Query(
         settings.default_search_mode,  # type: ignore[arg-type]
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
@@ -114,15 +133,23 @@ def search(
     - **semantic**: Dense vector kNN search using Solr HNSW (``book_embedding`` field).
     - **hybrid**: Reciprocal Rank Fusion of the BM25 and kNN legs.
 
-    Facets and highlights are only populated by the BM25 leg and are therefore
-    empty in pure semantic mode, and sourced from the BM25 leg in hybrid mode.
+    Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
+    newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
     """
+    resolved_page_size = resolve_page_size(limit, page_size)
+    filters = collect_search_filters(
+        author=fq_author,
+        category=fq_category,
+        language=fq_language,
+        year=fq_year,
+    )
+
     if mode == "keyword":
-        return _search_keyword(request, q, page, page_size, sort_by, sort_order)
+        return _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
     if mode == "semantic":
-        return _search_semantic(request, q, page_size)
+        return _search_semantic(request, q, resolved_page_size, filters)
     # hybrid
-    return _search_hybrid(request, q, page_size, sort_by, sort_order)
+    return _search_hybrid(request, q, resolved_page_size, sort_by, sort_order, sort, filters)
 
 
 def _search_keyword(
@@ -132,8 +159,9 @@ def _search_keyword(
     page_size: int,
     sort_by: str,
     sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
 ) -> dict[str, Any]:
-    """Execute the existing BM25 keyword search (unchanged Phase 2 behaviour)."""
     payload = query_solr(
         build_params_or_400(
             query=q,
@@ -141,6 +169,8 @@ def _search_keyword(
             page_size=page_size,
             sort_by=sort_by,
             sort_order=sort_order,
+            sort=sort,
+            filters=filters,
             facet_limit=settings.facet_limit,
         )
     )
@@ -170,6 +200,7 @@ def _search_semantic(
     request: Request,
     q: str,
     top_k: int,
+    filters: dict[str, str],
 ) -> dict[str, Any]:
     """Execute a Solr kNN semantic search using the ``book_embedding`` field.
 
@@ -180,7 +211,9 @@ def _search_semantic(
         raise HTTPException(status_code=400, detail="Query must not be empty for semantic search")
 
     vector = _fetch_embedding(q)
-    payload = query_solr(build_knn_params(vector, top_k, settings.knn_field))
+    payload = query_solr(
+        build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters))
+    )
 
     response = payload.get("response", {})
     results = [
@@ -208,6 +241,8 @@ def _search_hybrid(
     page_size: int,
     sort_by: str,
     sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
 ) -> dict[str, Any]:
     """Execute BM25 and kNN searches in parallel, then fuse with RRF.
 
@@ -227,6 +262,8 @@ def _search_hybrid(
         page_size=candidate_limit,
         sort_by=sort_by,
         sort_order=sort_order,
+        sort=sort,
+        filters=filters,
         facet_limit=settings.facet_limit,
     )
 
@@ -238,7 +275,9 @@ def _search_hybrid(
         kw_payload = kw_future.result()
         vector = emb_future.result()
 
-    knn_payload = query_solr(build_knn_params(vector, candidate_limit, settings.knn_field))
+    knn_payload = query_solr(
+        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
+    )
 
     kw_response = kw_payload.get("response", {})
     kw_highlighting = kw_payload.get("highlighting", {})
@@ -273,11 +312,18 @@ def _search_hybrid(
     }
 
 
+@app.get("/v1/facets/", include_in_schema=False, name="facets_v1")
+@app.get("/v1/facets", include_in_schema=False, name="facets_v1_no_slash")
 @app.get("/facets")
 def facets(
     q: str = Query("", description="Optional query to scope facet counts."),
+    sort: str | None = Query(None),
     sort_by: SortBy = Query("score"),
     sort_order: SortOrder = Query("desc"),
+    fq_author: str | None = Query(None),
+    fq_category: str | None = Query(None),
+    fq_language: str | None = Query(None),
+    fq_year: str | None = Query(None),
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -286,6 +332,13 @@ def facets(
             page_size=1,
             sort_by=sort_by,
             sort_order=sort_order,
+            sort=sort,
+            filters=collect_search_filters(
+                author=fq_author,
+                category=fq_category,
+                language=fq_language,
+                year=fq_year,
+            ),
             facet_limit=settings.facet_limit,
             rows=0,
         )
@@ -293,6 +346,7 @@ def facets(
     return {"query": q, "facets": parse_facet_counts(payload)}
 
 
+@app.get("/v1/documents/{document_id}", include_in_schema=False, name="get_document_v1")
 @app.get("/documents/{document_id}", name="get_document")
 def get_document(document_id: str) -> FileResponse:
     try:
@@ -312,6 +366,7 @@ def get_document(document_id: str) -> FileResponse:
     )
 
 
+@app.get("/v1/books/{document_id}/similar", include_in_schema=False, name="similar_books_v1")
 @app.get("/books/{document_id}/similar")
 def similar_books(
     request: Request,
