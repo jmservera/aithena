@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { useSearch, BookResult } from '../hooks/search';
+import { useSearch, BookResult, SearchMode } from '../hooks/search';
 import { SearchFilters } from '../hooks/search';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
@@ -14,6 +14,18 @@ const SORT_OPTIONS = [
   { value: 'title_s asc', label: 'Title (A–Z)' },
   { value: 'author_s asc', label: 'Author (A–Z)' },
 ];
+
+const MODE_OPTIONS: { value: SearchMode; label: string; title: string }[] = [
+  { value: 'keyword', label: 'Keyword', title: 'Traditional keyword search' },
+  { value: 'semantic', label: 'Semantic', title: 'Vector-based semantic search' },
+  { value: 'hybrid', label: 'Hybrid', title: 'Combined keyword + semantic search' },
+];
+
+const MODE_BADGE_CLASS: Record<SearchMode, string> = {
+  keyword: 'mode-badge--keyword',
+  semantic: 'mode-badge--semantic',
+  hybrid: 'mode-badge--hybrid',
+};
 
 function SearchPage() {
   const [inputValue, setInputValue] = useState('');
@@ -31,6 +43,7 @@ function SearchPage() {
     setPage,
     setSort,
     setLimit,
+    setMode,
   } = useSearch();
 
   function handleSubmit(e: FormEvent) {
@@ -70,12 +83,38 @@ function SearchPage() {
             </button>
           </form>
 
+          <div className="mode-selector" role="group" aria-label="Search mode">
+            {MODE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={`mode-btn${searchState.mode === opt.value ? ' mode-btn--active' : ''}`}
+                onClick={() => setMode(opt.value)}
+                title={opt.title}
+                aria-pressed={searchState.mode === opt.value}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           {searchState.query && (
             <div className="search-controls">
               <span className="search-result-count">
-                {loading
-                  ? 'Searching…'
-                  : `${total.toLocaleString()} result${total !== 1 ? 's' : ''} for "${searchState.query}"`}
+                {loading ? (
+                  'Searching…'
+                ) : (
+                  <>
+                    {total.toLocaleString()} result{total !== 1 ? 's' : ''} for &ldquo;
+                    {searchState.query}&rdquo;
+                    <span
+                      className={`mode-badge ${MODE_BADGE_CLASS[searchState.mode]}`}
+                      title={`Search mode: ${searchState.mode}`}
+                    >
+                      {searchState.mode}
+                    </span>
+                  </>
+                )}
               </span>
               <div className="search-sort-limit">
                 <label htmlFor="sort-select" className="control-label">
@@ -131,7 +170,7 @@ function SearchPage() {
 
           {!loading && !error && searchState.query && results.length === 0 && (
             <div className="search-empty">
-              No results found for "{searchState.query}"
+              No results found for &ldquo;{searchState.query}&rdquo;
               {hasActiveFilters && ' with the selected filters'}.
             </div>
           )}
