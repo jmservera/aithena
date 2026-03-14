@@ -446,7 +446,7 @@ volumes:
     driver_opts:
       type: "none"
       o: "bind"
-      device: "/home/jmservera/booklibrary"
+      device: "${BOOKS_PATH:-/data/booklibrary}"
   solr-data:
     driver: local
     driver_opts:
