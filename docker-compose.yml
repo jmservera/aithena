@@ -46,44 +46,6 @@ services:
       default:
         aliases:
           - rabbitmq
-  # qdrant:
-  #   image: qdrant/qdrant
-  #   environment:
-  #     - QDRANT__DEBUG=1
-  #     - QDRANT__SERVICE__HOST=0.0.0.0
-  #   ports:
-  #     - "6333:6333"
-  #   volumes:
-  #     - qdrant-data:/qdrant/storage
-  #   restart: on-failure
-  #   networks:
-  #     default:
-  #       aliases:
-  #         - qdrant
-  # llama-base: # this one is here just to ensure that the base image is created
-  #   build: ./llama-base
-  #   image: aithena-llama-base
-  #   volumes:
-  #     - "../open_llama_7b/:/llama/models/7B/"
-  # llama-server:
-  #   build: ./llama-server
-  #   ports:
-  #     - "8000:8000"
-  #   volumes:
-  #     - "../open_llama_7b/:/llama/models/"
-  #   restart: on-failure
-  #   cap_add:
-  #     - IPC_LOCK
-  #     - SYS_NICE
-  #   # deploy:
-  #   #   resources:
-  #   #     reservations:
-  #   #       memory: 16G
-  #   #       cpus: "20"
-  #   networks:
-  #     default:
-  #       aliases:
-  #         - llama-server
   embeddings-server:
     build: ./embeddings-server
     environment:
@@ -162,33 +124,6 @@ services:
       - document-data:/data/documents:ro
     networks:
       - default
-  # qdrant-search:
-  #   build:
-  #     context: .
-  #     dockerfile: ./qdrant-search/Dockerfile
-  #   ports:
-  #     - "8080:8080"
-  #   restart: on-failure
-  #   depends_on:
-  #     - qdrant
-  #   #      - llama-server
-  #   environment:
-  #     - PORT=8080
-  #     - QDRANT_HOST=qdrant
-  #     - QDRANT_PORT=6333
-  #     - QDRANT_COLLECTION=shortembeddings
-  #     - QDRANT_VECTOR_DIM=768
-  #     - EMBEDDINGS_HOST=embeddings-server
-  #     - EMBEDDINGS_PORT=8085
-  #     - CHAT_HOST=llama-server
-  #     - CHAT_PORT=8000
-  # llama-playground:
-  #   image: ghcr.io/mckaywrigley/chatbot-ui:main
-  #   ports:
-  #     - 3000:3000
-  #   environment:
-  #     - OPENAI_API_HOST=http://llama-server:8000
-  #     - OPENAI_API_KEY=""
   nginx:
     image: nginx:1.15-alpine
     restart: unless-stopped
@@ -411,12 +346,6 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/rabbitmq-data"
-  # qdrant-data:
-  #   driver: local
-  #   driver_opts:
-  #     type: "none"
-  #     o: "bind"
-  #     device: "/source/volumes/qdrant-data"
   nginx-data:
     driver: local
     driver_opts:
