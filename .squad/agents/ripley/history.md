@@ -290,3 +290,30 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 **Recommended execution order:** P3 (quick win) → P1 (needs stack) → P2 (needs data) → P4 (largest, parallelizable).
 
 **Decision written to:** `.squad/decisions/inbox/ripley-feature-priorities.md`
+
+### 2026-03-14 — P4 UI Spec: Library, Status, Stats Tabs
+
+**Context:** Juanma approved building all 3 P4 tabs (Library, Status, Stats) in the React UI. Designed full spec for Dallas (frontend) and Parker (backend).
+
+**Spec written to:** `.squad/decisions/inbox/ripley-p4-ui-spec.md`
+
+**Key design decisions:**
+
+1. **3 new backend endpoints** in `solr-search/main.py` (same service, same patterns):
+   - `GET /v1/library/?path=` — filesystem browser with Solr metadata enrichment
+   - `GET /v1/status/` — aggregated health from Solr, Redis, RabbitMQ, embeddings-server
+   - `GET /v1/stats/` — collection statistics via Solr stats component + facets
+
+2. **Frontend architecture:**
+   - `react-router-dom` for client-side routing (`/search`, `/library/*`, `/status`, `/stats`)
+   - Extract current search into `SearchPage.tsx`, `App.tsx` becomes router shell
+   - One custom hook per tab: `useLibrary()`, `useStatus()`, `useStats()`
+   - Status tab auto-refreshes every 10s via polling (not WebSocket)
+
+3. **Implementation order:** Stats endpoint (S) → Status endpoint (M) → Library endpoint (M) → Tab routing (S) → Stats UI (S) → Status UI (M) → Library UI (L)
+
+4. **Reuse strategy:** Stats endpoint reuses existing `build_solr_params()` + `parse_facet_counts()`. Library reuses `PdfViewer.tsx` for opening books. Status requires new RabbitMQ management API connection (new env var).
+
+5. **Open question:** `recharts` for charts vs plain tables. Recommended tables-first, charts in follow-up PR.
+
+**Effort estimate:** ~3 backend endpoints (S+M+M) + 4 frontend components (S+S+M+L) = medium total. Parker and Dallas can parallelize — backend first, frontend follows as endpoints land.

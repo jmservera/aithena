@@ -473,3 +473,622 @@ Three parallel initiatives to modernize aithena:
 - All meaningful changes require team consensus
 - Document architectural decisions here
 - Keep history focused on work, decisions focused on direction
+
+### 2026-03-14T08:35: User directive — delete branches after merge
+**By:** jmservera (via Copilot)
+**What:** When a PR is accepted/merged, delete the branch. Only keep branches for actual in-process work. Old branches should be deleted.
+**Why:** User request — keep clean branch list
+
+### 2026-03-14T09:45: User directive — remove Azure dependencies
+**By:** jmservera (via Copilot)
+**What:** This is a completely on-prem project that must run on docker compose without external dependencies. Remove any dependency on Azure (azure-identity, azure-storage-blob in document-lister). The Dependabot azure-identity alert will resolve itself once the dependency is removed.
+**Why:** User request — on-prem only, no cloud provider dependencies
+
+### 2026-03-14T07:57: User directive — Ripley model override
+**By:** jmservera (via Copilot)
+**What:** Change Ripley's default model to Claude Opus 4.6 1M Context
+**Why:** User request — Lead needs premium model for deep code review and architecture work
+
+### 2026-03-14T08:32: User directive — local testing with Playwright
+**By:** jmservera (via Copilot)
+**What:** The team can run the project locally to test it, and use Playwright to check the UI
+**Why:** User request — enables end-to-end validation before merging
+
+### 2026-03-14T10:19: User directive — hybrid dev workflow
+**By:** jmservera (via Copilot)
+**What:** Run stable infrastructure (Solr, ZooKeeper, Redis, RabbitMQ) in Docker, but run the code being debugged (solr-search, document-indexer, aithena-ui, etc.) directly on the host. This makes debugging and fixing easier when the rest of the solution is already working correctly.
+**Why:** User preference — faster dev loop, easier debugging, only containerize stable infra
+
+### 2026-03-14T10:34: User directive — Juanma as human decision gate
+**By:** jmservera / Juanma (via Copilot)
+**What:** Add Juanma as human Product Owner. Route important decisions the team cannot make autonomously to Juanma and HOLD until he responds. If he forgets, insist. All clear/parallel work continues — only blocking decisions wait. Autopilot mode respects this gate.
+**Why:** User request — human-in-the-loop for key decisions, no-block for clear work
+
+### 2026-03-14T08:36: User directive — trim unused projects and containers
+**By:** jmservera (via Copilot)
+**What:** Analyze which projects and containers no longer make sense to keep. Trim the project accordingly — remove deprecated/unused services.
+**Why:** User request — reduce maintenance burden, keep only what's actively used
+
+### Decision: Charter Reskill — Extract Procedures to Skills
+**Author:** Ripley  
+**Date:** 2026-07-14  
+**Status:** Implemented
+
+#### What Changed
+Extracted duplicated procedural content from 7 agent charters into shared skills, reducing total charter size from 13.4KB to 9.2KB (31% reduction).
+
+#### Decisions Made
+
+1. **Project Context sections removed from all charters** — Agents get project context from `decisions.md`, `team.md`, and the `project-conventions` skill at spawn time. Duplicating it in every charter wastes ~2.5KB.
+
+2. **Tech Stack sections removed from 6 charters** — Consolidated into `project-conventions` skill. Agent-specific tool knowledge stays in responsibilities (e.g., "Configure multilingual text analyzers" implies Solr expertise).
+
+3. **`project-conventions` skill rewritten** — Replaced the empty template with actual project context, service inventory, tech stack, testing conventions, and anti-patterns.
+
+4. **`squad-pr-workflow` skill created** — Extracted branch naming, PR conventions, commit trailers, and stale PR detection patterns from copilot charter and Ripley's history.
+
+5. **Copilot Capability Profile preserved** — This is functional config (self-assessment matrix), not procedure. Kept in charter.
+
+6. **Scribe charter untouched** — Already under 1KB (936B).
+
+#### Impact
+All charters now under 1.5KB target except copilot (2.2KB — contains required capability profile matrix that can't be externalized without breaking auto-assign logic).
+
+### PR Triage & Prioritization — 2026-07-14
+**Author:** Ripley (Lead)
+**Status:** EXECUTED
+
+#### Merged
+- **#55** — E2E test harness (Phase 4, approved, clean merge)
+- **#101** — Dependabot: Bump esbuild, vite, @vitejs/plugin-react
+- **#102** — Dependabot: Bump js-yaml 4.1.0 → 4.1.1
+
+#### Priority Order for Remaining Work
+
+1. **#63 (Phase 2, HIGH)** — PDF viewer panel. Assigned @copilot. Surgical extraction: only PdfViewer.tsx + integration.
+2. **#68 (Phase 3, HIGH)** — Hybrid search modes. Assigned @copilot. Keystone for Phase 3.
+3. **#69 (Phase 3, MEDIUM)** — Similar books endpoint. Assigned @copilot. BLOCKED on #68.
+4. **#56 (Phase 4, LOW)** — Docker hardening. Assigned @copilot, low priority.
+
+#### Closed (not worth fixing)
+- **#70** — Similar books UI. Built on old chat UI (pre-PR #62). Needs full rewrite, not rebase.
+- **#58** — PDF upload endpoint. Targets qdrant-search/, architecturally wrong. Needs fresh implementation.
+- **#59** — PDF upload UI. Built on old chat UI. Needs full rewrite after upload endpoint exists.
+
+#### Rationale
+PRs built on the old chat UI (before PR #62 rewrote to search paradigm) cannot be meaningfully rebased — the component tree is completely different. PRs targeting qdrant-search/ instead of solr-search/ are architecturally misaligned per ADR-001/ADR-003. Both classes should be re-created from scratch when their phase is prioritized.
+
+PRs that only need conflict resolution in existing solr-search/ or aithena-ui/ files (#63, #68, #69, #56) are worth fixing because the core logic is sound.
+
+### Feature Priorities Analysis — 2026-07-15
+**Author:** Ripley (Lead)
+**Status:** PROPOSED — awaiting user review
+**Requested by:** jmservera
+
+#### Priority 1: Test the Indexer — Verify End-to-End Pipeline
+
+**Existing issue:** NEW — needs issue
+**Current state:**
+- ✅ `document-indexer` fully rewritten for Solr (Tika extraction + chunk/embedding indexing). Imports `SOLR_HOST`, `SOLR_COLLECTION`; POSTs to `/update/extract` with literal metadata params. No Qdrant dependency remains.
+- ✅ `solr-init` service added to `docker-compose.yml` — auto-bootstraps the `books` collection (uploads configset to ZooKeeper, creates collection with RF=3, runs `add-conf-overlay.sh`).
+- ✅ `document-lister` polls `/data/documents/` (configurable `POLL_INTERVAL`, default 60s via PR #71), publishes paths to RabbitMQ.
+- ✅ `document-data` volume mounts `/home/jmservera/booklibrary` → `/data/documents` in containers.
+- ✅ E2E test harness exists (`e2e/test_upload_index_search.py`, merged via PR #55) — but it **bypasses** the actual pipeline by POSTing directly to Solr's extract endpoint.
+- ⚠️ The full pipeline (document-lister → RabbitMQ → document-indexer → Solr) has **never been verified** with real books.
+
+**Gap:** No one has started the full stack and confirmed `numFound > 0` from an actual indexing run. The E2E test uses a synthetic fixture PDF and skips the lister/indexer services entirely. We need a manual smoke test **and** an automated pipeline integration test.
+
+**Plan:**
+1. Start the stack: `docker compose up -d`
+2. Wait for `solr-init` to complete: check `docker compose logs solr-init` for "Solr init complete"
+3. Wait for `document-lister` to discover files: check `docker compose logs document-lister` for listed file count
+4. Wait for `document-indexer` to process queue: check `docker compose logs document-indexer` for "Indexed ... into Solr"
+5. Verify: `curl http://localhost:8983/solr/books/select?q=*:*&rows=0` — expect `numFound > 0`
+6. If failures, inspect Redis state via `admin/` Streamlit dashboard for error details
+7. File a bug for any issues found, then write an automated pipeline test in `e2e/`
+
+**Assigned to:** Lambert (tester) — manual verification; Brett (infra) — fix any docker/volume issues
+**Effort:** M (2-3 hours manual testing, additional time for fixes)
+
+#### Priority 2: Test Search Actually Finds Words — Keyword Search Validation
+
+**Existing issue:** #45 (hybrid search modes) — CLOSED/MERGED as PR #68. Partially addresses this.
+**Also related:** PR #72 (solr-search API, merged), PR #62 (faceted search UI, merged)
+**Current state:**
+- ✅ `solr-search` FastAPI service exists with `keyword`, `semantic`, and `hybrid` modes (default: `keyword`).
+- ✅ API endpoint: `GET http://localhost:8080/v1/search/?q={word}&mode=keyword`
+- ✅ Solr schema has `_text_` catch-all field with copyField from `title_t`, `author_t`.
+- ✅ Tika extraction populates `_text_` with PDF full-text content.
+- ⚠️ **No real-data search validation exists.** All tests use mocked Solr responses.
+- ⚠️ Semantic search depends on embeddings-server being healthy AND chunk documents existing with `embedding_v` vectors — untested with real data.
+
+**Gap:** Nobody has extracted a word from a known PDF, searched for it, and confirmed it appears in results. Need to: (a) confirm keyword/BM25 search works with actual indexed data; (b) assess whether semantic/hybrid search works or should be deferred.
+
+**Plan:**
+1. **Depends on Priority 1** — need indexed data first.
+2. Pick a known book from `/home/jmservera/booklibrary`. Use `pdftotext <book>.pdf - | head -100` to extract distinctive words.
+3. Keyword test: `curl "http://localhost:8080/v1/search/?q={distinctive_word}"` — verify the book appears in results with highlights.
+4. Facet test: Verify author/year/language facets are populated in the response.
+5. Semantic test: Try `curl "http://localhost:8080/v1/search/?q={word}&mode=semantic"` — if embeddings server is healthy and chunks were indexed, this should work. If not, document as future task (don't block).
+6. Write a real-data validation script in `e2e/` that automates steps 2-5.
+
+**Assigned to:** Lambert (tester) — validation script; Parker (backend) — fix any API issues
+**Effort:** S (1-2 hours once data is indexed)
+
+#### Priority 3: Make Books Folder Configurable via .env
+
+**Existing issue:** NEW — needs issue
+**Current state:**
+- ✅ `.env` is already in `.gitignore` (line 123).
+- ❌ No `.env` file exists.
+- ❌ `docker-compose.yml` hardcodes `/home/jmservera/booklibrary` in the `document-data` volume (line 449).
+- ✅ The `docker-compose.e2e.yml` already demonstrates the pattern: `device: "${E2E_LIBRARY_PATH:-/tmp/aithena-e2e-library}"` — this is the exact template to follow.
+- Other volumes also hardcode paths: `/source/volumes/rabbitmq-data`, `/source/volumes/solr-data`, etc.
+
+**Gap:** Single-line change in `docker-compose.yml` + create a `.env.example` file.
+
+**Plan:**
+1. In `docker-compose.yml`, change `device: "/home/jmservera/booklibrary"` → `device: "${BOOKS_PATH:-/home/jmservera/booklibrary}"` (preserves backward compat).
+2. Create `.env.example` with documented variables:
+   ```
+   # Path to the book library directory
+   BOOKS_PATH=/home/jmservera/booklibrary
+   ```
+3. Consider also parameterizing the other volume paths (`/source/volumes/*`) for portability, but keep that as a follow-up to avoid scope creep.
+4. Test: `cp .env.example .env`, edit path, `docker compose config | grep device` to verify substitution.
+
+**Assigned to:** Brett (infra)
+**Effort:** S (30 minutes)
+
+#### Priority 4: UI Indexing Status Dashboard + Library Browser
+
+**Existing issue:** #51 (Streamlit admin dashboard) — CLOSED (PR #57 merged). But that's the **Streamlit** admin, not the **React** UI.
+**Also related:** #50 (PDF upload flow, OPEN), #41 (frontend tests, OPEN)
+**Current state:**
+- ✅ **Streamlit admin** (`admin/src/main.py`) already shows: Total Documents, Queued, Processed, Failed counts (from Redis), RabbitMQ queue depth, and a Document Manager page for inspection/requeue. This covers the *operator* view.
+- ✅ **React UI** (`aithena-ui/`) has: search bar, faceted search, pagination, sort, PDF viewer. No stats/status/library pages.
+- ❌ No React UI page for indexing status, collection statistics, or library browsing.
+- The React UI currently talks only to `solr-search` (`/v1/search/`). There is no backend endpoint for collection stats or library browsing.
+
+**Gap:** This is a **new feature** requiring both backend API endpoints and frontend pages. Two sub-features:
+
+##### A. Indexing Status + Collection Stats
+**Backend:** New endpoint(s) in `solr-search`:
+- `GET /v1/stats` → Returns Solr collection stats (`numDocs`, facet counts for language/author/year) + Redis pipeline stats (queued/processed/failed counts).
+
+**Frontend:** New page/section in React UI:
+- **Indexing Status:** Documents indexed, in queue, failed (from Redis via new API).
+- **Collection Stats:** Total books, breakdown by language (pie chart), by author (top 20 bar), by year (histogram), by category.
+- **Data source:** Combine Solr `facet.field` queries with Redis state query.
+
+##### B. Library Browser
+**Backend:** New endpoint in `solr-search`:
+- `GET /v1/library?path={folder}` → Returns folder listing with document counts, or documents in a folder.
+- Uses Solr `folder_path_s` facet for navigation, `file_path_s` for document listing.
+
+**Frontend:** New page in React UI:
+- **Folder tree** navigation (collapsible, driven by `folder_path_s` facet).
+- **Document list** per folder (title, author, year, indexing status icon).
+- Click-to-search (pre-fill search with `fq_folder={path}`) or click-to-view-PDF.
+
+##### Proposed Menu/Page Structure
+```
+┌──────────────────────────────────────┐
+│  🏛️ Aithena                          │
+│  ┌──────┬──────────┬─────────┐       │
+│  │Search│ Library  │ Status  │       │
+│  └──────┴──────────┴─────────┘       │
+│                                      │
+│  Search  → current search UI (default)│
+│  Library → folder browser + doc list  │
+│  Status  → indexing pipeline + stats  │
+└──────────────────────────────────────┘
+```
+
+**Plan:**
+1. **Backend — Stats endpoint** (Parker): Add `GET /v1/stats` to `solr-search/main.py`. Query Solr for `numDocs` + facet summaries. Query Redis for pipeline state counts.
+2. **Backend — Library endpoint** (Parker): Add `GET /v1/library` with `path` param. Use Solr `folder_path_s` facet for tree, `file_path_s` filter for listing.
+3. **Frontend — Tab navigation** (Dallas): Add React Router or tab component. Three tabs: Search (current), Library, Status.
+4. **Frontend — Status page** (Dallas): Fetch `/v1/stats`, render indexing pipeline metrics + collection charts.
+5. **Frontend — Library page** (Dallas): Fetch `/v1/library`, render folder tree + document grid.
+6. **Tests** (Lambert): API tests for new endpoints, component tests for new pages.
+
+**Assigned to:** Parker (backend endpoints), Dallas (React pages), Lambert (tests)
+**Effort:** L (1-2 weeks across team)
+
+### Code Scanning Alerts — GitHub API Findings
+**Date:** 2026-03-14
+**Author:** Kane (Security Engineer)
+
+#### Summary
+- Code scanning: 3 open alerts (medium: 3; no critical/high)
+- Dependabot: 4 open alerts (critical: 2, high: 1, medium: 1)
+- Secret scanning: not accessible — API returned `404 Secret scanning is disabled on this repository`
+- Tool breakdown: CodeQL (3)
+- Cross-reference: no overlap with prior Bandit triage; current GitHub alerts are workflow-permission hardening and dependency vulnerabilities, while prior Bandit findings were dominated by third-party `.venv` noise
+
+#### Open Code Scanning Alerts
+| # | Rule | Severity | File | Line | Description |
+|---|------|----------|------|------|-------------|
+| 7 | `actions/missing-workflow-permissions` | medium | `.github/workflows/ci.yml` | 18 | Workflow does not contain permissions |
+| 8 | `actions/missing-workflow-permissions` | medium | `.github/workflows/ci.yml` | 41 | Workflow does not contain permissions |
+| 9 | `actions/missing-workflow-permissions` | medium | `.github/workflows/ci.yml` | 68 | Workflow does not contain permissions |
+
+#### Critical/High Code Scanning Alerts (require action)
+No critical or high-severity code scanning alerts are currently open.
+
+#### Dependabot Critical/High Snapshot
+| # | Package | Severity | Location | Vulnerable Range | First Patched | Summary |
+|---|---------|----------|----------|------------------|---------------|---------|
+| 40 | `qdrant-client` | critical | `qdrant-search/requirements.txt` | `< 1.9.0` | `1.9.0` | qdrant input validation failure |
+| 41 | `qdrant-client` | critical | `qdrant-clean/requirements.txt` | `< 1.9.0` | `1.9.0` | qdrant input validation failure |
+| 44 | `braces` | high | `aithena-ui/package-lock.json` (transitive via `micromatch`) | `< 3.0.3` | `3.0.3` | Uncontrolled resource consumption in braces |
+
+#### Additional Dependabot Context
+| # | Package | Severity | Location | Vulnerable Range | First Patched | Summary |
+|---|---------|----------|----------|------------------|---------------|---------|
+| 43 | `azure-identity` | medium | `document-lister/requirements.txt` | `< 1.16.1` | `1.16.1` | Azure Identity Libraries and Microsoft Authentication Library Elevation of Privilege Vulnerability |
+
+#### Recommended Actions
+1. Add explicit least-privilege `permissions:` to `.github/workflows/ci.yml` at workflow or job scope so each CI job only gets the token scopes it needs; this should clear all three open CodeQL alerts.
+2. Upgrade `qdrant-client` to `>=1.9.0` in both `qdrant-search/requirements.txt` and `qdrant-clean/requirements.txt`; these are the highest-risk open findings because they are critical and affect request validation.
+3. Refresh `aithena-ui` dependencies/lockfile so `braces` resolves to `3.0.3+` (likely via updated transitive packages such as `micromatch`/`fast-glob`); verify the lockfile no longer pins `braces` `3.0.2`.
+4. Upgrade `azure-identity` in `document-lister/requirements.txt` to `>=1.16.1` after validating compatibility with the current Azure SDK usage.
+5. Enable secret scanning if repository policy allows it; current API response indicates the feature is disabled, so exposed-secret coverage is absent.
+
+### Security Audit — Initial Findings
+**Date:** 2026-03-14
+**Author:** Kane (Security Engineer)
+
+#### Summary
+- bandit: 1,688 raw findings (30 HIGH / 54 MEDIUM / 1,604 LOW). All 30 HIGH findings came from the checked-in `document-indexer/.venv/` third-party environment; first-party code triage is 0 HIGH / 4 MEDIUM / 136 LOW.
+- checkov: 555 passed, 18 failed on Dockerfiles. `checkov --framework docker-compose` is not supported by local Checkov 3.2.508, so `docker-compose.yml` was reviewed manually.
+- Dependabot: 0 open alerts via GitHub API (`gh api repos/jmservera/aithena/dependabot/alerts`).
+- Actions: 15 supply chain risks (14 tag-pinned action refs across 5 workflows, plus `ci.yml` missing explicit `permissions:`).
+- Dockerfiles: 14 direct hardening issues from manual review (8 images run as root, 6 `pip install` commands missing `--no-cache-dir`; no `latest` tags, no `.env`/secret copies found).
+
+#### Critical (fix immediately)
+- No confirmed critical findings in first-party application code.
+- Raw Bandit HIGH results are scanner noise from the tracked `document-indexer/.venv/` tree (`pdfminer`, `pip`, `requests`, `redis`, etc.). This should be excluded from CI scanning or removed from the repository so real findings are not buried.
+
+#### High (fix this sprint)
+- **Pin GitHub Actions to commit SHAs.** Every workflow uses floating tags (`actions/checkout@v4`, `actions/setup-python@v5`, `actions/github-script@v7`) instead of immutable SHAs, leaving CI vulnerable to supply-chain tag retargeting.
+- **Tighten workflow token scope.** `.github/workflows/ci.yml` has no explicit `permissions:` block, so it falls back to repository defaults.
+- **Stop running containers as root.** All 8 Dockerfiles lack a `USER` directive (`document-indexer/`, `document-lister/`, `solr-search/`, `qdrant-search/`, `qdrant-clean/`, `embeddings-server/`, `llama-server/`, `llama-base/`).
+- **Reduce attack surface in Compose.** `docker-compose.yml` publishes many internal service ports (Redis, RabbitMQ, ZooKeeper, Solr nodes, embeddings API) to the host, and both `zoo1` and `solr-search` map host port `8080`, creating an avoidable exposure/collision.
+- **Improve Solr resilience.** `document-indexer` (`SOLR_HOST=solr`) and `solr-search` (`SOLR_URL=http://solr:8983/solr`) are pinned to a single Solr node despite the SolrCloud topology.
+
+#### Medium (fix next sprint)
+- **Add container healthchecks.** Checkov's 18 Dockerfile failures are primarily missing `HEALTHCHECK` instructions across all 8 images; this also weakens Compose readiness.
+- **Bandit first-party MEDIUMs:** four `B104` findings for binding FastAPI servers to `0.0.0.0` in `embeddings-server/main.py`, `qdrant-clean/main.py`, `qdrant-search/main.py`, and `solr-search/main.py`. This is expected for containers but should be explicitly accepted/baselined.
+- **Harden package installs.** `document-lister/Dockerfile`, `qdrant-search/Dockerfile`, `qdrant-clean/Dockerfile`, `llama-server/Dockerfile`, and two `python3 -m pip install` steps in `llama-base/Dockerfile` omit `--no-cache-dir`.
+- **Avoid unnecessary package managers.** Checkov flags `apt` usage in `llama-server/Dockerfile` and `llama-base/Dockerfile`; review whether slimmer/prebuilt bases can remove build tooling from runtime images.
+- **Compose hardening gaps.** ZooKeeper/Solr services lack health-based startup ordering and ZooKeeper restart policies; the repo's SolrCloud operations skill already calls these out as risks.
+
+#### Low / Accepted Risk
+- Bandit LOW findings are almost entirely `B101` test assertions in pytest suites; acceptable if tests stay out of production images and CI baselines them.
+- No GitHub Actions shell-injection pattern was found using `github.event.*.body` inside `run:` blocks.
+- No secrets were obviously echoed in workflow logs, and no Dockerfiles copy `.env` files into images.
+- No Dockerfile uses a literal `latest` tag, though most base images are still mutable tags rather than digests.
+- The current Dependabot API result is clean, but it conflicts with the historical note in `.squad/agents/kane/history.md`; verify in the GitHub UI if this looks unexpected.
+
+#### Recommended Next Steps
+1. Remove or ignore tracked virtualenv/vendor trees (especially `document-indexer/.venv/`) before enabling Bandit in CI; baseline the 4 accepted `B104` findings separately.
+2. Pin every GitHub Action to a full commit SHA and add explicit least-privilege `permissions:` to `ci.yml`.
+3. Add `USER` and `HEALTHCHECK` instructions to every Dockerfile, then wire Compose `depends_on` to health where possible.
+4. Reduce published host ports, move internal services behind the Compose network only, and stop pinning application traffic to a single Solr node.
+5. Add `--no-cache-dir` to remaining pip installs and review `llama-*` images for smaller, less privileged runtime stages.
+6. Re-run Compose scanning with a supported policy set/tooling path (current Checkov 3.2.508 rejects `docker-compose` as a framework) and reconcile the Dependabot baseline with GitHub UI state.
+
+### P4 UI Spec — Library, Status, Stats Tabs
+**Author:** Ripley (Lead)
+**Approved by:** Juanma (Product Owner) — all 3 tabs
+**Date:** 2026-03-14
+**Status:** APPROVED
+
+#### Navigation
+- **Tab bar** at top of `<main>`: `Search | Library | Status | Stats`
+- **URL routing:** React Router — `/search`, `/library`, `/library/*`, `/status`, `/stats`
+- **Default tab:** `/search` (current behavior, no regression)
+- **Sidebar:** The facet sidebar is Search-specific. Other tabs get their own sidebar content or collapse the sidebar.
+- **Component:** `TabNav.tsx` — shared top navigation, highlights active tab
+- **Router:** Wrap `App.tsx` in `BrowserRouter`; each tab is a `<Route>` rendering its page component
+
+#### Routing Detail
+```
+/                   → redirect to /search
+/search             → SearchPage (current App.tsx content, extracted)
+/library            → LibraryBrowser (root listing)
+/library/:path*     → LibraryBrowser (nested folder)
+/status             → IndexingStatus
+/stats              → CollectionStats
+```
+
+#### Tab 1: Search (existing — extract, don't modify)
+**Component:** `SearchPage.tsx`
+**What changes:** Extract the current `App()` body into `SearchPage`. `App.tsx` becomes the router shell + tab nav. No functional changes to search behavior.
+
+#### Tab 2: Library — Browse the Collection
+**Component:** `LibraryBrowser.tsx`
+**Purpose:** File-browser view of the book library (categories → authors → books). Users can explore the collection without searching.
+
+**Backend endpoint:**
+```
+GET /v1/library/?path={relative_path}
+GET /v1/library/                        # root listing
+GET /library/?path={relative_path}      # alias
+```
+
+**Query parameters:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `path` | string | `""` (root) | Relative path within `/data/documents`. URL-encoded. |
+| `sort_by` | string | `"name"` | `name`, `size`, `count`, `modified` |
+| `sort_order` | string | `"asc"` | `asc`, `desc` |
+
+**Response shape:**
+```json
+{
+  "path": "amades/catalan/",
+  "breadcrumb": [
+    {"name": "root", "path": ""},
+    {"name": "amades", "path": "amades/"},
+    {"name": "catalan", "path": "amades/catalan/"}
+  ],
+  "folders": [
+    {
+      "name": "Joan Amades",
+      "path": "amades/catalan/Joan Amades/",
+      "item_count": 14,
+      "total_size": 285600000
+    }
+  ],
+  "files": [
+    {
+      "name": "Folklore de Catalunya.pdf",
+      "path": "amades/catalan/Folklore de Catalunya.pdf",
+      "size": 24500000,
+      "modified": "2024-11-03T10:15:00Z",
+      "indexed": true,
+      "solr_id": "base64-encoded-id",
+      "metadata": {
+        "title": "Folklore de Catalunya",
+        "author": "Joan Amades",
+        "year": 1950,
+        "language": "ca",
+        "page_count": 342
+      }
+    }
+  ],
+  "total_folders": 3,
+  "total_files": 8
+}
+```
+
+**Backend implementation notes (Parker):**
+- Walk `settings.base_path / path` on the filesystem
+- For each file, check Solr for indexed metadata: query `file_path_s:{escaped_path}` with `rows=1`
+- Cache Solr lookups per request (batch query: `file_path_s:("path1" OR "path2" OR ...)`)
+- **Security:** Validate `path` does not escape `base_path` (same traversal protection as `/documents/{id}`)
+- Reject paths containing `..`, null bytes, or absolute paths
+- Return 404 if path doesn't exist on filesystem
+
+**Frontend behavior:**
+- Breadcrumb navigation at top (clickable path segments)
+- Folder list: click to navigate deeper (updates URL: `/library/amades/catalan/`)
+- File list: show metadata inline; "View PDF" button opens `PdfViewer` (reuse existing component)
+- Show folder icon + item count badge for folders
+- Show PDF icon + size + indexed status badge for files
+- Sort controls: name, size, count (folders), modified date
+- Empty state: "This folder is empty" or "No books found in this directory"
+
+#### Tab 3: Status — Indexing Progress & Health
+**Component:** `IndexingStatus.tsx`
+**Purpose:** Real-time dashboard showing indexing pipeline status and service health.
+
+**Backend endpoint:**
+```
+GET /v1/status/
+GET /status/
+```
+
+**No query parameters.** Returns current snapshot.
+
+**Response shape:**
+```json
+{
+  "timestamp": "2026-03-14T12:00:00Z",
+  "indexing": {
+    "total_discovered": 1247,
+    "total_indexed": 1180,
+    "total_queued": 42,
+    "total_failed": 25,
+    "total_with_embeddings": 890,
+    "last_scan_time": "2026-03-14T11:55:00Z",
+    "scan_interval_seconds": 600
+  },
+  "failed_documents": [
+    {
+      "file_path": "amades/broken_file.pdf",
+      "error": "PDF extraction failed: encrypted document",
+      "failed_at": "2026-03-14T10:30:00Z",
+      "retry_count": 3
+    }
+  ],
+  "services": {
+    "solr": {
+      "status": "healthy",
+      "nodes": 3,
+      "nodes_active": 3,
+      "collection": "books",
+      "docs_count": 1180
+    },
+    "rabbitmq": {
+      "status": "healthy",
+      "queue_name": "document_queue",
+      "queue_depth": 42,
+      "consumers": 1
+    },
+    "redis": {
+      "status": "healthy",
+      "connected": true,
+      "keys_count": 1300
+    },
+    "embeddings_server": {
+      "status": "healthy",
+      "model": "distiluse-base-multilingual-cased-v2",
+      "dimension": 512
+    }
+  }
+}
+```
+
+**Backend implementation notes (Parker):**
+- **Solr:** Query `admin/collections?action=CLUSTERSTATUS` for node health, `select?q=*:*&rows=0` for doc count
+- **Redis:** `HLEN` or `DBSIZE` for key count; `HGETALL` on lister state hash for discovered/failed counts
+- **RabbitMQ:** Management API (`GET /api/queues/{vhost}/{queue}`) for queue depth + consumer count
+- **Embeddings:** `GET /v1/embeddings/model` (already exists from PR #65) for model info; count docs with `book_embedding:[* TO *]` in Solr
+- **Failed docs:** Store in Redis hash `indexer:failed` with error + timestamp + retry count
+- Aggregate all sources into single response — keep endpoint fast (<2s)
+- Return `"status": "unhealthy"` per service if connection fails (don't 500 the whole endpoint)
+
+**Frontend behavior:**
+- **Progress section:** Big numbers for discovered / indexed / queued / failed / embedded
+- Progress bar: `indexed / discovered` as percentage
+- **Failed documents:** Expandable list with error details (collapsed by default)
+- **Services grid:** Card per service with green/red status dot, key metric
+- **Auto-refresh:** Poll every 10 seconds (`setInterval` + `useEffect` cleanup). Show "Last updated: X seconds ago" badge.
+- **Manual refresh button** for immediate update
+
+#### Tab 4: Stats — Collection Analytics
+**Component:** `CollectionStats.tsx`
+**Purpose:** Aggregate statistics and breakdowns of the indexed book collection.
+
+**Backend endpoint:**
+```
+GET /v1/stats/
+GET /stats/
+```
+
+**Query parameters:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `top_n` | int | `20` | Max items in each breakdown (authors, categories) |
+
+**Response shape:**
+```json
+{
+  "timestamp": "2026-03-14T12:00:00Z",
+  "totals": {
+    "books": 1180,
+    "total_pages": 342000,
+    "average_pages": 290,
+    "total_size_bytes": 48000000000,
+    "average_size_bytes": 40677966
+  },
+  "by_language": [
+    {"value": "es", "count": 420},
+    {"value": "ca", "count": 310},
+    {"value": "fr", "count": 250},
+    {"value": "en", "count": 200}
+  ],
+  "by_author": [
+    {"value": "Joan Amades", "count": 42},
+    {"value": "Unknown", "count": 38}
+  ],
+  "by_year": [
+    {"value": "1950", "count": 15},
+    {"value": "1960", "count": 22}
+  ],
+  "by_category": [
+    {"value": "amades", "count": 120},
+    {"value": "historia", "count": 95}
+  ]
+}
+```
+
+**Backend implementation notes (Parker):**
+- **Totals:** `q=*:*&rows=0&stats=true&stats.field=page_count_i&stats.field=file_size_l` — Solr stats component gives count, sum, mean
+- **Breakdowns:** Reuse `build_solr_params()` with `rows=0` + facets. The existing `/v1/facets` endpoint already returns `by_language`, `by_author`, `by_year`, `by_category` — extract and extend.
+- **by_year:** Use Solr range facets (`facet.range=year_i&f.year_i.facet.range.start=1400&f.year_i.facet.range.end=2030&f.year_i.facet.range.gap=10`) for histogram buckets, or standard facet for exact years
+- `top_n` controls `facet.limit` per field
+- Cache response for 60s (stats don't change fast)
+
+**Frontend behavior:**
+- **Summary cards:** Total books, total pages, avg pages, total size (human-readable)
+- **Language breakdown:** Horizontal bar chart or pie chart (4-6 slices max, rest as "Other")
+- **Author breakdown:** Top 20 bar chart (horizontal, sorted by count)
+- **Year breakdown:** Histogram (vertical bars, year on x-axis). Group very old books into decades.
+- **Category breakdown:** Treemap or horizontal bar chart
+- **Chart library:** Use a lightweight lib. Recommended: **recharts** (already React-native, small bundle, good for bar/pie/histogram). Alternative: raw SVG bars if we want zero new deps.
+- No auto-refresh needed (stats change slowly). Manual refresh button.
+
+#### Shared Frontend Infrastructure
+**New dependencies (Dallas):**
+- `react-router-dom` — Client-side routing (already standard for React SPAs)
+- `recharts` — Chart library for Stats tab (optional: can start with plain HTML tables, add charts later)
+
+**New shared components:**
+- `TabNav.tsx` — Tab bar navigation (Search | Library | Status | Stats)
+- `StatusBadge.tsx` — Reusable green/yellow/red dot + label
+- `ProgressBar.tsx` — Reusable progress bar (for Status tab)
+- `Breadcrumb.tsx` — Clickable path breadcrumb (for Library tab)
+
+**App.tsx restructure:**
+```tsx
+function App() {
+  return (
+    <BrowserRouter>
+      <TabNav />
+      <Routes>
+        <Route path="/" element={<Navigate to="/search" />} />
+        <Route path="/search" element={<SearchPage />} />
+        <Route path="/library/*" element={<LibraryBrowser />} />
+        <Route path="/status" element={<IndexingStatus />} />
+        <Route path="/stats" element={<CollectionStats />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
+
+**Custom hooks (one per tab):**
+- `useLibrary(path: string)` — fetches `/v1/library/?path=...`, returns folders/files/breadcrumb + loading/error
+- `useStatus()` — fetches `/v1/status/` with 10s auto-refresh, returns full status + loading/error
+- `useStats()` — fetches `/v1/stats/`, returns stats + loading/error
+
+#### Backend Endpoints Summary
+| Endpoint | Service | Method | What It Does | Depends On |
+|----------|---------|--------|-------------|------------|
+| `GET /v1/library/?path=` | solr-search | GET | Browse filesystem + Solr metadata | Solr, filesystem |
+| `GET /v1/status/` | solr-search | GET | Aggregate pipeline health | Solr, Redis, RabbitMQ, embeddings-server |
+| `GET /v1/stats/` | solr-search | GET | Collection statistics + breakdowns | Solr (stats + facets) |
+
+All three endpoints go in `solr-search/main.py`, following existing patterns:
+- Triple-alias routes (`/v1/X/`, `/v1/X`, `/X`)
+- Same `Settings` config for Solr URL, timeouts, CORS
+- Same error handling (HTTPException 400/404/502/504)
+- Same `parse_facet_counts()` reuse where applicable
+
+#### Implementation Order
+| Step | Who | What | Depends On | Effort |
+|------|-----|------|------------|--------|
+| 1 | Parker | `GET /v1/stats/` endpoint | Solr running, books indexed | S — reuses existing facets + stats query |
+| 2 | Parker | `GET /v1/status/` endpoint | Solr, Redis, RabbitMQ connections | M — multiple service queries |
+| 3 | Parker | `GET /v1/library/?path=` endpoint | Solr running, filesystem access | M — FS walk + Solr batch lookup |
+| 4 | Dallas | Tab navigation + routing (`react-router-dom`) | None | S — scaffolding only |
+| 5 | Dallas | `CollectionStats.tsx` (Stats tab) | Step 1 | S — tables first, charts later |
+| 6 | Dallas | `IndexingStatus.tsx` (Status tab) | Step 2 | M — auto-refresh, service cards |
+| 7 | Dallas | `LibraryBrowser.tsx` (Library tab) | Step 3 | L — breadcrumb nav, file browser UX |
+| 8 | Lambert | Integration tests for all 3 endpoints | Steps 1-3 | M |
+
+**Parallelism:** Parker works steps 1-3 (backend) while Dallas starts step 4 (routing). Dallas picks up 5-7 as endpoints land. Lambert tests after endpoints exist.
+
+**Recommended sequence for Dallas:** Stats → Status → Library (increasing complexity). Stats is simplest because it's mostly rendering data. Status adds auto-refresh. Library is the most complex UX (navigation, breadcrumbs, PDF viewer integration).
+
+#### Open Questions (non-blocking)
+1. **Charts:** Should Dallas use `recharts` or start with plain HTML tables? Recommend: tables first in initial PR, add `recharts` in a follow-up. Keeps initial PR small.
+2. **Status polling:** WebSocket vs polling? Recommend polling (10s interval). WebSocket adds infrastructure complexity for marginal benefit at this refresh rate.
+3. **Library caching:** Should `/v1/library/` cache Solr lookups across requests? Recommend: per-request batch only for now. Add Redis caching if performance is an issue.
+4. **RabbitMQ access:** solr-search currently doesn't connect to RabbitMQ. The `/v1/status/` endpoint needs the management API URL added to `Settings`. New env var: `RABBITMQ_MANAGEMENT_URL=http://rabbitmq:15672`.
+

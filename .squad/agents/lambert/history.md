@@ -88,3 +88,22 @@
 - Search still shows `0 results` because Solr collection `books` currently has `numFound: 0`; `/v1/facets` also returns empty arrays, so results, facet rendering, and PDF viewing remain blocked by missing indexed documents rather than routing errors.
 - Smoke artifacts captured: `aithena-ui-smoke-initial-2.png`, `aithena-ui-smoke-results.png`, `aithena-ui-smoke-initial.md`, `aithena-ui-smoke-results.md`, `aithena-ui-smoke-network.txt`, and `aithena-ui-smoke-console.txt`.
 
+### 2026-03-14 — Real-book indexing pipeline retest
+
+- `docker compose up -d` brought up Redis, RabbitMQ, ZooKeeper, SolrCloud, `solr-init`, `document-lister`, and `document-indexer`; `solr-init` finished and `http://localhost:8983/solr/books/admin/ping` returned healthy.
+- The real library mount is present: `/data/documents` exposed 169 files across folders like `amades/`, `balearics/`, `bsal/`, and `ultima hora/` inside the running containers.
+- Automatic indexing is still broken: after waiting through multiple poll intervals, Solr stayed at `numFound=0`, RabbitMQ queue `shortembeddings` stayed empty, and Redis had no `/shortembeddings/*` state keys.
+- `document-lister` logs stop after `Declaring queue shortembeddings`; there are no `Found new document` or `Document already processed` lines, so the lister never enqueued the mounted PDFs during the smoke window.
+- A manual RabbitMQ publish of `balearics/ESTUDIS_BALEARICS_01.pdf` proved the downstream path is partially alive: `document-indexer` consumed it and Solr indexed one document with `title_s="ESTUDIS BALEARICS 01"`, `category_s="Balearics"`, `author_s="Unknown"`.
+- The indexer then crashed during Redis state persistence with `TypeError: multiple values for argument 'file_path'` in `document_indexer/__main__.py` (`save_state(...)`), marking the sample as failed in Redis even though the Solr document was already written.
+- Net result: the autonomous `document-lister -> RabbitMQ -> document-indexer -> Solr` flow did **not** succeed end-to-end; only a manually enqueued sample reached Solr, and even that ended in a post-index failure state.
+
+### 2026-03-14 — P2 real search validation with indexed books
+
+- Starting the stack with plain `docker compose up -d` still left `document-indexer` in `Created` state while `document-lister` was already queueing real PDFs; at that point Solr only contained the old `blank.pdf` test document, so real-book search was still blocked immediately after startup.
+- Running `docker compose up -d document-indexer` started the consumer, RabbitMQ `shortembeddings` switched to `consumers=1`, and Solr grew to `76` indexed documents during the smoke window while the queue continued draining.
+- Real full-text search now works once the indexer is actually running: querying API `/v1/search/?q=Etnologia&limit=5` returned `1` hit for `amades/costumari 1 1 -3 OCR.pdf`, proving content words from an indexed book are searchable.
+- Facets are now populated on wildcard search: at the validation point `/v1/search/?q=*&limit=1` reported `76` total results with non-empty `author` (7 values), `category` (2), `year` (24), and `language` (3) facet groups.
+- Playwright verified the Vite UI against the live stack: searching `AMADES` showed `7` visible results, rendered facet filters (Author, Category, Language), and displayed real indexed titles such as `Auca dels edificis notables de Barcelona` and `costumari 1 1 -3 OCR`.
+- Metadata quality is **partial** rather than fully good: sampled Amades titles/authors look correct and BSAL category extraction appears, but OCR-heavy docs still surface noisy author/title values (for example `Ocr`) and many records depend on extracted text quality.
+
