@@ -123,6 +123,59 @@ cd document-indexer
 python3 -m pytest tests/ -v
 ```
 
+### E2E Tests
+
+The E2E suite validates the full upload → indexing → search → PDF viewing pipeline against a local development stack using fixture data isolated from the real book corpus.
+
+#### 1. Create the test library directory
+
+```bash
+export E2E_LIBRARY_PATH=/tmp/aithena-e2e-library
+mkdir -p "$E2E_LIBRARY_PATH"
+```
+
+#### 2. Start the local stack with the E2E override
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+```
+
+The override (`docker-compose.e2e.yml`) mounts `E2E_LIBRARY_PATH` as the document library instead of `/home/jmservera/booklibrary`, so the test run is fully isolated from the real corpus. It also sets the document-lister poll interval to 10 seconds for faster feedback.
+
+#### 3. Install test dependencies
+
+```bash
+pip install -r e2e/requirements.txt
+```
+
+#### 4. Run the E2E suite
+
+```bash
+cd e2e && pytest
+```
+
+#### What the suite tests
+
+| Step | Test | Description |
+|------|------|-------------|
+| Upload | `test_fixture_pdf_exists_in_library` | Fixture PDF written to test library directory |
+| Indexing | `test_index_document_into_solr` | PDF POSTed to Solr `/update/extract`; doc confirmed indexed |
+| Search | `test_search_returns_indexed_document` | Solr query returns doc with correct title, author, year |
+| Viewing | `test_pdf_file_path_is_accessible` | `file_path_s` resolves to an accessible file on disk |
+
+#### Failure diagnostics
+
+When a test fails, the suite automatically captures and prints:
+- The Solr response body (recent documents)
+- Last 50 lines of `document-indexer` container logs
+
+#### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SOLR_URL` | `http://localhost:8983/solr/books` | Solr collection endpoint |
+| `E2E_LIBRARY_PATH` | `/tmp/aithena-e2e-library` | Temporary library root (must match volume bind-mount) |
+
 ### Metadata Extraction
 
 Supports flexible path patterns:
