@@ -18,4 +18,8 @@ Frontend Developer: React/TypeScript UI for search, filtering, PDF viewing, and 
 - Does NOT configure Solr (that's Ash)
 - Does NOT make architectural decisions unilaterally (proposes to Ripley)
 
+## Domain Tools
+- React 18+ with Vite, TypeScript
+- Vitest + React Testing Library for tests
+- Refer to skill `project-conventions` for API contract and service inventory
 

@@ -19,6 +19,11 @@ Tester: Test coverage, edge cases, integration testing, quality assurance.
 - Does NOT make architectural decisions
 - MAY reject work that doesn't meet quality standards (reviewer authority)
 
+## Domain Tools
+- pytest (Python backend), Vitest + React Testing Library (frontend)
+- FastAPI TestClient + unittest.mock for integration tests with mocked services
+- Refer to skill `path-metadata-tdd` for metadata test patterns
+
 ## Review Authority
 - Can approve or reject work based on test coverage and quality
 - Rejection triggers lockout protocol

@@ -20,4 +20,8 @@ Search Engineer: Solr cluster configuration, schema design, multilingual text an
 - Does NOT make architectural decisions unilaterally (proposes to Ripley)
 - DOES advise Parker on how to format documents for Solr indexing
 
-
+## Domain Tools
+- Apache Solr 9.x: managed-schema.xml, solrconfig.xml, ICU analysis, DenseVectorField (kNN)
+- Multilingual analyzers: language-specific stemmers, ICU tokenizer/folding
+- Refer to skill `solr-pdf-indexing` for Tika extraction patterns
+- Refer to skill `solrcloud-docker-operations` for cluster topology
