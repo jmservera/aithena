@@ -24,6 +24,7 @@ from search_service import (
     get_query_embedding,
     normalize_book,
     parse_facet_counts,
+    parse_stats_response,
     reciprocal_rank_fusion,
     resolve_document_path,
     solr_escape,
@@ -435,6 +436,31 @@ def similar_books(
         )
 
     return {"results": results}
+
+
+@app.get("/v1/stats/", include_in_schema=False, name="stats_v1")
+@app.get("/v1/stats", include_in_schema=False, name="stats_v1_no_slash")
+@app.get("/stats")
+def stats() -> dict[str, Any]:
+    """Return collection-level statistics from Solr.
+
+    Queries Solr with the stats component and facets to produce an overview of
+    the indexed book collection including totals, breakdowns by language,
+    author, year, and category, and page-count statistics.
+    """
+    params: dict[str, Any] = {
+        "q": "*:*",
+        "rows": 0,
+        "wt": "json",
+        "stats": "true",
+        "stats.field": "page_count_i",
+        "facet": "true",
+        "facet.field": ["author_s", "category_s", "year_i", "language_detected_s"],
+        "facet.limit": settings.facet_limit,
+        "facet.mincount": 1,
+    }
+    payload = query_solr(params)
+    return parse_stats_response(payload)
 
 
 # ---------------------------------------------------------------------------

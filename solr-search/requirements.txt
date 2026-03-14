@@ -1,3 +1,5 @@
+# DEPRECATED: use pyproject.toml + uv.lock instead.
+# Kept as a fallback for tooling that does not support PEP 517 projects.
 fastapi[all]==0.99.1
 uvicorn[standard]==0.23.1
 requests==2.32.4
