@@ -16,6 +16,7 @@ How to decide who handles what.
 | CI/CD container builds | Brett | Image optimization, caching, GitHub Actions container pipelines |
 | Security scanning & audits | Kane | bandit, checkov, zizmor, OWASP ZAP, dependency vulnerabilities, container CVEs |
 | Code review | Ripley | Review PRs, check quality, suggest improvements |
+| Key decisions & approvals | Juanma 👤 | Product scope, UX direction, architecture trade-offs requiring human judgment |
 | Testing | Lambert | Write tests, find edge cases, verify fixes, integration testing |
 | Scope & priorities | Ripley | What to build next, trade-offs, decisions |
 | Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |

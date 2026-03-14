@@ -62,3 +62,29 @@
 - Parker's `extract_metadata()` populates title_s, author_s, year_i, category_s directly from filesystem path parsing. His parser handles amades/ (author), balearics/ (category), bsal/ (journal) patterns.
 - Your test suite validates Parker's parser contracts: relative paths, conservative fallbacks, year-range handling. 4 failing tests flag real parser gaps to address in Phase 1.5.
 
+### 2026-03-14 — Local smoke test blockers
+
+- Docker Engine and Docker Compose were available, and `docker compose config --quiet` passed, so the compose file is syntactically valid.
+- `zoo1` publishes host port `8080`, which collides with `solr-search` also publishing `8080`; starting `solr-search` failed with `Bind for 0.0.0.0:8080 failed: port is already allocated`.
+- The Solr services use `docker-entrypoint.sh solr start -c -f`, but the current `solr:latest` image rejects `-c` with `ERROR: -c is not supported by this script`, leaving `solr` in a restart loop and preventing the platform stack from becoming healthy.
+- Because nginx served its default welcome page and no UI was exposed on `localhost:5173`, Playwright could only capture infrastructure evidence (`nginx-home.png`) rather than execute a search/PDF smoke flow.
+
+### 2026-03-14 — Full local smoke retest
+
+- Brett’s compose fixes are effective: ZooKeeper (3 nodes), SolrCloud (3 nodes), Search API, Redis, RabbitMQ, nginx, document-lister, and document-indexer all came up locally with `docker compose up -d --build --pull never`.
+- The Solr bind-mounted data directories under `/source/volumes/solr-data*` were owned by `root:root` (`755`), so Solr could not create `core.properties`; fixing ownership to `8983:8983` and re-running the config upload + `CREATE` request was necessary before the `books` collection could be created.
+- The stack does **not** auto-bootstrap the `books` collection yet. A manual `solr zk upconfig` plus `collections?action=CREATE&name=books...` was required before `/search` stopped returning 502.
+- After collection bootstrap, the backend `/search` API worked but `numFound` stayed `0`; RabbitMQ showed queue `shortembeddings` with `0` messages and one consumer, so no documents had been indexed during the smoke window.
+- `aithena-ui` required `npm install --legacy-peer-deps` because `vite@8.0.0` conflicts with `@vitejs/plugin-react@4.7.0` peer requirements during a plain `npm install`.
+- Playwright confirmed the React shell loads on `http://localhost:5173`, but search is currently broken in the UI because `aithena-ui/src/hooks/search.tsx` calls `${VITE_API_URL}/v1/search/` while the backend exposes `/search`; browser network logs showed `GET http://localhost:8080/v1/search/?q=balearics... -> 404`.
+- Because UI search fails before any results render, PDF viewing and faceted filtering remain unverified in the browser smoke flow.
+
+### 2026-03-14 — /v1 alias verification rerun
+
+- Pulled `origin/jmservera/solrstreamlitui`, started the full compose stack, and waited for Solr (`:8983`) plus the search API (`:8080`) to report healthy.
+- The running `aithena-solr-search` container initially still returned `404` for `/v1/search/` and `/v1/health`; rebuilding just the `solr-search` image with `docker compose up -d --build solr-search` picked up Parker’s FastAPI aliases from `solr-search/main.py`.
+- After rebuild, `GET http://localhost:8080/v1/search/?q=*&limit=5` returned `200 OK` with the expected response shape, and `GET http://localhost:8080/v1/health` returned the normal health payload.
+- Playwright confirmed the UI now calls `GET http://localhost:8080/v1/search/?q=*&limit=10&page=1&sort=score+desc` and receives `200 OK`, so the route mismatch is fixed end-to-end.
+- Search still shows `0 results` because Solr collection `books` currently has `numFound: 0`; `/v1/facets` also returns empty arrays, so results, facet rendering, and PDF viewing remain blocked by missing indexed documents rather than routing errors.
+- Smoke artifacts captured: `aithena-ui-smoke-initial-2.png`, `aithena-ui-smoke-results.png`, `aithena-ui-smoke-initial.md`, `aithena-ui-smoke-results.md`, `aithena-ui-smoke-network.txt`, and `aithena-ui-smoke-console.txt`.
+
