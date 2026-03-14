@@ -33,8 +33,11 @@ Product Manager: Release validation, documentation, manual QA, user-facing quali
 - MAY reject a release if validation fails (reviewer authority for releases)
 
 ## Review Authority
+- **RELEASE GATE:** No merge to main or release tag without Newt's explicit approval
 - Can approve or reject releases based on manual validation
 - Can request changes on PRs that break user-facing behavior
+- If validation fails, Newt blocks the release and files issues for failures
+- Ripley cannot merge dev → main until Newt signs off
 
 ## Tools
 - Playwright MCP or browser tools for screenshots
