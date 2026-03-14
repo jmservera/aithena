@@ -6,6 +6,17 @@ from pathlib import Path
 from typing import Any
 
 YEAR_PATTERN = re.compile(r"(?<!\d)(1[5-9]\d{2}|20\d{2})(?!\d)")
+
+# ISO 639-1 two-letter language codes that are recognized as language folder names.
+# Covers the languages used in Solr's managed-schema dynamic text field types.
+KNOWN_LANGUAGE_CODES: frozenset[str] = frozenset(
+    {
+        "ar", "bg", "ca", "cs", "da", "de", "el", "en", "es", "et",
+        "eu", "fa", "fi", "fr", "ga", "gl", "hi", "hu", "hy", "id",
+        "it", "ja", "ko", "la", "lv", "nl", "no", "pl", "pt", "ro",
+        "ru", "sv", "th", "tr", "zh",
+    }
+)
 AUTHOR_TITLE_YEAR_PATTERN = re.compile(r"^(?P<author>.+?)\s+-\s+(?P<title>.+?)\s+\((?P<year>1[5-9]\d{2}|20\d{2})\)$")
 AUTHOR_TITLE_PATTERN = re.compile(r"^(?P<author>.+?)\s+-\s+(?P<title>.+)$")
 YEAR_RANGE_PATTERN = re.compile(r"(?P<start>1[5-9]\d{2}|20\d{2})\s*-\s*(?P<end>1[5-9]\d{2}|20\d{2})")
@@ -34,6 +45,18 @@ def display_category_segment(segment: str) -> str:
     if segment.islower() and segment.isalpha() and len(segment) <= 4:
         return segment.upper()
     return display_segment(segment)
+
+
+def extract_language(folder_parts: tuple[str, ...]) -> str | None:
+    """Return an ISO 639-1 language code if any folder segment is a known language code.
+
+    The leftmost matching segment wins, because the library root typically
+    organises documents as ``<lang>/<category>/<author>/…``.
+    """
+    for part in folder_parts:
+        if part.lower() in KNOWN_LANGUAGE_CODES:
+            return part.lower()
+    return None
 
 
 def extract_year(text: str) -> int | None:
@@ -143,12 +166,14 @@ def extract_metadata(file_path: str, base_path: str = "/data/documents/") -> dic
 
     file_size = path.stat().st_size if path.exists() else 0
     folder_path = "" if relative_path.parent == Path(".") else relative_path.parent.as_posix()
+    language = extract_language(folder_parts)
 
     return {
         "title": title or fallback_title,
         "author": author,
         "year": year,
         "category": category,
+        "language": language,
         "file_path": relative_path.as_posix(),
         "folder_path": folder_path,
         "file_size": file_size,
