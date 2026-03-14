@@ -1759,3 +1759,13 @@ All stale `squad:*` and `go:needs-research` labels removed from all 9 issues bef
 ## Note on Copilot Assignee
 
 The GitHub `Copilot` user cannot be directly assigned via `gh issue edit --add-assignee`. The `squad:copilot` label is the primary routing mechanism per team.md (`copilot-auto-assign: true`).
+
+---
+
+## User Directive: Branch Restructuring (2026-03-14T18:32)
+
+**By:** jmservera (via Copilot)
+
+**What:** Restructured repo branches: `dev` is now the default branch. Renamed `main` → `oldmain` and `jmservera/solrstreamlitui` → `main`. This means @copilot will now naturally target `dev` (the default). All PRs still target `dev`. Only Ripley or Juanma merge `dev` → `main`.
+
+**Why:** User request — fixes the root cause of @copilot always targeting the wrong branch (it targets the GitHub default, which is now `dev`).
