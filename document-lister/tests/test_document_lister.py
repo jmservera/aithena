@@ -5,13 +5,9 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import time
-import unittest.mock as mock
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helper: reload __init__ with a custom environment
@@ -158,7 +154,9 @@ class TestHandleDocument:
         stored = json.loads(call_args[0][1])
         assert stored["processed"] is False
 
-    def test_unprocessed_unchanged_document_is_not_requeued(self, tmp_path, redis_mock, channel_mock):
+    def test_unprocessed_unchanged_document_is_not_requeued(
+        self, tmp_path, redis_mock, channel_mock
+    ):
         """A document already in the queue (not yet processed) is not re-queued."""
         handle_document, _ = _import_handle_document()
         pdf = tmp_path / "book.pdf"
