@@ -2,10 +2,12 @@ FROM python:3.11-slim-bookworm
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
-WORKDIR /app
-COPY solr-search/requirements.txt .
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
+COPY solr-search/pyproject.toml solr-search/uv.lock ./
+
+RUN uv pip install --system --no-cache -r pyproject.toml
 COPY solr-search/ .
 
 ENV SOLR_URL="http://solr:8983/solr"
