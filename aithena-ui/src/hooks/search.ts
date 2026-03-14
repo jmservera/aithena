@@ -12,6 +12,7 @@ export interface BookResult {
   year?: number;
   language?: string;
   page_count?: number;
+  pages?: [number, number] | null;
   file_path?: string;
   highlights?: string[];
   document_url?: string | null;

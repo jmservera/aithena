@@ -19,6 +19,13 @@ function sanitizeHighlight(raw: string): string {
     .replace(/&lt;\/em&gt;/g, '</em>');
 }
 
+function formatFoundPages(pageStart: number, pageEnd: number): string {
+  if (pageEnd !== pageStart) {
+    return `Found on pages ${pageStart}–${pageEnd}`;
+  }
+  return `Found on page ${pageStart}`;
+}
+
 function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
   return (
     <article className={`book-card${isSelected ? ' book-card--active' : ''}`}>
@@ -47,6 +54,11 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
         {book.page_count !== undefined && (
           <span className="book-meta-item">
             <span className="book-meta-label">Pages:</span> {book.page_count}
+          </span>
+        )}
+        {book.pages && (
+          <span className="book-meta-item book-found-pages">
+            {formatFoundPages(book.pages[0], book.pages[1])}
           </span>
         )}
       </div>
