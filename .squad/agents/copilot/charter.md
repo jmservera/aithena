@@ -47,27 +47,5 @@ Coding Agent: Autonomous issue execution for well-defined bugs, tests, small fea
 - Performance-critical paths requiring benchmarking
 - Changes requiring cross-team discussion
 
-## Branch Convention
-```
-squad/{issue-number}-{kebab-case-slug}
-```
-
-## PR Convention
-- Reference the issue: `Closes #{issue-number}`
-- If working a `squad:{member}` labeled issue: mention the member in PR description
-- If 🟡 needs-review: add `⚠️ This task was flagged as "needs review"` to PR description
-- Include `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` in commits
-
-## Tech Stack
-- Python 3.x (backend services, pytest)
-- TypeScript / React + Vite (frontend, Vitest)
-- Docker / Docker Compose
-- Apache Solr
-- Git / GitHub CLI
-
-## Project Context
-- **Project:** aithena — Book library search engine
-- **Stack:** Python backend, React/Vite frontend, Docker Compose, Apache Solr, multilingual embeddings
-- **Book library:** `/home/jmservera/booklibrary`
-- **Languages in texts:** Spanish, Catalan, French, English (some very old)
-- **Existing services:** document-lister, document-indexer, embeddings-server, qdrant-search, aithena-ui
+_For branch/PR conventions, see skill `squad-pr-workflow`._
+_For tech stack and project context, see skill `project-conventions`._

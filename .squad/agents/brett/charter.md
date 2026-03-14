@@ -19,18 +19,4 @@ Infrastructure Architect: Docker, Docker Compose, SolrCloud clusters, container 
 - Does NOT write application tests (delegates to Lambert)
 - MAY write infrastructure tests (docker-compose validation, health check scripts, container smoke tests)
 
-## Tech Stack
-- Docker / Docker Compose / multi-stage builds
-- Apache Solr 9.x / SolrCloud / ZooKeeper ensemble
-- Alpine / Debian-slim base images
-- nginx reverse proxy / TLS termination
-- Redis, RabbitMQ (as infrastructure components)
-- GitHub Actions (CI container builds)
-- astral uv (Python package management in containers)
 
-## Project Context
-- **Project:** aithena — Book library search engine
-- **Stack:** Python backend, React/Vite frontend, Docker Compose, Apache Solr, multilingual embeddings
-- **Infrastructure:** SolrCloud (3 nodes, ports 8983-8985) + ZooKeeper (3 nodes) + Redis + RabbitMQ + nginx/certbot
-- **Book library:** `/home/jmservera/booklibrary` bind-mounted to `/data/documents`
-- **Key concern:** Production hardening, container security, service health checks, uv migration in Dockerfiles

@@ -213,3 +213,38 @@ Before labeling next Phase 3 batch, wait for these to be reworked and merged. Th
 2. **Unrebaseable** — PRs built on pre-#62 chat UI or targeting qdrant-search/. The foundation changed fundamentally. Cheaper to close and re-create.
 
 **Triage heuristic:** Check the file list. If a PR modifies `ChatMessage.tsx`, `Configbar.tsx`, `chat.tsx`, or `qdrant-search/`, it's stale beyond repair. Close it.
+
+### 2026-07-14 — Charter Reskill Audit
+
+**Task:** Audit all 8 charters, extract procedures to shared skills, slim down to <1.5KB each.
+
+**Findings:**
+- Every charter duplicated a "## Project Context" section (5-7 lines each, ~300B per charter)
+- 6 charters duplicated "## Tech Stack" sections (~200-350B each)
+- `project-conventions` skill was an empty template — wasted slot
+- Copilot charter had branch/PR conventions that apply to all agents
+
+**Actions:**
+1. Rewrote `project-conventions` skill with actual project context, service inventory, tech stack, patterns
+2. Created `squad-pr-workflow` skill with branch naming, PR conventions, stale PR detection
+3. Removed Project Context from 7 charters (kept scribe's as-is per instructions)
+4. Removed Tech Stack from 6 charters (parker, dallas, ash, lambert, brett, copilot)
+5. Replaced copilot's Branch/PR Convention sections with skill references
+
+**Results:**
+
+| Agent   | Before | After | Saved | Notes |
+|---------|--------|-------|-------|-------|
+| ripley  | 1303B  | 905B  | 398B  | Removed Project Context |
+| parker  | 1512B  | 962B  | 550B  | Removed Tech Stack + Project Context |
+| dallas  | 1407B  | 838B  | 569B  | Removed Tech Stack + Project Context |
+| ash     | 1836B  | 1182B | 654B  | Removed Tech Stack + Project Context |
+| lambert | 1311B  | 909B  | 402B  | Removed Tech Stack + Project Context |
+| brett   | 2003B  | 1186B | 817B  | Removed Tech Stack + Project Context |
+| scribe  | 936B   | 936B  | 0B    | Untouched (already <1KB) |
+| copilot | 3091B  | 2248B | 843B  | Removed Tech Stack + Project Context + PR/Branch conventions |
+| **Total** | **13399B** | **9166B** | **4233B** | **~1058 tokens saved** |
+
+**Skills created/updated:** 2 (project-conventions rewritten, squad-pr-workflow created)
+
+**Key learning:** The Capability Profile in copilot's charter (🟢/🟡/🔴 matrix) is functional config, not procedure — it can't be externalized without breaking the self-assessment workflow. Copilot stays at 2.2KB, above target but structurally necessary.

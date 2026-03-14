@@ -1,56 +1,72 @@
 ---
 name: "project-conventions"
-description: "Core conventions and patterns for this codebase"
+description: "Project context, tech stack, and conventions for the aithena codebase"
 domain: "project-conventions"
-confidence: "medium"
-source: "template"
+confidence: "high"
+source: "earned — consolidated from all agent charters during reskill audit"
+author: "Ripley"
+created: "2026-07-14"
+last_validated: "2026-07-14"
 ---
 
-## Context
+## Project Context
 
-> **This is a starter template.** Replace the placeholder patterns below with your actual project conventions. Skills train agents on codebase-specific practices — accurate documentation here improves agent output quality.
+- **Project:** aithena — Book library search engine
+- **User:** jmservera
+- **Book library:** `/home/jmservera/booklibrary` (bind-mounted to `/data/documents` in containers)
+- **Languages in texts:** Spanish, Catalan, French, English (including very old texts)
+- **Key concern:** Transitioning from Qdrant vector DB to Solr for full-text + semantic search
+- **Approach:** Phased — keyword search first, embeddings later
+
+## Services
+
+| Service | Path | Role |
+|---------|------|------|
+| document-lister | `document-lister/` | Polls `/data/documents/` for new PDFs, publishes to RabbitMQ |
+| document-indexer | `document-indexer/` | Consumes queue, indexes into Solr via Tika extraction |
+| embeddings-server | `embeddings-server/` | FastAPI server for `distiluse-base-multilingual-cased-v2` |
+| solr-search | `solr-search/` | FastAPI search API (BM25 + facets + document serving) |
+| aithena-ui | `aithena-ui/` | React/Vite frontend (search + facets + PDF viewer) |
+| solr | `solr/` | SolrCloud 3-node cluster with ZooKeeper ensemble |
+
+## Tech Stack
+
+### Backend (Python 3.x)
+- FastAPI + uvicorn (APIs)
+- pysolr (Solr client)
+- PyPDF2 / pdfplumber / PyMuPDF (PDF processing)
+- watchdog (file system monitoring)
+- RabbitMQ (message queue), Redis (caching/state)
+- pytest (testing)
+
+### Frontend (TypeScript)
+- React 18+ with Vite
+- Vitest + React Testing Library (testing)
+- PDF.js / react-pdf (PDF viewing)
+
+### Infrastructure
+- Docker / Docker Compose / multi-stage builds
+- Apache Solr 9.x / SolrCloud / ZooKeeper ensemble
+- astral uv (Python package management in containers)
+- nginx reverse proxy
 
 ## Patterns
 
-### [Pattern Name]
-
-Describe a key convention or practice used in this codebase. Be specific about what to do and why.
-
-### Error Handling
-
-<!-- Example: How does your project handle errors? -->
-<!-- - Use try/catch with specific error types? -->
-<!-- - Log to a specific service? -->
-<!-- - Return error objects vs throwing? -->
+### File Structure
+- Each service is a top-level directory with its own `Dockerfile` and `requirements.txt`
+- Solr config lives in `solr/books/` (managed-schema.xml, solrconfig.xml)
+- Docker Compose orchestrates all services
 
 ### Testing
+- Python: pytest — tests live alongside source or in `tests/` subdirectory
+- Frontend: Vitest — test files as `*.test.ts` / `*.test.tsx`
 
-<!-- Example: What test framework? Where do tests live? How to run them? -->
-<!-- - Test framework: Jest/Vitest/node:test/etc. -->
-<!-- - Test location: test/, __tests__/, *.test.ts, etc. -->
-<!-- - Run command: npm test, etc. -->
-
-### Code Style
-
-<!-- Example: Linting, formatting, naming conventions -->
-<!-- - Linter: ESLint config? -->
-<!-- - Formatter: Prettier? -->
-<!-- - Naming: camelCase, snake_case, etc.? -->
-
-### File Structure
-
-<!-- Example: How is the project organized? -->
-<!-- - src/ — Source code -->
-<!-- - test/ — Tests -->
-<!-- - docs/ — Documentation -->
-
-## Examples
-
-```
-// Add code examples that demonstrate your conventions
-```
+### Error Handling
+- FastAPI services use HTTP status codes + JSON error responses
+- PDF processing uses try/catch with fallbacks for corrupted files
 
 ## Anti-Patterns
 
-<!-- List things to avoid in this codebase -->
-- **[Anti-pattern]** — Explanation of what not to do and why.
+- **Don't target qdrant-search for new work** — it's deprecated; use solr-search
+- **Don't use pdfplumber for full-text when Solr Tika is available** — see skill `solr-pdf-indexing`
+- **Don't pin application traffic to a single Solr node** — see skill `solrcloud-docker-operations`

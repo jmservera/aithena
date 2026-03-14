@@ -9,6 +9,7 @@
 - **Active initiative:** UV migration across 7 Python services (issues #81-#87), security scanning (#88-#90), CI hardening
 
 ## Learnings
+- 2026-03-14: Extracted the SolrCloud Docker operations research into `.squad/skills/solrcloud-docker-operations/SKILL.md` so other agents can reuse the runbooks and hardening guidance.
 
 ## SolrCloud Docker Operations Reference
 
