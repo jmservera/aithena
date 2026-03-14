@@ -77,10 +77,10 @@ def load_state(file_path: str) -> dict:
 
 @retry(redis.exceptions.ConnectionError, delay=5, jitter=(1, 3))
 @retry(redis.exceptions.TimeoutError, delay=5, jitter=(1, 3))
-def save_state(file_path: str, **updates) -> dict:
-    state = load_state(file_path)
+def save_state(state_path: str, **updates) -> dict:
+    state = load_state(state_path)
     state.update(updates)
-    redis_client.set(redis_key(file_path), json.dumps(state))
+    redis_client.set(redis_key(state_path), json.dumps(state))
     return state
 
 

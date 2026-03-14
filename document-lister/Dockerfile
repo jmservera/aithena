@@ -11,7 +11,7 @@ ENV RABBITMQ_HOST="localhost"
 ENV RABBITMQ_PORT=5672
 ENV REDIS_HOST="localhost"
 ENV REDIS_PORT=6379
-ENV DOCUMENT_WILDCARD=".pdf"
+ENV DOCUMENT_WILDCARD="*.pdf"
 ENV QUEUE_NAME="new_documents"
 
 CMD ["python","-m","document_lister"]

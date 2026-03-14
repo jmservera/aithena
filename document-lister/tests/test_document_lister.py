@@ -39,6 +39,13 @@ class TestPollIntervalConfig:
         module = reload_init(env)
         assert module.POLL_INTERVAL == 60
 
+    def test_default_document_wildcard_is_pdf_glob(self):
+        """The lister defaults to matching PDF files on the local filesystem."""
+        env = {k: v for k, v in os.environ.items() if k != "DOCUMENT_WILDCARD"}
+        env.pop("DOCUMENT_WILDCARD", None)
+        module = reload_init(env)
+        assert module.DOCUMENT_WILDCARD == "*.pdf"
+
     def test_custom_poll_interval_is_respected(self):
         """POLL_INTERVAL is read from the environment variable."""
         module = reload_init({"POLL_INTERVAL": "120"})
@@ -70,12 +77,29 @@ def channel_mock():
     return MagicMock()
 
 
+def _import_main_module():
+    """Import document_lister.__main__."""
+    import document_lister.__main__ as main_mod
+    importlib.reload(main_mod)
+    return main_mod
+
+
 def _import_handle_document():
-    """Import handle_document from __main__ (mocking pika/redis at import time)."""
-    with patch.dict("sys.modules", {"pika": MagicMock(), "redis": MagicMock(), "retry": MagicMock()}):
-        import document_lister.__main__ as main_mod
-        importlib.reload(main_mod)
-        return main_mod.handle_document, main_mod.push_file_to_queue
+    main_mod = _import_main_module()
+    return main_mod.handle_document, main_mod.push_file_to_queue
+
+
+class TestProcessPath:
+    def test_only_pdf_files_are_enqueued(self, tmp_path, redis_mock, channel_mock):
+        main_mod = _import_main_module()
+        (tmp_path / "book.pdf").write_bytes(b"pdf content")
+        (tmp_path / "notes.txt").write_text("notes")
+
+        with patch.object(main_mod, "DOCUMENT_WILDCARD", "*"):
+            with patch.object(main_mod, "handle_document") as mock_handle:
+                main_mod.process_path(str(tmp_path), redis_mock, channel_mock)
+
+        mock_handle.assert_called_once_with(tmp_path / "book.pdf", redis_mock, channel_mock)
 
 
 class TestHandleDocument:

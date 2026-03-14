@@ -14,6 +14,7 @@ from document_indexer.__main__ import (
     index_chunks,
     index_document,
     mark_failure,
+    save_state,
 )
 
 # ---------------------------------------------------------------------------
@@ -383,3 +384,15 @@ class TestMarkFailure:
         mark_failure(pdf_file, "embedding error", stage="embedding_indexing")
         _, kwargs = mock_save_state.call_args
         assert kwargs["error_stage"] == "embedding_indexing"
+
+
+class TestSaveState:
+    def test_allows_file_path_metadata_field(self):
+        with patch("document_indexer.__main__.load_state", return_value={"path": "abs/path.pdf"}):
+            with patch.object(indexer_module.redis_client, "set") as mock_set:
+                state = save_state("abs/path.pdf", file_path="relative/path.pdf", processed=True)
+
+        assert state["path"] == "abs/path.pdf"
+        assert state["file_path"] == "relative/path.pdf"
+        assert state["processed"] is True
+        mock_set.assert_called_once()

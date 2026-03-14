@@ -90,3 +90,11 @@
 - Used concurrency groups to cancel in-progress runs on same PR.
 - Validation: All 15 document-indexer tests pass, all 8 solr-search unit tests pass, all 10 solr-search integration tests pass locally.
 
+### 2026-03-14 — Lister scan + save_state bugfixes
+
+- Fixed `document-lister` to scan the local filesystem reliably for `*.pdf` files instead of inheriting the broken Docker default `DOCUMENT_WILDCARD=.pdf`, which matched nothing and made the service look idle after queue declaration.
+- Simplified the lister scan loop to avoid redundant recursive rescans, log the active scan path/wildcard, and only enqueue PDFs.
+- Made the lister Docker/Compose config explicit for `BASE_PATH=/data/documents/` and `DOCUMENT_WILDCARD=*.pdf`; `QUEUE_NAME` already matched `shortembeddings` on both lister and indexer.
+- Renamed the indexer `save_state()` positional parameter so Redis state can safely include the metadata field `file_path` without raising `TypeError: multiple values for argument 'file_path'`.
+- Added a regression test for `save_state(file_path=...)`, reran `document-lister/tests` and `document-indexer` pytest suites, and verified a direct local run indexed a blank PDF into Solr with Redis state updated successfully.
+

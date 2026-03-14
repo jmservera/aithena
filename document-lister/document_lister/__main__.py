@@ -1,7 +1,4 @@
-"""
-This module is responsible for listing all documents in the folder '/data' and pushing them to the
-queue 'documents'
-"""
+"""Scan the local document library and enqueue PDFs for indexing."""
 
 from datetime import datetime
 from pathlib import Path
@@ -28,23 +25,21 @@ logger = logging.getLogger(__name__)
 @retry(redis.exceptions.ConnectionError, delay=5, jitter=(1, 3))
 @retry(redis.exceptions.TimeoutError, delay=5, jitter=(1, 3))
 def process_path(path: str, redis_client: redis.Redis, channel: pika.channel.Channel):
-    """
-    Recursively processes the given path and its subdirectories to find and handle documents.
+    """Scan the local filesystem and enqueue matching PDFs."""
 
-    Args:
-        path (str): The path to the directory to be processed.
-        redis_client (redis.Redis): The Redis client used for caching.
-        channel (pika.channel.Channel): The RabbitMQ channel used for message queueing.
-    """
+    base_path = Path(path)
+    if not base_path.exists():
+        logger.warning("Document path does not exist yet: %s", base_path)
+        return
 
-    for blob in Path(path).rglob(DOCUMENT_WILDCARD):
-        if blob.is_dir():
-            process_path(blob, redis_client, channel)
-        else:
-            if blob.suffix in [".pdf", ".docx", ".txt"]:
-                handle_document(blob, redis_client, channel)
-            else:
-                logger.info("Skipping non-document file: %s", blob)
+    logger.info("Scanning %s for %s", base_path, DOCUMENT_WILDCARD)
+    for file_path in base_path.rglob(DOCUMENT_WILDCARD):
+        if not file_path.is_file():
+            continue
+        if file_path.suffix.lower() != ".pdf":
+            logger.info("Skipping non-PDF file: %s", file_path)
+            continue
+        handle_document(file_path, redis_client, channel)
 
 
 def handle_document(path: Path, redis_client: redis.Redis, channel: pika.channel.Channel):
