@@ -25,9 +25,10 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
   }, [onClose]);
 
   const pdfUrl = resolveDocumentUrl(result.document_url);
+  const pageStart = result.pages?.[0];
   const pdfUrlWithPage = pdfUrl
-    ? result.page_start !== undefined
-      ? `${pdfUrl}#page=${result.page_start}`
+    ? pageStart !== undefined
+      ? `${pdfUrl}#page=${pageStart}`
       : pdfUrl
     : null;
 

@@ -19,8 +19,8 @@ function sanitizeHighlight(raw: string): string {
     .replace(/&lt;\/em&gt;/g, '</em>');
 }
 
-function formatFoundPages(pageStart: number, pageEnd?: number): string {
-  if (pageEnd !== undefined && pageEnd !== pageStart) {
+function formatFoundPages(pageStart: number, pageEnd: number): string {
+  if (pageEnd !== pageStart) {
     return `Found on pages ${pageStart}–${pageEnd}`;
   }
   return `Found on page ${pageStart}`;
@@ -56,9 +56,9 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
             <span className="book-meta-label">Pages:</span> {book.page_count}
           </span>
         )}
-        {book.page_start !== undefined && (
+        {book.pages && (
           <span className="book-meta-item book-found-pages">
-            {formatFoundPages(book.page_start, book.page_end)}
+            {formatFoundPages(book.pages[0], book.pages[1])}
           </span>
         )}
       </div>
