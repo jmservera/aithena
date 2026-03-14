@@ -599,3 +599,28 @@ Closed-unmerged: `add-build-status-tab-component` (#128), `add-contract-tests-so
 
 **Exit state:** `dev` branch stable with all 7 PRs merged. Branch discipline continues (7 consecutive PRs with correct `dev` base).
 
+
+### 2026-03-14 — v0.5 Release Planning (Phase 3: Embeddings Enhancement)
+
+**Context:** Juanma requested release planning for v0.5 (Phase 3). 5 of 6 issues closed, 1 open.
+
+**Verification results (all 5 closed issues confirmed delivered on `dev`):**
+- #42: Embeddings-server aligned — `distiluse-base-multilingual-cased-v2` in config, Dockerfile, and tests. Model info endpoint added.
+- #43: Dense vector fields — `knn_vector_512` field type, `book_embedding` + `embedding_v` fields in Solr schema.
+- #44: Chunking + embeddings — `chunker.py` (page-aware), `embeddings.py` (HTTP client), full test coverage.
+- #45: Search modes — `keyword|semantic|hybrid` via `?mode=` param, RRF fusion for hybrid, configurable defaults.
+- #46: Similar-books endpoint — `GET /books/{id}/similar` with kNN, limit, min_score, proper error handling.
+
+**Gap identified:** UI has no search mode selector. Backend supports 3 modes but `useSearch` hook doesn't pass `mode` param. Created #163 to fill this gap.
+
+**Issue management:**
+- Created #163 (search mode selector) — labeled `release:v0.5.0`, `squad`, `squad:copilot`
+- Moved #41 (frontend tests) from v0.4.0 → v0.5.0
+- Updated #47 body with detailed implementation guide (hook, component, integration steps)
+- Updated #41 body with Vitest setup guide and test file list
+- Assigned all 3 open issues to `squad:copilot`
+- Added triage comments with copilot fit ratings: #163 🟢, #47 🟡, #41 🟢
+
+**Merge strategy:** #41 + #163 in parallel (Batch 1), then #47 (Batch 2, touches SearchPage after both land).
+
+**Decision written to:** `.squad/decisions/inbox/ripley-v05-plan.md`
