@@ -1,0 +1,26 @@
+- generic [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e3]:
+      - heading "📚 Aithena" [level=1] [ref=e4]
+      - paragraph [ref=e5]: Book Library Search
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - searchbox "Search query" [ref=e9]: "*"
+        - button "Search" [ref=e10] [cursor=pointer]
+      - generic [ref=e13]:
+        - generic [ref=e14]: 0 results for "*"
+        - generic [ref=e15]:
+          - generic [ref=e16]: "Sort:"
+          - combobox "Sort:" [ref=e17] [cursor=pointer]:
+            - option "Relevance" [selected]
+            - option "Year (newest)"
+            - option "Year (oldest)"
+            - option "Title (A–Z)"
+            - option "Author (A–Z)"
+          - generic [ref=e18]: "Per page:"
+          - combobox "Per page:" [ref=e19] [cursor=pointer]:
+            - option "10" [selected]
+            - option "20"
+            - option "50"
+    - generic [ref=e20]: No results found for "*".

@@ -317,3 +317,28 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 5. **Open question:** `recharts` for charts vs plain tables. Recommended tables-first, charts in follow-up PR.
 
 **Effort estimate:** ~3 backend endpoints (S+M+M) + 4 frontend components (S+S+M+L) = medium total. Parker and Dallas can parallelize — backend first, frontend follows as endpoints land.
+
+### 2026-03-14 — Branching Strategy & Release Flow Setup
+
+**Request:** Juanma asked for a proper branching strategy after UI broke from uncoordinated PR merges.
+
+**Actions taken:**
+1. **Created `dev` branch** from `jmservera/solrstreamlitui` (commit 19decee) — this is now the active development integration branch
+2. **Pushed `dev` to origin** — all future squad/copilot PRs target `dev` instead of the feature branch
+3. **Documented branching strategy** in `.squad/decisions/inbox/ripley-branching-strategy.md`:
+   - `dev` — active development, all PRs land here
+   - `main` — production-ready, only working code
+   - Feature branches → `dev` → `main` at phase boundaries
+   - Merge authority: only Ripley or Juanma can merge dev → main and create tags
+4. **Created `.github/workflows/release.yml`** — CI workflow triggered on `v*` tags that runs tests and creates GitHub releases
+5. **Updated `.github/copilot-instructions.md`** — added branching strategy section so @copilot targets `dev`
+6. **Updated `.squad/skills/squad-pr-workflow/SKILL.md`** — added PR base branch rule and anti-pattern for targeting `main` directly
+7. **Tagged `v0.3.0-rc1`** — marks current state (Phase 3 features merged, UI needs integration fix)
+
+**Versioning scheme established:**
+- v0.1.0 — Phase 1 (Solr indexing) ✅
+- v0.2.0 — Phase 2 (Search API + UI) ✅
+- v0.3.0 — Phase 3 (Embeddings + hybrid search) — RC tagged, awaiting UI fix
+- v0.4.0 — Phase 4 (Dashboard + polish) — upcoming
+
+**Key decision:** Tagged as RC (not full release) because the UI is broken. Full v0.3.0 tag will be created after UI stabilization.
