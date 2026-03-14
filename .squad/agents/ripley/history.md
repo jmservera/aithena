@@ -468,3 +468,29 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 - Clean Architecture layers formalized: Presentation → Application → Domain → Infrastructure
 - Frontend follows: Pages → Components → Hooks → API pattern
 - Library browser endpoint is new work (not in current backlog) — needs issue creation
+
+### 2026-03-14 — Phase 4 Reflection: PR Review Patterns
+
+**Context:** Reviewed all 6 open @copilot PRs for Phase 4. Results: 1 approved (#137), 5 rejected (#119, #127, #128, #138, #140). 17% approval rate.
+
+**Systemic failure modes identified:**
+
+1. **Stale branches (3/6 rejections: #127, #128, #119):** Copilot branched before PR #123 (router architecture) merged. All three carried stale App.tsx that would delete the router, TabNav, and all 4 page components. This is the same class of failure seen in Phase 2 (#64) and Phase 3 (#68, #69, #70). The pattern is now confirmed as structural, not incidental — copilot agents don't rebase before opening PRs.
+
+2. **Scope bloat (2/6: #119, #140):** PR #119 bundled ~500 lines of unrelated frontend code into a backend endpoint PR (108 files total). PR #140 had 88 unrelated files from branch divergence. Both cases: agent didn't limit the diff to the issue scope.
+
+3. **Wrong target branch (1/6: #140):** PR #140 targeted `jmservera/solrstreamlitui` instead of `dev`, despite `.github/copilot-instructions.md` and squad-pr-workflow skill both documenting the rule. The 13 artifact files only exist on `dev`, so the PR was structurally impossible.
+
+4. **Dependency ordering ignored (1/6: #138):** PR #138 introduced a new `pages_i` Solr field when PR #137 (approved, not yet merged) already solves the problem via `page_start_i`/`page_end_i` normalization. Agent didn't check whether its prerequisite was merged.
+
+**What went well:**
+- Individual feature code quality was consistently good. `useStatus()`, `useStats()`, `CollectionStats.tsx`, `IndexingStatus.tsx` — all well-typed, accessible, properly decomposed React/TypeScript.
+- PR #137 (page ranges) was clean, well-tested, correctly scoped, and targeted `dev`. Proof that small, independent, leaf-node issues produce good results.
+- The review process caught all 5 problems before merge — no regressions introduced.
+
+**Actionable improvements for Phase 5:**
+1. **Issue gating:** Don't assign dependent issues until their prerequisite PRs are merged. Create issues in waves, not batches.
+2. **Branch freshness check:** Add to issue templates: "Before starting: `git fetch origin && git checkout -b <branch> origin/dev`". Consider CI check that rejects PRs >10 commits behind base.
+3. **Scope fence in issues:** Include explicit "Files you should touch" and "Files you must NOT touch" lists in issue descriptions.
+4. **Single-service PRs only:** Enforce rule: backend PRs touch only `solr-search/`, frontend PRs touch only `aithena-ui/`. Mixed PRs are auto-rejected.
+5. **Target branch validation:** Add CI check or PR template checklist item: "Base branch is `dev`".

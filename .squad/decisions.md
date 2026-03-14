@@ -1309,3 +1309,183 @@ After each milestone is complete:
 
 **Why:** User clarification — current branch naming is legacy, clean up later
 
+---
+
+## Phase 4 Inbox Merges (2026-03-14)
+
+### User Directive: TDD + Clean Code
+
+**Date:** 2026-03-14T17:05  
+**By:** jmservera / Juanma (via Copilot)  
+**What:** All development tasks must follow TDD (Test-Driven Development) and Uncle Bob's Clean Code and Clean Architecture principles. Tests first, then implementation. Code must be clean, well-structured, with clear separation of concerns.  
+**Why:** User requirement — quality-first development, maintainable codebase
+
+---
+
+### nginx Admin Entry Point Consolidation
+
+**Date:** 2026-03-14  
+**By:** Copilot working as Brett  
+**What:** Standardize local/prod-style web ingress through the repo-managed nginx service. The main React UI is now served at `/`, and admin tooling is grouped under `/admin/`.
+
+**Implementation details:**
+- `/admin/solr/` proxies Solr Admin
+- RabbitMQ now uses the management image plus `management.path_prefix = /admin/rabbitmq` so both the UI and API work behind `/admin/rabbitmq/`
+- Streamlit runs with `--server.baseUrlPath=/admin/streamlit`
+- Redis Commander is added with `URL_PREFIX=/admin/redis`
+- `/admin/` serves a simple landing page linking to all admin surfaces
+
+**Impact on teammates:**
+- Frontend/UI traffic should go through nginx at `http://localhost/` in proxied runs
+- Ops/testing docs should prefer the `/admin/...` URLs over direct service ports, though direct ports remain available for local debugging
+
+---
+
+### PRD: v0.3.0 — Stabilize Core (Close-Out)
+
+**Date:** 2026-03-14  
+**Status:** PROPOSED  
+**Goal:** Close v0.3.0 by completing the 6 remaining stabilization issues. These are cleanup, lint, and documentation tasks — no new features.
+
+**Current State:**
+- Open: 6 issues
+- Closed: 0 issues (all work done but issues not formally closed via PRs)
+- Merged PRs supporting v0.3.0: #115 (qdrant removal), #117 (ruff CI), #116/#129/#130/#131 (UV migrations)
+
+**Remaining Issues:**
+| # | Title | Owner | Effort | Status |
+|---|-------|-------|--------|--------|
+| #139 | Clean up smoke test artifacts from repo root | Dallas | S | PR #140 DRAFT |
+| #100 | LINT-6: eslint + prettier auto-fix on aithena-ui | Dallas | S | Not started |
+| #99 | LINT-5: ruff auto-fix across all Python services | Lambert | S | Not started |
+| #96 | DOC-1: Document uv migration and dev setup in README | Dallas | S | Not started |
+| #95 | LINT-4: Replace pylint/black with ruff in document-lister | Ripley | S | Not started |
+| #92 | UV-8: Update buildall.sh and CI for uv | Dallas | S | Not started |
+
+**Dependencies:** None — all 6 issues are independent and can be worked in parallel
+
+**Acceptance Criteria:**
+1. All smoke test artifacts (.png, .md snapshots, .txt logs) removed from repo root; .gitignore updated
+2. `ruff check --fix` and `ruff format` pass cleanly across all Python services
+3. `eslint` and `prettier` pass cleanly on `aithena-ui/`
+4. `document-lister/` uses ruff instead of pylint/black (pyproject.toml updated, old configs removed)
+5. `buildall.sh` uses `uv` for builds; CI workflows use `uv pip install`
+6. README documents: prerequisites (Docker, uv, Node 20+), dev setup, `docker compose up`, running tests
+
+**Close-Out Criteria:**
+When all 6 issues have merged PRs on `dev`:
+1. Run full CI suite (all green)
+2. Tag `v0.3.0`
+3. Merge `dev` → `main`
+4. Create GitHub Release
+5. Scribe logs session
+
+---
+
+### PRD: v0.4.0 — Dashboard & Polish
+
+**Date:** 2026-03-14  
+**Status:** PROPOSED  
+**Milestone:** v0.4.0 — Dashboard & Polish
+
+**Vision:** Transform aithena from a single-page search app into a multi-tab application with Library browsing, Status monitoring, and Stats dashboards — while hardening the frontend with linting, formatting, and test coverage.
+
+**User Stories:**
+- US-1: Tab Navigation — access different views without leaving the app
+- US-2: Library Browser — browse book collection by folder/author
+- US-3: Status Dashboard — see indexing progress and service health
+- US-4: Stats Dashboard — see collection statistics (total, by language, by author)
+- US-5: Frontend Test Coverage — catch regressions before merge
+- US-6: Frontend Code Quality — consistent style via eslint + prettier
+
+**Architecture:** Clean Architecture layers for both backend (Presentation → Application → Domain → Infrastructure) and frontend (Pages → Components → Hooks → API)
+
+**Implementation Tasks (TDD):** 9 tasks total
+- T1: Status endpoint service extraction (Parker, S)
+- T2: Stats endpoint service extraction (Parker, S)
+- T3: Tab navigation React Router (Dallas, S)
+- T4: Stats tab frontend (Dallas, S, depends T2+T3)
+- T5: Status tab frontend (Dallas, M, depends T1+T3)
+- T6: Library endpoint backend (Parker, M)
+- T7: Library browser frontend (Dallas, L, depends T3+T6)
+- T8: Prettier + ESLint config (Dallas, S)
+- T9: Frontend test coverage (Lambert, L, depends T3–T7)
+
+**Risks:** Stale branches, path traversal vulnerability, polling overwhelm, peer dependency conflicts
+
+**Success Criteria:**
+1. All 4 tabs render and navigate correctly
+2. Status page shows real service health
+3. Stats page shows collection statistics
+4. Library page browses real filesystem with metadata
+5. `npm run lint` and `npm run format:check` pass in CI
+6. `npm run test` passes with ≥70% component coverage
+7. All existing search functionality preserved (no regressions)
+
+---
+
+### Retro — v0.3.0 Stabilize Core (Post-Phase 2/3)
+
+**Date:** 2026-03-14  
+**Scope:** Sessions 1–3, Phase 1–3 work
+
+**What Went Well:**
+1. Pipeline bugs caught and fixed fast — Parker found critical lister + indexer bugs
+2. Smoke tests with Playwright caught real API contract issues before users
+3. Parallel work model scaled — copilot delivered 14 PRs while squad worked locally
+4. Skills system paid off (solrcloud, path-metadata heuristics)
+5. Milestone cadence established (v0.3.0–v1.0.0)
+6. Branching strategy prevented further UI breakage via `dev` integration branch
+
+**What Didn't Go Well:**
+1. UI broke from uncoordinated PR merges (pre-dev-branch)
+2. Stale branches / conflicts recurring time sink
+3. Smoke test artifacts committed to repo root
+4. Collection bootstrap missing piece (no auto-create)
+5. document-indexer didn't start automatically
+
+**Key Learnings:**
+1. Hybrid dev workflow (Docker infra + local code) is essential
+2. Must validate UI build before merging frontend PRs
+3. API contract mismatches (`/v1/` prefix) cost significant debugging time
+4. Page-level search needs app-side extraction (Solr Tika loses page boundaries)
+5. `solr-init` container pattern works for bootstrap
+6. `--legacy-peer-deps` is required for aithena-ui (needs documentation)
+7. FastAPI 0.99.1 + Starlette 0.27.0 requires `httpx<0.28`
+
+**Action Items:**
+| # | Action | Owner | Target |
+|---|--------|-------|--------|
+| 1 | Create `smoke-testing` skill | Ripley | This retro |
+| 2 | Create `api-contract-alignment` skill | Ripley | This retro |
+| 3 | Create `pr-integration-gate` skill | Ripley | This retro |
+| 4 | Update `solrcloud-docker-operations` confidence → high | Ripley | This retro |
+| 5 | Update `path-metadata-heuristics` confidence → high | Ripley | This retro |
+| 6 | Clean smoke artifacts from repo root | Dallas | v0.4.0 |
+| 7 | Add `npm run build` gate to CI for `aithena-ui/` | Parker/Lambert | v0.4.0 |
+| 8 | Document `--legacy-peer-deps` requirement | Dallas | v0.4.0 |
+
+---
+
+### v0.4.0 Task Decomposition — TDD Specs
+
+**Date:** 2026-03-14  
+**Milestone:** v0.4.0 — Dashboard & Polish
+
+**Task Summary:**
+| # | Task | Agent | Layer | Effort | Depends On |
+|---|------|-------|-------|--------|------------|
+| T1 | Status endpoint — service extraction | Parker | App + Infra | S | — |
+| T2 | Stats endpoint — service extraction | Parker | Application | S | — |
+| T3 | Tab navigation — React Router | Dallas | Presentation | S | — |
+| T4 | Stats tab — frontend | Dallas | Components + Hooks | S | T2, T3 |
+| T5 | Status tab — frontend | Dallas | Components + Hooks | M | T1, T3 |
+| T6 | Library endpoint — backend | Parker | App + Infra | M | — |
+| T7 | Library browser — frontend | Dallas | Pages + Components | L | T3, T6 |
+| T8 | Prettier + ESLint config | Dallas | Infrastructure | S | — |
+| T9 | Frontend test coverage | Lambert | All frontend | L | T3–T7 |
+
+**Total: 9 tasks (4S + 2M + 2L + 1S-config = ~3 sprints)**
+
+**Full detailed TDD specs:** See full PRD v0.4.0 above for each task's Red/Green/Refactor cycle, Clean Architecture layer assignments, and test specifications.
+
