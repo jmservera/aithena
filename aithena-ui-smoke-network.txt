@@ -1,1 +1,0 @@
-[GET] http://localhost:8080/v1/search/?q=*&limit=10&page=1&sort=score+desc => [200] OK
