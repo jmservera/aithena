@@ -1,62 +1,337 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import hashlib
+import json
+import logging
+from pathlib import Path
+import time
+
+import pdfplumber
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
-import uuid
 import redis
+import requests
 from retry import retry
-import pdfplumber
-import aiohttp
-import asyncio
-from qdrant_client import models, QdrantClient
-import re
 
-from .blob_storage import BlobStorage
+from . import (
+    BASE_PATH,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    EMBEDDINGS_HOST,
+    EMBEDDINGS_PORT,
+    QUEUE_NAME,
+    RABBITMQ_HOST,
+    RABBITMQ_PORT,
+    REDIS_HOST,
+    REDIS_PORT,
+    SOLR_COLLECTION,
+    SOLR_HOST,
+    SOLR_PORT,
+)
+from .chunker import chunk_text
+from .embeddings import get_embeddings
+from .metadata import extract_metadata
 
-from . import *
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+SOLR_TIMEOUT = 300
+SOLR_STARTUP_TIMEOUT = 10
+SOLR_STARTUP_DELAY = 5
+SOLR_STARTUP_ATTEMPTS = 60
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+queue = None
 
 
-async def heartbeat(channel: BlockingChannel):
-    """Send heartbeat to RabbitMQ every 10 seconds
-    channel: BlockingChannel
-    """
-    count = 0
-    while True:
-        count += 1
-        print(f"Waiting for embeddings {count}")
-        channel.connection.process_data_events()
-        await asyncio.sleep(10)
+def get_queue(channel: BlockingChannel):
+    """Declare the queue and enable backpressure."""
+    global queue
+    channel.basic_qos(prefetch_count=1)
+    queue = channel.queue_declare(
+        queue=QUEUE_NAME,
+        durable=True,
+        auto_delete=False,
+        passive=queue is not None,
+    )
+    return queue
 
 
-async def get_embeddings_async(text:list[str], channel:BlockingChannel):
-    """Get embeddings for a text from embeddings service"""
-    client_timeout = aiohttp.ClientTimeout(total=EMBEDDINGS_TIMEOUT)  # 30 minutes
-    async with aiohttp.ClientSession(timeout=client_timeout) as session:
-        hearbeat_task = asyncio.create_task(heartbeat(channel))
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def wait_for_solr_collection(
+    max_attempts: int = SOLR_STARTUP_ATTEMPTS,
+    delay: int = SOLR_STARTUP_DELAY,
+) -> None:
+    collections_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/admin/collections"
+    config_url = f"http://{SOLR_HOST}:{SOLR_PORT}/api/collections/{SOLR_COLLECTION}/config"
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
         try:
-            async with session.post(
-                f"http://{EMBEDDINGS_HOST}:{EMBEDDINGS_PORT}/v1/embeddings/",
-                json={"input": text},
-            ) as resp:
-                return await resp.json()
-        finally:
-            hearbeat_task.cancel()
+            response = requests.get(
+                collections_url,
+                params={"action": "LIST", "wt": "json"},
+                timeout=SOLR_STARTUP_TIMEOUT,
+            )
+            response.raise_for_status()
+            collections = response.json().get("collections", [])
+            if SOLR_COLLECTION not in collections:
+                raise RuntimeError(
+                    f"Solr collection {SOLR_COLLECTION} is not available yet."
+                )
+
+            config_response = requests.get(config_url, timeout=SOLR_STARTUP_TIMEOUT)
+            config_response.raise_for_status()
+            if '"/update/extract"' not in config_response.text:
+                raise RuntimeError(
+                    f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler."
+                )
+
+            logger.info("Solr collection %s is ready.", SOLR_COLLECTION)
+            return
+        except (requests.RequestException, RuntimeError, ValueError) as exc:
+            last_error = exc
+            if attempt == max_attempts:
+                break
+            logger.info(
+                "Waiting for Solr collection %s (%s/%s): %s",
+                SOLR_COLLECTION,
+                attempt,
+                max_attempts,
+                exc,
+            )
+            time.sleep(delay)
+
+    raise RuntimeError(
+        f"Solr collection {SOLR_COLLECTION} did not become ready after {max_attempts} attempts."
+    ) from last_error
 
 
-def get_embeddings(text:list[str], channel:BlockingChannel):
-    return loop.run_until_complete(get_embeddings_async(text, channel))
+def redis_key(file_path: str) -> str:
+    return f"/{QUEUE_NAME}/{file_path}"
 
-def cleanup(text:str):
-    if(text is None):
-        return ""
-    else:
-        # remove newlines, tabs and carriage returns
-        text = re.sub(r'[\n\t\r]', ' ', text)
-        # remove spaces before phrase marks, commas, colons, semicolons, question marks, exclamation marks, and dashes
-        text = re.sub(r'\s([,:;?!-\)\]])', r'\1', text)
-        # remove multiple spaces after opening brackets
-        text = re.sub(r'(\(|\[])\s+', r'\1', text)
-        # remove multiple sequential marks
-        text = re.sub(r'([\s.,:;?!-_\(\[\)\])])(\1+)', r'\1', text)
-        return text.strip()
+
+@retry(redis.exceptions.ConnectionError, delay=5, jitter=(1, 3))
+@retry(redis.exceptions.TimeoutError, delay=5, jitter=(1, 3))
+def load_state(file_path: str) -> dict:
+    current = redis_client.get(redis_key(file_path))
+    if current is None:
+        return {"path": file_path}
+
+    try:
+        return json.loads(current)
+    except json.JSONDecodeError:
+        logger.warning("Invalid Redis payload for %s. Resetting state.", file_path)
+        return {"path": file_path}
+
+
+@retry(redis.exceptions.ConnectionError, delay=5, jitter=(1, 3))
+@retry(redis.exceptions.TimeoutError, delay=5, jitter=(1, 3))
+def save_state(state_path: str, **updates) -> dict:
+    state = load_state(state_path)
+    state.update(updates)
+    redis_client.set(redis_key(state_path), json.dumps(state))
+    return state
+
+
+def mark_failure(path: Path, error: str, stage: str = "unknown") -> None:
+    """Persist a failure into Redis, recording which *stage* failed.
+
+    Args:
+        path: The file that was being processed.
+        error: Human-readable description of the error.
+        stage: ``"text_indexing"`` when Solr Tika extraction failed, or
+            ``"embedding_indexing"`` when chunk/vector indexing failed.
+    """
+    last_modified = path.stat().st_mtime if path.exists() else None
+    save_state(
+        str(path),
+        path=str(path),
+        last_modified=last_modified,
+        processed=False,
+        failed=True,
+        error=error,
+        error_stage=stage,
+        timestamp=now_iso(),
+    )
+
+
+def get_page_count(path: Path) -> int | None:
+    try:
+        with pdfplumber.open(path) as pdf:
+            return len(pdf.pages)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning("Unable to determine page count for %s: %s", path, exc)
+        return None
+
+
+def extract_pdf_text(path: Path) -> str:
+    """Extract all text from a PDF using pdfplumber (for chunk-based embedding indexing)."""
+    pages: list[str] = []
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                pages.append(text)
+    return "\n".join(pages)
+
+
+def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, str]:
+    doc_id = hashlib.sha256(metadata["file_path"].encode("utf-8")).hexdigest()
+    params = {
+        "resource.name": Path(metadata["file_path"]).name,
+        "commitWithin": "10000",
+        "literal.id": doc_id,
+        "literal.title_s": metadata["title"],
+        "literal.author_s": metadata["author"],
+        "literal.file_path_s": metadata["file_path"],
+        "literal.folder_path_s": metadata["folder_path"],
+        "literal.file_size_l": str(metadata["file_size"]),
+    }
+
+    if metadata.get("category"):
+        params["literal.category_s"] = metadata["category"]
+    if metadata.get("year") is not None:
+        params["literal.year_i"] = str(metadata["year"])
+    if page_count is not None:
+        params["literal.page_count_i"] = str(page_count)
+
+    return params
+
+
+def build_chunk_doc(
+    parent_id: str,
+    chunk_index: int,
+    chunk: str,
+    embedding: list[float],
+    metadata: dict,
+) -> dict:
+    """Build a Solr JSON document for a single text chunk."""
+    chunk_id = f"{parent_id}_chunk_{chunk_index:04d}"
+    doc: dict = {
+        "id": chunk_id,
+        "parent_id_s": parent_id,
+        "chunk_index_i": chunk_index,
+        "chunk_text_t": chunk,
+        "embedding_v": embedding,
+        "title_s": metadata["title"],
+        "author_s": metadata["author"],
+        "file_path_s": metadata["file_path"],
+        "folder_path_s": metadata["folder_path"],
+    }
+    if metadata.get("category"):
+        doc["category_s"] = metadata["category"]
+    if metadata.get("year") is not None:
+        doc["year_i"] = metadata["year"]
+    return doc
+
+
+def index_chunks(
+    path: Path,
+    parent_id: str,
+    metadata: dict,
+) -> int:
+    """Chunk the PDF text, obtain embeddings, and index into Solr.
+
+    Returns:
+        The number of chunks successfully indexed.
+
+    Raises:
+        Exception: Propagates any HTTP or embedding error so the caller can
+            record the appropriate Redis failure stage.
+    """
+    text = extract_pdf_text(path)
+    chunks = chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
+    if not chunks:
+        logger.info("No text chunks extracted from %s; skipping embedding indexing.", path)
+        return 0
+
+    embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
+
+    docs = [
+        build_chunk_doc(parent_id, idx, chunk, emb, metadata)
+        for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+    ]
+
+    solr_url = (
+        f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update"
+        "?commitWithin=10000"
+    )
+    response = requests.post(
+        solr_url,
+        json=docs,
+        timeout=SOLR_TIMEOUT,
+    )
+    response.raise_for_status()
+    return len(docs)
+
+
+def index_document(path: Path) -> dict:
+    if path.suffix.lower() != ".pdf":
+        raise ValueError(f"Unsupported file type: {path.suffix or 'unknown'}")
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+
+    metadata = extract_metadata(str(path), base_path=BASE_PATH)
+    page_count = get_page_count(path)
+    params = build_literal_params(metadata, page_count)
+    solr_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update/extract"
+
+    # ── Phase 1: full-text indexing via Solr Tika ──────────────────────────
+    try:
+        with path.open("rb") as handle:
+            response = requests.post(
+                solr_url,
+                params=params,
+                files={"file": (path.name, handle, "application/pdf")},
+                timeout=SOLR_TIMEOUT,
+            )
+        response.raise_for_status()
+    except Exception as exc:
+        mark_failure(path, str(exc), stage="text_indexing")
+        raise
+
+    parent_id = params["literal.id"]
+    save_state(
+        str(path),
+        path=str(path),
+        last_modified=path.stat().st_mtime,
+        processed=False,
+        failed=False,
+        error=None,
+        error_stage=None,
+        timestamp=now_iso(),
+        solr_id=parent_id,
+        text_indexed=True,
+        embedding_indexed=False,
+        title=metadata["title"],
+        author=metadata["author"],
+        year=metadata["year"],
+        category=metadata["category"],
+        file_path=metadata["file_path"],
+        folder_path=metadata["folder_path"],
+        file_size=metadata["file_size"],
+        page_count=page_count,
+    )
+
+    # ── Phase 2: chunk + embedding indexing ────────────────────────────────
+    try:
+        chunk_count = index_chunks(path, parent_id, metadata)
+    except Exception as exc:
+        mark_failure(path, str(exc), stage="embedding_indexing")
+        raise
+
+    save_state(
+        str(path),
+        processed=True,
+        embedding_indexed=True,
+        chunk_count=chunk_count,
+    )
+    return metadata
+
 
 def callback(
     channel: BlockingChannel,
@@ -64,134 +339,50 @@ def callback(
     properties: pika.spec.BasicProperties,
     body: bytes,
 ):
-    """Callback function for RabbitMQ consumer"""
-    print(f"Received new document: {body}. Remaining messages: {get_queue(channel).method.message_count}")
+    """Process a single queued document path."""
+    file_path = body.decode("utf-8")
+    remaining = get_queue(channel).method.message_count
+    logger.info("Received %s. Remaining messages: %s", file_path, remaining)
 
-    filename = body.decode("utf-8")
-    if filename.endswith(".pdf"):
-        stream = storage_client.download_blob_to_stream(STORAGE_CONTAINER, filename)
-        fulltext = ""
-        firstPass = True
-        with pdfplumber.open(stream) as pdf:
-            for page in pdf.pages:
-                print(
-                    f"Processing page {page.page_number}/{len(pdf.pages)} of {filename}"
-                )
-                fulltext = cleanup(page.extract_text())
-                if fulltext == "":
-                    print(f"Skipping empty page {filename} {page.page_number}")
-                else:
-                    chunks = []
-                    print(f"Splitting {filename} page {page.page_number} into chunks. Length: {len(fulltext)}")
-                    while len(fulltext) > 500:
-                        last_period_index = fulltext[:500].rfind(".")
-                        if last_period_index == -1:
-                            last_period_index = 500
-                        chunks.append(fulltext[:last_period_index])
-                        fulltext = fulltext[last_period_index + 1 :].strip()
-                    if len(fulltext)<300 and len(chunks)>0:                        
-                        chunks[-1] = chunks[-1] + " " + fulltext
-                    else:
-                        chunks.append(fulltext)
-                    # remove non-relevant chunks, anything less than 300 chars
-                    # will only add noise.
-                    chunks=list(filter(lambda x: len(x)>300,chunks))
-                    if(len(chunks)==0):
-                        print(f"Skipping empty page {filename} {page.page_number}")
-                        continue
-                    points = []
-                    embeddings = get_embeddings(chunks, channel)
-                    if firstPass:
-                        # check for first embedding similarity of 1.0 in the
-                        # qdrant database, which means
-                        # that this document is already indexed
-                        print("check for similarity for {filename}")
-                        similar_doc=qdrant.search(collection_name=QDRANT_COLLECTION,
-                                      query_vector=embeddings["data"][0]["embedding"],
-                                      limit=1)
-                        print(similar_doc)
-                        if(len(similar_doc)>0 and similar_doc[0].score>=1.0):
-                            print(f"Skipping already indexed document {filename} - Original: {similar_doc[0].payload['path']}")
-                            channel.basic_ack(delivery_tag=method.delivery_tag)
-                            return
-
-                        firstPass = False
-                    for chunk, embedding in zip(chunks, embeddings["data"]):
-                        points.append(
-                            models.PointStruct(
-                                id=str(uuid.uuid4()),  # TODO: generate id
-                                vector=embedding["embedding"],
-                                payload={
-                                    "path": filename,
-                                    "page": page.page_number,
-                                    "text": chunk
-                                },
-                            )
-                        )
-
-                    operation_info = qdrant.upsert(
-                        collection_name=QDRANT_COLLECTION, points=points, wait=True
-                    )
-                    print(f"Upserted {operation_info} for {filename}")
-    else:
-        print(f"Unsupported file type: {filename}")
-
-    channel.basic_ack(delivery_tag=method.delivery_tag)
-
-queue = None
-
-
-def get_queue(channel: BlockingChannel):
-    """Get queue from channel"""
-    global queue
-    channel.basic_qos(prefetch_count=1)
-    if queue is None:
-        print(f"***** Declaring queue {QUEUE_NAME} *****")
-
-        queue = channel.queue_declare(
-            queue=QUEUE_NAME, durable=True, auto_delete=False
+    try:
+        metadata = index_document(Path(file_path))
+        logger.info(
+            "Indexed %s by %s into Solr collection %s",
+            metadata["title"],
+            metadata["author"],
+            SOLR_COLLECTION,
         )
-    else:
-        queue = channel.queue_declare(
-            queue=QUEUE_NAME, durable=True, auto_delete=False, passive=True
-        )
-
-    return queue
+    except Exception as exc:  # pragma: no cover - runtime integration path
+        logger.exception("Failed to process %s", file_path)
+        try:
+            mark_failure(Path(file_path), str(exc), stage="unknown")
+        except Exception:
+            logger.exception("Unable to persist failed state for %s", file_path)
+    finally:
+        channel.basic_ack(delivery_tag=method.delivery_tag)
 
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
-def consume():
+def consume() -> None:
     connection = pika.BlockingConnection(
-        pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT)
+        pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT, heartbeat=600)
     )
     channel = connection.channel()
     get_queue(channel)
-
     channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
 
     try:
         channel.start_consuming()
-    # Don't recover connections closed by server
     except pika.exceptions.ConnectionClosedByBroker:
-        pass
-
-
-# https://stackoverflow.com/questions/73361664/asyncio-get-event-loop-deprecationwarning-there-is-no-current-event-loop
-loop = asyncio.new_event_loop()
-storage_client = BlobStorage(STORAGE_ACCOUNT_NAME)
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-print(f"Connection to Redis established {REDIS_HOST}:{REDIS_PORT}")
-
-qdrant = QdrantClient(url=f"http://{QDRANT_HOST}:{QDRANT_PORT}")
-if QDRANT_COLLECTION not in [n.name for n in qdrant.get_collections().collections]:
-    qdrant.create_collection(
-        collection_name=QDRANT_COLLECTION,
-        vectors_config=models.VectorParams(
-            size=QDRANT_VECTOR_DIM,  # todo: get from service... encoder.get_sentence_embedding_dimension(), # Vector size is defined by used model
-            distance=models.Distance.DOT,
-        ),
-    )
+        logger.warning("RabbitMQ closed the connection.")
 
 
 if __name__ == "__main__":
+    logger.info(
+        "Starting document-indexer against Solr %s:%s/%s",
+        SOLR_HOST,
+        SOLR_PORT,
+        SOLR_COLLECTION,
+    )
+    wait_for_solr_collection()
     consume()

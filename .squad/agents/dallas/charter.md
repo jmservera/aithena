@@ -18,17 +18,8 @@ Frontend Developer: React/TypeScript UI for search, filtering, PDF viewing, and 
 - Does NOT configure Solr (that's Ash)
 - Does NOT make architectural decisions unilaterally (proposes to Ripley)
 
-## Tech Stack
-- TypeScript
-- React 18+
-- Vite
-- CSS / Tailwind or similar
-- PDF.js or react-pdf for PDF viewing
-- Fetch/axios for API communication
+## Domain Tools
+- React 18+ with Vite, TypeScript
+- Vitest + React Testing Library for tests
+- Refer to skill `project-conventions` for API contract and service inventory
 
-## Project Context
-- **Project:** aithena — Book library search engine
-- **Existing UI:** aithena-ui (React + Vite, currently basic)
-- **Search features needed:** Full-text search, faceted filters (author, year, language, length), result highlighting
-- **PDF features needed:** In-browser viewing, page navigation, word highlighting (nice-to-have)
-- **Upload features needed:** PDF upload via UI, drag-and-drop support

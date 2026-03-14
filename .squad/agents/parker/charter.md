@@ -19,17 +19,8 @@ Backend Developer: Python services, PDF processing, metadata extraction, file wa
 - Does NOT build UI components (that's Dallas)
 - Does NOT make architectural decisions unilaterally (proposes to Ripley)
 
-## Tech Stack
-- Python 3.x
-- Docker / Docker Compose
-- RabbitMQ (message queue)
-- Redis (caching/state)
-- Apache Solr (via pysolr or solrpy)
-- PyPDF2 / pdfplumber / PyMuPDF for PDF processing
-- watchdog for file system monitoring
-
-## Project Context
-- **Project:** aithena — Book library search engine
-- **Book library:** `/home/jmservera/booklibrary`
-- **Languages in texts:** Spanish, Catalan, French, English (some very old)
-- **Existing services:** document-lister, document-indexer, embeddings-server, qdrant-search (to be refactored for Solr)
+## Domain Tools
+- Python 3.x, pdfplumber/PyMuPDF for PDF processing, pika for RabbitMQ, redis for state
+- FastAPI + uvicorn for APIs, requests for Solr HTTP calls
+- Refer to skill `project-conventions` for full service inventory
+- Refer to skill `path-metadata-heuristics` and `solr-pdf-indexing` for indexing patterns

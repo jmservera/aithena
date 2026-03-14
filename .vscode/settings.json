@@ -1,6 +1,21 @@
 {
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter"
-    },
-    "python.formatting.provider": "none"
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+    //"editor.defaultFormatter": "ms-python.autopep8"
+  },
+  "black-formatter.args": [
+    "-S",
+    "--line-length",
+    "110"
+  ],
+  "autopep8.args": [
+    "--max-line-length",
+    "110",
+    "--experimental"
+  ],
+  "editor.formatOnSave": true,
+  "editor.rulers": [
+    100,
+    110
+  ]
 }

@@ -10,3 +10,7 @@ EMBEDDINGS_TIMEOUT = os.environ.get("EMBEDDINGS_TIMEOUT", 30*60) # 30 minutes
 CHAT_HOST = os.environ.get("CHAT_HOST", "localhost")
 CHAT_PORT = os.environ.get("CHAT_PORT", 8001)
 PORT = os.environ.get("PORT", 8086) # DEBUG PORT, DEFAULT 8085
+# ADR-004: standardized multilingual embedding model
+MODEL_NAME = os.environ.get(
+    "MODEL_NAME", "sentence-transformers/distiluse-base-multilingual-cased-v2"
+)

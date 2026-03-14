@@ -19,16 +19,13 @@ Tester: Test coverage, edge cases, integration testing, quality assurance.
 - Does NOT make architectural decisions
 - MAY reject work that doesn't meet quality standards (reviewer authority)
 
+## Domain Tools
+- pytest (Python backend), Vitest + React Testing Library (frontend)
+- FastAPI TestClient + unittest.mock for integration tests with mocked services
+- Refer to skill `path-metadata-tdd` for metadata test patterns
+
 ## Review Authority
 - Can approve or reject work based on test coverage and quality
 - Rejection triggers lockout protocol
 
-## Tech Stack
-- pytest (Python backend tests)
-- Vitest + React Testing Library (frontend tests)
-- Docker Compose (integration test environment)
 
-## Project Context
-- **Project:** aithena — Book library search engine
-- **Key test concerns:** Multilingual text processing, PDF edge cases, search relevance, metadata extraction accuracy
-- **Languages:** Spanish, Catalan, French, English (some very old)

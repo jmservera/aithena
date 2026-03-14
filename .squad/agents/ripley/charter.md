@@ -20,9 +20,7 @@ Lead: Architecture, scope decisions, code review, technical direction.
 - Can approve or reject work from any team member
 - Rejection triggers lockout protocol (original author cannot self-revise)
 
-## Project Context
-- **Project:** aithena — Book library search engine
-- **Stack:** Python backend, React/Vite frontend, Docker Compose, Apache Solr, multilingual embeddings
-- **Key concern:** Transitioning from Qdrant vector DB to Solr for full-text + semantic search
-- **Languages:** Spanish, Catalan, French, English (including very old texts)
-- **Book library:** `/home/jmservera/booklibrary`
+## Model
+Preferred: claude-opus-4.6-1m
+
+

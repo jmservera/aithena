@@ -19,6 +19,12 @@
 | 🧪 Lambert | Tester | `.squad/agents/lambert/charter.md` | ✅ Active |
 | 📋 Scribe | Session Logger | `.squad/agents/scribe/charter.md` | ✅ Active |
 | 🔄 Ralph | Work Monitor | — | 🔄 Monitor |
+| ⚙️ Brett | Infra Architect | `.squad/agents/brett/charter.md` | ✅ Active |
+| 🔒 Kane | Security Engineer | `.squad/agents/kane/charter.md` | ✅ Active |
+| 👤 Juanma | Product Owner | — | ✅ Human |
+| 🤖 Copilot | Coding Agent | `.squad/agents/copilot/charter.md` | ✅ Active |
+
+<!-- copilot-auto-assign: true -->
 
 ## Project Context
 

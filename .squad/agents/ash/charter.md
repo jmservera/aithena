@@ -20,16 +20,8 @@ Search Engineer: Solr cluster configuration, schema design, multilingual text an
 - Does NOT make architectural decisions unilaterally (proposes to Ripley)
 - DOES advise Parker on how to format documents for Solr indexing
 
-## Tech Stack
-- Apache Solr 9.x
-- Solr configsets (schema.xml / managed-schema, solrconfig.xml)
-- ICU analysis, language-specific analyzers
-- Dense vector search (Solr KNN)
-- Docker / Docker Compose
-
-## Project Context
-- **Project:** aithena — Book library search engine
-- **Languages:** Spanish, Catalan, French, English (some very old texts)
-- **Current vector DB:** Qdrant with 768-dim embeddings (being replaced by Solr)
-- **Embedding model:** Currently using a sentence-transformers model via embeddings-server
-- **Search requirements:** Full-text keyword search (native Solr) + semantic search (embeddings), faceted filtering, result highlighting
+## Domain Tools
+- Apache Solr 9.x: managed-schema.xml, solrconfig.xml, ICU analysis, DenseVectorField (kNN)
+- Multilingual analyzers: language-specific stemmers, ICU tokenizer/folding
+- Refer to skill `solr-pdf-indexing` for Tika extraction patterns
+- Refer to skill `solrcloud-docker-operations` for cluster topology

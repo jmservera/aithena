@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   redis:
     # it is importnant to configure OS memory overcommit
@@ -22,7 +21,7 @@ services:
         aliases:
           - redis
     volumes:
-      - redis:/data
+      - redis-data:/data
   rabbitmq:
     image: rabbitmq
     command: rabbitmq-server
@@ -47,50 +46,50 @@ services:
       default:
         aliases:
           - rabbitmq
-  qdrant:
-    image: qdrant/qdrant
-    environment:
-      - QDRANT__DEBUG=1
-      - QDRANT__SERVICE__HOST=0.0.0.0
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant-data:/qdrant/storage
-    restart: on-failure
-    networks:
-      default:
-        aliases:
-          - qdrant
-  llama-base: # this one is here just to ensure that the base image is created
-    build: ./llama-base
-    image: aithena-llama-base
-    volumes:
-      - "../open_llama_7b/:/llama/models/7B/"
-  llama-server:
-    build: ./llama-server
-    ports:
-      - "8000:8000"
-    volumes:
-      - "../open_llama_7b/:/llama/models/"
-    restart: on-failure
-    cap_add:
-      - IPC_LOCK
-      - SYS_NICE
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       memory: 16G
-    #       cpus: "20"
-    networks:
-      default:
-        aliases:
-          - llama-server
+  # qdrant:
+  #   image: qdrant/qdrant
+  #   environment:
+  #     - QDRANT__DEBUG=1
+  #     - QDRANT__SERVICE__HOST=0.0.0.0
+  #   ports:
+  #     - "6333:6333"
+  #   volumes:
+  #     - qdrant-data:/qdrant/storage
+  #   restart: on-failure
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - qdrant
+  # llama-base: # this one is here just to ensure that the base image is created
+  #   build: ./llama-base
+  #   image: aithena-llama-base
+  #   volumes:
+  #     - "../open_llama_7b/:/llama/models/7B/"
+  # llama-server:
+  #   build: ./llama-server
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - "../open_llama_7b/:/llama/models/"
+  #   restart: on-failure
+  #   cap_add:
+  #     - IPC_LOCK
+  #     - SYS_NICE
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       memory: 16G
+  #   #       cpus: "20"
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - llama-server
   embeddings-server:
     build: ./embeddings-server
     environment:
       - PORT=8085
     ports:
-      - "8085:8085"
+      - "8085:8080"
     restart: on-failure
     networks:
       default:
@@ -100,68 +99,96 @@ services:
     build: ./document-lister
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-      - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
       - QUEUE_NAME=shortembeddings
+      - BASE_PATH=/data/documents/
+      - DOCUMENT_WILDCARD=*.pdf
+      - POLL_INTERVAL=60  # seconds between library scans (default: 60)
     depends_on:
       - rabbitmq
       - redis
     restart: on-failure
+    volumes:
+      - document-data:/data/documents
     networks:
       - default
   document-indexer:
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8085
-      - QDRANT_HOST=qdrant
-      - QDRANT_COLLECTION=shortembeddings
-      - QDRANT_VECTOR_DIM=768
-      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-      - STORAGE_CONTAINER=test-library
       - REDIS_HOST=redis
       - QUEUE_NAME=shortembeddings
+      - BASE_PATH=/data/documents/
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8085
     restart: on-failure
     deploy:
       replicas: 1
     depends_on:
-      - rabbitmq
-      - redis
-      - qdrant
-      - embeddings-server
+      rabbitmq:
+        condition: service_started
+      redis:
+        condition: service_started
+      embeddings-server:
+        condition: service_started
+    volumes:
+      - document-data:/data/documents:ro
     networks:
       - default
-  qdrant-search:
+  # solr-search: unified search API supporting keyword (Solr BM25), semantic (Solr kNN HNSW),
+  # and hybrid (RRF) modes.  Set DEFAULT_SEARCH_MODE=keyword|semantic|hybrid.
+  solr-search:
     build:
       context: .
-      dockerfile: ./qdrant-search/Dockerfile
+      dockerfile: ./solr-search/Dockerfile
     ports:
       - "8080:8080"
     restart: on-failure
     depends_on:
-      - qdrant
-      - llama-server
+      - solr
+      - embeddings-server
     environment:
       - PORT=8080
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - QDRANT_COLLECTION=shortembeddings
-      - QDRANT_VECTOR_DIM=768
-      - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8085
-      - CHAT_HOST=llama-server
-      - CHAT_PORT=8000
-      - STORAGE_ACCOUNT_NAME=biblaisourcedocs
-      - STORAGE_CONTAINER=test-library
-  llama-playground:
-    image: ghcr.io/mckaywrigley/chatbot-ui:main
-    ports:
-      - 3000:3000
-    environment:
-      - OPENAI_API_HOST=http://llama-server:8000
-      - OPENAI_API_KEY=""
+      - SOLR_URL=http://solr:8983/solr
+      - SOLR_COLLECTION=books
+      - BASE_PATH=/data/documents
+      - CORS_ORIGINS=http://localhost:5173
+      - EMBEDDINGS_URL=http://embeddings-server:8001/v1/embeddings/
+      - DEFAULT_SEARCH_MODE=keyword
+    volumes:
+      - document-data:/data/documents:ro
+    networks:
+      - default
+  # qdrant-search:
+  #   build:
+  #     context: .
+  #     dockerfile: ./qdrant-search/Dockerfile
+  #   ports:
+  #     - "8080:8080"
+  #   restart: on-failure
+  #   depends_on:
+  #     - qdrant
+  #   #      - llama-server
+  #   environment:
+  #     - PORT=8080
+  #     - QDRANT_HOST=qdrant
+  #     - QDRANT_PORT=6333
+  #     - QDRANT_COLLECTION=shortembeddings
+  #     - QDRANT_VECTOR_DIM=768
+  #     - EMBEDDINGS_HOST=embeddings-server
+  #     - EMBEDDINGS_PORT=8085
+  #     - CHAT_HOST=llama-server
+  #     - CHAT_PORT=8000
+  # llama-playground:
+  #   image: ghcr.io/mckaywrigley/chatbot-ui:main
+  #   ports:
+  #     - 3000:3000
+  #   environment:
+  #     - OPENAI_API_HOST=http://llama-server:8000
+  #     - OPENAI_API_KEY=""
   nginx:
     image: nginx:1.15-alpine
     restart: unless-stopped
@@ -180,6 +207,203 @@ services:
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+  zoo1:
+    image: zookeeper:3.9
+    ports:
+      - 18080:8080
+      - 2181:2181
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data1_logs:/logs
+      - zoo-data1_data:/data
+      - zoo-data1_datalog:/datalog
+      - zoo-backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+  zoo2:
+    image: zookeeper:3.9
+    ports:
+      - 2182:2181
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data2_logs:/logs
+      - zoo-data2_data:/data
+      - zoo-data2_datalog:/datalog
+      - zoo-backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+  zoo3:
+    image: zookeeper:3.9
+    ports:
+      - 2183:2181
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data3_logs:/logs
+      - zoo-data3_data:/data
+      - zoo-data3_datalog:/datalog
+      - zoo-backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+  solr:
+    image: solr:9.7
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - solr-data:/var/solr/data
+      - document-data:/data/documents:ro
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    ports:
+      - "8983:8983"
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # command: solr-precreate -c books
+    depends_on:
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+  # second solr node
+  solr2:
+    image: solr:9.7
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - solr-data2:/var/solr/data
+      - document-data:/data/documents:ro
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    ports:
+      - "8984:8983"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    #command: solr-create -c books
+    depends_on:
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+      solr:
+        condition: service_healthy
+  solr3:
+    image: solr:9.7
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - solr-data3:/var/solr/data
+      - document-data:/data/documents:ro
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    ports:
+      - "8985:8983"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    #command: solr-create -c books
+    depends_on:
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+      solr2:
+        condition: service_healthy
+  solr-init:
+    image: solr:9.7
+    depends_on:
+      solr:
+        condition: service_healthy
+      solr2:
+        condition: service_healthy
+      solr3:
+        condition: service_healthy
+    volumes:
+      - ./solr/books:/configsets/books:ro
+      - ./solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+    entrypoint:
+      - /bin/bash
+      - -ceu
+      - |
+          set -o pipefail
+          ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
+          SOLR_URL="http://solr:8983"
+
+          until curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null; do
+            sleep 2
+          done
+
+          until [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ]; do
+            sleep 2
+          done
+
+          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
+            solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
+          fi
+
+          if ! curl -fsS "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
+            curl -fsS "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
+          fi
+
+          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" sh /scripts/add-conf-overlay.sh
+
+          echo "Solr init complete"
+    networks:
+      - default
+    restart: "no"
 volumes:
   rabbitmq-data:
     driver: local
@@ -187,12 +411,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/rabbitmq-data"
-  qdrant-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/qdrant-data"
+  # qdrant-data:
+  #   driver: local
+  #   driver_opts:
+  #     type: "none"
+  #     o: "bind"
+  #     device: "/source/volumes/qdrant-data"
   nginx-data:
     driver: local
     driver_opts:
@@ -211,11 +435,95 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/certbot-data/www"
-  redis:
+  redis-data:
     driver: local
     driver_opts:
       type: "none"
       o: "bind"
       device: "/source/volumes/redis"
+  document-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${BOOKS_PATH:-/data/booklibrary}"
+  solr-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data"
+  solr-data2:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data2"
+  solr-data3:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data3"
+  zoo-data1_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/logs"
+  zoo-data1_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/data"
+  zoo-data1_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/datalog"
+  zoo-data2_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/logs"
+  zoo-data2_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/data"
+  zoo-data2_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/datalog"
+  zoo-data3_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/logs"
+  zoo-data3_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/data"
+  zoo-data3_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/datalog"
+  zoo-backup:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-backup"
 networks:
   default:
