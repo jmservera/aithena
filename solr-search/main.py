@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Literal
 
+import redis as redis_module
 import requests
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -433,6 +435,114 @@ def similar_books(
         )
 
     return {"results": results}
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Status endpoint
+# ---------------------------------------------------------------------------
+
+
+def _check_tcp(host: str, port: int, timeout: float = 2.0) -> str:
+    """Return ``"up"`` if a TCP connection to *host:port* succeeds, else ``"down"``."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return "up"
+    except OSError:
+        return "down"
+
+
+def _get_solr_status() -> dict[str, Any]:
+    """Query Solr CLUSTERSTATUS for live-node count and index doc count."""
+    try:
+        cluster_resp = requests.get(
+            settings.solr_admin_collections_url,
+            params={"action": "CLUSTERSTATUS", "wt": "json"},
+            timeout=5,
+        )
+        cluster_resp.raise_for_status()
+        live_nodes = len(
+            cluster_resp.json().get("cluster", {}).get("live_nodes", [])
+        )
+    except Exception:
+        live_nodes = 0
+
+    try:
+        count_resp = requests.get(
+            settings.select_url,
+            params={"q": "*:*", "rows": 0, "wt": "json"},
+            timeout=5,
+        )
+        count_resp.raise_for_status()
+        docs_indexed = count_resp.json().get("response", {}).get("numFound", 0)
+    except Exception:
+        docs_indexed = 0
+
+    return {"status": "ok", "nodes": live_nodes, "docs_indexed": docs_indexed}
+
+
+def _get_indexing_status() -> dict[str, Any]:
+    """Scan Redis for ``doc:*`` keys and aggregate indexing state counts."""
+    try:
+        r = redis_module.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            decode_responses=True,
+            socket_timeout=5,
+            socket_connect_timeout=5,
+        )
+        keys = r.keys(settings.redis_key_pattern)
+        total = len(keys)
+        indexed = 0
+        failed = 0
+        for key in keys:
+            raw = r.get(key)
+            if raw:
+                try:
+                    state = json.loads(raw)
+                    if state.get("failed"):
+                        failed += 1
+                    elif state.get("text_indexed"):
+                        indexed += 1
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+        pending = total - indexed - failed
+        return {
+            "total_discovered": total,
+            "indexed": indexed,
+            "failed": failed,
+            "pending": pending,
+        }
+    except Exception:
+        return {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+
+
+def _get_services_status() -> dict[str, str]:
+    """Check TCP reachability of Solr, Redis, and RabbitMQ."""
+    try:
+        solr_without_scheme = settings.solr_url.split("//", 1)[-1]
+        parts = solr_without_scheme.split(":", 1)
+        solr_host = parts[0]
+        solr_port = int(parts[1].split("/", 1)[0]) if len(parts) > 1 else 8983
+    except (ValueError, IndexError):
+        solr_host, solr_port = "solr", 8983
+
+    return {
+        "solr": _check_tcp(solr_host, solr_port),
+        "redis": _check_tcp(settings.redis_host, settings.redis_port),
+        "rabbitmq": _check_tcp(settings.rabbitmq_host, settings.rabbitmq_port),
+    }
+
+
+@app.get("/v1/status/", include_in_schema=False, name="status_v1")
+@app.get("/v1/status", include_in_schema=False, name="status_v1_no_slash")
+@app.get("/status")
+def status() -> dict[str, Any]:
+    """Return aggregated indexing and service health status."""
+    return {
+        "solr": _get_solr_status(),
+        "indexing": _get_indexing_status(),
+        "services": _get_services_status(),
+    }
 
 
 if __name__ == "__main__":

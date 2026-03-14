@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import sys
 from unittest.mock import MagicMock, patch
@@ -728,3 +729,162 @@ def test_similar_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
 
 def test_v1_document_alias_is_registered() -> None:
     assert app.url_path_for("get_document_v1", document_id="token") == "/v1/documents/token"
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Status endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@patch("main.socket.create_connection")
+@patch("main.redis_module.Redis")
+@patch("main.requests.get")
+def test_status_returns_expected_shape(
+    mock_requests_get: MagicMock,
+    mock_redis_cls: MagicMock,
+    mock_socket_conn: MagicMock,
+) -> None:
+    """GET /status must return the canonical three-key response shape."""
+    # Solr CLUSTERSTATUS response
+    cluster_resp = MagicMock()
+    cluster_resp.raise_for_status.return_value = None
+    cluster_resp.json.return_value = {
+        "cluster": {"live_nodes": ["node1:8983_solr", "node2:8983_solr", "node3:8983_solr"]}
+    }
+    # Solr doc-count response
+    count_resp = MagicMock()
+    count_resp.raise_for_status.return_value = None
+    count_resp.json.return_value = {"response": {"numFound": 76}}
+    mock_requests_get.side_effect = [cluster_resp, count_resp]
+
+    # Redis mock
+    mock_r = MagicMock()
+    mock_r.keys.return_value = ["doc:a", "doc:b", "doc:c"]
+    mock_r.get.side_effect = [
+        json.dumps({"text_indexed": True, "failed": False}),
+        json.dumps({"text_indexed": False, "failed": True}),
+        json.dumps({"text_indexed": False, "failed": False}),
+    ]
+    mock_redis_cls.return_value = mock_r
+
+    # TCP checks always succeed
+    mock_socket_conn.return_value.__enter__ = MagicMock(return_value=MagicMock())
+    mock_socket_conn.return_value.__exit__ = MagicMock(return_value=False)
+
+    client = get_client()
+    response = client.get("/status")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "solr" in data
+    assert "indexing" in data
+    assert "services" in data
+
+    assert data["solr"]["status"] == "ok"
+    assert data["solr"]["nodes"] == 3
+    assert data["solr"]["docs_indexed"] == 76
+
+    assert data["indexing"]["total_discovered"] == 3
+    assert data["indexing"]["indexed"] == 1
+    assert data["indexing"]["failed"] == 1
+    assert data["indexing"]["pending"] == 1
+
+    assert data["services"]["solr"] == "up"
+    assert data["services"]["redis"] == "up"
+    assert data["services"]["rabbitmq"] == "up"
+
+
+@patch("main.socket.create_connection")
+@patch("main.redis_module.Redis")
+@patch("main.requests.get")
+def test_status_v1_alias_registered(
+    mock_requests_get: MagicMock,
+    mock_redis_cls: MagicMock,
+    mock_socket_conn: MagicMock,
+) -> None:
+    """GET /v1/status/ alias must return 200."""
+    cluster_resp = MagicMock()
+    cluster_resp.raise_for_status.return_value = None
+    cluster_resp.json.return_value = {"cluster": {"live_nodes": []}}
+    count_resp = MagicMock()
+    count_resp.raise_for_status.return_value = None
+    count_resp.json.return_value = {"response": {"numFound": 0}}
+    mock_requests_get.side_effect = [cluster_resp, count_resp]
+
+    mock_r = MagicMock()
+    mock_r.keys.return_value = []
+    mock_redis_cls.return_value = mock_r
+
+    mock_socket_conn.return_value.__enter__ = MagicMock(return_value=MagicMock())
+    mock_socket_conn.return_value.__exit__ = MagicMock(return_value=False)
+
+    client = get_client()
+    assert client.get("/v1/status/").status_code == 200
+    assert client.get("/v1/status").status_code == 200
+
+
+@patch("main.socket.create_connection")
+@patch("main.redis_module.Redis")
+@patch("main.requests.get")
+def test_status_degrades_gracefully_on_solr_error(
+    mock_requests_get: MagicMock,
+    mock_redis_cls: MagicMock,
+    mock_socket_conn: MagicMock,
+) -> None:
+    """Status endpoint must still return 200 even when Solr is unreachable."""
+    import requests as req
+
+    mock_requests_get.side_effect = req.ConnectionError("Solr down")
+
+    mock_r = MagicMock()
+    mock_r.keys.return_value = []
+    mock_redis_cls.return_value = mock_r
+
+    mock_socket_conn.side_effect = OSError("Connection refused")
+
+    client = get_client()
+    response = client.get("/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["solr"]["nodes"] == 0
+    assert data["solr"]["docs_indexed"] == 0
+    assert data["services"]["solr"] == "down"
+    assert data["services"]["redis"] == "down"
+    assert data["services"]["rabbitmq"] == "down"
+
+
+@patch("main.socket.create_connection")
+@patch("main.redis_module.Redis")
+@patch("main.requests.get")
+def test_status_degrades_gracefully_on_redis_error(
+    mock_requests_get: MagicMock,
+    mock_redis_cls: MagicMock,
+    mock_socket_conn: MagicMock,
+) -> None:
+    """Status endpoint must still return 200 when Redis is unreachable."""
+    cluster_resp = MagicMock()
+    cluster_resp.raise_for_status.return_value = None
+    cluster_resp.json.return_value = {"cluster": {"live_nodes": ["node1"]}}
+    count_resp = MagicMock()
+    count_resp.raise_for_status.return_value = None
+    count_resp.json.return_value = {"response": {"numFound": 10}}
+    mock_requests_get.side_effect = [cluster_resp, count_resp]
+
+    mock_redis_cls.return_value.keys.side_effect = Exception("Redis down")
+
+    mock_socket_conn.return_value.__enter__ = MagicMock(return_value=MagicMock())
+    mock_socket_conn.return_value.__exit__ = MagicMock(return_value=False)
+
+    client = get_client()
+    response = client.get("/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["indexing"] == {
+        "total_discovered": 0,
+        "indexed": 0,
+        "failed": 0,
+        "pending": 0,
+    }
