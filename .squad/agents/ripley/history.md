@@ -317,3 +317,84 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 5. **Open question:** `recharts` for charts vs plain tables. Recommended tables-first, charts in follow-up PR.
 
 **Effort estimate:** ~3 backend endpoints (S+M+M) + 4 frontend components (S+S+M+L) = medium total. Parker and Dallas can parallelize — backend first, frontend follows as endpoints land.
+
+### 2026-03-14 — Branching Strategy & Release Flow Setup
+
+**Request:** Juanma asked for a proper branching strategy after UI broke from uncoordinated PR merges.
+
+**Actions taken:**
+1. **Created `dev` branch** from `jmservera/solrstreamlitui` (commit 19decee) — this is now the active development integration branch
+2. **Pushed `dev` to origin** — all future squad/copilot PRs target `dev` instead of the feature branch
+3. **Documented branching strategy** in `.squad/decisions/inbox/ripley-branching-strategy.md`:
+   - `dev` — active development, all PRs land here
+   - `main` — production-ready, only working code
+   - Feature branches → `dev` → `main` at phase boundaries
+   - Merge authority: only Ripley or Juanma can merge dev → main and create tags
+4. **Created `.github/workflows/release.yml`** — CI workflow triggered on `v*` tags that runs tests and creates GitHub releases
+5. **Updated `.github/copilot-instructions.md`** — added branching strategy section so @copilot targets `dev`
+6. **Updated `.squad/skills/squad-pr-workflow/SKILL.md`** — added PR base branch rule and anti-pattern for targeting `main` directly
+7. **Tagged `v0.3.0-rc1`** — marks current state (Phase 3 features merged, UI needs integration fix)
+
+**Versioning scheme established:**
+- v0.1.0 — Phase 1 (Solr indexing) ✅
+- v0.2.0 — Phase 2 (Search API + UI) ✅
+- v0.3.0 — Phase 3 (Embeddings + hybrid search) — RC tagged, awaiting UI fix
+- v0.4.0 — Phase 4 (Dashboard + polish) — upcoming
+
+**Key decision:** Tagged as RC (not full release) because the UI is broken. Full v0.3.0 tag will be created after UI stabilization.
+
+### 2026-03-14 — Triage of 14 @copilot Draft PRs
+
+**Context:** @copilot delivered 14 draft PRs from P4 spec + infrastructure work. Juanma requested triage via Ralph.
+
+**Critical finding:** All 14 PRs targeted `jmservera/solrstreamlitui` instead of `dev`. Retargeted all to `dev` via GitHub API.
+
+**Actions taken:**
+
+1. **Retargeted all 14 PRs** from `jmservera/solrstreamlitui` → `dev`
+2. **Merged 6 safe PRs** (Tier 1 infrastructure + Tier 2 UV migrations):
+
+| PR | Title | Verdict | Action |
+|----|-------|---------|--------|
+| #115 | Remove qdrant/llama services | ✅ Clean | Merged (squash) |
+| #117 | Ruff config + CI lint job | ✅ Clean | Merged (squash) |
+| #116 | UV admin migration | ✅ Clean | Merged (squash) |
+| #129 | UV solr-search migration | ✅ Clean | Merged (squash) |
+| #130 | UV document-indexer migration | ✅ Clean | Merged (squash) |
+| #131 | UV document-lister migration | ✅ Clean | Merged (squash) |
+
+3. **Reviewed + held 8 PRs** (Tier 3-5):
+
+| PR | Title | Verdict | Status |
+|----|-------|---------|--------|
+| #118 | /v1/stats/ endpoint | ✅ Approved in principle | HOLD — wait for UI stabilization |
+| #119 | /v1/status/ endpoint | ✅ Approved in principle | HOLD — wait for UI stabilization |
+| #123 | Tab navigation | ✅ Clean scaffold | HOLD — Dallas fixing UI first |
+| #127 | Stats tab | ⚠️ Overlaps #118 backend | HOLD — needs rebase after #118 |
+| #128 | Status tab | ✅ Clean | HOLD — depends on #119 |
+| #136 | Page-aware chunking | ✅ Clean | HOLD — first in chain |
+| #137 | Page numbers in API | ✅ Clean | HOLD — depends on #136 |
+| #138 | PDF viewer page nav | ⚠️ Conflicting | HOLD — rebase after #136+#137 |
+
+**Issues flagged:**
+- PR #127 duplicates the stats endpoint from #118 — merge #118 first, then rebase #127
+- PR #138 has merge conflicts — needs rebase after dependency chain lands
+- All Tier 4 frontend PRs held pending Dallas UI fix
+
+**Merge order when ready:**
+- Tier 3: #118 → #119 (backend endpoints)
+- Tier 4: #123 → #127 (rebase) → #128 (frontend, after Dallas UI fix)
+- Tier 5: #136 → #137 → #138 (rebase) (page search chain)
+
+### 2026-03-14 — Backlog Organization into GitHub Milestones
+
+- **COMPLETED:** Organized the full backlog into 5 GitHub milestones (v0.3.0–v1.0.0).
+- **Closed 13 issues** that were completed by merged PRs but never closed: #81–#84 (UV originals), #91 (LINT-1 original), #110 (qdrant removal), #111–#112 (UV-1/LINT-1 recreates), #113 (/v1/stats/), #124–#126 (UV recreates), #133 (page-aware chunking).
+- **Assigned 36 open issues** across milestones:
+  - v0.3.0 Stabilize Core: 5 issues (UV/ruff cleanup, docs)
+  - v0.4.0 Dashboard & Polish: 7 issues (endpoints, tabs, frontend lint/test)
+  - v0.5.0 Advanced Search: 3 issues (page results, similar books)
+  - v0.6.0 Security & Hardening: 19 issues (security CI, Mend vulns, docker hardening)
+  - v1.0.0 Production Ready: 2 issues (PDF upload) + future work
+- **Cadence established:** After each milestone → Pause → Scribe logs → Reskill → Tag release → Merge to default.
+- Decision recorded in `.squad/decisions/inbox/ripley-milestone-plan.md`.

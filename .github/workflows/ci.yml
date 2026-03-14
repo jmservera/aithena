@@ -9,6 +9,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -20,22 +23,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: document-indexer/uv.lock
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: document-indexer/requirements.txt
 
       - name: Install dependencies
         working-directory: document-indexer
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
+        run: uv sync --frozen
 
       - name: Run tests
         working-directory: document-indexer
-        run: python -m pytest -v --tb=short --cov=document_indexer --cov-report=term-missing
+        run: uv run python -m pytest -v --tb=short --cov=document_indexer --cov-report=term-missing
 
   solr-search-tests:
     name: solr-search tests
@@ -47,22 +52,32 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: solr-search/requirements.txt
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "solr-search/uv.lock"
 
       - name: Install dependencies
         working-directory: solr-search
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov 'httpx<0.28'
+        run: uv sync --frozen
 
       - name: Run unit tests
         working-directory: solr-search
-        run: python -m pytest tests/test_search_service.py -v --tb=short --cov=search_service --cov-report=term-missing
+        run: uv run python -m pytest tests/test_search_service.py -v --tb=short --cov=search_service --cov-report=term-missing
 
       - name: Run integration tests
         working-directory: solr-search
-        run: python -m pytest tests/test_integration.py -v --tb=short
+        run: uv run python -m pytest tests/test_integration.py -v --tb=short
+
+  python-lint:
+    name: Python lint (ruff)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
 
   all-tests-passed:
     name: All tests passed
@@ -70,5 +85,6 @@ jobs:
     needs:
       - document-indexer-tests
       - solr-search-tests
+      - python-lint
     steps:
       - run: echo "All tests passed successfully!"
