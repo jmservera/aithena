@@ -23,7 +23,7 @@ services:
     volumes:
       - redis-data:/data
   rabbitmq:
-    image: rabbitmq
+    image: rabbitmq:3-management
     command: rabbitmq-server
     hostname: rabbitmq
     expose:
@@ -34,6 +34,7 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     environment:
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
     healthcheck:
@@ -46,44 +47,6 @@ services:
       default:
         aliases:
           - rabbitmq
-  # qdrant:
-  #   image: qdrant/qdrant
-  #   environment:
-  #     - QDRANT__DEBUG=1
-  #     - QDRANT__SERVICE__HOST=0.0.0.0
-  #   ports:
-  #     - "6333:6333"
-  #   volumes:
-  #     - qdrant-data:/qdrant/storage
-  #   restart: on-failure
-  #   networks:
-  #     default:
-  #       aliases:
-  #         - qdrant
-  # llama-base: # this one is here just to ensure that the base image is created
-  #   build: ./llama-base
-  #   image: aithena-llama-base
-  #   volumes:
-  #     - "../open_llama_7b/:/llama/models/7B/"
-  # llama-server:
-  #   build: ./llama-server
-  #   ports:
-  #     - "8000:8000"
-  #   volumes:
-  #     - "../open_llama_7b/:/llama/models/"
-  #   restart: on-failure
-  #   cap_add:
-  #     - IPC_LOCK
-  #     - SYS_NICE
-  #   # deploy:
-  #   #   resources:
-  #   #     reservations:
-  #   #       memory: 16G
-  #   #       cpus: "20"
-  #   networks:
-  #     default:
-  #       aliases:
-  #         - llama-server
   embeddings-server:
     build: ./embeddings-server
     environment:
@@ -162,41 +125,63 @@ services:
       - document-data:/data/documents:ro
     networks:
       - default
-  # qdrant-search:
-  #   build:
-  #     context: .
-  #     dockerfile: ./qdrant-search/Dockerfile
-  #   ports:
-  #     - "8080:8080"
-  #   restart: on-failure
-  #   depends_on:
-  #     - qdrant
-  #   #      - llama-server
-  #   environment:
-  #     - PORT=8080
-  #     - QDRANT_HOST=qdrant
-  #     - QDRANT_PORT=6333
-  #     - QDRANT_COLLECTION=shortembeddings
-  #     - QDRANT_VECTOR_DIM=768
-  #     - EMBEDDINGS_HOST=embeddings-server
-  #     - EMBEDDINGS_PORT=8085
-  #     - CHAT_HOST=llama-server
-  #     - CHAT_PORT=8000
-  # llama-playground:
-  #   image: ghcr.io/mckaywrigley/chatbot-ui:main
-  #   ports:
-  #     - 3000:3000
-  #   environment:
-  #     - OPENAI_API_HOST=http://llama-server:8000
-  #     - OPENAI_API_KEY=""
+  streamlit-admin:
+    build: ./admin
+    expose:
+      - "8501"
+    restart: on-failure
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_NAME=shortembeddings
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_MGMT_PORT=15672
+      - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
+    networks:
+      - default
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    expose:
+      - "8081"
+    restart: on-failure
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+      - URL_PREFIX=/admin/redis
+    networks:
+      - default
+  aithena-ui:
+    build: ./aithena-ui
+    expose:
+      - "80"
+    restart: on-failure
+    depends_on:
+      - solr-search
+    networks:
+      - default
   nginx:
     image: nginx:1.15-alpine
     restart: unless-stopped
+    depends_on:
+      - aithena-ui
+      - solr-search
+      - streamlit-admin
+      - redis-commander
+      - rabbitmq
+      - solr
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - nginx-data:/etc/nginx/conf.d
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
@@ -411,18 +396,6 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/rabbitmq-data"
-  # qdrant-data:
-  #   driver: local
-  #   driver_opts:
-  #     type: "none"
-  #     o: "bind"
-  #     device: "/source/volumes/qdrant-data"
-  nginx-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/nginx-data"
   certbot-data-conf:
     driver: local
     driver_opts:

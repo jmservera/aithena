@@ -26,6 +26,8 @@ SOLR_FIELD_LIST = [
     "folder_path_s",
     "page_count_i",
     "file_size_l",
+    "page_start_i",
+    "page_end_i",
     "score",
 ]
 
@@ -208,6 +210,13 @@ def normalize_book(
     document_url: str | None,
 ) -> dict[str, Any]:
     document_id = document.get("id", "")
+    page_start = document.get("page_start_i")
+    page_end = document.get("page_end_i")
+    pages: list[int] | None = None
+    if page_start is not None or page_end is not None:
+        start = page_start if page_start is not None else page_end
+        end = page_end if page_end is not None else page_start
+        pages = [start, end]
     return {
         "id": document_id,
         "title": document.get("title_s") or Path(document.get("file_path_s", "")).stem,
@@ -219,6 +228,7 @@ def normalize_book(
         "folder_path": document.get("folder_path_s"),
         "page_count": document.get("page_count_i"),
         "file_size": document.get("file_size_l"),
+        "pages": pages,
         "score": document.get("score"),
         "highlights": collect_highlights(document_id, highlighting),
         "document_url": document_url,
@@ -346,3 +356,49 @@ def solr_escape(value: str) -> str:
     """Escape special Lucene/Solr query characters in a literal string value."""
     special = r'\+-&|!(){}[]^"~*?:/ '
     return "".join(f"\\{ch}" if ch in special else ch for ch in value)
+
+
+def parse_stats_response(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract collection statistics from a Solr stats + facets response.
+
+    Args:
+        payload: Raw Solr JSON response containing ``response``, ``stats``, and
+                 ``facet_counts`` sections.
+
+    Returns:
+        A dict with ``total_books``, ``by_language``, ``by_author``,
+        ``by_year``, ``by_category``, and ``page_stats`` keys.
+    """
+    total_books: int = payload.get("response", {}).get("numFound", 0)
+
+    facet_fields: dict[str, list[Any]] = (
+        payload.get("facet_counts", {}).get("facet_fields", {})
+    )
+
+    def _parse_facet(field: str) -> list[dict[str, Any]]:
+        raw = facet_fields.get(field) or []
+        return [
+            {"value": raw[i], "count": raw[i + 1]}
+            for i in range(0, len(raw), 2)
+        ]
+
+    stats_fields: dict[str, Any] = (
+        payload.get("stats", {}).get("stats_fields", {})
+    )
+    page_count_stats: dict[str, Any] = stats_fields.get("page_count_i") or {}
+
+    page_stats: dict[str, Any] = {
+        "total": int(page_count_stats.get("sum") or 0),
+        "avg": round(page_count_stats.get("mean") or 0),
+        "min": int(page_count_stats.get("min") or 0),
+        "max": int(page_count_stats.get("max") or 0),
+    }
+
+    return {
+        "total_books": total_books,
+        "by_language": _parse_facet("language_detected_s"),
+        "by_author": _parse_facet("author_s"),
+        "by_year": _parse_facet("year_i"),
+        "by_category": _parse_facet("category_s"),
+        "page_stats": page_stats,
+    }

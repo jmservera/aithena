@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest
+          if [ -f document-indexer/requirements.txt ]; then pip install -r document-indexer/requirements.txt; fi
+          if [ -f solr-search/requirements.txt ]; then pip install -r solr-search/requirements.txt; fi
+
+      - name: Run tests
+        run: |
+          if [ -d document-indexer ] && find document-indexer -name 'test_*.py' -o -name '*_test.py' | grep -q .; then
+            cd document-indexer && python3 -m pytest -v && cd ..
+          fi
+          if [ -d solr-search ] && find solr-search -name 'test_*.py' -o -name '*_test.py' | grep -q .; then
+            cd solr-search && python3 -m pytest -v && cd ..
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

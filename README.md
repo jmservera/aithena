@@ -24,9 +24,9 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 | **Document Indexer** | Consumes queue, extracts metadata, uploads to Solr | Python service with configurable path heuristics |
 | **Solr Search API** | FastAPI wrapper around the `books` collection | Normalized results, facets, highlights, PDF document URLs |
 | **Embeddings Server** | Semantic search vectors (Phase 3+) | `distiluse-base-multilingual-cased-v2` |
-| **Streamlit Admin UI** | Basic document management & monitoring | Port 8501 |
-| **React/Vite Frontend** | Search UI with faceting | In development (Phase 2) |
-| **nginx + Certbot** | Reverse proxy, TLS termination | Production-ready |
+| **Streamlit Admin UI** | Basic document management & monitoring | `/admin/streamlit/` via nginx |
+| **React/Vite Frontend** | Search UI with faceting | `/` via nginx |
+| **nginx + Certbot** | Reverse proxy, TLS termination, admin entry point | Production-ready |
 
 ### Data Flow
 
@@ -95,11 +95,16 @@ Once the `books` collection is created:
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| Solr Admin | http://localhost:8983 | Manage collections, view indexed docs |
-| Search API | http://localhost:8080/search?q=historia | Query books with facets, pagination, sorting, and highlights |
-| RabbitMQ Admin | http://localhost:15672 | Monitor queue depth |
+| Main UI | http://localhost/ | Search UI via the main nginx entry point |
+| Admin landing page | http://localhost/admin/ | Jump-off page for infra/admin tools |
+| Solr Admin | http://localhost/admin/solr/ | Manage collections and inspect indexed docs |
+| Search API | http://localhost/v1/search?q=historia | Query books with facets, pagination, sorting, and highlights through nginx |
+| RabbitMQ Admin | http://localhost/admin/rabbitmq/ | Monitor queue depth through the management UI |
+| Redis Commander | http://localhost/admin/redis/ | Inspect Redis state through a lightweight web UI |
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
-| Streamlit Admin | http://localhost:8501 | Document management (development) |
+| Streamlit Admin | http://localhost/admin/streamlit/ | Document management dashboard |
+
+Direct service ports such as `8983`, `15672`, and `8080` remain available for local debugging, but nginx is now the preferred entry point for the UI surface.
 
 ## Solr Schema & Fields
 
