@@ -1,0 +1,12 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "S"]
+ignore = ["S101"]  # allow assert in tests
+
+[lint.per-file-ignores]
+"tests/**" = ["S"]  # security warnings OK in tests
+
+[format]
+quote-style = "double"

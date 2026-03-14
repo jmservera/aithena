@@ -62,3 +62,10 @@
 - Parker's `extract_metadata()` populates title_s, author_s, year_i, category_s directly from filesystem path parsing. His parser handles amades/ (author), balearics/ (category), bsal/ (journal) patterns.
 - Your test suite validates Parker's parser contracts: relative paths, conservative fallbacks, year-range handling. 4 failing tests flag real parser gaps to address in Phase 1.5.
 
+### 2026-03-14 — Ruff linting baseline added to CI
+
+- Added root `ruff.toml` targeting Python 3.11 with 120-character lines, Ruff lint families `E/F/W/I/UP/B/SIM/S`, and test-specific allowances (`S101` globally, all `S` rules under `tests/**`).
+- Updated `.github/workflows/ci.yml` with a `python-lint` job using `astral-sh/ruff-action@v3`; each Ruff step uses `continue-on-error: true` so the new checks are visible in CI without gating merges before LINT-5.
+- Current repo baseline from the root: `ruff check .` reports **107** lint violations and `ruff format --check .` reports **23** files needing reformatting.
+- Regression check after the CI change: `document-indexer` tests still pass (**51 passed**), and `solr-search` suites still pass (**18 passed** total).
+
