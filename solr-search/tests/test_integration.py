@@ -936,3 +936,217 @@ def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -
     params = mock_solr_get.call_args[1]["params"]
     assert "page_start_i" in params["fl"]
     assert "page_end_i" in params["fl"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — /v1/status/ endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@patch("main._tcp_check")
+@patch("main._get_indexing_status")
+@patch("main._get_solr_status")
+def test_status_endpoint_returns_expected_shape(
+    mock_solr_status: MagicMock,
+    mock_indexing: MagicMock,
+    mock_tcp: MagicMock,
+) -> None:
+    """GET /v1/status/ must return solr, indexing, and services keys."""
+    mock_solr_status.return_value = {"status": "ok", "nodes": 3, "docs_indexed": 76}
+    mock_indexing.return_value = {
+        "total_discovered": 169,
+        "indexed": 76,
+        "failed": 2,
+        "pending": 91,
+    }
+    mock_tcp.return_value = True
+
+    client = get_client()
+    response = client.get("/v1/status")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["solr"] == {"status": "ok", "nodes": 3, "docs_indexed": 76}
+    assert data["indexing"] == {
+        "total_discovered": 169,
+        "indexed": 76,
+        "failed": 2,
+        "pending": 91,
+    }
+    assert data["services"] == {"solr": "up", "redis": "up", "rabbitmq": "up"}
+
+
+@patch("main._tcp_check")
+@patch("main._get_indexing_status")
+@patch("main._get_solr_status")
+def test_status_endpoint_slash_alias(
+    mock_solr_status: MagicMock,
+    mock_indexing: MagicMock,
+    mock_tcp: MagicMock,
+) -> None:
+    """/v1/status/ (with trailing slash) must also return 200."""
+    mock_solr_status.return_value = {"status": "ok", "nodes": 3, "docs_indexed": 0}
+    mock_indexing.return_value = {
+        "total_discovered": 0,
+        "indexed": 0,
+        "failed": 0,
+        "pending": 0,
+    }
+    mock_tcp.return_value = True
+
+    client = get_client()
+    response = client.get("/v1/status/")
+
+    assert response.status_code == 200
+
+
+@patch("main._tcp_check")
+@patch("main._get_indexing_status")
+@patch("main._get_solr_status")
+def test_status_services_down_when_tcp_fails(
+    mock_solr_status: MagicMock,
+    mock_indexing: MagicMock,
+    mock_tcp: MagicMock,
+) -> None:
+    """Services must report 'down' when TCP check fails."""
+    mock_solr_status.return_value = {"status": "error", "nodes": 0, "docs_indexed": 0}
+    mock_indexing.return_value = {
+        "total_discovered": 0,
+        "indexed": 0,
+        "failed": 0,
+        "pending": 0,
+    }
+    mock_tcp.return_value = False
+
+    client = get_client()
+    response = client.get("/v1/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["services"]["solr"] == "down"
+    assert data["services"]["redis"] == "down"
+    assert data["services"]["rabbitmq"] == "down"
+
+
+def test_get_solr_status_on_connection_error() -> None:
+    """_get_solr_status must return error status when Solr is unreachable."""
+    from main import _get_solr_status
+
+    with patch("main.requests.get", side_effect=Exception("connection refused")):
+        result = _get_solr_status("http://solr:8983/solr")
+
+    assert result["status"] == "error"
+    assert result["nodes"] == 0
+    assert result["docs_indexed"] == 0
+
+
+def test_get_solr_status_parses_cluster_response() -> None:
+    """_get_solr_status must extract live node count and sum doc counts across shards."""
+    from main import _get_solr_status
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "cluster": {
+            "live_nodes": ["node1", "node2", "node3"],
+            "collections": {
+                "books": {
+                    "shards": {
+                        "shard1": {
+                            "replicas": {
+                                "replica1": {"index": {"numDocs": 40}},
+                                "replica2": {"index": {"numDocs": 40}},
+                            }
+                        },
+                        "shard2": {
+                            "replicas": {
+                                "replica3": {"index": {"numDocs": 36}},
+                            }
+                        },
+                    }
+                }
+            },
+        }
+    }
+
+    with patch("main.requests.get", return_value=mock_response):
+        result = _get_solr_status("http://solr:8983/solr")
+
+    assert result["status"] == "ok"
+    assert result["nodes"] == 3
+    assert result["docs_indexed"] == 76  # 40 (shard1 first replica) + 36 (shard2)
+
+
+def test_get_solr_status_degraded_with_fewer_nodes() -> None:
+    """_get_solr_status must return 'degraded' with fewer than 3 live nodes."""
+    from main import _get_solr_status
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "cluster": {
+            "live_nodes": ["node1"],
+            "collections": {},
+        }
+    }
+
+    with patch("main.requests.get", return_value=mock_response):
+        result = _get_solr_status("http://solr:8983/solr")
+
+    assert result["status"] == "degraded"
+    assert result["nodes"] == 1
+
+
+def test_get_indexing_status_counts_states() -> None:
+    """_get_indexing_status must tally text_indexed, failed, and pending states."""
+    from main import _get_indexing_status
+
+    mock_redis = MagicMock()
+    mock_redis.scan_iter.return_value = ["doc:1", "doc:2", "doc:3", "doc:4", "doc:5"]
+    mock_redis.mget.return_value = [
+        "text_indexed",
+        "text_indexed",
+        "failed",
+        "processing",
+        None,
+    ]
+
+    with patch("main.redis_lib.Redis", return_value=mock_redis):
+        with patch("main._get_redis_pool", return_value=MagicMock()):
+            result = _get_indexing_status("doc:*")
+
+    assert result["total_discovered"] == 5
+    assert result["indexed"] == 2
+    assert result["failed"] == 1
+    assert result["pending"] == 2
+
+
+def test_get_indexing_status_on_redis_error() -> None:
+    """_get_indexing_status must return zeros when Redis is unreachable."""
+    from main import _get_indexing_status
+
+    with patch("main._get_redis_pool", side_effect=Exception("connection refused")):
+        result = _get_indexing_status("doc:*")
+
+    assert result == {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+
+
+def test_tcp_check_success() -> None:
+    """_tcp_check must return True for an open TCP port."""
+    from main import _tcp_check
+
+    mock_sock = MagicMock()
+    mock_sock.__enter__ = MagicMock(return_value=mock_sock)
+    mock_sock.__exit__ = MagicMock(return_value=False)
+
+    with patch("main.socket.create_connection", return_value=mock_sock):
+        assert _tcp_check("localhost", 6379) is True
+
+
+def test_tcp_check_failure() -> None:
+    """_tcp_check must return False when connection is refused."""
+    from main import _tcp_check
+
+    with patch("main.socket.create_connection", side_effect=OSError("refused")):
+        assert _tcp_check("localhost", 6379) is False

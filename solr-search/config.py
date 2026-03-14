@@ -34,6 +34,12 @@ class Settings:
     rrf_k: int
     knn_field: str
     book_embedding_field: str
+    # Phase 4 — status endpoint
+    redis_host: str
+    redis_port: int
+    redis_key_pattern: str
+    rabbitmq_host: str
+    rabbitmq_port: int
 
     @property
     def select_url(self) -> str:
@@ -67,4 +73,10 @@ settings = Settings(
     rrf_k=int(os.environ.get("RRF_K", "60")),
     knn_field=os.environ.get("KNN_FIELD", "book_embedding"),
     book_embedding_field=os.environ.get("BOOK_EMBEDDING_FIELD", "book_embedding"),
+    # Phase 4 — status endpoint
+    redis_host=os.environ.get("REDIS_HOST", "redis"),
+    redis_port=int(os.environ.get("REDIS_PORT", "6379")),
+    redis_key_pattern=os.environ.get("REDIS_KEY_PATTERN", "doc:*"),
+    rabbitmq_host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
+    rabbitmq_port=int(os.environ.get("RABBITMQ_PORT", "5672")),
 )

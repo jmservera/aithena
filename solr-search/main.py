@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import socket
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlparse
 
+import redis as redis_lib
 import requests
 from config import settings
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -456,6 +460,142 @@ def stats() -> dict[str, Any]:
     }
     payload = query_solr(params)
     return parse_stats_response(payload)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — /v1/status/ endpoint
+# ---------------------------------------------------------------------------
+
+_redis_pool: redis_lib.ConnectionPool | None = None
+_redis_pool_lock = threading.Lock()
+
+
+def _get_redis_pool() -> redis_lib.ConnectionPool:
+    """Return a singleton Redis ConnectionPool (double-checked locking)."""
+    global _redis_pool
+    if _redis_pool is None:
+        with _redis_pool_lock:
+            if _redis_pool is None:
+                _redis_pool = redis_lib.ConnectionPool(
+                    host=settings.redis_host,
+                    port=settings.redis_port,
+                    decode_responses=True,
+                    socket_connect_timeout=2,
+                    socket_timeout=5,
+                )
+    return _redis_pool
+
+
+def _tcp_check(host: str, port: int, timeout: float = 2.0) -> bool:
+    """Return True if a TCP connection to *host*:*port* succeeds within *timeout* seconds."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
+    """Query Solr CLUSTERSTATUS and return aggregated node/doc information."""
+    cluster_url = f"{solr_url}/admin/collections"
+    try:
+        resp = requests.get(
+            cluster_url,
+            params={"action": "CLUSTERSTATUS", "wt": "json"},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return {"status": "error", "nodes": 0, "docs_indexed": 0}
+
+    cluster = data.get("cluster", {})
+    live_nodes = cluster.get("live_nodes", [])
+    node_count = len(live_nodes)
+
+    docs_indexed = 0
+    collections = cluster.get("collections", {})
+    for col_data in collections.values():
+        for shard_data in col_data.get("shards", {}).values():
+            replicas = shard_data.get("replicas", {})
+            if replicas:
+                first_replica = next(iter(replicas.values()))
+                docs_indexed += first_replica.get("index", {}).get("numDocs", 0)
+
+    if node_count == 0:
+        solr_status = "error"
+    elif node_count < 3:
+        solr_status = "degraded"
+    else:
+        solr_status = "ok"
+
+    return {"status": solr_status, "nodes": node_count, "docs_indexed": docs_indexed}
+
+
+def _get_indexing_status(key_pattern: str) -> dict[str, int]:
+    """Scan Redis for *key_pattern* keys and tally indexing state counts."""
+    try:
+        pool = _get_redis_pool()
+        client = redis_lib.Redis(connection_pool=pool)
+        keys = list(client.scan_iter(match=key_pattern, count=100))
+        if not keys:
+            return {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+
+        values = client.mget(keys)
+        indexed = 0
+        failed = 0
+        pending = 0
+        for val in values:
+            if val is None:
+                pending += 1
+            elif val == "text_indexed":
+                indexed += 1
+            elif val == "failed":
+                failed += 1
+            else:
+                pending += 1
+
+        total = len(keys)
+        return {
+            "total_discovered": total,
+            "indexed": indexed,
+            "failed": failed,
+            "pending": pending,
+        }
+    except Exception:
+        return {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+
+
+@app.get("/v1/status/", include_in_schema=False, name="status_v1_slash")
+@app.get("/v1/status", name="status_v1")
+def service_status() -> dict[str, Any]:
+    """Return aggregated indexing and service health status.
+
+    Aggregates:
+    - Solr CLUSTERSTATUS (node health + doc count)
+    - Redis ``doc:*`` key scan (indexing state breakdown)
+    - TCP reachability checks for Solr, Redis, and RabbitMQ
+    """
+    parsed = urlparse(settings.solr_url)
+    solr_host = parsed.hostname or settings.solr_url
+    solr_port = parsed.port or 8983
+
+    solr_info = _get_solr_status(settings.solr_url, timeout=settings.request_timeout)
+    indexing_info = _get_indexing_status(settings.redis_key_pattern)
+
+    solr_up = _tcp_check(solr_host, solr_port)
+    redis_up = _tcp_check(settings.redis_host, settings.redis_port)
+    rabbitmq_up = _tcp_check(settings.rabbitmq_host, settings.rabbitmq_port)
+
+    return {
+        "solr": solr_info,
+        "indexing": indexing_info,
+        "services": {
+            "solr": "up" if solr_up else "down",
+            "redis": "up" if redis_up else "down",
+            "rabbitmq": "up" if rabbitmq_up else "down",
+        },
+    }
 
 
 if __name__ == "__main__":
