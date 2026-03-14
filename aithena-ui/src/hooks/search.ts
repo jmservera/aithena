@@ -4,6 +4,8 @@ import { buildApiUrl } from '../api';
 
 const searchBaseURL = buildApiUrl('/v1/search');
 
+export type SearchMode = 'keyword' | 'semantic' | 'hybrid';
+
 export interface BookResult {
   id: string;
   title: string;
@@ -44,6 +46,7 @@ export interface SearchResponse {
   facets: FacetGroups;
   page: number;
   limit: number;
+  mode?: SearchMode;
 }
 
 export interface SearchState {
@@ -52,6 +55,7 @@ export interface SearchState {
   page: number;
   limit: number;
   sort: string;
+  mode: SearchMode;
 }
 
 const defaultSearchState: SearchState = {
@@ -60,7 +64,10 @@ const defaultSearchState: SearchState = {
   page: 1,
   limit: 10,
   sort: 'score desc',
+  mode: 'keyword',
 };
+
+const modeLabel = (mode: SearchMode) => mode.charAt(0).toUpperCase() + mode.slice(1);
 
 export function useSearch() {
   const [searchState, setSearchState] = useState<SearchState>(defaultSearchState);
@@ -72,6 +79,13 @@ export function useSearch() {
 
   const runSearch = useCallback(async (state: SearchState) => {
     if (!state.query.trim()) {
+      if (state.mode !== 'keyword') {
+        setError(`${modeLabel(state.mode)} search requires a search query.`);
+        setResults([]);
+        setFacets({});
+        setTotal(0);
+        return;
+      }
       setResults([]);
       setFacets({});
       setTotal(0);
@@ -87,6 +101,7 @@ export function useSearch() {
       params.set('limit', state.limit.toString());
       params.set('page', state.page.toString());
       params.set('sort', state.sort);
+      params.set('mode', state.mode);
 
       if (state.filters.author) params.set('fq_author', state.filters.author);
       if (state.filters.category) params.set('fq_category', state.filters.category);
@@ -95,6 +110,14 @@ export function useSearch() {
 
       const response = await fetch(`${searchBaseURL}?${params.toString()}`);
       if (!response.ok) {
+        if (response.status === 400 && state.mode !== 'keyword') {
+          const body = await response.json().catch(() => ({}));
+          const detail =
+            typeof body?.detail === 'string'
+              ? body.detail
+              : `${modeLabel(state.mode)} search is unavailable. Embeddings may not be indexed yet.`;
+          throw new Error(detail);
+        }
         throw new Error(`Search request failed: ${response.status}`);
       }
       const data: SearchResponse = await response.json();
@@ -143,6 +166,10 @@ export function useSearch() {
     setSearchState((prev) => ({ ...prev, limit, page: 1 }));
   }, []);
 
+  const setMode = useCallback((mode: SearchMode) => {
+    setSearchState((prev) => ({ ...prev, mode, page: 1 }));
+  }, []);
+
   return {
     searchState,
     results,
@@ -156,5 +183,6 @@ export function useSearch() {
     setPage,
     setSort,
     setLimit,
+    setMode,
   };
 }

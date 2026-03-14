@@ -831,6 +831,78 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
+/* ── Mode selector ─────────────────────────────────────────────── */
+
+.mode-selector {
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  width: fit-content;
+}
+
+.mode-btn {
+  background-color: #40414f;
+  color: rgba(255, 255, 255, 0.65);
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 6px 16px;
+  font-size: 0.82em;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+  white-space: nowrap;
+}
+
+.mode-btn:last-child {
+  border-right: none;
+}
+
+.mode-btn:hover:not(.mode-btn--active) {
+  background-color: rgba(126, 200, 227, 0.1);
+  color: white;
+}
+
+.mode-btn--active {
+  background-color: #7ec8e3;
+  color: #1a1a2e;
+  font-weight: 700;
+  cursor: default;
+}
+
+/* ── Mode badge in results ─────────────────────────────────────── */
+
+.mode-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: capitalize;
+  vertical-align: middle;
+}
+
+.mode-badge--keyword {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.mode-badge--semantic {
+  background-color: rgba(126, 200, 227, 0.18);
+  color: #7ec8e3;
+  border: 1px solid rgba(126, 200, 227, 0.4);
+}
+
+.mode-badge--hybrid {
+  background-color: rgba(255, 217, 125, 0.15);
+  color: #ffd97d;
+  border: 1px solid rgba(255, 217, 125, 0.4);
+}
+
 /* ── Stats page ────────────────────────────────────────────────── */
 
 .stats-main {
