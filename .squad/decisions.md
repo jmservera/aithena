@@ -1777,3 +1777,52 @@ The GitHub `Copilot` user cannot be directly assigned via `gh issue edit --add-a
 **By:** jmservera (manual)
 **What:** Release workflow (`.github/workflows/release.yml`) updated to use `astral-sh/setup-uv@v5`, `uv sync --frozen`, and `uv run pytest -v`. This was the last pip-based workflow. All CI now uses uv exclusively.
 **Why:** Completes the uv migration started in PR #152/#153. Validated by 137 passing tests (73 document-indexer + 64 solr-search) and successful release workflow run `23094831631`.
+
+---
+
+### 2026-03-14T20:30: PR Review Batch — Branch Discipline & Redis Compliance (4 PRs approved & merged)
+
+**By:** Ripley (Lead Reviewer)  
+**Scope:** 4 @copilot PRs reviewed; all targeting `dev` branch
+
+#### Verdicts
+
+| PR | Title | Status | Key Finding |
+|----|-------|--------|-------------|
+| #156 | Add GET /v1/stats/ endpoint tests | ✅ APPROVED | 4 unit tests for existing `parse_stats_response`. Title misleading; endpoint already exists. |
+| #159 | Add GET /v1/status/ endpoint | ✅ APPROVED | Clean health endpoint. Redis: ConnectionPool singleton ✅, scan_iter ✅, mget ✅. 11 tests. |
+| #158 | LINT-3: ESLint + Prettier CI jobs | ✅ APPROVED | Workflow well-structured. Depends on #162 (prettier config) — merge second. |
+| #162 | LINT-2: Add prettier config | ✅ APPROVED | Clean config. Merge first (dependency for #158). |
+
+#### Merge Execution
+
+**Order:** #162→#158 (rebase)→#156→#159
+- #162 merged cleanly (commit `fdb6bf7`)
+- #158 rebased on dev after #162, resolved package.json conflict (commit `4d7fe68`)
+- #156 & #159 merged independently (commits `2cedc7c`, `e53374b`)
+
+#### Key Observations
+
+1. **Branch discipline:** All 4 PRs correctly target `dev`. Major improvement over Phase 4 (6/9 had wrong targets).
+2. **CI gap:** Only CodeQL runs on PR branches. Check `ci.yml` path filters — unit test jobs may be excluded.
+3. **Overlap pattern:** PRs #158 & #162 both modify identical files (prettier config + CI). Proper sequencing prevented conflicts.
+4. **Redis compliance:** PR #159 fully adheres to team standards (ConnectionPool singleton, scan_iter, mget, graceful error handling).
+
+---
+
+### 2026-03-14T20:02: User Directive — PM Gates All Releases
+
+**By:** jmservera (via Copilot)  
+**Status:** IMPLEMENTED (Newt added to team as Product Manager)
+
+**Decision:**
+Before merging `dev` → `main` and creating a release tag, Newt (Product Manager) must validate the release:
+- Run the app end-to-end
+- Verify old and new features work
+- Take screenshots
+- Update documentation
+- Approve or request rework
+
+No release proceeds without PM sign-off.
+
+**Rationale:** Ensures quality and documentation are current before shipping. Enforces a quality gate with human judgment.
