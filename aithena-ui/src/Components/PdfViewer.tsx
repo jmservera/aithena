@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { resolveDocumentUrl } from "../api";
-import { BookResult } from "../hooks/search";
+import { useState, useEffect } from 'react';
+import { resolveDocumentUrl } from '../api';
+import { BookResult } from '../hooks/search';
 
 interface PdfViewerProps {
   result: BookResult;
@@ -18,10 +18,10 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
   // Close on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === 'Escape') onClose();
     };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
   const pdfUrl = resolveDocumentUrl(result.document_url);
@@ -31,24 +31,18 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
       className="pdf-viewer-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={`PDF viewer: ${result.title || "document"}`}
+      aria-label={`PDF viewer: ${result.title || 'document'}`}
     >
       <div className="pdf-viewer-panel">
         <div className="pdf-viewer-header">
           <div className="pdf-viewer-title">
             <span className="pdf-viewer-icon">📄</span>
             <div>
-              <strong>{result.title || "Document"}</strong>
-              {result.author && (
-                <span className="pdf-viewer-author"> — {result.author}</span>
-              )}
+              <strong>{result.title || 'Document'}</strong>
+              {result.author && <span className="pdf-viewer-author"> — {result.author}</span>}
             </div>
           </div>
-          <button
-            className="pdf-viewer-close"
-            onClick={onClose}
-            aria-label="Close PDF viewer"
-          >
+          <button className="pdf-viewer-close" onClick={onClose} aria-label="Close PDF viewer">
             ✕
           </button>
         </div>
@@ -75,7 +69,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
             <iframe
               className="pdf-viewer-frame"
               src={pdfUrl}
-              title={result.title || "PDF document"}
+              title={result.title || 'PDF document'}
               onError={() => setLoadError(true)}
             />
           ) : (

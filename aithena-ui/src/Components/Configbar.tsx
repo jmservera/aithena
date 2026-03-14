@@ -1,11 +1,11 @@
-import React from "react";
-import { ChatMessageProps, defaultChatMessageProps } from "./ChatMessage";
+import React from 'react';
+import { ChatMessageProps, defaultChatMessageProps } from './ChatMessage';
 
 import {
   CreateCompletionRequest,
   CreateCompletionRequestDef,
   CreateCompletionRequestField,
-} from "./types/CreateCompletionRequest";
+} from './types/CreateCompletionRequest';
 
 // Define a component for the sidebar
 const Configbar = ({
@@ -33,11 +33,8 @@ const Configbar = ({
     setProps({ ...defaultChatMessageProps });
   };
 
-  const renderPropertyEditor = (
-    value: CreateCompletionRequestField,
-    index: number
-  ) => {
-    if (value.type === "number") {
+  const renderPropertyEditor = (value: CreateCompletionRequestField, index: number) => {
+    if (value.type === 'number') {
       return (
         <>
           <label key={`label-${index}`} htmlFor={value.key}>
@@ -53,9 +50,7 @@ const Configbar = ({
             min={value.min}
             max={value.max}
             step={value.increment}
-            value={props.model_properties[
-              value.key as keyof CreateCompletionRequest
-            ]?.toString()}
+            value={props.model_properties[value.key as keyof CreateCompletionRequest]?.toString()}
             onChange={handleModelChange}
           />
           <span key={`span-${index}`}>
@@ -88,14 +83,8 @@ const Configbar = ({
       />
       <span key="limit-span">{props.limit}</span>
       <br key="limit-br" />
-      {CreateCompletionRequestDef.map((value, index) =>
-        renderPropertyEditor(value, index)
-      )}
-      <div
-        key="side-key"
-        className="side-menu-button"
-        onClick={handleResetClick}
-      >
+      {CreateCompletionRequestDef.map((value, index) => renderPropertyEditor(value, index))}
+      <div key="side-key" className="side-menu-button" onClick={handleResetClick}>
         <span>🧹</span>Reset
       </div>
     </div>

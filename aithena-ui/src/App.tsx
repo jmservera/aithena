@@ -1,10 +1,10 @@
-import "./App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import TabNav from "./Components/TabNav";
-import SearchPage from "./pages/SearchPage";
-import LibraryPage from "./pages/LibraryPage";
-import StatusPage from "./pages/StatusPage";
-import StatsPage from "./pages/StatsPage";
+import './App.css';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import TabNav from './Components/TabNav';
+import SearchPage from './pages/SearchPage';
+import LibraryPage from './pages/LibraryPage';
+import StatusPage from './pages/StatusPage';
+import StatsPage from './pages/StatsPage';
 
 function App() {
   return (
@@ -32,4 +32,3 @@ function App() {
 }
 
 export default App;
-
