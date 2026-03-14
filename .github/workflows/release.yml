@@ -13,6 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            document-indexer/uv.lock
+            solr-search/uv.lock
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -20,17 +28,20 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          pip install pytest
-          if [ -f document-indexer/requirements.txt ]; then pip install -r document-indexer/requirements.txt; fi
-          if [ -f solr-search/requirements.txt ]; then pip install -r solr-search/requirements.txt; fi
+          if [ -f document-indexer/uv.lock ]; then
+            cd document-indexer && uv sync --frozen && cd ..
+          fi
+          if [ -f solr-search/uv.lock ]; then
+            cd solr-search && uv sync --frozen && cd ..
+          fi
 
       - name: Run tests
         run: |
           if [ -d document-indexer ] && find document-indexer -name 'test_*.py' -o -name '*_test.py' | grep -q .; then
-            cd document-indexer && python3 -m pytest -v && cd ..
+            cd document-indexer && uv run pytest -v && cd ..
           fi
           if [ -d solr-search ] && find solr-search -name 'test_*.py' -o -name '*_test.py' | grep -q .; then
-            cd solr-search && python3 -m pytest -v && cd ..
+            cd solr-search && uv run pytest -v && cd ..
           fi
 
       - name: Create GitHub Release
