@@ -1,6 +1,16 @@
-#/bin/bash
+#!/bin/bash
 
 TAG=cpu-v0.1
+
+# Detect Python services with pyproject.toml and sync with uv
+PYTHON_SERVICES=(admin/src document-indexer document-lister e2e qdrant-clean qdrant-search solr-search)
+
+for service in "${PYTHON_SERVICES[@]}"; do
+    if [ -f "$service/pyproject.toml" ]; then
+        echo "Syncing $service with uv..."
+        (cd "$service" && uv sync)
+    fi
+done
 
 docker compose up --build -d
 
