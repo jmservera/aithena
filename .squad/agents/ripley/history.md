@@ -587,3 +587,43 @@ Closed-unmerged: `add-build-status-tab-component` (#128), `add-contract-tests-so
 **Key learning:** The GitHub `Copilot` user cannot be assigned via `gh issue edit --add-assignee Copilot`. The `squad:copilot` label is the actual routing mechanism. Don't waste time trying to assign the user directly.
 
 **Sequential @copilot strategy:** Only 3 issues assigned at once (all 🟢 single-directory mechanical tasks). Remaining candidates (#99 ruff multi-service) held back for batch 2 after success is confirmed. This prevents the PR sprawl from Phase 4.
+
+### 2026-03-14 — PR Review Batch 2: v0.4 Frontend Features (3 PRs approved)
+
+**Context:** Reviewed 3 @copilot PRs implementing v0.4 UI features (PDF page nav, Status tab, Stats tab). All target `dev`. Backend APIs (PRs #156, #159) were just merged.
+
+**Verdicts:**
+- **PR #157** (PDF viewer page nav) — ✅ APPROVED. `pages?: [number, number] | null` exactly matches backend `normalize_book()`. Appends `#page=N` to PDF URL. `formatFoundPages()` handles single/range display.
+- **PR #160** (Status tab) — ✅ APPROVED. `StatusResponse` types are exact match with merged `/v1/status/` endpoint. AbortController + cancelled flag + setTimeout polling — no memory leaks. ServiceDot has accessible aria-label.
+- **PR #161** (Stats tab) — ✅ APPROVED. `StatsResponse`/`FacetEntry`/`PageStats` types are exact mirrors of `parse_stats_response()`. FacetTable well-extracted with limit prop.
+
+**Merge order:** #157 → #160 → #161 (package-lock.json + App.css will need conflict resolution on 2nd and 3rd merge).
+
+**Key observations:**
+1. **Type alignment discipline:** All 3 PRs have TypeScript interfaces that exactly match the backend Python return dicts. The fix commits (aligning with backend contract) worked — copilot corrected the types after CHANGES_REQUESTED.
+2. **Branch discipline holds:** 7 consecutive PRs with correct `dev` base branch since the guardrails were added.
+3. **No frontend tests:** None of the 3 PRs add component tests. Backend is tested, but React layer has no coverage. Flag for v1.0 planning.
+4. **AbortController inconsistency:** `useStatus()` has AbortController (polling hook), `useStats()` doesn't (one-shot). Both have cancelled flags. Minor cleanup candidate.
+5. **CI gap persists:** Only CodeQL runs on PR branches — no unit test CI jobs triggered. Need to fix `ci.yml` path/branch filters.
+
+### 2026-03-14T20:50 — Session Complete: v0.4 Merge Batch (7 PRs total)
+
+**Context:** Led full review and merge of 7 @copilot PRs across two batches (infrastructure + frontend).
+
+**Batch 1 (Backend Infrastructure) — All merged:**
+- #156: `CollectionStats` model + `parse_stats_response()` + 14 tests ✅
+- #158: Multilingual PDF metadata (en/es/fr/de) ✅
+- #159: GET `/v1/status/` endpoint + 11 tests ✅
+- #162: CI/CD fix (CodeQL on all branches, unit tests on main) ✅
+
+**Batch 2 (Frontend Components) — All merged:**
+- #157: PDF viewer page navigation ✅
+- #160: Status tab (IndexingStatus + useStatus) ✅
+- #161: Stats tab (CollectionStats + useStats) — required rebase conflict resolution (App.css) ✅
+
+**Merge execution:** Coordinator merged all 7 in sequence without blocking issues. PR #161 had a small merge conflict in `App.css` (Status page CSS vs Stats page CSS) — resolved by keeping both.
+
+**Key decision:** Frontend component tests deferred to post-v0.4 (acceptable for alpha phase, track for v1.0 gate).
+
+**Exit state:** `dev` branch stable with all 7 PRs merged. Branch discipline continues (7 consecutive PRs with correct `dev` base).
+

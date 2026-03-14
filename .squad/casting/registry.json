@@ -56,6 +56,14 @@
       "created_at": "2026-03-14T08:35:00Z",
       "legacy_named": false,
       "status": "active"
+    },
+    {
+      "persistent_name": "Newt",
+      "role": "Product Manager",
+      "universe": "Alien",
+      "created_at": "2026-03-14T19:30:00Z",
+      "legacy_named": false,
+      "status": "active"
     }
   ]
 }

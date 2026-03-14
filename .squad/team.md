@@ -23,6 +23,7 @@
 | 🔒 Kane | Security Engineer | `.squad/agents/kane/charter.md` | ✅ Active |
 | 👤 Juanma | Product Owner | — | ✅ Human |
 | 🤖 Copilot | Coding Agent | `.squad/agents/copilot/charter.md` | ✅ Active |
+| 📝 Newt | Product Manager | `.squad/agents/newt/charter.md` | ✅ Active |
 
 <!-- copilot-auto-assign: true -->
 

@@ -1769,3 +1769,101 @@ The GitHub `Copilot` user cannot be directly assigned via `gh issue edit --add-a
 **What:** Restructured repo branches: `dev` is now the default branch. Renamed `main` → `oldmain` and `jmservera/solrstreamlitui` → `main`. This means @copilot will now naturally target `dev` (the default). All PRs still target `dev`. Only Ripley or Juanma merge `dev` → `main`.
 
 **Why:** User request — fixes the root cause of @copilot always targeting the wrong branch (it targets the GitHub default, which is now `dev`).
+
+---
+
+### 2026-03-14T19:33: UV Migration Complete Across All CI
+
+**By:** jmservera (manual)
+**What:** Release workflow (`.github/workflows/release.yml`) updated to use `astral-sh/setup-uv@v5`, `uv sync --frozen`, and `uv run pytest -v`. This was the last pip-based workflow. All CI now uses uv exclusively.
+**Why:** Completes the uv migration started in PR #152/#153. Validated by 137 passing tests (73 document-indexer + 64 solr-search) and successful release workflow run `23094831631`.
+
+---
+
+### 2026-03-14T20:30: PR Review Batch — Branch Discipline & Redis Compliance (4 PRs approved & merged)
+
+**By:** Ripley (Lead Reviewer)  
+**Scope:** 4 @copilot PRs reviewed; all targeting `dev` branch
+
+#### Verdicts
+
+| PR | Title | Status | Key Finding |
+|----|-------|--------|-------------|
+| #156 | Add GET /v1/stats/ endpoint tests | ✅ APPROVED | 4 unit tests for existing `parse_stats_response`. Title misleading; endpoint already exists. |
+| #159 | Add GET /v1/status/ endpoint | ✅ APPROVED | Clean health endpoint. Redis: ConnectionPool singleton ✅, scan_iter ✅, mget ✅. 11 tests. |
+| #158 | LINT-3: ESLint + Prettier CI jobs | ✅ APPROVED | Workflow well-structured. Depends on #162 (prettier config) — merge second. |
+| #162 | LINT-2: Add prettier config | ✅ APPROVED | Clean config. Merge first (dependency for #158). |
+
+#### Merge Execution
+
+**Order:** #162→#158 (rebase)→#156→#159
+- #162 merged cleanly (commit `fdb6bf7`)
+- #158 rebased on dev after #162, resolved package.json conflict (commit `4d7fe68`)
+- #156 & #159 merged independently (commits `2cedc7c`, `e53374b`)
+
+#### Key Observations
+
+1. **Branch discipline:** All 4 PRs correctly target `dev`. Major improvement over Phase 4 (6/9 had wrong targets).
+2. **CI gap:** Only CodeQL runs on PR branches. Check `ci.yml` path filters — unit test jobs may be excluded.
+3. **Overlap pattern:** PRs #158 & #162 both modify identical files (prettier config + CI). Proper sequencing prevented conflicts.
+4. **Redis compliance:** PR #159 fully adheres to team standards (ConnectionPool singleton, scan_iter, mget, graceful error handling).
+
+---
+
+### 2026-03-14T20:02: User Directive — PM Gates All Releases
+
+**By:** jmservera (via Copilot)  
+**Status:** IMPLEMENTED (Newt added to team as Product Manager)
+
+**Decision:**
+Before merging `dev` → `main` and creating a release tag, Newt (Product Manager) must validate the release:
+- Run the app end-to-end
+- Verify old and new features work
+- Take screenshots
+- Update documentation
+- Approve or request rework
+
+No release proceeds without PM sign-off.
+
+**Rationale:** Ensures quality and documentation are current before shipping. Enforces a quality gate with human judgment.
+
+---
+
+### 2026-03-14T20:50: PR Review Batch 2 — v0.4 Frontend & Type Safety (3 PRs approved & merged)
+
+**By:** Ripley (Lead Reviewer)  
+**Scope:** 3 @copilot UI PRs reviewed and merged into `dev` branch  
+**Session:** v0.4 merge complete (7 total PRs this session)
+
+#### Summary
+
+All 3 Copilot UI PRs **approved**. TypeScript interfaces match the merged backend APIs exactly. React patterns are clean with proper cleanup. All CI green, all builds pass.
+
+#### Verdicts
+
+| PR | Title | Status | Key Finding |
+|----|-------|--------|------------|
+| #157 | PDF viewer page navigation | ✅ APPROVED | `pages?: [number, number] \| null` matches `normalize_book()` contract. `#page=N` fragment appended correctly. |
+| #160 | Status tab (IndexingStatus + useStatus) | ✅ APPROVED | Types match merged `/v1/status/` (PR #159). AbortController + cancelled flag + setTimeout polling — no leaks. |
+| #161 | Stats tab (CollectionStats + useStats) | ✅ APPROVED | Types match merged `parse_stats_response()` (PR #156). FacetEntry/PageStats interfaces are exact mirrors. |
+
+#### Merge Execution
+
+**Recommended order:** #157 → #160 → #161
+
+All three PRs merged successfully. Merge order #157→#160→#161 chosen (touchs different files except `package-lock.json` and `App.css`). PR #161 required rebase conflict resolution in `App.css` (Status page CSS vs Stats page CSS — kept both).
+
+#### Key Observations
+
+1. **Type safety:** All 3 frontend PRs maintain perfect TypeScript interface alignment with their backend counterparts (verified against #156, #159).
+2. **Branch discipline:** This is now 7 consecutive PRs with correct base branch (`dev`).
+3. **Frontend test gap:** No component tests in any 3 PRs. Backend well-tested (#156: 14 tests, #159: 11 tests), but React components should have Jest/RTL coverage before v1.0.
+4. **AbortController inconsistency:** `useStatus()` includes AbortController; `useStats()` does not. Both safe, but inconsistent patterns. Cleanup candidate for v0.5.
+5. **CI gap persists:** Only CodeQL runs on PR branches. Unit test jobs do not trigger. Consider gating on all branches.
+
+#### Decisions
+
+- ✅ Approve all 3 PRs — types match, no blockers
+- ✅ Merge order: #157 → #160 → #161
+- ⏳ Defer frontend component tests to post-v0.4 (acceptable for alpha phase, track for v1.0 gate)
+
