@@ -19,6 +19,7 @@
 | 🧪 Lambert | Tester | `.squad/agents/lambert/charter.md` | ✅ Active |
 | 📋 Scribe | Session Logger | `.squad/agents/scribe/charter.md` | ✅ Active |
 | 🔄 Ralph | Work Monitor | — | 🔄 Monitor |
+| ⚙️ Brett | Infra Architect | `.squad/agents/brett/charter.md` | ✅ Active |
 | 🤖 Copilot | Coding Agent | `.squad/agents/copilot/charter.md` | ✅ Active |
 
 <!-- copilot-auto-assign: true -->

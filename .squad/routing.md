@@ -11,6 +11,9 @@ How to decide who handles what.
 | React/TypeScript UI | Dallas | Search interface, filters, PDF viewer, upload UI, Vite config |
 | Solr & search | Ash | Solr schema, multilingual analyzers, embedding pipeline, query optimization |
 | Data & indexing pipeline | Ash + Parker | Solr indexing, document processing, embedding integration |
+| Docker, Compose, containers | Brett | Dockerfiles, docker-compose, multi-stage builds, container security, health checks |
+| SolrCloud infrastructure | Brett + Ash | Cluster topology, ZooKeeper, configsets, replica management |
+| CI/CD container builds | Brett | Image optimization, caching, GitHub Actions container pipelines |
 | Code review | Ripley | Review PRs, check quality, suggest improvements |
 | Testing | Lambert | Write tests, find edge cases, verify fixes, integration testing |
 | Scope & priorities | Ripley | What to build next, trade-offs, decisions |
