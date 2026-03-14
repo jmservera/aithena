@@ -5,13 +5,9 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import time
-import unittest.mock as mock
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helper: reload __init__ with a custom environment
@@ -22,6 +18,7 @@ def reload_init(env: dict) -> object:
     """Reload the document_lister package with the given environment variables."""
     with patch.dict(os.environ, env, clear=True):
         import document_lister
+
         importlib.reload(document_lister)
         return document_lister
 
@@ -80,6 +77,7 @@ def channel_mock():
 def _import_main_module():
     """Import document_lister.__main__."""
     import document_lister.__main__ as main_mod
+
     importlib.reload(main_mod)
     return main_mod
 
@@ -95,9 +93,8 @@ class TestProcessPath:
         (tmp_path / "book.pdf").write_bytes(b"pdf content")
         (tmp_path / "notes.txt").write_text("notes")
 
-        with patch.object(main_mod, "DOCUMENT_WILDCARD", "*"):
-            with patch.object(main_mod, "handle_document") as mock_handle:
-                main_mod.process_path(str(tmp_path), redis_mock, channel_mock)
+        with patch.object(main_mod, "DOCUMENT_WILDCARD", "*"), patch.object(main_mod, "handle_document") as mock_handle:
+            main_mod.process_path(str(tmp_path), redis_mock, channel_mock)
 
         mock_handle.assert_called_once_with(tmp_path / "book.pdf", redis_mock, channel_mock)
 
@@ -122,12 +119,14 @@ class TestHandleDocument:
         pdf = tmp_path / "book.pdf"
         pdf.write_bytes(b"pdf content")
 
-        existing = json.dumps({
-            "path": str(pdf),
-            "last_modified": pdf.stat().st_mtime,
-            "processed": True,
-            "timestamp": "2026-01-01T00:00:00",
-        })
+        existing = json.dumps(
+            {
+                "path": str(pdf),
+                "last_modified": pdf.stat().st_mtime,
+                "processed": True,
+                "timestamp": "2026-01-01T00:00:00",
+            }
+        )
         redis_mock.get.return_value = existing
 
         handle_document(pdf, redis_mock, channel_mock)
@@ -141,12 +140,14 @@ class TestHandleDocument:
         pdf.write_bytes(b"pdf content")
 
         old_mtime = pdf.stat().st_mtime - 10  # simulate older mtime in Redis
-        existing = json.dumps({
-            "path": str(pdf),
-            "last_modified": old_mtime,
-            "processed": True,
-            "timestamp": "2026-01-01T00:00:00",
-        })
+        existing = json.dumps(
+            {
+                "path": str(pdf),
+                "last_modified": old_mtime,
+                "processed": True,
+                "timestamp": "2026-01-01T00:00:00",
+            }
+        )
         redis_mock.get.return_value = existing
 
         handle_document(pdf, redis_mock, channel_mock)
@@ -164,21 +165,21 @@ class TestHandleDocument:
         pdf = tmp_path / "book.pdf"
         pdf.write_bytes(b"pdf content")
 
-        existing = json.dumps({
-            "path": str(pdf),
-            "last_modified": pdf.stat().st_mtime,
-            "processed": False,
-            "timestamp": "2026-01-01T00:00:00",
-        })
+        existing = json.dumps(
+            {
+                "path": str(pdf),
+                "last_modified": pdf.stat().st_mtime,
+                "processed": False,
+                "timestamp": "2026-01-01T00:00:00",
+            }
+        )
         redis_mock.get.return_value = existing
 
         handle_document(pdf, redis_mock, channel_mock)
 
         channel_mock.basic_publish.assert_not_called()
 
-    def test_modified_unprocessed_document_updates_mtime_but_not_requeued(
-        self, tmp_path, redis_mock, channel_mock
-    ):
+    def test_modified_unprocessed_document_updates_mtime_but_not_requeued(self, tmp_path, redis_mock, channel_mock):
         """A document already in the queue but with changed mtime updates Redis but does not
         push again (it was not yet processed, so the old queue entry is still valid)."""
         handle_document, _ = _import_handle_document()
@@ -186,12 +187,14 @@ class TestHandleDocument:
         pdf.write_bytes(b"pdf content")
 
         old_mtime = pdf.stat().st_mtime - 10
-        existing = json.dumps({
-            "path": str(pdf),
-            "last_modified": old_mtime,
-            "processed": False,
-            "timestamp": "2026-01-01T00:00:00",
-        })
+        existing = json.dumps(
+            {
+                "path": str(pdf),
+                "last_modified": old_mtime,
+                "processed": False,
+                "timestamp": "2026-01-01T00:00:00",
+            }
+        )
         redis_mock.get.return_value = existing
 
         handle_document(pdf, redis_mock, channel_mock)

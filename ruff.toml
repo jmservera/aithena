@@ -1,0 +1,13 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "S"]
+
+[lint.per-file-ignores]
+"**/tests/*.py" = ["S101"]
+"e2e/*.py" = ["S101"]
+"e2e/conftest.py" = ["S108"]
+"e2e/test_upload_index_search.py" = ["S603"]
+"embeddings-server/main.py" = ["S104"]
+"solr-search/main.py" = ["S104"]

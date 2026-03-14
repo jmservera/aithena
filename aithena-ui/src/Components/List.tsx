@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState } from 'react';
 
 interface props {
   list: string[];
 }
 
 function List({ list }: props) {
-  let [selectedItem, setSelectedItem] = useState(-1);
+  const [selectedItem, setSelectedItem] = useState(-1);
 
   return (
     <div>
@@ -13,11 +13,7 @@ function List({ list }: props) {
       <ul className="list-group">
         {list.map((item, index) => (
           <li
-            className={
-              selectedItem === index
-                ? "list-group-item active"
-                : "list-group-item"
-            }
+            className={selectedItem === index ? 'list-group-item active' : 'list-group-item'}
             key={item}
             onClick={() => setSelectedItem(index)}
           >

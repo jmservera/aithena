@@ -1,15 +1,11 @@
 #!/usr/bin/env python
-# encoding: utf-8
 
 import logging
 import sys
 
 from config import MODEL_NAME, PORT
 from fastapi import FastAPI
-
 from pydantic import BaseModel
-from typing import Union
-
 from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(level=logging.INFO)
@@ -19,13 +15,9 @@ logger.info("Loading embedding model: %s", MODEL_NAME)
 try:
     model = SentenceTransformer(MODEL_NAME)
     embedding_dim = model.get_sentence_embedding_dimension()
-    logger.info(
-        "Model loaded successfully: %s (embedding_dim=%d)", MODEL_NAME, embedding_dim
-    )
+    logger.info("Model loaded successfully: %s (embedding_dim=%d)", MODEL_NAME, embedding_dim)
 except Exception as exc:
-    logger.critical(
-        "Failed to load embedding model '%s': %s", MODEL_NAME, exc, exc_info=True
-    )
+    logger.critical("Failed to load embedding model '%s': %s", MODEL_NAME, exc, exc_info=True)
     sys.exit(1)
 
 app = FastAPI(title="𐃆 Aithena Embeddings API")
@@ -33,18 +25,22 @@ app = FastAPI(title="𐃆 Aithena Embeddings API")
 
 class EmbeddingsInput(BaseModel):
     """Input definition for embeddings endpoint. Takes a list of strings or a single string."""
-    input: Union[str, list[str]]
+
+    input: str | list[str]
 
 
 class EmbeddingsOutput(BaseModel):
     """Output definition for embeddings endpoint. Returns a list of embeddings."""
+
     class EmbeddingsList(BaseModel):
         """The list of embeddings."""
+
         object: str = "embedding"
         embedding: list[float] = []
 
     class Usage(BaseModel):
         """Usage statistics. Not used, just for compatibility with LLaMA.cpp API."""
+
         prompt_tokens: int
         total_tokens: int
 
@@ -56,6 +52,7 @@ class EmbeddingsOutput(BaseModel):
 
 class ModelInfo(BaseModel):
     """Active model metadata for downstream consumers (e.g. Solr vector field sizing)."""
+
     model: str
     embedding_dim: int
 

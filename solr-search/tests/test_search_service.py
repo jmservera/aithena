@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -111,10 +111,94 @@ def test_normalize_book_collects_fields_and_highlights() -> None:
         "folder_path": "amades",
         "page_count": 320,
         "file_size": 4096,
+        "pages": None,
         "score": 12.5,
         "highlights": ["<em>folk</em> story", "second snippet"],
         "document_url": "/documents/token",
     }
+
+
+def test_normalize_book_includes_page_range_for_chunk_hit() -> None:
+    book = normalize_book(
+        {
+            "id": "chunk123",
+            "title_s": "Rondalles",
+            "author_s": "Amades",
+            "year_i": 1950,
+            "file_path_s": "amades/rondalles.pdf",
+            "page_start_i": 5,
+            "page_end_i": 6,
+            "score": 8.0,
+        },
+        {},
+        "/documents/token",
+    )
+
+    assert book["pages"] == [5, 6]
+
+
+def test_normalize_book_pages_null_for_full_doc_hit() -> None:
+    book = normalize_book(
+        {
+            "id": "doc1",
+            "title_s": "Full Book",
+            "file_path_s": "books/full.pdf",
+            "score": 5.0,
+        },
+        {},
+        "/documents/token",
+    )
+
+    assert book["pages"] is None
+
+
+def test_normalize_book_single_page_chunk() -> None:
+    book = normalize_book(
+        {
+            "id": "chunk_single",
+            "title_s": "Single Page Chunk",
+            "file_path_s": "books/doc.pdf",
+            "page_start_i": 7,
+            "page_end_i": 7,
+            "score": 3.0,
+        },
+        {},
+        None,
+    )
+
+    assert book["pages"] == [7, 7]
+
+
+def test_normalize_book_page_start_only() -> None:
+    book = normalize_book(
+        {
+            "id": "chunk_start_only",
+            "title_s": "Partial Chunk",
+            "file_path_s": "books/doc.pdf",
+            "page_start_i": 10,
+            "score": 2.0,
+        },
+        {},
+        None,
+    )
+
+    assert book["pages"] == [10, 10]
+
+
+def test_normalize_book_page_end_only() -> None:
+    book = normalize_book(
+        {
+            "id": "chunk_end_only",
+            "title_s": "Partial Chunk",
+            "file_path_s": "books/doc.pdf",
+            "page_end_i": 15,
+            "score": 2.0,
+        },
+        {},
+        None,
+    )
+
+    assert book["pages"] == [15, 15]
 
 
 def test_document_tokens_round_trip_and_stay_under_base_path(tmp_path: Path) -> None:
@@ -144,7 +228,7 @@ def test_normalize_search_query_rejects_local_params() -> None:
 
 
 def test_build_inline_content_disposition_sanitizes_newlines() -> None:
-    header = build_inline_content_disposition('safe\nname.pdf')
+    header = build_inline_content_disposition("safe\nname.pdf")
 
     assert "\n" not in header
     assert header.startswith("inline; filename*=UTF-8''")
@@ -231,7 +315,6 @@ def test_reciprocal_rank_fusion_preserves_metadata() -> None:
     assert fused[0]["title"] == "My Book"
     assert fused[0]["author"] == "Author A"
     assert fused[0]["highlights"] == ["snippet"]
-
 
 
 def test_solr_escape_handles_special_characters() -> None:

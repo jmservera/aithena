@@ -12,6 +12,7 @@
 - 2026-03-14: Extracted the SolrCloud Docker operations research into `.squad/skills/solrcloud-docker-operations/SKILL.md` so other agents can reuse the runbooks and hardening guidance.
 - 2026-03-14: The local SolrCloud compose stack must use the official `solr:9.7` image with `ZK_HOST` and no `solr start -c -f` entrypoint override; keep `solr-search` on host port 8080 and move ZooKeeper AdminServer to a non-conflicting host port instead.
 - 2026-03-14: Added a one-shot `solr-init` bootstrap service plus ZooKeeper/Solr health checks so the `books` configset uploads, the `books` collection is recreated idempotently, and `document-indexer` waits for bootstrap completion before indexing.
+- 2026-03-14: `buildall.sh` should `uv sync` the uv-managed Python services (`admin`, `document-indexer`, `document-lister`, `solr-search`) and skip `embeddings-server` until it gains a `pyproject.toml`; local end-to-end `docker compose up --build -d` validation can still be blocked by external image pulls (RabbitMQ) or unrelated frontend lockfile drift.
 
 ## SolrCloud Docker Operations Reference
 
@@ -324,3 +325,10 @@
 - Apache Solr Reference Guide: Docker, SolrCloud recovery, shard/replica management, ping, collections API, configsets, authn/authz.
 - Apache ZooKeeper docs: ensemble configuration, admin guide, programmer guide.
 - Docker Compose docs: `depends_on`, `service_healthy`, restart semantics, and service shutdown ordering.
+
+## 2026-03-14 — nginx admin ingress
+- Moved the repo toward a repo-managed nginx entrypoint instead of an external `/etc/nginx/conf.d` bind volume so infra URLs are defined in source control.
+- Added an `aithena-ui` container so nginx can serve the React app at `/`, plus a static `/admin/` landing page for operators.
+- Exposed Solr Admin, RabbitMQ Management, Streamlit Admin, and Redis Commander under `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, and `/admin/redis/` respectively.
+- RabbitMQ now uses the management image with `management.path_prefix=/admin/rabbitmq`; Streamlit uses `--server.baseUrlPath=/admin/streamlit`; Redis Commander uses `URL_PREFIX=/admin/redis`.
+- Validation: `docker compose config --quiet`, `npm ci && npm run build` in `aithena-ui/`, `uv run python -m compileall src` in `admin/`, and nginx syntax tests with `docker run ... nginx -t` all succeeded. The `streamlit-admin` image build is still blocked in this environment by an external Docker Hub fetch failure for `python:3.11-slim`, so runtime validation stopped at app-level checks plus config syntax.

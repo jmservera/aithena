@@ -82,9 +82,7 @@ def test_extract_metadata_parses_author_directory_pattern(make_document, extract
     )
 
 
-def test_extract_metadata_parses_author_title_year_filename_pattern(
-    make_document, extract_metadata_func
-):
+def test_extract_metadata_parses_author_title_year_filename_pattern(make_document, extract_metadata_func):
     file_path, base_path = make_document(
         "Mercè Rodoreda - La plaça del Diamant (1962).pdf",
         b"root-file",
@@ -177,7 +175,7 @@ def test_extract_metadata_parses_category_filename_pattern(make_document, extrac
 def test_extract_metadata_handles_unicode_and_non_pdf_paths(
     make_document, extract_metadata_func, relative_path, expected
 ):
-    file_path, base_path = make_document(relative_path, "olé".encode("utf-8"))
+    file_path, base_path = make_document(relative_path, "olé".encode())
 
     metadata = extract_metadata_func(str(file_path), base_path=str(base_path))
 

@@ -1092,3 +1092,680 @@ All three endpoints go in `solr-search/main.py`, following existing patterns:
 3. **Library caching:** Should `/v1/library/` cache Solr lookups across requests? Recommend: per-request batch only for now. Add Redis caching if performance is an issue.
 4. **RabbitMQ access:** solr-search currently doesn't connect to RabbitMQ. The `/v1/status/` endpoint needs the management API URL added to `Settings`. New env var: `RABBITMQ_MANAGEMENT_URL=http://rabbitmq:15672`.
 
+
+---
+
+## Session 3 Decisions — Released 2026-03-14
+
+### Branching Strategy — Release Gating
+
+**Date:** 2026-03-14  
+**Author:** Ripley (Lead)  
+**Approved by:** Juanma (Product Owner)
+
+#### Branches
+
+- `dev` — active development, all squad/copilot PRs target this
+- `main` — production-ready, always has a working version
+- Feature branches: `squad/{issue}-{slug}` or `copilot/{slug}` — short-lived, merge to `dev`
+
+#### Release Flow
+
+1. Work happens on `dev` (PRs from feature branches)
+2. At phase end, Ripley or Juanma runs integration test on `dev`
+3. If tests pass: merge `dev` → `main`
+4. Create semver tag: `git tag -a v{X.Y.Z} -m "Release v{X.Y.Z}: {phase description}"`
+5. Push tag: `git push origin v{X.Y.Z}`
+
+#### Merge Authority
+
+- `dev` ← feature branches: any squad member can merge (with Ripley review)
+- `main` ← `dev`: ONLY Ripley or Juanma
+- Tags: ONLY Ripley or Juanma
+
+#### Current Version
+
+Based on the phase system:
+- v0.1.0 — Phase 1 (Solr indexing) ✅
+- v0.2.0 — Phase 2 (Search API + UI) ✅
+- v0.3.0 — Phase 3 (Embeddings + hybrid search) ✅
+- v0.4.0 — Phase 4 (Dashboard + polish) — in progress
+
+---
+
+### Backlog Organization into GitHub Milestones
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-14  
+**Status:** Accepted
+
+#### Context
+
+The backlog had 49 open issues with no milestone structure. 13 issues were completed by merged PRs but never closed. Work needed grouping into release phases with clear completion criteria and a pause-reflect-reskill cadence.
+
+#### Actions Taken
+
+- **Created 5 GitHub milestones** (v0.3.0 through v1.0.0)
+- **Closed 13 issues** completed by merged PRs (#81–#84, #91, #110–#113, #124–#126, #133)
+- **Assigned 36 remaining open issues** to milestones
+
+#### Milestone Structure
+
+##### v0.3.0 — Stabilize Core (5 issues)
+
+Finish the UV/ruff migration cleanup and document the new dev setup.
+
+| # | Title | Owner |
+|---|-------|-------|
+| 92 | UV-8: Update buildall.sh and CI for uv | Dallas |
+| 95 | LINT-4: Replace pylint/black with ruff in document-lister | Ripley |
+| 96 | DOC-1: Document uv migration and dev setup in README | Dallas |
+| 99 | LINT-5: Run ruff auto-fix across all Python services | Lambert |
+| 100 | LINT-6: Run eslint + prettier auto-fix on aithena-ui | Dallas |
+
+**Done when:** `buildall.sh` works with uv, all Python services pass `ruff check`, README has current dev setup instructions, CI green.  
+**Effort:** ~2–3 sessions.
+
+##### v0.4.0 — Dashboard & Polish (7 issues)
+
+Add dashboard endpoints + React tabs, establish frontend lint/test baseline.
+
+| # | Title | Owner |
+|---|-------|-------|
+| 114 | P4: Add /v1/status/ endpoint to solr-search | Parker |
+| 120 | P4: Add tab navigation to React UI | Dallas |
+| 121 | P4: Build Stats tab in React UI | Dallas/Copilot |
+| 122 | P4: Build Status tab in React UI | Dallas/Copilot |
+| 41 | Phase 2: Add frontend test coverage | Parker |
+| 93 | LINT-2: Add prettier config for aithena-ui | Dallas |
+| 94 | LINT-3: Add eslint + prettier CI jobs for frontend | Dallas |
+
+**Done when:** Status + Stats endpoints return real data, React UI has 4 tabs (Search/Library/Status/Stats), eslint+prettier CI green, frontend test coverage > 0%.  
+**Effort:** ~4–5 sessions.
+
+##### v0.5.0 — Advanced Search (3 issues)
+
+Page-level search results and similar-books UI.
+
+| # | Title | Owner |
+|---|-------|-------|
+| 134 | Return page numbers in search results from chunk-level hits | Ash/Parker |
+| 135 | Open PDF viewer at specific page from search results | Dallas |
+| 47 | Phase 3: Show similar books in React UI | Parker |
+
+**Done when:** Search results show page numbers, clicking a result opens PDF at the correct page, similar-books panel renders for each book.  
+**Effort:** ~3–4 sessions.
+
+##### v0.6.0 — Security & Hardening (19 issues)
+
+Security CI pipeline, vulnerability remediation, docker hardening.
+
+| # | Title | Owner |
+|---|-------|-------|
+| 88 | SEC-1: Add bandit Python security scanning to CI | Kane/Ripley |
+| 89 | SEC-2: Add checkov IaC scanning to CI | Kane/Ripley |
+| 90 | SEC-3: Add zizmor GitHub Actions security scanning | Kane/Ripley |
+| 97 | SEC-4: Create OWASP ZAP manual security audit guide | Kane |
+| 98 | SEC-5: Security scanning validation and baseline tuning | Lambert |
+| 52 | Phase 4: Harden docker-compose and service health checks | Brett |
+| 5–7, 17–18, 20, 29–35 | Mend dependency vulnerability fixes (13 issues) | Kane/Copilot |
+
+**Done when:** bandit+checkov+zizmor CI green, all HIGH+ Mend vulnerabilities resolved or suppressed with justification, docker-compose has health checks on all services.  
+**Note:** Many Mend issues may be auto-resolved — qdrant-clean/qdrant-search/llama-server were removed in PR #115. Triage each: close if the vulnerable package is gone, fix or suppress if still present.  
+**Effort:** ~5–6 sessions.
+
+##### v1.0.0 — Production Ready (2 issues + future work)
+
+Upload flow, E2E coverage, production stability.
+
+| # | Title | Owner |
+|---|-------|-------|
+| 49 | Phase 4: Add a PDF upload endpoint to the FastAPI backend | Parker |
+| 50 | Phase 4: Build a PDF upload flow in the React UI | Dallas |
+
+**Future work (no issues yet):**
+- Vector/semantic search validation end-to-end
+- Hybrid search mode toggle in UI
+- Branch rename (dev → main)
+- Full test coverage (backend + frontend)
+- docker-compose.infra.yml for hybrid local dev
+
+**Done when:** Full upload → index → search → view flow works E2E, branch renamed, CI green on default branch, all services have tests.  
+**Effort:** ~8–10 sessions.
+
+#### Cadence
+
+After each milestone is complete:
+
+1. **Pause** — Stop new feature work
+2. **Scribe logs** — Scribe captures session learnings, updates decisions.md
+3. **Reskill** — Team reviews what worked, what didn't, update charters if needed
+4. **Tag release** — `git tag v{X.Y.0}` on dev
+5. **Merge to default** — PR from dev to main (once branch rename happens, this simplifies)
+
+#### Issue Summary
+
+| Milestone | Open | Closed Today |
+|-----------|------|-------------|
+| v0.3.0 — Stabilize Core | 5 | — |
+| v0.4.0 — Dashboard & Polish | 7 | — |
+| v0.5.0 — Advanced Search | 3 | — |
+| v0.6.0 — Security & Hardening | 19 | — |
+| v1.0.0 — Production Ready | 2 | — |
+| **Completed (closed)** | — | **13** |
+| **Total** | **36** | **13** |
+
+---
+
+### User Directives — 2026-03-14
+
+#### Branching Strategy + Release Gating
+
+**By:** jmservera / Juanma (via Copilot)  
+**Date:** 2026-03-14T15:31
+
+**What:**
+1. Create a `dev` branch for all active work
+2. The current default branch (`jmservera/solrstreamlitui` or successor) is the "production-ready" branch
+3. At the end of each phase, when the solution works, merge dev → default and create a semver tag
+4. ONLY Ripley (Lead) or Juanma (Product Owner) can merge to the default branch and create release tags. Nobody else.
+5. Think about CI/CD workflows needed for this (tag-triggered builds, release notes, etc.)
+
+**Why:** User request — production readiness, always have a working version available via semver tags
+
+---
+
+#### Milestone-Based Backlog Management
+
+**By:** jmservera / Juanma (via Copilot)  
+**Date:** 2026-03-14T16:13
+
+**What:** Ripley owns the backlog. Use GitHub milestones to group issues into phases. After each milestone: pause, summarize learnings, reskill. Ripley decides what goes into each phase.
+
+**Why:** User request — structured delivery cadence with knowledge consolidation between phases
+
+---
+
+#### PDF Page Navigation from Search Results
+
+**By:** jmservera / Juanma (via Copilot)  
+**Date:** 2026-03-14T15:12
+
+**What:** Search results must show which page number(s) contain the matching text. Clicking a result should open the PDF at the correct page. This requires:
+1. Solr to track page numbers during indexing
+2. Search API to return page numbers with highlights
+3. PDF viewer to open at a specific page
+
+**Why:** Critical usability — users need to find the exact location of search hits in large PDFs
+
+---
+
+#### Rename Default Branch (Mid-Long Term)
+
+**By:** jmservera / Juanma (via Copilot)  
+**Date:** 2026-03-14T15:40
+
+**What:** The actual default branch is `jmservera/solrstreamlitui`, not `main`. Eventually rename it to something cleaner (e.g., `main`) and remove the old `main`. Low priority — do it when everything else is working.
+
+**Why:** User clarification — current branch naming is legacy, clean up later
+
+---
+
+## Phase 4 Inbox Merges (2026-03-14)
+
+### User Directive: TDD + Clean Code
+
+**Date:** 2026-03-14T17:05  
+**By:** jmservera / Juanma (via Copilot)  
+**What:** All development tasks must follow TDD (Test-Driven Development) and Uncle Bob's Clean Code and Clean Architecture principles. Tests first, then implementation. Code must be clean, well-structured, with clear separation of concerns.  
+**Why:** User requirement — quality-first development, maintainable codebase
+
+---
+
+### nginx Admin Entry Point Consolidation
+
+**Date:** 2026-03-14  
+**By:** Copilot working as Brett  
+**What:** Standardize local/prod-style web ingress through the repo-managed nginx service. The main React UI is now served at `/`, and admin tooling is grouped under `/admin/`.
+
+**Implementation details:**
+- `/admin/solr/` proxies Solr Admin
+- RabbitMQ now uses the management image plus `management.path_prefix = /admin/rabbitmq` so both the UI and API work behind `/admin/rabbitmq/`
+- Streamlit runs with `--server.baseUrlPath=/admin/streamlit`
+- Redis Commander is added with `URL_PREFIX=/admin/redis`
+- `/admin/` serves a simple landing page linking to all admin surfaces
+
+**Impact on teammates:**
+- Frontend/UI traffic should go through nginx at `http://localhost/` in proxied runs
+- Ops/testing docs should prefer the `/admin/...` URLs over direct service ports, though direct ports remain available for local debugging
+
+---
+
+### PRD: v0.3.0 — Stabilize Core (Close-Out)
+
+**Date:** 2026-03-14  
+**Status:** PROPOSED  
+**Goal:** Close v0.3.0 by completing the 6 remaining stabilization issues. These are cleanup, lint, and documentation tasks — no new features.
+
+**Current State:**
+- Open: 6 issues
+- Closed: 0 issues (all work done but issues not formally closed via PRs)
+- Merged PRs supporting v0.3.0: #115 (qdrant removal), #117 (ruff CI), #116/#129/#130/#131 (UV migrations)
+
+**Remaining Issues:**
+| # | Title | Owner | Effort | Status |
+|---|-------|-------|--------|--------|
+| #139 | Clean up smoke test artifacts from repo root | Dallas | S | PR #140 DRAFT |
+| #100 | LINT-6: eslint + prettier auto-fix on aithena-ui | Dallas | S | Not started |
+| #99 | LINT-5: ruff auto-fix across all Python services | Lambert | S | Not started |
+| #96 | DOC-1: Document uv migration and dev setup in README | Dallas | S | Not started |
+| #95 | LINT-4: Replace pylint/black with ruff in document-lister | Ripley | S | Not started |
+| #92 | UV-8: Update buildall.sh and CI for uv | Dallas | S | Not started |
+
+**Dependencies:** None — all 6 issues are independent and can be worked in parallel
+
+**Acceptance Criteria:**
+1. All smoke test artifacts (.png, .md snapshots, .txt logs) removed from repo root; .gitignore updated
+2. `ruff check --fix` and `ruff format` pass cleanly across all Python services
+3. `eslint` and `prettier` pass cleanly on `aithena-ui/`
+4. `document-lister/` uses ruff instead of pylint/black (pyproject.toml updated, old configs removed)
+5. `buildall.sh` uses `uv` for builds; CI workflows use `uv pip install`
+6. README documents: prerequisites (Docker, uv, Node 20+), dev setup, `docker compose up`, running tests
+
+**Close-Out Criteria:**
+When all 6 issues have merged PRs on `dev`:
+1. Run full CI suite (all green)
+2. Tag `v0.3.0`
+3. Merge `dev` → `main`
+4. Create GitHub Release
+5. Scribe logs session
+
+---
+
+### PRD: v0.4.0 — Dashboard & Polish
+
+**Date:** 2026-03-14  
+**Status:** PROPOSED  
+**Milestone:** v0.4.0 — Dashboard & Polish
+
+**Vision:** Transform aithena from a single-page search app into a multi-tab application with Library browsing, Status monitoring, and Stats dashboards — while hardening the frontend with linting, formatting, and test coverage.
+
+**User Stories:**
+- US-1: Tab Navigation — access different views without leaving the app
+- US-2: Library Browser — browse book collection by folder/author
+- US-3: Status Dashboard — see indexing progress and service health
+- US-4: Stats Dashboard — see collection statistics (total, by language, by author)
+- US-5: Frontend Test Coverage — catch regressions before merge
+- US-6: Frontend Code Quality — consistent style via eslint + prettier
+
+**Architecture:** Clean Architecture layers for both backend (Presentation → Application → Domain → Infrastructure) and frontend (Pages → Components → Hooks → API)
+
+**Implementation Tasks (TDD):** 9 tasks total
+- T1: Status endpoint service extraction (Parker, S)
+- T2: Stats endpoint service extraction (Parker, S)
+- T3: Tab navigation React Router (Dallas, S)
+- T4: Stats tab frontend (Dallas, S, depends T2+T3)
+- T5: Status tab frontend (Dallas, M, depends T1+T3)
+- T6: Library endpoint backend (Parker, M)
+- T7: Library browser frontend (Dallas, L, depends T3+T6)
+- T8: Prettier + ESLint config (Dallas, S)
+- T9: Frontend test coverage (Lambert, L, depends T3–T7)
+
+**Risks:** Stale branches, path traversal vulnerability, polling overwhelm, peer dependency conflicts
+
+**Success Criteria:**
+1. All 4 tabs render and navigate correctly
+2. Status page shows real service health
+3. Stats page shows collection statistics
+4. Library page browses real filesystem with metadata
+5. `npm run lint` and `npm run format:check` pass in CI
+6. `npm run test` passes with ≥70% component coverage
+7. All existing search functionality preserved (no regressions)
+
+---
+
+### Retro — v0.3.0 Stabilize Core (Post-Phase 2/3)
+
+**Date:** 2026-03-14  
+**Scope:** Sessions 1–3, Phase 1–3 work
+
+**What Went Well:**
+1. Pipeline bugs caught and fixed fast — Parker found critical lister + indexer bugs
+2. Smoke tests with Playwright caught real API contract issues before users
+3. Parallel work model scaled — copilot delivered 14 PRs while squad worked locally
+4. Skills system paid off (solrcloud, path-metadata heuristics)
+5. Milestone cadence established (v0.3.0–v1.0.0)
+6. Branching strategy prevented further UI breakage via `dev` integration branch
+
+**What Didn't Go Well:**
+1. UI broke from uncoordinated PR merges (pre-dev-branch)
+2. Stale branches / conflicts recurring time sink
+3. Smoke test artifacts committed to repo root
+4. Collection bootstrap missing piece (no auto-create)
+5. document-indexer didn't start automatically
+
+**Key Learnings:**
+1. Hybrid dev workflow (Docker infra + local code) is essential
+2. Must validate UI build before merging frontend PRs
+3. API contract mismatches (`/v1/` prefix) cost significant debugging time
+4. Page-level search needs app-side extraction (Solr Tika loses page boundaries)
+5. `solr-init` container pattern works for bootstrap
+6. `--legacy-peer-deps` is required for aithena-ui (needs documentation)
+7. FastAPI 0.99.1 + Starlette 0.27.0 requires `httpx<0.28`
+
+**Action Items:**
+| # | Action | Owner | Target |
+|---|--------|-------|--------|
+| 1 | Create `smoke-testing` skill | Ripley | This retro |
+| 2 | Create `api-contract-alignment` skill | Ripley | This retro |
+| 3 | Create `pr-integration-gate` skill | Ripley | This retro |
+| 4 | Update `solrcloud-docker-operations` confidence → high | Ripley | This retro |
+| 5 | Update `path-metadata-heuristics` confidence → high | Ripley | This retro |
+| 6 | Clean smoke artifacts from repo root | Dallas | v0.4.0 |
+| 7 | Add `npm run build` gate to CI for `aithena-ui/` | Parker/Lambert | v0.4.0 |
+| 8 | Document `--legacy-peer-deps` requirement | Dallas | v0.4.0 |
+
+---
+
+### v0.4.0 Task Decomposition — TDD Specs
+
+**Date:** 2026-03-14  
+**Milestone:** v0.4.0 — Dashboard & Polish
+
+**Task Summary:**
+| # | Task | Agent | Layer | Effort | Depends On |
+|---|------|-------|-------|--------|------------|
+| T1 | Status endpoint — service extraction | Parker | App + Infra | S | — |
+| T2 | Stats endpoint — service extraction | Parker | Application | S | — |
+| T3 | Tab navigation — React Router | Dallas | Presentation | S | — |
+| T4 | Stats tab — frontend | Dallas | Components + Hooks | S | T2, T3 |
+| T5 | Status tab — frontend | Dallas | Components + Hooks | M | T1, T3 |
+| T6 | Library endpoint — backend | Parker | App + Infra | M | — |
+| T7 | Library browser — frontend | Dallas | Pages + Components | L | T3, T6 |
+| T8 | Prettier + ESLint config | Dallas | Infrastructure | S | — |
+| T9 | Frontend test coverage | Lambert | All frontend | L | T3–T7 |
+
+**Total: 9 tasks (4S + 2M + 2L + 1S-config = ~3 sprints)**
+
+**Full detailed TDD specs:** See full PRD v0.4.0 above for each task's Red/Green/Refactor cycle, Clean Architecture layer assignments, and test specifications.
+
+# Phase 4 Reflection: PR Review Patterns & Process Improvements
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-14
+**Scope:** Phase 4 (v0.4.0 Dashboard & Polish) — @copilot PR batch review
+**Status:** RECOMMENDATION
+
+---
+
+## Summary
+
+Reviewed 6 open @copilot PRs for Phase 4. **1 approved, 5 rejected (17% approval rate).** The rejections cluster into 4 systemic patterns that have recurred since Phase 2. This is not a quality problem — the code inside each PR was consistently well-written. It is a **workflow and decomposition problem** that we can fix with process changes.
+
+---
+
+## PR Results
+
+| PR | Feature | Verdict | Failure Mode |
+|----|---------|---------|--------------|
+| #137 | Page ranges in search | ✅ Approved (needs rebase) | — |
+| #140 | Cleanup smoke artifacts | ❌ Rejected | Wrong target branch, broad gitignore, 88 unrelated files |
+| #128 | Status tab UI | ❌ Rejected | Stale branch — would delete router from PR #123 |
+| #138 | PDF viewer page nav | ❌ Rejected | Depends on unmerged #137, adds unused backend field |
+| #127 | Stats tab UI | ❌ Rejected | Stale branch — same as #128 |
+| #119 | Status endpoint | ❌ Rejected | Scope bloat (108 files), Redis perf issues |
+
+---
+
+## Failure Mode Analysis
+
+### 1. Stale Branches (3 PRs: #127, #128, #119)
+
+**Pattern:** Copilot branched from a commit before PR #123 (router architecture) merged. The resulting diffs carry the entire pre-router state of `App.tsx`, effectively deleting `TabNav`, `react-router-dom` routing, and all 4 page components.
+
+**History:** This is the same failure class seen in Phase 2 (PR #64 would have deleted `solr-search/` and CI workflows) and Phase 3 (PRs #68-#70 targeted `qdrant-search/` because they branched before the Solr migration). It has now occurred in **every phase** and accounts for the majority of rejections.
+
+**Root cause:** @copilot creates branches from whatever commit is current when the issue is assigned. If multiple issues are assigned simultaneously, all branches fork from the same (soon-to-be-stale) point. The agent does not rebase before opening the PR.
+
+**Fix:** Issue gating — assign issues sequentially after prerequisites merge, not in parallel batches.
+
+### 2. Scope Bloat (2 PRs: #119, #140)
+
+**Pattern:** PRs contain changes far beyond the issue scope. #119 was a backend endpoint PR that included ~500 lines of unrelated frontend code (the entire router architecture from #128, re-introduced). #140 was a 3-file chore that ballooned to 88 files from branch divergence.
+
+**Root cause:** When copilot's branch diverges from the base, it sometimes manually syncs files to resolve conflicts, creating a massive diff. The agent doesn't distinguish "files I changed" from "files that differ from base."
+
+**Fix:** Add "scope fence" to issue descriptions — explicit file/directory boundaries. Add review heuristic: any PR where `git diff --stat | wc -l` exceeds 2× the expected file count gets auto-flagged.
+
+### 3. Wrong Target Branch (1 PR: #140)
+
+**Pattern:** PR #140 targeted `jmservera/solrstreamlitui` instead of `dev`. This is documented in `.github/copilot-instructions.md`, the squad-pr-workflow skill, and the custom instructions block. The agent ignored all three.
+
+**Root cause:** The agent may have read stale instructions or inherited a branch that was tracking the old default. This same issue occurred with all 14 PRs in the Phase 3 batch (all retargeted manually).
+
+**Fix:** CI gate that rejects PRs not targeting `dev`. Belt-and-suspenders: repeat the target branch rule in the issue description itself.
+
+### 4. Dependency Ordering (1 PR: #138)
+
+**Pattern:** PR #138 adds a new `pages_i` Solr field to pass page numbers to the UI. But PR #137 (approved, not yet merged) already normalizes `page_start_i`/`page_end_i` into a `pages` API response field — making the new field redundant.
+
+**Root cause:** Issues #134 and #135 were assigned simultaneously. The agent working on #135 didn't check whether #134's solution (PR #137) was merged, and invented its own backend approach.
+
+**Fix:** Dependent issues must state the dependency explicitly: "This issue REQUIRES PR #NNN to be merged first. Do not start until that PR is on `dev`." Better yet: don't create the dependent issue until the prerequisite PR merges.
+
+---
+
+## What Went Well
+
+Despite the 17% approval rate, several things worked:
+
+1. **Code quality is consistently good.** Every rejected PR contained well-structured TypeScript/Python code. `useStatus()`, `useStats()`, `CollectionStats.tsx`, `IndexingStatus.tsx` — all properly typed, accessible, with clean component decomposition. The problem is never "bad code" — it's "good code in the wrong context."
+
+2. **PR #137 proves the model works for leaf-node issues.** It was small, independent, correctly scoped, targeted `dev`, and had comprehensive tests. The pattern: issues with no dependencies and a clear file scope produce good PRs from copilot.
+
+3. **The review process caught everything.** No regressions were introduced. The stale-branch detection heuristic (check `--stat` for unexpected deletions of recently-added files) continues to work reliably.
+
+4. **TDD specs helped.** PRs that followed the TDD specs from the v0.4.0 task decomposition had better test coverage than Phase 2-3 PRs.
+
+---
+
+## Recommendations for Phase 5
+
+### Process Changes
+
+| # | Change | Effort | Impact |
+|---|--------|--------|--------|
+| 1 | **Sequential issue assignment** — don't assign dependent issues until prerequisites merge | None | Eliminates stale branches and dependency violations |
+| 2 | **Scope fences in issue descriptions** — list "touch these files" and "do NOT touch these files" | Low | Eliminates scope bloat |
+| 3 | **Branch freshness CI check** — reject PRs >10 commits behind base | Medium | Catches stale branches before review |
+| 4 | **Single-layer PR rule** — backend PRs touch `solr-search/` only, frontend PRs touch `aithena-ui/` only | None | Prevents cross-layer contamination |
+| 5 | **Target branch in issue body** — repeat "target: dev" in every issue, not just global instructions | None | Redundancy prevents the #140 class of error |
+
+### Issue Template Additions
+
+Every issue assigned to @copilot should include:
+
+```markdown
+## Scope
+- **Target branch:** `dev`
+- **Files to modify:** [explicit list]
+- **Files NOT to modify:** [explicit exclusions]
+- **Prerequisites:** [PR #NNN must be merged first / None]
+
+## Before Starting
+1. `git fetch origin && git checkout -b squad/{issue}-{slug} origin/dev`
+2. Verify prerequisite PRs are merged: [list]
+```
+
+### Decomposition Rule
+
+**The "leaf node" principle:** Copilot produces good PRs for issues that are:
+- Independent (no unmerged prerequisites)
+- Scoped to one service/layer
+- Small (1-5 files changed)
+- Self-contained (test + implementation in same PR)
+
+Issues that violate any of these should be broken down further or assigned to squad members who can coordinate across branches.
+
+---
+
+## Conclusion
+
+The Phase 4 review results are disappointing at face value (17% approval) but instructive. The failure modes are **entirely preventable** with process discipline — none require changes to copilot's coding ability, which remains strong. The key insight: **copilot is a good coder but a poor branch manager.** Our job as a team is to structure issues so that branch management is trivial: one branch, one service, no dependencies, clear scope.
+
+If we implement the 5 recommendations above, I expect Phase 5 approval rates to exceed 80%.
+
+---
+
+# Branch Repair Strategy — 9 Broken @copilot PRs
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-14  
+**Status:** APPROVED  
+**Merged by:** Scribe, 2026-03-14T18:00:00Z
+
+## Situation Assessment
+
+All 9 PRs share the same root cause: @copilot branched from `main` (or old
+`jmservera/solrstreamlitui`) instead of `dev`, then tried manual "rebases" that
+actually merged or duplicated hundreds of unrelated files. The branches are 28
+commits behind `dev` (some 126 behind). Most carry ghost diffs from the old repo
+layout.
+
+### What `dev` already has that these PRs re-introduce
+
+| Feature | Already on `dev` | PR trying to add it |
+|---------|-----------------|---------------------|
+| ruff.toml + CI lint job | `ba81148` LINT-1 merged | #143 (redundant) |
+| uv migrations (all 4 services) | #116, #129, #130, #131 | #141 (redundant CI changes) |
+| /v1/stats/ endpoint + parse_stats_response | `fc2ac86` | #127, #119 (partial overlap) |
+| Solr schema page_start_i / page_end_i fields | In managed-schema.xml | #137 (adds the search_service code) |
+| PdfViewer component | `aithena-ui/src/Components/PdfViewer.tsx` (92 lines) | #138 (different version) |
+
+## Triage: Three Categories
+
+### 🟥 Category A — CLOSE (no salvageable value)
+
+| PR | Reason | Effort to repair | Value of code |
+|----|--------|------------------|---------------|
+| **#143** Ruff in document-lister | 100% redundant — LINT-1 (#117) already merged with identical ruff.toml + CI job. PR adds a conflicting local config. | Low | **Zero** |
+| **#141** buildall.sh + CI for uv | dev already has uv CI with `setup-uv@v5` + `uv sync --frozen`. PR's version is older/different. buildall.sh change is trivial (2 lines). | Low | **Near-zero** |
+| **#128** Status tab UI | Branch is 28 commits behind, carries 109 files in diff. The "status tab" is 1 component + hook, but the branch would obliterate the current App.tsx (no router, flatten the faceted search UI). | High | **Low** (no router exists on dev yet, component is simple) |
+| **#127** Stats tab UI | Same stale branch problem as #128. Nearly identical CSS + App.tsx changes. The CollectionStats component is ~80 lines but depends on a /stats UI contract that doesn't exist yet. | High | **Low** |
+| **#119** Status endpoint | 108-file diff, 6656 insertions. Bundles frontend code, has Redis `KEYS *` perf bug, includes its own copy of uv migration. The actual `/v1/status/` endpoint is ~40 lines of useful code buried in garbage. | Very High | **Low** (one endpoint, easy to rewrite) |
+
+**Action:** Close all 5 with a comment thanking @copilot and explaining why. Link to the replacement approach.
+
+### 🟨 Category B — CHERRY-PICK specific code onto fresh branch
+
+| PR | What's worth saving | How to extract |
+|----|--------------------|--------------------|
+| **#140** Clean up smoke test artifacts | Deletes 8 legitimate stale files (smoke screenshots, nginx-home.md/png, snapshot.md). The `.gitignore` additions are fine after narrowing the PNG pattern. Only 5 commits ahead, 7 behind — small branch, but targeted at wrong repo. | Cherry-pick the file deletions + gitignore onto a fresh `squad/140-clean-artifacts` from `dev`. Drop the broad `*.png` gitignore — use `/aithena-ui-*.png` pattern instead. ~10 min of work. |
+| **#138** PDF viewer page navigation | Has page-navigation enhancement to PdfViewer (jump to specific page from search results). But it depends on #137's `pages` field in search results, and its branch is **126 commits behind** with 70 files changed. Most of the diff is re-adding files that already exist on dev. | Wait for #137 to land. Then create fresh `squad/138-pdf-page-nav` from `dev`. Cherry-pick only the PdfViewer page-jump logic (the component changes, not the entire branch). Review carefully for the `pages_i` backend field — it's unused dead code that should be dropped. ~30 min. |
+
+### 🟩 Category C — REWRITE from scratch (faster than repair)
+
+| PR | What to rewrite | Why rewrite beats repair |
+|----|----------------|--------------------------|
+| **#145** Ruff across all Python | The ruff auto-fixes are mechanical — just run `ruff check --fix . && ruff format .` from dev. The PR's branch includes fixes to deprecated qdrant-search code we already removed. | `squad/lint-ruff-autofix` from `dev`: run ruff, commit, done. 5 min. |
+| **#144** Prettier + eslint on aithena-ui | Same pattern — run the formatters. The PR includes a SearchPage.tsx that doesn't exist on dev (stale code). | `squad/lint-eslint-prettier` from `dev`: add configs, run formatters, commit. 15 min. |
+
+## Optimal Merge Order
+
+```
+Step 1:  #137 (approved, page ranges) — rebase onto dev, merge
+         └── Unblocks #138
+
+Step 2:  #140 (clean up artifacts) — cherry-pick onto fresh branch, merge
+         └── Independent, quick win
+
+Step 3:  #145-replacement (ruff autofix) — fresh branch, run ruff
+         └── Independent, should go before any new Python code
+
+Step 4:  #144-replacement (eslint/prettier) — fresh branch, run formatters
+         └── Independent, should go before any new UI code
+
+Step 5:  #138-replacement (PDF page nav) — cherry-pick after #137 lands
+         └── Depends on #137
+
+Step 6:  Close #143, #141, #128, #127, #119 with explanation
+```
+
+Steps 2-4 can run in parallel once Step 1 is done.
+
+## Prevention & Guardrails
+
+To stop this from recurring:
+1. **Branch protection on `dev`**: require PRs, block force pushes
+2. **Issue assignment instructions**: always include `base branch: dev` in issue body
+3. **PR template**: add "Target branch: [ ] dev" checkbox
+4. **Limit @copilot to single-issue PRs** — never let it bundle multiple features
+5. **Auto-close PRs that target `main`** from copilot branches (GitHub Action)
+
+## Summary
+
+Of 9 broken PRs: **close 5, cherry-pick 2, rewrite 2 from scratch**. The total
+salvageable code is small — maybe 200 lines of actual value across all 9 PRs.
+Most of the "work" in these PRs is ghost diffs from stale branches. The fastest
+path to value is: rebase #137 (approved), run formatters on fresh branches, and
+close everything else.
+
+---
+
+# Post-Cleanup Issue Reassignment
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-14  
+**Status:** IMPLEMENTED  
+**Context:** After closing 9 broken @copilot PRs and adding scope fences, reassigned all 9 affected issues with fresh labels.
+
+## Closed Issues (PRs merged)
+
+| Issue | PR | Status |
+|-------|----|--------|
+| #96 — DOC-1: Document uv migration | #142 | ✅ Closed |
+| #134 — Return page numbers in search results | #137 | ✅ Closed |
+
+## @copilot Batch 1 (3 issues — sequential, simplest first)
+
+| Issue | Title | Rating | Rationale |
+|-------|-------|--------|-----------|
+| #139 | Clean up smoke test artifacts | 🟢 | Pure file deletion + .gitignore. Repo root only. Zero judgment. |
+| #95 | LINT-4: Replace pylint/black with ruff in document-lister | 🟢 | Single directory (document-lister/), Size S, mechanical pyproject.toml edit. |
+| #100 | LINT-6: Run eslint + prettier auto-fix on aithena-ui | 🟢 | Single directory (aithena-ui/), Size S, run linter and commit. |
+
+## Squad Member Assignments (6 issues — hold for now)
+
+| Issue | Title | Assigned To | Rating | Rationale |
+|-------|-------|-------------|--------|-----------|
+| #99 | LINT-5: Run ruff auto-fix across all Python services | 🔧 Parker | 🟡 | Size M, multi-directory. Reconsider for @copilot after batch 1. |
+| #114 | P4: Add /v1/status/ endpoint | 🔧 Parker | 🔴 | Multi-service integration (Solr + Redis + RabbitMQ). Needs backend expertise. |
+| #135 | Open PDF viewer at specific page | ⚛️ Dallas | 🟡 | UI feature with backend dependency. Needs UX judgment. |
+| #122 | P4: Build Status tab in React UI | ⚛️ Dallas | 🟡 | Blocked on #120 + #114. Pick up after deps land. |
+| #121 | P4: Build Stats tab in React UI | ⚛️ Dallas | 🟡 | Blocked on #120. Pick up after tab nav lands. |
+| #92 | UV-8: Update buildall.sh and CI for uv | ⚙️ Brett | 🟡 | CI/build infra, blocked on UV-1 through UV-7. |
+
+## Labels Removed
+
+All stale `squad:*` and `go:needs-research` labels removed from all 9 issues before reassignment.
+
+## Guardrails Applied
+
+- @copilot issues limited to 3 (batch 1) — not all at once
+- Each @copilot issue is single-directory, purely mechanical, with clear scope fences
+- Remaining issues stay with squad members until batch 1 succeeds
+- Phase 4 lesson: assign sequentially, not in parallel, to avoid PR sprawl
+
+## Note on Copilot Assignee
+
+The GitHub `Copilot` user cannot be directly assigned via `gh issue edit --add-assignee`. The `squad:copilot` label is the primary routing mechanism per team.md (`copilot-auto-assign: true`).
+
+---
+
+## User Directive: Branch Restructuring (2026-03-14T18:32)
+
+**By:** jmservera (via Copilot)
+
+**What:** Restructured repo branches: `dev` is now the default branch. Renamed `main` → `oldmain` and `jmservera/solrstreamlitui` → `main`. This means @copilot will now naturally target `dev` (the default). All PRs still target `dev`. Only Ripley or Juanma merge `dev` → `main`.
+
+**Why:** User request — fixes the root cause of @copilot always targeting the wrong branch (it targets the GitHub default, which is now `dev`).

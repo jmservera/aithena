@@ -1,4 +1,4 @@
-import { FacetGroups, SearchFilters } from "../hooks/search";
+import { FacetGroups, SearchFilters } from '../hooks/search';
 
 interface FacetPanelProps {
   facets: FacetGroups;
@@ -7,13 +7,13 @@ interface FacetPanelProps {
 }
 
 const FACET_LABELS: Record<keyof FacetGroups, string> = {
-  author: "Author",
-  category: "Category",
-  language: "Language",
-  year: "Year",
+  author: 'Author',
+  category: 'Category',
+  language: 'Language',
+  year: 'Year',
 };
 
-const FACET_KEYS = ["author", "category", "language", "year"] as const;
+const FACET_KEYS = ['author', 'category', 'language', 'year'] as const;
 
 function FacetPanel({ facets, filters, onFilterChange }: FacetPanelProps) {
   return (
@@ -35,10 +35,7 @@ function FacetPanel({ facets, filters, onFilterChange }: FacetPanelProps) {
                       className="facet-checkbox"
                       checked={activeValue === value}
                       onChange={() =>
-                        onFilterChange(
-                          key,
-                          activeValue === value ? undefined : value
-                        )
+                        onFilterChange(key, activeValue === value ? undefined : value)
                       }
                     />
                     <span className="facet-value">{value}</span>

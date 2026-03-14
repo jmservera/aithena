@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import requests
+from config import settings
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-
-from config import settings
 from search_service import (
     build_filter_queries,
     build_inline_content_disposition,
@@ -22,6 +21,7 @@ from search_service import (
     get_query_embedding,
     normalize_book,
     parse_facet_counts,
+    parse_stats_response,
     reciprocal_rank_fusion,
     resolve_document_path,
     solr_escape,
@@ -116,16 +116,16 @@ def search(
     limit: int | None = Query(None, ge=1, le=settings.max_page_size),
     page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size),
     sort: str | None = Query(None, description="Combined sort clause like `score desc` or `year_i asc`."),
-    sort_by: SortBy = Query("score"),
-    sort_order: SortOrder = Query("desc"),
+    sort_by: Annotated[SortBy, Query()] = "score",
+    sort_order: Annotated[SortOrder, Query()] = "desc",
     fq_author: str | None = Query(None),
     fq_category: str | None = Query(None),
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
-    mode: SearchMode = Query(
-        settings.default_search_mode,  # type: ignore[arg-type]
-        description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
-    ),
+    mode: Annotated[
+        SearchMode,
+        Query(description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion)."),
+    ] = settings.default_search_mode,  # type: ignore[arg-type]
 ) -> dict[str, Any]:
     """Search for books.
 
@@ -211,9 +211,7 @@ def _search_semantic(
         raise HTTPException(status_code=400, detail="Query must not be empty for semantic search")
 
     vector = _fetch_embedding(q)
-    payload = query_solr(
-        build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters))
-    )
+    payload = query_solr(build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)))
 
     response = payload.get("response", {})
     results = [
@@ -318,8 +316,8 @@ def _search_hybrid(
 def facets(
     q: str = Query("", description="Optional query to scope facet counts."),
     sort: str | None = Query(None),
-    sort_by: SortBy = Query("score"),
-    sort_order: SortOrder = Query("desc"),
+    sort_by: Annotated[SortBy, Query()] = "score",
+    sort_order: Annotated[SortOrder, Query()] = "desc",
     fq_author: str | None = Query(None),
     fq_category: str | None = Query(None),
     fq_language: str | None = Query(None),
@@ -433,6 +431,31 @@ def similar_books(
         )
 
     return {"results": results}
+
+
+@app.get("/v1/stats/", include_in_schema=False, name="stats_v1")
+@app.get("/v1/stats", include_in_schema=False, name="stats_v1_no_slash")
+@app.get("/stats")
+def stats() -> dict[str, Any]:
+    """Return collection-level statistics from Solr.
+
+    Queries Solr with the stats component and facets to produce an overview of
+    the indexed book collection including totals, breakdowns by language,
+    author, year, and category, and page-count statistics.
+    """
+    params: dict[str, Any] = {
+        "q": "*:*",
+        "rows": 0,
+        "wt": "json",
+        "stats": "true",
+        "stats.field": "page_count_i",
+        "facet": "true",
+        "facet.field": ["author_s", "category_s", "year_i", "language_detected_s"],
+        "facet.limit": settings.facet_limit,
+        "facet.mincount": 1,
+    }
+    payload = query_solr(params)
+    return parse_stats_response(payload)
 
 
 if __name__ == "__main__":

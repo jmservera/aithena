@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import json
 import logging
-from pathlib import Path
 import time
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pdfplumber
 import pika
-from pika.adapters.blocking_connection import BlockingChannel
 import redis
 import requests
+from pika.adapters.blocking_connection import BlockingChannel
 from retry import retry
 
 from . import (
@@ -29,7 +29,7 @@ from . import (
     SOLR_HOST,
     SOLR_PORT,
 )
-from .chunker import chunk_text
+from .chunker import chunk_text_with_pages
 from .embeddings import get_embeddings
 from .metadata import extract_metadata
 
@@ -58,7 +58,7 @@ def get_queue(channel: BlockingChannel):
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def wait_for_solr_collection(
@@ -79,16 +79,12 @@ def wait_for_solr_collection(
             response.raise_for_status()
             collections = response.json().get("collections", [])
             if SOLR_COLLECTION not in collections:
-                raise RuntimeError(
-                    f"Solr collection {SOLR_COLLECTION} is not available yet."
-                )
+                raise RuntimeError(f"Solr collection {SOLR_COLLECTION} is not available yet.")
 
             config_response = requests.get(config_url, timeout=SOLR_STARTUP_TIMEOUT)
             config_response.raise_for_status()
             if '"/update/extract"' not in config_response.text:
-                raise RuntimeError(
-                    f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler."
-                )
+                raise RuntimeError(f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler.")
 
             logger.info("Solr collection %s is ready.", SOLR_COLLECTION)
             return
@@ -168,15 +164,20 @@ def get_page_count(path: Path) -> int | None:
         return None
 
 
-def extract_pdf_text(path: Path) -> str:
-    """Extract all text from a PDF using pdfplumber (for chunk-based embedding indexing)."""
-    pages: list[str] = []
+def extract_pdf_text(path: Path) -> list[tuple[int, str]]:
+    """Extract text per page from a PDF using pdfplumber (for chunk-based embedding indexing).
+
+    Returns:
+        An ordered list of ``(page_number, text)`` pairs where *page_number*
+        is 1-based.  Pages that yield no text are omitted.
+    """
+    pages: list[tuple[int, str]] = []
     with pdfplumber.open(path) as pdf:
-        for page in pdf.pages:
+        for page_num, page in enumerate(pdf.pages, start=1):
             text = page.extract_text()
             if text:
-                pages.append(text)
-    return "\n".join(pages)
+                pages.append((page_num, text))
+    return pages
 
 
 def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, str]:
@@ -208,6 +209,8 @@ def build_chunk_doc(
     chunk: str,
     embedding: list[float],
     metadata: dict,
+    page_start: int | None = None,
+    page_end: int | None = None,
 ) -> dict:
     """Build a Solr JSON document for a single text chunk."""
     chunk_id = f"{parent_id}_chunk_{chunk_index:04d}"
@@ -226,6 +229,10 @@ def build_chunk_doc(
         doc["category_s"] = metadata["category"]
     if metadata.get("year") is not None:
         doc["year_i"] = metadata["year"]
+    if page_start is not None:
+        doc["page_start_i"] = page_start
+    if page_end is not None:
+        doc["page_end_i"] = page_end
     return doc
 
 
@@ -243,23 +250,21 @@ def index_chunks(
         Exception: Propagates any HTTP or embedding error so the caller can
             record the appropriate Redis failure stage.
     """
-    text = extract_pdf_text(path)
-    chunks = chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
-    if not chunks:
+    pages = extract_pdf_text(path)
+    page_chunks = chunk_text_with_pages(pages, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
+    if not page_chunks:
         logger.info("No text chunks extracted from %s; skipping embedding indexing.", path)
         return 0
 
+    chunks = [chunk for chunk, _, _ in page_chunks]
     embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
 
     docs = [
-        build_chunk_doc(parent_id, idx, chunk, emb, metadata)
-        for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+        build_chunk_doc(parent_id, idx, chunk, emb, metadata, page_start, page_end)
+        for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(page_chunks, embeddings, strict=False))
     ]
 
-    solr_url = (
-        f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update"
-        "?commitWithin=10000"
-    )
+    solr_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update?commitWithin=10000"
     response = requests.post(
         solr_url,
         json=docs,
@@ -364,9 +369,7 @@ def callback(
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
 def consume() -> None:
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT, heartbeat=600)
-    )
+    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT, heartbeat=600))
     channel = connection.channel()
     get_queue(channel)
     channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)

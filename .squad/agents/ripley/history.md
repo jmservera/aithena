@@ -346,3 +346,244 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 - ~3 days across Parker, Ash, Dallas, Lambert (parallelizable)
 
 **Decision written to:** `.squad/decisions/inbox/ripley-page-level-search.md`
+### 2026-03-14 — Branching Strategy & Release Flow Setup
+
+**Request:** Juanma asked for a proper branching strategy after UI broke from uncoordinated PR merges.
+
+**Actions taken:**
+1. **Created `dev` branch** from `jmservera/solrstreamlitui` (commit 19decee) — this is now the active development integration branch
+2. **Pushed `dev` to origin** — all future squad/copilot PRs target `dev` instead of the feature branch
+3. **Documented branching strategy** in `.squad/decisions/inbox/ripley-branching-strategy.md`:
+   - `dev` — active development, all PRs land here
+   - `main` — production-ready, only working code
+   - Feature branches → `dev` → `main` at phase boundaries
+   - Merge authority: only Ripley or Juanma can merge dev → main and create tags
+4. **Created `.github/workflows/release.yml`** — CI workflow triggered on `v*` tags that runs tests and creates GitHub releases
+5. **Updated `.github/copilot-instructions.md`** — added branching strategy section so @copilot targets `dev`
+6. **Updated `.squad/skills/squad-pr-workflow/SKILL.md`** — added PR base branch rule and anti-pattern for targeting `main` directly
+7. **Tagged `v0.3.0-rc1`** — marks current state (Phase 3 features merged, UI needs integration fix)
+
+**Versioning scheme established:**
+- v0.1.0 — Phase 1 (Solr indexing) ✅
+- v0.2.0 — Phase 2 (Search API + UI) ✅
+- v0.3.0 — Phase 3 (Embeddings + hybrid search) — RC tagged, awaiting UI fix
+- v0.4.0 — Phase 4 (Dashboard + polish) — upcoming
+
+**Key decision:** Tagged as RC (not full release) because the UI is broken. Full v0.3.0 tag will be created after UI stabilization.
+
+### 2026-03-14 — Triage of 14 @copilot Draft PRs
+
+**Context:** @copilot delivered 14 draft PRs from P4 spec + infrastructure work. Juanma requested triage via Ralph.
+
+**Critical finding:** All 14 PRs targeted `jmservera/solrstreamlitui` instead of `dev`. Retargeted all to `dev` via GitHub API.
+
+**Actions taken:**
+
+1. **Retargeted all 14 PRs** from `jmservera/solrstreamlitui` → `dev`
+2. **Merged 6 safe PRs** (Tier 1 infrastructure + Tier 2 UV migrations):
+
+| PR | Title | Verdict | Action |
+|----|-------|---------|--------|
+| #115 | Remove qdrant/llama services | ✅ Clean | Merged (squash) |
+| #117 | Ruff config + CI lint job | ✅ Clean | Merged (squash) |
+| #116 | UV admin migration | ✅ Clean | Merged (squash) |
+| #129 | UV solr-search migration | ✅ Clean | Merged (squash) |
+| #130 | UV document-indexer migration | ✅ Clean | Merged (squash) |
+| #131 | UV document-lister migration | ✅ Clean | Merged (squash) |
+
+3. **Reviewed + held 8 PRs** (Tier 3-5):
+
+| PR | Title | Verdict | Status |
+|----|-------|---------|--------|
+| #118 | /v1/stats/ endpoint | ✅ Approved in principle | HOLD — wait for UI stabilization |
+| #119 | /v1/status/ endpoint | ✅ Approved in principle | HOLD — wait for UI stabilization |
+| #123 | Tab navigation | ✅ Clean scaffold | HOLD — Dallas fixing UI first |
+| #127 | Stats tab | ⚠️ Overlaps #118 backend | HOLD — needs rebase after #118 |
+| #128 | Status tab | ✅ Clean | HOLD — depends on #119 |
+| #136 | Page-aware chunking | ✅ Clean | HOLD — first in chain |
+| #137 | Page numbers in API | ✅ Clean | HOLD — depends on #136 |
+| #138 | PDF viewer page nav | ⚠️ Conflicting | HOLD — rebase after #136+#137 |
+
+**Issues flagged:**
+- PR #127 duplicates the stats endpoint from #118 — merge #118 first, then rebase #127
+- PR #138 has merge conflicts — needs rebase after dependency chain lands
+- All Tier 4 frontend PRs held pending Dallas UI fix
+
+**Merge order when ready:**
+- Tier 3: #118 → #119 (backend endpoints)
+- Tier 4: #123 → #127 (rebase) → #128 (frontend, after Dallas UI fix)
+- Tier 5: #136 → #137 → #138 (rebase) (page search chain)
+
+### 2026-03-14 — Backlog Organization into GitHub Milestones
+
+- **COMPLETED:** Organized the full backlog into 5 GitHub milestones (v0.3.0–v1.0.0).
+- **Closed 13 issues** that were completed by merged PRs but never closed: #81–#84 (UV originals), #91 (LINT-1 original), #110 (qdrant removal), #111–#112 (UV-1/LINT-1 recreates), #113 (/v1/stats/), #124–#126 (UV recreates), #133 (page-aware chunking).
+- **Assigned 36 open issues** across milestones:
+  - v0.3.0 Stabilize Core: 5 issues (UV/ruff cleanup, docs)
+  - v0.4.0 Dashboard & Polish: 7 issues (endpoints, tabs, frontend lint/test)
+  - v0.5.0 Advanced Search: 3 issues (page results, similar books)
+  - v0.6.0 Security & Hardening: 19 issues (security CI, Mend vulns, docker hardening)
+  - v1.0.0 Production Ready: 2 issues (PDF upload) + future work
+- **Cadence established:** After each milestone → Pause → Scribe logs → Reskill → Tag release → Merge to default.
+- Decision recorded in `.squad/decisions/inbox/ripley-milestone-plan.md`.
+
+### 2026-03-14 — Retro v0.3 + Reskill Cycle
+
+**Retro conducted:** Synthesized learnings from all 7 agent histories + 3 session logs.
+- **What went well:** Pipeline bugs found fast (Parker lister+indexer fixes), Playwright caught API mismatch, parallel @copilot work (14 PRs), skills guided Brett/Parker effectively, branching strategy stabilized merges.
+- **What didn't go well:** UI broke from uncoordinated merges, stale branches targeting wrong base, smoke artifacts in repo root, collection bootstrap missing.
+- **Key learnings:** Hybrid dev workflow essential, must gate frontend builds, API contracts need single source of truth, page-level search needs app-side extraction.
+
+**Skills created:**
+1. `smoke-testing` (medium) — Docker up → health wait → Vite → Playwright → cleanup cycle
+2. `api-contract-alignment` (medium) — Keep frontend/backend API paths in sync via shared prefix
+3. `pr-integration-gate` (medium) — Required build/test checks before merging PRs to dev
+
+**Skills updated:**
+4. `solrcloud-docker-operations` confidence → high (validated by Brett during bootstrap + admin ingress)
+5. `path-metadata-heuristics` confidence → high (validated by Parker during 169-file real library indexing)
+
+**Charter audit:** Brett charter trimmed from 1534B to ~1280B (consolidated 8 responsibilities → 4 ownership bullets). Others within budget. Copilot charter exempt per reskill rules.
+
+**Deliverable:** `.squad/decisions/inbox/ripley-retro-v03.md` written with full retro + action items.
+
+### 2026-03-14 — Strategic Planning: PRDs, TDD Specs, Task Decomposition
+
+**Context:** Juanma requested next-step planning with PRDs, task decomposition, and TDD enforcement.
+
+**Assessment — Current state:**
+- 5 milestones: v0.3.0 (6 open), v0.4.0 (7 open), v0.5.0 (3 open), v0.6.0 (19 open), v1.0.0 (2 open)
+- 8 open PRs: 2 READY (#132, #119), 6 DRAFT
+- v0.3.0 is all cleanup (lint, docs, UV) — no feature work
+- v0.4.0 has P4 UI spec already written, backend endpoints partially in PRs
+
+**Deliverables created:**
+
+1. **PRD: v0.3.0 Close-Out** (`.squad/decisions/inbox/ripley-prd-v030-closeout.md`)
+   - 6 independent cleanup tasks, all parallelizable
+   - Acceptance criteria for each
+   - Close-out protocol: CI green → tag v0.3.0 → merge to main → release
+
+2. **PRD: v0.4.0 Dashboard & Polish** (`.squad/decisions/inbox/ripley-prd-v040-dashboard.md`)
+   - 6 user stories (tab nav, library, status, stats, tests, lint)
+   - Clean Architecture layers defined for both backend and frontend
+   - 9 implementation tasks with full TDD specs
+   - 3-phase implementation order with dependency tracking
+   - Maps to existing PRs (#119, #123, #127, #128)
+
+3. **TDD + Clean Code Skill** (`.squad/skills/tdd-clean-code/SKILL.md`)
+   - Red-Green-Refactor cycle with rules
+   - Clean Code principles (naming, functions, error handling)
+   - Clean Architecture for Python/FastAPI and React/TypeScript
+   - Test structure (Arrange-Act-Assert, Given-When-Then)
+   - Anti-patterns to avoid (testing and code)
+
+4. **v0.4.0 Task Decomposition** (`.squad/decisions/inbox/ripley-v040-task-decomposition.md`)
+   - 9 tasks with full TDD specs (test names, assertions, implementation steps)
+   - Agent assignments (Parker: 4 backend, Dallas: 4 frontend, Lambert: 1 testing)
+   - Clean Architecture layer per task
+   - Interface contracts defined
+
+**Task counts per milestone:**
+- v0.3.0: 6 issues (all cleanup, no new tasks needed)
+- v0.4.0: 9 TDD tasks decomposed (maps to 7 existing + 2 new issues)
+- v0.5.0: 3 issues (deferred — page search chain, blocked on v0.4.0)
+- v0.6.0: 19 issues (security — deferred to Kane's audit completion)
+- v1.0.0: 2 issues (deferred — PDF upload, needs full pipeline)
+
+**Key decisions:**
+- TDD is mandatory for all v0.4.0 work — skill created and linked in PRDs
+- Clean Architecture layers formalized: Presentation → Application → Domain → Infrastructure
+- Frontend follows: Pages → Components → Hooks → API pattern
+- Library browser endpoint is new work (not in current backlog) — needs issue creation
+
+### 2026-03-14 — Phase 4 Reflection: PR Review Patterns
+
+**Context:** Reviewed all 6 open @copilot PRs for Phase 4. Results: 1 approved (#137), 5 rejected (#119, #127, #128, #138, #140). 17% approval rate.
+
+**Systemic failure modes identified:**
+
+1. **Stale branches (3/6 rejections: #127, #128, #119):** Copilot branched before PR #123 (router architecture) merged. All three carried stale App.tsx that would delete the router, TabNav, and all 4 page components. This is the same class of failure seen in Phase 2 (#64) and Phase 3 (#68, #69, #70). The pattern is now confirmed as structural, not incidental — copilot agents don't rebase before opening PRs.
+
+2. **Scope bloat (2/6: #119, #140):** PR #119 bundled ~500 lines of unrelated frontend code into a backend endpoint PR (108 files total). PR #140 had 88 unrelated files from branch divergence. Both cases: agent didn't limit the diff to the issue scope.
+
+3. **Wrong target branch (1/6: #140):** PR #140 targeted `jmservera/solrstreamlitui` instead of `dev`, despite `.github/copilot-instructions.md` and squad-pr-workflow skill both documenting the rule. The 13 artifact files only exist on `dev`, so the PR was structurally impossible.
+
+4. **Dependency ordering ignored (1/6: #138):** PR #138 introduced a new `pages_i` Solr field when PR #137 (approved, not yet merged) already solves the problem via `page_start_i`/`page_end_i` normalization. Agent didn't check whether its prerequisite was merged.
+
+**What went well:**
+- Individual feature code quality was consistently good. `useStatus()`, `useStats()`, `CollectionStats.tsx`, `IndexingStatus.tsx` — all well-typed, accessible, properly decomposed React/TypeScript.
+- PR #137 (page ranges) was clean, well-tested, correctly scoped, and targeted `dev`. Proof that small, independent, leaf-node issues produce good results.
+- The review process caught all 5 problems before merge — no regressions introduced.
+
+**Actionable improvements for Phase 5:**
+1. **Issue gating:** Don't assign dependent issues until their prerequisite PRs are merged. Create issues in waves, not batches.
+2. **Branch freshness check:** Add to issue templates: "Before starting: `git fetch origin && git checkout -b <branch> origin/dev`". Consider CI check that rejects PRs >10 commits behind base.
+3. **Scope fence in issues:** Include explicit "Files you should touch" and "Files you must NOT touch" lists in issue descriptions.
+4. **Single-service PRs only:** Enforce rule: backend PRs touch only `solr-search/`, frontend PRs touch only `aithena-ui/`. Mixed PRs are auto-rejected.
+5. **Target branch validation:** Add CI check or PR template checklist item: "Base branch is `dev`".
+
+### 2026-03-14 — PR #145 Review: LINT-5 Ruff Auto-Fix (REQUEST CHANGES)
+
+**PR #145** — "[LINT-5] Run ruff auto-fix across all Python services" from @copilot (draft)
+- **Target branch:** `jmservera/solrstreamlitui` ❌ (should be `dev`)
+- **Branch status:** 6 ahead, 24 behind `dev` — stale
+- **Changes:** 23 files, +352/-167 lines. Purely lint/format fixes across all Python services.
+- **Quality of fixes:** Good. Unused imports removed (F401), wildcard imports replaced (F403/F405), unused variable `cleaned` removed (F841), duplicate `question` fn renamed to `question_post` (F811), consistent formatting applied.
+- **No local ruff config added** — respects root `ruff.toml` ✓
+- **Verdict:** REQUEST CHANGES — wrong target branch + stale branch. Code itself is clean; needs retarget to `dev`, rebase, and re-run ruff post-rebase.
+- **Pattern note:** 6th PR in this session with wrong target branch. This is a systematic copilot agent configuration issue.
+
+### 2026-03-14 — Branch Repair Strategy for 9 Broken @copilot PRs
+
+**Context:** After reviewing all 9 broken PRs from @copilot (all with "changes requested"), analyzed git divergence, code value, and repair feasibility.
+
+**Key findings:**
+- All 9 PRs share the root cause: @copilot branched from `main` or old `jmservera/solrstreamlitui` instead of `dev`
+- Branches are 28 commits behind `dev` (PR #138 is 126 behind)
+- Most diff volume is ghost diffs from stale branches, not actual feature code
+- Several PRs duplicate work already on `dev` (ruff config, uv migrations, stats endpoint)
+
+**Triage outcome:**
+- **CLOSE 5 PRs:** #143 (redundant ruff), #141 (redundant uv CI), #128 (stale status tab), #127 (stale stats tab), #119 (scope bloat status endpoint)
+- **CHERRY-PICK 2 PRs:** #140 (artifact cleanup — small, targeted), #138 (PDF page nav — after #137 lands)
+- **REWRITE 2 from scratch:** #145 (just run ruff on fresh branch), #144 (just run eslint/prettier on fresh branch)
+
+**Critical dependency:** PR #137 (approved, page ranges) must rebase and merge first — it unblocks #138 and adds real search value.
+
+**Total salvageable code across all 9 PRs: ~200 lines.** Most effort should go into prevention (branch protection, explicit base-branch instructions) rather than repair.
+
+**Decision written to:** `.squad/decisions/inbox/ripley-branch-repair-strategy.md`
+
+### 2026-03-14 — Stale Branch Cleanup
+
+**Context:** Accumulated 28 remote branches (incl. HEAD) after multiple phases of copilot agent work. Many branches from merged PRs and closed-unmerged PRs were never cleaned up.
+
+**Analysis:**
+- 7 branches fully merged into `dev` (PRs #54–#71 era) — leftover after merge
+- 16 branches from closed-unmerged PRs (#54–#145) — all from broken copilot PRs that branched from wrong base; decided to redo from scratch
+- 5 branches protected: `dev`, `main`, `jmservera/solrstreamlitui` (default), plus 2 open PRs (#137 page ranges, #142 uv docs)
+
+**Deleted 23 branches:**
+Merged: `add-dense-vector-fields` (#66), `add-e2e-coverage-upload-search-pdf` (#55), `add-faceted-filtering-react-ui` (#62), `align-embeddings-server-to-distiluse-model` (#65), `configure-document-lister-polling` (#71), `expand-streamlit-dashboard-indexing` (#57), `extend-document-indexer-chunking` (#67).
+Closed-unmerged: `add-build-status-tab-component` (#128), `add-contract-tests-solr-search-api` (#60), `add-frontend-test-coverage` (#64), `add-pdf-upload-endpoint` (#58), `add-pdf-upload-flow` (#59), `add-related-books-panel` (#70), `clean-up-smoke-test-artifacts` (#140), `create-solr-backed-fastapi-search-service` (#54), `jmservera-add-v1-status-endpoint` (#119), `jmserverasolrstreamlitui-build-stats-tab` (#127), `lint-4-replace-pylint-black-with-ruff` (#143), `lint-5-run-ruff-auto-fix` (#145), `lint-6-autofix-eslint-prettier` (#144), `replace-chat-shell-with-search-page` (#61), `update-pdf-viewer-navigation` (#138), `uv-8-update-build-scripts-ci` (#141).
+
+**Preserved 5 branches:** `dev`, `main`, `jmservera/solrstreamlitui`, `copilot/jmservera-solrsearch-return-page-numbers` (PR #137), `copilot/doc-1-document-uv-migration` (PR #142).
+
+**Result:** Remote went from 28 refs → 6 refs (5 branches + HEAD). Clean slate for Phase 5 work.
+
+### 2026-03-14 — Post-Cleanup Issue Reassignment (Phase 5 Triage)
+
+**Context:** After closing 9 broken @copilot PRs, updating copilot-instructions.md with branch guardrails, and adding scope fences, performed full triage of the 9 affected issues.
+
+**Actions taken:**
+1. Closed #134 (PR #137 merged). #96 was already closed.
+2. Removed all stale `squad:*` and `go:needs-research` labels from 9 issues (#139, #135, #122, #121, #114, #95, #92, #99, #100).
+3. Assigned 3 simplest issues to `squad:copilot` (batch 1): #139 (cleanup artifacts), #95 (ruff in document-lister), #100 (eslint in aithena-ui).
+4. Assigned remaining 6 to squad members: #99 → Parker, #114 → Parker, #135 → Dallas, #122 → Dallas, #121 → Dallas, #92 → Brett.
+5. Posted triage comments on all 9 issues with rationale.
+6. Wrote decision to `.squad/decisions/inbox/ripley-issue-reassignment.md`.
+
+**Key learning:** The GitHub `Copilot` user cannot be assigned via `gh issue edit --add-assignee Copilot`. The `squad:copilot` label is the actual routing mechanism. Don't waste time trying to assign the user directly.
+
+**Sequential @copilot strategy:** Only 3 issues assigned at once (all 🟢 single-directory mechanical tasks). Remaining candidates (#99 ruff multi-service) held back for batch 2 after success is confirmed. This prevents the PR sprawl from Phase 4.

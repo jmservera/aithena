@@ -3,10 +3,10 @@ import json
 import redis
 import requests
 import streamlit as st
-
 from pages.shared.config import (
     QUEUE_NAME,
     RABBITMQ_HOST,
+    RABBITMQ_MGMT_PATH_PREFIX,
     RABBITMQ_MGMT_PORT,
     RABBITMQ_PASS,
     RABBITMQ_USER,
@@ -14,11 +14,12 @@ from pages.shared.config import (
     REDIS_PORT,
 )
 
+rabbitmq_management_url = f"http://{RABBITMQ_HOST}:{RABBITMQ_MGMT_PORT}{RABBITMQ_MGMT_PATH_PREFIX}"
+
 st.set_page_config(page_title="Aithena Admin", page_icon="🏛️", layout="wide")
 st.title("🏛️ Aithena Admin Dashboard")
 st.caption(
-    f"Redis: `{REDIS_HOST}:{REDIS_PORT}` · Queue: `{QUEUE_NAME}` · "
-    f"RabbitMQ management: `{RABBITMQ_HOST}:{RABBITMQ_MGMT_PORT}`"
+    f"Redis: `{REDIS_HOST}:{REDIS_PORT}` · Queue: `{QUEUE_NAME}` · RabbitMQ management: `{rabbitmq_management_url}`"
 )
 
 # ── Redis metrics ────────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ except redis.exceptions.ConnectionError:
 st.subheader("📨 RabbitMQ Queue")
 try:
     resp = requests.get(
-        f"http://{RABBITMQ_HOST}:{RABBITMQ_MGMT_PORT}/api/queues/%2F/{QUEUE_NAME}",
+        f"{rabbitmq_management_url}/api/queues/%2F/{QUEUE_NAME}",
         auth=(RABBITMQ_USER, RABBITMQ_PASS),
         timeout=5,
     )
@@ -71,7 +72,10 @@ try:
     else:
         st.warning(f"RabbitMQ management API returned HTTP {resp.status_code}.")
 except requests.exceptions.RequestException:
-    st.info("RabbitMQ management API not reachable. Verify `RABBITMQ_HOST` and `RABBITMQ_MGMT_PORT`.")
+    st.info(
+        "RabbitMQ management API not reachable. Verify `RABBITMQ_HOST`, "
+        "`RABBITMQ_MGMT_PORT`, and `RABBITMQ_MGMT_PATH_PREFIX`."
+    )
 
 st.divider()
 st.info("Use **Document Manager** in the sidebar to inspect documents and trigger requeue or clear actions.")

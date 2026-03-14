@@ -1,4 +1,4 @@
-import { BookResult } from "../hooks/search";
+import { BookResult } from '../hooks/search';
 
 interface BookCardProps {
   book: BookResult;
@@ -12,16 +12,16 @@ interface BookCardProps {
  */
 function sanitizeHighlight(raw: string): string {
   return raw
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/&lt;em&gt;/g, "<em>")
-    .replace(/&lt;\/em&gt;/g, "</em>");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/&lt;em&gt;/g, '<em>')
+    .replace(/&lt;\/em&gt;/g, '</em>');
 }
 
 function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
   return (
-    <article className={`book-card${isSelected ? " book-card--active" : ""}`}>
+    <article className={`book-card${isSelected ? ' book-card--active' : ''}`}>
       <h2 className="book-title">{book.title}</h2>
       <div className="book-meta">
         {book.author && (
@@ -64,9 +64,7 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
         </div>
       )}
       <div className="book-card-footer">
-        {book.file_path && (
-          <p className="book-filepath">{book.file_path}</p>
-        )}
+        {book.file_path && <p className="book-filepath">{book.file_path}</p>}
         {book.document_url && onOpenPdf && (
           <button
             className="open-pdf-btn"
