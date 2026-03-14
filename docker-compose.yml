@@ -129,11 +129,9 @@ services:
       replicas: 1
     depends_on:
       rabbitmq:
-        condition: service_healthy
+        condition: service_started
       redis:
-        condition: service_healthy
-      solr-init:
-        condition: service_completed_successfully
+        condition: service_started
       embeddings-server:
         condition: service_started
     volumes:

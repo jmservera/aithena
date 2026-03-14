@@ -15,6 +15,7 @@ from document_indexer.__main__ import (
     index_document,
     mark_failure,
     save_state,
+    wait_for_solr_collection,
 )
 
 # ---------------------------------------------------------------------------
@@ -189,6 +190,68 @@ class TestIndexChunks:
         with patch("document_indexer.__main__.chunk_text", return_value=["chunk"]):
             with pytest.raises(Exception, match="500 Server Error"):
                 index_chunks(pdf_file, "pid", metadata_stub)
+
+
+# ---------------------------------------------------------------------------
+# Solr startup gating
+# ---------------------------------------------------------------------------
+
+
+class TestWaitForSolrCollection:
+    def _mock_response(self, *, json_data=None, text="", error=None):
+        response = MagicMock()
+        response.text = text
+        response.raise_for_status = MagicMock(side_effect=error)
+        if json_data is None:
+            response.json.side_effect = ValueError("invalid json")
+        else:
+            response.json.return_value = json_data
+        return response
+
+    @patch("document_indexer.__main__.requests.get")
+    def test_returns_when_collection_and_extract_handler_are_ready(self, mock_get):
+        mock_get.side_effect = [
+            self._mock_response(json_data={"collections": ["books"]}),
+            self._mock_response(text='{"config":{"requestHandler":{"/update/extract":{}}}}'),
+        ]
+
+        wait_for_solr_collection(max_attempts=1, delay=0)
+
+        assert mock_get.call_args_list == [
+            call(
+                "http://solr:8983/solr/admin/collections",
+                params={"action": "LIST", "wt": "json"},
+                timeout=indexer_module.SOLR_STARTUP_TIMEOUT,
+            ),
+            call(
+                "http://solr:8983/api/collections/books/config",
+                timeout=indexer_module.SOLR_STARTUP_TIMEOUT,
+            ),
+        ]
+
+    @patch("document_indexer.__main__.time.sleep")
+    @patch("document_indexer.__main__.requests.get")
+    def test_retries_until_extract_handler_exists(self, mock_get, mock_sleep):
+        mock_get.side_effect = [
+            self._mock_response(json_data={"collections": ["books"]}),
+            self._mock_response(text='{"config":{"requestHandler":{}}}'),
+            self._mock_response(json_data={"collections": ["books"]}),
+            self._mock_response(text='{"config":{"requestHandler":{"/update/extract":{}}}}'),
+        ]
+
+        wait_for_solr_collection(max_attempts=2, delay=0)
+
+        mock_sleep.assert_called_once_with(0)
+
+    @patch("document_indexer.__main__.time.sleep")
+    @patch("document_indexer.__main__.requests.get")
+    def test_raises_after_exhausting_attempts(self, mock_get, mock_sleep):
+        mock_get.return_value = self._mock_response(json_data={"collections": []})
+
+        with pytest.raises(RuntimeError, match="did not become ready"):
+            wait_for_solr_collection(max_attempts=2, delay=0)
+
+        mock_sleep.assert_called_once_with(0)
 
 
 # ---------------------------------------------------------------------------

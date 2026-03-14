@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
+import time
 
 import pdfplumber
 import pika
@@ -36,6 +37,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SOLR_TIMEOUT = 300
+SOLR_STARTUP_TIMEOUT = 10
+SOLR_STARTUP_DELAY = 5
+SOLR_STARTUP_ATTEMPTS = 60
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 queue = None
 
@@ -55,6 +59,55 @@ def get_queue(channel: BlockingChannel):
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def wait_for_solr_collection(
+    max_attempts: int = SOLR_STARTUP_ATTEMPTS,
+    delay: int = SOLR_STARTUP_DELAY,
+) -> None:
+    collections_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/admin/collections"
+    config_url = f"http://{SOLR_HOST}:{SOLR_PORT}/api/collections/{SOLR_COLLECTION}/config"
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.get(
+                collections_url,
+                params={"action": "LIST", "wt": "json"},
+                timeout=SOLR_STARTUP_TIMEOUT,
+            )
+            response.raise_for_status()
+            collections = response.json().get("collections", [])
+            if SOLR_COLLECTION not in collections:
+                raise RuntimeError(
+                    f"Solr collection {SOLR_COLLECTION} is not available yet."
+                )
+
+            config_response = requests.get(config_url, timeout=SOLR_STARTUP_TIMEOUT)
+            config_response.raise_for_status()
+            if '"/update/extract"' not in config_response.text:
+                raise RuntimeError(
+                    f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler."
+                )
+
+            logger.info("Solr collection %s is ready.", SOLR_COLLECTION)
+            return
+        except (requests.RequestException, RuntimeError, ValueError) as exc:
+            last_error = exc
+            if attempt == max_attempts:
+                break
+            logger.info(
+                "Waiting for Solr collection %s (%s/%s): %s",
+                SOLR_COLLECTION,
+                attempt,
+                max_attempts,
+                exc,
+            )
+            time.sleep(delay)
+
+    raise RuntimeError(
+        f"Solr collection {SOLR_COLLECTION} did not become ready after {max_attempts} attempts."
+    ) from last_error
 
 
 def redis_key(file_path: str) -> str:
@@ -331,4 +384,5 @@ if __name__ == "__main__":
         SOLR_PORT,
         SOLR_COLLECTION,
     )
+    wait_for_solr_collection()
     consume()

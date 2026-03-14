@@ -7,13 +7,29 @@ SOLR_COLLECTION="${SOLR_COLLECTION:-books}"
 collection_endpoint="${SOLR_BASE_URL%/}/api/collections/${SOLR_COLLECTION}/config"
 backup_endpoint="${SOLR_BASE_URL%/}/api/cluster/backup-repositories"
 
+retry_curl() {
+  output=""
+  until output="$(curl -fsS "$@" 2>/dev/null)"; do
+    sleep 2
+  done
+  printf '%s' "$output"
+}
+
 post_json() {
   endpoint="$1"
   payload="$2"
-  curl -fsS -X POST -H 'Content-type:application/json' -d "$payload" "$endpoint"
+  retry_curl -X POST -H 'Content-type:application/json' -d "$payload" "$endpoint" >/dev/null
 }
 
-collection_config="$(curl -fsS "$collection_endpoint")"
+optional_post_json() {
+  endpoint="$1"
+  payload="$2"
+  if ! curl -fsS -X POST -H 'Content-type:application/json' -d "$payload" "$endpoint"; then
+    echo "Warning: optional Solr config request failed for $endpoint; continuing" >&2
+  fi
+}
+
+collection_config="$(retry_curl "$collection_endpoint")"
 
 if ! printf '%s' "$collection_config" | grep -q '"/update/extract"'; then
   post_json "$collection_endpoint" '{
@@ -32,7 +48,7 @@ if ! printf '%s' "$collection_config" | grep -q '"/update/extract"'; then
   }'
 fi
 
-collection_config="$(curl -fsS "$collection_endpoint")"
+collection_config="$(retry_curl "$collection_endpoint")"
 
 if ! printf '%s' "$collection_config" | grep -q '"my-init"'; then
   post_json "$collection_endpoint" '{
@@ -50,7 +66,7 @@ fi
 backup_config="$(curl -fsS "$backup_endpoint" 2>/dev/null || true)"
 
 if [ -n "$backup_config" ] && ! printf '%s' "$backup_config" | grep -q '"local_repo"'; then
-  post_json "$backup_endpoint" '{
+  optional_post_json "$backup_endpoint" '{
     "create-repository": {
       "name": "local_repo",
       "type": "local",
