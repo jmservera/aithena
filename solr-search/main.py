@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any, Literal
 
 import requests
@@ -21,6 +23,7 @@ from search_service import (
     parse_facet_counts,
     reciprocal_rank_fusion,
     resolve_document_path,
+    solr_escape,
 )
 
 SortBy = Literal["score", "title", "author", "year", "category", "language"]
@@ -307,6 +310,74 @@ def get_document(document_id: str) -> FileResponse:
         filename=document_path.name,
         headers={"Content-Disposition": build_inline_content_disposition(document_path.name)},
     )
+
+
+@app.get("/books/{document_id}/similar")
+def similar_books(
+    request: Request,
+    document_id: str,
+    limit: int = Query(5, ge=1, le=50, description="Maximum number of similar books to return."),
+    min_score: float = Query(0.0, ge=0.0, le=1.0, description="Minimum cosine similarity score threshold."),
+) -> dict[str, Any]:
+    """Return books semantically similar to the one identified by *document_id*.
+
+    The source document is always excluded from results. Similarity is computed
+    using Solr's kNN query against the ``book_embedding`` DenseVectorField.
+    """
+    embedding_field = settings.book_embedding_field
+
+    source_payload = query_solr(
+        {
+            "q": f"id:{solr_escape(document_id)}",
+            "fl": f"id,{embedding_field}",
+            "rows": 1,
+            "wt": "json",
+        }
+    )
+    source_docs = source_payload.get("response", {}).get("docs", [])
+    if not source_docs:
+        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
+
+    vector = source_docs[0].get(embedding_field)
+    if not vector:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Document {document_id!r} has no embedding yet. "
+                "Embeddings are populated by the Phase 3 indexing pipeline."
+            ),
+        )
+
+    knn_payload = query_solr(
+        {
+            "q": f"{{!knn f={embedding_field} topK={limit + 1}}}{json.dumps(vector)}",
+            "fq": f"-id:{solr_escape(document_id)}",
+            "fl": "id,title_s,author_s,year_i,category_s,file_path_s,score",
+            "rows": limit,
+            "wt": "json",
+        }
+    )
+    docs = knn_payload.get("response", {}).get("docs", [])
+
+    results = []
+    for doc in docs:
+        score = doc.get("score", 0.0)
+        if min_score > 0.0 and score < min_score:
+            continue
+        file_path = doc.get("file_path_s")
+        results.append(
+            {
+                "id": doc.get("id"),
+                "title": doc.get("title_s") or Path(file_path or "").stem,
+                "author": doc.get("author_s") or "Unknown",
+                "year": doc.get("year_i"),
+                "category": doc.get("category_s"),
+                "document_url": build_document_url(request, file_path),
+                "score": score,
+            }
+        )
+
+    return {"results": results}
 
 
 if __name__ == "__main__":

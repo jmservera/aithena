@@ -453,3 +453,208 @@ def test_search_hybrid_empty_query_returns_400(
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "hybrid"})
     assert response.status_code == 400
+
+
+
+# ---------------------------------------------------------------------------
+# Tests for GET /books/{document_id}/similar
+# ---------------------------------------------------------------------------
+
+DUMMY_VECTOR = [round(0.002 * i, 4) for i in range(512)]
+
+SOURCE_DOC_WITH_EMBEDDING = {
+    "id": "source-doc-id",
+    "book_embedding": DUMMY_VECTOR,
+}
+
+SIMILAR_BOOKS_DOCS = [
+    {
+        "id": "similar-1",
+        "title_s": "Book One",
+        "author_s": "Author A",
+        "year_i": 2010,
+        "category_s": "Fiction",
+        "file_path_s": "fiction/Author A/Book One.pdf",
+        "score": 0.93,
+    },
+    {
+        "id": "similar-2",
+        "title_s": "Book Two",
+        "author_s": "Author B",
+        "year_i": 2015,
+        "category_s": "Fiction",
+        "file_path_s": "fiction/Author B/Book Two.pdf",
+        "score": 0.85,
+    },
+]
+
+
+def _make_mock_response(docs: list[dict], num_found: int | None = None) -> MagicMock:
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = {
+        "response": {
+            "numFound": num_found if num_found is not None else len(docs),
+            "start": 0,
+            "docs": docs,
+        }
+    }
+    return mock_resp
+
+
+@patch("main.requests.get")
+def test_similar_returns_200_with_results(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response(SIMILAR_BOOKS_DOCS),
+    ]
+
+    response = client.get("/books/source-doc-id/similar")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "results" in body
+    assert len(body["results"]) == 2
+
+
+@patch("main.requests.get")
+def test_similar_result_contains_required_fields(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response(SIMILAR_BOOKS_DOCS),
+    ]
+
+    response = client.get("/books/source-doc-id/similar")
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    for field in ("id", "title", "author", "year", "category", "document_url", "score"):
+        assert field in result, f"Missing required field: {field}"
+
+
+@patch("main.requests.get")
+def test_similar_excludes_source_document_via_fq(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response(SIMILAR_BOOKS_DOCS),
+    ]
+
+    client.get("/books/source-doc-id/similar")
+
+    assert mock_solr_get.call_count == 2
+    knn_call_params = mock_solr_get.call_args_list[1][1]["params"]
+    fq = knn_call_params.get("fq", "")
+    assert "source" in fq
+    assert fq.startswith("-id:")
+
+
+@patch("main.requests.get")
+def test_similar_uses_knn_query_parser(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response(SIMILAR_BOOKS_DOCS),
+    ]
+
+    client.get("/books/source-doc-id/similar")
+
+    knn_call_params = mock_solr_get.call_args_list[1][1]["params"]
+    q = knn_call_params.get("q", "")
+    assert "{!knn" in q
+    assert "book_embedding" in q
+
+
+@patch("main.requests.get")
+def test_similar_retrieves_embedding_field_from_source(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response(SIMILAR_BOOKS_DOCS),
+    ]
+
+    client.get("/books/source-doc-id/similar")
+
+    source_call_params = mock_solr_get.call_args_list[0][1]["params"]
+    fl = source_call_params.get("fl", "")
+    assert "book_embedding" in fl
+
+
+@patch("main.requests.get")
+def test_similar_limit_controls_rows_in_knn_query(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response(SIMILAR_BOOKS_DOCS[:1]),
+    ]
+
+    client.get("/books/source-doc-id/similar?limit=3")
+
+    knn_call_params = mock_solr_get.call_args_list[1][1]["params"]
+    assert knn_call_params.get("rows") == 3
+
+
+@patch("main.requests.get")
+def test_similar_min_score_filters_results(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    low_score_doc = {**SIMILAR_BOOKS_DOCS[1], "score": 0.50}
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response([SIMILAR_BOOKS_DOCS[0], low_score_doc]),
+    ]
+
+    response = client.get("/books/source-doc-id/similar?min_score=0.8")
+
+    assert response.status_code == 200
+    scores = [r["score"] for r in response.json()["results"]]
+    assert all(s >= 0.8 for s in scores)
+    assert len(scores) == 1
+
+
+@patch("main.requests.get")
+def test_similar_returns_404_for_unknown_id(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.return_value = _make_mock_response([])
+
+    response = client.get("/books/nonexistent-id/similar")
+
+    assert response.status_code == 404
+
+
+@patch("main.requests.get")
+def test_similar_returns_422_when_embedding_missing(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    doc_no_embedding = {"id": "source-doc-id"}
+    mock_solr_get.return_value = _make_mock_response([doc_no_embedding])
+
+    response = client.get("/books/source-doc-id/similar")
+
+    assert response.status_code == 422
+
+
+@patch("main.requests.get")
+def test_similar_returns_empty_list_when_no_similar_found(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.side_effect = [
+        _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
+        _make_mock_response([]),
+    ]
+
+    response = client.get("/books/source-doc-id/similar")
+
+    assert response.status_code == 200
+    assert response.json()["results"] == []
+
+
+@patch("main.requests.get")
+def test_similar_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
+    import requests as req
+
+    client = get_client()
+    mock_solr_get.side_effect = req.ConnectionError("Cannot connect to Solr")
+
+    response = client.get("/books/source-doc-id/similar")
+
+    assert response.status_code == 502
