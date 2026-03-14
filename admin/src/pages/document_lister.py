@@ -3,7 +3,6 @@ import json
 import pandas as pd
 import redis
 import streamlit as st
-
 from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PORT
 
 st.set_page_config(page_title="Document Manager", page_icon="📄", layout="wide")
@@ -55,11 +54,13 @@ def make_df(docs: list[dict], columns: list[str]) -> pd.DataFrame:
 try:
     queued_docs, processed_docs, failed_docs = load_documents()
 
-    tab_queued, tab_processed, tab_failed = st.tabs([
-        f"⏳ Queued ({len(queued_docs)})",
-        f"✅ Processed ({len(processed_docs)})",
-        f"❌ Failed ({len(failed_docs)})",
-    ])
+    tab_queued, tab_processed, tab_failed = st.tabs(
+        [
+            f"⏳ Queued ({len(queued_docs)})",
+            f"✅ Processed ({len(processed_docs)})",
+            f"❌ Failed ({len(failed_docs)})",
+        ]
+    )
 
     # ── Queued tab ───────────────────────────────────────────────────────────
     with tab_queued:
@@ -142,5 +143,7 @@ try:
             st.success("No failed documents. 🎉")
 
 except redis.exceptions.ConnectionError:
-    st.error(f"Cannot connect to Redis at {REDIS_HOST}:{REDIS_PORT}. "
-             "Check that the `REDIS_HOST` and `REDIS_PORT` environment variables are set correctly.")
+    st.error(
+        f"Cannot connect to Redis at {REDIS_HOST}:{REDIS_PORT}. "
+        "Check that the `REDIS_HOST` and `REDIS_PORT` environment variables are set correctly."
+    )

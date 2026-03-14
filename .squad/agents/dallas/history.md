@@ -48,3 +48,10 @@
 - Cleaned leftover chat-era TypeScript issues by renaming non-JSX files from `.tsx` to `.ts` and fixing lint errors in old helper/components; `npm run build` and `npm run lint` now pass.
 - Smoke tested at `http://localhost:5173`: search for `balearics` returned 22 results with facets/pagination, and the PDF viewer opened with an iframe-backed dialog.
 
+### 2026-03-14T18:55 — LINT-6 prettier + eslint autofix on aithena-ui
+
+- Added `aithena-ui/.prettierrc` plus Prettier integration in `.eslintrc.cjs`, and installed `prettier`, `eslint-config-prettier`, and `eslint-plugin-prettier` as dev dependencies.
+- Ran `npx prettier --write` and `npx eslint --fix` across the UI, including `vite.config.ts`, keeping the diff formatting-only.
+- Renamed non-JSX hooks from `.tsx` to `.ts` (`src/hooks/chat`, `input`, `search`) so file extensions match content without changing imports.
+- Verified `npm run lint` and `npm run build` pass; `npm test` currently fails because `aithena-ui/package.json` has no `test` script yet.
+

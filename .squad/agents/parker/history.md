@@ -16,6 +16,11 @@
 - Closed 9 stale/bad-base Copilot PRs (#140, #128, #138, #127, #119, #143, #141, #145, #144) and re-opened their linked issues for fresh pickup instead of trying to salvage branches targeting the wrong base.
 - Standardized reassignment guardrails on the linked issues: branch from `origin/dev`, target `dev`, stay inside the issue-specific scope fence, and do not touch files outside the stated scope.
 - PR #137 (page ranges in search results) is still blocked by merge conflicts against `dev`; GitHub reports it is not cleanly mergeable and needs a local rebase/merge before it can land.
+### 2026-03-14 — Ruff cleanup across Python services
+
+- Root `ruff.toml` is the single source of truth for Python linting; Python service `pyproject.toml` files do not carry local `[tool.ruff]` overrides.
+- Test suites rely on pytest-style `assert` usage, so Ruff needs per-file ignores for `S101` under `**/tests/*.py` and `e2e/*.py`; service entrypoints also keep targeted ignores for expected container/test patterns (`S104`, `S108`, `S603`).
+- Post-cleanup validation passes for `solr-search`, `document-indexer`, and `document-lister` via `uv run pytest`, and `embeddings-server` passes in a clean temp venv with `huggingface_hub<0.26` plus `httpx<0.28`.
 
 ### 2026-03-14 — API contract + on-prem cleanup
 

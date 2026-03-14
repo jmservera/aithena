@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
-import pytest
-
 import document_indexer.__main__ as indexer_module
+import pytest
+import requests
 from document_indexer.__main__ import (
     build_chunk_doc,
-    build_literal_params,
     index_chunks,
     index_document,
     mark_failure,
@@ -125,17 +122,13 @@ class TestIndexChunks:
         resp = MagicMock()
         resp.status_code = status_code
         resp.text = text
-        resp.raise_for_status = MagicMock(
-            side_effect=None if status_code < 400 else Exception("HTTP error")
-        )
+        resp.raise_for_status = MagicMock(side_effect=None if status_code < 400 else Exception("HTTP error"))
         return resp
 
     @patch("document_indexer.__main__.requests.post")
     @patch("document_indexer.__main__.get_embeddings")
     @patch("document_indexer.__main__.extract_pdf_text")
-    def test_returns_chunk_count(
-        self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
-    ):
+    def test_returns_chunk_count(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
         mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
         mock_post.return_value = self._mock_response()
@@ -148,9 +141,7 @@ class TestIndexChunks:
     @patch("document_indexer.__main__.requests.post")
     @patch("document_indexer.__main__.get_embeddings")
     @patch("document_indexer.__main__.extract_pdf_text")
-    def test_posts_json_docs_to_solr(
-        self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
-    ):
+    def test_posts_json_docs_to_solr(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
         page_chunks = [("chunk one", 1, 1), ("chunk two", 1, 2)]
         embeddings = [[0.1] * 512, [0.2] * 512]
@@ -168,9 +159,7 @@ class TestIndexChunks:
         assert docs[1]["id"] == "pid_chunk_0001"
 
     @patch("document_indexer.__main__.extract_pdf_text")
-    def test_empty_text_returns_zero_without_calling_embeddings(
-        self, mock_extract_text, pdf_file, metadata_stub
-    ):
+    def test_empty_text_returns_zero_without_calling_embeddings(self, mock_extract_text, pdf_file, metadata_stub):
         mock_extract_text.return_value = []
         with patch("document_indexer.__main__.get_embeddings") as mock_emb:
             count = index_chunks(pdf_file, "pid", metadata_stub)
@@ -186,26 +175,28 @@ class TestIndexChunks:
         mock_extract_text.return_value = FAKE_PAGES
         mock_get_embeddings.side_effect = RuntimeError("embedding server down")
 
-        with patch("document_indexer.__main__.chunk_text_with_pages", return_value=[("chunk", 1, 1)]):
-            with pytest.raises(RuntimeError, match="embedding server down"):
-                index_chunks(pdf_file, "pid", metadata_stub)
+        with (
+            patch("document_indexer.__main__.chunk_text_with_pages", return_value=[("chunk", 1, 1)]),
+            pytest.raises(RuntimeError, match="embedding server down"),
+        ):
+            index_chunks(pdf_file, "pid", metadata_stub)
 
         mock_post.assert_not_called()
 
     @patch("document_indexer.__main__.requests.post")
     @patch("document_indexer.__main__.get_embeddings")
     @patch("document_indexer.__main__.extract_pdf_text")
-    def test_propagates_solr_error(
-        self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
-    ):
+    def test_propagates_solr_error(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
         mock_get_embeddings.return_value = [FAKE_EMBEDDING]
         mock_post.return_value = self._mock_response(500, "Solr error")
-        mock_post.return_value.raise_for_status.side_effect = Exception("500 Server Error")
+        mock_post.return_value.raise_for_status.side_effect = requests.HTTPError("500 Server Error")
 
-        with patch("document_indexer.__main__.chunk_text_with_pages", return_value=[("chunk", 1, 1)]):
-            with pytest.raises(Exception, match="500 Server Error"):
-                index_chunks(pdf_file, "pid", metadata_stub)
+        with (
+            patch("document_indexer.__main__.chunk_text_with_pages", return_value=[("chunk", 1, 1)]),
+            pytest.raises(requests.HTTPError, match="500 Server Error"),
+        ):
+            index_chunks(pdf_file, "pid", metadata_stub)
 
     @patch("document_indexer.__main__.requests.post")
     @patch("document_indexer.__main__.get_embeddings")
@@ -304,7 +295,7 @@ class TestIndexDocument:
 
     def _mock_error_response(self, message="HTTP 500"):
         resp = MagicMock()
-        resp.raise_for_status.side_effect = Exception(message)
+        resp.raise_for_status.side_effect = requests.HTTPError(message)
         return resp
 
     @patch("document_indexer.__main__.save_state")
@@ -386,9 +377,8 @@ class TestIndexDocument:
         mock_extract_meta.return_value = metadata_stub
         mock_post.return_value = self._mock_error_response("Solr down")
 
-        with patch("document_indexer.__main__.BASE_PATH", base_path):
-            with pytest.raises(Exception):
-                index_document(pdf_file)
+        with patch("document_indexer.__main__.BASE_PATH", base_path), pytest.raises(requests.HTTPError):
+            index_document(pdf_file)
 
         mock_mark_failure.assert_called_once()
         _, kwargs = mock_mark_failure.call_args
@@ -417,9 +407,8 @@ class TestIndexDocument:
         mock_post.return_value = self._mock_ok_response()
         mock_index_chunks.side_effect = RuntimeError("embeddings server unavailable")
 
-        with patch("document_indexer.__main__.BASE_PATH", base_path):
-            with pytest.raises(RuntimeError):
-                index_document(pdf_file)
+        with patch("document_indexer.__main__.BASE_PATH", base_path), pytest.raises(RuntimeError):
+            index_document(pdf_file)
 
         mock_mark_failure.assert_called_once()
         _, kwargs = mock_mark_failure.call_args
@@ -447,9 +436,8 @@ class TestIndexDocument:
         mock_extract_meta.return_value = metadata_stub
         mock_post.return_value = self._mock_error_response()
 
-        with patch("document_indexer.__main__.BASE_PATH", base_path):
-            with pytest.raises(Exception):
-                index_document(pdf_file)
+        with patch("document_indexer.__main__.BASE_PATH", base_path), pytest.raises(requests.HTTPError):
+            index_document(pdf_file)
 
         mock_index_chunks.assert_not_called()
 
@@ -488,9 +476,11 @@ class TestMarkFailure:
 
 class TestSaveState:
     def test_allows_file_path_metadata_field(self):
-        with patch("document_indexer.__main__.load_state", return_value={"path": "abs/path.pdf"}):
-            with patch.object(indexer_module.redis_client, "set") as mock_set:
-                state = save_state("abs/path.pdf", file_path="relative/path.pdf", processed=True)
+        with (
+            patch("document_indexer.__main__.load_state", return_value={"path": "abs/path.pdf"}),
+            patch.object(indexer_module.redis_client, "set") as mock_set,
+        ):
+            state = save_state("abs/path.pdf", file_path="relative/path.pdf", processed=True)
 
         assert state["path"] == "abs/path.pdf"
         assert state["file_path"] == "relative/path.pdf"

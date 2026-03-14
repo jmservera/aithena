@@ -3,11 +3,10 @@ name: CI - Unit & Integration Tests
 on:
   push:
     branches:
-      - main
-      - jmservera/solrstreamlitui
+      - dev
   pull_request:
     branches:
-      - main
+      - dev
 
 permissions:
   contents: read
@@ -40,7 +39,7 @@ jobs:
 
       - name: Run tests
         working-directory: document-indexer
-        run: uv run python -m pytest -v --tb=short --cov=document_indexer --cov-report=term-missing
+        run: uv run pytest -v --tb=short --cov=document_indexer --cov-report=term-missing
 
   solr-search-tests:
     name: solr-search tests
@@ -65,11 +64,11 @@ jobs:
 
       - name: Run unit tests
         working-directory: solr-search
-        run: uv run python -m pytest tests/test_search_service.py -v --tb=short --cov=search_service --cov-report=term-missing
+        run: uv run pytest tests/test_search_service.py -v --tb=short --cov=search_service --cov-report=term-missing
 
       - name: Run integration tests
         working-directory: solr-search
-        run: uv run python -m pytest tests/test_integration.py -v --tb=short
+        run: uv run pytest tests/test_integration.py -v --tb=short
 
   python-lint:
     name: Python lint (ruff)

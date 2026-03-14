@@ -1,5 +1,0 @@
-Total messages: 4 (Errors: 1, Warnings: 0)
-Returning 2 messages for level "info"
-
-[INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom-1rtgfX8y.js?v=037499b6:17198
-[ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/favicon.ico:0

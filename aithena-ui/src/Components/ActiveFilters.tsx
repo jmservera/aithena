@@ -1,4 +1,4 @@
-import { SearchFilters } from "../hooks/search";
+import { SearchFilters } from '../hooks/search';
 
 interface ActiveFiltersProps {
   filters: SearchFilters;
@@ -7,16 +7,16 @@ interface ActiveFiltersProps {
 }
 
 const FILTER_LABELS: Record<keyof SearchFilters, string> = {
-  author: "Author",
-  category: "Category",
-  language: "Language",
-  year: "Year",
+  author: 'Author',
+  category: 'Category',
+  language: 'Language',
+  year: 'Year',
 };
 
 function ActiveFilters({ filters, onRemove, onClearAll }: ActiveFiltersProps) {
   const activeEntries = (
     Object.entries(filters) as [keyof SearchFilters, string | undefined][]
-  ).filter(([, value]) => value !== undefined && value !== "");
+  ).filter(([, value]) => value !== undefined && value !== '');
 
   if (activeEntries.length === 0) return null;
 

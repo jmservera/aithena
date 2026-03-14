@@ -1,10 +1,10 @@
-import { NavLink } from "react-router-dom";
+import { NavLink } from 'react-router-dom';
 
 const TABS = [
-  { to: "/search", label: "🔍 Search" },
-  { to: "/library", label: "📖 Library" },
-  { to: "/status", label: "🟢 Status" },
-  { to: "/stats", label: "📊 Stats" },
+  { to: '/search', label: '🔍 Search' },
+  { to: '/library', label: '📖 Library' },
+  { to: '/status', label: '🟢 Status' },
+  { to: '/stats', label: '📊 Stats' },
 ];
 
 function TabNav() {
@@ -14,9 +14,7 @@ function TabNav() {
         <NavLink
           key={tab.to}
           to={tab.to}
-          className={({ isActive }) =>
-            "tab-nav-link" + (isActive ? " tab-nav-link--active" : "")
-          }
+          className={({ isActive }) => 'tab-nav-link' + (isActive ? ' tab-nav-link--active' : '')}
         >
           {tab.label}
         </NavLink>

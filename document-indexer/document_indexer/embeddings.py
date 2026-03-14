@@ -39,7 +39,5 @@ def get_embeddings(
 
     embeddings = [item["embedding"] for item in data["data"]]
     if len(embeddings) != len(texts):
-        raise ValueError(
-            f"Expected {len(texts)} embeddings, got {len(embeddings)} from {url}"
-        )
+        raise ValueError(f"Expected {len(texts)} embeddings, got {len(embeddings)} from {url}")
     return embeddings
