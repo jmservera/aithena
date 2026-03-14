@@ -8,11 +8,10 @@ export interface StatsBucket {
 }
 
 export interface PageStats {
-  count: number;
-  total_pages: number;
-  avg_pages: number;
-  min_pages: number;
-  max_pages: number;
+  total: number;
+  avg: number;
+  min: number;
+  max: number;
 }
 
 export interface StatsResponse {

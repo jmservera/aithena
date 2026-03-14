@@ -42,31 +42,25 @@ function PageStatsCard({ ps }: { ps: PageStats }) {
           <tr className="stats-tr">
             <td className="stats-td stats-td--value">Total pages</td>
             <td className="stats-td stats-td--count">
-              {ps.total_pages.toLocaleString()}
-            </td>
-          </tr>
-          <tr className="stats-tr">
-            <td className="stats-td stats-td--value">Books with page data</td>
-            <td className="stats-td stats-td--count">
-              {ps.count.toLocaleString()}
+              {ps.total.toLocaleString()}
             </td>
           </tr>
           <tr className="stats-tr">
             <td className="stats-td stats-td--value">Average pages / book</td>
             <td className="stats-td stats-td--count">
-              {ps.avg_pages.toLocaleString()}
+              {ps.avg.toLocaleString()}
             </td>
           </tr>
           <tr className="stats-tr">
             <td className="stats-td stats-td--value">Min pages</td>
             <td className="stats-td stats-td--count">
-              {ps.min_pages.toLocaleString()}
+              {ps.min.toLocaleString()}
             </td>
           </tr>
           <tr className="stats-tr">
             <td className="stats-td stats-td--value">Max pages</td>
             <td className="stats-td stats-td--count">
-              {ps.max_pages.toLocaleString()}
+              {ps.max.toLocaleString()}
             </td>
           </tr>
         </tbody>
@@ -97,7 +91,7 @@ function CollectionStats() {
   if (!data) return null;
 
   const hasPageStats =
-    data.page_stats && "total_pages" in data.page_stats;
+    data.page_stats && "total" in data.page_stats;
 
   return (
     <div className="stats-container">
