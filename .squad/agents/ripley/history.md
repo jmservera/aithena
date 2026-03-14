@@ -385,3 +385,16 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 - Tier 3: #118 → #119 (backend endpoints)
 - Tier 4: #123 → #127 (rebase) → #128 (frontend, after Dallas UI fix)
 - Tier 5: #136 → #137 → #138 (rebase) (page search chain)
+
+### 2026-03-14 — Backlog Organization into GitHub Milestones
+
+- **COMPLETED:** Organized the full backlog into 5 GitHub milestones (v0.3.0–v1.0.0).
+- **Closed 13 issues** that were completed by merged PRs but never closed: #81–#84 (UV originals), #91 (LINT-1 original), #110 (qdrant removal), #111–#112 (UV-1/LINT-1 recreates), #113 (/v1/stats/), #124–#126 (UV recreates), #133 (page-aware chunking).
+- **Assigned 36 open issues** across milestones:
+  - v0.3.0 Stabilize Core: 5 issues (UV/ruff cleanup, docs)
+  - v0.4.0 Dashboard & Polish: 7 issues (endpoints, tabs, frontend lint/test)
+  - v0.5.0 Advanced Search: 3 issues (page results, similar books)
+  - v0.6.0 Security & Hardening: 19 issues (security CI, Mend vulns, docker hardening)
+  - v1.0.0 Production Ready: 2 issues (PDF upload) + future work
+- **Cadence established:** After each milestone → Pause → Scribe logs → Reskill → Tag release → Merge to default.
+- Decision recorded in `.squad/decisions/inbox/ripley-milestone-plan.md`.
