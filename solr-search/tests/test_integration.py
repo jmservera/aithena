@@ -876,3 +876,223 @@ def test_stats_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
     response = client.get("/v1/stats/")
 
     assert response.status_code == 502
+
+
+# ---------------------------------------------------------------------------
+# Page range support — chunk-level search hits
+# ---------------------------------------------------------------------------
+
+
+@patch("main.requests.get")
+def test_search_chunk_hits_include_page_range(mock_solr_get: MagicMock) -> None:
+    """Chunk documents with page_start_i/page_end_i must expose pages in results."""
+    client = get_client()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "response": {
+            "numFound": 2,
+            "docs": [
+                {
+                    "id": "chunk-1",
+                    "title_s": "Rondalles",
+                    "author_s": "Amades",
+                    "year_i": 1950,
+                    "file_path_s": "amades/rondalles.pdf",
+                    "page_start_i": 5,
+                    "page_end_i": 6,
+                    "score": 9.0,
+                },
+                {
+                    "id": "doc-full",
+                    "title_s": "Full Book",
+                    "author_s": "Amades",
+                    "year_i": 1952,
+                    "file_path_s": "amades/full.pdf",
+                    "score": 5.0,
+                },
+            ],
+        },
+        "highlighting": {},
+        "facet_counts": {"facet_fields": {}},
+    }
+    mock_solr_get.return_value = mock_response
+
+    response = client.get("/search", params={"q": "rondalles"})
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+
+    chunk_result = next(r for r in results if r["id"] == "chunk-1")
+    assert chunk_result["pages"] == [5, 6]
+
+    full_result = next(r for r in results if r["id"] == "doc-full")
+    assert full_result["pages"] is None
+
+
+@patch("main.requests.get")
+def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -> None:
+    """Solr queries must request page_start_i and page_end_i fields."""
+    client = get_client()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "response": {"numFound": 0, "docs": []},
+        "highlighting": {},
+        "facet_counts": {"facet_fields": {}},
+    }
+    mock_solr_get.return_value = mock_response
+
+    client.get("/search", params={"q": "test"})
+
+    params = mock_solr_get.call_args[1]["params"]
+    assert "page_start_i" in params["fl"]
+    assert "page_end_i" in params["fl"]
+
+
+# ---------------------------------------------------------------------------
+# Tests for GET /v1/stats/
+# ---------------------------------------------------------------------------
+
+_STATS_SOLR_PAYLOAD = {
+    "response": {"numFound": 76, "docs": []},
+    "stats": {
+        "stats_fields": {
+            "page_count_i": {
+                "min": 1.0,
+                "max": 800.0,
+                "sum": 12000.0,
+                "mean": 157.89,
+                "count": 76,
+                "missing": 0,
+            }
+        }
+    },
+    "facet_counts": {
+        "facet_fields": {
+            "author_s": ["Joan Amades", 15, "Other Author", 5],
+            "category_s": ["amades", 40, "other", 36],
+            "year_i": [1950, 3, 1960, 10],
+            "language_detected_s": ["ca", 40, "es", 20],
+        }
+    },
+}
+
+
+@patch("main.requests.get")
+def test_stats_returns_200_with_correct_shape(mock_solr_get: MagicMock) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = _STATS_SOLR_PAYLOAD
+    mock_solr_get.return_value = mock_resp
+
+    client = get_client()
+    response = client.get("/v1/stats/")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_books"] == 76
+    assert data["by_language"] == [{"value": "ca", "count": 40}, {"value": "es", "count": 20}]
+    assert data["by_author"] == [{"value": "Joan Amades", "count": 15}, {"value": "Other Author", "count": 5}]
+    assert data["by_year"] == [{"value": 1950, "count": 3}, {"value": 1960, "count": 10}]
+    assert data["by_category"] == [{"value": "amades", "count": 40}, {"value": "other", "count": 36}]
+    assert data["page_stats"]["total"] == 12000
+    assert data["page_stats"]["min"] == 1
+    assert data["page_stats"]["max"] == 800
+    assert data["page_stats"]["avg"] == 158
+
+
+@patch("main.requests.get")
+def test_stats_no_slash_alias_returns_200(mock_solr_get: MagicMock) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = _STATS_SOLR_PAYLOAD
+    mock_solr_get.return_value = mock_resp
+
+    client = get_client()
+    response = client.get("/v1/stats")
+
+    assert response.status_code == 200
+
+
+@patch("main.requests.get")
+def test_stats_legacy_path_returns_200(mock_solr_get: MagicMock) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = _STATS_SOLR_PAYLOAD
+    mock_solr_get.return_value = mock_resp
+
+    client = get_client()
+    response = client.get("/stats")
+
+    assert response.status_code == 200
+
+
+@patch("main.requests.get")
+def test_stats_sends_correct_solr_params(mock_solr_get: MagicMock) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = _STATS_SOLR_PAYLOAD
+    mock_solr_get.return_value = mock_resp
+
+    client = get_client()
+    client.get("/v1/stats/")
+
+    mock_solr_get.assert_called_once()
+    params = mock_solr_get.call_args[1]["params"]
+    assert params["q"] == "*:*"
+    assert params["rows"] == 0
+    assert params["stats"] == "true"
+    assert params["stats.field"] == "page_count_i"
+    assert params["facet"] == "true"
+    assert "author_s" in params["facet.field"]
+    assert "category_s" in params["facet.field"]
+    assert "year_i" in params["facet.field"]
+    assert "language_detected_s" in params["facet.field"]
+
+
+@patch("main.requests.get")
+def test_stats_handles_empty_collection(mock_solr_get: MagicMock) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "response": {"numFound": 0, "docs": []},
+        "stats": {"stats_fields": {"page_count_i": None}},
+        "facet_counts": {"facet_fields": {}},
+    }
+    mock_solr_get.return_value = mock_resp
+
+    client = get_client()
+    response = client.get("/v1/stats/")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_books"] == 0
+    assert data["by_language"] == []
+    assert data["by_author"] == []
+    assert data["page_stats"] == {"total": 0, "avg": 0, "min": 0, "max": 0}
+
+
+@patch("main.requests.get")
+def test_stats_returns_504_on_solr_timeout(mock_solr_get: MagicMock) -> None:
+    import requests as req
+
+    mock_solr_get.side_effect = req.Timeout("Connection timeout")
+
+    client = get_client()
+    response = client.get("/v1/stats/")
+
+    assert response.status_code == 504
+
+
+@patch("main.requests.get")
+def test_stats_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
+    import requests as req
+
+    mock_solr_get.side_effect = req.ConnectionError("Cannot connect to Solr")
+
+    client = get_client()
+    response = client.get("/v1/stats/")
+
+    assert response.status_code == 502
