@@ -4,6 +4,7 @@ import { ChatMessageProps, defaultChatMessageProps } from "./ChatMessage";
 import {
   CreateCompletionRequest,
   CreateCompletionRequestDef,
+  CreateCompletionRequestPropDef,
 } from "./types/CreateCompletionRequest";
 
 // Define a component for the sidebar
@@ -32,7 +33,10 @@ const Configbar = ({
     setProps({ ...defaultChatMessageProps });
   };
 
-  const renderPropertyEditor = (value: any, index: number) => {
+  const renderPropertyEditor = (
+    value: CreateCompletionRequestPropDef,
+    index: number
+  ) => {
     if (value.type == "number") {
       return (
         <>

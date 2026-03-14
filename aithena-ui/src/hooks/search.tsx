@@ -120,13 +120,19 @@ export function useSearch() {
     runSearch(searchState);
   }, [searchState, runSearch]);
 
-  const submitSearch = useCallback((query: string, mode: SearchMode = "keyword") => {
-    setSearchState((prev) => ({ ...prev, query, mode, page: 1 }));
-  }, []);
+  const submitSearch = useCallback(
+    (query: string, mode: SearchMode = "keyword") => {
+      setSearchState((prev) => ({ ...prev, query, mode, page: 1 }));
+    },
+    []
+  );
 
-  const setQuery = useCallback((query: string) => {
-    submitSearch(query, "keyword");
-  }, [submitSearch]);
+  const setQuery = useCallback(
+    (query: string) => {
+      submitSearch(query, "keyword");
+    },
+    [submitSearch]
+  );
 
   const setFilter = useCallback(
     (key: keyof SearchFilters, value: string | undefined) => {

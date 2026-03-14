@@ -1,11 +1,13 @@
 //https://markus.oberlehner.net/blog/building-a-chatgpt-client-with-remix-leveraging-response-streaming-for-a-chat-like-experience/
 import { useState } from "react";
 
-export const useChat = () => {
-  const [messages, setMessages] = useState<any>([]);
+type ChatMessage = Record<string, unknown>;
 
-  const addMessage = (message: any) =>
-    setMessages((prevMessages: any) => [...prevMessages, message]);
+export const useChat = () => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  const addMessage = (message: ChatMessage) =>
+    setMessages((prevMessages: ChatMessage[]) => [...prevMessages, message]);
 
   return { messages, addMessage };
 };

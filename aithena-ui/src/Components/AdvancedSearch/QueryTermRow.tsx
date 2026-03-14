@@ -26,7 +26,10 @@ function QueryTermRow({
       <div className="card-body">
         <div className="row g-3 align-items-end">
           <div className="col-12 col-xl-4">
-            <label className="form-label advanced-search-label" htmlFor={`query-term-${term.id}`}>
+            <label
+              className="form-label advanced-search-label"
+              htmlFor={`query-term-${term.id}`}
+            >
               Search term
             </label>
             <input
@@ -35,12 +38,17 @@ function QueryTermRow({
               type="text"
               value={term.text}
               placeholder="Word, phrase, wildcard, or exclusion"
-              onChange={(event) => onChange(term.id, { text: event.target.value })}
+              onChange={(event) =>
+                onChange(term.id, { text: event.target.value })
+              }
             />
           </div>
 
           <div className="col-6 col-md-3 col-xl-2">
-            <label className="form-label advanced-search-label" htmlFor={`query-operator-${term.id}`}>
+            <label
+              className="form-label advanced-search-label"
+              htmlFor={`query-operator-${term.id}`}
+            >
               {index === 0 ? "Join" : "Operator"}
             </label>
             <select
@@ -63,7 +71,10 @@ function QueryTermRow({
           </div>
 
           <div className="col-6 col-md-3 col-xl-2">
-            <label className="form-label advanced-search-label" htmlFor={`query-field-${term.id}`}>
+            <label
+              className="form-label advanced-search-label"
+              htmlFor={`query-field-${term.id}`}
+            >
               Field
             </label>
             <select
@@ -92,9 +103,14 @@ function QueryTermRow({
                 type="checkbox"
                 checked={term.fuzzy}
                 disabled={fuzzyDisabled}
-                onChange={(event) => onChange(term.id, { fuzzy: event.target.checked })}
+                onChange={(event) =>
+                  onChange(term.id, { fuzzy: event.target.checked })
+                }
               />
-              <label className="form-check-label advanced-search-label" htmlFor={`query-fuzzy-${term.id}`}>
+              <label
+                className="form-check-label advanced-search-label"
+                htmlFor={`query-fuzzy-${term.id}`}
+              >
                 Fuzzy
               </label>
             </div>
@@ -114,7 +130,10 @@ function QueryTermRow({
                   })
                 }
               />
-              <label className="form-check-label advanced-search-label" htmlFor={`query-phrase-${term.id}`}>
+              <label
+                className="form-check-label advanced-search-label"
+                htmlFor={`query-phrase-${term.id}`}
+              >
                 Phrase
               </label>
             </div>
