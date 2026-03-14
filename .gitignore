@@ -164,7 +164,7 @@ __azurite_db_blob__.json
 __azurite_db_blob_extent__.json
 
 # Smoke test / snapshot artifacts — write these to tmp/ or .squad/artifacts/ instead
-*.png
+/*.png
 *-smoke-*.txt
 *-smoke-*.md
 *-snapshot.md
