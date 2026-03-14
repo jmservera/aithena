@@ -12,17 +12,17 @@ Aithena runs as a Docker Compose stack built around Solr, a document ingestion p
 |---|---|---|
 | `nginx` | Main reverse proxy and public entry point | `80`, `443` |
 | `aithena-ui` | User-facing React frontend | proxied through `nginx` |
-| `solr-search` | FastAPI search, status, stats, and document endpoints | `8080` |
-| `solr`, `solr2`, `solr3` | SolrCloud search nodes | `8983`, `8984`, `8985` |
+| `solr-search` | FastAPI search, status, stats, and document endpoints | proxied through `nginx`; direct `8080` via override |
+| `solr`, `solr2`, `solr3` | SolrCloud search nodes | proxied admin through `nginx`; direct `8983`-`8985` via override |
 | `solr-init` | One-shot collection/config bootstrap for `books` | internal only |
-| `zoo1`, `zoo2`, `zoo3` | ZooKeeper ensemble for SolrCloud | `2181`, `2182`, `2183` |
-| `redis` | Indexing state tracking | `6379` |
-| `rabbitmq` | Queue for document ingestion | `5672`, `15672` |
+| `zoo1`, `zoo2`, `zoo3` | ZooKeeper ensemble for SolrCloud | internal only; direct `18080`, `2181`-`2183` via override |
+| `redis` | Indexing state tracking | internal only; direct `6379` via override |
+| `rabbitmq` | Queue for document ingestion | internal AMQP; admin proxied through `nginx`; direct `5672`, `15672` via override |
 | `document-lister` | Scans the mounted library and enqueues PDFs | internal only |
 | `document-indexer` | Consumes queue items and indexes books into Solr | internal only |
-| `embeddings-server` | Embedding service used by the search stack | `8085` |
-| `streamlit-admin` | Lightweight admin dashboard | proxied through `nginx` |
-| `redis-commander` | Web UI for Redis inspection | proxied through `nginx` |
+| `embeddings-server` | Embedding service used by the search stack | internal only; direct `8085` via override |
+| `streamlit-admin` | Lightweight admin dashboard | proxied through `nginx`; direct `8501` via override |
+| `redis-commander` | Web UI for Redis inspection | proxied through `nginx`; direct `8081` via override |
 | `certbot` | Certificate renewal helper | internal only |
 
 ### Service dependencies
@@ -59,7 +59,13 @@ export BOOKS_PATH=/absolute/path/to/your/booklibrary
 docker compose up -d
 ```
 
-This starts the full stack, including SolrCloud, Redis, RabbitMQ, the indexing services, the search API, and the UI.
+This starts the full stack, including SolrCloud, Redis, RabbitMQ, the indexing services, the search API, and the UI. In the default local workflow, Docker Compose also auto-loads `docker-compose.override.yml`, which republishes debug ports for direct host access.
+
+For a production-style run with only the nginx gateway exposed on the host, use:
+
+```bash
+docker compose -f docker-compose.yml up -d
+```
 
 ### 3. Watch initial bootstrap
 
@@ -79,12 +85,15 @@ Common local URLs:
 | Surface | URL |
 |---|---|
 | Main UI | `http://localhost/` |
-| Search API | `http://localhost:8080/v1/search/` |
-| Status API | `http://localhost:8080/v1/status/` |
-| Stats API | `http://localhost:8080/v1/stats/` |
-| Solr admin | `http://localhost:8983/solr/` |
-| RabbitMQ management | `http://localhost:15672/` |
-| ZooKeeper node 1 | `localhost:2181` |
+| Search API | `http://localhost/v1/search/` |
+| Status API | `http://localhost/v1/status/` |
+| Stats API | `http://localhost/v1/stats/` |
+| Solr admin | `http://localhost/admin/solr/` |
+| RabbitMQ management | `http://localhost/admin/rabbitmq/` |
+| Streamlit admin | `http://localhost/admin/streamlit/` |
+| Redis Commander | `http://localhost/admin/redis/` |
+
+Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8501`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
 
 ## Configuration
 
@@ -179,7 +188,7 @@ Important: this dashboard is focused on the search and ingestion path. It does *
 #### Status endpoint
 
 ```bash
-curl http://localhost:8080/v1/status/
+curl http://localhost/v1/status/
 ```
 
 This endpoint aggregates:
@@ -191,7 +200,7 @@ This endpoint aggregates:
 #### Stats endpoint
 
 ```bash
-curl http://localhost:8080/v1/stats/
+curl http://localhost/v1/stats/
 ```
 
 This endpoint returns:
@@ -235,7 +244,7 @@ docker compose ps solr solr2 solr3 solr-init zoo1 zoo2 zoo3
 docker compose logs --tail=100 zoo1
 docker compose logs --tail=100 solr
 docker compose logs --tail=100 solr-init
-curl -f http://localhost:8983/solr/admin/info/system
+docker compose exec solr curl -f http://localhost:8983/solr/admin/info/system
 ```
 
 What to look for:
@@ -285,7 +294,7 @@ docker compose logs --tail=100 document-lister
 docker compose logs --tail=100 document-indexer
 ```
 
-Also inspect the management UI at `http://localhost:15672/`.
+Also inspect the management UI at `http://localhost/admin/rabbitmq/` (or `http://localhost:15672/` when the dev override is loaded).
 
 What to look for:
 
@@ -373,7 +382,7 @@ Before calling a deployment healthy, confirm:
 
 - `docker compose ps` shows core services running
 - `solr-init` completed successfully
-- `http://localhost:8080/v1/status/` returns JSON
-- `http://localhost:8080/v1/stats/` returns JSON
+- `http://localhost/v1/status/` returns JSON
+- `http://localhost/v1/stats/` returns JSON
 - the main UI at `http://localhost/` loads Search, Status, and Stats
 - a known PDF can be searched and opened from results

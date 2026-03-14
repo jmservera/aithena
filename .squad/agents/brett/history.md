@@ -67,3 +67,10 @@
 7. Add resource limits: `SOLR_HEAP=1g`, memory limits, log caps
 8. Add graceful shutdown: `stop_grace_period: 60s` for Solr/ZooKeeper
 9. Expand Solr volume mount: `/var/solr` instead of just `/var/solr/data`
+
+### 2026-03-14 — Production vs development port publishing split
+
+- `docker-compose.yml` now leaves host publishing to `nginx` only (`80`/`443`); Redis, RabbitMQ, ZooKeeper, Solr nodes, solr-search, and embeddings stay network-internal via `expose:`.
+- `docker-compose.override.yml` restores the local debug surfaces: Redis `6379`, RabbitMQ `5672`/`15672`, solr-search `8080`, Streamlit `8501`, Redis Commander `8081`, ZooKeeper `18080`/`2181`-`2183`, Solr `8983`-`8985`, embeddings `8085`.
+- nginx already covers the UI and operator surfaces that production needs: `/`, `/v1/`, `/documents/`, `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, `/admin/redis/`.
+- This closes the earlier hardening gap about over-published Compose ports without breaking the local debugging workflow.

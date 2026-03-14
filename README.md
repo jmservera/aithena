@@ -76,6 +76,14 @@ export BOOKS_PATH=/absolute/path/to/your/booklibrary
 docker compose up -d
 ```
 
+By default, Docker Compose also auto-loads `docker-compose.override.yml`, so local development/debug ports stay published.
+
+Use the production-only surface when you want just the nginx gateway on the host:
+
+```bash
+docker compose -f docker-compose.yml up -d
+```
+
 This starts:
 - Redis, RabbitMQ (messaging layer)
 - ZooKeeper ensemble (3 nodes)
@@ -110,7 +118,20 @@ Once `solr-init` completes:
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
 | Streamlit Admin | http://localhost/admin/streamlit/ | Document management dashboard |
 
-Direct service ports such as `8983`, `15672`, and `8080` remain available for local debugging, but nginx is now the preferred entry point for the UI surface.
+When `docker compose up` loads `docker-compose.override.yml` (the default local workflow), these direct debug ports are also available:
+
+| Service | Port(s) | Purpose |
+|---------|---------|---------|
+| solr-search | `8080` | Direct FastAPI debugging without nginx |
+| solr / solr2 / solr3 | `8983`, `8984`, `8985` | Solr admin/API access per node |
+| rabbitmq | `5672`, `15672` | AMQP clients and direct management UI |
+| redis | `6379` | Redis CLI and direct state inspection |
+| redis-commander | `8081` | Direct Redis Commander UI |
+| streamlit-admin | `8501` | Direct Streamlit debugging |
+| zoo1 / zoo2 / zoo3 | `18080`, `2181`, `2182`, `2183` | ZooKeeper AdminServer and node client ports |
+| embeddings-server | `8085` | Embeddings API debugging / local external tools |
+
+For production-style runs (`docker compose -f docker-compose.yml up`), only nginx publishes `80/443`.
 
 ## Solr Schema & Fields
 
@@ -228,12 +249,12 @@ Current branch: `jmservera/solrstreamlitui`
 | `QUEUE_NAME` | `shortembeddings` | RabbitMQ queue name for discovered documents in the current Docker Compose stack. |
 
 ### Solr returns empty results?
-- Check collection was created: `http://localhost:8983/solr/#/collections`
+- Check collection was created: `http://localhost/admin/solr/#/collections` (or `http://localhost:8983/solr/#/collections` when the dev override is loaded)
 - Monitor indexer logs: `docker compose logs document-indexer`
 - Check Redis state: `redis-cli KEYS "*"`
 
 ### Indexing stuck or slow?
-- Monitor RabbitMQ queue depth: `http://localhost:15672`
+- Monitor RabbitMQ queue depth: `http://localhost/admin/rabbitmq/` (or `http://localhost:15672` with the dev override)
 - Check Solr logs for extraction errors: `docker compose logs solr`
 - Increase document-indexer replicas in `docker-compose.yml`
 

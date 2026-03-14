@@ -1,0 +1,50 @@
+services:
+  redis:
+    ports:
+      - "6379:6379" # Redis CLI / direct state inspection
+
+  rabbitmq:
+    ports:
+      - "5672:5672" # AMQP clients and queue debugging tools
+      - "15672:15672" # RabbitMQ management UI without nginx
+
+  embeddings-server:
+    ports:
+      - "8085:8080" # Host access for embedding API debugging and external local tools
+
+  solr-search:
+    ports:
+      - "8080:8080" # Direct FastAPI access without going through nginx
+
+  streamlit-admin:
+    ports:
+      - "8501:8501" # Direct Streamlit debugging without nginx path rewriting
+
+  redis-commander:
+    ports:
+      - "8081:8081" # Direct Redis Commander UI for local debugging
+
+  zoo1:
+    ports:
+      - "18080:8080" # ZooKeeper AdminServer for node 1
+      - "2181:2181" # ZooKeeper client port for node 1
+
+  zoo2:
+    ports:
+      - "2182:2181" # ZooKeeper client port for node 2
+
+  zoo3:
+    ports:
+      - "2183:2181" # ZooKeeper client port for node 3
+
+  solr:
+    ports:
+      - "8983:8983" # Primary Solr admin/API port
+
+  solr2:
+    ports:
+      - "8984:8983" # Secondary Solr node admin/API port
+
+  solr3:
+    ports:
+      - "8985:8983" # Tertiary Solr node admin/API port
