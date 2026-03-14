@@ -5,7 +5,7 @@ interface props {
 }
 
 function List({ list }: props) {
-  let [selectedItem, setSelectedItem] = useState(-1);
+  const [selectedItem, setSelectedItem] = useState(-1);
 
   return (
     <div>

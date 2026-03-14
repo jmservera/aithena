@@ -1,223 +1,33 @@
 import "./App.css";
-import { useState, FormEvent } from "react";
-import { useSearch, BookResult } from "./hooks/search";
-import { SearchFilters } from "./hooks/search";
-import FacetPanel from "./Components/FacetPanel";
-import ActiveFilters from "./Components/ActiveFilters";
-import BookCard from "./Components/BookCard";
-import Pagination from "./Components/Pagination";
-import PdfViewer from "./Components/PdfViewer";
-import IndexingStatus from "./Components/IndexingStatus";
-
-type Tab = "search" | "status";
-
-const SORT_OPTIONS = [
-  { value: "score desc", label: "Relevance" },
-  { value: "year_i desc", label: "Year (newest)" },
-  { value: "year_i asc", label: "Year (oldest)" },
-  { value: "title_s asc", label: "Title (A–Z)" },
-  { value: "author_s asc", label: "Author (A–Z)" },
-];
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import TabNav from "./Components/TabNav";
+import SearchPage from "./pages/SearchPage";
+import LibraryPage from "./pages/LibraryPage";
+import StatusPage from "./pages/StatusPage";
+import StatsPage from "./pages/StatsPage";
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("search");
-  const [inputValue, setInputValue] = useState("");
-  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
-  const {
-    searchState,
-    results,
-    facets,
-    total,
-    loading,
-    error,
-    setQuery,
-    setFilter,
-    clearFilters,
-    setPage,
-    setSort,
-    setLimit,
-  } = useSearch();
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setQuery(inputValue.trim());
-  }
-
-  function handleRemoveFilter(key: keyof SearchFilters) {
-    setFilter(key, undefined);
-  }
-
-  const hasActiveFilters = Object.values(searchState.filters).some(
-    (v) => v !== undefined && v !== ""
-  );
-
-  const totalPages = Math.ceil(total / searchState.limit);
-
   return (
-    <div className="App">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1 className="sidebar-title">📚 Aithena</h1>
-          <p className="sidebar-subtitle">Book Library Search</p>
-        </div>
-        <nav className="tab-nav" aria-label="Main navigation">
-          <button
-            className={`tab-btn${activeTab === "search" ? " tab-btn--active" : ""}`}
-            onClick={() => setActiveTab("search")}
-            aria-current={activeTab === "search" ? "page" : undefined}
-          >
-            🔍 Search
-          </button>
-          <button
-            className={`tab-btn${activeTab === "status" ? " tab-btn--active" : ""}`}
-            onClick={() => setActiveTab("status")}
-            aria-current={activeTab === "status" ? "page" : undefined}
-          >
-            📊 Status
-          </button>
-        </nav>
-        {activeTab === "search" && (
-          <FacetPanel
-            facets={facets}
-            filters={searchState.filters}
-            onFilterChange={setFilter}
-          />
-        )}
-      </aside>
-
-      <main className="search-main">
-        {activeTab === "status" ? (
-          <div className="status-main">
-            <header className="status-header">
-              <h2 className="status-title">Indexing Status</h2>
-            </header>
-            <div className="status-content">
-              <IndexingStatus />
-            </div>
+    <BrowserRouter>
+      <div className="App">
+        <div className="app-header">
+          <div className="app-branding">
+            <h1 className="sidebar-title">📚 Aithena</h1>
+            <p className="sidebar-subtitle">Book Library Search</p>
           </div>
-        ) : (
-          <>
-            <header className="search-header">
-              <form className="search-form" onSubmit={handleSubmit}>
-                <input
-                  className="search-input"
-                  type="search"
-                  value={inputValue}
-                  placeholder="Search books by title, author, or content…"
-                  onChange={(e) => setInputValue(e.target.value)}
-                  aria-label="Search query"
-                />
-                <button className="search-btn" type="submit" disabled={loading}>
-                  {loading ? "…" : "Search"}
-                </button>
-              </form>
-
-              {searchState.query && (
-                <div className="search-controls">
-                  <span className="search-result-count">
-                    {loading
-                      ? "Searching…"
-                      : `${total.toLocaleString()} result${total !== 1 ? "s" : ""} for "${searchState.query}"`}
-                  </span>
-                  <div className="search-sort-limit">
-                    <label htmlFor="sort-select" className="control-label">
-                      Sort:
-                    </label>
-                    <select
-                      id="sort-select"
-                      className="sort-select"
-                      value={searchState.sort}
-                      onChange={(e) => setSort(e.target.value)}
-                    >
-                      {SORT_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    <label htmlFor="limit-select" className="control-label">
-                      Per page:
-                    </label>
-                    <select
-                      id="limit-select"
-                      className="sort-select"
-                      value={searchState.limit}
-                      onChange={(e) => setLimit(Number(e.target.value))}
-                    >
-                      {[10, 20, 50].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {hasActiveFilters && (
-                <ActiveFilters
-                  filters={searchState.filters}
-                  onRemove={handleRemoveFilter}
-                  onClearAll={clearFilters}
-                />
-              )}
-            </header>
-
-            <section className="search-results">
-              {error && (
-                <div className="search-error" role="alert">
-                  ⚠️ {error}
-                </div>
-              )}
-
-              {!loading && !error && searchState.query && results.length === 0 && (
-                <div className="search-empty">
-                  No results found for "{searchState.query}"
-                  {hasActiveFilters && " with the selected filters"}.
-                </div>
-              )}
-
-              {!searchState.query && !loading && (
-                <div className="search-empty">
-                  Enter a search term above to find books.
-                </div>
-              )}
-
-              {results.map((book) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  onOpenPdf={setSelectedBook}
-                  isSelected={selectedBook?.id === book.id}
-                />
-              ))}
-            </section>
-
-            {total > 0 && (
-              <footer className="search-footer">
-                <Pagination
-                  page={searchState.page}
-                  limit={searchState.limit}
-                  total={total}
-                  onPageChange={setPage}
-                />
-                <p className="pagination-info">
-                  Page {searchState.page} of {totalPages}
-                </p>
-              </footer>
-            )}
-          </>
-        )}
-      </main>
-
-      {selectedBook && (
-        <PdfViewer
-          result={selectedBook}
-          onClose={() => setSelectedBook(null)}
-        />
-      )}
-    </div>
+          <TabNav />
+        </div>
+        <div className="app-content">
+          <Routes>
+            <Route path="/" element={<Navigate to="/search" replace />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/library" element={<LibraryPage />} />
+            <Route path="/status" element={<StatusPage />} />
+            <Route path="/stats" element={<StatsPage />} />
+          </Routes>
+        </div>
+      </div>
+    </BrowserRouter>
   );
 }
 

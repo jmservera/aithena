@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 
-const searchBaseURL = `${import.meta.env.VITE_API_URL}/v1/search/`;
+import { buildApiUrl } from "../api";
+
+const searchBaseURL = buildApiUrl("/v1/search");
 
 export interface BookResult {
   id: string;
