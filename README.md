@@ -114,6 +114,166 @@ See [`solr/README.md`](solr/README.md) for schema design details. The FastAPI se
 - `category_s` — Inferred from folder hierarchy
 - `_text_` — Default query field (includes title, author, content)
 
+## Search Query Syntax
+
+The `/search` and `/facets` endpoints pass the `q` parameter straight to Solr using `defType=edismax`, with `_text_` as the default query field. That gives you standard Lucene/Solr query syntax with the more forgiving edismax parser.
+
+- **Default field:** `_text_`
+- **General search scope:** full text, plus copied title/author text in the Solr catch-all field
+- **Match all documents:** empty query, `*`, or `*:*`
+- **Not allowed in `q`:** Solr local-parameter syntax such as `{!knn ...}` (keyword search rejects it intentionally; use `mode=semantic` or `mode=hybrid` instead)
+
+### Field names to use in queries
+
+Use the real Solr field names when you want field-specific queries:
+
+| Field | Meaning | Notes |
+|-------|---------|-------|
+| `title_s` | exact stored title | Best for exact title matches |
+| `title_t` | analyzed title text | Useful when title text is indexed separately |
+| `author_s` | exact stored author | Quote multi-word values, e.g. `author_s:"Medicina Balear"` |
+| `author_t` | analyzed author text | Useful when author text is indexed separately |
+| `category_s` | exact category | Real examples: `Balearics`, `BSAL`, `UIB` |
+| `year_i` | numeric publication year | Use this for numeric/range queries |
+| `language_detected_s` / `language_s` | language code | Values like `es`, `ca`, `fr`, `en` |
+| `content` | extracted PDF body text | Full-text field |
+| `_text_` | Solr catch-all field | Default search field |
+
+> `title:folklore`, `author:amades`, `category:balearics`, and `year:[1900 TO 1950]` are the human-friendly Lucene examples you may know from Solr docs, but in this API you should use the real field names above: for example `title_t:folklore`, `author_s:Amades`, `category_s:Balearics`, and `year_i:[1900 TO 1950]`.
+
+### Supported query patterns
+
+#### 1. Basic search
+
+```text
+folklore
+```
+
+Finds documents containing the word in the default `_text_` field.
+
+#### 2. Phrase search
+
+```text
+"catalan folklore"
+```
+
+Matches the exact phrase.
+
+#### 3. Boolean operators
+
+```text
+folklore AND catalan
+folklore OR traditions
+folklore NOT modern
+```
+
+Use uppercase `AND`, `OR`, and `NOT` for clarity.
+
+#### 4. Fuzzy search
+
+```text
+folklre~
+folklore~2
+```
+
+Useful for OCR noise, old spellings, and typos in historical texts.
+
+#### 5. Proximity search
+
+```text
+"catalan traditions"~5
+```
+
+Matches documents where the words appear within 5 words of each other.
+
+#### 6. Wildcards
+
+```text
+folk*
+fol?lore
+```
+
+- `*` matches multiple trailing characters
+- `?` matches a single character
+
+#### 7. Field-specific search
+
+```text
+title_t:folklore
+author_s:Amades
+author_s:"Medicina Balear"
+category_s:Balearics
+category_s:BSAL
+```
+
+Notes:
+- `*_s` fields are exact/string fields, so case and full value matter more
+- Quote multi-word string values such as `author_s:"Medicina Balear"`
+- `category_s:Balearics` and `category_s:BSAL` are practical examples from the current collection
+
+#### 8. Range queries
+
+```text
+year_i:[1900 TO 1950]
+year_i:[1900 TO *]
+```
+
+Use `year_i` for numeric year ranges.
+
+#### 9. Boosting
+
+```text
+folklore^2 traditions
+```
+
+Boosts matches on `folklore` so they rank higher.
+
+#### 10. Grouping
+
+```text
+(folklore OR traditions) AND catalan
+```
+
+Parentheses control evaluation order.
+
+#### 11. Negation
+
+```text
+-modern
+```
+
+Excludes documents containing that term.
+
+#### 12. Escaping special characters
+
+Escape special Lucene characters with a backslash when you want a literal value:
+
+```text
++ - && || ! ( ) { } [ ] ^ " ~ * ? : \ /
+```
+
+Examples:
+
+```text
+author_s:"Medicina Balear"
+content:folklore\:balear
+```
+
+### Practical collection examples
+
+```text
+author_s:Amades
+category_s:Balearics
+category_s:BSAL
+author_s:"Medicina Balear" AND year_i:[2010 TO 2014]
+```
+
+### Search tips
+
+- The collection is **multilingual**: Spanish, Catalan, French, and English can all appear in the same index.
+- Many books are **old or OCR-heavy**, so fuzzy queries such as `amads~` or `folklre~` can recover variant spellings.
+- If you are calling the HTTP API directly, remember to **URL-encode** quotes, spaces, backslashes, and other special characters.
+
 ## Development
 
 ### Testing
