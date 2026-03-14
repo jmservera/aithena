@@ -248,3 +248,27 @@ Before labeling next Phase 3 batch, wait for these to be reworked and merged. Th
 **Skills created/updated:** 2 (project-conventions rewritten, squad-pr-workflow created)
 
 **Key learning:** The Capability Profile in copilot's charter (🟢/🟡/🔴 matrix) is functional config, not procedure — it can't be externalized without breaking the self-assessment workflow. Copilot stays at 2.2KB, above target but structurally necessary.
+
+### 2026-07-14 — PR Review: #63, #68, #69 (Phase 2-3 Fixed PRs)
+
+**Context:** Reviewed 3 @copilot PRs rebased onto `jmservera/solrstreamlitui`, retargeted from qdrant-search to solr-search.
+
+**PR #63 — PDF Viewer Panel (APPROVED ✅)**
+- PdfViewer.tsx: Clean iframe viewer, Escape-to-close, error fallback, accessibility
+- BookCard.tsx: XSS-safe `sanitizeHighlight()`, `document_url` integration
+- Uses existing `/documents/{document_id}` endpoint from solr-search
+- Diff bloated (6.1K adds) — carries accumulated base-branch changes; actual PDF code is well-scoped
+
+**PR #68 — Hybrid Search Modes (APPROVED ✅)**
+- Phase 3 keystone: `?mode=keyword|semantic|hybrid` on `/search`
+- Solr kNN `{!knn}` for semantic, embeddings server for vectors, RRF fusion for hybrid
+- ThreadPoolExecutor for parallel BM25+embedding in hybrid mode
+- Backward-compatible (default mode = keyword)
+
+**PR #69 — Similar Books Endpoint (APPROVED ✅, merge after #68)**
+- `GET /books/{document_id}/similar` using Solr kNN on `book_embedding`
+- Two-step: fetch source embedding → kNN with `-id:` exclusion filter
+- `solr_escape()` prevents Lucene injection; 12 tests
+
+**Key learning — Parallel PR creation creates merge-order dependencies:**
+All three PRs create `solr-search/` files from scratch. The second PR to merge will conflict. Workflow: merge in dependency order, rebase next PR, then merge.
