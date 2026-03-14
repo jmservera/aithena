@@ -208,7 +208,7 @@ services:
   zoo1:
     image: zookeeper:3.9
     ports:
-      - 8080:8080
+      - 18080:8080
       - 2181:2181
     networks:
       - default
@@ -256,7 +256,7 @@ services:
     depends_on:
       - zoo2
   solr:
-    image: solr
+    image: solr:9.7
     # build:
     #   context: .
     #   dockerfile: ./solr/Dockerfile
@@ -272,14 +272,13 @@ services:
     networks:
       - default
     # command: solr-precreate -c books
-    entrypoint: docker-entrypoint.sh solr start -c -f
     depends_on:
       - zoo1
       - zoo2
       - zoo3
   # second solr node
   solr2:
-    image: solr
+    image: solr:9.7
     # build:
     #   context: .
     #   dockerfile: ./solr/Dockerfile
@@ -293,14 +292,13 @@ services:
     ports:
       - "8984:8983"
     #command: solr-create -c books
-    entrypoint: docker-entrypoint.sh solr start -c -f
     depends_on:
       - zoo1
       - zoo2
       - zoo3
       - solr
   solr3:
-    image: solr
+    image: solr:9.7
     # build:
     #   context: .
     #   dockerfile: ./solr/Dockerfile
@@ -314,7 +312,6 @@ services:
     ports:
       - "8985:8983"
     #command: solr-create -c books
-    entrypoint: docker-entrypoint.sh solr start -c -f
     depends_on:
       - zoo1
       - zoo2
