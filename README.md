@@ -48,12 +48,17 @@ Frontend / Search API
 | Service | Host Port | Notes |
 |---------|-----------|-------|
 | Solr (node 1) | 8983 | Admin UI + direct query; restrict in production |
+| Solr (node 2) | 8984 | Dev access to secondary node |
+| Solr (node 3) | 8985 | Dev access to tertiary node |
+| RabbitMQ AMQP | 5672 | Message broker |
 | RabbitMQ Management | 15672 | Monitoring only; restrict in production |
+| Redis | 6379 | State store |
 | Admin UI | 8501 | Streamlit admin dashboard |
 | Embeddings Server | 8085 | Dev access; internal-only in production |
+| Search API (solr-search) | 8080 | FastAPI; fronted by nginx /api in production |
 | nginx | 80 / 443 | Public entry point for all production traffic |
 
-Internal-only services (no host port mapping): Redis, ZooKeeper (zoo1–zoo3), Solr nodes 2 & 3.
+ZooKeeper nodes (zoo1–zoo3): zoo1 client port (2181) and admin HTTP (8080) are exposed to the host; zoo2/zoo3 client ports are accessible on 2182/2183.
 
 ## Quick Start
 
@@ -122,6 +127,7 @@ Once created, Document Lister automatically discovers PDFs and Document Indexer 
 | Solr Admin | http://localhost:8983 | Manage collections, view indexed docs |
 | RabbitMQ Admin | http://localhost:15672 | Monitor queue depth |
 | Admin UI | http://localhost:8501 | Document management (Streamlit) |
+| Search API | http://localhost:8080/docs | FastAPI search endpoints (OpenAPI docs) |
 | Redis CLI | `docker compose exec redis redis-cli` | Check `processed` & `failed` keys |
 
 ## Environment Variables
@@ -131,12 +137,18 @@ Key variables wired in `docker-compose.yml` (override via `.env` or compose `env
 | Variable | Service | Default | Description |
 |----------|---------|---------|-------------|
 | `REDIS_HOST` | lister, indexer, admin | `redis` | Redis service hostname |
-| `RABBITMQ_HOST` | lister, indexer | `rabbitmq` | RabbitMQ service hostname |
+| `RABBITMQ_HOST` | lister, indexer, admin | `rabbitmq` | RabbitMQ service hostname |
 | `QUEUE_NAME` | lister, indexer, admin | `shortembeddings` | Shared queue/namespace; must match across services |
 | `BASE_PATH` | indexer | `/data/documents/` | Mount point inside the indexer container |
 | `SOLR_HOST` | indexer | `solr` | Solr hostname for Tika extraction posts |
 | `SOLR_PORT` | indexer | `8983` | Solr port |
 | `SOLR_COLLECTION` | indexer | `books` | Solr collection name |
+| `EMBEDDINGS_HOST` | indexer | `embeddings-server` | Embeddings server hostname (Phase 3) |
+| `EMBEDDINGS_PORT` | indexer | `8085` | Embeddings server port (Phase 3) |
+| `SOLR_URL` | solr-search | `http://solr:8983/solr` | Full Solr base URL |
+| `CORS_ORIGINS` | solr-search | `http://localhost:5173` | Allowed CORS origins for the search API |
+| `RABBITMQ_MGMT_PORT` | admin | `15672` | RabbitMQ management API port |
+| `RABBITMQ_USER` | admin | `guest` | RabbitMQ management API username |
 | `ZK_HOST` | solr, solr2, solr3 | `zoo1:2181,zoo2:2181,zoo3:2181` | ZooKeeper ensemble addresses |
 | `SOLR_MODULES` | solr, solr2, solr3 | `extraction,langid` | Solr modules to enable (Tika + language detection) |
 

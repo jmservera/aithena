@@ -8,10 +8,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ .
 
-# Runtime defaults — override via docker-compose environment or .env
+# Runtime defaults — override via docker-compose environment or .env.
+# QUEUE_NAME must match document-lister and document-indexer.
 ENV REDIS_HOST="localhost"
 ENV REDIS_PORT=6379
 ENV QUEUE_NAME="shortembeddings"
+ENV RABBITMQ_HOST="localhost"
+ENV RABBITMQ_MGMT_PORT=15672
+ENV RABBITMQ_USER="guest"
+ENV RABBITMQ_PASS="guest"
 
 EXPOSE 8501
 

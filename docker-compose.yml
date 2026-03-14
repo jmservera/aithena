@@ -6,9 +6,10 @@ services:
     # echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/nextcloud-aio-memory-overcommit.conf
     image: redis
     command: redis-server --save 20 1 --loglevel warning
-    # Redis is internal-only; not exposed to the host for security.
     expose:
       - 6379
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -26,10 +27,11 @@ services:
     image: rabbitmq:3-management
     command: rabbitmq-server
     hostname: rabbitmq
-    # AMQP port is internal-only; management UI (15672) exposed for monitoring.
     expose:
       - 5672
+      - 15672
     ports:
+      - "5672:5672"
       - "15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
@@ -46,15 +48,48 @@ services:
       default:
         aliases:
           - rabbitmq
+  # qdrant:
+  #   image: qdrant/qdrant
+  #   environment:
+  #     - QDRANT__DEBUG=1
+  #     - QDRANT__SERVICE__HOST=0.0.0.0
+  #   ports:
+  #     - "6333:6333"
+  #   volumes:
+  #     - qdrant-data:/qdrant/storage
+  #   restart: on-failure
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - qdrant
+  # llama-base: # this one is here just to ensure that the base image is created
+  #   build: ./llama-base
+  #   image: aithena-llama-base
+  #   volumes:
+  #     - "../open_llama_7b/:/llama/models/7B/"
+  # llama-server:
+  #   build: ./llama-server
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - "../open_llama_7b/:/llama/models/"
+  #   restart: on-failure
+  #   cap_add:
+  #     - IPC_LOCK
+  #     - SYS_NICE
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       memory: 16G
+  #   #       cpus: "20"
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - llama-server
   embeddings-server:
-    # Serves distiluse-base-multilingual-cased-v2 for semantic search (Phase 3+).
-    # Internal port 8080 is mapped to host 8085 for local development access.
-    # In production, access via nginx only.
     build: ./embeddings-server
     environment:
-      - PORT=8080
-    expose:
-      - 8080
+      - PORT=8085
     ports:
       - "8085:8080"
     healthcheck:
@@ -69,15 +104,12 @@ services:
         aliases:
           - embeddings-server
   document-lister:
-    # Scans /data/documents (bind-mounted book library) every 60 s,
-    # tracks state in Redis, and queues new PDF paths to RabbitMQ.
-    # Volume: document-data → /data/documents (see volumes section)
-    # Queue name must match document-indexer QUEUE_NAME.
     build: ./document-lister
     environment:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=redis
       - QUEUE_NAME=shortembeddings
+      - POLL_INTERVAL=60  # seconds between library scans
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -89,10 +121,6 @@ services:
     networks:
       - default
   document-indexer:
-    # Consumes PDF paths from RabbitMQ, extracts metadata from the filepath,
-    # and uploads the PDF to Solr via /update/extract (Tika).
-    # BASE_PATH must match the mount point in the document-data volume.
-    # Scale replicas to increase indexing throughput (prefetch=1 provides backpressure).
     build: ./document-indexer
     environment:
       - RABBITMQ_HOST=rabbitmq
@@ -102,6 +130,8 @@ services:
       - SOLR_HOST=solr
       - SOLR_PORT=8983
       - SOLR_COLLECTION=books
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8085
     restart: unless-stopped
     deploy:
       replicas: 1
@@ -112,31 +142,76 @@ services:
         condition: service_healthy
       solr:
         condition: service_healthy
+      embeddings-server:
+        condition: service_healthy
+    volumes:
+      - document-data:/data/documents:ro
+    networks:
+      - default
+  solr-search:
+    # FastAPI search API wrapping Solr /select and /kNN endpoints.
+    # Accessible at http://localhost:8080 (development) or via nginx /api in production.
+    build:
+      context: .
+      dockerfile: ./solr-search/Dockerfile
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      solr:
+        condition: service_healthy
+    environment:
+      - PORT=8080
+      - SOLR_URL=http://solr:8983/solr
+      - SOLR_COLLECTION=books
+      - BASE_PATH=/data/documents
+      - CORS_ORIGINS=http://localhost:5173
     volumes:
       - document-data:/data/documents:ro
     networks:
       - default
   admin:
     # Streamlit admin dashboard for document management and indexing monitoring.
-    # Accessible at http://localhost:8501 (development) or via nginx in production.
+    # Accessible at http://localhost:8501 (development) or via nginx /admin in production.
+    # Environment variables (QUEUE_NAME must match document-lister and document-indexer).
     build: ./admin
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - QUEUE_NAME=shortembeddings
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_MGMT_PORT=15672
     expose:
       - 8501
     ports:
       - "8501:8501"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - default
-  # search-api: (Phase 2 — not yet implemented)
-  # FastAPI service wrapping Solr /select for full-text + faceted search.
-  # Will be added when the solr-search FastAPI service is built.
+  # llama-playground:
+  #   image: ghcr.io/mckaywrigley/chatbot-ui:main
+  #   ports:
+  #     - 3000:3000
+  #   environment:
+  #     - OPENAI_API_HOST=http://llama-server:8000
+  #     - OPENAI_API_KEY=""
   nginx:
     image: nginx:1.15-alpine
     restart: unless-stopped
@@ -148,10 +223,10 @@ services:
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     # nginx config in nginx-data volume should proxy:
-    #   /          → aithena-ui (React frontend, Phase 2)
-    #   /admin     → admin:8501 (Streamlit admin)
-    #   /api       → search-api:8000 (FastAPI, Phase 2)
-    #   /solr      → solr:8983 (admin access only, restrict in production)
+    #   /          → aithena-ui (React frontend, served as static files)
+    #   /api       → solr-search:8080 (FastAPI search service)
+    #   /admin     → admin:8501 (Streamlit admin dashboard)
+    #   /solr      → solr:8983 (Solr admin — restrict access in production)
     command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
@@ -168,13 +243,9 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
   zoo1:
     image: zookeeper:3.9
-    # ZooKeeper nodes are internal-only (cluster communication + Solr).
-    # ZK admin HTTP server (8080) and client port (2181) not exposed to host.
-    expose:
-      - 2181
-      - 2888
-      - 3888
-      - 8080
+    ports:
+      - 8080:8080
+      - 2181:2181
     networks:
       - default
     environment:
@@ -195,11 +266,8 @@ services:
       - zoo-backup:/backup
   zoo2:
     image: zookeeper:3.9
-    expose:
-      - 2181
-      - 2888
-      - 3888
-      - 8080
+    ports:
+      - 2182:2181
     networks:
       - default
     environment:
@@ -223,11 +291,8 @@ services:
         condition: service_healthy
   zoo3:
     image: zookeeper:3.9
-    expose:
-      - 2181
-      - 2888
-      - 3888
-      - 8080
+    ports:
+      - 2183:2181
     networks:
       - default
     environment:
@@ -250,12 +315,10 @@ services:
       zoo2:
         condition: service_healthy
   solr:
-    # Primary SolrCloud node — admin UI accessible at http://localhost:8983.
-    # ZK_HOST wires all three ZooKeeper nodes for ensemble coordination.
-    # document-data volume mounted read-only for Tika-based PDF extraction.
-    # After first boot, create the books collection:
-    #   docker compose exec solr solr create_collection -c books -n books -shards 1 -replicationFactor 3
     image: solr
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
     restart: unless-stopped
     volumes:
       - solr-data:/var/solr/data
@@ -267,6 +330,7 @@ services:
       - "8983:8983"
     networks:
       - default
+    # command: solr-precreate -c books
     entrypoint: docker-entrypoint.sh solr start -c -f
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system?wt=json > /dev/null || exit 1"]
@@ -281,9 +345,12 @@ services:
         condition: service_healthy
       zoo3:
         condition: service_healthy
-  # Second SolrCloud node — internal only (no host port mapping).
+  # second solr node
   solr2:
     image: solr
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
     restart: unless-stopped
     volumes:
       - solr-data2:/var/solr/data
@@ -291,8 +358,9 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
-    expose:
-      - 8983
+    ports:
+      - "8984:8983"
+    #command: solr-create -c books
     entrypoint: docker-entrypoint.sh solr start -c -f
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system?wt=json > /dev/null || exit 1"]
@@ -311,9 +379,11 @@ services:
         condition: service_healthy
     networks:
       - default
-  # Third SolrCloud node — internal only (no host port mapping).
   solr3:
     image: solr
+    # build:
+    #   context: .
+    #   dockerfile: ./solr/Dockerfile
     restart: unless-stopped
     volumes:
       - solr-data3:/var/solr/data
@@ -321,8 +391,9 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
-    expose:
-      - 8983
+    ports:
+      - "8985:8983"
+    #command: solr-create -c books
     entrypoint: docker-entrypoint.sh solr start -c -f
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system?wt=json > /dev/null || exit 1"]
@@ -348,6 +419,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/rabbitmq-data"
+  # qdrant-data:
+  #   driver: local
+  #   driver_opts:
+  #     type: "none"
+  #     o: "bind"
+  #     device: "/source/volumes/qdrant-data"
   nginx-data:
     driver: local
     driver_opts:
