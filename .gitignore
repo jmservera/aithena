@@ -169,3 +169,9 @@ qdrant-clean/
 llama-server/
 llama-base/
 
+# Smoke test artifacts — write these to tmp/ or .squad/artifacts/ instead
+/*.png
+/*-smoke-*.txt
+/*-smoke-*.md
+/*-snapshot.md
+
