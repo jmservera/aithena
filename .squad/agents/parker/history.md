@@ -11,6 +11,11 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-14 — Admin service uv migration
+
+- Migrated `admin/` from ad-hoc `pip install -r src/requirements.txt` to `uv` with a root `pyproject.toml`, generated `uv.lock`, and `uv sync` validation.
+- Kept `admin/src/requirements.txt` as a compatibility shim, but marked it deprecated so local development now flows through `cd admin && uv sync && uv run streamlit run src/main.py`.
+
 ### 2026-03-13 — Metadata parser test fixes
 
 - Fixed unknown-pattern fallback titles to preserve the original filename stem instead of replacing underscores with spaces.

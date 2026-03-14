@@ -1,3 +1,4 @@
+# Deprecated: use `uv sync` from the admin/ directory to install dependencies.
 streamlit==1.37.0
 redis==4.6.0
 python-dotenv==1.0.1

@@ -10,10 +10,12 @@ A Streamlit-based operations dashboard for monitoring and managing the document 
 ## Running locally
 
 ```bash
-cd admin/src
-pip install -r requirements.txt
-streamlit run main.py
+cd admin
+uv sync
+uv run streamlit run src/main.py
 ```
+
+> `src/requirements.txt` remains for compatibility, but `pyproject.toml` + `uv.lock` are now the canonical dependency sources.
 
 ## Configuration
 
