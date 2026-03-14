@@ -1,10 +1,13 @@
 FROM python:3.11-alpine
 ENV PYTHONUNBUFFERED=1
 
-WORKDIR /app
-COPY requirements.txt .
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen --no-dev --no-install-project
+
 COPY . .
 
 ENV RABBITMQ_HOST="localhost"
@@ -17,4 +20,4 @@ ENV SOLR_HOST="solr"
 ENV SOLR_PORT=8983
 ENV SOLR_COLLECTION="books"
 
-CMD ["python","-m","document_indexer"]
+CMD ["uv", "run", "python", "-m", "document_indexer"]
