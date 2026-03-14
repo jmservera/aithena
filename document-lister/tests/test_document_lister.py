@@ -91,9 +91,11 @@ class TestProcessPath:
         (tmp_path / "book.pdf").write_bytes(b"pdf content")
         (tmp_path / "notes.txt").write_text("notes")
 
-        with patch.object(main_mod, "DOCUMENT_WILDCARD", "*"):
-            with patch.object(main_mod, "handle_document") as mock_handle:
-                main_mod.process_path(str(tmp_path), redis_mock, channel_mock)
+        with (
+            patch.object(main_mod, "DOCUMENT_WILDCARD", "*"),
+            patch.object(main_mod, "handle_document") as mock_handle,
+        ):
+            main_mod.process_path(str(tmp_path), redis_mock, channel_mock)
 
         mock_handle.assert_called_once_with(tmp_path / "book.pdf", redis_mock, channel_mock)
 
