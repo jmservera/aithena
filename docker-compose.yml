@@ -153,13 +153,12 @@ services:
       - document-data:/data/documents:ro
     networks:
       - default
-  # solr-search: Unified search API supporting keyword (Solr BM25), semantic (Solr kNN),
-  # and hybrid (RRF) modes.
-  # Set DEFAULT_SEARCH_MODE to keyword | semantic | hybrid (default: keyword).
+  # solr-search: unified search API supporting keyword (Solr BM25), semantic (Solr kNN HNSW),
+  # and hybrid (RRF) modes.  Set DEFAULT_SEARCH_MODE=keyword|semantic|hybrid.
   solr-search:
     build:
-      context: ./solr-search
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./solr-search/Dockerfile
     ports:
       - "8080:8080"
     restart: on-failure
@@ -168,12 +167,14 @@ services:
       - embeddings-server
     environment:
       - PORT=8080
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
+      - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
-      - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8085
+      - BASE_PATH=/data/documents
+      - CORS_ORIGINS=http://localhost:5173
+      - EMBEDDINGS_URL=http://embeddings-server:8001/v1/embeddings/
       - DEFAULT_SEARCH_MODE=keyword
+    volumes:
+      - document-data:/data/documents:ro
     networks:
       - default
   # qdrant-search:

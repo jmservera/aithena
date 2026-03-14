@@ -196,15 +196,15 @@ docker exec solr solr config-set-upload \
 
 ---
 
-## Phase 3 — Dense Vector Field (`embedding`)
+## Phase 3 — Dense Vector Field (`book_embedding`)
 
-The `embedding` field (type `knn_vector`, 512-dim cosine similarity, HNSW index) is used for
-semantic and hybrid search.
+The `book_embedding` field (type `knn_vector_512`, 512-dim cosine similarity, HNSW index) is used
+for semantic and hybrid search.
 
 - **Type:** `solr.DenseVectorField` with `vectorDimension=512`, `similarityFunction=cosine`
 - **Indexing:** The document-indexer chunks each PDF post-Tika and calls the embeddings server
-  (`distiluse-base-multilingual-cased-v2`) to populate the `embedding` field (ADR-004).
-- **Query syntax:** `{!knn f=embedding topK=10}[0.1,0.2,...,0.512]`
+  (`distiluse-base-multilingual-cased-v2`) to populate the `book_embedding` field (ADR-004).
+- **Query syntax:** `{!knn f=book_embedding topK=10}[0.1,0.2,...,0.512]`
 
 ---
 
@@ -219,28 +219,28 @@ supports three search modes via the `?mode=` query parameter.
 - Fields boosted: `title_t^2`, `author_t^1.5`, `_text_`.
 - **Facets** — populated from `author_s`, `category_s`, `language_detected_s`, `year_i`.
 - **Highlights** — populated from the `content` field using Solr's Unified Highlighter.
-- **Pagination** — use `?page=N&limit=N` (maps to Solr `start`/`rows`).
+- **Pagination** — use `?page=N&page_size=N` (maps to Solr `start`/`rows`).
 - **Filtering** — `?fq_author=`, `?fq_category=`, `?fq_language=`, `?fq_year=`.
 
 ### `semantic`
 
 - Encodes the query via the embeddings server (`distiluse-base-multilingual-cased-v2`).
-- Queries Solr with `{!knn f=embedding topK=N}[vec...]` for nearest-neighbour retrieval.
+- Queries Solr with `{!knn f=book_embedding topK=N}[vec...]` for nearest-neighbour retrieval.
 - **Facets** — empty (Solr kNN does not aggregate facets in the same pass); returned as
   empty lists in the `facets` object.
 - **Highlights** — empty (`[]` per result); no snippet extraction is performed.
-- **Pagination** — controlled by `?limit=N`; cursor pagination is not supported.
+- **Pagination** — controlled by `?page_size=N`; cursor pagination is not supported.
 
 ### `hybrid`
 
 - Runs keyword (BM25) and semantic (kNN) searches concurrently
-  (`candidate_limit = max(limit*2, 20)` per leg).
+  (`candidate_limit = max(page_size*2, 20)` per leg).
 - Fuses results using **Reciprocal Rank Fusion** (RRF, `k=60` by default).
 - **Facets** — sourced from the keyword (BM25) leg only; semantic-only hits will not
   have facet coverage.
 - **Highlights** — sourced from the keyword (BM25) leg only; results that appear only
   in the semantic leg will have empty `highlights` arrays.
-- **Pagination** — truncated to `?limit=N` after RRF fusion; no offset pagination.
+- **Pagination** — truncated to `?page_size=N` after RRF fusion; no offset pagination.
 - `RRF_K` can be tuned via the `RRF_K` environment variable (default `60`).
 
 ### Normalised Response Shape
@@ -251,9 +251,11 @@ All three modes return the same JSON envelope so the UI can consume them uniform
 {
   "query": "search text",
   "mode": "keyword | semantic | hybrid",
-  "total": 42,
   "page": 1,
-  "limit": 10,
+  "page_size": 10,
+  "total_results": 42,
+  "total_pages": 5,
+  "sort": {"by": "score", "order": "desc"},
   "results": [
     {
       "id": "...",
@@ -265,8 +267,10 @@ All three modes return the same JSON envelope so the UI can consume them uniform
       "folder_path": "amades",
       "category": "History",
       "language": "ca",
+      "page_count": 320,
+      "file_size": 5242880,
       "highlights": ["...relevant snippet..."],
-      "document_url": "http://host/docs/amades/book.pdf"
+      "document_url": "http://host/documents/encoded-token"
     }
   ],
   "facets": {
