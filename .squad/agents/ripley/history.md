@@ -526,3 +526,20 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 **Total salvageable code across all 9 PRs: ~200 lines.** Most effort should go into prevention (branch protection, explicit base-branch instructions) rather than repair.
 
 **Decision written to:** `.squad/decisions/inbox/ripley-branch-repair-strategy.md`
+
+### 2026-03-14 — Stale Branch Cleanup
+
+**Context:** Accumulated 28 remote branches (incl. HEAD) after multiple phases of copilot agent work. Many branches from merged PRs and closed-unmerged PRs were never cleaned up.
+
+**Analysis:**
+- 7 branches fully merged into `dev` (PRs #54–#71 era) — leftover after merge
+- 16 branches from closed-unmerged PRs (#54–#145) — all from broken copilot PRs that branched from wrong base; decided to redo from scratch
+- 5 branches protected: `dev`, `main`, `jmservera/solrstreamlitui` (default), plus 2 open PRs (#137 page ranges, #142 uv docs)
+
+**Deleted 23 branches:**
+Merged: `add-dense-vector-fields` (#66), `add-e2e-coverage-upload-search-pdf` (#55), `add-faceted-filtering-react-ui` (#62), `align-embeddings-server-to-distiluse-model` (#65), `configure-document-lister-polling` (#71), `expand-streamlit-dashboard-indexing` (#57), `extend-document-indexer-chunking` (#67).
+Closed-unmerged: `add-build-status-tab-component` (#128), `add-contract-tests-solr-search-api` (#60), `add-frontend-test-coverage` (#64), `add-pdf-upload-endpoint` (#58), `add-pdf-upload-flow` (#59), `add-related-books-panel` (#70), `clean-up-smoke-test-artifacts` (#140), `create-solr-backed-fastapi-search-service` (#54), `jmservera-add-v1-status-endpoint` (#119), `jmserverasolrstreamlitui-build-stats-tab` (#127), `lint-4-replace-pylint-black-with-ruff` (#143), `lint-5-run-ruff-auto-fix` (#145), `lint-6-autofix-eslint-prettier` (#144), `replace-chat-shell-with-search-page` (#61), `update-pdf-viewer-navigation` (#138), `uv-8-update-build-scripts-ci` (#141).
+
+**Preserved 5 branches:** `dev`, `main`, `jmservera/solrstreamlitui`, `copilot/jmservera-solrsearch-return-page-numbers` (PR #137), `copilot/doc-1-document-uv-migration` (PR #142).
+
+**Result:** Remote went from 28 refs → 6 refs (5 branches + HEAD). Clean slate for Phase 5 work.
