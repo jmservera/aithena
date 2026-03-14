@@ -1826,3 +1826,44 @@ Before merging `dev` → `main` and creating a release tag, Newt (Product Manage
 No release proceeds without PM sign-off.
 
 **Rationale:** Ensures quality and documentation are current before shipping. Enforces a quality gate with human judgment.
+
+---
+
+### 2026-03-14T20:50: PR Review Batch 2 — v0.4 Frontend & Type Safety (3 PRs approved & merged)
+
+**By:** Ripley (Lead Reviewer)  
+**Scope:** 3 @copilot UI PRs reviewed and merged into `dev` branch  
+**Session:** v0.4 merge complete (7 total PRs this session)
+
+#### Summary
+
+All 3 Copilot UI PRs **approved**. TypeScript interfaces match the merged backend APIs exactly. React patterns are clean with proper cleanup. All CI green, all builds pass.
+
+#### Verdicts
+
+| PR | Title | Status | Key Finding |
+|----|-------|--------|------------|
+| #157 | PDF viewer page navigation | ✅ APPROVED | `pages?: [number, number] \| null` matches `normalize_book()` contract. `#page=N` fragment appended correctly. |
+| #160 | Status tab (IndexingStatus + useStatus) | ✅ APPROVED | Types match merged `/v1/status/` (PR #159). AbortController + cancelled flag + setTimeout polling — no leaks. |
+| #161 | Stats tab (CollectionStats + useStats) | ✅ APPROVED | Types match merged `parse_stats_response()` (PR #156). FacetEntry/PageStats interfaces are exact mirrors. |
+
+#### Merge Execution
+
+**Recommended order:** #157 → #160 → #161
+
+All three PRs merged successfully. Merge order #157→#160→#161 chosen (touchs different files except `package-lock.json` and `App.css`). PR #161 required rebase conflict resolution in `App.css` (Status page CSS vs Stats page CSS — kept both).
+
+#### Key Observations
+
+1. **Type safety:** All 3 frontend PRs maintain perfect TypeScript interface alignment with their backend counterparts (verified against #156, #159).
+2. **Branch discipline:** This is now 7 consecutive PRs with correct base branch (`dev`).
+3. **Frontend test gap:** No component tests in any 3 PRs. Backend well-tested (#156: 14 tests, #159: 11 tests), but React components should have Jest/RTL coverage before v1.0.
+4. **AbortController inconsistency:** `useStatus()` includes AbortController; `useStats()` does not. Both safe, but inconsistent patterns. Cleanup candidate for v0.5.
+5. **CI gap persists:** Only CodeQL runs on PR branches. Unit test jobs do not trigger. Consider gating on all branches.
+
+#### Decisions
+
+- ✅ Approve all 3 PRs — types match, no blockers
+- ✅ Merge order: #157 → #160 → #161
+- ⏳ Defer frontend component tests to post-v0.4 (acceptable for alpha phase, track for v1.0 gate)
+
