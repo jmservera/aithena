@@ -251,6 +251,7 @@ def test_build_pagination_handles_empty_results() -> None:
 
 from search_service import (  # noqa: E402
     build_knn_params,
+    parse_stats_response,
     reciprocal_rank_fusion,
 )
 
@@ -321,3 +322,107 @@ def test_solr_escape_handles_special_characters() -> None:
     assert solr_escape("id:with spaces") == r"id\:with\ spaces"
     assert solr_escape("simple") == "simple"
     assert solr_escape("path/to/file.pdf") == r"path\/to\/file.pdf"
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Stats endpoint helpers
+# ---------------------------------------------------------------------------
+
+
+def test_parse_stats_response_extracts_all_fields() -> None:
+    payload = {
+        "response": {"numFound": 76, "docs": []},
+        "stats": {
+            "stats_fields": {
+                "page_count_i": {
+                    "min": 1.0,
+                    "max": 800.0,
+                    "sum": 12000.0,
+                    "mean": 157.89,
+                    "count": 76,
+                    "missing": 0,
+                }
+            }
+        },
+        "facet_counts": {
+            "facet_fields": {
+                "author_s": ["Joan Amades", 15, "Other Author", 5],
+                "category_s": ["Folklore", 40, "History", 10],
+                "year_i": [1950, 3, 1960, 10],
+                "language_detected_s": ["ca", 40, "es", 20],
+            }
+        },
+    }
+
+    result = parse_stats_response(payload)
+
+    assert result["total_books"] == 76
+    assert result["by_author"] == [{"value": "Joan Amades", "count": 15}, {"value": "Other Author", "count": 5}]
+    assert result["by_category"] == [{"value": "Folklore", "count": 40}, {"value": "History", "count": 10}]
+    assert result["by_year"] == [{"value": 1950, "count": 3}, {"value": 1960, "count": 10}]
+    assert result["by_language"] == [{"value": "ca", "count": 40}, {"value": "es", "count": 20}]
+    assert result["page_stats"]["total"] == 12000
+    assert result["page_stats"]["min"] == 1
+    assert result["page_stats"]["max"] == 800
+    assert result["page_stats"]["avg"] == 158
+
+
+def test_parse_stats_response_handles_empty_collection() -> None:
+    payload = {
+        "response": {"numFound": 0, "docs": []},
+        "stats": {"stats_fields": {"page_count_i": None}},
+        "facet_counts": {"facet_fields": {}},
+    }
+
+    result = parse_stats_response(payload)
+
+    assert result["total_books"] == 0
+    assert result["by_author"] == []
+    assert result["by_category"] == []
+    assert result["by_year"] == []
+    assert result["by_language"] == []
+    assert result["page_stats"] == {"total": 0, "avg": 0, "min": 0, "max": 0}
+
+
+def test_parse_stats_response_handles_missing_stats_section() -> None:
+    payload = {
+        "response": {"numFound": 5, "docs": []},
+        "facet_counts": {
+            "facet_fields": {
+                "author_s": ["Author A", 5],
+                "category_s": [],
+                "year_i": [],
+                "language_detected_s": [],
+            }
+        },
+    }
+
+    result = parse_stats_response(payload)
+
+    assert result["total_books"] == 5
+    assert result["by_author"] == [{"value": "Author A", "count": 5}]
+    assert result["page_stats"] == {"total": 0, "avg": 0, "min": 0, "max": 0}
+
+
+def test_parse_stats_response_rounds_average() -> None:
+    payload = {
+        "response": {"numFound": 3, "docs": []},
+        "stats": {
+            "stats_fields": {
+                "page_count_i": {
+                    "min": 10.0,
+                    "max": 100.0,
+                    "sum": 165.0,
+                    "mean": 55.0,
+                }
+            }
+        },
+        "facet_counts": {"facet_fields": {}},
+    }
+
+    result = parse_stats_response(payload)
+
+    assert result["page_stats"]["avg"] == 55
+    assert result["page_stats"]["total"] == 165
+    assert result["page_stats"]["min"] == 10
+    assert result["page_stats"]["max"] == 100
