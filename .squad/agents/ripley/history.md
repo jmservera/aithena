@@ -272,3 +272,21 @@ Before labeling next Phase 3 batch, wait for these to be reworked and merged. Th
 
 **Key learning — Parallel PR creation creates merge-order dependencies:**
 All three PRs create `solr-search/` files from scratch. The second PR to merge will conflict. Workflow: merge in dependency order, rebase next PR, then merge.
+
+### 2026-07-15 — Feature Priorities Analysis (4 Priorities)
+
+**Context:** User requested analysis of 4 feature priorities, cross-referenced against existing backlog.
+
+**Key findings:**
+
+1. **Test the indexer (NEW issue):** document-indexer fully rewritten for Solr (Tika + chunks + embeddings). solr-init auto-bootstraps collection. E2E harness exists (PR #55) but bypasses actual pipeline (POSTs directly to Solr). Full lister→RabbitMQ→indexer pipeline has **never been run** against real books. Assigned: Lambert + Brett. Effort: M.
+
+2. **Test search finds words (NEW issue):** solr-search API exists with keyword/semantic/hybrid modes (PRs #68, #72 merged). No real-data validation — all tests mock Solr responses. Depends on Priority 1 completing first. Assigned: Lambert + Parker. Effort: S.
+
+3. **Configurable books path (NEW issue):** `.env` already gitignored but doesn't exist. docker-compose.yml hardcodes `/home/jmservera/booklibrary`. E2E compose already shows the `${VAR:-default}` pattern. Single-line fix + `.env.example`. Assigned: Brett. Effort: S.
+
+4. **UI dashboard + library browser (NEW — 3-4 sub-issues):** Streamlit admin (#51/PR #57 merged) covers operator view. React UI has nothing for stats/status/browsing. Needs backend endpoints (`/v1/stats`, `/v1/library`) + 3 React pages (Search/Library/Status tabs). Assigned: Parker + Dallas + Lambert. Effort: L.
+
+**Recommended execution order:** P3 (quick win) → P1 (needs stack) → P2 (needs data) → P4 (largest, parallelizable).
+
+**Decision written to:** `.squad/decisions/inbox/ripley-feature-priorities.md`
