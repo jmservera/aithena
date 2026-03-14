@@ -1,200 +1,378 @@
-#!/usr/bin/env python
-# encoding: utf-8
-"""Aithena Solr-backed search API.
+from __future__ import annotations
 
-Exposes two main endpoints:
-  GET /search/      — full-text keyword search via Solr /select
-  GET /similar/     — kNN semantic similarity via Solr DenseVectorField
-"""
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any, Literal
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
-from config import (
-    PORT,
-    SOLR_COLLECTION,
-    SOLR_HOST,
-    SOLR_PORT,
-    SOLR_TIMEOUT,
-    SOLR_VECTOR_FIELD,
-    TITLE,
-    VERSION,
+from config import settings
+from search_service import (
+    build_inline_content_disposition,
+    build_knn_params,
+    build_pagination,
+    build_solr_params,
+    decode_document_token,
+    encode_document_token,
+    get_query_embedding,
+    normalize_book,
+    parse_facet_counts,
+    reciprocal_rank_fusion,
+    resolve_document_path,
+    solr_escape,
 )
 
-# ---------------------------------------------------------------------------
-# App setup
-# ---------------------------------------------------------------------------
+SortBy = Literal["score", "title", "author", "year", "category", "language"]
+SortOrder = Literal["asc", "desc"]
+SearchMode = Literal["keyword", "semantic", "hybrid"]
 
-app = FastAPI(title=TITLE + " (root)", version=VERSION)
-api_app = FastAPI(title=TITLE, version=VERSION)
-
-origins = ["http://localhost:5173"]
-
-app.mount("/v1", api_app)
-
-api_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-SOLR_BASE_URL = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}"
+app = FastAPI(title=settings.title, version=settings.version)
 
 
-def _solr_select(params: dict) -> dict:
-    """Execute a Solr /select request and return the decoded JSON body."""
+def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
     try:
-        resp = requests.get(
-            f"{SOLR_BASE_URL}/select",
-            params=params,
-            timeout=SOLR_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return resp.json()
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Solr error: {exc}")
+        return build_solr_params(**kwargs)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def _normalize_book(doc: dict) -> dict:
-    """Map a raw Solr document to the public API shape."""
-    return {
-        "id": doc.get("id"),
-        "title": doc.get("title_s") or doc.get("title_t"),
-        "author": doc.get("author_s") or doc.get("author_t"),
-        "year": doc.get("year_i"),
-        "category": doc.get("category_s"),
-        "document_url": doc.get("file_path_s"),
-        "language": doc.get("language_detected_s"),
-        "page_count": doc.get("page_count_i"),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
-
-
-@api_app.get("/health")
-async def health():
-    """Liveness probe — returns OK when the service is running."""
-    return {"status": "ok", "version": VERSION}
-
-
-@api_app.get("/search/")
-async def search(q: str, limit: int = 10, page: int = 1):
-    """Full-text keyword search backed by Solr /select.
-
-    Returns matching books with title, author, year, category, and document_url.
-    """
-    if not q or not q.strip():
-        raise HTTPException(status_code=400, detail="Query parameter 'q' must not be empty.")
-
-    start = (page - 1) * limit
-    data = _solr_select(
-        {
-            "q": q,
-            "defType": "edismax",
-            "qf": "title_t author_t _text_",
-            "fl": "id,title_s,title_t,author_s,author_t,year_i,category_s,file_path_s,language_detected_s,page_count_i,score",
-            "rows": limit,
-            "start": start,
-            "wt": "json",
-        }
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=settings.allow_credentials,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
-    response = data.get("response", {})
-    docs = response.get("docs", [])
-    total = response.get("numFound", 0)
+
+def query_solr(params: dict[str, Any]) -> dict[str, Any]:
+    try:
+        response = requests.get(settings.select_url, params=params, timeout=settings.request_timeout)
+        response.raise_for_status()
+        return response.json()
+    except requests.Timeout as exc:
+        raise HTTPException(status_code=504, detail="Timed out waiting for Solr") from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Solr search request failed") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="Solr returned invalid JSON") from exc
+
+
+def _fetch_embedding(text: str) -> list[float]:
+    """Call the embeddings server; wrap errors as HTTP 502."""
+    try:
+        return get_query_embedding(settings.embeddings_url, text, settings.embeddings_timeout)
+    except requests.Timeout as exc:
+        raise HTTPException(status_code=504, detail="Timed out waiting for embeddings server") from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Embeddings server request failed") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+def build_document_url(request: Request, file_path: str | None) -> str | None:
+    if not file_path:
+        return None
+
+    document_id = encode_document_token(file_path)
+    if settings.document_url_base:
+        return f"{settings.document_url_base}/{document_id}"
+    return str(request.url_for("get_document", document_id=document_id))
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok", "service": settings.title, "version": settings.version}
+
+
+@app.get("/info")
+def info() -> dict[str, str]:
+    return {"title": settings.title, "version": settings.version}
+
+
+@app.get("/search")
+def search(
+    request: Request,
+    q: str = Query("", description="Keyword search. Empty values return all indexed books."),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size),
+    sort_by: SortBy = Query("score"),
+    sort_order: SortOrder = Query("desc"),
+    mode: SearchMode = Query(
+        settings.default_search_mode,  # type: ignore[arg-type]
+        description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
+    ),
+) -> dict[str, Any]:
+    """Search for books.
+
+    - **keyword** (default): BM25 full-text search via Solr edismax.
+    - **semantic**: Dense vector kNN search using Solr HNSW (``book_embedding`` field).
+    - **hybrid**: Reciprocal Rank Fusion of the BM25 and kNN legs.
+
+    Facets and highlights are only populated by the BM25 leg and are therefore
+    empty in pure semantic mode, and sourced from the BM25 leg in hybrid mode.
+    """
+    if mode == "keyword":
+        return _search_keyword(request, q, page, page_size, sort_by, sort_order)
+    if mode == "semantic":
+        return _search_semantic(request, q, page_size)
+    # hybrid
+    return _search_hybrid(request, q, page_size, sort_by, sort_order)
+
+
+def _search_keyword(
+    request: Request,
+    q: str,
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+) -> dict[str, Any]:
+    """Execute the existing BM25 keyword search (unchanged Phase 2 behaviour)."""
+    payload = query_solr(
+        build_params_or_400(
+            query=q,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            facet_limit=settings.facet_limit,
+        )
+    )
+
+    response = payload.get("response", {})
+    highlighting = payload.get("highlighting", {})
+    results = [
+        normalize_book(
+            document,
+            highlighting,
+            build_document_url(request, document.get("file_path_s")),
+        )
+        for document in response.get("docs", [])
+    ]
 
     return {
-        "results": [_normalize_book(d) for d in docs],
-        "total": total,
         "query": q,
-        "page": page,
-        "limit": limit,
+        "mode": "keyword",
+        "sort": {"by": sort_by, "order": sort_order},
+        **build_pagination(response.get("numFound", 0), page, page_size),
+        "results": results,
+        "facets": parse_facet_counts(payload),
     }
 
 
-@api_app.get("/similar/")
-async def similar(id: str, limit: int = 5, min_score: float = 0.0):
-    """Return books semantically similar to the document identified by *id*.
+def _search_semantic(
+    request: Request,
+    q: str,
+    top_k: int,
+) -> dict[str, Any]:
+    """Execute a Solr kNN semantic search using the ``book_embedding`` field.
 
-    *id* is the Solr document ID (SHA-256 of the file path) returned by
-    ``/search/``.  The source document is always excluded from results.
-
-    ``limit`` controls the maximum number of books returned.
-    ``min_score`` filters out results whose cosine similarity is below the
-    given threshold (0.0 = no threshold).
-
-    The endpoint uses Solr's ``{!knn}`` query parser against the
-    ``embedding_v`` dense-vector field populated by the indexing pipeline.
+    Facets and highlights degrade to empty because the kNN query path does not
+    produce Solr facet counts or highlight snippets.
     """
-    # ------------------------------------------------------------------
-    # Step 1: Fetch the source document and its vector from Solr.
-    # ------------------------------------------------------------------
-    source_data = _solr_select(
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Query must not be empty for semantic search")
+
+    vector = _fetch_embedding(q)
+    payload = query_solr(build_knn_params(vector, top_k, settings.knn_field))
+
+    response = payload.get("response", {})
+    results = [
+        normalize_book(
+            document,
+            {},
+            build_document_url(request, document.get("file_path_s")),
+        )
+        for document in response.get("docs", [])
+    ]
+
+    return {
+        "query": q,
+        "mode": "semantic",
+        "sort": {"by": "score", "order": "desc"},
+        **build_pagination(response.get("numFound", len(results)), 1, top_k),
+        "results": results,
+        "facets": {"author": [], "category": [], "year": [], "language": []},
+    }
+
+
+def _search_hybrid(
+    request: Request,
+    q: str,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+) -> dict[str, Any]:
+    """Execute BM25 and kNN searches in parallel, then fuse with RRF.
+
+    Facets and highlights are sourced from the BM25 (keyword) leg.
+    Documents that appear only in the kNN leg will have empty highlights.
+    The RRF k constant is configurable via the ``RRF_K`` environment variable
+    (default 60, per the original RRF paper).
+    """
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Query must not be empty for hybrid search")
+
+    candidate_limit = max(page_size * 2, 20)
+
+    kw_params = build_params_or_400(
+        query=q,
+        page=1,
+        page_size=candidate_limit,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        facet_limit=settings.facet_limit,
+    )
+
+    # Run BM25 query and embedding fetch concurrently
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        kw_future = pool.submit(query_solr, kw_params)
+        emb_future = pool.submit(_fetch_embedding, q)
+
+        kw_payload = kw_future.result()
+        vector = emb_future.result()
+
+    knn_payload = query_solr(build_knn_params(vector, candidate_limit, settings.knn_field))
+
+    kw_response = kw_payload.get("response", {})
+    kw_highlighting = kw_payload.get("highlighting", {})
+
+    kw_results = [
+        normalize_book(
+            document,
+            kw_highlighting,
+            build_document_url(request, document.get("file_path_s")),
+        )
+        for document in kw_response.get("docs", [])
+    ]
+
+    sem_results = [
+        normalize_book(
+            document,
+            {},
+            build_document_url(request, document.get("file_path_s")),
+        )
+        for document in knn_payload.get("response", {}).get("docs", [])
+    ]
+
+    fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)[:page_size]
+
+    return {
+        "query": q,
+        "mode": "hybrid",
+        "sort": {"by": "score", "order": "desc"},
+        **build_pagination(len(fused), 1, page_size),
+        "results": fused,
+        "facets": parse_facet_counts(kw_payload),
+    }
+
+
+@app.get("/facets")
+def facets(
+    q: str = Query("", description="Optional query to scope facet counts."),
+    sort_by: SortBy = Query("score"),
+    sort_order: SortOrder = Query("desc"),
+) -> dict[str, Any]:
+    payload = query_solr(
+        build_params_or_400(
+            query=q,
+            page=1,
+            page_size=1,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            facet_limit=settings.facet_limit,
+            rows=0,
+        )
+    )
+    return {"query": q, "facets": parse_facet_counts(payload)}
+
+
+@app.get("/documents/{document_id}", name="get_document")
+def get_document(document_id: str) -> FileResponse:
+    try:
+        file_path = decode_document_token(document_id)
+        document_path = resolve_document_path(settings.base_path, file_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+
+    if document_path.suffix.lower() != ".pdf" or not document_path.is_file():
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return FileResponse(
+        document_path,
+        media_type="application/pdf",
+        filename=document_path.name,
+        headers={"Content-Disposition": build_inline_content_disposition(document_path.name)},
+    )
+
+
+@app.get("/books/{document_id}/similar")
+def similar_books(
+    request: Request,
+    document_id: str,
+    limit: int = Query(5, ge=1, le=50, description="Maximum number of similar books to return."),
+    min_score: float = Query(0.0, ge=0.0, le=1.0, description="Minimum cosine similarity score threshold."),
+) -> dict[str, Any]:
+    """Return books semantically similar to the one identified by *document_id*.
+
+    The source document is always excluded from results. Similarity is computed
+    using Solr's kNN query against the ``book_embedding`` DenseVectorField.
+    """
+    embedding_field = settings.book_embedding_field
+
+    source_payload = query_solr(
         {
-            "q": f"id:{_solr_escape(id)}",
-            "fl": f"id,file_path_s,{SOLR_VECTOR_FIELD}",
+            "q": f"id:{solr_escape(document_id)}",
+            "fl": f"id,{embedding_field}",
             "rows": 1,
             "wt": "json",
         }
     )
-
-    source_docs = source_data.get("response", {}).get("docs", [])
+    source_docs = source_payload.get("response", {}).get("docs", [])
     if not source_docs:
-        raise HTTPException(status_code=404, detail=f"No document found with id: {id!r}")
+        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
 
-    source_doc = source_docs[0]
-    vector = source_doc.get(SOLR_VECTOR_FIELD)
+    vector = source_docs[0].get(embedding_field)
     if not vector:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"Document {id!r} has no embedding yet. "
+                f"Document {document_id!r} has no embedding yet. "
                 "Embeddings are populated by the Phase 3 indexing pipeline."
             ),
         )
 
-    # ------------------------------------------------------------------
-    # Step 2: Run kNN query against Solr, excluding the source document.
-    # Request limit + 1 candidates so exclusion doesn't leave us short.
-    # ------------------------------------------------------------------
-    top_k = limit + 1
-    vector_str = json.dumps(vector)
-
-    params: dict = {
-        "q": f"{{!knn f={SOLR_VECTOR_FIELD} topK={top_k}}}{vector_str}",
-        "fq": f"-id:{_solr_escape(id)}",
-        "fl": "id,title_s,title_t,author_s,author_t,year_i,category_s,file_path_s,score",
-        "rows": limit,
-        "wt": "json",
-    }
-
-    knn_data = _solr_select(params)
-    docs = knn_data.get("response", {}).get("docs", [])
+    knn_payload = query_solr(
+        {
+            "q": f"{{!knn f={embedding_field} topK={limit + 1}}}{json.dumps(vector)}",
+            "fq": f"-id:{solr_escape(document_id)}",
+            "fl": "id,title_s,author_s,year_i,category_s,file_path_s,score",
+            "rows": limit,
+            "wt": "json",
+        }
+    )
+    docs = knn_payload.get("response", {}).get("docs", [])
 
     results = []
     for doc in docs:
         score = doc.get("score", 0.0)
         if min_score > 0.0 and score < min_score:
             continue
+        file_path = doc.get("file_path_s")
         results.append(
             {
                 "id": doc.get("id"),
-                "title": doc.get("title_s") or doc.get("title_t"),
-                "author": doc.get("author_s") or doc.get("author_t"),
+                "title": doc.get("title_s") or Path(file_path or "").stem,
+                "author": doc.get("author_s") or "Unknown",
                 "year": doc.get("year_i"),
                 "category": doc.get("category_s"),
-                "document_url": doc.get("file_path_s"),
+                "document_url": build_document_url(request, file_path),
                 "score": score,
             }
         )
@@ -202,17 +380,7 @@ async def similar(id: str, limit: int = 5, min_score: float = 0.0):
     return {"results": results}
 
 
-def _solr_escape(value: str) -> str:
-    """Escape special Lucene/Solr query characters in a literal value."""
-    special = r'\+-&|!(){}[]^"~*?:/'
-    return "".join(f"\\{c}" if c in special else c for c in value)
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run(app, host="0.0.0.0", port=settings.port)

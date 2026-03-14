@@ -15,6 +15,7 @@ from search_service import (  # noqa: E402
     normalize_search_query,
     parse_facet_counts,
     resolve_document_path,
+    solr_escape,
 )
 
 
@@ -216,3 +217,10 @@ def test_reciprocal_rank_fusion_preserves_metadata() -> None:
     assert fused[0]["title"] == "My Book"
     assert fused[0]["author"] == "Author A"
     assert fused[0]["highlights"] == ["snippet"]
+
+
+
+def test_solr_escape_handles_special_characters() -> None:
+    assert solr_escape("id:with spaces") == r"id\:with\ spaces"
+    assert solr_escape("simple") == "simple"
+    assert solr_escape("path/to/file.pdf") == r"path\/to\/file.pdf"

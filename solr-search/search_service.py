@@ -290,3 +290,10 @@ def reciprocal_rank_fusion(
         merged["score"] = rrf_score
         fused.append(merged)
     return fused
+
+
+
+def solr_escape(value: str) -> str:
+    """Escape special Lucene/Solr query characters in a literal string value."""
+    special = r'\+-&|!(){}[]^"~*?:/ '
+    return "".join(f"\\{ch}" if ch in special else ch for ch in value)

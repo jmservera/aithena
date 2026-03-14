@@ -41,6 +41,9 @@
     </analyzer>
   </fieldType>
   <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
+  <!-- Phase 3: 512-dim dense vector field type for distiluse-base-multilingual-cased-v2 (ADR-004).
+       HNSW index with cosine similarity for kNN semantic search. -->
+  <fieldType name="knn_vector_512" class="solr.DenseVectorField" vectorDimension="512" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">
@@ -470,9 +473,9 @@
   <field name="dcterms_modified" type="pdates"/>
   <field name="div" type="text_general"/>
   <field name="id" type="string" multiValued="false" indexed="true" required="true" stored="true"/>
-  <!-- Phase 3: dense vector field for kNN similarity search (ADR-004).
-       Dimension matches use-cmlm-multilingual / distiluse-base-multilingual-cased-v2 (512-dim). -->
-  <fieldType name="knn_vector_512" class="solr.DenseVectorField" vectorDimension="512" similarityFunction="cosine"/>
+  <!-- Phase 3: dense vector field for kNN semantic search (ADR-004)
+       Model: distiluse-base-multilingual-cased-v2 → 512 dimensions, cosine similarity -->
+  <field name="book_embedding" type="knn_vector_512" indexed="true" stored="true" multiValued="false"/>
   <!-- Phase 1 book metadata fields (ADR-002) -->
   <field name="title_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="title_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
@@ -485,7 +488,10 @@
   <field name="category_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="file_size_l" type="plong" multiValued="false" indexed="true" stored="true"/>
   <field name="language_detected_s" type="string" multiValued="false" indexed="true" stored="true"/>
-  <!-- Phase 3: document-level embedding vector for kNN similarity search -->
+  <!-- Phase 3 chunk + embedding fields (ADR-001) -->
+  <field name="parent_id_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="chunk_index_i" type="pint" multiValued="false" indexed="true" stored="true"/>
+  <field name="chunk_text_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
   <field name="embedding_v" type="knn_vector_512" indexed="true" stored="true"/>
   <field name="last_modified" type="pdates"/>
   <field name="last_save_date" type="pdates"/>

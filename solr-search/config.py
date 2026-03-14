@@ -34,6 +34,7 @@ class Settings:
     default_search_mode: str
     rrf_k: int
     knn_field: str
+    book_embedding_field: str
 
     @property
     def select_url(self) -> str:
@@ -69,4 +70,5 @@ settings = Settings(
     default_search_mode=os.environ.get("DEFAULT_SEARCH_MODE", "keyword"),
     rrf_k=int(os.environ.get("RRF_K", "60")),
     knn_field=os.environ.get("KNN_FIELD", "book_embedding"),
+    book_embedding_field=os.environ.get("BOOK_EMBEDDING_FIELD", "book_embedding"),
 )
