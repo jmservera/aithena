@@ -4,33 +4,27 @@ import { buildApiUrl } from '../api';
 
 const statusUrl = buildApiUrl('/v1/status/');
 
-export interface ServiceHealth {
-  status: 'ok' | 'error' | 'degraded';
-  reachable: boolean;
-  detail?: string;
-}
-
-export interface FailedDocument {
-  id: string;
-  file_path?: string;
-  error?: string;
+export interface SolrInfo {
+  status: 'ok' | 'degraded' | 'error';
+  nodes: number;
+  docs_indexed: number;
 }
 
 export interface IndexingProgress {
-  discovered: number;
+  total_discovered: number;
   indexed: number;
   failed: number;
   pending: number;
 }
 
 export interface StatusResponse {
+  solr: SolrInfo;
   indexing: IndexingProgress;
   services: {
-    solr: ServiceHealth;
-    redis: ServiceHealth;
-    rabbitmq: ServiceHealth;
+    solr: string;
+    redis: string;
+    rabbitmq: string;
   };
-  failed_documents: FailedDocument[];
 }
 
 export interface StatusState {
@@ -51,10 +45,12 @@ export function useStatus(): StatusState {
   useEffect(() => {
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | undefined;
 
     async function fetchStatus() {
+      controller = new AbortController();
       try {
-        const response = await fetch(statusUrl);
+        const response = await fetch(statusUrl, { signal: controller.signal });
         if (!response.ok) {
           throw new Error(`Status request failed: ${response.status}`);
         }
@@ -65,7 +61,7 @@ export function useStatus(): StatusState {
           setLastUpdated(new Date());
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
           setError(err instanceof Error ? err.message : 'Failed to fetch status');
         }
       } finally {
@@ -80,6 +76,7 @@ export function useStatus(): StatusState {
 
     return () => {
       cancelled = true;
+      controller?.abort();
       clearTimeout(timeoutId);
     };
   }, []);

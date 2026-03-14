@@ -1,23 +1,13 @@
 import { useStatus } from '../hooks/status';
-import type { ServiceHealth, FailedDocument } from '../hooks/status';
 
-function HealthDot({ health }: { health: ServiceHealth }) {
-  const isOk = health.status === 'ok' && health.reachable;
+function ServiceDot({ serviceStatus }: { serviceStatus: string }) {
+  const isUp = serviceStatus === 'up';
   return (
     <span
-      className={`health-dot ${isOk ? 'health-dot--ok' : 'health-dot--error'}`}
-      title={health.detail ?? health.status}
-      aria-label={isOk ? 'ok' : 'error'}
+      className={`health-dot ${isUp ? 'health-dot--ok' : 'health-dot--error'}`}
+      title={serviceStatus}
+      aria-label={serviceStatus}
     />
-  );
-}
-
-function FailedDocRow({ doc }: { doc: FailedDocument }) {
-  return (
-    <li className="failed-doc-item">
-      <span className="failed-doc-id">{doc.file_path ?? doc.id}</span>
-      {doc.error && <span className="failed-doc-error">{doc.error}</span>}
-    </li>
   );
 }
 
@@ -42,7 +32,7 @@ function IndexingStatus() {
 
   const indexing = data?.indexing;
   const services = data?.services;
-  const failedDocs = data?.failed_documents ?? [];
+  const solr = data?.solr;
 
   return (
     <main className="status-main">
@@ -58,7 +48,7 @@ function IndexingStatus() {
         <h3 className="status-section-title">Indexing Progress</h3>
         <div className="indexing-grid">
           <div className="indexing-card">
-            <span className="indexing-value">{indexing?.discovered ?? '—'}</span>
+            <span className="indexing-value">{indexing?.total_discovered ?? '—'}</span>
             <span className="indexing-label">Discovered</span>
           </div>
           <div className="indexing-card indexing-card--ok">
@@ -79,44 +69,27 @@ function IndexingStatus() {
       <section className="status-section">
         <h3 className="status-section-title">Service Health</h3>
         <ul className="service-list">
-          {services && (
-            <>
-              <li className="service-item">
-                <HealthDot health={services.solr} />
-                <span className="service-name">Solr</span>
-                <span className="service-detail">
-                  {services.solr.detail ?? services.solr.status}
-                </span>
-              </li>
-              <li className="service-item">
-                <HealthDot health={services.redis} />
-                <span className="service-name">Redis</span>
-                <span className="service-detail">
-                  {services.redis.detail ?? services.redis.status}
-                </span>
-              </li>
-              <li className="service-item">
-                <HealthDot health={services.rabbitmq} />
-                <span className="service-name">RabbitMQ</span>
-                <span className="service-detail">
-                  {services.rabbitmq.detail ?? services.rabbitmq.status}
-                </span>
-              </li>
-            </>
-          )}
+          <li className="service-item">
+            <ServiceDot serviceStatus={services?.solr ?? 'unknown'} />
+            <span className="service-name">Solr</span>
+            <span className="service-detail">
+              {solr
+                ? `${solr.status} · ${solr.nodes} node${solr.nodes !== 1 ? 's' : ''} · ${solr.docs_indexed} docs`
+                : (services?.solr ?? '—')}
+            </span>
+          </li>
+          <li className="service-item">
+            <ServiceDot serviceStatus={services?.redis ?? 'unknown'} />
+            <span className="service-name">Redis</span>
+            <span className="service-detail">{services?.redis ?? '—'}</span>
+          </li>
+          <li className="service-item">
+            <ServiceDot serviceStatus={services?.rabbitmq ?? 'unknown'} />
+            <span className="service-name">RabbitMQ</span>
+            <span className="service-detail">{services?.rabbitmq ?? '—'}</span>
+          </li>
         </ul>
       </section>
-
-      {failedDocs.length > 0 && (
-        <section className="status-section">
-          <h3 className="status-section-title">Failed Documents ({failedDocs.length})</h3>
-          <ul className="failed-doc-list">
-            {failedDocs.map((doc, i) => (
-              <FailedDocRow key={`${doc.id}-${i}`} doc={doc} />
-            ))}
-          </ul>
-        </section>
-      )}
     </main>
   );
 }
