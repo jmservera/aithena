@@ -24,9 +24,13 @@ If you are running the frontend in Vite development mode instead of the full sta
 
 - `http://localhost:5173`
 
+![Aithena tab navigation](images/tab-navigation.png)
+
 ## Searching for books
 
 The **Search** tab is the main place to work.
+
+![Search page](images/search-page.png)
 
 ### Run a search
 
@@ -97,6 +101,10 @@ You can filter by:
 - Changing a filter refreshes the results immediately.
 - When you change a filter, the result list returns to page 1.
 
+![Search results](images/search-results.png)
+
+![Facet panel](images/facet-panel.png)
+
 ## Viewing PDFs
 
 When a result includes an attached document link, you can open the PDF directly from the result card.
@@ -108,6 +116,8 @@ When a result includes an attached document link, you can open the PDF directly 
 3. Click **📄 Open PDF**.
 
 The document opens in an overlay viewer without leaving the search page.
+
+![PDF viewer](images/pdf-viewer.png)
 
 ### Page navigation from search results
 
@@ -149,6 +159,8 @@ This section shows whether key services are reachable:
 
 The Status tab refreshes automatically every **10 seconds**, so it is the best place to watch the system during imports or after operational changes.
 
+![Status tab](images/status-tab.png)
+
 ## Understanding the Stats tab
 
 The **Stats** tab gives a library-wide summary.
@@ -175,6 +187,8 @@ The page also shows counts grouped by:
 ### Refresh behavior
 
 The Stats tab loads when you open it. If new books have been indexed since the page was opened, refresh the browser page to load the latest totals.
+
+![Stats tab](images/stats-tab.png)
 
 ## Tips and tricks
 

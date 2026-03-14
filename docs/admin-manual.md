@@ -161,6 +161,8 @@ That means every service using `/data/documents` is reading from the same mounte
 
 The UI **Status** tab is the fastest operator-friendly health check.
 
+![Status tab](images/status-tab.png)
+
 It shows:
 
 - indexing counts from Redis-backed document tracking
@@ -169,6 +171,8 @@ It shows:
 - automatic refresh every 10 seconds
 
 Important: this dashboard is focused on the search and ingestion path. It does **not** report health for every container in the stack.
+
+![Stats tab](images/stats-tab.png)
 
 ### Use the API directly
 
