@@ -126,10 +126,14 @@ services:
     deploy:
       replicas: 1
     depends_on:
-      - rabbitmq
-      - redis
-      - solr
-      - embeddings-server
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      solr-init:
+        condition: service_completed_successfully
+      embeddings-server:
+        condition: service_started
     volumes:
       - document-data:/data/documents:ro
     networks:
@@ -219,6 +223,12 @@ services:
       - zoo-data1_data:/data
       - zoo-data1_datalog:/datalog
       - zoo-backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   zoo2:
     image: zookeeper:3.9
     ports:
@@ -234,8 +244,12 @@ services:
       - zoo-data2_data:/data
       - zoo-data2_datalog:/datalog
       - zoo-backup:/backup
-    depends_on:
-      - zoo1
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   zoo3:
     image: zookeeper:3.9
     ports:
@@ -251,8 +265,12 @@ services:
       - zoo-data3_data:/data
       - zoo-data3_datalog:/datalog
       - zoo-backup:/backup
-    depends_on:
-      - zoo2
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   solr:
     image: solr:9.7
     # build:
@@ -269,11 +287,20 @@ services:
       - "8983:8983"
     networks:
       - default
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     # command: solr-precreate -c books
     depends_on:
-      - zoo1
-      - zoo2
-      - zoo3
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
   # second solr node
   solr2:
     image: solr:9.7
@@ -289,12 +316,22 @@ services:
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
     ports:
       - "8984:8983"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     #command: solr-create -c books
     depends_on:
-      - zoo1
-      - zoo2
-      - zoo3
-      - solr
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+      solr:
+        condition: service_healthy
   solr3:
     image: solr:9.7
     # build:
@@ -309,12 +346,64 @@ services:
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
     ports:
       - "8985:8983"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     #command: solr-create -c books
     depends_on:
-      - zoo1
-      - zoo2
-      - zoo3
-      - solr2
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+      solr2:
+        condition: service_healthy
+  solr-init:
+    image: solr:9.7
+    depends_on:
+      solr:
+        condition: service_healthy
+      solr2:
+        condition: service_healthy
+      solr3:
+        condition: service_healthy
+    volumes:
+      - ./solr/books:/configsets/books:ro
+      - ./solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+    entrypoint:
+      - /bin/bash
+      - -ceu
+      - |
+          set -o pipefail
+          ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
+          SOLR_URL="http://solr:8983"
+
+          until curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null; do
+            sleep 2
+          done
+
+          until [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ]; do
+            sleep 2
+          done
+
+          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
+            solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
+          fi
+
+          if ! curl -fsS "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
+            curl -fsS "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
+          fi
+
+          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" sh /scripts/add-conf-overlay.sh
+
+          echo "Solr init complete"
+    networks:
+      - default
+    restart: "no"
 volumes:
   rabbitmq-data:
     driver: local

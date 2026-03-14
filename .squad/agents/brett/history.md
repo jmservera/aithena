@@ -11,6 +11,7 @@
 ## Learnings
 - 2026-03-14: Extracted the SolrCloud Docker operations research into `.squad/skills/solrcloud-docker-operations/SKILL.md` so other agents can reuse the runbooks and hardening guidance.
 - 2026-03-14: The local SolrCloud compose stack must use the official `solr:9.7` image with `ZK_HOST` and no `solr start -c -f` entrypoint override; keep `solr-search` on host port 8080 and move ZooKeeper AdminServer to a non-conflicting host port instead.
+- 2026-03-14: Added a one-shot `solr-init` bootstrap service plus ZooKeeper/Solr health checks so the `books` configset uploads, the `books` collection is recreated idempotently, and `document-indexer` waits for bootstrap completion before indexing.
 
 ## SolrCloud Docker Operations Reference
 

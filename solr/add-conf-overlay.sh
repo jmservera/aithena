@@ -1,58 +1,62 @@
 #!/bin/sh
+set -eu
 
-collection='http://localhost:8983/api/collections/books/config'
+SOLR_BASE_URL="${SOLR_BASE_URL:-http://localhost:8983}"
+SOLR_COLLECTION="${SOLR_COLLECTION:-books}"
 
+collection_endpoint="${SOLR_BASE_URL%/}/api/collections/${SOLR_COLLECTION}/config"
+backup_endpoint="${SOLR_BASE_URL%/}/api/cluster/backup-repositories"
 
-# add the langid processor, needs MODULES=langid in solrconfig.xml 
-# <updateRequestProcessorChain name="langid" default="${update.autoCreateFields:true}"
-#            processor="uuid,remove-blank,field-name-mutating,parse-boolean,parse-long,parse-double,parse-date,add-schema-fields">
-#        <processor class="org.apache.solr.update.processor.LangDetectLanguageIdentifierUpdateProcessorFactory">
-#          <str name="langid.fl">content,_text_</str>
-#          <str name="langid.langField">language_s</str>
-#          <str name="langid.fallback">en</str>
-# <!--         <str name="langid.model">langdetect-183.bin</str> -->
-#        </processor>
-# <!--       <processor class="solr.IgnoreFieldUpdateProcessorFactory" />-->
-#        <processor class="solr.LogUpdateProcessorFactory" />
-#        <processor class="solr.DistributedUpdateProcessorFactory"/>
-#        <processor class="solr.RunUpdateProcessorFactory" />
-# </updateRequestProcessorChain>
+post_json() {
+  endpoint="$1"
+  payload="$2"
+  curl -fsS -X POST -H 'Content-type:application/json' -d "$payload" "$endpoint"
+}
 
-# cannot be done with config api https://solr.apache.org/guide/solr/latest/configuration-guide/config-api.html#updaterequestprocessorchain-elements
+collection_config="$(curl -fsS "$collection_endpoint")"
 
-
-# add the pdf extraction handler, needs SOLR_MODULES=extraction in solrconfig.xml
-curl -X POST -H 'Content-type:application/json' -d '{
-  "update-requesthandler": {
-    "name": "/update/extract",
-    "class": "solr.extraction.ExtractingRequestHandler",
-    "defaults":{ "lowernames": "true", "fmap.content":"_text_", "captureAttr":"true", "update.chain":"langid"}
-  }
-}' $collection
-
-curl -X POST -H 'Content-type:application/json' -d '"initParams": {
-    "my-init": {
-      "name": "my-init",
-      "path": "/select,/browse",
-      "defaults": {
-        "df": "content"
+if ! printf '%s' "$collection_config" | grep -q '"/update/extract"'; then
+  post_json "$collection_endpoint" '{
+    "add-requesthandler": {
+      "/update/extract": {
+        "name": "/update/extract",
+        "class": "solr.extraction.ExtractingRequestHandler",
+        "defaults": {
+          "lowernames": "true",
+          "fmap.content": "_text_",
+          "captureAttr": "true",
+          "update.chain": "langid"
+        }
       }
     }
-  }' $collection
+  }'
+fi
 
-# <backup>
-#   <repository name="local_repo"
-#     class="org.apache.solr.core.backup.repository.LocalFileSystemRepository">
-#     <str name="location">/solr/backup_data</str>
-#   </repository>
-# </backup>
+collection_config="$(curl -fsS "$collection_endpoint")"
 
-curl -X POST -H 'Content-type:application/json' -d '{
-  "create-backup": {
-    "repository": {
-      "name": "local_repo",
-      "class": "org.apache.solr.core.backup.repository.LocalFileSystemRepository",
-      "location": "/backup"
+if ! printf '%s' "$collection_config" | grep -q '"my-init"'; then
+  post_json "$collection_endpoint" '{
+    "add-initparams": {
+      "my-init": {
+        "path": "/select,/browse",
+        "defaults": {
+          "df": "content"
+        }
+      }
     }
-  }
-}' $collection
+  }'
+fi
+
+backup_config="$(curl -fsS "$backup_endpoint" 2>/dev/null || true)"
+
+if [ -n "$backup_config" ] && ! printf '%s' "$backup_config" | grep -q '"local_repo"'; then
+  post_json "$backup_endpoint" '{
+    "create-repository": {
+      "name": "local_repo",
+      "type": "local",
+      "settings": {
+        "location": "/backup"
+      }
+    }
+  }'
+fi
