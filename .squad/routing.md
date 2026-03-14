@@ -14,6 +14,7 @@ How to decide who handles what.
 | Docker, Compose, containers | Brett | Dockerfiles, docker-compose, multi-stage builds, container security, health checks |
 | SolrCloud infrastructure | Brett + Ash | Cluster topology, ZooKeeper, configsets, replica management |
 | CI/CD container builds | Brett | Image optimization, caching, GitHub Actions container pipelines |
+| Security scanning & audits | Kane | bandit, checkov, zizmor, OWASP ZAP, dependency vulnerabilities, container CVEs |
 | Code review | Ripley | Review PRs, check quality, suggest improvements |
 | Testing | Lambert | Write tests, find edge cases, verify fixes, integration testing |
 | Scope & priorities | Ripley | What to build next, trade-offs, decisions |
