@@ -10,10 +10,12 @@ A Streamlit-based operations dashboard for monitoring and managing the document 
 ## Running locally
 
 ```bash
-cd admin/src
-pip install -r requirements.txt
-streamlit run main.py
+cd admin
+uv sync
+uv run streamlit run src/main.py
 ```
+
+> **Note:** `src/requirements.txt` is deprecated. Use the `pyproject.toml` with `uv` as shown above.
 
 ## Configuration
 
