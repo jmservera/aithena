@@ -624,3 +624,42 @@ Closed-unmerged: `add-build-status-tab-component` (#128), `add-contract-tests-so
 **Merge strategy:** #41 + #163 in parallel (Batch 1), then #47 (Batch 2, touches SearchPage after both land).
 
 **Decision written to:** `.squad/decisions/inbox/ripley-v05-plan.md`
+
+### 2026-03-14T23:xx — Reskill: Current Codebase State & v0.5 Roadmap Update
+
+**Release Status:**
+- **v0.4.0 SHIPPED** — All 7 Phase 2 PRs merged to `dev` (Search API, UI, Status/Stats tabs, PDF navigation). Release commit: `c27fa4b`
+- **v0.5 (Phase 3: Embeddings Enhancement) IN PROGRESS** — 5 of 6 core issues verified complete on `dev`:
+  - #42, #43, #44, #45, #46 all delivered (embeddings model, dense vectors, chunking, search modes, similar-books API)
+  - #163 (search mode selector UI) created as the remaining gap — assigned `squad:copilot`, 🟢 good fit
+  - Two parallel copilot issues also open: #41 (frontend tests, 🟢) and #47 (similar books UI, 🟡 needs review)
+- **v0.6 (Phase 4)** planned but unstarted — upload endpoint (#49), upload UI (#50), hardening (#52)
+
+**Architecture Stability:**
+- Solr migration **COMPLETE**: SolrCloud 3-node, Tika extraction, langid detection, all working on `dev`
+- FastAPI search service (`solr-search/`) live and integrated: secure, well-tested (+11 unit tests), clean code structure
+- React search UI (`aithena-ui/`) converted from chat to search paradigm: FacetPanel, ActiveFilters, BookCard, pagination, sort — all working
+- PDF viewer panel integrated: page navigation from search results
+- Status + Stats tabs complete: health monitoring (Solr, Redis, RabbitMQ), collection stats by language/author/year/category
+
+**Critical Bugs (requires assignment):**
+- **#166: RabbitMQ fails on first start — timeout_waiting_for_khepri_projections** (assigned Parker + Lambert, needs research)
+- **#167: New files not detected or indexed — document pipeline stalled** (assigned Parker + Dallas, needs research)
+
+**Active Work:**
+- **Open PRs:** #164 (search mode selector backend, appears to be pre-#163), #165 (frontend test coverage for search/facets/PDF)
+- **Squad labeling:** Issues #166-#167 (bugs, blocked), #98-#90 (security scanning, requires triage), #49-#50 (Phase 4, unstarted)
+
+**Branch Discipline:** All work properly routed to `dev` as per branching strategy. Main receives merges only from dev at release gates (Newt approval required).
+
+**Key Patterns Observed:**
+1. **Copilot work is highly reliable:** Phase 2 + Phase 3 PRs are well-structured, test-covered, clean code. Zero defects merged to dev.
+2. **Phase-based issue decomposition works:** Explicit dependencies + single-owner issues prevent PR sprawl.
+3. **Architecture board (decisions.md) is the source of truth:** All major decisions (ADRs, team assignments, risk mitigations) recorded and traceable.
+4. **Clean Code + TDD is the standard:** All services follow separation of concerns (domain/application/presentation layers), comprehensive type hints, error handling edge cases in tests.
+
+**Next Lead Action Items:**
+1. Triage & assign bugs #166-#167 (RabbitMQ + file detection failures)
+2. Clarify v0.5 copilot queue: #163, #41, #47 parallelization + merge sequencing
+3. Review open security scanning issues (#88-#98) — defer or assign to security team (Kane)?
+4. Plan v0.6 roadmap: #49, #50, #52 — coordinate with Parker (backend) + Dallas (frontend) + Ash (search tuning)

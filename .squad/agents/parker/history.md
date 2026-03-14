@@ -109,3 +109,57 @@
 - Renamed the indexer `save_state()` positional parameter so Redis state can safely include the metadata field `file_path` without raising `TypeError: multiple values for argument 'file_path'`.
 - Added a regression test for `save_state(file_path=...)`, reran `document-lister/tests` and `document-indexer` pytest suites, and verified a direct local run indexed a blank PDF into Solr with Redis state updated successfully.
 
+### 2026-03-14 — Backend Reskill: Current Service Architecture
+
+**solr-search/ (FastAPI search API; 604 + 396 LOC)**
+- Main endpoints (dual-routed for `/` and `/v1/` prefix compatibility):
+  - `GET /search/` → keyword search (edismax, facets, highlight, pagination)
+  - `GET /facets/` → facet aggregations (author, category, year, language)
+  - `GET /documents/{document_id}` → PDF file serving with path token validation
+  - `GET /books/{document_id}/similar` → kNN semantic similarity using `book_embedding` field
+  - `GET /stats/` → aggregated indexing stats (processed/failed/pending counts from Redis)
+  - `GET /health/` → liveness check
+  - `GET /info/` → API version/title metadata
+  - `GET /status/` → health aggregation for Solr, Redis, RabbitMQ with TCP probes
+- Key modules: `config.py` (Settings dataclass, env-driven), `search_service.py` (Solr query builders, normalization, embedding calls)
+- Search modes: `keyword` (BM25), `semantic` (embedding similarity), `hybrid` (RRF fusion)
+- Embeddings integration: POST to embeddings-server `/v1/embeddings/`, expects `EmbeddingsInput.input` (string or list)
+- Document token encoding: base64 URL-safe tokens for `/documents/{id}` to avoid path traversal
+- CORS middleware enabled for frontend at `http://localhost:5173`
+
+**document-indexer/ (RabbitMQ consumer; 391 LOC main)**
+- Consumes from queue (default `shortembeddings`); graceful backpressure via `prefetch_count=1`
+- Per document: extract metadata from path, chunk text with page tracking, upload to Solr `/update/extract`, update Redis state
+- Key modules: `metadata.py` (heuristic parser for `Author - Title - Year` patterns), `chunker.py` (sliding window with page tracking), `embeddings.py` (batch calls to embeddings-server)
+- Solr integration: multipart POST with literal.* metadata + PDF binary to `/update/extract`; Tika + langid chains auto-detect language
+- Redis state keys: `doc:{hash_id}` with `{"file_path": "...", "status": "processed|failed", "page_count": N, "timestamp": ISO}`
+- Page-aware chunking: each chunk includes `page_start_i` / `page_end_i` for highlighting in UI
+
+**document-lister/ (filesystem scanner; 144 LOC main)**
+- Polls `BASE_PATH` (default `/data/documents`) every `POLL_INTERVAL` (default 30s) for `*.pdf` files
+- Per new/modified file: check Redis state, enqueue to RabbitMQ, or mark as unprocessed if modified
+- Redis state keys: `/{QUEUE_NAME}/{file_path}` with `{"processed": bool, "last_modified": mtime, "timestamp": ISO}`
+
+**embeddings-server/ (FastAPI FastText/SentenceTransformer; ~80 LOC)**
+- Model: `distiluse-base-multilingual-cased-v2` (multilingual, ~512D embeddings)
+- Endpoints: `POST /v1/embeddings/` (generates embeddings), `GET /v1/embeddings/model` (returns model name + dim)
+- Used by both indexer (book-level embeddings during indexing) and solr-search (query embeddings for semantic search)
+
+**Test Coverage & CI** 
+- Backend tests use pytest (28 tests in solr-search, 15 in document-indexer, 5 in document-lister)
+- CI workflow (`.github/workflows/ci.yml`): uses `uv` for dependency management, Python 3.11, runs unit + integration tests on dev/PR pushes
+- Integration tests mock HTTP responses; no Docker-compose in test, only unit isolation
+- Ruff linting runs across all Python services with per-file ignores for `S101` in tests (`assert` is allowed)
+
+**Current API Contract (with Phase 1–3 additions)**
+- `limit` / `sort` / `sort_order` query parameters
+- `fq_*` filter parameters for faceted search (author, category, year, language)
+- Response format: `{"results": [...], "total": N, "limit": M, "offset": O, "facets": {...}}`
+- Returns `page_start_i` / `page_end_i` per hit for chunk-level search result localization
+
+**Recent Commits & Activity**
+- #159 (MERGED): Added `/v1/status/` endpoint with aggregated health probes
+- #136 (STALE): Page ranges tracking — needs rebase to dev
+- UV migration (#129–131): All services now use uv instead of pip for reproducible builds
+- Ruff standardization (#100–105): Single root ruff.toml, auto-fix applied across services
+

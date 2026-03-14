@@ -332,3 +332,84 @@
 - Exposed Solr Admin, RabbitMQ Management, Streamlit Admin, and Redis Commander under `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, and `/admin/redis/` respectively.
 - RabbitMQ now uses the management image with `management.path_prefix=/admin/rabbitmq`; Streamlit uses `--server.baseUrlPath=/admin/streamlit`; Redis Commander uses `URL_PREFIX=/admin/redis`.
 - Validation: `docker compose config --quiet`, `npm ci && npm run build` in `aithena-ui/`, `uv run python -m compileall src` in `admin/`, and nginx syntax tests with `docker run ... nginx -t` all succeeded. The `streamlit-admin` image build is still blocked in this environment by an external Docker Hub fetch failure for `python:3.11-slim`, so runtime validation stopped at app-level checks plus config syntax.
+
+## 2026-03-14 — Reskill session: current infrastructure snapshot
+
+### Service Topology & Status
+- **9 services built from source:** `aithena-ui`, `admin` (Streamlit), `document-lister`, `document-indexer`, `solr-search`, `embeddings-server`, `redis-commander` (pulled)
+- **3-node SolrCloud cluster:** `solr` (8983), `solr2` (8984), `solr3` (8985), all healthy ✓. Collection `books` with 3x replication factor.
+- **3-node ZooKeeper ensemble:** `zoo1` (2181, AdminServer 8080), `zoo2` (2182), `zoo3` (2183). All have ruok/mntr/conf 4LW enabled, separate `/data` and `/datalog` volumes.
+- **Redis:** port 6379, health check ✓, `on-failure` restart.
+- **RabbitMQ:** port 5672 (AMQP), 15672 (management), health check ✓, `on-failure` restart. **Known issue #166:** Khepri timeout on first boot cascades to all dependent services (document-lister, document-indexer, solr-search, admin).
+- **nginx:** 80/443, depends on all admin UIs but no health check on them. Reverse-proxy architecture routes `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, `/admin/redis/` to their respective containers.
+- **certbot:** automated TLS renewal, `unless-stopped` restart.
+
+### CI/CD & Deployment
+- **GitHub Actions workflows:**
+  - `ci.yml` — Python unit tests for `document-indexer` (pytest with coverage) and `solr-search` (unit + integration tests), Python linting via ruff (continue-on-error).
+  - `lint-frontend.yml` — Frontend linting.
+  - `release.yml` — Release workflow (uses uv for Python dependencies).
+  - `squad-*.yml` workflows for triage, assignment, heartbeat.
+- **Build automation:** `buildall.sh` runs `uv sync` in each uv-managed Python service (`admin`, `document-indexer`, `document-lister`, `solr-search`) then does `docker compose up --build -d`. Skips `embeddings-server` until it gains a `pyproject.toml`.
+- **uv migration:** all 4 production Python services now use uv + `pyproject.toml` + `uv.lock`. `embeddings-server` still has raw pip requirements.
+
+### Known Infrastructure Bugs
+1. **#166 — RabbitMQ Khepri timeout on cold start:** `timeout_waiting_for_khepri_projections` after 10 retries × 30s. Second `docker compose up` succeeds. Root cause: Khepri (RabbitMQ 4.x metadata store) projection registration race condition or stale state in docker volume. Suggested fixes: (a) increase health check retries + start_period, (b) clear `rabbitmq-data` volume, (c) pin RabbitMQ version, (d) set memory watermark env var, (e) investigate RabbitMQ GitHub for known Khepri bug.
+2. **#167 — Document pipeline stall:** new PDFs not detected or indexed after being added to `/home/jmservera/booklibrary` (mounted as `/data/documents`). Likely cascaded from #166 (RabbitMQ unhealthy → services start without queue) + `depends_on: condition: service_started` doesn't wait for health. Related issues: (a) `depends_on` uses `service_started`, not `service_healthy` for RabbitMQ, (b) no Redis or RabbitMQ connection retry logic in services, (c) volume mount may be inaccessible during startup race.
+
+### Volume & Persistence Strategy
+- **All volumes are bind-backed local drivers**, pointing to `/source/volumes/...` and `/home/jmservera/booklibrary`.
+- **Solr:** 3 separate data volumes (`solr-data`, `solr-data2`, `solr-data3`) → `/var/solr/data` on each node. Not persisting full `/var/solr`, so logs are ephemeral.
+- **ZooKeeper:** per-node split of `/data`, `/datalog`, `/logs` on separate volumes. Good practice.
+- **Redis:** single `redis-data` volume.
+- **RabbitMQ:** single `rabbitmq-data` volume (the Khepri issue may be volume state corruption).
+- **Certbot:** two volumes for conf and challenge responses.
+- **Application data:** single shared `document-data` volume mount at `/data/documents` (read-only for Solr/apps, writable from host).
+
+### Health Checks & Dependencies
+- **Redis:** has health check (`redis-cli ping`, 5s interval, 15s timeout, 1 retry) ✓.
+- **RabbitMQ:** has health check (rabbitmqctl ping, 5s interval, 15s timeout, 1 retry), **too aggressive for Khepri cold start** ✗.
+- **Solr & ZooKeeper:** **no health checks** ✗. This violates the solrcloud-docker-operations skill. Missing checks are critical because compose uses `depends_on: service_started`, which doesn't wait for readiness.
+- **Application services:** use `depends_on: service_started` for RabbitMQ/Redis/Solr. Without health checks on those infra services, apps start before they're ready.
+- **nginx:** depends on all admin UIs without health checks on them.
+
+### Docker Compose Gaps vs. Skill Recommendations
+- ❌ No health checks for Solr nodes (should be `curl -fsS http://localhost:8983/solr/admin/info/system`).
+- ❌ No health checks for ZooKeeper (should be `printf ruok | nc -w 2 localhost 2181 | grep imok`).
+- ❌ `depends_on` uses `condition: service_started` instead of `condition: service_healthy` for critical infra (RabbitMQ, Redis, Solr).
+- ❌ ZooKeeper nodes have **no restart policy**; others have `on-failure` or `unless-stopped`. Should be `unless-stopped` for ZooKeeper.
+- ❌ No `stop_grace_period` for Solr/ZooKeeper; hard kills may cause long recoveries.
+- ❌ No `SOLR_HEAP` or memory limits set; OOM-kill risk during indexing.
+- ❌ No log caps on Docker logs; unbounded growth risk.
+- ❌ ZooKeeper AdminServer port 8080 collides with `solr-search` port 8080 on host (though Docker routing works, it's confusing).
+- ❌ Solr node volumes mount `/var/solr/data` only, not full `/var/solr`; persistent logs unavailable for troubleshooting.
+- ❌ `/backup` is configured in `solr/add-conf-overlay.sh` but **not mounted** in Solr containers; backups cannot actually be persisted.
+- ✓ Solr/ZooKeeper `depends_on` ordering is stricter than necessary but not harmful (serial Solr startup).
+- ✓ Current ZooKeeper and Solr image versions (zookeeper:3.9, solr:9.7) are reasonable.
+
+### nginx Reverse-Proxy Ingress
+- **Routes defined in `nginx/default.conf`:** static admin landing page at `/admin/`, proxies to Solr Admin UI (`/admin/solr/`), RabbitMQ Management (`/admin/rabbitmq/`), Streamlit (`/admin/streamlit/`), Redis Commander (`/admin/redis/`), React UI (`/`), API endpoints (`/v1/` and `/documents/` → solr-search:8080).
+- **Current reverse-proxy patterns:** 
+  - `/admin/solr/`: uses `X-Forwarded-Prefix` + path rewrite + sub_filter for CSS/JS URLs ✓.
+  - `/admin/rabbitmq/`: WebSocket upgrade support ✓.
+  - `/admin/streamlit/`: WebSocket upgrade + proxy buffering off + 24h timeout ✓.
+  - `/admin/redis/`: WebSocket upgrade ✓.
+  - `/v1/` and `/documents/`: direct API proxies to solr-search ✓.
+  - `/`: catch-all routes to aithena-ui React app ✓.
+- **No HTTPS or auth enforcement** (cert setup for ACME but HTTP-only in current config).
+
+### RabbitMQ Configuration
+- **config file:** `/rabbitmq/rabbitmq.conf` sets `management.path_prefix=/admin/rabbitmq` for upstream compatibility with nginx reverse proxy.
+- **env var:** `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000` (sets 1-hour consumer timeout for long-running indexing jobs).
+- **version:** floating tag `rabbitmq:3-management` (likely 4.x with Khepri). Should be pinned to avoid surprise Khepri bugs.
+
+### Recommendations for Next Session (Priority Order)
+1. **Fix #166 (RabbitMQ cold-start):** Increase health check retries/start_period, optionally pin RabbitMQ version to known-good 3.13 or 4.0.
+2. **Add SolrCloud health checks** per skill: Solr + ZooKeeper readiness probes, switch `depends_on` to `service_healthy`.
+3. **Fix #167 (document pipeline stall):** After fixing RabbitMQ, add connection retry logic and service startup ordering fixes.
+4. **Harden ZooKeeper:** add restart policy `unless-stopped`, consider adding autopurge config.
+5. **Fix port collision:** move ZooKeeper AdminServer to 18080 or disable it.
+6. **Mount Solr backup path:** `/backup` on all Solr nodes to enable filesystem backups.
+7. **Add resource limits:** `SOLR_HEAP=1g` + memory limits, log caps for all services.
+8. **Add graceful shutdown:** `stop_grace_period: 60s` for Solr/ZooKeeper.
+9. **Expand Solr volume mounts:** `/var/solr` instead of just `/var/solr/data` for persistent logs.

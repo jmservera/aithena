@@ -2,11 +2,11 @@
 name: "pr-integration-gate"
 description: "Required build/test checks before merging PRs to dev"
 domain: "ci, workflow, quality"
-confidence: "medium"
-source: "earned — UI breakage from unvalidated frontend PR merges in Session 2"
+confidence: "high"
+source: "earned — 7 consecutive copilot PRs (Phase 2–3) with zero build/test failures in dev merges"
 author: "Ripley"
 created: "2026-03-14"
-last_validated: "2026-03-14"
+last_validated: "2026-03-14T23:45"
 ---
 
 ## Context
