@@ -106,6 +106,88 @@ def info() -> dict[str, str]:
     return {"title": settings.title, "version": settings.version}
 
 
+def _parse_facet_list(raw: list[Any]) -> list[dict[str, Any]]:
+    """Convert Solr's flat [value, count, value, count, …] facet list to dicts."""
+    it = iter(raw)
+    return [{"value": v, "count": c} for v, c in zip(it, it)]
+
+
+@app.get("/v1/stats/", include_in_schema=False, name="stats_v1")
+@app.get("/v1/stats", include_in_schema=False, name="stats_v1_no_slash")
+@app.get("/stats")
+def stats() -> dict[str, Any]:
+    """Return collection-level statistics.
+
+    - Total books indexed.
+    - Distribution by language, author (top 20), year, and category.
+    - Aggregate page-count statistics (total, average, min, max).
+    """
+    # Use list-of-tuples so that repeated facet.field keys are preserved.
+    params: list[tuple[str, str | int]] = [
+        ("q", "*:*"),
+        ("rows", 0),
+        ("wt", "json"),
+        ("facet", "true"),
+        ("facet.mincount", 1),
+        ("facet.limit", -1),
+        ("facet.field", "language_detected_s"),
+        ("facet.field", "author_s"),
+        ("facet.field", "year_i"),
+        ("facet.field", "category_s"),
+        ("f.author_s.facet.limit", 20),
+        ("stats", "true"),
+        ("stats.field", "page_count_i"),
+    ]
+    try:
+        response = requests.get(
+            settings.select_url,
+            params=params,
+            timeout=settings.request_timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.Timeout as exc:
+        raise HTTPException(status_code=504, detail="Timed out waiting for Solr") from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Solr stats request failed") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="Solr returned invalid JSON") from exc
+
+    total_books: int = payload.get("response", {}).get("numFound", 0)
+
+    facet_fields = payload.get("facet_counts", {}).get("facet_fields", {})
+    by_language = _parse_facet_list(facet_fields.get("language_detected_s") or [])
+    by_author = _parse_facet_list(facet_fields.get("author_s") or [])
+    by_year = _parse_facet_list(facet_fields.get("year_i") or [])
+    by_category = _parse_facet_list(facet_fields.get("category_s") or [])
+
+    raw_page_stats = (
+        payload.get("stats", {})
+        .get("stats_fields", {})
+        .get("page_count_i", {})
+    )
+    page_stats: dict[str, Any] = {}
+    if raw_page_stats:
+        count = raw_page_stats.get("count", 0)
+        total_pages = int(raw_page_stats.get("sum", 0))
+        page_stats = {
+            "count": count,
+            "total_pages": total_pages,
+            "avg_pages": round(raw_page_stats.get("mean", 0.0), 1),
+            "min_pages": int(raw_page_stats.get("min", 0)),
+            "max_pages": int(raw_page_stats.get("max", 0)),
+        }
+
+    return {
+        "total_books": total_books,
+        "by_language": by_language,
+        "by_author": by_author,
+        "by_year": by_year,
+        "by_category": by_category,
+        "page_stats": page_stats,
+    }
+
+
 @app.get("/v1/search/", include_in_schema=False, name="search_v1")
 @app.get("/v1/search", include_in_schema=False, name="search_v1_no_slash")
 @app.get("/search")

@@ -728,3 +728,100 @@ def test_similar_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
 
 def test_v1_document_alias_is_registered() -> None:
     assert app.url_path_for("get_document_v1", document_id="token") == "/v1/documents/token"
+
+
+# ---------------------------------------------------------------------------
+# /stats
+# ---------------------------------------------------------------------------
+
+def _make_stats_mock_response() -> MagicMock:
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.json.return_value = {
+        "response": {"numFound": 42, "docs": []},
+        "facet_counts": {
+            "facet_fields": {
+                "language_detected_s": ["en", 30, "ca", 12],
+                "author_s": ["Amades, Joan", 10, "Doe, Jane", 5],
+                "year_i": ["2000", 3, "2010", 8],
+                "category_s": ["Folklore", 20, "History", 22],
+            }
+        },
+        "stats": {
+            "stats_fields": {
+                "page_count_i": {
+                    "min": 10.0,
+                    "max": 500.0,
+                    "count": 42,
+                    "sum": 8400.0,
+                    "mean": 200.0,
+                }
+            }
+        },
+    }
+    return mock
+
+
+@patch("main.requests.get")
+def test_stats_returns_expected_shape(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.return_value = _make_stats_mock_response()
+
+    response = client.get("/stats")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_books"] == 42
+    assert {"value": "en", "count": 30} in data["by_language"]
+    assert {"value": "ca", "count": 12} in data["by_language"]
+    assert data["by_author"][0]["value"] == "Amades, Joan"
+    assert data["by_category"][0]["value"] == "Folklore"
+    assert data["page_stats"]["total_pages"] == 8400
+    assert data["page_stats"]["avg_pages"] == 200.0
+    assert data["page_stats"]["min_pages"] == 10
+    assert data["page_stats"]["max_pages"] == 500
+
+
+@patch("main.requests.get")
+def test_stats_v1_alias(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock_solr_get.return_value = _make_stats_mock_response()
+
+    response = client.get("/v1/stats/")
+
+    assert response.status_code == 200
+    assert "total_books" in response.json()
+
+
+@patch("main.requests.get")
+def test_stats_returns_empty_on_no_data(mock_solr_get: MagicMock) -> None:
+    client = get_client()
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.json.return_value = {
+        "response": {"numFound": 0, "docs": []},
+        "facet_counts": {"facet_fields": {}},
+        "stats": {"stats_fields": {}},
+    }
+    mock_solr_get.return_value = mock
+
+    response = client.get("/stats")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_books"] == 0
+    assert data["by_language"] == []
+    assert data["page_stats"] == {}
+
+
+@patch("main.requests.get")
+def test_stats_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
+    import requests as req
+
+    client = get_client()
+    mock_solr_get.side_effect = req.ConnectionError("Cannot connect to Solr")
+
+    response = client.get("/stats")
+
+    assert response.status_code == 502
