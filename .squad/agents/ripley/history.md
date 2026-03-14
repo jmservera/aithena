@@ -63,3 +63,20 @@
 2. Clarify v0.5 copilot queue: #163, #41, #47 parallelization + merge sequencing
 3. Review open security scanning issues (#88-#98) — defer or assign to security team (Kane)?
 4. Plan v0.6 roadmap: #49, #50, #52 — coordinate with Parker (backend) + Dallas (frontend) + Ash (search tuning)
+
+### 2026-03-14T23:xx — v0.5 PR Batch 1 Review
+
+**Reviewed & Approved:**
+- **PR #164** (search mode selector) — ✅ Clean, complete. All #163 acceptance criteria met. Mode type, API param, toggle UI, error handling all correct.
+- **PR #165** (Vitest test coverage) — ✅ 19 behavioral tests, 3 components. Proper mocking, no snapshots. Solid foundation for #41.
+- **PR #170** (Admin tab iframe) — ✅ Minimal, correct stop-gap for #168. Relative path, sandbox attribute, graceful fallback.
+
+**Issues Found:**
+1. **Pre-existing CI failure:** `solr-search/tests/test_integration.py:1115` has a ruff SIM117 violation that fails Python lint on every PR branch. Needs independent fix — opened as known issue.
+2. **CI gap:** `npm run test` (vitest) is not in the CI pipeline. Frontend tests exist but don't run in CI. Should be added as a follow-up.
+
+**Observations:**
+- Copilot agent continues to deliver clean, well-structured code. All 3 PRs target `dev`, follow existing React patterns, use proper TypeScript types, and match the project's hook-based architecture.
+- No hardcoded URLs in any PR. Relative paths used consistently.
+- The Copilot agent handles edge cases well (empty query guard for semantic mode, sandbox attribute on iframe, proper ARIA attributes).
+- Recommended merge order: #165 → #164 → #170 (tests first for baseline).
