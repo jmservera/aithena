@@ -36,7 +36,10 @@ export function useStats() {
 
     fetch(statsBaseURL)
       .then((res) => {
-        if (!res.ok) throw new Error(`Stats request failed: ${res.status}`);
+        if (!res.ok)
+          throw new Error(
+            `Could not load collection statistics (HTTP ${res.status}). Please check your connection and try again.`
+          );
         return res.json() as Promise<StatsResponse>;
       })
       .then((json) => {
@@ -44,7 +47,11 @@ export function useStats() {
       })
       .catch((err: unknown) => {
         if (!cancelled)
-          setError(err instanceof Error ? err.message : "Failed to load stats");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load collection statistics. Please try again later."
+          );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
