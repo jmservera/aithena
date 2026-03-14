@@ -25,6 +25,11 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
   }, [onClose]);
 
   const pdfUrl = resolveDocumentUrl(result.document_url);
+  const pdfUrlWithPage = pdfUrl
+    ? result.page_start !== undefined
+      ? `${pdfUrl}#page=${result.page_start}`
+      : pdfUrl
+    : null;
 
   return (
     <div
@@ -54,9 +59,9 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
               <p className="pdf-viewer-error-detail">
                 The file may be unavailable or the URL is invalid.
               </p>
-              {pdfUrl && (
+              {pdfUrlWithPage && (
                 <a
-                  href={pdfUrl}
+                  href={pdfUrlWithPage}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="pdf-viewer-fallback-link"
@@ -65,10 +70,10 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
                 </a>
               )}
             </div>
-          ) : pdfUrl ? (
+          ) : pdfUrlWithPage ? (
             <iframe
               className="pdf-viewer-frame"
-              src={pdfUrl}
+              src={pdfUrlWithPage}
               title={result.title || 'PDF document'}
               onError={() => setLoadError(true)}
             />
