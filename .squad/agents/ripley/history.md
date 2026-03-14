@@ -398,3 +398,23 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
   - v1.0.0 Production Ready: 2 issues (PDF upload) + future work
 - **Cadence established:** After each milestone → Pause → Scribe logs → Reskill → Tag release → Merge to default.
 - Decision recorded in `.squad/decisions/inbox/ripley-milestone-plan.md`.
+
+### 2026-03-14 — Retro v0.3 + Reskill Cycle
+
+**Retro conducted:** Synthesized learnings from all 7 agent histories + 3 session logs.
+- **What went well:** Pipeline bugs found fast (Parker lister+indexer fixes), Playwright caught API mismatch, parallel @copilot work (14 PRs), skills guided Brett/Parker effectively, branching strategy stabilized merges.
+- **What didn't go well:** UI broke from uncoordinated merges, stale branches targeting wrong base, smoke artifacts in repo root, collection bootstrap missing.
+- **Key learnings:** Hybrid dev workflow essential, must gate frontend builds, API contracts need single source of truth, page-level search needs app-side extraction.
+
+**Skills created:**
+1. `smoke-testing` (medium) — Docker up → health wait → Vite → Playwright → cleanup cycle
+2. `api-contract-alignment` (medium) — Keep frontend/backend API paths in sync via shared prefix
+3. `pr-integration-gate` (medium) — Required build/test checks before merging PRs to dev
+
+**Skills updated:**
+4. `solrcloud-docker-operations` confidence → high (validated by Brett during bootstrap + admin ingress)
+5. `path-metadata-heuristics` confidence → high (validated by Parker during 169-file real library indexing)
+
+**Charter audit:** Brett charter trimmed from 1534B to ~1280B (consolidated 8 responsibilities → 4 ownership bullets). Others within budget. Copilot charter exempt per reskill rules.
+
+**Deliverable:** `.squad/decisions/inbox/ripley-retro-v03.md` written with full retro + action items.
