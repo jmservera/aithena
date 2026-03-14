@@ -135,6 +135,26 @@ def test_normalize_book_includes_matched_pages() -> None:
     assert book["pages"] == [5, 6]
 
 
+def test_normalize_book_single_page_match() -> None:
+    book = normalize_book(
+        {"id": "abc123", "title_s": "Rondalles", "page_start_i": 3, "page_end_i": 3},
+        {},
+        "/documents/token",
+    )
+
+    assert book["pages"] == [3]
+
+
+def test_normalize_book_no_page_fields_returns_empty() -> None:
+    book = normalize_book(
+        {"id": "abc123", "title_s": "Rondalles"},
+        {},
+        "/documents/token",
+    )
+
+    assert book["pages"] == []
+
+
 def test_document_tokens_round_trip_and_stay_under_base_path(tmp_path: Path) -> None:
     relative_path = "amades/rondalles.pdf"
     token = encode_document_token(relative_path)
