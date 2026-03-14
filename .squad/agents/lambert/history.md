@@ -10,6 +10,13 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-14 — Playwright browser E2E suite for the local stack
+
+- The new browser suite lives in `e2e/playwright/` and is intentionally **read-only**: it discovers suitable indexed queries from the live `/v1/search/` API instead of uploading fixture books, so repeated runs do not mutate Solr or the library mount.
+- `playwright.config.ts` keeps `baseURL` aligned with the nginx entry point (`http://localhost`) while `global-setup.ts` polls both `http://localhost/search` and `http://localhost:5173/search`, exporting `PLAYWRIGHT_APP_BASE_URL` so the same tests work against either nginx or the Vite dev server.
+- Search, facet, pagination, and PDF tests are data-aware: they skip with explicit reasons when the stack has no indexed books, no meaningful author facet, or no multi-page PDF rather than failing for missing sample data.
+- The current PDF viewer is an iframe wrapper with no custom page controls, so Playwright page-navigation coverage is implemented via standard PDF fragment navigation (`#page=2`) after opening the modal.
+
 ### 2026-03-13 — Metadata extraction test design
 
 **Real library patterns discovered from `/home/jmservera/booklibrary`:**
