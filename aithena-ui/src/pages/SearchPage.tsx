@@ -1,22 +1,22 @@
-import { useState, FormEvent } from "react";
-import { useSearch, BookResult } from "../hooks/search";
-import { SearchFilters } from "../hooks/search";
-import FacetPanel from "../Components/FacetPanel";
-import ActiveFilters from "../Components/ActiveFilters";
-import BookCard from "../Components/BookCard";
-import Pagination from "../Components/Pagination";
-import PdfViewer from "../Components/PdfViewer";
+import { useState, FormEvent } from 'react';
+import { useSearch, BookResult } from '../hooks/search';
+import { SearchFilters } from '../hooks/search';
+import FacetPanel from '../Components/FacetPanel';
+import ActiveFilters from '../Components/ActiveFilters';
+import BookCard from '../Components/BookCard';
+import Pagination from '../Components/Pagination';
+import PdfViewer from '../Components/PdfViewer';
 
 const SORT_OPTIONS = [
-  { value: "score desc", label: "Relevance" },
-  { value: "year_i desc", label: "Year (newest)" },
-  { value: "year_i asc", label: "Year (oldest)" },
-  { value: "title_s asc", label: "Title (A–Z)" },
-  { value: "author_s asc", label: "Author (A–Z)" },
+  { value: 'score desc', label: 'Relevance' },
+  { value: 'year_i desc', label: 'Year (newest)' },
+  { value: 'year_i asc', label: 'Year (oldest)' },
+  { value: 'title_s asc', label: 'Title (A–Z)' },
+  { value: 'author_s asc', label: 'Author (A–Z)' },
 ];
 
 function SearchPage() {
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState('');
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
   const {
     searchState,
@@ -43,7 +43,7 @@ function SearchPage() {
   }
 
   const hasActiveFilters = Object.values(searchState.filters).some(
-    (v) => v !== undefined && v !== ""
+    (v) => v !== undefined && v !== ''
   );
 
   const totalPages = Math.ceil(total / searchState.limit);
@@ -51,11 +51,7 @@ function SearchPage() {
   return (
     <div className="search-layout">
       <aside className="sidebar">
-        <FacetPanel
-          facets={facets}
-          filters={searchState.filters}
-          onFilterChange={setFilter}
-        />
+        <FacetPanel facets={facets} filters={searchState.filters} onFilterChange={setFilter} />
       </aside>
 
       <main className="search-main">
@@ -70,7 +66,7 @@ function SearchPage() {
               aria-label="Search query"
             />
             <button className="search-btn" type="submit" disabled={loading}>
-              {loading ? "…" : "Search"}
+              {loading ? '…' : 'Search'}
             </button>
           </form>
 
@@ -78,8 +74,8 @@ function SearchPage() {
             <div className="search-controls">
               <span className="search-result-count">
                 {loading
-                  ? "Searching…"
-                  : `${total.toLocaleString()} result${total !== 1 ? "s" : ""} for "${searchState.query}"`}
+                  ? 'Searching…'
+                  : `${total.toLocaleString()} result${total !== 1 ? 's' : ''} for "${searchState.query}"`}
               </span>
               <div className="search-sort-limit">
                 <label htmlFor="sort-select" className="control-label">
@@ -136,14 +132,12 @@ function SearchPage() {
           {!loading && !error && searchState.query && results.length === 0 && (
             <div className="search-empty">
               No results found for "{searchState.query}"
-              {hasActiveFilters && " with the selected filters"}.
+              {hasActiveFilters && ' with the selected filters'}.
             </div>
           )}
 
           {!searchState.query && !loading && (
-            <div className="search-empty">
-              Enter a search term above to find books.
-            </div>
+            <div className="search-empty">Enter a search term above to find books.</div>
           )}
 
           {results.map((book) => (
@@ -171,12 +165,7 @@ function SearchPage() {
         )}
       </main>
 
-      {selectedBook && (
-        <PdfViewer
-          result={selectedBook}
-          onClose={() => setSelectedBook(null)}
-        />
-      )}
+      {selectedBook && <PdfViewer result={selectedBook} onClose={() => setSelectedBook(null)} />}
     </div>
   );
 }

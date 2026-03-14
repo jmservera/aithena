@@ -1,12 +1,12 @@
-import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { fetchEventSource } from '@microsoft/fetch-event-source';
 
-import { buildApiUrl } from "../api";
+import { buildApiUrl } from '../api';
 import {
   CreateCompletionRequest,
   defaultCreateCompletionRequest,
-} from "./types/CreateCompletionRequest";
+} from './types/CreateCompletionRequest';
 
-const serverBaseURL = buildApiUrl("/v1/question/");
+const serverBaseURL = buildApiUrl('/v1/question/');
 
 type MessageHandler = (data: unknown) => void;
 
@@ -17,7 +17,7 @@ export type ChatMessageProps = {
 };
 
 export const defaultChatMessageProps: ChatMessageProps = {
-  message: "",
+  message: '',
   limit: 8,
   model_properties: defaultCreateCompletionRequest,
 };
@@ -42,11 +42,11 @@ export async function ChatMessage(
   await fetchEventSource(serverBaseURL, {
     signal,
     openWhenHidden: true,
-    method: "POST",
+    method: 'POST',
     headers: {
-      Accept: "text/event-stream",
-      "Content-Type": "application/json",
-      "X-Accel-Buffering": "no",
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+      'X-Accel-Buffering': 'no',
     },
     body: msg,
     async onopen(res) {
@@ -55,7 +55,7 @@ export async function ChatMessage(
       }
 
       if (res.status >= 400 && res.status < 500 && res.status !== 429) {
-        console.log("Client-side error", res);
+        console.log('Client-side error', res);
       }
     },
     onmessage(event) {
@@ -71,10 +71,10 @@ export async function ChatMessage(
       }
     },
     onclose() {
-      console.log("Connection closed by the server");
+      console.log('Connection closed by the server');
     },
     onerror(err) {
-      console.log("There was an error from server", err);
+      console.log('There was an error from server', err);
     },
   });
 }

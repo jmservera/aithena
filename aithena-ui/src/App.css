@@ -64,7 +64,9 @@
   font-size: 0.9em;
   font-weight: 500;
   border-bottom: 3px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
 }
 
@@ -370,7 +372,9 @@
   cursor: pointer;
   font-size: 0.82em;
   padding: 2px 8px;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .clear-all-filters:hover {
@@ -496,7 +500,9 @@
   cursor: pointer;
   font-size: 0.82em;
   white-space: nowrap;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 
@@ -533,7 +539,9 @@
   height: 34px;
   padding: 0 8px;
   font-size: 0.9em;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
 .pagination-btn:hover:not(:disabled) {
@@ -630,7 +638,9 @@
   padding: 4px 8px;
   border-radius: 4px;
   flex-shrink: 0;
-  transition: color 0.15s, background-color 0.15s;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
 }
 
 .pdf-viewer-close:hover {

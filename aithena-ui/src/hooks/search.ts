@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from 'react';
 
-import { buildApiUrl } from "../api";
+import { buildApiUrl } from '../api';
 
-const searchBaseURL = buildApiUrl("/v1/search");
+const searchBaseURL = buildApiUrl('/v1/search');
 
 export interface BookResult {
   id: string;
@@ -54,16 +54,15 @@ export interface SearchState {
 }
 
 const defaultSearchState: SearchState = {
-  query: "",
+  query: '',
   filters: {},
   page: 1,
   limit: 10,
-  sort: "score desc",
+  sort: 'score desc',
 };
 
 export function useSearch() {
-  const [searchState, setSearchState] =
-    useState<SearchState>(defaultSearchState);
+  const [searchState, setSearchState] = useState<SearchState>(defaultSearchState);
   const [results, setResults] = useState<BookResult[]>([]);
   const [facets, setFacets] = useState<FacetGroups>({});
   const [total, setTotal] = useState(0);
@@ -83,17 +82,15 @@ export function useSearch() {
 
     try {
       const params = new URLSearchParams();
-      params.set("q", state.query);
-      params.set("limit", state.limit.toString());
-      params.set("page", state.page.toString());
-      params.set("sort", state.sort);
+      params.set('q', state.query);
+      params.set('limit', state.limit.toString());
+      params.set('page', state.page.toString());
+      params.set('sort', state.sort);
 
-      if (state.filters.author) params.set("fq_author", state.filters.author);
-      if (state.filters.category)
-        params.set("fq_category", state.filters.category);
-      if (state.filters.language)
-        params.set("fq_language", state.filters.language);
-      if (state.filters.year) params.set("fq_year", state.filters.year);
+      if (state.filters.author) params.set('fq_author', state.filters.author);
+      if (state.filters.category) params.set('fq_category', state.filters.category);
+      if (state.filters.language) params.set('fq_language', state.filters.language);
+      if (state.filters.year) params.set('fq_year', state.filters.year);
 
       const response = await fetch(`${searchBaseURL}?${params.toString()}`);
       if (!response.ok) {
@@ -104,7 +101,7 @@ export function useSearch() {
       setFacets(data.facets ?? {});
       setTotal(data.total ?? 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed");
+      setError(err instanceof Error ? err.message : 'Search failed');
       setResults([]);
       setFacets({});
       setTotal(0);
@@ -121,16 +118,13 @@ export function useSearch() {
     setSearchState((prev) => ({ ...prev, query, page: 1 }));
   }, []);
 
-  const setFilter = useCallback(
-    (key: keyof SearchFilters, value: string | undefined) => {
-      setSearchState((prev) => ({
-        ...prev,
-        page: 1,
-        filters: { ...prev.filters, [key]: value },
-      }));
-    },
-    []
-  );
+  const setFilter = useCallback((key: keyof SearchFilters, value: string | undefined) => {
+    setSearchState((prev) => ({
+      ...prev,
+      page: 1,
+      filters: { ...prev.filters, [key]: value },
+    }));
+  }, []);
 
   const clearFilters = useCallback(() => {
     setSearchState((prev) => ({ ...prev, page: 1, filters: {} }));
