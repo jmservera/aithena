@@ -10,6 +10,20 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Detects language** automatically using `langid`
 - **Prepares for semantic search** with pre-extracted embeddings (Phase 2+)
 
+## Features
+
+- **Search page** for keyword search across indexed title, author, and full-text content
+- **Facet filtering** by author, category, language, and year
+- **PDF viewer** that opens from search results and jumps to the matched page when page metadata exists
+- **Status tab** with indexing progress plus Solr, Redis, and RabbitMQ health, refreshing every 10 seconds
+- **Stats tab** with indexed-book totals, page-count statistics, and breakdowns by language, author, year, and category
+
+## Documentation
+
+- [User Manual](docs/user-manual.md)
+- [Admin Manual](docs/admin-manual.md)
+- [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
+
 ## Architecture
 
 ### Core Stack
@@ -48,19 +62,13 @@ Frontend / Search API
 
 ### 1. Configure Book Library Path
 
-Edit `docker-compose.yml`, update the `document-data` volume:
+Set the host library directory before you start the stack:
 
-```yaml
-volumes:
-  document-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/path/to/your/booklibrary"  # ← Change this
+```bash
+export BOOKS_PATH=/absolute/path/to/your/booklibrary
 ```
 
-Default: `/home/jmservera/booklibrary`
+`docker-compose.yml` binds that host path into the shared `document-data` volume. If `BOOKS_PATH` is not set, the stack falls back to `/data/booklibrary`.
 
 ### 2. Start All Services
 
@@ -72,24 +80,22 @@ This starts:
 - Redis, RabbitMQ (messaging layer)
 - ZooKeeper ensemble (3 nodes)
 - SolrCloud cluster (3 nodes)
+- `solr-init`, which uploads the `books` configset and creates the collection automatically
 - Document Lister, Document Indexer, Solr Search API, Embeddings Server
 - nginx + Certbot (TLS)
-- Admin UI, frontend placeholders
+- Admin UI and frontend
 
-### 3. Create Books Collection
-
-Upload the Solr configset to the cluster:
+### 3. Confirm Solr Bootstrap
 
 ```bash
-cd solr/books
-# Upload config to ZooKeeper (requires Solr CLI tools installed)
-# Or use the Solr Web UI to create collection: http://localhost:8983
+docker compose ps
+docker compose logs -f solr-init
 ```
 
-Once the `books` collection is created:
-- Document Lister automatically discovers PDFs in `/home/jmservera/booklibrary`
+Once `solr-init` completes:
+- Document Lister automatically discovers PDFs in `BOOKS_PATH`
 - Document Indexer consumes them from RabbitMQ and indexes into Solr
-- Track progress in Redis (`redis-cli`)
+- Track progress in Redis (`redis-cli`) and the Status tab
 
 ### 4. Access Interfaces
 
@@ -218,8 +224,8 @@ Current branch: `jmservera/solrstreamlitui`
 |----------|---------|-------------|
 | `POLL_INTERVAL` | `60` | Seconds between library scans. New and modified files are re-queued; unchanged processed files are skipped. |
 | `BASE_PATH` | `/data/documents/` | Root directory to scan for documents. |
-| `DOCUMENT_WILDCARD` | `*` | Glob pattern for files to consider. |
-| `QUEUE_NAME` | `new_documents` | RabbitMQ queue name for discovered documents. |
+| `DOCUMENT_WILDCARD` | `*.pdf` | Glob pattern for files to consider. Non-PDF files are skipped explicitly. |
+| `QUEUE_NAME` | `shortembeddings` | RabbitMQ queue name for discovered documents in the current Docker Compose stack. |
 
 ### Solr returns empty results?
 - Check collection was created: `http://localhost:8983/solr/#/collections`
