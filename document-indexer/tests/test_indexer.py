@@ -22,7 +22,8 @@ from document_indexer.__main__ import (
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
-FAKE_TEXT = " ".join(["word"] * 500)
+FAKE_PAGES = [(1, " ".join(["word"] * 500))]
+FAKE_PAGE_CHUNKS = [("chunk1", 1, 1), ("chunk2", 1, 2)]
 FAKE_EMBEDDING = [0.1] * 512
 
 
@@ -98,6 +99,21 @@ class TestBuildChunkDoc:
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
         assert doc["year_i"] == 1984
 
+    def test_page_fields_included_when_provided(self, metadata_stub):
+        doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub, page_start=3, page_end=5)
+        assert doc["page_start_i"] == 3
+        assert doc["page_end_i"] == 5
+
+    def test_page_fields_absent_when_not_provided(self, metadata_stub):
+        doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
+        assert "page_start_i" not in doc
+        assert "page_end_i" not in doc
+
+    def test_page_start_equals_page_end_for_single_page_chunk(self, metadata_stub):
+        doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub, page_start=2, page_end=2)
+        assert doc["page_start_i"] == 2
+        assert doc["page_end_i"] == 2
+
 
 # ---------------------------------------------------------------------------
 # index_chunks
@@ -120,11 +136,11 @@ class TestIndexChunks:
     def test_returns_chunk_count(
         self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
     ):
-        mock_extract_text.return_value = FAKE_TEXT
+        mock_extract_text.return_value = FAKE_PAGES
         mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
         mock_post.return_value = self._mock_response()
 
-        with patch("document_indexer.__main__.chunk_text", return_value=["chunk1", "chunk2"]):
+        with patch("document_indexer.__main__.chunk_text_with_pages", return_value=FAKE_PAGE_CHUNKS):
             count = index_chunks(pdf_file, "parent_id", metadata_stub)
 
         assert count == 2
@@ -135,13 +151,13 @@ class TestIndexChunks:
     def test_posts_json_docs_to_solr(
         self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
     ):
-        mock_extract_text.return_value = FAKE_TEXT
-        chunks = ["chunk one", "chunk two"]
+        mock_extract_text.return_value = FAKE_PAGES
+        page_chunks = [("chunk one", 1, 1), ("chunk two", 1, 2)]
         embeddings = [[0.1] * 512, [0.2] * 512]
         mock_get_embeddings.return_value = embeddings
         mock_post.return_value = self._mock_response()
 
-        with patch("document_indexer.__main__.chunk_text", return_value=chunks):
+        with patch("document_indexer.__main__.chunk_text_with_pages", return_value=page_chunks):
             index_chunks(pdf_file, "pid", metadata_stub)
 
         mock_post.assert_called_once()
@@ -155,7 +171,7 @@ class TestIndexChunks:
     def test_empty_text_returns_zero_without_calling_embeddings(
         self, mock_extract_text, pdf_file, metadata_stub
     ):
-        mock_extract_text.return_value = ""
+        mock_extract_text.return_value = []
         with patch("document_indexer.__main__.get_embeddings") as mock_emb:
             count = index_chunks(pdf_file, "pid", metadata_stub)
         assert count == 0
@@ -167,10 +183,10 @@ class TestIndexChunks:
     def test_propagates_embedding_error(
         self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
     ):
-        mock_extract_text.return_value = FAKE_TEXT
+        mock_extract_text.return_value = FAKE_PAGES
         mock_get_embeddings.side_effect = RuntimeError("embedding server down")
 
-        with patch("document_indexer.__main__.chunk_text", return_value=["chunk"]):
+        with patch("document_indexer.__main__.chunk_text_with_pages", return_value=[("chunk", 1, 1)]):
             with pytest.raises(RuntimeError, match="embedding server down"):
                 index_chunks(pdf_file, "pid", metadata_stub)
 
@@ -182,14 +198,35 @@ class TestIndexChunks:
     def test_propagates_solr_error(
         self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
     ):
-        mock_extract_text.return_value = FAKE_TEXT
+        mock_extract_text.return_value = FAKE_PAGES
         mock_get_embeddings.return_value = [FAKE_EMBEDDING]
         mock_post.return_value = self._mock_response(500, "Solr error")
         mock_post.return_value.raise_for_status.side_effect = Exception("500 Server Error")
 
-        with patch("document_indexer.__main__.chunk_text", return_value=["chunk"]):
+        with patch("document_indexer.__main__.chunk_text_with_pages", return_value=[("chunk", 1, 1)]):
             with pytest.raises(Exception, match="500 Server Error"):
                 index_chunks(pdf_file, "pid", metadata_stub)
+
+    @patch("document_indexer.__main__.requests.post")
+    @patch("document_indexer.__main__.get_embeddings")
+    @patch("document_indexer.__main__.extract_pdf_text")
+    def test_page_numbers_propagated_to_solr_docs(
+        self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
+    ):
+        mock_extract_text.return_value = FAKE_PAGES
+        page_chunks = [("chunk one", 2, 3), ("chunk two", 3, 5)]
+        mock_get_embeddings.return_value = [[0.1] * 512, [0.2] * 512]
+        mock_post.return_value = self._mock_response()
+
+        with patch("document_indexer.__main__.chunk_text_with_pages", return_value=page_chunks):
+            index_chunks(pdf_file, "pid", metadata_stub)
+
+        _, kwargs = mock_post.call_args
+        docs = kwargs["json"]
+        assert docs[0]["page_start_i"] == 2
+        assert docs[0]["page_end_i"] == 3
+        assert docs[1]["page_start_i"] == 3
+        assert docs[1]["page_end_i"] == 5
 
 
 # ---------------------------------------------------------------------------

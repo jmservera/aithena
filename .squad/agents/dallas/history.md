@@ -39,3 +39,12 @@
 - Paradigm shift from chat to search requires component rewrite, not refactor
 - Full plan in `.squad/decisions/archive/2026-03-13-ripley-architecture-plan.md`
 
+### 2026-03-14T15:50 — Fixed broken search UI after merged frontend changes
+
+- The main runtime failure was API URL resolution: `aithena-ui/package.json` built with `VITE_API_URL="."`, which made search requests hit the wrong origin and return `404` in the browser.
+- Added `aithena-ui/src/api.ts` to centralize API/document URL building, with localhost-aware fallback to `http://localhost:8080` during Vite dev and relative paths for proxied deployments.
+- Updated `src/hooks/search.tsx` and `src/Components/PdfViewer.tsx` to use the shared URL helpers so both search requests and PDF iframe URLs resolve correctly.
+- Added Vite dev-server proxy rules for `/v1` and `/documents`, and removed hardcoded `VITE_API_URL` values from package scripts so dev/build behave consistently.
+- Cleaned leftover chat-era TypeScript issues by renaming non-JSX files from `.tsx` to `.ts` and fixing lint errors in old helper/components; `npm run build` and `npm run lint` now pass.
+- Smoke tested at `http://localhost:5173`: search for `balearics` returned 22 results with facets/pagination, and the PDF viewer opened with an iframe-backed dialog.
+

@@ -2,6 +2,14 @@
 
 You are working on a project that uses **Squad**, an AI team framework. When picking up issues autonomously, follow these guidelines.
 
+## Branching Strategy
+
+- **All PRs must target the `dev` branch** — never target `main` directly.
+- `dev` is the active development branch where all squad and copilot work lands.
+- `main` is production-ready and only receives merges from `dev` at phase boundaries.
+- Only Ripley (Lead) or Juanma (Product Owner) can merge `dev` → `main` and create release tags.
+- Feature branches: use `squad/{issue-number}-{slug}` or `copilot/{slug}` convention.
+
 ## Team Context
 
 Before starting work on any issue:

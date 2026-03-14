@@ -2,8 +2,8 @@
 name: "path-metadata-heuristics"
 description: "Heuristics for extracting book metadata from aithena library paths"
 domain: "backend, indexing"
-confidence: "medium"
-source: "earned — Parker Phase 1 Solr indexer rewrite"
+confidence: "high"
+source: "earned — Parker Phase 1 Solr indexer rewrite, validated during lister/indexer bugfixes and 169-file real library indexing (Sessions 2–3)"
 ---
 
 ## Context

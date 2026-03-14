@@ -1,10 +1,13 @@
 FROM python:3.11-alpine
 ENV PYTHONUNBUFFERED=1
 
-WORKDIR /app
-COPY requirements.txt .
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-RUN pip install -r requirements.txt
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen --no-dev --no-install-project
+
 COPY . .
 
 ENV RABBITMQ_HOST="localhost"
@@ -14,5 +17,5 @@ ENV REDIS_PORT=6379
 ENV DOCUMENT_WILDCARD="*.pdf"
 ENV QUEUE_NAME="new_documents"
 
-CMD ["python","-m","document_lister"]
+CMD ["uv", "run", "python", "-m", "document_lister"]
 

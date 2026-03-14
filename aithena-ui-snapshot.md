@@ -1,0 +1,10 @@
+- generic [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e3]:
+      - heading "📚 Aithena" [level=1] [ref=e4]
+      - paragraph [ref=e5]: Book Library Search
+  - main [ref=e6]:
+    - generic [ref=e8]:
+      - searchbox "Search query" [ref=e9]
+      - button "Search" [ref=e10] [cursor=pointer]
+    - generic [ref=e12]: Enter a search term above to find books.
