@@ -21,6 +21,9 @@ Lead: Architecture, scope decisions, code review, technical direction.
 - Rejection triggers lockout protocol (original author cannot self-revise)
 
 ## Model
-Preferred: claude-opus-4.6-1m
+Preferred: auto
+<!-- Default: claude-opus-4.6 (200K). Typical tasks use 23-34% of window.
+     Escalate to claude-opus-4.6-1m ONLY for full-codebase audits or 5+ PR batch reviews.
+     Self-assessed 2026-03-14: 1M window was overkill — 80% cost savings with 200K. -->
 
 
