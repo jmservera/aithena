@@ -418,3 +418,53 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 **Charter audit:** Brett charter trimmed from 1534B to ~1280B (consolidated 8 responsibilities → 4 ownership bullets). Others within budget. Copilot charter exempt per reskill rules.
 
 **Deliverable:** `.squad/decisions/inbox/ripley-retro-v03.md` written with full retro + action items.
+
+### 2026-03-14 — Strategic Planning: PRDs, TDD Specs, Task Decomposition
+
+**Context:** Juanma requested next-step planning with PRDs, task decomposition, and TDD enforcement.
+
+**Assessment — Current state:**
+- 5 milestones: v0.3.0 (6 open), v0.4.0 (7 open), v0.5.0 (3 open), v0.6.0 (19 open), v1.0.0 (2 open)
+- 8 open PRs: 2 READY (#132, #119), 6 DRAFT
+- v0.3.0 is all cleanup (lint, docs, UV) — no feature work
+- v0.4.0 has P4 UI spec already written, backend endpoints partially in PRs
+
+**Deliverables created:**
+
+1. **PRD: v0.3.0 Close-Out** (`.squad/decisions/inbox/ripley-prd-v030-closeout.md`)
+   - 6 independent cleanup tasks, all parallelizable
+   - Acceptance criteria for each
+   - Close-out protocol: CI green → tag v0.3.0 → merge to main → release
+
+2. **PRD: v0.4.0 Dashboard & Polish** (`.squad/decisions/inbox/ripley-prd-v040-dashboard.md`)
+   - 6 user stories (tab nav, library, status, stats, tests, lint)
+   - Clean Architecture layers defined for both backend and frontend
+   - 9 implementation tasks with full TDD specs
+   - 3-phase implementation order with dependency tracking
+   - Maps to existing PRs (#119, #123, #127, #128)
+
+3. **TDD + Clean Code Skill** (`.squad/skills/tdd-clean-code/SKILL.md`)
+   - Red-Green-Refactor cycle with rules
+   - Clean Code principles (naming, functions, error handling)
+   - Clean Architecture for Python/FastAPI and React/TypeScript
+   - Test structure (Arrange-Act-Assert, Given-When-Then)
+   - Anti-patterns to avoid (testing and code)
+
+4. **v0.4.0 Task Decomposition** (`.squad/decisions/inbox/ripley-v040-task-decomposition.md`)
+   - 9 tasks with full TDD specs (test names, assertions, implementation steps)
+   - Agent assignments (Parker: 4 backend, Dallas: 4 frontend, Lambert: 1 testing)
+   - Clean Architecture layer per task
+   - Interface contracts defined
+
+**Task counts per milestone:**
+- v0.3.0: 6 issues (all cleanup, no new tasks needed)
+- v0.4.0: 9 TDD tasks decomposed (maps to 7 existing + 2 new issues)
+- v0.5.0: 3 issues (deferred — page search chain, blocked on v0.4.0)
+- v0.6.0: 19 issues (security — deferred to Kane's audit completion)
+- v1.0.0: 2 issues (deferred — PDF upload, needs full pipeline)
+
+**Key decisions:**
+- TDD is mandatory for all v0.4.0 work — skill created and linked in PRDs
+- Clean Architecture layers formalized: Presentation → Application → Domain → Infrastructure
+- Frontend follows: Pages → Components → Hooks → API pattern
+- Library browser endpoint is new work (not in current backlog) — needs issue creation
