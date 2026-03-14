@@ -505,3 +505,24 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 - **No local ruff config added** — respects root `ruff.toml` ✓
 - **Verdict:** REQUEST CHANGES — wrong target branch + stale branch. Code itself is clean; needs retarget to `dev`, rebase, and re-run ruff post-rebase.
 - **Pattern note:** 6th PR in this session with wrong target branch. This is a systematic copilot agent configuration issue.
+
+### 2026-03-14 — Branch Repair Strategy for 9 Broken @copilot PRs
+
+**Context:** After reviewing all 9 broken PRs from @copilot (all with "changes requested"), analyzed git divergence, code value, and repair feasibility.
+
+**Key findings:**
+- All 9 PRs share the root cause: @copilot branched from `main` or old `jmservera/solrstreamlitui` instead of `dev`
+- Branches are 28 commits behind `dev` (PR #138 is 126 behind)
+- Most diff volume is ghost diffs from stale branches, not actual feature code
+- Several PRs duplicate work already on `dev` (ruff config, uv migrations, stats endpoint)
+
+**Triage outcome:**
+- **CLOSE 5 PRs:** #143 (redundant ruff), #141 (redundant uv CI), #128 (stale status tab), #127 (stale stats tab), #119 (scope bloat status endpoint)
+- **CHERRY-PICK 2 PRs:** #140 (artifact cleanup — small, targeted), #138 (PDF page nav — after #137 lands)
+- **REWRITE 2 from scratch:** #145 (just run ruff on fresh branch), #144 (just run eslint/prettier on fresh branch)
+
+**Critical dependency:** PR #137 (approved, page ranges) must rebase and merge first — it unblocks #138 and adds real search value.
+
+**Total salvageable code across all 9 PRs: ~200 lines.** Most effort should go into prevention (branch protection, explicit base-branch instructions) rather than repair.
+
+**Decision written to:** `.squad/decisions/inbox/ripley-branch-repair-strategy.md`
