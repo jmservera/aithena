@@ -2083,3 +2083,97 @@ When a running stack is available, capture and replace the placeholder images in
 3. Scope freeze: v0.5 = #41 (frontend tests) + #163 (search mode selector) + #47 (similar books UI). No additions.
 
 **Why:** Juanma stepped away; applied Ripley's recommendations as sensible defaults. Enables unblocked copilot work on Batch 1 issues while maintaining quality gates.
+
+---
+
+## 2026-03-14T23:04: Port Security Hardening Directive
+
+**By:** jmservera (via Copilot coordinator)  
+**What:** Production should only publish nginx ports (80/443). All other container ports (Solr, Redis, RabbitMQ, ZooKeeper, etc.) should use `expose:` only (internal network). Keep port publishing available for development/debugging via docker-compose.override.yml.  
+**Why:** User request — security hardening. Services behind nginx gateway don't need host-level port bindings in production. Reduces attack surface for production-style deployments while keeping local debugging workflow intact.
+
+---
+
+## 2026-03-14T23:10: Streamlit UI Roadmap (v0.5 → v0.6)
+
+**By:** jmservera (via Copilot coordinator)  
+**What:**
+- **v0.5:** Add an "Admin" tab in the React UI that embeds the Streamlit app (currently hidden behind nginx `/admin/streamlit/` path).
+- **v0.6:** Migrate all Streamlit functionality (document management, requeue, queue depth monitoring) into native React components, then remove Streamlit.
+
+**Why:** User request — Streamlit is hidden and not discoverable. Short-term: make admin features accessible. Long-term: consolidate into a single unified UI.
+
+---
+
+## 2026-03-14T23:22: Release Gate Process — Milestone Cleanup
+
+**By:** jmservera (via Copilot coordinator)  
+**What:** Never publish a release with open milestone issues. Before Newt (Release Lead) approves a release, ALL issues labeled with that release milestone must be either closed or explicitly moved to a later milestone. No exceptions.  
+**Why:** v0.4.0 was released with #41 still open on the v0.4 milestone. Juanma caught the gap in post-release audit. This rule prevents it from happening again.
+
+---
+
+## 2026-03-14T23:20: Brett — Production vs Development Port Publishing (Implementation Complete)
+
+**Date:** 2026-03-14  
+**By:** Copilot working as Brett  
+**Status:** ✅ Committed (e3001c8)
+
+**What changed:**
+- `docker-compose.yml` now publishes host ports only for `nginx` (`80`, `443`).
+- All other formerly published service ports were moved behind the Compose network with `expose:`.
+- New `docker-compose.override.yml` restores direct host access for local debugging (`redis`, `rabbitmq`, `solr-search`, `streamlit-admin`, `redis-commander`, `zoo1`-`zoo3`, `solr`-`solr3`, and `embeddings-server`).
+
+**Ingress audit:**
+- nginx already proxies the public UI (`/`), search API (`/v1/`, `/documents/`), Solr admin (`/admin/solr/` and `/solr/`), RabbitMQ management (`/admin/rabbitmq/`), Streamlit admin (`/admin/streamlit/`), and Redis Commander (`/admin/redis/`).
+- Redis, RabbitMQ AMQP (`5672`), ZooKeeper, the secondary Solr nodes, and the embeddings server remain internal-only in production.
+
+**Notes for teammates:**
+- Use `docker compose -f docker-compose.yml up` for nginx-only production exposure.
+- Use plain `docker compose up` for the usual local stack with debug ports restored automatically.
+- The embeddings server keeps a dev host port on `8085` because external local tools may still call it directly.
+
+---
+
+## 2026-03-14T23:20: Kane — Port Security Audit (Risk Assessment)
+
+**Date:** 2026-03-14  
+**Requested by:** jmservera  
+**Author:** Kane (Security Engineer)  
+**Status:** ✅ Completed — Risk matrix produced. Key findings filed separately below.
+
+**Summary:** The existing Compose stack exposes multiple internal control-plane services directly on the host (Redis, RabbitMQ broker + management UI, ZooKeeper, all three Solr nodes) plus nginx exposes admin paths without any authentication layer. This expands the blast radius far beyond the frontend to include queue state, search indices, and cluster metadata.
+
+**HIGH RISK findings:**
+| Service | Host binding | Risk |
+|---------|--------------|------|
+| redis | `6379:6379` | Full read/write/delete access to queue/indexing state |
+| rabbitmq | `5672:5672` | Queue injection, message replay, pipeline disruption |
+| rabbitmq | `15672:15672` | Broker administration if default `guest/guest` creds work |
+| redis-commander | `/admin/redis/` (nginx) | One-click browsing/edit/deletion of all Redis data |
+| solr | `8983`, `8984`, `8985` | Full search/index admin, collection CRUD, schema inspection |
+| zoo1/zoo2/zoo3 | `2181`, `2182`, `2183` | SolrCloud coordination metadata, cluster tampering |
+| zoo1 | `18080:8080` | ZooKeeper admin visibility |
+
+**MEDIUM RISK findings:**
+| Service | Host binding | Risk |
+|---------|--------------|------|
+| solr-search | `8080:8080` | Unauthenticated read access to indexed metadata, PDFs |
+| nginx | `80:80`, `443:443` | Single public entry point with zero auth on `/admin/*` paths |
+| streamlit-admin | `/admin/streamlit/` (nginx) | Operational manipulation of indexing workflow, queue visibility |
+
+**Recommended mitigations:**
+1. Add authentication in front of `/admin/*` immediately (minimum: nginx `auth_basic`; better: OAuth2/OIDC).
+2. Add real service credentials and disable insecure defaults (RabbitMQ, Redis, Solr).
+3. Separate public and operator surfaces; treat admin paths as private with auth + IP allowlisting.
+4. Protect document access explicitly if PDFs are not meant to be public.
+5. Add rate limiting/timeouts to `solr-search` and `embeddings-server` to prevent abuse.
+6. Remove or isolate ZooKeeper from non-admin networks.
+7. Finish TLS config or stop publishing `443` until it is real.
+8. Move operational secrets out of code defaults (remove `guest/guest` fallback).
+
+**Services that MUST add authentication:**
+- `streamlit-admin`, `redis-commander`, Solr admin/API, RabbitMQ management UI/API, public `/documents/` (if private).
+
+**Bottom line:** Port reduction (decided above) is the first fix, but must be paired with service auth, admin-path auth, and abuse controls.
+
