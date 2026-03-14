@@ -10,6 +10,7 @@
 
 ## Learnings
 - 2026-03-14: Extracted the SolrCloud Docker operations research into `.squad/skills/solrcloud-docker-operations/SKILL.md` so other agents can reuse the runbooks and hardening guidance.
+- 2026-03-14: Removing dead qdrant/llama services requires cleaning both `docker-compose.yml` service stubs and helper scripts like `buildall.sh`; the README was already free of those exact service-directory references.
 
 ## SolrCloud Docker Operations Reference
 
