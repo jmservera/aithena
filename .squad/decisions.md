@@ -1709,3 +1709,53 @@ salvageable code is small — maybe 200 lines of actual value across all 9 PRs.
 Most of the "work" in these PRs is ghost diffs from stale branches. The fastest
 path to value is: rebase #137 (approved), run formatters on fresh branches, and
 close everything else.
+
+---
+
+# Post-Cleanup Issue Reassignment
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-14  
+**Status:** IMPLEMENTED  
+**Context:** After closing 9 broken @copilot PRs and adding scope fences, reassigned all 9 affected issues with fresh labels.
+
+## Closed Issues (PRs merged)
+
+| Issue | PR | Status |
+|-------|----|--------|
+| #96 — DOC-1: Document uv migration | #142 | ✅ Closed |
+| #134 — Return page numbers in search results | #137 | ✅ Closed |
+
+## @copilot Batch 1 (3 issues — sequential, simplest first)
+
+| Issue | Title | Rating | Rationale |
+|-------|-------|--------|-----------|
+| #139 | Clean up smoke test artifacts | 🟢 | Pure file deletion + .gitignore. Repo root only. Zero judgment. |
+| #95 | LINT-4: Replace pylint/black with ruff in document-lister | 🟢 | Single directory (document-lister/), Size S, mechanical pyproject.toml edit. |
+| #100 | LINT-6: Run eslint + prettier auto-fix on aithena-ui | 🟢 | Single directory (aithena-ui/), Size S, run linter and commit. |
+
+## Squad Member Assignments (6 issues — hold for now)
+
+| Issue | Title | Assigned To | Rating | Rationale |
+|-------|-------|-------------|--------|-----------|
+| #99 | LINT-5: Run ruff auto-fix across all Python services | 🔧 Parker | 🟡 | Size M, multi-directory. Reconsider for @copilot after batch 1. |
+| #114 | P4: Add /v1/status/ endpoint | 🔧 Parker | 🔴 | Multi-service integration (Solr + Redis + RabbitMQ). Needs backend expertise. |
+| #135 | Open PDF viewer at specific page | ⚛️ Dallas | 🟡 | UI feature with backend dependency. Needs UX judgment. |
+| #122 | P4: Build Status tab in React UI | ⚛️ Dallas | 🟡 | Blocked on #120 + #114. Pick up after deps land. |
+| #121 | P4: Build Stats tab in React UI | ⚛️ Dallas | 🟡 | Blocked on #120. Pick up after tab nav lands. |
+| #92 | UV-8: Update buildall.sh and CI for uv | ⚙️ Brett | 🟡 | CI/build infra, blocked on UV-1 through UV-7. |
+
+## Labels Removed
+
+All stale `squad:*` and `go:needs-research` labels removed from all 9 issues before reassignment.
+
+## Guardrails Applied
+
+- @copilot issues limited to 3 (batch 1) — not all at once
+- Each @copilot issue is single-directory, purely mechanical, with clear scope fences
+- Remaining issues stay with squad members until batch 1 succeeds
+- Phase 4 lesson: assign sequentially, not in parallel, to avoid PR sprawl
+
+## Note on Copilot Assignee
+
+The GitHub `Copilot` user cannot be directly assigned via `gh issue edit --add-assignee`. The `squad:copilot` label is the primary routing mechanism per team.md (`copilot-auto-assign: true`).

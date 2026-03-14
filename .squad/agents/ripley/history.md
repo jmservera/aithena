@@ -543,3 +543,19 @@ Closed-unmerged: `add-build-status-tab-component` (#128), `add-contract-tests-so
 **Preserved 5 branches:** `dev`, `main`, `jmservera/solrstreamlitui`, `copilot/jmservera-solrsearch-return-page-numbers` (PR #137), `copilot/doc-1-document-uv-migration` (PR #142).
 
 **Result:** Remote went from 28 refs → 6 refs (5 branches + HEAD). Clean slate for Phase 5 work.
+
+### 2026-03-14 — Post-Cleanup Issue Reassignment (Phase 5 Triage)
+
+**Context:** After closing 9 broken @copilot PRs, updating copilot-instructions.md with branch guardrails, and adding scope fences, performed full triage of the 9 affected issues.
+
+**Actions taken:**
+1. Closed #134 (PR #137 merged). #96 was already closed.
+2. Removed all stale `squad:*` and `go:needs-research` labels from 9 issues (#139, #135, #122, #121, #114, #95, #92, #99, #100).
+3. Assigned 3 simplest issues to `squad:copilot` (batch 1): #139 (cleanup artifacts), #95 (ruff in document-lister), #100 (eslint in aithena-ui).
+4. Assigned remaining 6 to squad members: #99 → Parker, #114 → Parker, #135 → Dallas, #122 → Dallas, #121 → Dallas, #92 → Brett.
+5. Posted triage comments on all 9 issues with rationale.
+6. Wrote decision to `.squad/decisions/inbox/ripley-issue-reassignment.md`.
+
+**Key learning:** The GitHub `Copilot` user cannot be assigned via `gh issue edit --add-assignee Copilot`. The `squad:copilot` label is the actual routing mechanism. Don't waste time trying to assign the user directly.
+
+**Sequential @copilot strategy:** Only 3 issues assigned at once (all 🟢 single-directory mechanical tasks). Remaining candidates (#99 ruff multi-service) held back for batch 2 after success is confirmed. This prevents the PR sprawl from Phase 4.
