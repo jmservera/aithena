@@ -494,3 +494,14 @@ All three PRs create `solr-search/` files from scratch. The second PR to merge w
 3. **Scope fence in issues:** Include explicit "Files you should touch" and "Files you must NOT touch" lists in issue descriptions.
 4. **Single-service PRs only:** Enforce rule: backend PRs touch only `solr-search/`, frontend PRs touch only `aithena-ui/`. Mixed PRs are auto-rejected.
 5. **Target branch validation:** Add CI check or PR template checklist item: "Base branch is `dev`".
+
+### 2026-03-14 — PR #145 Review: LINT-5 Ruff Auto-Fix (REQUEST CHANGES)
+
+**PR #145** — "[LINT-5] Run ruff auto-fix across all Python services" from @copilot (draft)
+- **Target branch:** `jmservera/solrstreamlitui` ❌ (should be `dev`)
+- **Branch status:** 6 ahead, 24 behind `dev` — stale
+- **Changes:** 23 files, +352/-167 lines. Purely lint/format fixes across all Python services.
+- **Quality of fixes:** Good. Unused imports removed (F401), wildcard imports replaced (F403/F405), unused variable `cleaned` removed (F841), duplicate `question` fn renamed to `question_post` (F811), consistent formatting applied.
+- **No local ruff config added** — respects root `ruff.toml` ✓
+- **Verdict:** REQUEST CHANGES — wrong target branch + stale branch. Code itself is clean; needs retarget to `dev`, rebase, and re-run ruff post-rebase.
+- **Pattern note:** 6th PR in this session with wrong target branch. This is a systematic copilot agent configuration issue.
