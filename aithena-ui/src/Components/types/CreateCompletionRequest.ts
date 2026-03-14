@@ -33,7 +33,18 @@ const defaultCreateCompletionRequest: CreateCompletionRequest = {
   top_k: 40,
   repeat_penalty: 1.1,
 };
-const CreateCompletionRequestDef = [
+type CreateCompletionRequestField = {
+  key: string;
+  type: string;
+  min?: number;
+  max?: number;
+  default?: number | boolean;
+  def?: number | boolean;
+  increment?: number;
+  desc?: string;
+};
+
+const CreateCompletionRequestDef: CreateCompletionRequestField[] = [
   {
     key: "max_tokens",
     type: "number",
@@ -151,4 +162,4 @@ const CreateCompletionRequestDef = [
 ];
 
 export { CreateCompletionRequestDef, defaultCreateCompletionRequest };
-export type { CreateCompletionRequest };
+export type { CreateCompletionRequest, CreateCompletionRequestField };
