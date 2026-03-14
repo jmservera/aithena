@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { resolveDocumentUrl } from "../api";
 import { BookResult } from "../hooks/search";
 
 interface PdfViewerProps {
@@ -23,7 +24,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const pdfUrl = result.document_url ?? null;
+  const pdfUrl = resolveDocumentUrl(result.document_url);
   const startPage =
     result.pages && result.pages.length > 0 ? result.pages[0] : null;
   const iframeSrc = pdfUrl
