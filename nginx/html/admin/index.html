@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aithena Admin</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      main {
+        max-width: 56rem;
+        margin: 0 auto;
+      }
+      h1 {
+        margin-bottom: 0.5rem;
+      }
+      p {
+        color: #cbd5e1;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        display: grid;
+        gap: 1rem;
+      }
+      a {
+        display: block;
+        padding: 1rem 1.25rem;
+        border-radius: 0.75rem;
+        text-decoration: none;
+        color: inherit;
+        background: rgba(30, 41, 59, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+      }
+      a:hover {
+        border-color: #38bdf8;
+      }
+      strong {
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+      code {
+        color: #7dd3fc;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Aithena admin entry point</h1>
+      <p>Operational web interfaces available behind the main nginx reverse proxy.</p>
+      <ul>
+        <li><a href="/"><strong>Main search UI</strong><span><code>/</code></span></a></li>
+        <li><a href="/admin/solr/"><strong>Solr Admin</strong><span><code>/admin/solr/</code></span></a></li>
+        <li><a href="/admin/rabbitmq/"><strong>RabbitMQ Management</strong><span><code>/admin/rabbitmq/</code></span></a></li>
+        <li><a href="/admin/streamlit/"><strong>Streamlit Admin</strong><span><code>/admin/streamlit/</code></span></a></li>
+        <li><a href="/admin/redis/"><strong>Redis Commander</strong><span><code>/admin/redis/</code></span></a></li>
+      </ul>
+    </main>
+  </body>
+</html>
