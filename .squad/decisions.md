@@ -1489,3 +1489,128 @@ When all 6 issues have merged PRs on `dev`:
 
 **Full detailed TDD specs:** See full PRD v0.4.0 above for each task's Red/Green/Refactor cycle, Clean Architecture layer assignments, and test specifications.
 
+# Phase 4 Reflection: PR Review Patterns & Process Improvements
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-14
+**Scope:** Phase 4 (v0.4.0 Dashboard & Polish) — @copilot PR batch review
+**Status:** RECOMMENDATION
+
+---
+
+## Summary
+
+Reviewed 6 open @copilot PRs for Phase 4. **1 approved, 5 rejected (17% approval rate).** The rejections cluster into 4 systemic patterns that have recurred since Phase 2. This is not a quality problem — the code inside each PR was consistently well-written. It is a **workflow and decomposition problem** that we can fix with process changes.
+
+---
+
+## PR Results
+
+| PR | Feature | Verdict | Failure Mode |
+|----|---------|---------|--------------|
+| #137 | Page ranges in search | ✅ Approved (needs rebase) | — |
+| #140 | Cleanup smoke artifacts | ❌ Rejected | Wrong target branch, broad gitignore, 88 unrelated files |
+| #128 | Status tab UI | ❌ Rejected | Stale branch — would delete router from PR #123 |
+| #138 | PDF viewer page nav | ❌ Rejected | Depends on unmerged #137, adds unused backend field |
+| #127 | Stats tab UI | ❌ Rejected | Stale branch — same as #128 |
+| #119 | Status endpoint | ❌ Rejected | Scope bloat (108 files), Redis perf issues |
+
+---
+
+## Failure Mode Analysis
+
+### 1. Stale Branches (3 PRs: #127, #128, #119)
+
+**Pattern:** Copilot branched from a commit before PR #123 (router architecture) merged. The resulting diffs carry the entire pre-router state of `App.tsx`, effectively deleting `TabNav`, `react-router-dom` routing, and all 4 page components.
+
+**History:** This is the same failure class seen in Phase 2 (PR #64 would have deleted `solr-search/` and CI workflows) and Phase 3 (PRs #68-#70 targeted `qdrant-search/` because they branched before the Solr migration). It has now occurred in **every phase** and accounts for the majority of rejections.
+
+**Root cause:** @copilot creates branches from whatever commit is current when the issue is assigned. If multiple issues are assigned simultaneously, all branches fork from the same (soon-to-be-stale) point. The agent does not rebase before opening the PR.
+
+**Fix:** Issue gating — assign issues sequentially after prerequisites merge, not in parallel batches.
+
+### 2. Scope Bloat (2 PRs: #119, #140)
+
+**Pattern:** PRs contain changes far beyond the issue scope. #119 was a backend endpoint PR that included ~500 lines of unrelated frontend code (the entire router architecture from #128, re-introduced). #140 was a 3-file chore that ballooned to 88 files from branch divergence.
+
+**Root cause:** When copilot's branch diverges from the base, it sometimes manually syncs files to resolve conflicts, creating a massive diff. The agent doesn't distinguish "files I changed" from "files that differ from base."
+
+**Fix:** Add "scope fence" to issue descriptions — explicit file/directory boundaries. Add review heuristic: any PR where `git diff --stat | wc -l` exceeds 2× the expected file count gets auto-flagged.
+
+### 3. Wrong Target Branch (1 PR: #140)
+
+**Pattern:** PR #140 targeted `jmservera/solrstreamlitui` instead of `dev`. This is documented in `.github/copilot-instructions.md`, the squad-pr-workflow skill, and the custom instructions block. The agent ignored all three.
+
+**Root cause:** The agent may have read stale instructions or inherited a branch that was tracking the old default. This same issue occurred with all 14 PRs in the Phase 3 batch (all retargeted manually).
+
+**Fix:** CI gate that rejects PRs not targeting `dev`. Belt-and-suspenders: repeat the target branch rule in the issue description itself.
+
+### 4. Dependency Ordering (1 PR: #138)
+
+**Pattern:** PR #138 adds a new `pages_i` Solr field to pass page numbers to the UI. But PR #137 (approved, not yet merged) already normalizes `page_start_i`/`page_end_i` into a `pages` API response field — making the new field redundant.
+
+**Root cause:** Issues #134 and #135 were assigned simultaneously. The agent working on #135 didn't check whether #134's solution (PR #137) was merged, and invented its own backend approach.
+
+**Fix:** Dependent issues must state the dependency explicitly: "This issue REQUIRES PR #NNN to be merged first. Do not start until that PR is on `dev`." Better yet: don't create the dependent issue until the prerequisite PR merges.
+
+---
+
+## What Went Well
+
+Despite the 17% approval rate, several things worked:
+
+1. **Code quality is consistently good.** Every rejected PR contained well-structured TypeScript/Python code. `useStatus()`, `useStats()`, `CollectionStats.tsx`, `IndexingStatus.tsx` — all properly typed, accessible, with clean component decomposition. The problem is never "bad code" — it's "good code in the wrong context."
+
+2. **PR #137 proves the model works for leaf-node issues.** It was small, independent, correctly scoped, targeted `dev`, and had comprehensive tests. The pattern: issues with no dependencies and a clear file scope produce good PRs from copilot.
+
+3. **The review process caught everything.** No regressions were introduced. The stale-branch detection heuristic (check `--stat` for unexpected deletions of recently-added files) continues to work reliably.
+
+4. **TDD specs helped.** PRs that followed the TDD specs from the v0.4.0 task decomposition had better test coverage than Phase 2-3 PRs.
+
+---
+
+## Recommendations for Phase 5
+
+### Process Changes
+
+| # | Change | Effort | Impact |
+|---|--------|--------|--------|
+| 1 | **Sequential issue assignment** — don't assign dependent issues until prerequisites merge | None | Eliminates stale branches and dependency violations |
+| 2 | **Scope fences in issue descriptions** — list "touch these files" and "do NOT touch these files" | Low | Eliminates scope bloat |
+| 3 | **Branch freshness CI check** — reject PRs >10 commits behind base | Medium | Catches stale branches before review |
+| 4 | **Single-layer PR rule** — backend PRs touch `solr-search/` only, frontend PRs touch `aithena-ui/` only | None | Prevents cross-layer contamination |
+| 5 | **Target branch in issue body** — repeat "target: dev" in every issue, not just global instructions | None | Redundancy prevents the #140 class of error |
+
+### Issue Template Additions
+
+Every issue assigned to @copilot should include:
+
+```markdown
+## Scope
+- **Target branch:** `dev`
+- **Files to modify:** [explicit list]
+- **Files NOT to modify:** [explicit exclusions]
+- **Prerequisites:** [PR #NNN must be merged first / None]
+
+## Before Starting
+1. `git fetch origin && git checkout -b squad/{issue}-{slug} origin/dev`
+2. Verify prerequisite PRs are merged: [list]
+```
+
+### Decomposition Rule
+
+**The "leaf node" principle:** Copilot produces good PRs for issues that are:
+- Independent (no unmerged prerequisites)
+- Scoped to one service/layer
+- Small (1-5 files changed)
+- Self-contained (test + implementation in same PR)
+
+Issues that violate any of these should be broken down further or assigned to squad members who can coordinate across branches.
+
+---
+
+## Conclusion
+
+The Phase 4 review results are disappointing at face value (17% approval) but instructive. The failure modes are **entirely preventable** with process discipline — none require changes to copilot's coding ability, which remains strong. The key insight: **copilot is a good coder but a poor branch manager.** Our job as a team is to structure issues so that branch management is trivial: one branch, one service, no dependencies, clear scope.
+
+If we implement the 5 recommendations above, I expect Phase 5 approval rates to exceed 80%.
