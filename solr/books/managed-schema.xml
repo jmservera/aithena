@@ -41,14 +41,11 @@
     </analyzer>
   </fieldType>
   <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
-  <!-- Phase 3: dense vector field for multilingual embeddings (ADR-001, ADR-004) -->
-  <!-- Dimension 512 matches distiluse-base-multilingual-cased-v2 / use-cmlm-multilingual -->
-  <fieldType name="knn_vector_512" class="solr.DenseVectorField" vectorDimension="512" similarityFunction="cosine"/>
-  <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
-  <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <!-- Phase 3: 512-dim dense vector field type for distiluse-base-multilingual-cased-v2 (ADR-004).
        HNSW index with cosine similarity for kNN semantic search. -->
   <fieldType name="knn_vector_512" class="solr.DenseVectorField" vectorDimension="512" similarityFunction="cosine" knnAlgorithm="hnsw"/>
+  <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
+  <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">
     <analyzer>
       <tokenizer name="keyword"/>

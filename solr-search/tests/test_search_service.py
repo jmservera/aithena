@@ -145,3 +145,74 @@ def test_build_pagination_handles_empty_results() -> None:
         "total_results": 0,
         "total_pages": 0,
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Hybrid search helpers
+# ---------------------------------------------------------------------------
+
+from search_service import (  # noqa: E402
+    build_knn_params,
+    reciprocal_rank_fusion,
+)
+
+
+def test_build_knn_params_produces_correct_solr_query() -> None:
+    vector = [0.1, 0.2, 0.3]
+    params = build_knn_params(vector, top_k=5, knn_field="book_embedding")
+
+    assert params["rows"] == 5
+    assert params["q"] == "{!knn f=book_embedding topK=5}[0.1,0.2,0.3]"
+    assert "id" in params["fl"]
+
+
+def test_build_knn_params_custom_field() -> None:
+    params = build_knn_params([0.5], top_k=3, knn_field="embedding_v")
+    assert "f=embedding_v" in params["q"]
+
+
+def test_reciprocal_rank_fusion_empty_inputs() -> None:
+    assert reciprocal_rank_fusion([], []) == []
+
+
+def test_reciprocal_rank_fusion_keyword_only() -> None:
+    docs = [{"id": "a", "score": 1.0}, {"id": "b", "score": 0.5}]
+    fused = reciprocal_rank_fusion(docs, [])
+    assert [d["id"] for d in fused] == ["a", "b"]
+
+
+def test_reciprocal_rank_fusion_semantic_only() -> None:
+    docs = [{"id": "x", "score": 0.9}, {"id": "y", "score": 0.7}]
+    fused = reciprocal_rank_fusion([], docs)
+    assert [d["id"] for d in fused] == ["x", "y"]
+
+
+def test_reciprocal_rank_fusion_shared_doc_ranks_first() -> None:
+    kw = [{"id": "shared", "score": 1.0}, {"id": "kw_only", "score": 0.5}]
+    sem = [{"id": "shared", "score": 0.9}, {"id": "sem_only", "score": 0.7}]
+    fused = reciprocal_rank_fusion(kw, sem)
+    assert fused[0]["id"] == "shared"
+
+
+def test_reciprocal_rank_fusion_scores_descending() -> None:
+    kw = [{"id": f"k{i}", "score": 1.0} for i in range(5)]
+    sem = [{"id": f"s{i}", "score": 0.9} for i in range(5)]
+    fused = reciprocal_rank_fusion(kw, sem)
+    scores = [d["score"] for d in fused]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_reciprocal_rank_fusion_rrf_score_overwrites_original_score() -> None:
+    kw = [{"id": "doc1", "score": 99.9, "title": "My Book"}]
+    fused = reciprocal_rank_fusion(kw, [])
+    # RRF score is 1/(k+1) = 1/61 ≈ 0.016, not the original 99.9
+    assert fused[0]["score"] < 1.0
+    assert fused[0]["title"] == "My Book"
+
+
+def test_reciprocal_rank_fusion_preserves_metadata() -> None:
+    kw = [{"id": "doc1", "score": 1.0, "title": "My Book", "author": "Author A", "highlights": ["snippet"]}]
+    fused = reciprocal_rank_fusion(kw, [])
+    assert fused[0]["title"] == "My Book"
+    assert fused[0]["author"] == "Author A"
+    assert fused[0]["highlights"] == ["snippet"]

@@ -189,3 +189,104 @@ def build_pagination(num_found: int, page: int, page_size: int) -> dict[str, int
         "total_results": num_found,
         "total_pages": math.ceil(num_found / page_size) if num_found else 0,
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Semantic / Hybrid search helpers
+# ---------------------------------------------------------------------------
+
+
+def build_knn_params(
+    vector: list[float],
+    top_k: int,
+    knn_field: str,
+) -> dict[str, Any]:
+    """Build Solr parameters for a kNN (dense vector) query.
+
+    Uses the Solr ``{!knn}`` local-parameter syntax with the pre-existing
+    ``book_embedding`` DenseVectorField (HNSW, cosine similarity, 512-dim).
+    """
+    vector_str = "[" + ",".join(str(v) for v in vector) + "]"
+    return {
+        "q": f"{{!knn f={knn_field} topK={top_k}}}{vector_str}",
+        "rows": top_k,
+        "fl": ",".join(SOLR_FIELD_LIST),
+        "wt": "json",
+    }
+
+
+def get_query_embedding(embeddings_url: str, text: str, timeout: float) -> list[float]:
+    """Call the embeddings server and return the query vector.
+
+    Args:
+        embeddings_url: Full URL of the embeddings endpoint
+                        (e.g. ``http://embeddings-server:8001/v1/embeddings/``).
+        text: Query text to embed.
+        timeout: HTTP request timeout in seconds.
+
+    Returns:
+        A list of floats representing the query embedding.
+
+    Raises:
+        requests.HTTPError: If the embeddings server returns a non-2xx status.
+        ValueError: If the response payload has no ``data`` entries.
+    """
+    import requests  # local import to keep search_service import-clean in tests
+
+    response = requests.post(
+        embeddings_url,
+        json={"input": text},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    data = response.json().get("data", [])
+    if not data:
+        raise ValueError("Embeddings server returned empty data")
+    return data[0]["embedding"]
+
+
+def reciprocal_rank_fusion(
+    keyword_results: list[dict[str, Any]],
+    semantic_results: list[dict[str, Any]],
+    k: int = 60,
+) -> list[dict[str, Any]]:
+    """Merge two ranked result lists using Reciprocal Rank Fusion (RRF).
+
+    For each document, the RRF score is the sum across lists of
+    ``1 / (k + rank)`` (1-based rank).  Documents present in both lists
+    score higher than documents present in only one.
+
+    Facets and highlights from *keyword_results* are preserved on the merged
+    result because the kNN leg does not produce Solr-style facet counts or
+    highlights.
+
+    Args:
+        keyword_results: Normalised book dicts from the BM25 Solr leg.
+        semantic_results: Normalised book dicts from the kNN Solr leg.
+        k: RRF damping constant (default 60 per the original RRF paper).
+
+    Returns:
+        A new list of book dicts sorted by descending RRF score, with the
+        ``score`` field overwritten with the RRF combined score.
+    """
+    scores: dict[str, float] = {}
+    result_map: dict[str, dict[str, Any]] = {}
+
+    for rank, doc in enumerate(keyword_results, start=1):
+        doc_id = doc["id"]
+        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+        result_map[doc_id] = doc
+
+    for rank, doc in enumerate(semantic_results, start=1):
+        doc_id = doc["id"]
+        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+        if doc_id not in result_map:
+            result_map[doc_id] = doc
+
+    ranked = sorted(scores.items(), key=lambda pair: pair[1], reverse=True)
+    fused: list[dict[str, Any]] = []
+    for doc_id, rrf_score in ranked:
+        merged = dict(result_map[doc_id])
+        merged["score"] = rrf_score
+        fused.append(merged)
+    return fused

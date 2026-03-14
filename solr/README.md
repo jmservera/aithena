@@ -192,4 +192,94 @@ docker exec solr solr config-set-upload \
 - [Solr Schema](https://solr.apache.org/docs/latest/schema-elements-intro.html)
 - [Solr Dense Vector Search](https://solr.apache.org/docs/latest/query-guide/dense-vector-search.html)
 - [Tika Integration](https://solr.apache.org/docs/latest/indexing-and-basic-data-operations.html#indexing-binary-documents)
+- [Solr Dense Vector Search (kNN)](https://solr.apache.org/docs/latest/query-guide/dense-vector-search.html)
+
+---
+
+## Phase 3 — Dense Vector Field (`book_embedding`)
+
+The `book_embedding` field (type `knn_vector_512`, 512-dim cosine similarity, HNSW index) is used
+for semantic and hybrid search.
+
+- **Type:** `solr.DenseVectorField` with `vectorDimension=512`, `similarityFunction=cosine`
+- **Indexing:** The document-indexer chunks each PDF post-Tika and calls the embeddings server
+  (`distiluse-base-multilingual-cased-v2`) to populate the `book_embedding` field (ADR-004).
+- **Query syntax:** `{!knn f=book_embedding topK=10}[0.1,0.2,...,0.512]`
+
+---
+
+## Search API — Mode Behaviour
+
+The `solr-search` FastAPI service (`solr-search/main.py`) wraps this Solr collection and
+supports three search modes via the `?mode=` query parameter.
+
+### `keyword` (default, backward-compatible)
+
+- Queries Solr using the **Extended DisMax** (`edismax`) query parser.
+- Fields boosted: `title_t^2`, `author_t^1.5`, `_text_`.
+- **Facets** — populated from `author_s`, `category_s`, `language_detected_s`, `year_i`.
+- **Highlights** — populated from the `content` field using Solr's Unified Highlighter.
+- **Pagination** — use `?page=N&page_size=N` (maps to Solr `start`/`rows`).
+- **Filtering** — `?fq_author=`, `?fq_category=`, `?fq_language=`, `?fq_year=`.
+
+### `semantic`
+
+- Encodes the query via the embeddings server (`distiluse-base-multilingual-cased-v2`).
+- Queries Solr with `{!knn f=book_embedding topK=N}[vec...]` for nearest-neighbour retrieval.
+- **Facets** — empty (Solr kNN does not aggregate facets in the same pass); returned as
+  empty lists in the `facets` object.
+- **Highlights** — empty (`[]` per result); no snippet extraction is performed.
+- **Pagination** — controlled by `?page_size=N`; cursor pagination is not supported.
+
+### `hybrid`
+
+- Runs keyword (BM25) and semantic (kNN) searches concurrently
+  (`candidate_limit = max(page_size*2, 20)` per leg).
+- Fuses results using **Reciprocal Rank Fusion** (RRF, `k=60` by default).
+- **Facets** — sourced from the keyword (BM25) leg only; semantic-only hits will not
+  have facet coverage.
+- **Highlights** — sourced from the keyword (BM25) leg only; results that appear only
+  in the semantic leg will have empty `highlights` arrays.
+- **Pagination** — truncated to `?page_size=N` after RRF fusion; no offset pagination.
+- `RRF_K` can be tuned via the `RRF_K` environment variable (default `60`).
+
+### Normalised Response Shape
+
+All three modes return the same JSON envelope so the UI can consume them uniformly:
+
+```json
+{
+  "query": "search text",
+  "mode": "keyword | semantic | hybrid",
+  "page": 1,
+  "page_size": 10,
+  "total_results": 42,
+  "total_pages": 5,
+  "sort": {"by": "score", "order": "desc"},
+  "results": [
+    {
+      "id": "...",
+      "score": 0.95,
+      "title": "Book Title",
+      "author": "Author Name",
+      "year": 2020,
+      "file_path": "amades/book.pdf",
+      "folder_path": "amades",
+      "category": "History",
+      "language": "ca",
+      "page_count": 320,
+      "file_size": 5242880,
+      "highlights": ["...relevant snippet..."],
+      "document_url": "http://host/documents/encoded-token"
+    }
+  ],
+  "facets": {
+    "author":   [{"value": "Author A", "count": 5}],
+    "category": [{"value": "History",  "count": 3}],
+    "language": [],
+    "year":     []
+  }
+}
+```
+
 - [Multilingual Search](https://solr.apache.org/docs/latest/language-analyzers.html)

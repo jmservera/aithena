@@ -28,6 +28,12 @@ class Settings:
     cors_origins: list[str]
     allow_credentials: bool
     document_url_base: str | None
+    # Phase 3 — hybrid search
+    embeddings_url: str
+    embeddings_timeout: float
+    default_search_mode: str
+    rrf_k: int
+    knn_field: str
 
     @property
     def select_url(self) -> str:
@@ -55,4 +61,12 @@ settings = Settings(
     cors_origins=parsed_cors_origins,
     allow_credentials=allow_credentials,
     document_url_base=os.environ.get("DOCUMENT_URL_BASE", "").rstrip("/") or None,
+    # Phase 3 — hybrid search
+    embeddings_url=os.environ.get(
+        "EMBEDDINGS_URL", "http://embeddings-server:8001/v1/embeddings/"
+    ).rstrip("/"),
+    embeddings_timeout=float(os.environ.get("EMBEDDINGS_TIMEOUT", "120")),
+    default_search_mode=os.environ.get("DEFAULT_SEARCH_MODE", "keyword"),
+    rrf_k=int(os.environ.get("RRF_K", "60")),
+    knn_field=os.environ.get("KNN_FIELD", "book_embedding"),
 )
