@@ -11,6 +11,12 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-14 — Copilot PR guardrails reset
+
+- Closed 9 stale/bad-base Copilot PRs (#140, #128, #138, #127, #119, #143, #141, #145, #144) and re-opened their linked issues for fresh pickup instead of trying to salvage branches targeting the wrong base.
+- Standardized reassignment guardrails on the linked issues: branch from `origin/dev`, target `dev`, stay inside the issue-specific scope fence, and do not touch files outside the stated scope.
+- PR #137 (page ranges in search results) is still blocked by merge conflicts against `dev`; GitHub reports it is not cleanly mergeable and needs a local rebase/merge before it can land.
+
 ### 2026-03-14 — API contract + on-prem cleanup
 
 - Added backward-compatible `/v1` aliases in `solr-search` for search, facets, similar-books, document serving, health, and info while keeping the legacy unversioned routes live.
