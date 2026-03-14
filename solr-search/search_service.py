@@ -351,7 +351,6 @@ def reciprocal_rank_fusion(
     return fused
 
 
-
 def solr_escape(value: str) -> str:
     """Escape special Lucene/Solr query characters in a literal string value."""
     special = r'\+-&|!(){}[]^"~*?:/ '
@@ -371,20 +370,13 @@ def parse_stats_response(payload: dict[str, Any]) -> dict[str, Any]:
     """
     total_books: int = payload.get("response", {}).get("numFound", 0)
 
-    facet_fields: dict[str, list[Any]] = (
-        payload.get("facet_counts", {}).get("facet_fields", {})
-    )
+    facet_fields: dict[str, list[Any]] = payload.get("facet_counts", {}).get("facet_fields", {})
 
     def _parse_facet(field: str) -> list[dict[str, Any]]:
         raw = facet_fields.get(field) or []
-        return [
-            {"value": raw[i], "count": raw[i + 1]}
-            for i in range(0, len(raw), 2)
-        ]
+        return [{"value": raw[i], "count": raw[i + 1]} for i in range(0, len(raw), 2)]
 
-    stats_fields: dict[str, Any] = (
-        payload.get("stats", {}).get("stats_fields", {})
-    )
+    stats_fields: dict[str, Any] = payload.get("stats", {}).get("stats_fields", {})
     page_count_stats: dict[str, Any] = stats_fields.get("page_count_i") or {}
 
     page_stats: dict[str, Any] = {

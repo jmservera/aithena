@@ -3,7 +3,6 @@ import json
 import redis
 import requests
 import streamlit as st
-
 from pages.shared.config import (
     QUEUE_NAME,
     RABBITMQ_HOST,
@@ -15,15 +14,12 @@ from pages.shared.config import (
     REDIS_PORT,
 )
 
-rabbitmq_management_url = (
-    f"http://{RABBITMQ_HOST}:{RABBITMQ_MGMT_PORT}{RABBITMQ_MGMT_PATH_PREFIX}"
-)
+rabbitmq_management_url = f"http://{RABBITMQ_HOST}:{RABBITMQ_MGMT_PORT}{RABBITMQ_MGMT_PATH_PREFIX}"
 
 st.set_page_config(page_title="Aithena Admin", page_icon="🏛️", layout="wide")
 st.title("🏛️ Aithena Admin Dashboard")
 st.caption(
-    f"Redis: `{REDIS_HOST}:{REDIS_PORT}` · Queue: `{QUEUE_NAME}` · "
-    f"RabbitMQ management: `{rabbitmq_management_url}`"
+    f"Redis: `{REDIS_HOST}:{REDIS_PORT}` · Queue: `{QUEUE_NAME}` · RabbitMQ management: `{rabbitmq_management_url}`"
 )
 
 # ── Redis metrics ────────────────────────────────────────────────────────────

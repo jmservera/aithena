@@ -2,11 +2,10 @@
 
 Uses unittest.mock to patch SentenceTransformer so no model download is required.
 """
+
 from __future__ import annotations
 
-import importlib
 import sys
-import types
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -21,9 +20,7 @@ def _make_mock_model(embedding_dim: int = EMBEDDING_DIM) -> MagicMock:
     """Build a minimal SentenceTransformer mock."""
     mock = MagicMock()
     mock.get_sentence_embedding_dimension.return_value = embedding_dim
-    mock.encode.side_effect = lambda sentences: np.zeros(
-        (len(sentences), embedding_dim), dtype=np.float32
-    )
+    mock.encode.side_effect = lambda sentences: np.zeros((len(sentences), embedding_dim), dtype=np.float32)
     return mock
 
 
@@ -109,6 +106,7 @@ class TestStartupFailure:
                 del sys.modules[key]
 
         import os
+
         orig_model_name = os.environ.get("MODEL_NAME")
         os.environ["MODEL_NAME"] = "nonexistent/model-that-does-not-exist"
         # Also patch config to reflect the env change before main imports it

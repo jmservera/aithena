@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import json
 import logging
-from pathlib import Path
 import time
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pdfplumber
 import pika
-from pika.adapters.blocking_connection import BlockingChannel
 import redis
 import requests
+from pika.adapters.blocking_connection import BlockingChannel
 from retry import retry
 
 from . import (
@@ -58,7 +58,7 @@ def get_queue(channel: BlockingChannel):
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def wait_for_solr_collection(
@@ -79,16 +79,12 @@ def wait_for_solr_collection(
             response.raise_for_status()
             collections = response.json().get("collections", [])
             if SOLR_COLLECTION not in collections:
-                raise RuntimeError(
-                    f"Solr collection {SOLR_COLLECTION} is not available yet."
-                )
+                raise RuntimeError(f"Solr collection {SOLR_COLLECTION} is not available yet.")
 
             config_response = requests.get(config_url, timeout=SOLR_STARTUP_TIMEOUT)
             config_response.raise_for_status()
             if '"/update/extract"' not in config_response.text:
-                raise RuntimeError(
-                    f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler."
-                )
+                raise RuntimeError(f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler.")
 
             logger.info("Solr collection %s is ready.", SOLR_COLLECTION)
             return
@@ -265,13 +261,10 @@ def index_chunks(
 
     docs = [
         build_chunk_doc(parent_id, idx, chunk, emb, metadata, page_start, page_end)
-        for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(page_chunks, embeddings))
+        for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(page_chunks, embeddings, strict=False))
     ]
 
-    solr_url = (
-        f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update"
-        "?commitWithin=10000"
-    )
+    solr_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update?commitWithin=10000"
     response = requests.post(
         solr_url,
         json=docs,
@@ -376,9 +369,7 @@ def callback(
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
 def consume() -> None:
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT, heartbeat=600)
-    )
+    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT, heartbeat=600))
     channel = connection.channel()
     get_queue(channel)
     channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)

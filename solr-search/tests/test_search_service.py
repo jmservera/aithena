@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -228,7 +228,7 @@ def test_normalize_search_query_rejects_local_params() -> None:
 
 
 def test_build_inline_content_disposition_sanitizes_newlines() -> None:
-    header = build_inline_content_disposition('safe\nname.pdf')
+    header = build_inline_content_disposition("safe\nname.pdf")
 
     assert "\n" not in header
     assert header.startswith("inline; filename*=UTF-8''")
@@ -315,7 +315,6 @@ def test_reciprocal_rank_fusion_preserves_metadata() -> None:
     assert fused[0]["title"] == "My Book"
     assert fused[0]["author"] == "Author A"
     assert fused[0]["highlights"] == ["snippet"]
-
 
 
 def test_solr_escape_handles_special_characters() -> None:
