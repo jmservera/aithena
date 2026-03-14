@@ -42,8 +42,13 @@ Before reviewing or rebasing a PR:
 3. If PR deletes files that were recently added → DEFINITELY stale
 4. **Triage heuristic:** If a PR modifies `ChatMessage.tsx`, `Configbar.tsx`, `chat.tsx`, or `qdrant-search/` → stale beyond repair, close it
 
+### PR Base Branch
+
+All PRs target `dev` (not `main`). The `dev` branch is the active development integration branch. Only Ripley or Juanma merge `dev` → `main` at phase boundaries.
+
 ## Anti-Patterns
 
 - **Don't create PRs from stale branches** — always pull latest base before starting
 - **Don't batch-assign issues to copilot without checking base branch freshness** — causes architecture-violating PRs
 - **Don't self-merge** — all PRs require squad member review
+- **Don't target `main` directly** — all feature work goes through `dev`

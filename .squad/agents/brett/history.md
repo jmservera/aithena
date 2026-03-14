@@ -324,3 +324,10 @@
 - Apache Solr Reference Guide: Docker, SolrCloud recovery, shard/replica management, ping, collections API, configsets, authn/authz.
 - Apache ZooKeeper docs: ensemble configuration, admin guide, programmer guide.
 - Docker Compose docs: `depends_on`, `service_healthy`, restart semantics, and service shutdown ordering.
+
+## 2026-03-14 — nginx admin ingress
+- Moved the repo toward a repo-managed nginx entrypoint instead of an external `/etc/nginx/conf.d` bind volume so infra URLs are defined in source control.
+- Added an `aithena-ui` container so nginx can serve the React app at `/`, plus a static `/admin/` landing page for operators.
+- Exposed Solr Admin, RabbitMQ Management, Streamlit Admin, and Redis Commander under `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, and `/admin/redis/` respectively.
+- RabbitMQ now uses the management image with `management.path_prefix=/admin/rabbitmq`; Streamlit uses `--server.baseUrlPath=/admin/streamlit`; Redis Commander uses `URL_PREFIX=/admin/redis`.
+- Validation: `docker compose config --quiet`, `npm ci && npm run build` in `aithena-ui/`, `uv run python -m compileall src` in `admin/`, and nginx syntax tests with `docker run ... nginx -t` all succeeded. The `streamlit-admin` image build is still blocked in this environment by an external Docker Hub fetch failure for `python:3.11-slim`, so runtime validation stopped at app-level checks plus config syntax.

@@ -10,10 +10,14 @@ A Streamlit-based operations dashboard for monitoring and managing the document 
 ## Running locally
 
 ```bash
-cd admin/src
-pip install -r requirements.txt
-streamlit run main.py
+cd admin
+uv sync
+uv run streamlit run src/main.py
 ```
+
+When you run the full Docker Compose stack, nginx exposes this dashboard at `http://localhost/admin/streamlit/`.
+
+> **Note:** `src/requirements.txt` is deprecated. Use the `pyproject.toml` with `uv` as shown above.
 
 ## Configuration
 
@@ -23,9 +27,10 @@ All settings are read from environment variables (a `.env` file in `admin/src/` 
 |---|---|---|
 | `REDIS_HOST` | `localhost` | Redis hostname |
 | `REDIS_PORT` | `6379` | Redis port |
-| `QUEUE_NAME` | `new_documents` | Shared queue/key-prefix name (must match `document-lister` and `document-indexer`) |
+| `QUEUE_NAME` | `shortembeddings` | Shared queue/key-prefix name (must match `document-lister` and `document-indexer`) |
 | `RABBITMQ_HOST` | `localhost` | RabbitMQ hostname |
 | `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ management HTTP API port |
+| `RABBITMQ_MGMT_PATH_PREFIX` | _(empty)_ | Optional management UI/API prefix such as `/admin/rabbitmq` when RabbitMQ is reverse-proxied |
 | `RABBITMQ_USER` | `guest` | RabbitMQ management API username |
 | `RABBITMQ_PASS` | `guest` | RabbitMQ management API password |
 

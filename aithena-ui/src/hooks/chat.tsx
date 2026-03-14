@@ -2,10 +2,10 @@
 import { useState } from "react";
 
 export const useChat = () => {
-  const [messages, setMessages] = useState<any>([]);
+  const [messages, setMessages] = useState<unknown[]>([]);
 
-  const addMessage = (message: any) =>
-    setMessages((prevMessages: any) => [...prevMessages, message]);
+  const addMessage = (message: unknown) =>
+    setMessages((prevMessages) => [...prevMessages, message]);
 
   return { messages, addMessage };
 };
