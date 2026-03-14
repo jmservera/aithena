@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import socket
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Literal
@@ -477,8 +478,30 @@ def _check_tcp(host: str, port: int, timeout: float = 2.0) -> str:
         return "down"
 
 
+# Module-level connection pool — created once, reused across requests.
+_redis_pool: redis_module.ConnectionPool | None = None
+_redis_pool_lock = threading.Lock()
+
+
+def _get_redis_pool() -> redis_module.ConnectionPool:
+    global _redis_pool
+    if _redis_pool is None:
+        with _redis_pool_lock:
+            if _redis_pool is None:
+                _redis_pool = redis_module.ConnectionPool(
+                    host=settings.redis_host,
+                    port=settings.redis_port,
+                    decode_responses=True,
+                    socket_timeout=5,
+                    socket_connect_timeout=5,
+                )
+    return _redis_pool
+
+
 def _get_solr_status() -> dict[str, Any]:
     """Query Solr CLUSTERSTATUS for live-node count and index doc count."""
+    solr_reachable = False
+    live_nodes = 0
     try:
         cluster_resp = requests.get(
             settings.solr_admin_collections_url,
@@ -489,6 +512,7 @@ def _get_solr_status() -> dict[str, Any]:
         live_nodes = len(
             cluster_resp.json().get("cluster", {}).get("live_nodes", [])
         )
+        solr_reachable = True
     except Exception:
         live_nodes = 0
 
@@ -503,34 +527,35 @@ def _get_solr_status() -> dict[str, Any]:
     except Exception:
         docs_indexed = 0
 
-    return {"status": "ok", "nodes": live_nodes, "docs_indexed": docs_indexed}
+    if not solr_reachable:
+        solr_status = "error"
+    elif live_nodes == 0:
+        solr_status = "degraded"
+    else:
+        solr_status = "ok"
+
+    return {"status": solr_status, "nodes": live_nodes, "docs_indexed": docs_indexed}
 
 
 def _get_indexing_status() -> dict[str, Any]:
     """Scan Redis for ``doc:*`` keys and aggregate indexing state counts."""
     try:
-        r = redis_module.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            decode_responses=True,
-            socket_timeout=5,
-            socket_connect_timeout=5,
-        )
-        keys = r.keys(settings.redis_key_pattern)
+        r = redis_module.Redis(connection_pool=_get_redis_pool())
+        keys = list(r.scan_iter(settings.redis_key_pattern))
         total = len(keys)
         indexed = 0
         failed = 0
-        for key in keys:
-            raw = r.get(key)
-            if raw:
-                try:
-                    state = json.loads(raw)
-                    if state.get("failed"):
-                        failed += 1
-                    elif state.get("text_indexed"):
-                        indexed += 1
-                except (json.JSONDecodeError, AttributeError):
-                    pass
+        if keys:
+            for raw in r.mget(keys):
+                if raw:
+                    try:
+                        state = json.loads(raw)
+                        if state.get("failed"):
+                            failed += 1
+                        elif state.get("text_indexed"):
+                            indexed += 1
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
         pending = total - indexed - failed
         return {
             "total_discovered": total,

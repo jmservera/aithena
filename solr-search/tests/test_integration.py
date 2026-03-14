@@ -907,8 +907,8 @@ def test_status_returns_expected_shape(
 
     # Redis mock
     mock_r = MagicMock()
-    mock_r.keys.return_value = ["doc:a", "doc:b", "doc:c"]
-    mock_r.get.side_effect = [
+    mock_r.scan_iter.return_value = ["doc:a", "doc:b", "doc:c"]
+    mock_r.mget.return_value = [
         json.dumps({"text_indexed": True, "failed": False}),
         json.dumps({"text_indexed": False, "failed": True}),
         json.dumps({"text_indexed": False, "failed": False}),
@@ -961,7 +961,7 @@ def test_status_v1_alias_registered(
     mock_requests_get.side_effect = [cluster_resp, count_resp]
 
     mock_r = MagicMock()
-    mock_r.keys.return_value = []
+    mock_r.scan_iter.return_value = []
     mock_redis_cls.return_value = mock_r
 
     mock_socket_conn.return_value.__enter__ = MagicMock(return_value=MagicMock())
@@ -986,7 +986,7 @@ def test_status_degrades_gracefully_on_solr_error(
     mock_requests_get.side_effect = req.ConnectionError("Solr down")
 
     mock_r = MagicMock()
-    mock_r.keys.return_value = []
+    mock_r.scan_iter.return_value = []
     mock_redis_cls.return_value = mock_r
 
     mock_socket_conn.side_effect = OSError("Connection refused")
@@ -996,6 +996,7 @@ def test_status_degrades_gracefully_on_solr_error(
 
     assert response.status_code == 200
     data = response.json()
+    assert data["solr"]["status"] == "error"
     assert data["solr"]["nodes"] == 0
     assert data["solr"]["docs_indexed"] == 0
     assert data["services"]["solr"] == "down"
@@ -1020,7 +1021,7 @@ def test_status_degrades_gracefully_on_redis_error(
     count_resp.json.return_value = {"response": {"numFound": 10}}
     mock_requests_get.side_effect = [cluster_resp, count_resp]
 
-    mock_redis_cls.return_value.keys.side_effect = Exception("Redis down")
+    mock_redis_cls.return_value.scan_iter.side_effect = Exception("Redis down")
 
     mock_socket_conn.return_value.__enter__ = MagicMock(return_value=MagicMock())
     mock_socket_conn.return_value.__exit__ = MagicMock(return_value=False)
