@@ -1769,3 +1769,11 @@ The GitHub `Copilot` user cannot be directly assigned via `gh issue edit --add-a
 **What:** Restructured repo branches: `dev` is now the default branch. Renamed `main` → `oldmain` and `jmservera/solrstreamlitui` → `main`. This means @copilot will now naturally target `dev` (the default). All PRs still target `dev`. Only Ripley or Juanma merge `dev` → `main`.
 
 **Why:** User request — fixes the root cause of @copilot always targeting the wrong branch (it targets the GitHub default, which is now `dev`).
+
+---
+
+### 2026-03-14T19:33: UV Migration Complete Across All CI
+
+**By:** jmservera (manual)
+**What:** Release workflow (`.github/workflows/release.yml`) updated to use `astral-sh/setup-uv@v5`, `uv sync --frozen`, and `uv run pytest -v`. This was the last pip-based workflow. All CI now uses uv exclusively.
+**Why:** Completes the uv migration started in PR #152/#153. Validated by 137 passing tests (73 document-indexer + 64 solr-search) and successful release workflow run `23094831631`.
