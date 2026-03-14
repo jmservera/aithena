@@ -72,7 +72,9 @@ def test_search_returns_results_with_mocked_solr(mock_solr_get: MagicMock) -> No
     }
     mock_solr_get.return_value = mock_response
 
-    response = client.get("/search", params={"q": "folklore", "page": 1, "page_size": 10})
+    response = client.get(
+        "/search", params={"q": "folklore", "page": 1, "page_size": 10}
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -271,7 +273,9 @@ def test_v1_health_and_info_aliases_return_ok() -> None:
 
 
 @patch("main.requests.get")
-def test_search_pagination_parameters_passed_correctly(mock_solr_get: MagicMock) -> None:
+def test_search_pagination_parameters_passed_correctly(
+    mock_solr_get: MagicMock,
+) -> None:
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -415,7 +419,9 @@ def test_search_semantic_mode_calls_embeddings_and_knn(
     mock_solr_get.return_value = mock_solr_resp
 
     client = get_client()
-    response = client.get("/search", params={"q": "catalan history", "mode": "semantic"})
+    response = client.get(
+        "/search", params={"q": "catalan history", "mode": "semantic"}
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -484,7 +490,9 @@ def test_search_hybrid_mode_fuses_both_legs(
     mock_solr_get.side_effect = _solr_side_effect
 
     client = get_client()
-    response = client.get("/search", params={"q": "folklore", "mode": "hybrid", "page_size": 5})
+    response = client.get(
+        "/search", params={"q": "folklore", "mode": "hybrid", "page_size": 5}
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -505,7 +513,6 @@ def test_search_hybrid_empty_query_returns_400(
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "hybrid"})
     assert response.status_code == 400
-
 
 
 # ---------------------------------------------------------------------------
@@ -634,7 +641,9 @@ def test_similar_uses_knn_query_parser(mock_solr_get: MagicMock) -> None:
 
 
 @patch("main.requests.get")
-def test_similar_retrieves_embedding_field_from_source(mock_solr_get: MagicMock) -> None:
+def test_similar_retrieves_embedding_field_from_source(
+    mock_solr_get: MagicMock,
+) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
         _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
@@ -701,7 +710,9 @@ def test_similar_returns_422_when_embedding_missing(mock_solr_get: MagicMock) ->
 
 
 @patch("main.requests.get")
-def test_similar_returns_empty_list_when_no_similar_found(mock_solr_get: MagicMock) -> None:
+def test_similar_returns_empty_list_when_no_similar_found(
+    mock_solr_get: MagicMock,
+) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
         _make_mock_response([SOURCE_DOC_WITH_EMBEDDING]),
@@ -727,4 +738,7 @@ def test_similar_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
 
 
 def test_v1_document_alias_is_registered() -> None:
-    assert app.url_path_for("get_document_v1", document_id="token") == "/v1/documents/token"
+    assert (
+        app.url_path_for("get_document_v1", document_id="token")
+        == "/v1/documents/token"
+    )

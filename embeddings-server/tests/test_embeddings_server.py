@@ -2,11 +2,10 @@
 
 Uses unittest.mock to patch SentenceTransformer so no model download is required.
 """
+
 from __future__ import annotations
 
-import importlib
 import sys
-import types
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -109,6 +108,7 @@ class TestStartupFailure:
                 del sys.modules[key]
 
         import os
+
         orig_model_name = os.environ.get("MODEL_NAME")
         os.environ["MODEL_NAME"] = "nonexistent/model-that-does-not-exist"
         # Also patch config to reflect the env change before main imports it

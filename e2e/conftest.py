@@ -7,11 +7,11 @@ Environment variables (with defaults for the local dev stack):
                     The document-data volume must be bound to the same path
                     when running the stack with docker-compose.e2e.yml.
 """
+
 from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 import time
 from pathlib import Path
 from typing import Generator
@@ -24,9 +24,7 @@ import requests
 # ---------------------------------------------------------------------------
 
 SOLR_URL: str = os.environ.get("SOLR_URL", "http://localhost:8983/solr/books")
-E2E_LIBRARY_PATH: str = os.environ.get(
-    "E2E_LIBRARY_PATH", "/tmp/aithena-e2e-library"
-)
+E2E_LIBRARY_PATH: str = os.environ.get("E2E_LIBRARY_PATH", "/tmp/aithena-e2e-library")
 
 # Relative path inside the library; uses the Author - Title (Year) pattern so
 # the metadata extractor produces deterministic fields.
@@ -37,12 +35,11 @@ FIXTURE_RELATIVE_PATH = "TestAuthor/TestAuthor - E2E Test Book (2024).pdf"
 # Minimal-PDF generator (no external dependencies)
 # ---------------------------------------------------------------------------
 
+
 def _build_pdf(text: str = "E2E test document for aithena") -> bytes:
     """Return a minimal but valid single-page PDF containing *text*."""
 
-    stream_body = (
-        f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET"
-    ).encode()
+    stream_body = (f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET").encode()
 
     objects: list[bytes] = [
         b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",

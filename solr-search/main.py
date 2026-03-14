@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Literal
 
@@ -53,25 +53,39 @@ if settings.cors_origins:
 
 def query_solr(params: dict[str, Any]) -> dict[str, Any]:
     try:
-        response = requests.get(settings.select_url, params=params, timeout=settings.request_timeout)
+        response = requests.get(
+            settings.select_url, params=params, timeout=settings.request_timeout
+        )
         response.raise_for_status()
         return response.json()
     except requests.Timeout as exc:
-        raise HTTPException(status_code=504, detail="Timed out waiting for Solr") from exc
+        raise HTTPException(
+            status_code=504, detail="Timed out waiting for Solr"
+        ) from exc
     except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail="Solr search request failed") from exc
+        raise HTTPException(
+            status_code=502, detail="Solr search request failed"
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=502, detail="Solr returned invalid JSON") from exc
+        raise HTTPException(
+            status_code=502, detail="Solr returned invalid JSON"
+        ) from exc
 
 
 def _fetch_embedding(text: str) -> list[float]:
     """Call the embeddings server; wrap errors as HTTP 502."""
     try:
-        return get_query_embedding(settings.embeddings_url, text, settings.embeddings_timeout)
+        return get_query_embedding(
+            settings.embeddings_url, text, settings.embeddings_timeout
+        )
     except requests.Timeout as exc:
-        raise HTTPException(status_code=504, detail="Timed out waiting for embeddings server") from exc
+        raise HTTPException(
+            status_code=504, detail="Timed out waiting for embeddings server"
+        ) from exc
     except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail="Embeddings server request failed") from exc
+        raise HTTPException(
+            status_code=502, detail="Embeddings server request failed"
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -91,7 +105,11 @@ def resolve_page_size(limit: int | None, page_size: int) -> int:
 
 
 def collect_search_filters(**filters: str | None) -> dict[str, str]:
-    return {name: value.strip() for name, value in filters.items() if value and value.strip()}
+    return {
+        name: value.strip()
+        for name, value in filters.items()
+        if value and value.strip()
+    }
 
 
 @app.get("/v1/health", include_in_schema=False, name="health_v1")
@@ -111,11 +129,15 @@ def info() -> dict[str, str]:
 @app.get("/search")
 def search(
     request: Request,
-    q: str = Query("", description="Keyword search. Empty values return all indexed books."),
+    q: str = Query(
+        "", description="Keyword search. Empty values return all indexed books."
+    ),
     page: int = Query(1, ge=1),
     limit: int | None = Query(None, ge=1, le=settings.max_page_size),
     page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size),
-    sort: str | None = Query(None, description="Combined sort clause like `score desc` or `year_i asc`."),
+    sort: str | None = Query(
+        None, description="Combined sort clause like `score desc` or `year_i asc`."
+    ),
     sort_by: SortBy = Query("score"),
     sort_order: SortOrder = Query("desc"),
     fq_author: str | None = Query(None),
@@ -145,11 +167,15 @@ def search(
     )
 
     if mode == "keyword":
-        return _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+        return _search_keyword(
+            request, q, page, resolved_page_size, sort_by, sort_order, sort, filters
+        )
     if mode == "semantic":
         return _search_semantic(request, q, resolved_page_size, filters)
     # hybrid
-    return _search_hybrid(request, q, resolved_page_size, sort_by, sort_order, sort, filters)
+    return _search_hybrid(
+        request, q, resolved_page_size, sort_by, sort_order, sort, filters
+    )
 
 
 def _search_keyword(
@@ -208,11 +234,15 @@ def _search_semantic(
     produce Solr facet counts or highlight snippets.
     """
     if not q.strip():
-        raise HTTPException(status_code=400, detail="Query must not be empty for semantic search")
+        raise HTTPException(
+            status_code=400, detail="Query must not be empty for semantic search"
+        )
 
     vector = _fetch_embedding(q)
     payload = query_solr(
-        build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters))
+        build_knn_params(
+            vector, top_k, settings.knn_field, build_filter_queries(filters)
+        )
     )
 
     response = payload.get("response", {})
@@ -252,7 +282,9 @@ def _search_hybrid(
     (default 60, per the original RRF paper).
     """
     if not q.strip():
-        raise HTTPException(status_code=400, detail="Query must not be empty for hybrid search")
+        raise HTTPException(
+            status_code=400, detail="Query must not be empty for hybrid search"
+        )
 
     candidate_limit = max(page_size * 2, 20)
 
@@ -276,7 +308,9 @@ def _search_hybrid(
         vector = emb_future.result()
 
     knn_payload = query_solr(
-        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
+        build_knn_params(
+            vector, candidate_limit, settings.knn_field, build_filter_queries(filters)
+        )
     )
 
     kw_response = kw_payload.get("response", {})
@@ -300,7 +334,9 @@ def _search_hybrid(
         for document in knn_payload.get("response", {}).get("docs", [])
     ]
 
-    fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)[:page_size]
+    fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)[
+        :page_size
+    ]
 
     return {
         "query": q,
@@ -362,17 +398,25 @@ def get_document(document_id: str) -> FileResponse:
         document_path,
         media_type="application/pdf",
         filename=document_path.name,
-        headers={"Content-Disposition": build_inline_content_disposition(document_path.name)},
+        headers={
+            "Content-Disposition": build_inline_content_disposition(document_path.name)
+        },
     )
 
 
-@app.get("/v1/books/{document_id}/similar", include_in_schema=False, name="similar_books_v1")
+@app.get(
+    "/v1/books/{document_id}/similar", include_in_schema=False, name="similar_books_v1"
+)
 @app.get("/books/{document_id}/similar")
 def similar_books(
     request: Request,
     document_id: str,
-    limit: int = Query(5, ge=1, le=50, description="Maximum number of similar books to return."),
-    min_score: float = Query(0.0, ge=0.0, le=1.0, description="Minimum cosine similarity score threshold."),
+    limit: int = Query(
+        5, ge=1, le=50, description="Maximum number of similar books to return."
+    ),
+    min_score: float = Query(
+        0.0, ge=0.0, le=1.0, description="Minimum cosine similarity score threshold."
+    ),
 ) -> dict[str, Any]:
     """Return books semantically similar to the one identified by *document_id*.
 
@@ -391,7 +435,9 @@ def similar_books(
     )
     source_docs = source_payload.get("response", {}).get("docs", [])
     if not source_docs:
-        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
+        raise HTTPException(
+            status_code=404, detail=f"Document not found: {document_id!r}"
+        )
 
     vector = source_docs[0].get(embedding_field)
     if not vector:

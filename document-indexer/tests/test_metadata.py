@@ -64,7 +64,9 @@ def assert_metadata_values(metadata: dict, **expected: object) -> None:
         assert metadata[key] == value
 
 
-def test_extract_metadata_parses_author_directory_pattern(make_document, extract_metadata_func):
+def test_extract_metadata_parses_author_directory_pattern(
+    make_document, extract_metadata_func
+):
     file_path, base_path = make_document(
         "Gabriel García Márquez/Cien años de soledad.pdf",
         b"abc123",
@@ -103,7 +105,9 @@ def test_extract_metadata_parses_author_title_year_filename_pattern(
     )
 
 
-def test_extract_metadata_parses_category_author_title_pattern(make_document, extract_metadata_func):
+def test_extract_metadata_parses_category_author_title_pattern(
+    make_document, extract_metadata_func
+):
     file_path, base_path = make_document(
         "Novel·la/Víctor Català/Solitud.pdf",
         b"category-author-title",
@@ -121,7 +125,9 @@ def test_extract_metadata_parses_category_author_title_pattern(make_document, ex
     )
 
 
-def test_extract_metadata_parses_category_filename_pattern(make_document, extract_metadata_func):
+def test_extract_metadata_parses_category_filename_pattern(
+    make_document, extract_metadata_func
+):
     file_path, base_path = make_document(
         "Poesia/Federico García Lorca - Romancero gitano (1928).pdf",
         b"category-filename",
@@ -185,7 +191,9 @@ def test_extract_metadata_handles_unicode_and_non_pdf_paths(
     assert_metadata_values(metadata, **expected)
 
 
-def test_extract_metadata_keeps_very_long_titles_intact(make_document, extract_metadata_func):
+def test_extract_metadata_keeps_very_long_titles_intact(
+    make_document, extract_metadata_func
+):
     long_title = "Crònica" * 25
     file_path, base_path = make_document(f"Arxiu/{long_title}.pdf", b"long-title")
 
@@ -201,7 +209,9 @@ def test_extract_metadata_keeps_very_long_titles_intact(make_document, extract_m
     )
 
 
-def test_extract_metadata_falls_back_for_root_level_unknown_pattern(make_document, extract_metadata_func):
+def test_extract_metadata_falls_back_for_root_level_unknown_pattern(
+    make_document, extract_metadata_func
+):
     file_path, base_path = make_document("scan_0042_final copy.pdf", b"fallback-root")
 
     metadata = extract_metadata_func(str(file_path), base_path=str(base_path))
@@ -216,7 +226,9 @@ def test_extract_metadata_falls_back_for_root_level_unknown_pattern(make_documen
     )
 
 
-def test_extract_metadata_handles_nested_deep_paths_conservatively(make_document, extract_metadata_func):
+def test_extract_metadata_handles_nested_deep_paths_conservatively(
+    make_document, extract_metadata_func
+):
     file_path, base_path = make_document(
         "Archive/Scans/1901/Cançó de bressol.pdf",
         b"deep-path",
@@ -234,7 +246,9 @@ def test_extract_metadata_handles_nested_deep_paths_conservatively(make_document
     )
 
 
-def test_extract_metadata_uses_filename_fallback_for_unknown_patterns(make_document, extract_metadata_func):
+def test_extract_metadata_uses_filename_fallback_for_unknown_patterns(
+    make_document, extract_metadata_func
+):
     file_path, base_path = make_document(
         "Collected_Works__Vol_7__draft copy.pdf",
         b"fallback-filename",

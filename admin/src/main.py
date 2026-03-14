@@ -67,11 +67,17 @@ try:
         c2.metric("Messages Unacked", queue_info.get("messages_unacknowledged", "N/A"))
         c3.metric("Total Messages", queue_info.get("messages", "N/A"))
     elif resp.status_code == 404:
-        st.info(f"Queue `{QUEUE_NAME}` not found — it will be created when the first document is listed.")
+        st.info(
+            f"Queue `{QUEUE_NAME}` not found — it will be created when the first document is listed."
+        )
     else:
         st.warning(f"RabbitMQ management API returned HTTP {resp.status_code}.")
 except requests.exceptions.RequestException:
-    st.info("RabbitMQ management API not reachable. Verify `RABBITMQ_HOST` and `RABBITMQ_MGMT_PORT`.")
+    st.info(
+        "RabbitMQ management API not reachable. Verify `RABBITMQ_HOST` and `RABBITMQ_MGMT_PORT`."
+    )
 
 st.divider()
-st.info("Use **Document Manager** in the sidebar to inspect documents and trigger requeue or clear actions.")
+st.info(
+    "Use **Document Manager** in the sidebar to inspect documents and trigger requeue or clear actions."
+)

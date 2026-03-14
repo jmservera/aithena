@@ -22,6 +22,7 @@ Prerequisites (see README.md §E2E Tests):
   • Solr is healthy at http://localhost:8983 (or SOLR_URL).
   • E2E_LIBRARY_PATH matches the volume bind-mount in docker-compose.e2e.yml.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -29,14 +30,10 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
 import requests
 
 from conftest import (
-    FIXTURE_RELATIVE_PATH,
     wait_for_solr_doc,
-    _build_pdf,
-    E2E_LIBRARY_PATH,
 )
 
 SOLR_TIMEOUT = 60  # seconds to wait for a Solr document to appear
@@ -100,9 +97,9 @@ def _index_pdf(solr_url: str, pdf_path: Path, base_path: Path) -> requests.Respo
 
 def _capture_diagnostics(solr_url: str, label: str) -> None:
     """Dump Solr admin stats and recent docs to stdout for CI diagnostics."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"DIAGNOSTIC CAPTURE: {label}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     try:
         info = requests.get(
             f"{solr_url}/select",
@@ -123,10 +120,12 @@ def _capture_diagnostics(solr_url: str, label: str) -> None:
             timeout=10,
             cwd=Path(__file__).parent.parent,
         )
-        print(f"\n[document-indexer logs (last 50 lines)]\n{result.stdout or result.stderr}")
+        print(
+            f"\n[document-indexer logs (last 50 lines)]\n{result.stdout or result.stderr}"
+        )
     except Exception as exc:
         print(f"[docker logs unavailable] {exc}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +225,7 @@ class TestUploadIndexSearchView:
         )
 
         # Find our specific document (there may be others from earlier runs)
-        fixture_doc = next(
-            (d for d in docs if d.get("id") == fixture_solr_id), None
-        )
+        fixture_doc = next((d for d in docs if d.get("id") == fixture_solr_id), None)
         if fixture_doc is None:
             _capture_diagnostics(solr_url, "fixture-doc-missing")
         assert fixture_doc is not None, (
@@ -277,13 +274,14 @@ class TestUploadIndexSearchView:
         assert docs, f"Fixture document {fixture_solr_id} not found in Solr."
 
         file_path_s: str = docs[0].get("file_path_s", "")
-        assert file_path_s, "file_path_s field is empty or missing in the Solr document."
+        assert file_path_s, (
+            "file_path_s field is empty or missing in the Solr document."
+        )
 
         # The viewer reconstructs the full path as: library_root / file_path_s
         full_path = test_library_root / file_path_s
         assert full_path.exists(), (
-            f"PDF not accessible at {full_path}. "
-            f"file_path_s from Solr: {file_path_s!r}"
+            f"PDF not accessible at {full_path}. file_path_s from Solr: {file_path_s!r}"
         )
         assert full_path.stat().st_size > 0, f"PDF at {full_path} is empty."
 

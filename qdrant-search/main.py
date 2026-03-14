@@ -4,13 +4,24 @@ import aiohttp
 from fastapi.staticfiles import StaticFiles
 from pydantic.dataclasses import dataclass
 from pydantic import BaseModel
-from qdrant_client import models, QdrantClient
-from config import *
+from qdrant_client import QdrantClient
+from config import (
+    CHAT_HOST,
+    CHAT_PORT,
+    EMBEDDINGS_HOST,
+    EMBEDDINGS_PORT,
+    EMBEDDINGS_TIMEOUT,
+    PORT,
+    QDRANT_COLLECTION,
+    QDRANT_HOST,
+    QDRANT_PORT,
+    TITLE,
+    VERSION,
+)
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from fastapi.encoders import jsonable_encoder
 import json
 
 app = FastAPI(title="api " + TITLE, version=VERSION)
@@ -181,7 +192,7 @@ async def _question(
     input: str, limit: int = 10, props: ModelProperties = ModelProperties()
 ):
     # todo: receive config from request
-    if not input is None and len(input) > 0:
+    if input is not None and len(input) > 0:
         if props.stream:
             return StreamingResponse(
                 generate_question(input, limit, props),
@@ -202,13 +213,13 @@ async def question(
 
 
 @api_app.post("/question/")
-async def question(input: ChatInput):
+async def question_post(input: ChatInput):
     return await _question(input.input, input.limit, input.model_properties)
 
 
 @api_app.get("/search/")
 async def index(input: str, limit: int = 5):
-    if not input is None and len(input) != 0:
+    if input is not None and len(input) != 0:
         embedding = await get_embeddings_async(input)
 
         hits = qdrant.search(

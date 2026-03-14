@@ -42,7 +42,9 @@ def extract_metadata_func():
 
 @pytest.fixture
 def make_document(tmp_path: Path):
-    def _make(relative_path: str, content: bytes = b"metadata-test") -> tuple[Path, Path]:
+    def _make(
+        relative_path: str, content: bytes = b"metadata-test"
+    ) -> tuple[Path, Path]:
         document_path = tmp_path / relative_path
         document_path.parent.mkdir(parents=True, exist_ok=True)
         document_path.write_bytes(content)

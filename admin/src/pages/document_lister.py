@@ -55,16 +55,20 @@ def make_df(docs: list[dict], columns: list[str]) -> pd.DataFrame:
 try:
     queued_docs, processed_docs, failed_docs = load_documents()
 
-    tab_queued, tab_processed, tab_failed = st.tabs([
-        f"⏳ Queued ({len(queued_docs)})",
-        f"✅ Processed ({len(processed_docs)})",
-        f"❌ Failed ({len(failed_docs)})",
-    ])
+    tab_queued, tab_processed, tab_failed = st.tabs(
+        [
+            f"⏳ Queued ({len(queued_docs)})",
+            f"✅ Processed ({len(processed_docs)})",
+            f"❌ Failed ({len(failed_docs)})",
+        ]
+    )
 
     # ── Queued tab ───────────────────────────────────────────────────────────
     with tab_queued:
         st.subheader("Queued Documents")
-        st.caption("These documents have been discovered by the lister and are waiting to be indexed.")
+        st.caption(
+            "These documents have been discovered by the lister and are waiting to be indexed."
+        )
         if st.button("🔄 Refresh", key="refresh_queued"):
             st.rerun()
         if queued_docs:
@@ -92,7 +96,9 @@ try:
             )
             confirm_col, cancel_col = st.columns([1, 4])
             with confirm_col:
-                if st.button("✅ Confirm", key="confirm_clear_processed_btn", type="primary"):
+                if st.button(
+                    "✅ Confirm", key="confirm_clear_processed_btn", type="primary"
+                ):
                     for doc in processed_docs:
                         redis_client.delete(doc["_redis_key"])
                     st.session_state.pop("confirm_clear_processed", None)
@@ -103,8 +109,18 @@ try:
                     st.session_state.pop("confirm_clear_processed", None)
                     st.rerun()
         if processed_docs:
-            display_cols = ["path", "title", "author", "year", "category", "page_count", "timestamp"]
-            st.dataframe(make_df(processed_docs, display_cols), use_container_width=True)
+            display_cols = [
+                "path",
+                "title",
+                "author",
+                "year",
+                "category",
+                "page_count",
+                "timestamp",
+            ]
+            st.dataframe(
+                make_df(processed_docs, display_cols), use_container_width=True
+            )
         else:
             st.info("No processed documents yet.")
 
@@ -120,7 +136,9 @@ try:
             if st.button("🔄 Refresh", key="refresh_failed"):
                 st.rerun()
         with col_requeue_all:
-            if failed_docs and st.button("🔄 Requeue All", key="requeue_all", type="primary"):
+            if failed_docs and st.button(
+                "🔄 Requeue All", key="requeue_all", type="primary"
+            ):
                 for doc in failed_docs:
                     requeue_document(doc["_redis_key"])
                 st.success(f"Requeued {len(failed_docs)} failed document(s).")
@@ -130,17 +148,23 @@ try:
             for doc in failed_docs:
                 path_label = doc.get("path", doc.get("_redis_key", "Unknown"))
                 with st.expander(f"❌ {path_label}"):
-                    st.markdown(f"**Error:** {doc.get('error') or 'No error details recorded.'}")
+                    st.markdown(
+                        f"**Error:** {doc.get('error') or 'No error details recorded.'}"
+                    )
                     st.markdown(f"**Timestamp:** {doc.get('timestamp', 'N/A')}")
                     if doc.get("last_modified"):
                         st.markdown(f"**Last modified:** {doc['last_modified']}")
                     if st.button("🔄 Requeue", key=f"requeue_{doc['_redis_key']}"):
                         requeue_document(doc["_redis_key"])
-                        st.success("Document requeued — it will be picked up on the next lister scan.")
+                        st.success(
+                            "Document requeued — it will be picked up on the next lister scan."
+                        )
                         st.rerun()
         else:
             st.success("No failed documents. 🎉")
 
 except redis.exceptions.ConnectionError:
-    st.error(f"Cannot connect to Redis at {REDIS_HOST}:{REDIS_PORT}. "
-             "Check that the `REDIS_HOST` and `REDIS_PORT` environment variables are set correctly.")
+    st.error(
+        f"Cannot connect to Redis at {REDIS_HOST}:{REDIS_PORT}. "
+        "Check that the `REDIS_HOST` and `REDIS_PORT` environment variables are set correctly."
+    )

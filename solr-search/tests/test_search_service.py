@@ -67,7 +67,9 @@ def test_parse_facet_counts_prefers_detected_language_buckets() -> None:
 
 
 def test_build_filter_queries_supports_language_fallback_and_exact_matches() -> None:
-    filters = build_filter_queries({"author": "Joan Amades", "language": "ca", "year": "1950"})
+    filters = build_filter_queries(
+        {"author": "Joan Amades", "language": "ca", "year": "1950"}
+    )
 
     assert filters == [
         r"author_s:Joan\ Amades",
@@ -122,7 +124,10 @@ def test_document_tokens_round_trip_and_stay_under_base_path(tmp_path: Path) -> 
     token = encode_document_token(relative_path)
 
     assert decode_document_token(token) == relative_path
-    assert resolve_document_path(tmp_path, relative_path) == tmp_path / "amades" / "rondalles.pdf"
+    assert (
+        resolve_document_path(tmp_path, relative_path)
+        == tmp_path / "amades" / "rondalles.pdf"
+    )
 
 
 def test_resolve_document_path_rejects_traversal(tmp_path: Path) -> None:
@@ -144,7 +149,7 @@ def test_normalize_search_query_rejects_local_params() -> None:
 
 
 def test_build_inline_content_disposition_sanitizes_newlines() -> None:
-    header = build_inline_content_disposition('safe\nname.pdf')
+    header = build_inline_content_disposition("safe\nname.pdf")
 
     assert "\n" not in header
     assert header.startswith("inline; filename*=UTF-8''")
@@ -181,7 +186,9 @@ def test_build_knn_params_produces_correct_solr_query() -> None:
 
 
 def test_build_knn_params_custom_field() -> None:
-    params = build_knn_params([0.5], top_k=3, knn_field="embedding_v", filters=["author_s:Amades"])
+    params = build_knn_params(
+        [0.5], top_k=3, knn_field="embedding_v", filters=["author_s:Amades"]
+    )
     assert "f=embedding_v" in params["q"]
     assert params["fq"] == ["author_s:Amades"]
 
@@ -226,12 +233,19 @@ def test_reciprocal_rank_fusion_rrf_score_overwrites_original_score() -> None:
 
 
 def test_reciprocal_rank_fusion_preserves_metadata() -> None:
-    kw = [{"id": "doc1", "score": 1.0, "title": "My Book", "author": "Author A", "highlights": ["snippet"]}]
+    kw = [
+        {
+            "id": "doc1",
+            "score": 1.0,
+            "title": "My Book",
+            "author": "Author A",
+            "highlights": ["snippet"],
+        }
+    ]
     fused = reciprocal_rank_fusion(kw, [])
     assert fused[0]["title"] == "My Book"
     assert fused[0]["author"] == "Author A"
     assert fused[0]["highlights"] == ["snippet"]
-
 
 
 def test_solr_escape_handles_special_characters() -> None:

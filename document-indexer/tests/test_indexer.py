@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -10,7 +8,6 @@ import pytest
 import document_indexer.__main__ as indexer_module
 from document_indexer.__main__ import (
     build_chunk_doc,
-    build_literal_params,
     index_chunks,
     index_document,
     mark_failure,
@@ -60,7 +57,9 @@ def metadata_stub(pdf_file: Path, base_path: str):
 
 class TestBuildChunkDoc:
     def test_chunk_id_is_deterministic(self, metadata_stub):
-        doc = build_chunk_doc("parent123", 0, "some text", FAKE_EMBEDDING, metadata_stub)
+        doc = build_chunk_doc(
+            "parent123", 0, "some text", FAKE_EMBEDDING, metadata_stub
+        )
         assert doc["id"] == "parent123_chunk_0000"
 
     def test_chunk_index_zero_padded(self, metadata_stub):
@@ -124,7 +123,9 @@ class TestIndexChunks:
         mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
         mock_post.return_value = self._mock_response()
 
-        with patch("document_indexer.__main__.chunk_text", return_value=["chunk1", "chunk2"]):
+        with patch(
+            "document_indexer.__main__.chunk_text", return_value=["chunk1", "chunk2"]
+        ):
             count = index_chunks(pdf_file, "parent_id", metadata_stub)
 
         assert count == 2
@@ -185,7 +186,9 @@ class TestIndexChunks:
         mock_extract_text.return_value = FAKE_TEXT
         mock_get_embeddings.return_value = [FAKE_EMBEDDING]
         mock_post.return_value = self._mock_response(500, "Solr error")
-        mock_post.return_value.raise_for_status.side_effect = Exception("500 Server Error")
+        mock_post.return_value.raise_for_status.side_effect = Exception(
+            "500 Server Error"
+        )
 
         with patch("document_indexer.__main__.chunk_text", return_value=["chunk"]):
             with pytest.raises(Exception, match="500 Server Error"):
@@ -212,7 +215,9 @@ class TestWaitForSolrCollection:
     def test_returns_when_collection_and_extract_handler_are_ready(self, mock_get):
         mock_get.side_effect = [
             self._mock_response(json_data={"collections": ["books"]}),
-            self._mock_response(text='{"config":{"requestHandler":{"/update/extract":{}}}}'),
+            self._mock_response(
+                text='{"config":{"requestHandler":{"/update/extract":{}}}}'
+            ),
         ]
 
         wait_for_solr_collection(max_attempts=1, delay=0)
@@ -236,7 +241,9 @@ class TestWaitForSolrCollection:
             self._mock_response(json_data={"collections": ["books"]}),
             self._mock_response(text='{"config":{"requestHandler":{}}}'),
             self._mock_response(json_data={"collections": ["books"]}),
-            self._mock_response(text='{"config":{"requestHandler":{"/update/extract":{}}}}'),
+            self._mock_response(
+                text='{"config":{"requestHandler":{"/update/extract":{}}}}'
+            ),
         ]
 
         wait_for_solr_collection(max_attempts=2, delay=0)
@@ -451,9 +458,14 @@ class TestMarkFailure:
 
 class TestSaveState:
     def test_allows_file_path_metadata_field(self):
-        with patch("document_indexer.__main__.load_state", return_value={"path": "abs/path.pdf"}):
+        with patch(
+            "document_indexer.__main__.load_state",
+            return_value={"path": "abs/path.pdf"},
+        ):
             with patch.object(indexer_module.redis_client, "set") as mock_set:
-                state = save_state("abs/path.pdf", file_path="relative/path.pdf", processed=True)
+                state = save_state(
+                    "abs/path.pdf", file_path="relative/path.pdf", processed=True
+                )
 
         assert state["path"] == "abs/path.pdf"
         assert state["file_path"] == "relative/path.pdf"

@@ -33,18 +33,22 @@ app = FastAPI(title="𐃆 Aithena Embeddings API")
 
 class EmbeddingsInput(BaseModel):
     """Input definition for embeddings endpoint. Takes a list of strings or a single string."""
+
     input: Union[str, list[str]]
 
 
 class EmbeddingsOutput(BaseModel):
     """Output definition for embeddings endpoint. Returns a list of embeddings."""
+
     class EmbeddingsList(BaseModel):
         """The list of embeddings."""
+
         object: str = "embedding"
         embedding: list[float] = []
 
     class Usage(BaseModel):
         """Usage statistics. Not used, just for compatibility with LLaMA.cpp API."""
+
         prompt_tokens: int
         total_tokens: int
 
@@ -56,6 +60,7 @@ class EmbeddingsOutput(BaseModel):
 
 class ModelInfo(BaseModel):
     """Active model metadata for downstream consumers (e.g. Solr vector field sizing)."""
+
     model: str
     embedding_dim: int
 

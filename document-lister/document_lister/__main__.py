@@ -42,7 +42,9 @@ def process_path(path: str, redis_client: redis.Redis, channel: pika.channel.Cha
         handle_document(file_path, redis_client, channel)
 
 
-def handle_document(path: Path, redis_client: redis.Redis, channel: pika.channel.Channel):
+def handle_document(
+    path: Path, redis_client: redis.Redis, channel: pika.channel.Channel
+):
     """
     Handles a document by checking its status and pushing it to the queue if necessary.
 
@@ -120,7 +122,9 @@ def produce():
     """
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT))
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT)
+    )
     channel = connection.channel()
     logger.info("Declaring queue %s", QUEUE_NAME)
     channel.queue_declare(queue=QUEUE_NAME, durable=True, auto_delete=False)

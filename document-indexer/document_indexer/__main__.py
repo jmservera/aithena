@@ -66,7 +66,9 @@ def wait_for_solr_collection(
     delay: int = SOLR_STARTUP_DELAY,
 ) -> None:
     collections_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/admin/collections"
-    config_url = f"http://{SOLR_HOST}:{SOLR_PORT}/api/collections/{SOLR_COLLECTION}/config"
+    config_url = (
+        f"http://{SOLR_HOST}:{SOLR_PORT}/api/collections/{SOLR_COLLECTION}/config"
+    )
     last_error: Exception | None = None
 
     for attempt in range(1, max_attempts + 1):
@@ -246,7 +248,9 @@ def index_chunks(
     text = extract_pdf_text(path)
     chunks = chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
     if not chunks:
-        logger.info("No text chunks extracted from %s; skipping embedding indexing.", path)
+        logger.info(
+            "No text chunks extracted from %s; skipping embedding indexing.", path
+        )
         return 0
 
     embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
