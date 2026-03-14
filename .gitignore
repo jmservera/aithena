@@ -162,3 +162,10 @@ init-letsencrypt.sh
 .*env/
 __azurite_db_blob__.json
 __azurite_db_blob_extent__.json
+
+# Removed deprecated services (kept in .gitignore to prevent re-introduction)
+qdrant-search/
+qdrant-clean/
+llama-server/
+llama-base/
+
