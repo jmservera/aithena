@@ -466,6 +466,215 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* ── Advanced search builder ───────────────────────────────────── */
+
+.advanced-search-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.advanced-search-toolbar,
+.advanced-search-panel,
+.advanced-query-preview,
+.advanced-term-row {
+  background-color: #40414f;
+  color: #f5f7fb;
+}
+
+.advanced-search-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f5f7fb;
+}
+
+.advanced-search-subtitle,
+.advanced-search-help {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.88rem;
+}
+
+.advanced-builder-toggle .btn,
+.advanced-search-builder .btn,
+.search-mode-badge {
+  font-weight: 600;
+}
+
+.advanced-search-builder .btn-outline-secondary,
+.advanced-search-builder .btn-outline-info,
+.advanced-search-builder .btn-outline-danger {
+  border-width: 1px;
+}
+
+.advanced-search-builder .btn-outline-secondary {
+  color: rgba(255, 255, 255, 0.72);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.advanced-search-builder .btn-outline-secondary:hover,
+.advanced-search-builder .btn-outline-secondary:focus {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.advanced-search-builder .btn-outline-info {
+  color: #7ec8e3;
+  border-color: rgba(126, 200, 227, 0.45);
+}
+
+.advanced-search-builder .btn-outline-info:hover,
+.advanced-search-builder .btn-outline-info:focus {
+  background-color: rgba(126, 200, 227, 0.16);
+  color: #cceaf4;
+  border-color: #7ec8e3;
+}
+
+.advanced-search-builder .btn-outline-danger {
+  color: #ff9b9b;
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.advanced-search-builder .btn-outline-danger:hover,
+.advanced-search-builder .btn-outline-danger:focus {
+  background-color: rgba(255, 107, 107, 0.14);
+  color: #ffd1d1;
+  border-color: #ff6b6b;
+}
+
+.advanced-search-builder .btn-info,
+.search-btn.btn-info {
+  background-color: #7ec8e3;
+  border-color: #7ec8e3;
+  color: #1a1a2e;
+}
+
+.advanced-search-builder .btn-info:hover,
+.search-btn.btn-info:hover:not(:disabled) {
+  background-color: #9bd5ea;
+  border-color: #9bd5ea;
+  color: #1a1a2e;
+}
+
+.advanced-search-builder .card-body {
+  padding: 1rem 1.1rem;
+}
+
+.advanced-search-section-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+  margin-bottom: 0.35rem;
+}
+
+.advanced-search-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.advanced-search-builder .form-control,
+.advanced-search-builder .form-select,
+.search-sort-limit .form-select {
+  background-color: #353645;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.advanced-search-builder .form-control::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.advanced-search-builder .form-control:focus,
+.advanced-search-builder .form-select:focus,
+.search-sort-limit .form-select:focus {
+  background-color: #353645;
+  color: #ffffff;
+  border-color: #7ec8e3;
+  box-shadow: 0 0 0 0.18rem rgba(126, 200, 227, 0.18);
+}
+
+.advanced-search-builder .form-select option,
+.search-sort-limit .form-select option {
+  color: #10131f;
+}
+
+.advanced-search-check {
+  min-height: unset;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding-left: 0;
+}
+
+.advanced-search-check .form-check-input {
+  margin: 0;
+  background-color: #2b2c3b;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.advanced-search-check .form-check-input:checked {
+  background-color: #7ec8e3;
+  border-color: #7ec8e3;
+}
+
+.advanced-search-tabs {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+.advanced-search-tabs .nav-link {
+  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid transparent;
+}
+
+.advanced-search-tabs .nav-link:hover:not(:disabled),
+.advanced-search-tabs .nav-link:focus-visible:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.advanced-search-tabs .nav-link.active {
+  color: #ffffff;
+  background-color: rgba(126, 200, 227, 0.12);
+  border-color: rgba(126, 200, 227, 0.34) rgba(126, 200, 227, 0.34) transparent;
+}
+
+.advanced-search-tabs .nav-link:disabled {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.advanced-query-preview code,
+.advanced-search-help code {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background-color: #1f2230;
+  color: #ffd97d;
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.86rem;
+}
+
+.advanced-search-help code {
+  display: inline-block;
+  padding: 0.12rem 0.35rem;
+  font-size: 0.82rem;
+}
+
+.advanced-query-preview-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.advanced-semantic-input {
+  min-height: 6.5rem;
+}
+
+.advanced-search-simple-form {
+  align-items: stretch;
+}
+
 /* ── PDF Viewer overlay ────────────────────────────────────────── */
 
 .pdf-viewer-overlay {
