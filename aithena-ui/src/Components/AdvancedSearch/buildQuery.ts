@@ -24,13 +24,14 @@ export interface BuildQueryInput {
 
 export const QUERY_OPERATOR_OPTIONS: QueryOperator[] = ["AND", "OR", "NOT"];
 
-export const QUERY_FIELD_OPTIONS: Array<{ value: QueryField; label: string }> = [
-  { value: "all", label: "All fields" },
-  { value: "title", label: "Title" },
-  { value: "author", label: "Author" },
-  { value: "content", label: "Content" },
-  { value: "category", label: "Category" },
-];
+export const QUERY_FIELD_OPTIONS: Array<{ value: QueryField; label: string }> =
+  [
+    { value: "all", label: "All fields" },
+    { value: "title", label: "Title" },
+    { value: "author", label: "Author" },
+    { value: "content", label: "Content" },
+    { value: "category", label: "Category" },
+  ];
 
 const FIELD_MAP: Record<Exclude<QueryField, "all">, string> = {
   title: "title_s",
@@ -72,7 +73,12 @@ function buildTermClause(term: QueryTerm): string {
     clause = `(${clause})`;
   }
 
-  if (term.fuzzy && !term.phrase && !isMultiWord && !/[?*]/.test(normalizedText)) {
+  if (
+    term.fuzzy &&
+    !term.phrase &&
+    !isMultiWord &&
+    !/[?*]/.test(normalizedText)
+  ) {
     clause = `${clause}~`;
   }
 
@@ -113,7 +119,11 @@ function buildLanguageClause(language?: string): string {
   return `(language_detected_s:${escapedLanguage} OR language_s:${escapedLanguage})`;
 }
 
-export function buildQuery({ terms, yearRange, language }: BuildQueryInput): string {
+export function buildQuery({
+  terms,
+  yearRange,
+  language,
+}: BuildQueryInput): string {
   const termClauses = terms
     .map((term) => ({ term, clause: buildTermClause(term) }))
     .filter((entry) => entry.clause);

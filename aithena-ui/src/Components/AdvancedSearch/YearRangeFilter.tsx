@@ -11,7 +11,10 @@ function YearRangeFilter({ value, onChange }: YearRangeFilterProps) {
       <div className="advanced-search-section-label">Year range</div>
       <div className="row g-3">
         <div className="col-6">
-          <label className="form-label advanced-search-label" htmlFor="year-range-from">
+          <label
+            className="form-label advanced-search-label"
+            htmlFor="year-range-from"
+          >
             From
           </label>
           <input
@@ -22,11 +25,16 @@ function YearRangeFilter({ value, onChange }: YearRangeFilterProps) {
             step={1}
             placeholder="1900"
             value={value.from}
-            onChange={(event) => onChange({ ...value, from: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...value, from: event.target.value })
+            }
           />
         </div>
         <div className="col-6">
-          <label className="form-label advanced-search-label" htmlFor="year-range-to">
+          <label
+            className="form-label advanced-search-label"
+            htmlFor="year-range-to"
+          >
             To
           </label>
           <input

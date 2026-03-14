@@ -41,7 +41,9 @@ function AdvancedSearchBuilder({
   semanticEnabled = false,
   hybridEnabled = false,
 }: AdvancedSearchBuilderProps) {
-  const [builderMode, setBuilderMode] = useState<"simple" | "advanced">("simple");
+  const [builderMode, setBuilderMode] = useState<"simple" | "advanced">(
+    "simple"
+  );
   const [searchMode, setSearchMode] = useState<SearchMode>("keyword");
   const [simpleQuery, setSimpleQuery] = useState("");
   const [semanticQuery, setSemanticQuery] = useState("");
@@ -76,7 +78,11 @@ function AdvancedSearchBuilder({
   const showSemanticInput = showAdvancedBuilder && searchMode !== "keyword";
 
   function handleBuilderModeChange(nextMode: "simple" | "advanced") {
-    if (nextMode === "advanced" && !terms[0]?.text.trim() && simpleQuery.trim()) {
+    if (
+      nextMode === "advanced" &&
+      !terms[0]?.text.trim() &&
+      simpleQuery.trim()
+    ) {
       setTerms((currentTerms) => [
         { ...currentTerms[0], text: simpleQuery.trim() },
         ...currentTerms.slice(1),
@@ -103,12 +109,17 @@ function AdvancedSearchBuilder({
 
   function handleTermChange(id: string, updates: Partial<QueryTerm>) {
     setTerms((currentTerms) =>
-      currentTerms.map((term) => (term.id === id ? { ...term, ...updates } : term))
+      currentTerms.map((term) =>
+        term.id === id ? { ...term, ...updates } : term
+      )
     );
   }
 
   function handleAddTerm() {
-    setTerms((currentTerms) => [...currentTerms, createEmptyTerm(nextTermId.current++)]);
+    setTerms((currentTerms) => [
+      ...currentTerms,
+      createEmptyTerm(nextTermId.current++),
+    ]);
   }
 
   function handleRemoveTerm(id: string) {
@@ -171,10 +182,15 @@ function AdvancedSearchBuilder({
             <div>
               <div className="advanced-search-title">Search composer</div>
               <p className="advanced-search-subtitle mb-0">
-                Start with simple search, then opt into guided Solr query building.
+                Start with simple search, then opt into guided Solr query
+                building.
               </p>
             </div>
-            <div className="btn-group advanced-builder-toggle" role="group" aria-label="Search builder mode">
+            <div
+              className="btn-group advanced-builder-toggle"
+              role="group"
+              aria-label="Search builder mode"
+            >
               <button
                 type="button"
                 className={`btn ${builderMode === "simple" ? "btn-info" : "btn-outline-secondary"}`}
@@ -202,7 +218,11 @@ function AdvancedSearchBuilder({
                 onChange={(event) => setSimpleQuery(event.target.value)}
                 aria-label="Search query"
               />
-              <button className="search-btn btn btn-info" type="submit" disabled={loading}>
+              <button
+                className="search-btn btn btn-info"
+                type="submit"
+                disabled={loading}
+              >
                 {loading ? "…" : "Search"}
               </button>
             </div>
@@ -223,12 +243,20 @@ function AdvancedSearchBuilder({
               <div className="d-flex flex-column gap-3">
                 <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
                   <div>
-                    <div className="advanced-search-section-label">Search terms</div>
+                    <div className="advanced-search-section-label">
+                      Search terms
+                    </div>
                     <p className="advanced-search-help mb-0">
-                      Use rows to combine terms with AND / OR / NOT. Wildcards like <code>*</code> and <code>?</code> can be typed directly.
+                      Use rows to combine terms with AND / OR / NOT. Wildcards
+                      like <code>*</code> and <code>?</code> can be typed
+                      directly.
                     </p>
                   </div>
-                  <button type="button" className="btn btn-outline-info align-self-start" onClick={handleAddTerm}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-info align-self-start"
+                    onClick={handleAddTerm}
+                  >
                     Add term
                   </button>
                 </div>
@@ -246,10 +274,17 @@ function AdvancedSearchBuilder({
 
                 <div className="row g-3">
                   <div className="col-12 col-lg-6">
-                    <YearRangeFilter value={yearRange} onChange={setYearRange} />
+                    <YearRangeFilter
+                      value={yearRange}
+                      onChange={setYearRange}
+                    />
                   </div>
                   <div className="col-12 col-lg-6">
-                    <LanguageFilter value={language} options={languageOptions} onChange={setLanguage} />
+                    <LanguageFilter
+                      value={language}
+                      options={languageOptions}
+                      onChange={setLanguage}
+                    />
                   </div>
                 </div>
               </div>
@@ -257,7 +292,10 @@ function AdvancedSearchBuilder({
 
             {showSemanticInput && (
               <div>
-                <label className="form-label advanced-search-section-label" htmlFor="semantic-query-input">
+                <label
+                  className="form-label advanced-search-section-label"
+                  htmlFor="semantic-query-input"
+                >
                   Natural language query
                 </label>
                 <textarea
@@ -278,7 +316,11 @@ function AdvancedSearchBuilder({
             />
 
             <div className="d-flex justify-content-end">
-              <button className="search-btn btn btn-info" type="submit" disabled={loading}>
+              <button
+                className="search-btn btn btn-info"
+                type="submit"
+                disabled={loading}
+              >
                 {loading ? "…" : "Search"}
               </button>
             </div>

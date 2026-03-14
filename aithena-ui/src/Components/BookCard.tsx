@@ -64,9 +64,7 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
         </div>
       )}
       <div className="book-card-footer">
-        {book.file_path && (
-          <p className="book-filepath">{book.file_path}</p>
-        )}
+        {book.file_path && <p className="book-filepath">{book.file_path}</p>}
         {book.document_url && onOpenPdf && (
           <button
             className="open-pdf-btn"

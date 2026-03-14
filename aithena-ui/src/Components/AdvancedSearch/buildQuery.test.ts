@@ -89,7 +89,7 @@ describe("buildQuery", () => {
         yearRange: { from: "1900", to: "" },
         language: "en",
       })
-    ).toBe('year_i:[1900 TO *] AND (language_detected_s:en OR language_s:en)');
+    ).toBe("year_i:[1900 TO *] AND (language_detected_s:en OR language_s:en)");
   });
 
   it("ignores invalid year boundary values instead of generating broken Solr ranges", () => {

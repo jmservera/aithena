@@ -47,7 +47,9 @@ function SearchPage() {
   );
 
   const totalPages = Math.ceil(total / searchState.limit);
-  const languageOptions = (facets.language ?? []).map(({ value }) => String(value));
+  const languageOptions = (facets.language ?? []).map(({ value }) =>
+    String(value)
+  );
 
   return (
     <div className="App">
@@ -174,7 +176,10 @@ function SearchPage() {
       </main>
 
       {selectedBook && (
-        <PdfViewer result={selectedBook} onClose={() => setSelectedBook(null)} />
+        <PdfViewer
+          result={selectedBook}
+          onClose={() => setSelectedBook(null)}
+        />
       )}
     </div>
   );

@@ -21,7 +21,10 @@ function formatLanguageLabel(code: string) {
 function LanguageFilter({ value, options, onChange }: LanguageFilterProps) {
   return (
     <div>
-      <label className="form-label advanced-search-section-label" htmlFor="language-filter">
+      <label
+        className="form-label advanced-search-section-label"
+        htmlFor="language-filter"
+      >
         Language filter
       </label>
       <select

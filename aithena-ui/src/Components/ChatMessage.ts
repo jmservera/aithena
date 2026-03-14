@@ -7,7 +7,7 @@ import {
 const serverBaseURL = `${import.meta.env.VITE_API_URL}/v1/question/`;
 console.log(`serverBaseURL: ${serverBaseURL}`);
 
-type MessageHandler = (data: any) => void;
+type MessageHandler = (data: unknown) => void;
 
 export type ChatMessageProps = {
   message: string;
@@ -31,7 +31,7 @@ export const ChatMessage = async (
   console.log(`message limit: ${limit}`);
 
   console.log(`fetching ${message}`);
-  let msg = JSON.stringify({
+  const msg = JSON.stringify({
     input: message,
     limit: limit,
     model_properties: {
