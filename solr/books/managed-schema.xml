@@ -483,6 +483,7 @@
   <field name="author_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
   <field name="year_i" type="pint" multiValued="false" indexed="true" stored="true"/>
   <field name="page_count_i" type="pint" multiValued="false" indexed="true" stored="true"/>
+  <field name="pages_i" type="pints" multiValued="true" indexed="true" stored="true"/>
   <field name="file_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="folder_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="category_s" type="string" multiValued="false" indexed="true" stored="true"/>

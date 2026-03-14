@@ -25,6 +25,7 @@ SOLR_FIELD_LIST = [
     "file_path_s",
     "folder_path_s",
     "page_count_i",
+    "pages_i",
     "file_size_l",
     "score",
 ]
@@ -218,6 +219,7 @@ def normalize_book(
         "file_path": document.get("file_path_s"),
         "folder_path": document.get("folder_path_s"),
         "page_count": document.get("page_count_i"),
+        "pages": document.get("pages_i") or [],
         "file_size": document.get("file_size_l"),
         "score": document.get("score"),
         "highlights": collect_highlights(document_id, highlighting),

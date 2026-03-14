@@ -24,6 +24,13 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
   }, [onClose]);
 
   const pdfUrl = result.document_url ?? null;
+  const startPage =
+    result.pages && result.pages.length > 0 ? result.pages[0] : null;
+  const iframeSrc = pdfUrl
+    ? startPage !== null
+      ? `${pdfUrl}#page=${startPage}`
+      : pdfUrl
+    : null;
 
   return (
     <div
@@ -61,7 +68,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
               </p>
               {pdfUrl && (
                 <a
-                  href={pdfUrl}
+                  href={iframeSrc ?? pdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="pdf-viewer-fallback-link"
@@ -70,10 +77,10 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
                 </a>
               )}
             </div>
-          ) : pdfUrl ? (
+          ) : iframeSrc ? (
             <iframe
               className="pdf-viewer-frame"
-              src={pdfUrl}
+              src={iframeSrc}
               title={result.title || "PDF document"}
               onError={() => setLoadError(true)}
             />

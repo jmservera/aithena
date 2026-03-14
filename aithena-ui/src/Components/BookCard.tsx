@@ -50,6 +50,14 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
           </span>
         )}
       </div>
+      {book.pages && book.pages.length > 0 && (
+        <p className="book-matched-pages">
+          Found on{" "}
+          {book.pages.length === 1
+            ? `page ${book.pages[0]}`
+            : `pages ${book.pages.join(", ")}`}
+        </p>
+      )}
       {book.highlights && book.highlights.length > 0 && (
         <div className="book-highlights">
           {book.highlights.map((snippet, i) => (

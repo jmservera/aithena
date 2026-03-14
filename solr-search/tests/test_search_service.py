@@ -114,7 +114,24 @@ def test_normalize_book_collects_fields_and_highlights() -> None:
         "score": 12.5,
         "highlights": ["<em>folk</em> story", "second snippet"],
         "document_url": "/documents/token",
+        "pages": [],
     }
+
+
+def test_normalize_book_includes_matched_pages() -> None:
+    book = normalize_book(
+        {
+            "id": "abc123",
+            "title_s": "Rondalles",
+            "author_s": "Amades",
+            "page_count_i": 320,
+            "pages_i": [5, 6],
+        },
+        {},
+        "/documents/token",
+    )
+
+    assert book["pages"] == [5, 6]
 
 
 def test_document_tokens_round_trip_and_stay_under_base_path(tmp_path: Path) -> None:
