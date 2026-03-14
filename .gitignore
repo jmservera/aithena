@@ -163,6 +163,13 @@ init-letsencrypt.sh
 __azurite_db_blob__.json
 __azurite_db_blob_extent__.json
 
+# Smoke test / snapshot artifacts — write these to tmp/ or .squad/artifacts/ instead
+*.png
+*-smoke-*.txt
+*-smoke-*.md
+*-snapshot.md
+tmp/
+
 # Removed deprecated services (kept in .gitignore to prevent re-introduction)
 qdrant-search/
 qdrant-clean/

@@ -1,0 +1,4 @@
+# Ignore all smoke-test / snapshot artifacts in this directory.
+# Add this folder as the output path in smoke tests instead of the repo root.
+*
+!.gitignore
