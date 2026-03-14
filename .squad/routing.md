@@ -20,6 +20,7 @@ How to decide who handles what.
 | Testing | Lambert | Write tests, find edge cases, verify fixes, integration testing |
 | Scope & priorities | Ripley | What to build next, trade-offs, decisions |
 | Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |
+| Release validation, screenshots, docs | Newt | Pre-release smoke test, user/admin manuals, changelog |
 | Session logging | Scribe | Automatic — never needs routing |
 
 ## Issue Routing
