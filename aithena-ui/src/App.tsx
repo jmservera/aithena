@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import TabNav from './Components/TabNav';
 import SearchPage from './pages/SearchPage';
 import LibraryPage from './pages/LibraryPage';
+import UploadPage from './pages/UploadPage';
 import StatusPage from './pages/StatusPage';
 import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
@@ -23,6 +24,7 @@ function App() {
             <Route path="/" element={<Navigate to="/search" replace />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/library" element={<LibraryPage />} />
+            <Route path="/upload" element={<UploadPage />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/admin" element={<AdminPage />} />
