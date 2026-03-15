@@ -512,6 +512,39 @@ def test_search_hybrid_empty_query_returns_400(mock_solr_get: MagicMock, mock_em
 
 
 # ---------------------------------------------------------------------------
+# Tests for invalid search mode parameter
+# ---------------------------------------------------------------------------
+
+
+def test_search_invalid_mode_returns_400() -> None:
+    """GET /v1/search?q=test&mode=invalid must return 400 with a descriptive message."""
+    client = get_client()
+    response = client.get("/v1/search", params={"q": "test", "mode": "invalid"})
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "Invalid search mode" in detail
+    assert "keyword" in detail
+    assert "semantic" in detail
+    assert "hybrid" in detail
+
+
+@patch("main.requests.get")
+def test_search_keyword_mode_returns_200(mock_solr_get: MagicMock) -> None:
+    """GET /v1/search?q=test&mode=keyword must return 200 (control case)."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = _solr_payload(_make_solr_docs(1))
+    mock_solr_get.return_value = mock_response
+
+    client = get_client()
+    response = client.get("/v1/search", params={"q": "test", "mode": "keyword"})
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "keyword"
+
+
+# ---------------------------------------------------------------------------
 # Tests for GET /books/{document_id}/similar
 # ---------------------------------------------------------------------------
 
