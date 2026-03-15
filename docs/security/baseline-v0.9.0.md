@@ -161,5 +161,6 @@ The following issues should be created for the v0.9.0 / v1.0.0 roadmap:
 | `document-indexer/requirements.txt` | Same as above (fallback file) |
 | `document-indexer/uv.lock` | Regenerated: pdfplumber 0.11.9, pdfminer-six 20251230 |
 | `admin/pyproject.toml` | `streamlit` `==1.37.0` → `>=1.51.0,<2`; added `pillow>=12.1.1` |
-| `admin/src/requirements.txt` | `streamlit` `==1.37.0` → `>=1.51.0,<2` (fallback file) |
+| `admin/src/requirements.txt` | `streamlit` `==1.37.0` → `>=1.51.0,<2`; added `pillow>=12.1.1` (fallback file) |
 | `admin/uv.lock` | Regenerated: streamlit 1.55.0, pillow 12.1.1 |
+| `solr-search/Dockerfile` | Changed install from `uv pip install --system -r pyproject.toml` → `uv sync --frozen --no-dev --no-install-project`; added `ENV PATH="/app/.venv/bin:${PATH}"` so production image is built from the reviewed lockfile |
