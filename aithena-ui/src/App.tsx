@@ -1,6 +1,7 @@
 import './App.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import TabNav from './Components/TabNav';
+import Footer from './Components/Footer';
 import SearchPage from './pages/SearchPage';
 import LibraryPage from './pages/LibraryPage';
 import UploadPage from './pages/UploadPage';
@@ -30,6 +31,7 @@ function App() {
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </div>
+        <Footer />
       </div>
     </BrowserRouter>
   );

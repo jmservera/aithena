@@ -11,6 +11,14 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-15T16:31 — Added build-time version footer to main UI (#201)
+
+- Wired the frontend build version through `vite.config.ts` with `define.__APP_VERSION__ = JSON.stringify(process.env.VERSION || 'dev')`, matching Brett's Dockerfile `VERSION` env setup from #199.
+- Extended `src/vite-env.d.ts` with a global declaration so React components and Vitest can reference `__APP_VERSION__` without local imports.
+- Added `src/Components/Footer.tsx` + `Footer.css` as a fixed, non-intrusive bottom-right badge showing `Aithena v{__APP_VERSION__}` across all routes by rendering it once in `App.tsx`.
+- Added `src/__tests__/Footer.test.tsx` to assert the footer and version string render correctly.
+- Verified the UI with `npm run lint`, `npm run build`, and `npx vitest run` (all passing; existing Upload/useUpload tests still emit known React act() warnings).
+
 ### 2026-03-13T20:58 — Phase 2–4 GitHub Issues Assigned
 
 - Ripley decomposed Phase 2–4 into issues #36–#53, all assigned to `@copilot` with squad labels and release milestones.

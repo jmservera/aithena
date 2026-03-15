@@ -7,6 +7,9 @@ const apiProxyTarget =
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.VERSION || 'dev'),
+  },
   plugins: [react({ fastRefresh: false })],
   base: '',
   server: {
