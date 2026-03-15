@@ -2,7 +2,8 @@
 # Use `admin/pyproject.toml` with `uv` instead:
 #   cd admin && uv sync
 #   uv run streamlit run src/main.py
-streamlit==1.37.0
+streamlit>=1.51.0,<2
 redis==4.6.0
 python-dotenv==1.0.1
 requests>=2.31.0
+pillow>=12.1.1
