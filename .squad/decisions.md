@@ -3379,3 +3379,34 @@ Use `object.__setattr__(settings, "field", value)` in test fixtures to modify fr
 2. E2E tests for upload → indexing → search pipeline
 3. Monitoring for RabbitMQ connection latency and upload metrics
 4. Stream validation enhancement (avoid 50MB memory load)
+
+
+---
+
+# Decision: Reskill Charter Optimization
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-15  
+**Status:** Proposed
+
+## Context
+
+The reskill audit found duplicated operational guidance spread across multiple agent charters. This inflated charter size, made updates error-prone, and mixed durable skills with role-specific responsibilities.
+
+## Decision
+
+1. Extract Newt's release approval checklist into shared skill `release-gate`.
+2. Remove duplicated workflow and project-context sections from `copilot` charter because they are already covered by `squad-pr-workflow` and `project-conventions`.
+3. Condense `newt` charter so it keeps role, authority, and responsibilities while delegating the detailed release process to `release-gate`.
+
+## Rationale
+
+- Shared skills are easier to update than repeating the same process in multiple charters.
+- Charters should define role boundaries and authority, not duplicate reusable operating instructions.
+- Centralizing the release checklist preserves Newt's gate authority while making the release process discoverable for the whole squad.
+
+## Impact
+
+- New release guidance now lives in `.squad/skills/release-gate/SKILL.md`.
+- Copilot and Newt charters are shorter and more focused.
+- Future release-process changes need one edit in the shared skill instead of charter-by-charter rewrites.

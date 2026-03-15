@@ -55,6 +55,21 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-15 — Reskill Charter Optimization
+
+**What was extracted:**
+- Newt's release approval checklist was extracted into shared skill `.squad/skills/release-gate/SKILL.md`.
+- Copilot charter removed duplicated Branch/PR/Tech Stack/Project Context blocks and now defers to `squad-pr-workflow` and `project-conventions`.
+- Newt charter now keeps role, authority, and core responsibilities while deferring detailed release steps to `release-gate`.
+
+**Charter sizes:**
+- `copilot`: 3223 → 2249 bytes (saved 974)
+- `newt`: 2731 → 1315 bytes (saved 1416)
+- total charter footprint: 15592 → 13202 bytes (saved 2390)
+
+**Skills created:**
+- `release-gate`
+
 ### 2026-03-14T23:xx — Reskill: Current Codebase State & v0.5 Roadmap Update
 
 **Release Status:**
