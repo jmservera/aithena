@@ -1,11 +1,13 @@
-import { useState, FormEvent } from 'react';
+import { useState, useCallback, FormEvent } from 'react';
 import { useSearch, BookResult, SearchMode } from '../hooks/search';
 import { SearchFilters } from '../hooks/search';
+import { getCachedSimilarBook } from '../hooks/similarBooks';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
 import BookCard from '../Components/BookCard';
 import Pagination from '../Components/Pagination';
 import PdfViewer from '../Components/PdfViewer';
+import SimilarBooks from '../Components/SimilarBooks';
 
 const SORT_OPTIONS = [
   { value: 'score desc', label: 'Relevance' },
@@ -57,6 +59,20 @@ function SearchPage() {
 
   const hasActiveFilters = Object.values(searchState.filters).some(
     (v) => v !== undefined && v !== ''
+  );
+
+  const handleOpenPdf = useCallback((book: BookResult) => {
+    setSelectedBook(book);
+  }, []);
+
+  const handleSelectSimilarBook = useCallback(
+    (bookId: string) => {
+      const similarBook = getCachedSimilarBook(bookId);
+      const searchResult = results.find((book) => book.id === bookId);
+
+      setSelectedBook((currentBook) => similarBook ?? searchResult ?? currentBook);
+    },
+    [results]
   );
 
   const totalPages = Math.ceil(total / searchState.limit);
@@ -183,11 +199,15 @@ function SearchPage() {
             <BookCard
               key={book.id}
               book={book}
-              onOpenPdf={setSelectedBook}
+              onOpenPdf={handleOpenPdf}
               isSelected={selectedBook?.id === book.id}
             />
           ))}
         </section>
+
+        {selectedBook && (
+          <SimilarBooks documentId={selectedBook.id} onSelectBook={handleSelectSimilarBook} />
+        )}
 
         {total > 0 && (
           <footer className="search-footer">

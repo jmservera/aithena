@@ -137,3 +137,11 @@
 - Vitest + React Testing Library are available as dev deps but no test files exist.
 - `npm run lint` and `npm run build` pass cleanly.
 
+### 2026-03-15T09:05 — Added Similar Books panel to SearchPage
+
+- Created `src/hooks/similarBooks.ts` with `useSimilarBooks(documentId)` to call `/v1/books/{documentId}/similar?limit=5&min_score=0.0`, using `buildApiUrl` and `AbortController` cleanup.
+- Added `src/Components/SimilarBooks.tsx` as a horizontal recommendation strip with title, author, score badge, loading skeletons, empty state, and friendly error handling.
+- Integrated the panel into `SearchPage.tsx` so selecting a book for PDF viewing also loads similar titles; clicking a similar book swaps the selected PDF and refreshes recommendations.
+- Added dark-theme styles in `App.css` for `.similar-books-panel`, `.similar-book-card`, and `.similarity-score`.
+- Added Vitest coverage for the new panel and SearchPage interaction; verified `npm run lint`, `npm run build`, and `npm test` all pass.
+
