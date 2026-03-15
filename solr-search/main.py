@@ -11,7 +11,7 @@ from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Generator, Literal
 from urllib.parse import urlparse
 
 import pika
@@ -784,14 +784,19 @@ def admin_containers() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4 — /v1/admin/documents endpoints (document triage and recovery)
+# Admin — /v1/admin/documents endpoints (document triage and recovery)
 # ---------------------------------------------------------------------------
 
 DocumentStatus = Literal["queued", "processed", "failed"]
 
-_ADMIN_DOC_COLUMNS_QUEUED = ("path", "timestamp", "last_modified")
-_ADMIN_DOC_COLUMNS_PROCESSED = ("path", "title", "author", "year", "category", "page_count", "timestamp")
-_ADMIN_DOC_COLUMNS_FAILED = ("path", "error", "timestamp", "last_modified")
+# Column sets per status — mirrors the Streamlit admin dashboard schema.
+# Canonical field names are defined by document-lister (__main__.py) and
+# document-indexer, which write these JSON fields to Redis.
+_ADMIN_DOC_COLUMNS: dict[str, tuple[str, ...]] = {
+    "queued": ("path", "timestamp", "last_modified"),
+    "processed": ("path", "title", "author", "year", "category", "page_count", "timestamp"),
+    "failed": ("path", "error", "timestamp", "last_modified"),
+}
 
 
 def _get_admin_redis_client() -> redis_lib.Redis:
@@ -824,6 +829,30 @@ def _classify_doc_state(state: dict[str, Any]) -> DocumentStatus:
     return "queued"
 
 
+def _iter_admin_docs(
+    client: redis_lib.Redis,
+) -> Generator[tuple[str, dict[str, Any], DocumentStatus], None, None]:
+    """Yield ``(redis_key, state_dict, status)`` for every valid admin doc entry.
+
+    Silently skips keys whose value is missing or cannot be decoded as JSON.
+    Raises HTTPException 503 if the Redis scan itself fails.
+    """
+    try:
+        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
+
+    for key in keys:
+        raw = client.get(key)
+        if raw is None:
+            continue
+        try:
+            state: dict[str, Any] = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        yield key, state, _classify_doc_state(state)
+
+
 def _load_admin_documents(
     status_filter: DocumentStatus | None = None,
 ) -> dict[str, Any]:
@@ -838,58 +867,24 @@ def _load_admin_documents(
         React data-table.  Each entry carries an opaque ``id`` token that can
         be passed back to the requeue endpoint.
     """
-    try:
-        client = _get_admin_redis_client()
-        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
-    except Exception:
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
-
-    total_queued = 0
-    total_processed = 0
-    total_failed = 0
+    client = _get_admin_redis_client()
+    counts: dict[DocumentStatus, int] = {"queued": 0, "processed": 0, "failed": 0}
     documents: list[dict[str, Any]] = []
 
-    for key in keys:
-        raw = client.get(key)
-        if raw is None:
-            continue
-        try:
-            state: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-
-        doc_status = _classify_doc_state(state)
-        if doc_status == "queued":
-            total_queued += 1
-        elif doc_status == "processed":
-            total_processed += 1
-        else:
-            total_failed += 1
+    for key, state, doc_status in _iter_admin_docs(client):
+        counts[doc_status] += 1
 
         if status_filter is not None and doc_status != status_filter:
             continue
 
-        entry: dict[str, Any] = {
-            "id": _encode_admin_key(key),
-            "status": doc_status,
-        }
-        if doc_status == "queued":
-            for col in _ADMIN_DOC_COLUMNS_QUEUED:
-                entry[col] = state.get(col)
-        elif doc_status == "processed":
-            for col in _ADMIN_DOC_COLUMNS_PROCESSED:
-                entry[col] = state.get(col)
-        else:
-            for col in _ADMIN_DOC_COLUMNS_FAILED:
-                entry[col] = state.get(col)
-
+        entry: dict[str, Any] = {"id": _encode_admin_key(key), "status": doc_status}
+        for col in _ADMIN_DOC_COLUMNS[doc_status]:
+            entry[col] = state.get(col)
         documents.append(entry)
 
     return {
-        "total": total_queued + total_processed + total_failed,
-        "queued": total_queued,
-        "processed": total_processed,
-        "failed": total_failed,
+        "total": sum(counts.values()),
+        **counts,
         "documents": documents,
     }
 
@@ -932,22 +927,10 @@ def admin_requeue_failed() -> dict[str, Any]:
     re-enqueue the document on its next scan.  The operation is idempotent —
     calling it when there are no failed documents returns ``requeued: 0``.
     """
-    try:
-        client = _get_admin_redis_client()
-        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
-    except Exception:
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
-
+    client = _get_admin_redis_client()
     requeued_ids: list[str] = []
-    for key in keys:
-        raw = client.get(key)
-        if raw is None:
-            continue
-        try:
-            state: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if _classify_doc_state(state) == "failed":
+    for key, _state, doc_status in _iter_admin_docs(client):
+        if doc_status == "failed":
             _delete_admin_key(key)
             requeued_ids.append(_encode_admin_key(key))
 
@@ -962,22 +945,10 @@ def admin_clear_processed() -> dict[str, Any]:
     on its next scan.  The operation is idempotent — calling it when there are
     no processed documents returns ``cleared: 0``.
     """
-    try:
-        client = _get_admin_redis_client()
-        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
-    except Exception:
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
-
+    client = _get_admin_redis_client()
     cleared = 0
-    for key in keys:
-        raw = client.get(key)
-        if raw is None:
-            continue
-        try:
-            state: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if _classify_doc_state(state) == "processed":
+    for key, _state, doc_status in _iter_admin_docs(client):
+        if doc_status == "processed":
             _delete_admin_key(key)
             cleared += 1
 
