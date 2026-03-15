@@ -21,7 +21,7 @@ services:
     volumes:
       - redis-data:/data
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13-management
     command: rabbitmq-server
     hostname: rabbitmq
     expose:
@@ -32,11 +32,13 @@ services:
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     environment:
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
+      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
-      interval: 5s
-      timeout: 15s
-      retries: 1
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 30s
     restart: on-failure
     networks:
       default:
@@ -63,8 +65,10 @@ services:
       - DOCUMENT_WILDCARD=*.pdf
       - POLL_INTERVAL=60  # seconds between library scans (default: 60)
     depends_on:
-      - rabbitmq
-      - redis
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
     restart: on-failure
     volumes:
       - document-data:/data/documents
@@ -87,7 +91,7 @@ services:
       replicas: 1
     depends_on:
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_started
       embeddings-server:
@@ -165,12 +169,18 @@ services:
     image: nginx:1.15-alpine
     restart: unless-stopped
     depends_on:
-      - aithena-ui
-      - solr-search
-      - streamlit-admin
-      - redis-commander
-      - rabbitmq
-      - solr
+      aithena-ui:
+        condition: service_started
+      solr-search:
+        condition: service_started
+      streamlit-admin:
+        condition: service_started
+      redis-commander:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      solr:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
