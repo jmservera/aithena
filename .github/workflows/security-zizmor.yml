@@ -26,12 +26,12 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           persist-credentials: false
 
       - name: Run zizmor security scan
-        uses: zizmorcore/zizmor-action@v0.1.1
+        uses: zizmorcore/zizmor-action@f52a838cfabf134edcbaa7c8b3677dde20045018  # v0.1.1
         with:
           # SARIF output automatically uploaded to GitHub Code Scanning
           # Focuses on P0 findings: template-injection and dangerous-triggers
