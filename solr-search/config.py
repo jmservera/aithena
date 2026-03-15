@@ -48,6 +48,8 @@ class Settings:
     upload_dir: Path
     max_upload_size_mb: int
     rabbitmq_queue_name: str
+    # Admin queue management
+    admin_queue_name: str
 
     @property
     def select_url(self) -> str:
@@ -93,4 +95,5 @@ settings = Settings(
     upload_dir=Path(os.environ.get("UPLOAD_DIR", "/data/documents/uploads")).resolve(),
     max_upload_size_mb=int(os.environ.get("MAX_UPLOAD_SIZE_MB", "50")),
     rabbitmq_queue_name=os.environ.get("RABBITMQ_QUEUE_NAME", "shortembeddings"),
+    admin_queue_name=os.environ.get("QUEUE_NAME", os.environ.get("RABBITMQ_QUEUE_NAME", "shortembeddings")),
 )
