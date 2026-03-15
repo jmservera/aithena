@@ -36,6 +36,13 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-15 — Embeddings Container Contract
+
+- `embeddings-server` must run the repo's FastAPI app, not the Weaviate inference image, because downstream services expect `POST /v1/embeddings/` in OpenAI-compatible batch format.
+- Standardize the internal container port on `8080`; `document-indexer` host/port wiring and `solr-search`'s `EMBEDDINGS_URL` must both target `http://embeddings-server:8080/v1/embeddings/`.
+- Preloading the SentenceTransformer model during the image build keeps runtime startup focused on serving requests instead of first-boot downloads.
+
+
 ### 2026-03-14 — Backend Reskill: Current Service Architecture
 
 **solr-search/** endpoints:

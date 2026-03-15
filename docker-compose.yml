@@ -44,8 +44,6 @@ services:
           - rabbitmq
   embeddings-server:
     build: ./embeddings-server
-    environment:
-      - PORT=8085
     expose:
       - "8080"
     restart: on-failure
@@ -83,7 +81,7 @@ services:
       - SOLR_PORT=8983
       - SOLR_COLLECTION=books
       - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8085
+      - EMBEDDINGS_PORT=8080
     restart: on-failure
     deploy:
       replicas: 1
@@ -116,7 +114,7 @@ services:
       - SOLR_COLLECTION=books
       - BASE_PATH=/data/documents
       - CORS_ORIGINS=http://localhost:5173
-      - EMBEDDINGS_URL=http://embeddings-server:8001/v1/embeddings/
+      - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
       - DEFAULT_SEARCH_MODE=keyword
     volumes:
       - document-data:/data/documents:ro
