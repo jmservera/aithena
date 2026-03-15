@@ -42,6 +42,7 @@ class Settings:
     redis_host: str
     redis_port: int
     redis_key_pattern: str
+    redis_queue_name: str
     rabbitmq_host: str
     rabbitmq_port: int
     # Phase 4 — upload endpoint
@@ -87,6 +88,7 @@ settings = Settings(
     redis_host=os.environ.get("REDIS_HOST", "redis"),
     redis_port=int(os.environ.get("REDIS_PORT", "6379")),
     redis_key_pattern=os.environ.get("REDIS_KEY_PATTERN", "doc:*"),
+    redis_queue_name=os.environ.get("REDIS_QUEUE_NAME", os.environ.get("QUEUE_NAME", "shortembeddings")),
     rabbitmq_host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
     rabbitmq_port=int(os.environ.get("RABBITMQ_PORT", "5672")),
     # Phase 4 — upload endpoint
