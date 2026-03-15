@@ -44,6 +44,14 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-15 — Issue #204: GitHub Actions versioned release automation
+
+- Replaced the old tag-only release workflow with a semver-validated GHCR publish pipeline for all six source-built services: `admin`, `aithena-ui`, `document-indexer`, `document-lister`, `embeddings-server`, and `solr-search`.
+- The new `.github/workflows/release.yml` builds each image with `VERSION`, `GIT_COMMIT`, and `BUILD_DATE`, then publishes four release tags per image via `docker/metadata-action`: full (`X.Y.Z`), minor (`X.Y`), major (`X`), and `latest`.
+- Kept GitHub Release publication in the workflow so the tag ceremony still produces release notes after all image pushes succeed.
+- Added `.github/workflows/version-check.yml` to gate PRs into `dev` and `main` on a valid root `VERSION` file plus `ARG VERSION` declarations in the six release Dockerfiles.
+- No `ci.yml` change was required because the existing CI workflow only runs on `dev` branch pushes/PRs, so it does not conflict with tag-triggered release publishing.
+
 ### 2026-03-14 — Reskill session: current infrastructure snapshot
 
 **9 services operational:**
