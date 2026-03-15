@@ -57,6 +57,7 @@ class ModelInfo(BaseModel):
     embedding_dim: int
 
 
+@app.head("/health")
 @app.get("/health")
 async def health():
     """Health check endpoint for container orchestration."""
