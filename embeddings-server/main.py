@@ -70,7 +70,7 @@ async def model_info() -> ModelInfo:
     return ModelInfo(model=MODEL_NAME, embedding_dim=embedding_dim)
 
 
-@app.get("/version")
+@app.get("/version", include_in_schema=False)
 async def version() -> dict[str, str]:
     """Returns service build metadata."""
     return {

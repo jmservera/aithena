@@ -148,7 +148,7 @@ def info() -> dict[str, str]:
     return {"title": settings.title, "version": settings.version}
 
 
-@app.get("/version")
+@app.get("/version", include_in_schema=False)
 def version() -> dict[str, str]:
     return {
         "service": "solr-search",
