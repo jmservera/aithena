@@ -8,8 +8,6 @@ services:
     command: redis-server --save 20 1 --loglevel warning
     expose:
       - 6379
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -23,25 +21,24 @@ services:
     volumes:
       - redis-data:/data
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13-management
     command: rabbitmq-server
     hostname: rabbitmq
     expose:
       - 5672
       - 15672
-    ports:
-      - "5672:5672"
-      - "15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     environment:
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
+      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
-      interval: 5s
-      timeout: 15s
-      retries: 1
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 30s
     restart: on-failure
     networks:
       default:
@@ -51,8 +48,8 @@ services:
     build: ./embeddings-server
     environment:
       - PORT=8085
-    ports:
-      - "8085:8080"
+    expose:
+      - "8080"
     restart: on-failure
     networks:
       default:
@@ -68,8 +65,10 @@ services:
       - DOCUMENT_WILDCARD=*.pdf
       - POLL_INTERVAL=60  # seconds between library scans (default: 60)
     depends_on:
-      - rabbitmq
-      - redis
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: on-failure
     volumes:
       - document-data:/data/documents
@@ -92,9 +91,9 @@ services:
       replicas: 1
     depends_on:
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       embeddings-server:
         condition: service_started
     volumes:
@@ -107,8 +106,8 @@ services:
     build:
       context: .
       dockerfile: ./solr-search/Dockerfile
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     restart: on-failure
     depends_on:
       - solr
@@ -170,12 +169,18 @@ services:
     image: nginx:1.15-alpine
     restart: unless-stopped
     depends_on:
-      - aithena-ui
-      - solr-search
-      - streamlit-admin
-      - redis-commander
-      - rabbitmq
-      - solr
+      aithena-ui:
+        condition: service_started
+      solr-search:
+        condition: service_started
+      streamlit-admin:
+        condition: service_started
+      redis-commander:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      solr:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
@@ -194,9 +199,9 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
   zoo1:
     image: zookeeper:3.9
-    ports:
-      - 18080:8080
-      - 2181:2181
+    expose:
+      - "8080"
+      - "2181"
     networks:
       - default
     environment:
@@ -216,8 +221,8 @@ services:
       start_period: 30s
   zoo2:
     image: zookeeper:3.9
-    ports:
-      - 2182:2181
+    expose:
+      - "2181"
     networks:
       - default
     environment:
@@ -237,8 +242,8 @@ services:
       start_period: 30s
   zoo3:
     image: zookeeper:3.9
-    ports:
-      - 2183:2181
+    expose:
+      - "2181"
     networks:
       - default
     environment:
@@ -268,8 +273,8 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
-    ports:
-      - "8983:8983"
+    expose:
+      - "8983"
     networks:
       - default
     healthcheck:
@@ -299,8 +304,8 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
-    ports:
-      - "8984:8983"
+    expose:
+      - "8983"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
@@ -329,8 +334,8 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
-    ports:
-      - "8985:8983"
+    expose:
+      - "8983"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s

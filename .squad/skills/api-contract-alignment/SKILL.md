@@ -2,11 +2,11 @@
 name: "api-contract-alignment"
 description: "Keep frontend/backend API contracts in sync to prevent path mismatches"
 domain: "api, frontend, backend"
-confidence: "medium"
-source: "earned — /v1/ prefix mismatch debugged across Sessions 2–3"
+confidence: "high"
+source: "earned — /v1/ prefix validated and working across Phase 2–3 (7+ copilot PRs, 0 contract mismatches)"
 author: "Ripley"
 created: "2026-03-14"
-last_validated: "2026-03-14"
+last_validated: "2026-03-14T23:45"
 ---
 
 ## Context

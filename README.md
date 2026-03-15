@@ -10,6 +10,20 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Detects language** automatically using `langid`
 - **Prepares for semantic search** with pre-extracted embeddings (Phase 2+)
 
+## Features
+
+- **Search page** for keyword search across indexed title, author, and full-text content
+- **Facet filtering** by author, category, language, and year
+- **PDF viewer** that opens from search results and jumps to the matched page when page metadata exists
+- **Status tab** with indexing progress plus Solr, Redis, and RabbitMQ health, refreshing every 10 seconds
+- **Stats tab** with indexed-book totals, page-count statistics, and breakdowns by language, author, year, and category
+
+## Documentation
+
+- [User Manual](docs/user-manual.md)
+- [Admin Manual](docs/admin-manual.md)
+- [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
+
 ## Architecture
 
 ### Core Stack
@@ -48,19 +62,13 @@ Frontend / Search API
 
 ### 1. Configure Book Library Path
 
-Edit `docker-compose.yml`, update the `document-data` volume:
+Set the host library directory before you start the stack:
 
-```yaml
-volumes:
-  document-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/path/to/your/booklibrary"  # ← Change this
+```bash
+export BOOKS_PATH=/absolute/path/to/your/booklibrary
 ```
 
-Default: `/home/jmservera/booklibrary`
+`docker-compose.yml` binds that host path into the shared `document-data` volume. If `BOOKS_PATH` is not set, the stack falls back to `/data/booklibrary`.
 
 ### 2. Start All Services
 
@@ -68,28 +76,34 @@ Default: `/home/jmservera/booklibrary`
 docker compose up -d
 ```
 
+By default, Docker Compose also auto-loads `docker-compose.override.yml`, so local development/debug ports stay published.
+
+Use the production-only surface when you want just the nginx gateway on the host:
+
+```bash
+docker compose -f docker-compose.yml up -d
+```
+
 This starts:
 - Redis, RabbitMQ (messaging layer)
 - ZooKeeper ensemble (3 nodes)
 - SolrCloud cluster (3 nodes)
+- `solr-init`, which uploads the `books` configset and creates the collection automatically
 - Document Lister, Document Indexer, Solr Search API, Embeddings Server
 - nginx + Certbot (TLS)
-- Admin UI, frontend placeholders
+- Admin UI and frontend
 
-### 3. Create Books Collection
-
-Upload the Solr configset to the cluster:
+### 3. Confirm Solr Bootstrap
 
 ```bash
-cd solr/books
-# Upload config to ZooKeeper (requires Solr CLI tools installed)
-# Or use the Solr Web UI to create collection: http://localhost:8983
+docker compose ps
+docker compose logs -f solr-init
 ```
 
-Once the `books` collection is created:
-- Document Lister automatically discovers PDFs in `/home/jmservera/booklibrary`
+Once `solr-init` completes:
+- Document Lister automatically discovers PDFs in `BOOKS_PATH`
 - Document Indexer consumes them from RabbitMQ and indexes into Solr
-- Track progress in Redis (`redis-cli`)
+- Track progress in Redis (`redis-cli`) and the Status tab
 
 ### 4. Access Interfaces
 
@@ -104,7 +118,20 @@ Once the `books` collection is created:
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
 | Streamlit Admin | http://localhost/admin/streamlit/ | Document management dashboard |
 
-Direct service ports such as `8983`, `15672`, and `8080` remain available for local debugging, but nginx is now the preferred entry point for the UI surface.
+When `docker compose up` loads `docker-compose.override.yml` (the default local workflow), these direct debug ports are also available:
+
+| Service | Port(s) | Purpose |
+|---------|---------|---------|
+| solr-search | `8080` | Direct FastAPI debugging without nginx |
+| solr / solr2 / solr3 | `8983`, `8984`, `8985` | Solr admin/API access per node |
+| rabbitmq | `5672`, `15672` | AMQP clients and direct management UI |
+| redis | `6379` | Redis CLI and direct state inspection |
+| redis-commander | `8081` | Direct Redis Commander UI |
+| streamlit-admin | `8501` | Direct Streamlit debugging |
+| zoo1 / zoo2 / zoo3 | `18080`, `2181`, `2182`, `2183` | ZooKeeper AdminServer and node client ports |
+| embeddings-server | `8085` | Embeddings API debugging / local external tools |
+
+For production-style runs (`docker compose -f docker-compose.yml up`), only nginx publishes `80/443`.
 
 ## Solr Schema & Fields
 
@@ -444,16 +471,16 @@ Current branch: `jmservera/solrstreamlitui`
 |----------|---------|-------------|
 | `POLL_INTERVAL` | `60` | Seconds between library scans. New and modified files are re-queued; unchanged processed files are skipped. |
 | `BASE_PATH` | `/data/documents/` | Root directory to scan for documents. |
-| `DOCUMENT_WILDCARD` | `*` | Glob pattern for files to consider. |
-| `QUEUE_NAME` | `new_documents` | RabbitMQ queue name for discovered documents. |
+| `DOCUMENT_WILDCARD` | `*.pdf` | Glob pattern for files to consider. Non-PDF files are skipped explicitly. |
+| `QUEUE_NAME` | `shortembeddings` | RabbitMQ queue name for discovered documents in the current Docker Compose stack. |
 
 ### Solr returns empty results?
-- Check collection was created: `http://localhost:8983/solr/#/collections`
+- Check collection was created: `http://localhost/admin/solr/#/collections` (or `http://localhost:8983/solr/#/collections` when the dev override is loaded)
 - Monitor indexer logs: `docker compose logs document-indexer`
 - Check Redis state: `redis-cli KEYS "*"`
 
 ### Indexing stuck or slow?
-- Monitor RabbitMQ queue depth: `http://localhost:15672`
+- Monitor RabbitMQ queue depth: `http://localhost/admin/rabbitmq/` (or `http://localhost:15672` with the dev override)
 - Check Solr logs for extraction errors: `docker compose logs solr`
 - Increase document-indexer replicas in `docker-compose.yml`
 

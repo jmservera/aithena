@@ -8,6 +8,7 @@ import pytest
 import requests
 from document_indexer.__main__ import (
     build_chunk_doc,
+    build_literal_params,
     index_chunks,
     index_document,
     mark_failure,
@@ -45,6 +46,7 @@ def metadata_stub(pdf_file: Path, base_path: str):
         "author": "Author",
         "year": None,
         "category": None,
+        "language": None,
         "file_path": pdf_file.relative_to(base_path).as_posix(),
         "folder_path": pdf_file.parent.relative_to(base_path).as_posix(),
         "file_size": pdf_file.stat().st_size,
@@ -95,6 +97,16 @@ class TestBuildChunkDoc:
         metadata_stub["year"] = 1984
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
         assert doc["year_i"] == 1984
+
+    def test_optional_language_included_when_present(self, metadata_stub):
+        metadata_stub["language"] = "ca"
+        doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
+        assert doc["language_s"] == "ca"
+
+    def test_optional_language_absent_when_none(self, metadata_stub):
+        metadata_stub["language"] = None
+        doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
+        assert "language_s" not in doc
 
     def test_page_fields_included_when_provided(self, metadata_stub):
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub, page_start=3, page_end=5)
@@ -486,3 +498,47 @@ class TestSaveState:
         assert state["file_path"] == "relative/path.pdf"
         assert state["processed"] is True
         mock_set.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# build_literal_params — language metadata
+# ---------------------------------------------------------------------------
+
+
+class TestBuildLiteralParams:
+    def _base_metadata(self, file_path: str = "author/title.pdf") -> dict:
+        return {
+            "title": "Title",
+            "author": "Author",
+            "year": None,
+            "category": None,
+            "language": None,
+            "file_path": file_path,
+            "folder_path": "author",
+            "file_size": 1024,
+        }
+
+    def test_language_included_in_params_when_set(self):
+        meta = self._base_metadata()
+        meta["language"] = "ca"
+        params = build_literal_params(meta, page_count=None)
+        assert params["literal.language_s"] == "ca"
+
+    def test_language_absent_from_params_when_none(self):
+        meta = self._base_metadata()
+        meta["language"] = None
+        params = build_literal_params(meta, page_count=None)
+        assert "literal.language_s" not in params
+
+    def test_language_absent_from_params_when_missing(self):
+        meta = self._base_metadata()
+        del meta["language"]
+        params = build_literal_params(meta, page_count=None)
+        assert "literal.language_s" not in params
+
+    @pytest.mark.parametrize("lang", ["es", "ca", "fr", "en", "la", "de", "pt", "it", "nl"])
+    def test_all_supported_language_codes_are_passed_through(self, lang):
+        meta = self._base_metadata()
+        meta["language"] = lang
+        params = build_literal_params(meta, page_count=None)
+        assert params["literal.language_s"] == lang

@@ -197,6 +197,8 @@ def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, st
         params["literal.category_s"] = metadata["category"]
     if metadata.get("year") is not None:
         params["literal.year_i"] = str(metadata["year"])
+    if metadata.get("language"):
+        params["literal.language_s"] = metadata["language"]
     if page_count is not None:
         params["literal.page_count_i"] = str(page_count)
 
@@ -229,6 +231,8 @@ def build_chunk_doc(
         doc["category_s"] = metadata["category"]
     if metadata.get("year") is not None:
         doc["year_i"] = metadata["year"]
+    if metadata.get("language"):
+        doc["language_s"] = metadata["language"]
     if page_start is not None:
         doc["page_start_i"] = page_start
     if page_end is not None:

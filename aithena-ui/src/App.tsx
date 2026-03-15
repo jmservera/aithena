@@ -5,6 +5,7 @@ import SearchPage from './pages/SearchPage';
 import LibraryPage from './pages/LibraryPage';
 import StatusPage from './pages/StatusPage';
 import StatsPage from './pages/StatsPage';
+import AdminPage from './pages/AdminPage';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </div>
       </div>

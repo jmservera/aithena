@@ -5,6 +5,7 @@ const TABS = [
   { to: '/library', label: '📖 Library' },
   { to: '/status', label: '🟢 Status' },
   { to: '/stats', label: '📊 Stats' },
+  { to: '/admin', label: '🛠️ Admin' },
 ];
 
 function TabNav() {

@@ -265,3 +265,34 @@ def test_extract_metadata_matches_real_library_patterns(
 
     assert_metadata_shape(metadata, file_path, booklibrary_root)
     assert_metadata_values(metadata, **expected)
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "expected_language"),
+    [
+        pytest.param("ca/Novel·la/Víctor Català/Solitud.pdf", "ca", id="catalan-top-level-folder"),
+        pytest.param("es/Poesia/García Lorca - Romancero gitano (1928).pdf", "es", id="spanish-top-level-folder"),
+        pytest.param("fr/Villon - Ballade (1490).pdf", "fr", id="french-top-level-folder"),
+        pytest.param("en/Shakespeare - Hamlet.pdf", "en", id="english-top-level-folder"),
+        pytest.param("la/Cicero - De re publica.pdf", "la", id="latin-top-level-folder"),
+        pytest.param("Gabriel García Márquez/Cien años de soledad.pdf", None, id="no-language-folder"),
+        pytest.param("Poesia/García Lorca - Romancero gitano (1928).pdf", None, id="category-no-language"),
+    ],
+)
+def test_extract_metadata_detects_language_from_folder_path(
+    make_document, extract_metadata_func, relative_path, expected_language
+):
+    file_path, base_path = make_document(relative_path, b"language-detection-test")
+
+    metadata = extract_metadata_func(str(file_path), base_path=str(base_path))
+
+    assert_metadata_shape(metadata, file_path, base_path)
+    assert metadata["language"] == expected_language
+
+
+def test_extract_metadata_language_none_for_root_level_file(make_document, extract_metadata_func):
+    file_path, base_path = make_document("Hamlet.pdf", b"root-file")
+
+    metadata = extract_metadata_func(str(file_path), base_path=str(base_path))
+
+    assert metadata["language"] is None

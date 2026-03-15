@@ -98,6 +98,17 @@ class TestProcessPath:
 
         mock_handle.assert_called_once_with(tmp_path / "book.pdf", redis_mock, channel_mock)
 
+    def test_nonexistent_path_is_skipped_gracefully(self, redis_mock, channel_mock):
+        """process_path logs a warning and returns early when the base path does not exist."""
+        main_mod = _import_main_module()
+
+        with patch.object(main_mod, "handle_document") as mock_handle:
+            main_mod.process_path("/nonexistent/path/that/does/not/exist", redis_mock, channel_mock)
+
+        mock_handle.assert_not_called()
+        redis_mock.get.assert_not_called()
+        channel_mock.basic_publish.assert_not_called()
+
 
 class TestHandleDocument:
     def test_new_document_is_queued(self, tmp_path, redis_mock, channel_mock):
