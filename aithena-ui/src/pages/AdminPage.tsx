@@ -5,7 +5,7 @@ function AdminPage() {
         src="/admin/streamlit/"
         title="Admin dashboard"
         className="admin-frame"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+        sandbox="allow-same-origin allow-scripts allow-forms"
       />
     </div>
   );
