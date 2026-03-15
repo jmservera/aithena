@@ -2526,3 +2526,120 @@ v0.5.0 was released without updated docs (regression from v0.4.0). Adding to New
 - Newt responsible for feature guide, deployment guide, manual verification, screenshots
 - No release to main until docs present and reviewed
 
+
+---
+
+# 2026-03-15T09:12: User Directive — Documentation HARD REQUIREMENT Before Release
+
+**Date**: March 15, 2026  
+**By**: jmservera (User Directive via Copilot)  
+**Status**: ✅ Documented
+
+## Decision
+
+Documentation (feature guide, updated manuals, test report, screenshots) is a **HARD REQUIREMENT** before any release. Documentation must be generated **as part of release validation**, not after release.
+
+## Rationale
+
+- v0.5.0 was released without updated documentation
+- This pattern repeated in v0.4.0 (caught by Juanma during review)
+- Missing docs break user onboarding and slow team ramp-up
+- Release validation must include doc completeness gate (same weight as test pass rate)
+
+## Impact
+
+- Adds documentation review to Newt's release validation charter
+- If docs are missing, release is **BLOCKED** — same as failing tests
+- Applies to all future releases (v0.6.0 onwards)
+
+## Action Items
+
+1. Update `.squad/agents/newt/charter.md` to include doc validation gate
+2. Template: `docs/release/{version}-manual.md`, `docs/release/{version}-features.md`, screenshots in `docs/release/screenshots/{version}/`
+3. Newt to verify completeness before stamping release APPROVED
+
+---
+
+# 2026-03-15T11:10: Kane Decision — Security Scanning PRs Rejected (All 5)
+
+**Date**: March 15, 2026  
+**Role**: Kane (Security Engineer)  
+**Context**: v0.6.0 Release Group 1/2 Security Scanning  
+**Status**: ✅ Decisions logged, reassignment pending
+
+## Decision
+
+**REJECTED** all five security scanning PRs (#186-190) due to missing implementation. No actual code, workflows, or documentation delivered despite detailed specifications.
+
+## Problem
+
+@copilot was assigned issues #88-90 (SEC-1/2/3) and opened draft PRs #186-190, but failed to implement required work:
+
+- **PRs #186-188 (CI scanners)**: No `.github/workflows/` files created, no scanner configurations, no SARIF upload
+- **PR #189 (ZAP guide)**: No `docs/security/zap-audit.md` documentation
+- **PR #190 (Baseline tuning)**: No findings triage, no baseline documentation
+
+All five PRs contain only inherited RabbitMQ config changes from base branch. Single "Initial plan" commits indicate work was never started.
+
+## Security Impact
+
+Without these implementations, v0.6.0 is missing:
+- **Bandit** — Python SAST (no detection of hardcoded secrets, SQL injection, unsafe deserialization)
+- **Checkov** — IaC scanning (no detection of insecure Dockerfile/Actions patterns)
+- **Zizmor** — Supply chain scanning (no detection of GitHub Actions template injection)
+- **ZAP procedures** — Manual OWASP audit process (ad-hoc reviews, no repeatability)
+- **Baseline documentation** — No risk acceptance framework, uncontrolled exceptions
+
+## Specification Requirements (Re-stated)
+
+### SEC-1 (Bandit — Python SAST)
+- **Workflow**: `.github/workflows/security-bandit.yml`
+- **Targets**: All Python services (document-indexer, document-lister, embeddings-server, solr-search, qdrant-search, qdrant-clean)
+- **Output**: SARIF format → GitHub Code Scanning upload
+- **Mode**: Non-blocking (`continue-on-error: true`) on first run
+
+### SEC-2 (Checkov — IaC SAST)
+- **Workflow**: `.github/workflows/security-checkov.yml`
+- **Targets**: All Dockerfiles + GitHub Actions workflows
+- **Baseline exceptions**: CKV_DOCKER_2 (HEALTHCHECK), CKV_DOCKER_3 (USER directive)
+- **Output**: SARIF format → GitHub Code Scanning upload
+- **Mode**: Non-blocking (`soft_fail: true`)
+
+### SEC-3 (Zizmor — GitHub Actions Supply Chain)
+- **Workflow**: `.github/workflows/security-zizmor.yml`
+- **Targets**: `.github/workflows/*.yml`
+- **Focus**: template-injection, dangerous-triggers (P0)
+- **Output**: SARIF format → GitHub Code Scanning upload
+- **Mode**: Non-blocking (`continue-on-error: true`)
+
+### SEC-4 (OWASP ZAP Manual Audit Guide)
+- **Documentation**: `docs/security/zap-audit.md`
+- **Sections**: Prerequisites, proxy setup, manual explore, active scan, result interpretation, IaC review, reporting
+- **Cadence**: Quarterly or before major releases
+- **Audience**: Security auditors, release managers
+
+### SEC-5 (Baseline Tuning)
+- **Process**: Run scanners, triage findings (HIGH/CRITICAL fixed or documented, MEDIUM/LOW baseline allowed)
+- **Output**: `docs/security/baseline.md` (accepted risks, exceptions by scanner, mitigation strategies)
+- **Dependency**: File GitHub issues for deferred HIGH/CRITICAL (v0.7.0 target)
+
+## Release Impact
+
+- **v0.6.0 security milestone BLOCKED** until SEC-1/2/3 implemented
+- **Release risk**: No new security coverage beyond existing CodeQL
+- **Team capacity**: 5 issues require re-work or reassignment
+
+## Recommendations
+
+1. **Escalate to Ripley/Ralph** — @copilot work stalled; consider manual intervention
+2. **Break into smaller PRs** — One scanner per PR for easier verification
+3. **Kane direct implementation** — If @copilot re-work stalls, Kane can implement security tooling (in-scope)
+4. **Tighten review gates** — Require CI workflow validation before PR marked ready-for-review
+
+## Status
+
+- **PRs #186-190**: Changes Requested (detailed specs in review comments)
+- **Issues #88-90, #97-98**: OPEN (blocked on implementation)
+- **v0.6.0 Group 1/2**: BLOCKED
+
+**Next Review**: After @copilot re-implements or work is reassigned to team member.
