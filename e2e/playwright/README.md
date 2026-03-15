@@ -91,10 +91,15 @@ Tests in this suite fall into two categories:
 | Search pagination | More than 10 indexed documents |
 | Semantic search returns results | Embeddings service up + indexed data |
 | Hybrid search returns results | Embeddings service up + indexed data |
-| Similar-books trigger visible on result card | At least one indexed document |
-| Similar-books panel loads related books | Embeddings service up + indexed data |
-| Source book excluded from similar-books results | Embeddings service up + indexed data |
+| SimilarBooks panel appears after Open PDF click | At least one result with a `document_url` |
+| SimilarBooks panel shows book cards | Embeddings service up + document with stored embedding |
+| Source book excluded from similar-books results | Embeddings service up + document with stored embedding |
+| Closing PDF viewer hides SimilarBooks panel | At least one result with a `document_url` |
 | Upload success/pending feedback | Backend upload + RabbitMQ configured |
+
+### Note on similar-books flow
+
+The SimilarBooks panel renders below the search results whenever a book is selected via its **"📄 Open PDF"** button on a result card. This button only appears on cards where the API returns a `document_url`. Closing the PDF viewer (the "Close PDF viewer" button on the overlay) sets `selectedBook = null` and hides both the viewer and the SimilarBooks panel.
 
 ## Files
 

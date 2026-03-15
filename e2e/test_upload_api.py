@@ -100,25 +100,34 @@ class TestUploadValidationErrors:
         )
 
     def test_upload_rejects_non_pdf_content_type(self, api_url: str, api_available: None) -> None:
-        """POST /v1/upload with a non-PDF MIME type must return HTTP 415."""
+        """POST /v1/upload with a non-PDF MIME type must return HTTP 400.
+
+        The backend validates content-type and rejects non-PDF MIME types with
+        400 Bad Request (matching solr-search/tests/test_upload.py behaviour).
+        """
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("document.txt", io.BytesIO(b"just text"), "text/plain")},
             timeout=10,
         )
-        assert resp.status_code == 415, (
-            f"Expected 415 for text/plain content-type, got {resp.status_code}: {resp.text}"
+        assert resp.status_code == 400, (
+            f"Expected 400 for text/plain content-type, got {resp.status_code}: {resp.text}"
         )
 
     def test_upload_rejects_non_pdf_extension(self, api_url: str, api_available: None) -> None:
-        """POST /v1/upload with a .docx extension must return HTTP 415."""
+        """POST /v1/upload with a non-.pdf extension must return HTTP 400.
+
+        The backend validates the filename extension and rejects files whose
+        name does not end in .pdf with 400 Bad Request (matching
+        solr-search/tests/test_upload.py behaviour).
+        """
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("report.docx", io.BytesIO(b"fake docx content"), "application/pdf")},
             timeout=10,
         )
-        assert resp.status_code == 415, (
-            f"Expected 415 for .docx extension, got {resp.status_code}: {resp.text}"
+        assert resp.status_code == 400, (
+            f"Expected 400 for .docx extension, got {resp.status_code}: {resp.text}"
         )
 
     def test_upload_rejects_invalid_pdf_bytes(self, api_url: str, api_available: None) -> None:
@@ -152,8 +161,8 @@ class TestUploadValidationErrors:
             files={"file": ("bad.pdf", io.BytesIO(b"not a pdf"), "application/pdf")},
             timeout=10,
         )
-        # Should be 400 or 415; either way a 'detail' key must be present
-        assert resp.status_code in (400, 415), f"Unexpected status: {resp.status_code}"
+        # Invalid PDF content returns 400 Bad Request
+        assert resp.status_code == 400, f"Unexpected status: {resp.status_code}"
         body = resp.json()
         assert "detail" in body, f"'detail' missing from error response: {body}"
         assert body["detail"], f"'detail' is empty: {body}"

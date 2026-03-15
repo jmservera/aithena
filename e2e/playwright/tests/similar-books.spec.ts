@@ -1,26 +1,30 @@
 /**
  * Playwright E2E tests for the similar-books feature.
  *
- * These tests verify the "Similar books" user journey through the UI:
- *   - A similar-books trigger (button/link) is visible on book result cards.
- *   - Activating the trigger loads a list of related books.
- *   - The source book is not shown in its own similar-books list.
+ * The SimilarBooks panel renders below the search results whenever a book is
+ * selected via its "Open PDF" button.  The actual UI flow is:
  *
- * All tests skip gracefully when no indexed data is available, following
- * the same pattern as search.spec.ts.
+ *   1. Search for a query that returns results with a `document_url`.
+ *   2. Click the "📄 Open PDF" button (.open-pdf-btn) on a result card.
+ *   3. The SimilarBooks panel (.similar-books-panel) appears below the results.
+ *   4. The PDF viewer overlay (.pdf-viewer-overlay) also opens.
+ *   5. Closing the PDF viewer (button[aria-label="Close PDF viewer"]) hides both.
+ *
+ * All tests skip gracefully when no indexed data with a document_url is available,
+ * following the same pattern as search.spec.ts.
  *
  * Coverage matrix
  * ~~~~~~~~~~~~~~~
  *
- * | Scenario                                         | Gated | Note                           |
- * |--------------------------------------------------|-------|--------------------------------|
- * | Similar-books trigger visible on result card     | Yes   | requires indexed documents     |
- * | Similar-books panel loads after trigger click    | Yes   | requires embeddings + data     |
- * | Source book absent from similar-books results    | Yes   | requires embeddings + data     |
- * | Similar-books panel can be closed / dismissed    | Yes   | requires embeddings + data     |
+ * | Scenario                                             | Gated | Note                              |
+ * |------------------------------------------------------|-------|-----------------------------------|
+ * | SimilarBooks panel appears after Open PDF click      | Yes   | requires result with document_url |
+ * | SimilarBooks panel shows book cards                  | Yes   | requires embeddings + data        |
+ * | Source book title absent from similar-books results  | Yes   | requires embeddings + data        |
+ * | Closing PDF viewer hides SimilarBooks panel          | Yes   | requires result with document_url |
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 import {
   discoverCatalogScenario,
@@ -33,66 +37,34 @@ import {
 let appBaseURL = '';
 let catalog: CatalogScenario;
 
+/** HTTP status codes that indicate the embeddings service is unavailable. */
+const EMBEDDINGS_UNAVAILABLE_CODES = new Set([422, 502, 503]);
+
 test.beforeAll(async ({ request }) => {
   appBaseURL = getAppBaseURL();
   catalog = await discoverCatalogScenario(request, appBaseURL);
 });
 
 // ---------------------------------------------------------------------------
-// Similar-books trigger visibility
+// Helper: open a PDF from a search result and wait for the similar-books API
 // ---------------------------------------------------------------------------
 
-test('similar-books trigger is visible on at least one result card', async ({ page }) => {
-  test.skip(
-    catalog.totalDocuments === 0,
-    'No indexed documents available — similar-books trigger cannot be verified.'
-  );
-
+/**
+ * Search for `query`, click the "Open PDF" button on the card matching
+ * `resultTitle`, and return the resolved similar-books API response.
+ */
+async function openPdfAndWaitForSimilarBooks(
+  page: Page,
+  query: string,
+  resultTitle: string
+) {
   await gotoSearchPage(page, appBaseURL);
-  await runSearch(page, catalog.broadQuery);
+  await runSearch(page, query);
 
-  // The trigger may be a button labelled "Similar", "Find similar", or similar text,
-  // or a link with a class like .similar-btn.  We look for any of these patterns.
-  const triggerLocator = page.locator(
-    'button.similar-btn, a.similar-btn, [aria-label*="Similar"], button:has-text("Similar")'
-  ).first();
+  const card = page.locator('.book-card').filter({ hasText: resultTitle }).first();
+  await expect(card).toBeVisible();
 
-  const triggerVisible = await triggerLocator.isVisible({ timeout: 8_000 }).catch(() => false);
-
-  if (!triggerVisible) {
-    test.skip(true, 'No similar-books trigger found on result cards — feature may not yet be implemented in the UI.');
-    return;
-  }
-
-  await expect(triggerLocator).toBeVisible();
-});
-
-// ---------------------------------------------------------------------------
-// Similar-books panel behavior (gated on embeddings + data)
-// ---------------------------------------------------------------------------
-
-test('similar-books panel loads related books after trigger click', async ({ page }) => {
-  test.skip(
-    catalog.totalDocuments === 0,
-    'No indexed documents — similar-books panel cannot be tested.'
-  );
-
-  await gotoSearchPage(page, appBaseURL);
-  await runSearch(page, catalog.broadQuery);
-
-  const triggerLocator = page.locator(
-    'button.similar-btn, a.similar-btn, [aria-label*="Similar"], button:has-text("Similar")'
-  ).first();
-
-  const triggerVisible = await triggerLocator.isVisible({ timeout: 8_000 }).catch(() => false);
-
-  if (!triggerVisible) {
-    test.skip(true, 'No similar-books trigger found — feature may not yet be implemented in the UI.');
-    return;
-  }
-
-  // Intercept the similar-books API call to detect embedding availability
-  const similarResponsePromise = page.waitForResponse(
+  const similarPromise = page.waitForResponse(
     (response) =>
       response.url().includes('/books/') &&
       response.url().includes('/similar') &&
@@ -100,10 +72,28 @@ test('similar-books panel loads related books after trigger click', async ({ pag
     { timeout: 20_000 }
   );
 
-  await triggerLocator.click();
-  const similarResponse = await similarResponsePromise;
+  await card.locator('.open-pdf-btn').click();
+  return similarPromise;
+}
 
-  if (similarResponse.status() === 422 || similarResponse.status() === 503) {
+// ---------------------------------------------------------------------------
+// SimilarBooks panel appearance
+// ---------------------------------------------------------------------------
+
+test('SimilarBooks panel appears below search results after Open PDF is clicked', async ({ page }) => {
+  test.skip(
+    !catalog.pdfScenario,
+    'No indexed result with a document_url is available — similar-books panel cannot be tested.'
+  );
+
+  const scenario = catalog.pdfScenario!;
+  const similarResponse = await openPdfAndWaitForSimilarBooks(
+    page,
+    scenario.query,
+    scenario.result.title
+  );
+
+  if (EMBEDDINGS_UNAVAILABLE_CODES.has(similarResponse.status())) {
     test.skip(
       true,
       `Similar-books API returned ${similarResponse.status()} — embeddings service may not be running.`
@@ -111,145 +101,114 @@ test('similar-books panel loads related books after trigger click', async ({ pag
     return;
   }
 
-  expect(similarResponse.ok()).toBeTruthy();
-
-  // A panel, modal, or list section should become visible
-  const panelLocator = page.locator(
-    '.similar-books-panel, .similar-books-modal, .similar-books-list, [aria-label*="Similar"]'
-  ).first();
-
-  const panelAppeared = await panelLocator
-    .waitFor({ state: 'visible', timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!panelAppeared) {
-    test.skip(true, 'Similar-books panel did not appear — UI may show results inline or in a different element.');
-    return;
-  }
-
-  await expect(panelLocator).toBeVisible();
+  // The SimilarBooks component renders as <section class="similar-books-panel">
+  const panel = page.locator('.similar-books-panel');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+  await expect(panel.locator('#similar-books-title')).toHaveText('Similar Books');
 });
 
-test('source book is not present in its own similar-books results', async ({ page }) => {
+// ---------------------------------------------------------------------------
+// SimilarBooks panel content
+// ---------------------------------------------------------------------------
+
+test('SimilarBooks panel shows book cards when embeddings are available', async ({ page }) => {
   test.skip(
-    catalog.totalDocuments === 0,
-    'No indexed documents — similar-books exclusion cannot be verified.'
+    !catalog.pdfScenario,
+    'No indexed result with a document_url is available — similar-books content cannot be tested.'
   );
 
-  await gotoSearchPage(page, appBaseURL);
-  await runSearch(page, catalog.broadQuery);
-
-  // Pick the first visible card and record its title
-  const firstCard = page.locator('.book-card').first();
-  const cardVisible = await firstCard.isVisible({ timeout: 8_000 }).catch(() => false);
-
-  if (!cardVisible) {
-    test.skip(true, 'No book cards visible — similar-books exclusion cannot be tested.');
-    return;
-  }
-
-  const sourceTitle = (await firstCard.locator('.book-title').textContent())?.trim() ?? '';
-
-  const triggerLocator = firstCard.locator(
-    'button.similar-btn, a.similar-btn, [aria-label*="Similar"], button:has-text("Similar")'
-  ).first();
-
-  const triggerVisible = await triggerLocator.isVisible({ timeout: 5_000 }).catch(() => false);
-
-  if (!triggerVisible) {
-    test.skip(true, 'No similar-books trigger on the first card — feature may not be implemented yet.');
-    return;
-  }
-
-  const similarResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/books/') &&
-      response.url().includes('/similar') &&
-      response.request().method() === 'GET',
-    { timeout: 20_000 }
+  const scenario = catalog.pdfScenario!;
+  const similarResponse = await openPdfAndWaitForSimilarBooks(
+    page,
+    scenario.query,
+    scenario.result.title
   );
-
-  await triggerLocator.click();
-  const similarResponse = await similarResponsePromise;
 
   if (!similarResponse.ok()) {
     test.skip(
       true,
-      `Similar-books API returned ${similarResponse.status()} — skipping exclusion check.`
+      `Similar-books API returned ${similarResponse.status()} — embeddings service may not be running.`
     );
     return;
   }
 
-  // If the UI renders similar books in a panel, confirm the source title is absent
-  const panelLocator = page.locator(
-    '.similar-books-panel, .similar-books-modal, .similar-books-list'
-  ).first();
-
-  const panelAppeared = await panelLocator
-    .waitFor({ state: 'visible', timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!panelAppeared || !sourceTitle) {
-    test.skip(true, 'Panel not visible or source title unknown — exclusion check skipped.');
+  const payload = await similarResponse.json() as { results?: unknown[] };
+  if (!payload.results || payload.results.length === 0) {
+    test.skip(true, 'Similar-books API returned an empty list — no related books to verify in the UI.');
     return;
   }
 
-  const panelTitles = await panelLocator.locator('.book-title, .similar-book-title').allTextContents();
-  const normalizedPanelTitles = panelTitles.map((t) => t.trim());
+  const panel = page.locator('.similar-books-panel');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
 
-  expect(normalizedPanelTitles).not.toContain(sourceTitle);
+  // Each similar book renders as a button.similar-book-card with a title and author
+  const cards = panel.locator('.similar-book-card');
+  await expect(cards.first()).toBeVisible();
+
+  const firstTitle = panel.locator('.similar-book-card__title').first();
+  await expect(firstTitle).toBeVisible();
+  await expect(firstTitle).not.toBeEmpty();
 });
 
-test('similar-books panel can be dismissed', async ({ page }) => {
+// ---------------------------------------------------------------------------
+// Source book exclusion
+// ---------------------------------------------------------------------------
+
+test('source book title is not present in the similar-books panel', async ({ page }) => {
   test.skip(
-    catalog.totalDocuments === 0,
-    'No indexed documents — similar-books dismiss cannot be tested.'
+    !catalog.pdfScenario,
+    'No indexed result with a document_url is available — exclusion check cannot be performed.'
   );
 
-  await gotoSearchPage(page, appBaseURL);
-  await runSearch(page, catalog.broadQuery);
+  const scenario = catalog.pdfScenario!;
+  const sourceTitle = scenario.result.title;
 
-  const triggerLocator = page.locator(
-    'button.similar-btn, a.similar-btn, [aria-label*="Similar"], button:has-text("Similar")'
-  ).first();
+  const similarResponse = await openPdfAndWaitForSimilarBooks(
+    page,
+    scenario.query,
+    sourceTitle
+  );
 
-  const triggerVisible = await triggerLocator.isVisible({ timeout: 8_000 }).catch(() => false);
-
-  if (!triggerVisible) {
-    test.skip(true, 'No similar-books trigger found — feature may not be implemented yet.');
+  if (!similarResponse.ok()) {
+    test.skip(
+      true,
+      `Similar-books API returned ${similarResponse.status()} — exclusion check skipped.`
+    );
     return;
   }
 
-  await triggerLocator.click();
+  const panel = page.locator('.similar-books-panel');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
 
-  const panelLocator = page.locator(
-    '.similar-books-panel, .similar-books-modal, .similar-books-list'
-  ).first();
+  // Collect all rendered similar-book titles from the panel
+  const similarTitles = await panel.locator('.similar-book-card__title').allTextContents();
+  const normalizedTitles = similarTitles.map((t) => t.trim());
 
-  const panelAppeared = await panelLocator
-    .waitFor({ state: 'visible', timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false);
+  expect(normalizedTitles).not.toContain(sourceTitle);
+});
 
-  if (!panelAppeared) {
-    test.skip(true, 'Similar-books panel did not appear — dismiss test skipped.');
-    return;
-  }
+// ---------------------------------------------------------------------------
+// Dismiss behavior: closing PDF viewer hides SimilarBooks panel
+// ---------------------------------------------------------------------------
 
-  // Look for a close button within the panel
-  const closeBtn = panelLocator
-    .locator('button[aria-label*="lose"], button:has-text("Close"), button:has-text("×")')
-    .first();
+test('closing the PDF viewer also hides the similar-books panel', async ({ page }) => {
+  test.skip(
+    !catalog.pdfScenario,
+    'No indexed result with a document_url is available — dismiss behavior cannot be tested.'
+  );
 
-  const closeBtnVisible = await closeBtn.isVisible({ timeout: 3_000 }).catch(() => false);
+  const scenario = catalog.pdfScenario!;
+  await openPdfAndWaitForSimilarBooks(page, scenario.query, scenario.result.title);
 
-  if (!closeBtnVisible) {
-    test.skip(true, 'No close button found in similar-books panel — dismiss test skipped.');
-    return;
-  }
+  // Wait for the panel to appear (embeddings may or may not be available;
+  // we only need the panel element to exist before testing dismiss)
+  const panel = page.locator('.similar-books-panel');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
 
-  await closeBtn.click();
-  await expect(panelLocator).toBeHidden({ timeout: 5_000 });
+  // The PDF viewer close button is always present and sets selectedBook = null,
+  // which removes both the PDF viewer overlay and the SimilarBooks panel.
+  await page.getByRole('button', { name: 'Close PDF viewer' }).click();
+
+  await expect(panel).toBeHidden({ timeout: 5_000 });
+  await expect(page.locator('.pdf-viewer-overlay')).toBeHidden({ timeout: 5_000 });
 });

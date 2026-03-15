@@ -44,6 +44,11 @@ import requests
 
 SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
 SEARCH_ENDPOINT = "/v1/search"
+# Maximum number of indexed documents to probe when searching for one with a
+# stored embedding vector (used by the any_embedded_document_id fixture).
+MAX_EMBEDDING_PROBE_ATTEMPTS = 20
+
+
 def _similar_endpoint(doc_id: str) -> str:
     """Return the similar-books URL for the given document ID."""
     return f"/v1/books/{doc_id}/similar"
@@ -101,6 +106,49 @@ def any_document_id(api_url: str, api_available: None) -> str | None:
             return None
         docs = resp.json().get("results", [])
         return docs[0]["id"] if docs else None
+    except Exception:
+        return None
+
+
+@pytest.fixture(scope="session")
+def any_embedded_document_id(api_url: str, api_available: None, embeddings_available: bool) -> str | None:
+    """Return the id of a document that has a stored embedding vector, or None.
+
+    Unlike ``any_document_id``, this fixture probes the ``/v1/books/{id}/similar``
+    endpoint for each candidate document (up to ``MAX_EMBEDDING_PROBE_ATTEMPTS``) until it finds one that
+    returns HTTP 200 — confirming that the document has an embedding stored in
+    Solr.  A 422 response means the embedding field is absent for that document.
+
+    This is important because semantic and similar-books tests must exercise the
+    actual embedding path; silently skipping on a missing vector gives false
+    confidence that the feature works.
+    """
+    if not embeddings_available:
+        return None
+    try:
+        resp = requests.get(
+            f"{api_url}{SEARCH_ENDPOINT}",
+            params={"q": "*", "mode": "keyword", "limit": str(MAX_EMBEDDING_PROBE_ATTEMPTS)},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return None
+        docs = resp.json().get("results", [])
+        for doc in docs:
+            doc_id = doc.get("id")
+            if not doc_id:
+                continue
+            try:
+                probe = requests.get(
+                    f"{api_url}{_similar_endpoint(doc_id)}",
+                    params={"limit": "1"},
+                    timeout=10,
+                )
+                if probe.status_code == 200:
+                    return doc_id
+            except Exception:
+                continue
+        return None
     except Exception:
         return None
 
@@ -407,27 +455,23 @@ class TestSimilarBooks:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """GET /v1/books/{id}/similar must return a list of similar books.
 
-        Gated: requires embeddings service + at least one indexed document with an embedding.
+        Gated: requires embeddings service + at least one indexed document with a
+        stored embedding vector (verified by ``any_embedded_document_id``).
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — similar-books list cannot be verified.")
+        if not any_embedded_document_id:
+            pytest.skip("No document with a stored embedding found — similar-books cannot be verified.")
 
         resp = requests.get(
-            f"{api_url}{_similar_endpoint(any_document_id)}",
+            f"{api_url}{_similar_endpoint(any_embedded_document_id)}",
             params={"limit": "5"},
             timeout=30,
         )
-        if resp.status_code == 422:
-            pytest.skip(
-                f"Document {any_document_id!r} has no embedding stored — "
-                "similar-books requires indexed embeddings."
-            )
         assert resp.status_code == 200, (
             f"Expected 200 for similar-books, got {resp.status_code}: {resp.text}"
         )
@@ -440,34 +484,30 @@ class TestSimilarBooks:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """Similar-books results must not include the source document itself.
 
-        Gated: requires embeddings service + indexed document with an embedding.
+        Gated: requires embeddings service + indexed document with a stored embedding.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — exclusion check cannot be performed.")
+        if not any_embedded_document_id:
+            pytest.skip("No document with a stored embedding found — exclusion check cannot be performed.")
 
         resp = requests.get(
-            f"{api_url}{_similar_endpoint(any_document_id)}",
+            f"{api_url}{_similar_endpoint(any_embedded_document_id)}",
             params={"limit": "5"},
             timeout=30,
         )
-        if resp.status_code == 422:
-            pytest.skip(
-                f"Document {any_document_id!r} has no embedding stored — "
-                "similar-books requires indexed embeddings."
-            )
-        if resp.status_code != 200:
-            pytest.skip(f"Similar-books returned {resp.status_code}, skipping exclusion check.")
+        assert resp.status_code == 200, (
+            f"Expected 200 for similar-books, got {resp.status_code}: {resp.text}"
+        )
 
         results = resp.json().get("results", [])
         returned_ids = [doc.get("id") for doc in results]
-        assert any_document_id not in returned_ids, (
-            f"Source document {any_document_id!r} must not appear in its own similar-books list. "
+        assert any_embedded_document_id not in returned_ids, (
+            f"Source document {any_embedded_document_id!r} must not appear in its own similar-books list. "
             f"Got IDs: {returned_ids}"
         )
 
@@ -476,27 +516,25 @@ class TestSimilarBooks:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """Each similar-books result entry must include 'id' and 'title'.
 
-        Gated: requires embeddings service + indexed documents with embeddings.
+        Gated: requires embeddings service + indexed documents with stored embeddings.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — result field check cannot be performed.")
+        if not any_embedded_document_id:
+            pytest.skip("No document with a stored embedding found — result field check cannot be performed.")
 
         resp = requests.get(
-            f"{api_url}{_similar_endpoint(any_document_id)}",
+            f"{api_url}{_similar_endpoint(any_embedded_document_id)}",
             params={"limit": "5"},
             timeout=30,
         )
-        if resp.status_code in (404, 422):
-            pytest.skip(
-                f"Skipping field check: document {any_document_id!r} not found or has no embedding."
-            )
-        assert resp.status_code == 200
+        assert resp.status_code == 200, (
+            f"Expected 200 for similar-books, got {resp.status_code}: {resp.text}"
+        )
 
         results = resp.json().get("results", [])
         for doc in results:
