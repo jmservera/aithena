@@ -55,6 +55,13 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-15 — v1.0 roadmap triage and milestone shaping
+
+- The remaining Mend issues in the #5-#35 range were stale automation, not a usable release plan: they pointed at Python 3.7 wheels, removed `qdrant-*` manifests, or old transitive resolutions that no longer match the current Python 3.11 stack.
+- Replacing noisy Mend alerts with one curated dependency-baseline issue (#214) keeps security work actionable and easier to route.
+- The clean path to v1.0 is two lean milestones: **v0.8.0** for admin parity + dependency baseline + E2E confidence, then **v0.9.0** for operational hardening (auth, metrics, failover, capacity, semantic degraded mode, release docs).
+- Semantic/hybrid search is already in the product; the remaining work is productization and operational hardening, not inventing the feature from scratch.
+
 ### 2026-03-15 — Reskill Charter Optimization
 
 **What was extracted:**
@@ -258,3 +265,11 @@
 - Kane: Security scanning plan (#88-98) — 3 CI scanners (non-blocking) + OWASP ZAP guide + baseline tuning
 
 **Next:** Awaiting Juanma approval → Ripley creates issues + milestone → Phase 1 setup
+
+### 2026-03-15 — Full project state review
+
+- The repo is now past the "prototype" threshold: upload flow, security scanning, compose hardening, version provenance, container visibility, and admin status all exist on `dev`, and the current tree validates cleanly across backend and frontend.
+- The main blockers to v1.0 are no longer search features; they are production controls: protecting admin surfaces, tightening release automation, expanding E2E confidence, and finishing release-facing documentation.
+- The roadmap shape is sound (`v0.8.0` for admin/release confidence, `v0.9.0` for operability), but GitHub milestone hygiene needs cleanup because the board currently shows legacy open milestones and a duplicate-looking `v0.6.0` milestone state.
+- The `solr-search` service is emerging as the architectural center of gravity: search, upload, status, version, and admin container aggregation now converge there cleanly.
+- The current React admin page is still an iframe bridge, so the native admin dashboard work in `v0.8.0` is the right next architectural step.
