@@ -80,3 +80,18 @@
 - No hardcoded URLs in any PR. Relative paths used consistently.
 - The Copilot agent handles edge cases well (empty query guard for semantic mode, sandbox attribute on iframe, proper ARIA attributes).
 - Recommended merge order: #165 → #164 → #170 (tests first for baseline).
+
+### 2025-07-24 — v0.5 Bug Fix PR Review (Batch 2)
+
+**Reviewed & Approved:**
+- **PR #173** (document-lister restart idempotency) — ✅ Investigation-only PR. Copilot correctly identified that persistent state tracking (Redis + mtime) was already implemented. Added one edge-case test. No production code changed.
+- **PR #174** (language detection fix) — ✅ Three-pronged fix: Solr langid field rename (`language_s` → `language_detected_s`), new folder-based language extraction (`extract_language()` with 35 ISO 639-1 codes), and indexer pass-through for `language_s`. 13 new tests. Requires full reindex after merge.
+
+**CI Gap (recurring):**
+- Only CodeQL runs automatically on these PR branches. Ruff + pytest are not triggered — likely need first-time workflow approval in GitHub UI. This is the second review batch where full CI hasn't run. Should be escalated to unblock automated validation.
+
+**Observations:**
+1. Copilot agent shows good investigative judgement — PR #173 correctly concluded "already fixed" rather than introducing unnecessary changes.
+2. PR #174 demonstrates multi-layer debugging: Solr config + Python metadata + indexer pipeline all needed coordinated fixes. Well-decomposed.
+3. The dual-field language architecture (`language_detected_s` for content analysis, `language_s` for folder-based) is a sound design that gives content detection priority with folder fallback.
+4. Merge order matters: #173 → #174, then schedule full reindex for the library.
