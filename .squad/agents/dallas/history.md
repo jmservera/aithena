@@ -176,3 +176,23 @@
 
 **Next:** Awaiting Juanma approval of release plan → #49 implementation → Issue #50 created + assigned → Implementation
 
+### 2026-03-15T13:38 — Built PDF Upload UI (#50, PR #198)
+
+- Implemented complete PDF upload flow for issue #50 with drag-and-drop support, progress tracking, and comprehensive error handling.
+- Created **UploadPage** component with 5 UI states: idle, selecting, uploading, success, error — follows existing component patterns (BEM CSS, dark theme).
+- Created **useUpload** hook with XMLHttpRequest for deterministic upload progress tracking (progress bar shows percentage and file sizes).
+- Added **Upload** tab to main navigation (TabNav.tsx) between Library and Status.
+- **Client-side validation**: Rejects non-PDF files and files >50MB with immediate error messages.
+- **Backend integration**: POSTs to `/v1/upload` (from Parker's PR #197), handles all documented errors (400, 413, 429, 500, 502) with user-friendly messages.
+- **UI features**: Drag-and-drop zone with visual feedback, file picker button, retry after error, upload another after success, "Back to Search" link.
+- **Testing**: Added 11 UploadPage tests + 12 useUpload hook tests (all 53 tests passing) — used manual file input mocking (dispatchEvent) to bypass accept attribute in validation test.
+- **Code quality**: TypeScript strict types, ESLint clean, build succeeding, follows existing patterns (buildApiUrl helper, AbortController cleanup in other hooks).
+- **Dark theme CSS**: 250+ lines in App.css for upload-*, including pulse animation for progress spinner, gradient progress bar, hover states.
+- **Key technical decisions**:
+  - XMLHttpRequest over fetch for progress events (xhr.upload.onprogress)
+  - Tab-based navigation (not modal) for consistency with existing UI
+  - Validation before XHR creation (fast failure, no network overhead)
+  - State-driven UI (uploading/progress/result/error) for clear flow
+- **PR #198** created targeting `dev`, references issue #50, ready for review after Parker's backend merge.
+- **Learnings**: userEvent.upload respects `accept` attribute in tests — use manual dispatchEvent for non-accepted file types; waitFor must wrap XHR handler calls to ensure they execute after XHR creation; state updates in hooks are async, always wrap assertions in waitFor.
+
