@@ -21,7 +21,7 @@ services:
     volumes:
       - redis-data:/data
   rabbitmq:
-    image: rabbitmq:3.13-management
+    image: rabbitmq:3.12-management
     command: rabbitmq-server
     hostname: rabbitmq
     expose:
@@ -30,9 +30,7 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-    environment:
-      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
-      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
+
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
       interval: 10s
