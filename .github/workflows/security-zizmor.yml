@@ -1,0 +1,38 @@
+name: Security - GitHub Actions Supply Chain (zizmor)
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  zizmor:
+    name: GitHub Actions Security Scan
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor security scan
+        uses: zizmorcore/zizmor-action@v0.1.1
+        with:
+          # SARIF output automatically uploaded to GitHub Code Scanning
+          # Focuses on P0 findings: template-injection and dangerous-triggers
+          advanced-security: true
