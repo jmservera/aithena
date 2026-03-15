@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAdmin, QueueDocument } from '../hooks/admin';
+import { useAdmin, AdminDocument } from '../hooks/admin';
 
 type TabKey = 'queued' | 'processed' | 'failed';
 
@@ -17,7 +17,7 @@ function DocPath({ path }: { path?: string }) {
 }
 
 interface QueuedTableProps {
-  docs: QueueDocument[];
+  docs: AdminDocument[];
 }
 
 function QueuedTable({ docs }: QueuedTableProps) {
@@ -49,7 +49,7 @@ function QueuedTable({ docs }: QueuedTableProps) {
 }
 
 interface ProcessedTableProps {
-  docs: QueueDocument[];
+  docs: AdminDocument[];
   onClearAll: () => void;
   busy: boolean;
 }
@@ -125,7 +125,7 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
 }
 
 interface FailedTableProps {
-  docs: QueueDocument[];
+  docs: AdminDocument[];
   onRequeue: (id: string) => void;
   onRequeueAll: () => void;
   busy: boolean;
@@ -271,11 +271,13 @@ function AdminPage() {
             ))}
           </div>
 
-          {activeTab === 'queued' && <QueuedTable docs={data.queued_documents} />}
+          {activeTab === 'queued' && (
+            <QueuedTable docs={data.documents.filter((d) => d.status === 'queued')} />
+          )}
 
           {activeTab === 'processed' && (
             <ProcessedTable
-              docs={data.processed_documents}
+              docs={data.documents.filter((d) => d.status === 'processed')}
               onClearAll={() => runAction(clearProcessed)}
               busy={busy}
             />
@@ -283,7 +285,7 @@ function AdminPage() {
 
           {activeTab === 'failed' && (
             <FailedTable
-              docs={data.failed_documents}
+              docs={data.documents.filter((d) => d.status === 'failed')}
               onRequeue={(id) => runAction(() => requeueDocument(id))}
               onRequeueAll={() => runAction(requeueAllFailed)}
               busy={busy}

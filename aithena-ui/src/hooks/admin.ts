@@ -1,15 +1,17 @@
 import { useState, useCallback } from 'react';
 import { buildApiUrl } from '../api';
 
-const queueUrl = buildApiUrl('/v1/admin/queue');
+// GET /v1/admin/documents — canonical API contract from the admin operations API
+const documentsUrl = buildApiUrl('/v1/admin/documents');
 
-export interface QueueDocument {
+export type DocumentStatus = 'queued' | 'processed' | 'failed';
+
+export interface AdminDocument {
   id: string;
+  status: DocumentStatus;
   path?: string;
   timestamp?: string;
   last_modified?: number;
-  processed?: boolean;
-  failed?: boolean;
   error?: string;
   title?: string;
   author?: string;
@@ -18,14 +20,21 @@ export interface QueueDocument {
   page_count?: number;
 }
 
+export interface AdminDocumentsResponse {
+  total: number;
+  queued: number;
+  processed: number;
+  failed: number;
+  documents: AdminDocument[];
+}
+
 export interface QueueState {
   total: number;
   queued: number;
   processed: number;
   failed: number;
-  queued_documents: QueueDocument[];
-  processed_documents: QueueDocument[];
-  failed_documents: QueueDocument[];
+  /** All documents; filter client-side by doc.status */
+  documents: AdminDocument[];
 }
 
 export interface AdminState {
@@ -65,7 +74,7 @@ export function useAdmin(): UseAdminReturn {
     setLoading(true);
     setError(null);
     try {
-      const json = (await apiFetch(queueUrl)) as QueueState;
+      const json = (await apiFetch(documentsUrl)) as AdminDocumentsResponse;
       setData(json);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load queue state');

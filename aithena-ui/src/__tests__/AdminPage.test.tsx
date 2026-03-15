@@ -2,14 +2,13 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, afterEach } from 'vitest';
 import AdminPage from '../pages/AdminPage';
 
+// Matches the GET /v1/admin/documents response shape from the admin operations API
 const emptyQueueResponse = {
   total: 0,
   queued: 0,
   processed: 0,
   failed: 0,
-  queued_documents: [],
-  processed_documents: [],
-  failed_documents: [],
+  documents: [],
 };
 
 const populatedQueueResponse = {
@@ -17,26 +16,25 @@ const populatedQueueResponse = {
   queued: 1,
   processed: 1,
   failed: 1,
-  queued_documents: [
+  documents: [
     {
-      id: 'cXVldWVkLWtleQ==',
+      id: 'cXVldWVkLWtleQ',
+      status: 'queued',
       path: '/data/documents/pending_book.pdf',
       timestamp: '2024-01-15T10:00:00',
     },
-  ],
-  processed_documents: [
     {
-      id: 'cHJvY2Vzc2VkLWtleQ==',
+      id: 'cHJvY2Vzc2VkLWtleQ',
+      status: 'processed',
       path: '/data/documents/indexed_book.pdf',
       title: 'Indexed Book',
       author: 'Jane Doe',
       year: 2023,
       timestamp: '2024-01-14T09:00:00',
     },
-  ],
-  failed_documents: [
     {
-      id: 'ZmFpbGVkLWtleQ==',
+      id: 'ZmFpbGVkLWtleQ',
+      status: 'failed',
       path: '/data/documents/broken_book.pdf',
       error: 'Extraction failed: corrupt PDF',
       timestamp: '2024-01-13T08:00:00',
