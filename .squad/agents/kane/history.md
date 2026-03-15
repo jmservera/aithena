@@ -103,3 +103,75 @@
 ✅ SEC-4 complete — OWASP ZAP audit guide ready for v0.6.0 release validation  
 ✅ PR #194 opened targeting dev (documentation only, no code changes)  
 ✅ Next: SEC-5 (issue #98) — triage bandit/checkov/zizmor findings, establish security baseline
+### 2026-03-15 — SEC-1 Bandit Implementation Complete
+
+**Summary:** Implemented SEC-1 (issue #88) bandit Python SAST scanning for CI. Created PR #193 targeting dev branch with complete workflow and configuration.
+
+**Implementation Details:**
+- Created `.bandit` config file with baseline skip rules:
+  - S101 (pytest assert), S104 (0.0.0.0 binding), S603/S607 (subprocess in tests)
+  - S105/S106/S108 (test data false positives)
+  - Excludes .venv, site-packages, node_modules
+- Created `.github/workflows/security-bandit.yml`:
+  - Triggers on push/PR to dev and main branches
+  - Installs bandit with SARIF support
+  - Runs recursive scan with --exit-zero
+  - Uploads SARIF to GitHub Code Scanning
+  - Stores SARIF artifact (30-day retention)
+  - Non-blocking (continue-on-error: true)
+  - Proper permissions (security-events: write)
+- Scans all Python services: document-indexer, document-lister, solr-search, admin, embeddings-server, e2e
+
+**Key Decisions:**
+- Used centralized `.bandit` config instead of command-line flags for maintainability
+- Added SARIF artifact upload in addition to Code Scanning for audit trail
+- Applied 7 skip rules covering 60+ pattern instances based on security spec
+- Workflow follows existing CI patterns (permissions block, concurrency, Python 3.11)
+
+**Testing:**
+- Workflow syntax validated
+- Branch pushed successfully
+- PR #193 created targeting dev (Closes #88)
+
+**Lessons Learned:**
+- Bandit config file supports `targets` list but CLI `-r .` with exclusions is simpler
+- SARIF upload requires both bandit[sarif] package and proper permissions
+- continue-on-error at job level ensures non-blocking behavior
+
+
+### 2026-03-15 — SEC-3 Implementation Complete (PR #192)
+
+**Summary:** Implemented zizmor GitHub Actions supply chain security scanning workflow. Previous @copilot PR was empty/rejected; implemented from scratch as Kane per squad charter.
+
+**Implementation Details:**
+
+**Workflow:** `.github/workflows/security-zizmor.yml`
+- **Tool:** Official `zizmorcore/zizmor-action@v0.1.1` action from GitHub Marketplace
+- **Triggers:** Push/PR to dev/main, path filter: `.github/workflows/**`
+- **Non-blocking:** `continue-on-error: true` prevents CI breakage during baseline tuning phase
+- **SARIF Upload:** Integrated with GitHub Code Scanning via `security-events: write` permission
+- **Focus:** P0 findings (template-injection, dangerous-triggers) per v0.6.0 spec
+
+**Tool Research:**
+- Zizmor has official GitHub Action (zizmorcore/zizmor-action) - preferred over pip install
+- Supports SARIF output natively when `advanced-security: true` is configured
+- Focuses on GitHub Actions supply chain risks: template injection, dangerous triggers, excessive permissions, unpinned dependencies
+- Template injection occurs when user-controllable input (PR titles, issue bodies, commit messages) flows into `run` commands without escaping
+- Dangerous triggers like `pull_request_target` run with base repo secrets/permissions but allow untrusted fork code
+
+**Known Baseline:**
+- CKV_GHA_7 (pin actions to SHA) is a Checkov finding, not zizmor - deferred to v0.7.0 audit per spec
+- No zizmor-specific baseline exceptions identified yet (will triage findings in SEC-5)
+
+**Configuration:**
+- No zizmor config file created initially - allows all findings to surface for SEC-5 triage
+- Zizmor supports inline ignores via comments (`# zizmor: ignore[rule-name]`) and `zizmor.yml` config for project-wide exceptions
+- Will document baseline exceptions during SEC-5 triage after first scan results
+
+**Branch/PR:**
+- Branch: `squad/90-sec3-zizmor-scanning` from dev
+- PR #192 targeting dev (closes #90)
+- Single commit with detailed implementation notes
+- Ready for review and merge
+
+**Next:** SEC-3 complete → Awaiting SEC-1/SEC-2 completion → Kane review SEC-4/SEC-5
