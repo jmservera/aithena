@@ -165,3 +165,85 @@
 
 **Branch:** squad/89-sec2-checkov-scanning → dev
 **Status:** PR #191 open, awaiting review
+
+### 2026-03-15 — Issue #52 Implementation: Production Docker Hardening
+
+**Summary:** Implemented complete production hardening specification for docker-compose.yml per Phase 4 requirements.
+
+**Deliverables (PR #196):**
+
+**1. Port Conflict Fix (Critical Bug)**
+- Removed `PORT=8085` env var from embeddings-server in docker-compose.yml
+- Updated embeddings-server config default from 8086 to 8080
+- Fixed EMBEDDINGS_PORT in document-indexer (8085 → 8080)
+- Fixed EMBEDDINGS_URL in solr-search (8001 → 8080)
+- Resolves mismatch between `expose: 8080` and env vars
+
+**2. Health Endpoints**
+- Added `/health` endpoint to embeddings-server (returns status, model, embedding_dim)
+- Added `/health` location to nginx (200 "healthy", access_log off)
+- Verified solr-search already has `/health` endpoint
+
+**3. Health Checks (8 new services)**
+- embeddings-server: `wget http://localhost:8080/health` (60s start_period for model loading)
+- solr-search: `wget http://localhost:8080/health`
+- document-lister: `pgrep -f python`
+- document-indexer: `pgrep -f python`
+- aithena-ui: `wget http://localhost:80/`
+- streamlit-admin: `wget /_stcore/health`
+- redis-commander: `wget http://localhost:8081/`
+- nginx: `wget http://localhost:80/health`
+
+**4. Restart Policies**
+- `unless-stopped` (14 services): redis, rabbitmq, zoo1-3, solr1-3, embeddings-server, solr-search, streamlit-admin, redis-commander, aithena-ui, nginx
+- `on-failure` (2 services): document-lister, document-indexer (stateless workers)
+
+**5. Resource Limits (all 20+ services)**
+- Memory limits: 128m-2g range (2-2.5x observed usage headroom)
+- Memory reservations: Conservative allocations prevent OOM cascade
+- CPU reservations: Solr nodes 1.0 core each, embeddings 1.0, solr-search 0.5
+- Log rotation: json-file driver, 10m × 3 files per service (30MB max)
+
+**6. Graceful Shutdown (stop_grace_period)**
+- 60s: Solr (solr, solr2, solr3), ZooKeeper (zoo1, zoo2, zoo3)
+- 30s: Redis, RabbitMQ
+- 10s: All other services
+
+**7. Dependency Fixes (5 changes service_started → service_healthy)**
+- document-indexer: embeddings-server condition upgraded
+- solr-search: Added `condition: service_healthy` for solr and embeddings-server
+- aithena-ui: Added `condition: service_healthy` for solr-search
+- nginx: All upstreams now wait for `service_healthy` (aithena-ui, solr-search, streamlit-admin, redis-commander, solr)
+
+**8. Production Deployment Guide**
+- Created `docs/deployment/production.md` (509 lines)
+- Sections: prerequisites, resource requirements (16GB RAM, 8+ cores), startup order (5 tiers, 3-5min cold start), volume initialization, health validation, graceful shutdown, monitoring/logging, troubleshooting, backup/restore
+- Includes production hardening checklist (SSL, auth, firewall, monitoring)
+
+**Key Architectural Decisions:**
+- Tiered service classification: Tier 1 (core infra, high availability) → Tier 5 (nginx ingress, starts last)
+- Resource limit philosophy: 2-2.5x observed usage headroom; CPU reservations (not hard limits) to avoid throttling
+- Health check timing: Conservative start_period (60s embeddings, 30s ZK/Solr) prevents false positives
+- Dependency graph validation: nginx waits for all upstreams healthy → zero-downtime production startup
+- Dev workflow preservation: All hardening in base compose, no changes to docker-compose.override.yml
+
+**Total System Requirements:**
+- Memory: ~15GB limits, ~8GB reserved
+- CPU: 8+ cores recommended (3 cores Solr + 1 embeddings + 0.5 search + overhead)
+- Disk: 100GB+ for infrastructure volumes + library size
+
+**Validation:**
+- YAML syntax validated with Python yaml.safe_load()
+- All service health checks have appropriate start_period and retries
+- Dependency graph ensures correct startup order (verified via spec review)
+
+**Branch:** squad/52-docker-hardening → dev
+**Status:** PR #196 open, awaiting review
+**Implementation Time:** ~2 hours (spec reading, implementation, validation, documentation)
+
+**Learnings:**
+- Health check start_period is critical for model-loading services (embeddings 60s) and cluster formation (ZK/Solr 30s)
+- Log rotation prevents disk exhaustion in long-running production deployments (30MB per service × 20 services = 600MB max)
+- depends_on service_healthy creates implicit startup ordering that matches tier-based dependency graph
+- Resource reservations guarantee minimum allocation but allow bursting; limits prevent OOM cascade
+- nginx should start LAST to ensure zero 502 errors during cold start (all upstreams must be healthy first)

@@ -5,6 +5,9 @@ ENV PORT=8080
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+
 COPY solr-search/pyproject.toml solr-search/uv.lock ./
 
 RUN uv pip install --system --no-cache -r pyproject.toml
