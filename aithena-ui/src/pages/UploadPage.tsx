@@ -49,7 +49,9 @@ function UploadPage() {
   };
 
   const handleFileSelected = (file: File) => {
-    uploadFile(file);
+    uploadFile(file).catch(() => {
+      // Error is already handled by the upload hook's error state
+    });
   };
 
   const handleBrowseClick = () => {
