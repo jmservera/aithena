@@ -273,3 +273,18 @@
 - The roadmap shape is sound (`v0.8.0` for admin/release confidence, `v0.9.0` for operability), but GitHub milestone hygiene needs cleanup because the board currently shows legacy open milestones and a duplicate-looking `v0.6.0` milestone state.
 - The `solr-search` service is emerging as the architectural center of gravity: search, upload, status, version, and admin container aggregation now converge there cleanly.
 - The current React admin page is still an iframe bridge, so the native admin dashboard work in `v0.8.0` is the right next architectural step.
+
+### 2026-03-15 — v0.11.0 Auth + Installer decomposition
+
+**Summary:** Planned the v0.11.0 authentication + setup-installer milestone, recorded the architecture in `.squad/decisions/inbox/ripley-v0.11-auth-installer.md`, and opened issues #250-#257 for execution.
+
+**Key Decisions:**
+- Local auth should live in `solr-search`; adding a separate auth service would be unnecessary service sprawl for this milestone.
+- Use a persistent SQLite user store with Argon2id password hashes; the installer seeds the initial admin user and `.env` carries runtime config such as JWT secret and paths.
+- Browser-only admin tools cannot rely on local-storage bearer headers alone, so the auth contract needs hybrid transport: bearer token for SPA/API calls plus a secure cookie for nginx-gated browser surfaces.
+- Split the work into narrow issues: architecture (#250) → backend auth (#251) → frontend/nginx/admin protection (#252-#254) plus installer (#255), compose/docs wiring (#256), and end-to-end coverage (#257).
+
+**Lead Learnings:**
+1. **Token transport matters as much as token format** — once nginx-gated browser tools enter scope, a pure localStorage + header plan is incomplete.
+2. **Installer and auth must be designed together** — the bootstrap path for the first user affects storage model, compose wiring, and operational docs immediately.
+3. **Security-sensitive milestone work should stay human-owned even when well specified** — only the compose/docs follow-through and the final test matrix looked suitable for explicit `@copilot` collaboration.

@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the release-facing feature summary, see the [v0.5.0 Feature Guide](features/v0.5.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v0.7.0 Feature Guide](features/v0.7.0.md).
 
 ## System architecture overview
 
@@ -159,6 +159,10 @@ That means every service using `/data/documents` is reading from the same mounte
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed dev origin |
 | `EMBEDDINGS_URL` | `http://embeddings-server:8001/v1/embeddings/` | Embeddings endpoint |
 | `DEFAULT_SEARCH_MODE` | `keyword` | Default API search mode |
+| `UPLOAD_MAX_SIZE_MB` | `50` | Maximum upload file size (v0.6.0+) |
+| `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
+| `UPLOAD_STAGING_DIR` | `/data/uploads/` | Temporary upload staging area (v0.6.0+) |
+| `EXPOSE_CONTAINER_STATS` | `false` | Enable `/v1/admin/containers` endpoint (v0.7.0+) |
 
 #### `streamlit-admin`
 
@@ -215,6 +219,228 @@ Why this matters:
 - the search API now reads language values with a `language_detected_s` first / `language_s` fallback for filters and normalized results.
 
 This improves language facets and search filters for libraries organized as `<language>/<category>/<author>/file.pdf`.
+
+## Deployment Updates for v0.6.0 (PDF Upload, Security Scanning, Docker Hardening)
+
+### Docker Health Checks
+
+v0.6.0 adds health checks to all services in `docker-compose.yml`. Services now verify they are:
+
+1. Running
+2. Ready to accept connections
+3. Responsive to queries
+
+**Example (Redis):**
+```yaml
+redis:
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 5s
+    timeout: 15s
+    retries: 1
+  restart: unless-stopped
+```
+
+**Key changes:**
+
+- Services that depend on others now use `condition: service_healthy` instead of just `service_started`
+- This prevents race conditions where the indexer or admin tools come up before their dependencies are actually ready
+
+### Resource Limits and Restart Policies
+
+v0.6.0 enforces memory and CPU limits on all services to prevent resource exhaustion:
+
+| Service | Memory Limit | Restart Policy |
+|---------|--------------|-----------------|
+| Redis | 512 MB | `unless-stopped` |
+| RabbitMQ | 2 GB | `unless-stopped` |
+| Solr nodes | 2 GB each | `unless-stopped` |
+| Embeddings Server | 2 GB | `unless-stopped` |
+| Solr Search API | 512 MB | `unless-stopped` |
+| Document Indexer | 512 MB | `on-failure` |
+| Document Lister | 512 MB | `on-failure` |
+
+**Restart policies explained:**
+
+- `restart: unless-stopped` — automatically restart unless explicitly stopped by user
+- `restart: on-failure` — only restart if the container exits with a non-zero code
+- `stop_grace_period` — allows graceful shutdown before forced termination
+
+### Security Scanning
+
+v0.6.0 adds continuous security scanning to the CI/CD pipeline:
+
+- **Bandit** scans Python code for security vulnerabilities
+- **Checkov** scans Infrastructure-as-Code (Docker Compose, deployment files)
+- **Zizmor** scans GitHub Actions workflows for security issues
+
+All scans run on every push to any branch. Results are available in GitHub Actions workflow logs.
+
+**To review findings:**
+
+```bash
+# Check the latest Bandit scan
+gh run view --log bandit 2>/dev/null | grep -A 20 "security"
+
+# Check Checkov results for docker-compose
+gh run view --log checkov 2>/dev/null | grep -i "docker-compose"
+```
+
+See `docs/security/baseline-v0.6.0.md` for the complete security findings triage (287 items catalogued).
+
+## Deployment Updates for v0.7.0 (Versioning, Admin Observability, Release Automation)
+
+### Semantic Versioning Infrastructure
+
+v0.7.0 adds version tracking across all services:
+
+- **VERSION file** in project root is the single source of truth
+- Each service reads version from git tags (development) or container image labels (production)
+- `docker-compose.yml` includes version in Dockerfile labels
+
+**To check the current version:**
+
+```bash
+cat VERSION
+echo "Current tag: v$(cat VERSION)"
+```
+
+**To verify all services report the same version:**
+
+```bash
+# Version endpoint on solr-search
+curl -s http://localhost:8080/version | jq '.version'
+
+# In Streamlit admin dashboard
+# Navigate to System Status > Versions tab
+```
+
+### Version Endpoints (GET /version)
+
+v0.7.0 adds `/version` endpoints to all services. Use these for monitoring and health checks:
+
+```bash
+# Get version info from solr-search
+curl -s http://localhost:8080/version | jq '.'
+```
+
+**Response format:**
+```json
+{
+  "service": "solr-search",
+  "version": "0.7.0",
+  "build_time": "2026-03-15T14:30:00Z",
+  "git_commit": "a1b2c3d4",
+  "git_branch": "main",
+  "python_version": "3.11.7"
+}
+```
+
+### Container Stats Endpoint (GET /v1/admin/containers)
+
+v0.7.0 adds an endpoint for querying Docker container metadata without needing direct Docker socket access:
+
+```bash
+# Get container stats (requires EXPOSE_CONTAINER_STATS=true)
+curl -s http://localhost:8080/v1/admin/containers | jq '.containers[] | "\(.name) - \(.state) (\(.cpu_percent)% CPU, \(.memory_mb)MB)"'
+```
+
+**Security note:** This endpoint is **disabled by default**. To enable it, set the environment variable:
+
+```bash
+export EXPOSE_CONTAINER_STATS=true
+docker-compose up
+```
+
+### System Status Admin Page
+
+v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
+
+**Navigation:**
+
+1. Open the **Admin** tab in Aithena
+2. Navigate to **System Status** (if not visible, ensure v0.7.0 is deployed)
+3. Tabs available:
+   - **Versions** — version matrix and update history for all services
+   - **Health** — health check statuses and history
+   - **Resources** — CPU and memory usage graphs
+   - **Logs** — recent system events and state changes
+
+**Auto-refresh behavior:**
+
+- Polls `/version` and `/admin/containers` every 30 seconds
+- Changes highlighted in green (improvement) or red (degradation)
+- Can be paused for detailed inspection
+
+**To troubleshoot the System Status page:**
+
+```bash
+# Verify version endpoints are responsive
+curl -s http://localhost:8080/version | jq '.version'
+
+# Verify container stats endpoint is responsive (if enabled)
+export EXPOSE_CONTAINER_STATS=true
+curl -s http://localhost:8080/v1/admin/containers | jq '.containers | length'
+```
+
+### Version Display in User Interface
+
+v0.7.0 adds version display in the footer of the web app:
+
+- Shows **Aithena v0.7.0** (or current version) in bottom-right corner
+- Hover tooltip reveals full version metadata (commit hash, build time)
+- Gracefully displays "unknown" if version endpoint is unavailable
+
+### Monitoring Version Consistency
+
+Use the System Status page to detect version skew (services at different versions):
+
+**Workflow:**
+
+1. After a deploy, open the **Versions** tab in System Status
+2. Confirm all services are at v0.7.0 (or your target version)
+3. If any service is at an older version, wait for it to restart or check deployment logs
+4. Set up a monitoring alert: alert if any service version differs from the others
+
+**Manual check:**
+
+```bash
+for service in solr-search document-indexer document-lister embeddings-server; do
+  echo -n "$service: "
+  # Requires knowledge of each service's version endpoint and port
+done
+```
+
+### Release Automation
+
+v0.7.0 includes a CI/CD workflow (`.github/workflows/release.yml`) that automates versioned releases:
+
+**Trigger:** Merge to `main` branch (or manual trigger)
+
+**What it does:**
+
+1. Determines new version using conventional commits
+2. Updates `VERSION` file
+3. Updates `CHANGELOG.md` from commit messages
+4. Creates git tag (e.g., `v0.7.0`)
+5. Builds and tags container images (`:v0.7.0`, `:latest`)
+6. Creates GitHub Release with changelog
+
+**Supported pre-release tags:**
+
+- `v0.7.0-rc1` (release candidate)
+- `v0.7.0-beta` (beta)
+- `v0.7.0-alpha` (alpha)
+
+**To test locally:**
+
+```bash
+# Check if release workflow would trigger
+git log --oneline -5 | head -3
+
+# Check current version
+cat VERSION
+```
 
 ## Monitoring
 

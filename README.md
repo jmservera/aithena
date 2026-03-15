@@ -30,10 +30,13 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
+- [v0.7.0 Feature Guide](docs/features/v0.7.0.md) — Latest release
 - [v0.6.0 Feature Guide](docs/features/v0.6.0.md)
 - [v0.5.0 Feature Guide](docs/features/v0.5.0.md)
 - [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
 - [Security Baseline](docs/security/baseline-v0.6.0.md)
+- [v0.7.0 Test Report](docs/test-report-v0.7.0.md)
+- [v0.6.0 Test Report](docs/test-report-v0.6.0.md)
 - [v0.5.0 Test Report](docs/test-report-v0.5.0.md)
 
 ## Architecture

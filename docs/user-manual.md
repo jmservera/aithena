@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For a release-focused summary, see the [v0.5.0 Feature Guide](features/v0.5.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v0.7.0 Feature Guide](features/v0.7.0.md).
 
 ## Getting started
 
@@ -10,6 +10,8 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - narrow results with facets
 - open PDFs directly from search results
 - use Similar Books recommendations after opening a document
+- upload PDF files via drag-and-drop (v0.6.0+)
+- check the Aithena version in the footer (v0.7.0+)
 - check system health in the Status tab
 - view library-wide statistics in the Stats tab
 - open the Admin tab to load the embedded operator dashboard when you need admin tools
@@ -248,6 +250,61 @@ The embedded Streamlit dashboard currently includes:
 - It is mainly intended for operators and library administrators, not day-to-day readers.
 - If the dashboard cannot load, contact your administrator to confirm the admin services are running.
 
+## Uploading PDFs (v0.6.0+)
+
+The **Upload** tab lets you add PDFs to the library without logging in to the server.
+
+### How to upload
+
+1. Open the **Upload** tab.
+2. Either drag-and-drop a PDF onto the zone, or click to browse and select a file.
+3. Watch the real-time progress bar as the file transfers.
+4. When the upload completes, you'll see a success message.
+
+### What happens after upload
+
+- Your PDF is placed in the library staging area.
+- The indexer picks it up on the next scan cycle (usually within seconds to minutes depending on queue size).
+- Once indexed, the document appears in search results.
+- If indexing fails, check the Admin tab to see failed documents.
+
+### Upload limits
+
+- **File size**: Maximum 50 MB per file (contact your administrator to change this)
+- **File type**: PDF only
+- **Rate limit**: 10 uploads per minute per IP address
+
+### Troubleshooting uploads
+
+| Error | What it means | How to fix |
+|---|---|---|
+| "Invalid file type. Please upload a PDF." | You selected a non-PDF file | Select a file ending in `.pdf` |
+| "File is too large. Maximum size is 50 MB." | Your PDF exceeds the size limit | Split the PDF or contact your administrator |
+| "Too many uploads. Please wait a moment and try again." | You've hit the rate limit | Wait a minute and try again |
+| "Upload failed. Please try again." | Server error during upload | Try again; if it persists, contact your administrator |
+
+## Version information (v0.7.0+)
+
+The Aithena version appears in the footer of the web app as a small version badge.
+
+### What the version means
+
+The version (e.g., **v0.7.0**) tells you which release you are running. This is useful when:
+
+- **Troubleshooting:** Knowing the version helps you search documentation for known issues.
+- **Feature confirmation:** New features appear only in version 0.6.0 and later (e.g., PDF upload).
+- **Support:** When contacting support, mention your version and the commit hash shown in the tooltip.
+
+### How to find the version
+
+Hover over the version badge in the bottom-right corner of the footer to see:
+
+- Full version number
+- Git commit hash
+- Build timestamp
+
+If the version displays as "unknown", the admin dashboard may not be running or the version endpoint is unavailable.
+
 ## Tips and tricks
 
 - Start broad, then narrow with facets.
@@ -256,8 +313,11 @@ The embedded Streamlit dashboard currently includes:
 - If a result includes highlighted snippets, scan those before opening the PDF.
 - Check the **Status** tab if new books are not appearing in search yet.
 - Check the **Stats** tab when you want a quick sense of collection coverage by language, author, year, or category.
+- Upload PDFs via the **Upload** tab if you don't have direct server access (v0.6.0+).
+- Check the footer version badge to confirm you're running the latest release (v0.7.0+).
 
 ## Need more help?
 
 - For deployment and troubleshooting: [Admin Manual](admin-manual.md)
-- For release documentation and screenshots: [v0.5.0 Feature Guide](features/v0.5.0.md)
+- For release documentation and features: [v0.7.0 Feature Guide](features/v0.7.0.md)
+- For previous releases: [v0.6.0 Feature Guide](features/v0.6.0.md), [v0.5.0 Feature Guide](features/v0.5.0.md)
