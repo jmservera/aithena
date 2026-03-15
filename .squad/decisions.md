@@ -3021,3 +3021,90 @@ Created 30KB+ OWASP ZAP audit guide (`docs/security/owasp-zap-audit-guide.md`) c
 **Status:** ✅ Approved for v0.6.0  
 **PR:** #194 (targeting dev)  
 **Next:** SEC-5 triage (bandit/checkov/zizmor findings → security baseline document)
+
+## Brett — Docker Hardening Implementation (#52)
+
+**Date:** 2026-03-15  
+**Author:** Brett (Infrastructure Architect)  
+**Status:** ✅ Implemented (PR #196 merged)  
+
+### Decision
+
+Implemented production Docker hardening specification for all 20+ services in docker-compose.yml per Phase 4 #52 requirements.
+
+### What Changed
+
+**1. Critical Port Conflict Fix**
+- Standardized embeddings-server internal port to 8080 (removed conflicting PORT=8085 env var)
+- Updated all references: EMBEDDINGS_PORT, EMBEDDINGS_URL
+- Resolves health check failures caused by port mismatch
+
+**2. Health Checks (8 new)**
+- embeddings-server, solr-search: HTTP health endpoints (wget)
+- document-lister, document-indexer: Process checks (pgrep)
+- aithena-ui, streamlit-admin, redis-commander, nginx: HTTP checks
+
+**3. Production Hardening (all services)**
+- Restart policies: unless-stopped for critical services, on-failure for workers
+- Resource limits: Memory 128m-2g, CPU reservations 0.5-1.0 core
+- Graceful shutdown: 60s Solr/ZK, 30s Redis/RabbitMQ, 10s others
+- Log rotation: json-file driver, 10m × 3 files (30MB max per service)
+- Dependency fixes: 5 services upgraded to service_healthy conditions
+
+**4. Production Deployment Guide**
+- Created docs/deployment/production.md covering startup order, resource requirements, troubleshooting, backup/restore, and production checklist
+
+### Key Design Decisions
+
+1. **Tiered Startup Order**: 5-tier dependency graph ensures correct initialization (infra → search → apps → UIs → ingress)
+2. **Conservative Health Checks**: 60s start_period for embeddings (model loading), 30s for ZK/Solr (cluster formation)
+3. **Resource Headroom**: 2-2.5x observed usage limits prevent OOM while allowing bursting
+4. **nginx Last**: Reverse proxy starts LAST after all upstreams healthy → zero 502 errors on cold start
+5. **Log Rotation**: 30MB cap per service (600MB total) prevents disk exhaustion in production
+
+### System Requirements
+
+- **Memory**: ~15GB limits, ~8GB reserved (16GB+ host recommended)
+- **CPU**: 8+ cores (3 Solr + 1 embeddings + 0.5 search + overhead)
+- **Disk**: 100GB+ SSD for infrastructure + library size
+
+### Impact
+
+- **Operators**: Full production deployment guide with troubleshooting
+- **Developers**: No changes to docker-compose.override.yml (dev workflow intact)
+- **CI/CD**: Longer startup time (3-5min cold start vs 1-2min), but deterministic
+- **Production**: Zero-downtime deployments, predictable resource usage
+
+### Future Considerations
+
+1. **Security hardening** (deferred to v0.7.0): RabbitMQ credentials, Redis password, Admin endpoint auth
+2. **Monitoring integration** (future): Prometheus export, alerting, dashboards
+3. **Horizontal scaling** (future): Solr nodes 4-N, load balancer, queue autoscaling
+
+**Reviewed by:** Ripley (Lead)  
+**Status:** ✅ Approved and merged (PR #196)  
+**Related:** Issue #52 (closed)
+
+---
+
+## Parker — Embeddings Dockerfile Alignment
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-15  
+**Status:** 📋 PROPOSED  
+
+### Context
+
+The repository's `embeddings-server` implementation is a custom FastAPI application that exposes `POST /v1/embeddings/` and `GET /v1/embeddings/model` for downstream consumers. The previous Dockerfile used the Weaviate `semitechnologies/transformers-inference:custom` base image, which serves a different API shape (`/vectors/` on port 8080) and never starts the repo's `main.py`.
+
+### Decision
+
+Build `embeddings-server` from `python:3.11-slim`, install `requirements.txt`, preload the configured SentenceTransformer model during the image build, copy `main.py` plus `config/`, and run `uvicorn` for the custom FastAPI app on internal port `8080`.
+
+### Impact
+
+- `document-indexer` and `solr-search` can rely on the project-specific OpenAI-compatible embeddings endpoint.
+- The image contract is now aligned with ADR-004's model standardization and avoids the `/vectors/` vs `/v1/embeddings/` mismatch.
+- Startup behavior is more predictable because the model is cached into the image during build.
+
+**Status:** 📋 Proposed (awaiting implementation)
