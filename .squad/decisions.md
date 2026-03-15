@@ -1,5 +1,133 @@
 # Squad Decisions
 
+# Decision: Container Version Metadata Baseline
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-15  
+**Status:** Proposed  
+**Issue:** #199 — Versioning infrastructure
+
+## Context
+
+The v0.7.0 milestone needs a single, repeatable way to stamp every source-built container with release metadata. Without a shared convention, local builds, CI builds, and tagged releases can drift, making support and debugging harder.
+
+## Decision
+
+Use a repo-root `VERSION` file as the default application version source, overridden by an exact git tag when present. Pass `VERSION`, `GIT_COMMIT`, and `BUILD_DATE` through Docker Compose build args into every source-built Dockerfile, and bake them into both OCI labels and runtime environment variables.
+
+## Rationale
+
+- Keeps release numbering aligned with the semver tagging flow on `dev` → `main`
+- Gives operators a stable fallback (`VERSION`) before a release tag exists
+- Makes image provenance visible both from container registries (OCI labels) and inside running containers (`ENV`)
+- Uses one metadata contract across Python, Node, and nginx-based images
+
+## Impact
+
+- Source-built services now share one image metadata schema
+- `buildall.sh` can build tagged and untagged snapshots consistently
+- CI/CD can override any of the three variables without patching Dockerfiles
+
+## Next steps
+
+1. Reuse the same metadata contract in release workflows that publish images
+2. Surface the runtime `VERSION` in application health/status endpoints where useful
+
+
+# Decision: Documentation-First Release Process
+
+**Author:** Newt (Product Manager)  
+**Date:** 2026-03-20  
+**Status:** Proposed  
+**Issue:** Release documentation requirements for v0.6.0 and beyond
+
+## Context
+
+v0.5.0 failed to include release documentation until after approval—a process failure that nearly resulted in shipping without user-facing guides. v0.6.0 shipped 5 major features but documentation was not prepared ahead of time, forcing backfill work.
+
+To prevent this pattern, Newt proposes a formalized documentation-first release process.
+
+## Decision
+
+**Feature documentation must be written and committed before release approval.**
+
+### Required artifacts before "Ready for Release"
+
+1. **Feature Guide** (`docs/features/vX.Y.Z.md`)
+   - Shipped features with user-facing descriptions
+   - Configuration changes (if any)
+   - Breaking changes (if any)
+   - See `docs/features/v0.6.0.md` as template
+
+2. **User Manual Updates** (`docs/user-manual.md`)
+   - New tabs, buttons, or workflows
+   - Step-by-step guides for new features
+   - Troubleshooting for new upload/admin flows
+
+3. **Admin Manual Updates** (`docs/admin-manual.md`)
+   - Deployment changes (new environment variables, ports, volumes)
+   - Configuration tuning options
+   - Monitoring and health check guidance
+   - Troubleshooting for new features
+
+4. **Test Report** (`docs/test-report-vX.Y.Z.md`)
+   - Test coverage summary
+   - Manual QA validation results
+   - Known issues and workarounds
+
+5. **README.md Updates**
+   - Feature list must reflect shipped capabilities
+   - Links to new documentation must be added
+   - Screenshots must be current
+
+### Release gate
+
+- Newt does NOT approve release until all above artifacts are committed to `dev` branch
+- PR reviewers check that documentation is present and current
+- Release notes are auto-generated from feature guide and test report
+
+### Documentation as code
+
+- Feature guides are stored in git alongside code
+- Changes to features require corresponding doc changes (checked in review)
+- Documentation is reviewed as rigorously as code
+
+## Rationale
+
+- **User support**: Users and operators need accurate, current documentation
+- **Consistency**: Same feature guide format across all releases (v0.6.0, v0.7.0, etc.)
+- **Traceability**: Feature docs are versioned alongside code; easy to find docs for any tag
+- **Process rigor**: Documentation is not optional or deferred
+
+## Impact
+
+- Adds 1–2 days to each release cycle for documentation
+- Prevents user confusion and support burden
+- Makes releases feel complete and professional
+
+## Next steps
+
+1. Formalize this decision in squad charter for Newt
+2. Create a release documentation checklist (GitHub issue template)
+3. Add PR check to enforce doc changes for feature PRs
+
+
+# Parker — Admin Containers Aggregation Decision
+
+## Context
+Issue #202 adds `GET /v1/admin/containers` in `solr-search` to summarize the running stack without using Docker SDK access.
+
+## Decision
+- Reuse the existing `/v1/status` probing approach inside `solr-search`: TCP reachability for infrastructure, Solr cluster probing for Solr, and direct HTTP `/version` calls for HTTP services.
+- For non-HTTP repo services (`streamlit-admin`, `aithena-ui`, `document-indexer`, `document-lister`), report shared build metadata from `VERSION` and `GIT_COMMIT` injected into the repo's container builds.
+- Mark worker processes as `status: "unknown"` instead of `down` because they do not expose stable network probes in this environment and Docker runtime label inspection is intentionally unavailable.
+
+## Why
+This keeps the endpoint fast, deterministic, and compatible with codespaces where Docker is unavailable, while still surfacing useful release metadata for the whole stack.
+
+
+---
+
 ## Active Decisions
 
 ### Architecture Plan — aithena Solr Migration (2026-03-13)
