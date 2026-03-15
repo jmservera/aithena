@@ -67,7 +67,12 @@ services:
         aliases:
           - rabbitmq
   embeddings-server:
-    build: ./embeddings-server
+    build:
+      context: ./embeddings-server
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "8080"
     healthcheck:
@@ -95,7 +100,12 @@ services:
         aliases:
           - embeddings-server
   document-lister:
-    build: ./document-lister
+    build:
+      context: ./document-lister
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=redis
@@ -132,7 +142,12 @@ services:
     networks:
       - default
   document-indexer:
-    build: ./document-indexer
+    build:
+      context: ./document-indexer
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=redis
@@ -180,6 +195,10 @@ services:
     build:
       context: .
       dockerfile: ./solr-search/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "8080"
     restart: unless-stopped
@@ -231,7 +250,12 @@ services:
     networks:
       - default
   streamlit-admin:
-    build: ./admin
+    build:
+      context: ./admin
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "8501"
     restart: unless-stopped
@@ -299,7 +323,12 @@ services:
     networks:
       - default
   aithena-ui:
-    build: ./aithena-ui
+    build:
+      context: ./aithena-ui
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "80"
     restart: unless-stopped
