@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
 import socket
 import threading
+import time
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +18,7 @@ import pika
 import redis as redis_lib
 import requests
 from config import settings
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from search_service import (
@@ -40,6 +43,37 @@ SortOrder = Literal["asc", "desc"]
 SearchMode = Literal["keyword", "semantic", "hybrid"]
 
 app = FastAPI(title=settings.title, version=settings.version)
+
+
+class RateLimiter:
+    """Simple in-memory rate limiter for upload endpoint."""
+
+    def __init__(self, max_requests: int = 10, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: dict[str, deque[float]] = defaultdict(deque)
+        self.lock = threading.Lock()
+
+    def is_allowed(self, client_ip: str) -> bool:
+        """Check if client is allowed to make a request."""
+        now = time.time()
+        cutoff = now - self.window_seconds
+
+        with self.lock:
+            # Remove old requests outside the window
+            while self.requests[client_ip] and self.requests[client_ip][0] < cutoff:
+                self.requests[client_ip].popleft()
+
+            # Check if under limit
+            if len(self.requests[client_ip]) >= self.max_requests:
+                return False
+
+            # Add current request
+            self.requests[client_ip].append(now)
+            return True
+
+
+upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 
 
 def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
@@ -653,7 +687,7 @@ def _publish_to_queue(file_path: Path) -> None:
 
 
 @app.post("/v1/upload", name="upload_pdf")
-async def upload_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
+async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
     """Upload a PDF document for indexing.
 
     Accepts multipart/form-data with a PDF file, validates it, writes to the
@@ -663,9 +697,15 @@ async def upload_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
         - 202 Accepted with upload_id, filename, size
         - 400 Bad Request: invalid file type or validation failure
         - 413 Payload Too Large: file exceeds size limit
+        - 429 Too Many Requests: rate limit exceeded
         - 500 Internal Server Error: storage failure
         - 502 Bad Gateway: RabbitMQ failure
     """
+    # Rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    if not upload_rate_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many uploads. Please try again later.")
+
     # Validate content type
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are accepted.")
@@ -674,19 +714,24 @@ async def upload_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Invalid filename. Must have .pdf extension.")
 
-    # Read file content
+    # Stream file content with size limit enforcement
+    max_size_bytes = settings.max_upload_size_mb * 1024 * 1024
+    chunk_size = 8192
+    content = bytearray()
+
     try:
-        content = await file.read()
+        while chunk := await file.read(chunk_size):
+            content.extend(chunk)
+            if len(content) > max_size_bytes:
+                raise HTTPException(
+                    status_code=413, detail=f"File size exceeds {settings.max_upload_size_mb}MB limit"
+                )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Failed to read uploaded file") from exc
 
-    # Validate file size
     file_size = len(content)
-    max_size_bytes = settings.max_upload_size_mb * 1024 * 1024
-    if file_size > max_size_bytes:
-        raise HTTPException(
-            status_code=413, detail=f"File size exceeds {settings.max_upload_size_mb}MB limit"
-        )
 
     # Validate PDF magic number
     if not _validate_pdf_content(content):
@@ -716,10 +761,8 @@ async def upload_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
         _publish_to_queue(target_path)
     except HTTPException:
         # Clean up file if RabbitMQ publish fails
-        try:
+        with contextlib.suppress(Exception):
             target_path.unlink(missing_ok=True)
-        except Exception:
-            pass
         raise
 
     # Compute upload_id (matches Solr document ID for status tracking)

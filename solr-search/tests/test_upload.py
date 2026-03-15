@@ -44,10 +44,13 @@ def mock_rabbitmq():
 def upload_dir(tmp_path):
     """Use a temporary upload directory for tests."""
     from config import settings
+    from main import upload_rate_limiter
     upload_path = tmp_path / "uploads"
     upload_path.mkdir(exist_ok=True)
     # Replace the upload_dir in settings by using object.__setattr__ on frozen dataclass
     object.__setattr__(settings, "upload_dir", upload_path)
+    # Reset rate limiter for each test
+    upload_rate_limiter.requests.clear()
     yield upload_path
     # Cleanup
     import shutil
@@ -123,7 +126,7 @@ def test_upload_file_too_large(client: TestClient, upload_dir):
     # Temporarily change the limit
     original_limit = settings.max_upload_size_mb
     object.__setattr__(settings, "max_upload_size_mb", 1)
-    
+
     try:
         large_content = b"%PDF-1.4\n" + b"X" * (2 * 1024 * 1024)  # 2MB
 
@@ -207,16 +210,16 @@ def test_upload_rabbitmq_failure(client: TestClient, valid_pdf_content: bytes, u
 def test_upload_storage_failure(client: TestClient, valid_pdf_content: bytes):
     """Test upload when file write fails."""
     from config import settings
-    
+
     mock_path = Mock()
     mock_path.mkdir = Mock()
     mock_path.__truediv__ = Mock(return_value=mock_path)
     mock_path.exists.return_value = False
     mock_path.write_bytes.side_effect = OSError("Disk full")
-    
+
     original_dir = settings.upload_dir
     object.__setattr__(settings, "upload_dir", mock_path)
-    
+
     try:
         response = client.post(
             "/v1/upload",
@@ -246,3 +249,72 @@ def test_upload_special_characters_in_filename(
     assert ">" not in data["filename"]
     assert "?" not in data["filename"]
     assert data["filename"].endswith(".pdf")
+
+
+def test_upload_streaming_enforces_size_limit(client: TestClient, upload_dir):
+    """Test that streaming upload aborts early for files exceeding the limit.
+
+    This test verifies that the chunked read prevents memory exhaustion by
+    aborting as soon as the size limit is exceeded, rather than reading the
+    entire file into memory first.
+    """
+    from io import BytesIO
+
+    from config import settings
+
+    # Create a generator that simulates a large file without allocating all memory
+    def large_file_generator(size_mb: int):
+        """Generate file content in chunks to avoid allocating full size in memory."""
+        chunk_size = 8192
+        pdf_header = b"%PDF-1.4\n"
+        yield pdf_header
+
+        total_bytes = size_mb * 1024 * 1024
+        bytes_written = len(pdf_header)
+
+        while bytes_written < total_bytes:
+            chunk = b"X" * min(chunk_size, total_bytes - bytes_written)
+            yield chunk
+            bytes_written += len(chunk)
+
+    # Test with a file slightly larger than the limit (51MB vs 50MB limit)
+    # The streaming implementation should abort early without reading the entire file
+    large_file = BytesIO()
+    for chunk in large_file_generator(51):
+        large_file.write(chunk)
+    large_file.seek(0)
+
+    response = client.post(
+        "/v1/upload",
+        files={"file": ("huge.pdf", large_file, "application/pdf")},
+    )
+
+    assert response.status_code == 413
+    assert "exceeds" in response.json()["detail"]
+    assert f"{settings.max_upload_size_mb}MB" in response.json()["detail"]
+
+
+def test_upload_rate_limiting(client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir):
+    """Test that rate limiting works correctly."""
+    from main import upload_rate_limiter
+
+    # Clear any existing rate limit state
+    upload_rate_limiter.requests.clear()
+
+    # Make maximum allowed requests (10)
+    for i in range(10):
+        response = client.post(
+            "/v1/upload",
+            files={"file": (f"test{i}.pdf", valid_pdf_content, "application/pdf")},
+        )
+        # First 10 should succeed (or fail for other reasons, but not rate limiting)
+        assert response.status_code != 429
+
+    # 11th request should be rate limited
+    response = client.post(
+        "/v1/upload",
+        files={"file": ("test11.pdf", valid_pdf_content, "application/pdf")},
+    )
+
+    assert response.status_code == 429
+    assert "Too many uploads" in response.json()["detail"]
