@@ -784,6 +784,233 @@ def admin_containers() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Phase 4 — /v1/admin/documents endpoints (document triage and recovery)
+# ---------------------------------------------------------------------------
+
+DocumentStatus = Literal["queued", "processed", "failed"]
+
+_ADMIN_DOC_COLUMNS_QUEUED = ("path", "timestamp", "last_modified")
+_ADMIN_DOC_COLUMNS_PROCESSED = ("path", "title", "author", "year", "category", "page_count", "timestamp")
+_ADMIN_DOC_COLUMNS_FAILED = ("path", "error", "timestamp", "last_modified")
+
+
+def _get_admin_redis_client() -> redis_lib.Redis:
+    """Return a Redis client using the shared pool."""
+    pool = _get_redis_pool()
+    return redis_lib.Redis(connection_pool=pool)
+
+
+def _admin_key_pattern() -> str:
+    """Return the Redis key scan pattern for document-lister state entries."""
+    return f"/{settings.redis_queue_name}/*"
+
+
+def _encode_admin_key(redis_key: str) -> str:
+    """Base64url-encode a Redis key for use as a URL path segment."""
+    return encode_document_token(redis_key)
+
+
+def _decode_admin_key(token: str) -> str:
+    """Decode a base64url-encoded Redis key.  Raises ValueError on invalid input."""
+    return decode_document_token(token)
+
+
+def _classify_doc_state(state: dict[str, Any]) -> DocumentStatus:
+    """Return the status category for a parsed document state dict."""
+    if state.get("failed"):
+        return "failed"
+    if state.get("processed"):
+        return "processed"
+    return "queued"
+
+
+def _load_admin_documents(
+    status_filter: DocumentStatus | None = None,
+) -> dict[str, Any]:
+    """Scan Redis and return documents categorised by indexing status.
+
+    Args:
+        status_filter: When set, only documents with that status are included
+            in the ``documents`` list; counts always reflect the full dataset.
+
+    Returns:
+        A dict with summary counts and a ``documents`` list suitable for a
+        React data-table.  Each entry carries an opaque ``id`` token that can
+        be passed back to the requeue endpoint.
+    """
+    try:
+        client = _get_admin_redis_client()
+        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
+
+    total_queued = 0
+    total_processed = 0
+    total_failed = 0
+    documents: list[dict[str, Any]] = []
+
+    for key in keys:
+        raw = client.get(key)
+        if raw is None:
+            continue
+        try:
+            state: dict[str, Any] = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        doc_status = _classify_doc_state(state)
+        if doc_status == "queued":
+            total_queued += 1
+        elif doc_status == "processed":
+            total_processed += 1
+        else:
+            total_failed += 1
+
+        if status_filter is not None and doc_status != status_filter:
+            continue
+
+        entry: dict[str, Any] = {
+            "id": _encode_admin_key(key),
+            "status": doc_status,
+        }
+        if doc_status == "queued":
+            for col in _ADMIN_DOC_COLUMNS_QUEUED:
+                entry[col] = state.get(col)
+        elif doc_status == "processed":
+            for col in _ADMIN_DOC_COLUMNS_PROCESSED:
+                entry[col] = state.get(col)
+        else:
+            for col in _ADMIN_DOC_COLUMNS_FAILED:
+                entry[col] = state.get(col)
+
+        documents.append(entry)
+
+    return {
+        "total": total_queued + total_processed + total_failed,
+        "queued": total_queued,
+        "processed": total_processed,
+        "failed": total_failed,
+        "documents": documents,
+    }
+
+
+def _delete_admin_key(redis_key: str) -> bool:
+    """Delete *redis_key* from Redis.  Returns True if the key existed."""
+    try:
+        client = _get_admin_redis_client()
+        return bool(client.delete(redis_key))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
+
+
+@app.get("/v1/admin/documents/", include_in_schema=False, name="admin_documents_v1_slash")
+@app.get("/v1/admin/documents", name="admin_documents_v1")
+def admin_list_documents(
+    status: Annotated[
+        DocumentStatus | None,
+        Query(description="Filter documents by indexing status (queued, processed, or failed)."),
+    ] = None,
+) -> dict[str, Any]:
+    """List documents tracked in Redis with their indexing status.
+
+    Returns summary counts for all statuses plus a ``documents`` list for the
+    React admin table.  Use the optional ``status`` query parameter to limit
+    the ``documents`` list to a single status while still receiving full
+    counts.
+
+    Each document entry includes an opaque ``id`` token that can be passed to
+    the ``POST /v1/admin/documents/{doc_id}/requeue`` endpoint.
+    """
+    return _load_admin_documents(status_filter=status)
+
+
+@app.post("/v1/admin/documents/requeue-failed", name="admin_requeue_failed_v1")
+def admin_requeue_failed() -> dict[str, Any]:
+    """Requeue all failed documents by deleting their Redis tracking entries.
+
+    Deleting the Redis key causes the document-lister to re-discover and
+    re-enqueue the document on its next scan.  The operation is idempotent —
+    calling it when there are no failed documents returns ``requeued: 0``.
+    """
+    try:
+        client = _get_admin_redis_client()
+        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
+
+    requeued_ids: list[str] = []
+    for key in keys:
+        raw = client.get(key)
+        if raw is None:
+            continue
+        try:
+            state: dict[str, Any] = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if _classify_doc_state(state) == "failed":
+            _delete_admin_key(key)
+            requeued_ids.append(_encode_admin_key(key))
+
+    return {"requeued": len(requeued_ids), "ids": requeued_ids}
+
+
+@app.delete("/v1/admin/documents/processed", name="admin_clear_processed_v1")
+def admin_clear_processed() -> dict[str, Any]:
+    """Clear all processed document entries from Redis.
+
+    Removing the Redis key causes the document-lister to re-index the document
+    on its next scan.  The operation is idempotent — calling it when there are
+    no processed documents returns ``cleared: 0``.
+    """
+    try:
+        client = _get_admin_redis_client()
+        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
+
+    cleared = 0
+    for key in keys:
+        raw = client.get(key)
+        if raw is None:
+            continue
+        try:
+            state: dict[str, Any] = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if _classify_doc_state(state) == "processed":
+            _delete_admin_key(key)
+            cleared += 1
+
+    return {"cleared": cleared}
+
+
+@app.post("/v1/admin/documents/{doc_id}/requeue", name="admin_requeue_document_v1")
+def admin_requeue_document(doc_id: str) -> dict[str, Any]:
+    """Requeue a single document identified by its opaque ``doc_id`` token.
+
+    The ``doc_id`` is the base64url-encoded Redis key returned by
+    ``GET /v1/admin/documents``.  Deleting the key causes the document-lister
+    to re-discover and re-enqueue the document on its next scan.
+
+    The operation is idempotent — requeueing a document that no longer exists
+    in Redis (e.g. because it was already requeued) returns a 404.
+    """
+    try:
+        redis_key = _decode_admin_key(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid document id")
+
+    if not redis_key.startswith(f"/{settings.redis_queue_name}/"):
+        raise HTTPException(status_code=400, detail="Invalid document id")
+
+    deleted = _delete_admin_key(redis_key)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found in queue state")
+
+    return {"requeued": 1, "id": doc_id}
+
+
+# ---------------------------------------------------------------------------
 # Phase 4 — /v1/upload endpoint
 # ---------------------------------------------------------------------------
 
