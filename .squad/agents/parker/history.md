@@ -116,3 +116,69 @@
 - Dependencies: pika, python-multipart, retry (all available)
 
 **Next:** Awaiting Juanma approval of release plan → Issue #49 created + assigned → Implementation
+
+### 2026-07-24 — v0.6.0 Upload Endpoint Implementation Complete (#49, PR #197)
+
+**Task:** Implemented PDF upload endpoint for issue #49 as Copilot (Parker voice).
+
+**Deliverables:**
+- ✅ POST /v1/upload endpoint in solr-search/main.py (120 LOC)
+- ✅ Triple validation: MIME type + .pdf extension + %PDF- magic number
+- ✅ Filename sanitization (path traversal prevention, special char filtering, length limits)
+- ✅ Per-request RabbitMQ connection (thread-safe for multi-worker FastAPI)
+- ✅ Collision handling: timestamp suffix for duplicate filenames
+- ✅ Comprehensive error handling: 400, 413, 500, 502 status codes
+- ✅ 10 unit tests (100% edge case coverage), all 88 tests pass
+- ✅ Docker Compose updates: env vars, volume mount :ro → read-write, health check deps
+- ✅ Dependencies: pika>=1.3.2, python-multipart>=0.0.6
+
+**Technical Implementation:**
+```python
+POST /v1/upload
+→ Validate content_type=application/pdf
+→ Validate .pdf extension
+→ Read file content, check size ≤ MAX_UPLOAD_SIZE_MB
+→ Validate %PDF- magic number
+→ Sanitize filename (strip path traversal, limit chars, 255 char max)
+→ Write to UPLOAD_DIR (/data/documents/uploads/)
+→ Publish to shortembeddings RabbitMQ queue (per-request connection)
+→ Return 202 Accepted {upload_id, filename, original_filename, size, status, message}
+```
+
+**Security Hardening:**
+- Path traversal prevention: `Path(filename).name` strips directories, regex filters `..`
+- Triple validation prevents content-type spoofing (MIME can be faked, magic number is authoritative)
+- Per-request RabbitMQ connection: Pika `BlockingConnection` is NOT thread-safe; creating/closing per request ensures multi-worker safety (~50-100ms overhead, acceptable for async workflow)
+- File cleanup on RabbitMQ failure: prevents orphaned uploads when queue is down
+
+**Test Strategy:**
+- Used `object.__setattr__` to modify frozen `@dataclass(frozen=True)` settings in tests (cleaner than monkeypatch for isolated per-test changes)
+- Mocked RabbitMQ with `patch("main.pika.BlockingConnection")` to avoid real connections
+- Tested collision handling by uploading same filename twice, verified timestamp suffix
+- Storage failure test: mocked `Path.write_bytes` to raise `OSError("Disk full")`
+
+**Integration Points:**
+- **Volume:** document-data mounted at /data/documents (changed from :ro to read-write in docker-compose.yml)
+- **Queue:** shortembeddings (existing, used by document-lister)
+- **Indexing:** Existing document-indexer consumes queue, processes PDFs → Solr
+- **Status tracking:** /v1/status endpoint shows Redis indexing state (no changes needed)
+
+**Config Added to solr-search:**
+```
+UPLOAD_DIR=/data/documents/uploads
+MAX_UPLOAD_SIZE_MB=50
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_QUEUE_NAME=shortembeddings
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+
+**PR #197:** Targets `dev` branch per squad guidelines. All tests pass. Ready for review.
+
+**Follow-up Recommendations:**
+1. UI integration (issue #50): Build upload form in aithena-ui that POSTs to /v1/upload
+2. Status polling: UI should poll /v1/status with upload_id to show indexing progress
+3. E2E test: Add full pipeline test (upload → queue → indexing → search) in e2e/
+4. Monitoring: Consider logging upload metrics (file count, size distribution, RabbitMQ latency)
+

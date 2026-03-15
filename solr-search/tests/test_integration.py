@@ -1112,9 +1112,11 @@ def test_get_indexing_status_counts_states() -> None:
         None,
     ]
 
-    with patch("main.redis_lib.Redis", return_value=mock_redis):
-        with patch("main._get_redis_pool", return_value=MagicMock()):
-            result = _get_indexing_status("doc:*")
+    with (
+        patch("main.redis_lib.Redis", return_value=mock_redis),
+        patch("main._get_redis_pool", return_value=MagicMock()),
+    ):
+        result = _get_indexing_status("doc:*")
 
     assert result["total_discovered"] == 5
     assert result["indexed"] == 2

@@ -189,6 +189,10 @@ services:
         condition: service_healthy
       embeddings-server:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 30s
@@ -215,8 +219,15 @@ services:
       - CORS_ORIGINS=http://localhost:5173
       - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
       - DEFAULT_SEARCH_MODE=keyword
+      - UPLOAD_DIR=/data/documents/uploads
+      - MAX_UPLOAD_SIZE_MB=50
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_QUEUE_NAME=shortembeddings
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
-      - document-data:/data/documents:ro
+      - document-data:/data/documents
     networks:
       - default
   streamlit-admin:

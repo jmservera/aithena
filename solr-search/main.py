@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
+import re
 import socket
 import threading
+import time
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
+import pika
 import redis as redis_lib
 import requests
 from config import settings
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from search_service import (
@@ -36,6 +43,37 @@ SortOrder = Literal["asc", "desc"]
 SearchMode = Literal["keyword", "semantic", "hybrid"]
 
 app = FastAPI(title=settings.title, version=settings.version)
+
+
+class RateLimiter:
+    """Simple in-memory rate limiter for upload endpoint."""
+
+    def __init__(self, max_requests: int = 10, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: dict[str, deque[float]] = defaultdict(deque)
+        self.lock = threading.Lock()
+
+    def is_allowed(self, client_ip: str) -> bool:
+        """Check if client is allowed to make a request."""
+        now = time.time()
+        cutoff = now - self.window_seconds
+
+        with self.lock:
+            # Remove old requests outside the window
+            while self.requests[client_ip] and self.requests[client_ip][0] < cutoff:
+                self.requests[client_ip].popleft()
+
+            # Check if under limit
+            if len(self.requests[client_ip]) >= self.max_requests:
+                return False
+
+            # Add current request
+            self.requests[client_ip].append(now)
+            return True
+
+
+upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 
 
 def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
@@ -595,6 +633,148 @@ def service_status() -> dict[str, Any]:
             "redis": "up" if redis_up else "down",
             "rabbitmq": "up" if rabbitmq_up else "down",
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — /v1/upload endpoint
+# ---------------------------------------------------------------------------
+
+
+def _sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent path traversal and limit to safe characters."""
+    # Remove any directory components
+    filename = Path(filename).name
+    # Remove or replace unsafe characters, keep alphanumeric, dots, dashes, underscores
+    filename = re.sub(r"[^\w\s\-\.]", "_", filename)
+    # Remove any leading/trailing dots or spaces
+    filename = filename.strip(". ")
+    # Limit length
+    if len(filename) > 255:
+        name_part = filename.rsplit(".", 1)[0][:240]
+        ext = filename.rsplit(".", 1)[1] if "." in filename else ""
+        filename = f"{name_part}.{ext}" if ext else name_part
+    return filename if filename else "upload.pdf"
+
+
+def _validate_pdf_content(content: bytes) -> bool:
+    """Validate that content starts with PDF magic number."""
+    return content.startswith(b"%PDF-")
+
+
+def _compute_upload_id(file_path: Path) -> str:
+    """Compute upload_id as SHA256 hash of the file path (matches Solr document ID)."""
+    return hashlib.sha256(str(file_path).encode()).hexdigest()
+
+
+def _publish_to_queue(file_path: Path) -> None:
+    """Publish file path to RabbitMQ queue for indexing (per-request connection)."""
+    try:
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=settings.rabbitmq_host, port=settings.rabbitmq_port)
+        )
+        channel = connection.channel()
+        channel.queue_declare(queue=settings.rabbitmq_queue_name, durable=True, auto_delete=False)
+        channel.basic_publish(
+            exchange="",
+            routing_key=settings.rabbitmq_queue_name,
+            body=str(file_path),
+            properties=pika.BasicProperties(delivery_mode=2),
+        )
+        connection.close()
+    except pika.exceptions.AMQPError as exc:
+        raise HTTPException(status_code=502, detail="Failed to enqueue document for indexing") from exc
+
+
+@app.post("/v1/upload", name="upload_pdf")
+async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
+    """Upload a PDF document for indexing.
+
+    Accepts multipart/form-data with a PDF file, validates it, writes to the
+    upload directory, and enqueues for indexing via RabbitMQ.
+
+    Returns:
+        - 202 Accepted with upload_id, filename, size
+        - 400 Bad Request: invalid file type or validation failure
+        - 413 Payload Too Large: file exceeds size limit
+        - 429 Too Many Requests: rate limit exceeded
+        - 500 Internal Server Error: storage failure
+        - 502 Bad Gateway: RabbitMQ failure
+    """
+    # Rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    if not upload_rate_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many uploads. Please try again later.")
+
+    # Validate content type
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are accepted.")
+
+    # Validate filename extension
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Invalid filename. Must have .pdf extension.")
+
+    # Stream file content with size limit enforcement
+    max_size_bytes = settings.max_upload_size_mb * 1024 * 1024
+    chunk_size = 8192
+    content = bytearray()
+
+    try:
+        while chunk := await file.read(chunk_size):
+            content.extend(chunk)
+            if len(content) > max_size_bytes:
+                raise HTTPException(
+                    status_code=413, detail=f"File size exceeds {settings.max_upload_size_mb}MB limit"
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Failed to read uploaded file") from exc
+
+    file_size = len(content)
+
+    # Validate PDF magic number
+    if not _validate_pdf_content(content):
+        raise HTTPException(status_code=400, detail="Invalid PDF file. File does not contain PDF header.")
+
+    # Sanitize filename
+    safe_filename = _sanitize_filename(file.filename)
+
+    # Ensure upload directory exists
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # Handle filename collision with timestamp
+    target_path = settings.upload_dir / safe_filename
+    if target_path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name_stem = target_path.stem
+        target_path = settings.upload_dir / f"{name_stem}_{timestamp}.pdf"
+
+    # Write file to disk
+    try:
+        target_path.write_bytes(content)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file") from exc
+
+    # Publish to RabbitMQ
+    try:
+        _publish_to_queue(target_path)
+    except HTTPException:
+        # Clean up file if RabbitMQ publish fails
+        with contextlib.suppress(Exception):
+            target_path.unlink(missing_ok=True)
+        raise
+
+    # Compute upload_id (matches Solr document ID for status tracking)
+    upload_id = _compute_upload_id(target_path)
+
+    return {
+        "upload_id": upload_id,
+        "filename": target_path.name,
+        "original_filename": file.filename,
+        "size": file_size,
+        "status": "accepted",
+        "message": "File uploaded and queued for indexing",
     }
 
 
