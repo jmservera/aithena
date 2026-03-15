@@ -254,16 +254,16 @@ class TestSemanticSearch:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """GET /v1/search?mode=semantic must return HTTP 200 when embeddings service is up.
 
-        Gated: requires embeddings service + at least one indexed document with an embedding.
+        Gated: requires embeddings service + at least one indexed document with a stored embedding.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — semantic search cannot be verified.")
+        if not any_embedded_document_id:
+            pytest.skip("No indexed document with a stored embedding — semantic search cannot be verified.")
 
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
@@ -279,16 +279,16 @@ class TestSemanticSearch:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """Semantic search response must include mode='semantic'.
 
-        Gated: requires embeddings service + indexed data.
+        Gated: requires embeddings service + indexed data with a stored embedding.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — semantic mode field cannot be verified.")
+        if not any_embedded_document_id:
+            pytest.skip("No indexed document with a stored embedding — semantic mode field cannot be verified.")
 
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
@@ -305,16 +305,16 @@ class TestSemanticSearch:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """Semantic search response must include a 'results' list.
 
-        Gated: requires embeddings service + indexed data.
+        Gated: requires embeddings service + indexed data with a stored embedding.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — semantic results cannot be verified.")
+        if not any_embedded_document_id:
+            pytest.skip("No indexed document with a stored embedding — semantic results cannot be verified.")
 
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
@@ -355,16 +355,16 @@ class TestHybridSearch:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """GET /v1/search?mode=hybrid must return HTTP 200 when embeddings service is up.
 
-        Gated: requires embeddings service + at least one indexed document with an embedding.
+        Gated: requires embeddings service + at least one indexed document with a stored embedding.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — hybrid search cannot be verified.")
+        if not any_embedded_document_id:
+            pytest.skip("No indexed document with a stored embedding — hybrid search cannot be verified.")
 
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
@@ -380,16 +380,16 @@ class TestHybridSearch:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """Hybrid search response must include mode='hybrid'.
 
-        Gated: requires embeddings service + indexed data.
+        Gated: requires embeddings service + indexed data with a stored embedding.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — hybrid mode field cannot be verified.")
+        if not any_embedded_document_id:
+            pytest.skip("No indexed document with a stored embedding — hybrid mode field cannot be verified.")
 
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
@@ -406,16 +406,16 @@ class TestHybridSearch:
         api_url: str,
         api_available: None,
         embeddings_available: bool,
-        any_document_id: str | None,
+        any_embedded_document_id: str | None,
     ) -> None:
         """Each hybrid result must include 'id' and 'title' fields.
 
-        Gated: requires embeddings service + indexed data with results.
+        Gated: requires embeddings service + indexed data with a stored embedding.
         """
         if not embeddings_available:
             pytest.skip("Embeddings service is not available in this stack configuration.")
-        if not any_document_id:
-            pytest.skip("No indexed documents — hybrid result fields cannot be verified.")
+        if not any_embedded_document_id:
+            pytest.skip("No indexed document with a stored embedding — hybrid result fields cannot be verified.")
 
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
