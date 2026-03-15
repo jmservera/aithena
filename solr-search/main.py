@@ -33,7 +33,8 @@ from search_service import (
 
 SortBy = Literal["score", "title", "author", "year", "category", "language"]
 SortOrder = Literal["asc", "desc"]
-SearchMode = Literal["keyword", "semantic", "hybrid"]
+
+VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
 
 app = FastAPI(title=settings.title, version=settings.version)
 
@@ -126,10 +127,10 @@ def search(
     fq_category: str | None = Query(None),
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
-    mode: Annotated[
-        SearchMode,
-        Query(description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion)."),
-    ] = settings.default_search_mode,  # type: ignore[arg-type]
+    mode: str = Query(
+        settings.default_search_mode,
+        description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
+    ),
 ) -> dict[str, Any]:
     """Search for books.
 
@@ -140,6 +141,12 @@ def search(
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
     """
+    if mode not in VALID_SEARCH_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid search mode: {mode!r}. Must be one of: keyword, semantic, hybrid.",
+        )
+
     resolved_page_size = resolve_page_size(limit, page_size)
     filters = collect_search_filters(
         author=fq_author,
