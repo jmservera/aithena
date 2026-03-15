@@ -2335,3 +2335,689 @@ Successfully executed the v0.5.0 release from dev → main with tag creation and
 
 **Decision Impact**: Release complete. Main branch now contains v0.5.0. Dev remains active development branch.
 
+---
+
+## v0.6.0 Release Planning — 2026-03-15
+
+### Release Plan — v0.6.0 Production Hardening & Security
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-15  
+**Status:** PROPOSED — awaiting Juanma approval
+
+**Summary:**
+v0.6.0 focuses on Production Hardening & Security, completing Phase 4 polish and establishing security scanning baseline. Scope: 12 issues across 3 domains (3 Phase 4 features, 5 security scanning, 4 v0.5.0 polish, 1 hardening). Timeline: 3-4 weeks. Deferred 13 Dependabot vulnerabilities to v0.7.0 batch upgrade.
+
+**Key Decisions:**
+- **Dependency Order:** 6 task groups with explicit sequencing (Group 1 parallel → Group 2 gates → Groups 3-4 sequential → Group 5 parallel → Group 6 gates)
+- **Squad Assignments:** Copilot owns all code; Parker/Dallas/Brett/Kane gate reviews
+- **Issue Grouping:** Phase 4 (3), Security scanning (5), v0.5.0 polish (4, new)
+- **Review Gates:** 4 issues need squad review (2 security, 2 feature design, 1 hardening)
+- **New Issues to Create:** #178-#181 (sandbox fix, LRU cache, facet hint, search validation)
+
+**Next Steps:** Juanma approval → Ripley creates issues + milestone → Phase 1 setup (create 4 new issues, add labels, assign to v0.6.0 milestone)
+
+See full plan: `.squad/decisions/inbox/ripley-v060-release-plan.md` (archived as reference)
+
+---
+
+### API Specification — PDF Upload Endpoint (#49)
+
+**Author:** Parker (Backend)  
+**Date:** 2026-03-15  
+**Status:** APPROVED
+
+**Summary:**
+Endpoint specification for `POST /v1/upload`. Accepts multipart/form-data PDF files, validates type/size, publishes to RabbitMQ `shortembeddings` queue for asynchronous indexing.
+
+**Key Design Decisions:**
+- **Response:** 202 Accepted (file queued, processing async)
+- **File Validation:** Triple check (MIME type `application/pdf`, extension `.pdf`, magic number `%PDF-`)
+- **Size Limit:** 50 MB (configurable via `MAX_UPLOAD_SIZE_MB` env)
+- **Storage:** `/data/documents/uploads/` (shared volume with document-indexer)
+- **Queue Integration:** Publishes absolute file path to existing `shortembeddings` RabbitMQ queue
+- **Connection Pattern:** Per-request pika connections (thread-safe for uvicorn workers, ~50-100ms overhead acceptable)
+- **Error Handling:** 400 (validation), 413 (size), 500 (disk), 502 (RabbitMQ)
+- **Filename Sanitization:** Strip path traversal (`..`, `/`, `\`), append timestamp on collision
+- **Dependencies:** pika, python-multipart, retry (all already available)
+- **Tests:** ≥8 unit tests covering validation, RabbitMQ integration, error cases
+
+**Design Rationale:**
+- Reuses existing RabbitMQ indexing pipeline (no code duplication)
+- Per-request connections avoid threading issues with FastAPI uvicorn workers
+- Triple validation compensates for content-type spoofing attacks
+- 50MB limit prevents DoS while allowing typical PDFs (rate limiting deferred to nginx/v0.7.0)
+
+**Open Questions Resolved:**
+- ✅ Single vs. multi-file: Single-file only (multi-file deferred to v0.7.0)
+- ✅ Progress tracking: No progress API, HTTP upload shows frontend progress only
+- ✅ Duplicate detection: Handled by existing Redis state (indexer skips if unchanged)
+- ✅ Category metadata: Accept parameter but don't persist (user must rename file if needed)
+
+---
+
+### Design Specification — PDF Upload UI (#50)
+
+**Author:** Dallas (Frontend)  
+**Date:** 2026-03-15  
+**Status:** APPROVED
+
+**Summary:**
+Complete design for PDF upload feature in React UI. New tab-based upload page with 5-state UX flow (idle, selecting, uploading, success, error).
+
+**Key Design Decisions:**
+- **Navigation:** New "Upload" tab after Admin tab (consistent with existing tab pattern)
+- **UX Flow:** 5 states with clear transitions (idle → selecting → uploading → success/error)
+- **Components:** UploadPage, FileDropZone, FileSelector, UploadProgress, UploadResult (5 components)
+- **Hook:** useUpload with progress tracking via XMLHttpRequest (no new deps)
+- **File Validation:** Client-side MIME type check + 50MB size limit
+- **Progress Tracking:** XMLHttpRequest.upload.onprogress (deterministic, works in tests with mocking)
+- **Styling:** Dark theme (#7ec8e3 accents), BEM-ish CSS, zero new dependencies
+- **Tests:** ≥12 tests (8 UploadPage, 4 useUpload hook) using Vitest + React Testing Library
+- **Code Changes:** Modify App.tsx, TabNav.tsx, App.css (3 files); create 6 new components + 1 hook + 2 test files
+
+**Design Rationale:**
+- XMLHttpRequest chosen over fetch for upload progress (fetch lacks native upload tracking)
+- Reuses existing buildApiUrl helper from api.ts
+- Follows existing component/hook patterns (match useSimilarBooks, useSearch style)
+- Tab-based navigation matches existing design language
+- No multi-file or status polling in v0.6.0 (deferred features)
+
+**Key Risks Mitigated:**
+- ✅ Backend endpoint delay — wait for Parker spec before impl
+- ✅ File size mismatch — coordinate 50MB limit with Parker
+- ✅ XHR progress mocking in tests — use vi.stubGlobal('XMLHttpRequest', MockXHR)
+- ✅ Drag-and-drop compatibility — feature detection with button fallback
+
+---
+
+### Infrastructure Specification — Docker Hardening (#52)
+
+**Author:** Brett (Infrastructure)  
+**Date:** 2026-03-15  
+**Status:** DESIGN SPEC — ready for @copilot implementation
+
+**Summary:**
+Production-grade Docker Compose hardening for 20+ services. Adds health checks, restart policies, resource limits, graceful shutdown, and fixes dependency conditions.
+
+**Key Design Decisions:**
+- **Health Checks:** 8 new (embeddings-server, solr-search, document-lister, document-indexer, aithena-ui, streamlit-admin, redis-commander, nginx)
+- **Restart Policies:** `unless-stopped` for stateful/critical (redis, rabbitmq, zoo ensemble, solr-search, embeddings-server, UIs); `on-failure` for stateless workers
+- **Resource Limits:** Memory (256m-2g) + CPU reservations (0.5-1.0 core) + log rotation (10m × 3 files per service)
+- **Graceful Shutdown:** 60s for Solr/ZooKeeper, 30s for RabbitMQ/Redis, 10s default
+- **Dependency Fixes:** Change 5 `depends_on: service_started` → `service_healthy` (embeddings, solr-search, aithena-ui, nginx)
+- **Critical Fix:** embeddings-server port conflict (remove `PORT=8085` env, standardize internal port to 8080)
+- **Production Deployment Guide:** docs/deployment/production.md (service startup order, resource requirements, volume initialization, health validation, troubleshooting)
+
+**Design Principles:**
+- Fail-fast for stateless workers, conservative for stateful infrastructure
+- Health before readiness (all depends_on use service_healthy)
+- Resource caps prevent OOM cascade; CPU limits ensure fair scheduling
+- Production hardening in base docker-compose.yml; dev conveniences stay in override
+
+**Order of Implementation:**
+1. Fix embeddings-server port conflict
+2. Add /health endpoints to nginx, solr-search, embeddings-server
+3. Add health checks to docker-compose.yml
+4. Update restart policies, resource limits, stop_grace_period
+5. Fix depends_on conditions
+6. Create docs/deployment/production.md
+
+**Known Risks Mitigated:**
+- ✅ Health check false positives — start_period set appropriately (10-60s)
+- ✅ Resource limits too tight — 2-2.5x observed usage (monitor post-merge)
+- ✅ Graceful shutdown incomplete — 60s for stateful services
+- ✅ Log disk fill — rotation configured to 30MB max per service
+
+---
+
+### Security Specification — Scanning & Validation (#88-98)
+
+**Author:** Kane (Security)  
+**Date:** 2026-03-15  
+**Status:** APPROVED
+
+**Summary:**
+Security scanning specification for v0.6.0. Three CI scanners (bandit, checkov, zizmor) with non-blocking initial baselines + manual OWASP ZAP audit guide + baseline tuning.
+
+**Key Design Decisions:**
+
+**Group 1 (CI Scanners — Non-blocking):**
+- **SEC-1 Bandit (#88):** Python code scanning, 60+ rule skips documented (pytest assert, container binding, subprocess in tests), SARIF + Code Scanning upload
+- **SEC-2 Checkov (#89):** Dockerfile + GitHub Actions scanning, `soft_fail: true`, Docker Compose manual review via ZAP guide (tool limitation)
+- **SEC-3 Zizmor (#90):** GitHub Actions supply chain scanning, focus on template-injection + dangerous-triggers as P0, `continue-on-error: true`
+
+**Group 2 (Manual Validation — Kane review gate):**
+- **SEC-4 (#97):** OWASP ZAP audit guide with proxy setup, manual explore phase, active scan targets, result interpretation, Docker Compose IaC manual review, reporting
+- **SEC-5 (#98):** Bandit/checkov/zizmor findings triage (HIGH/CRITICAL fixed, MEDIUM/LOW documented or deferred), update config files with justified exceptions
+
+**Known Baseline Exceptions:**
+- Bandit: S101 (pytest assert), S104 (0.0.0.0 binding in containers), S603 (subprocess in e2e tests)
+- Checkov: CKV_DOCKER_2 (HEALTHCHECK not all containers), CKV_DOCKER_3 (USER not required for official images)
+- Zizmor: CKV_GHA_7 (pin actions to SHA, deferred to v0.7.0 audit)
+
+**Known Security Gaps (Deferred to v0.7.0):**
+- Missing auth on admin endpoints (/admin/solr, /admin/rabbitmq, /admin/redis, /admin/streamlit) — document as P0 risk
+- Insecure defaults (RabbitMQ guest/guest, Redis no password) — document requirement to change pre-production
+- Dependabot vulnerabilities (13 issues, batch v0.7.0 upgrade)
+
+**Risk Mitigation:**
+- ✅ Non-blocking scanners prevent dev halt while establishing visibility
+- ✅ Kane review gate ensures baseline quality before release
+- ✅ SEC-4 manual review compensates for checkov docker-compose gap
+- ⚠️ If CRITICAL vulns found in Group 1, may block v0.6.0 (escalate to Ripley for hotfix)
+
+---
+
+### Documentation Requirement — Release Gate
+
+**Author:** jmservera (via Copilot directive 2026-03-15T09:12)  
+**Date:** 2026-03-15  
+**Status:** ADOPTED
+
+**Decision:**
+Documentation (feature guide, updated manuals, test report, screenshots) is a HARD REQUIREMENT before any release. Newt (Product Manager) must generate all docs as part of release validation step, not after. If docs are missing, release is blocked — same gate as failing tests.
+
+**Rationale:**
+v0.5.0 was released without updated docs (regression from v0.4.0). Adding to Newt's release validation charter to prevent future regressions.
+
+**Impact on v0.6.0:**
+- Phase 6 (Release Validation) cannot pass until docs complete
+- Newt responsible for feature guide, deployment guide, manual verification, screenshots
+- No release to main until docs present and reviewed
+
+
+---
+
+# 2026-03-15T09:12: User Directive — Documentation HARD REQUIREMENT Before Release
+
+**Date**: March 15, 2026  
+**By**: jmservera (User Directive via Copilot)  
+**Status**: ✅ Documented
+
+## Decision
+
+Documentation (feature guide, updated manuals, test report, screenshots) is a **HARD REQUIREMENT** before any release. Documentation must be generated **as part of release validation**, not after release.
+
+## Rationale
+
+- v0.5.0 was released without updated documentation
+- This pattern repeated in v0.4.0 (caught by Juanma during review)
+- Missing docs break user onboarding and slow team ramp-up
+- Release validation must include doc completeness gate (same weight as test pass rate)
+
+## Impact
+
+- Adds documentation review to Newt's release validation charter
+- If docs are missing, release is **BLOCKED** — same as failing tests
+- Applies to all future releases (v0.6.0 onwards)
+
+## Action Items
+
+1. Update `.squad/agents/newt/charter.md` to include doc validation gate
+2. Template: `docs/release/{version}-manual.md`, `docs/release/{version}-features.md`, screenshots in `docs/release/screenshots/{version}/`
+3. Newt to verify completeness before stamping release APPROVED
+
+---
+
+# 2026-03-15T11:10: Kane Decision — Security Scanning PRs Rejected (All 5)
+
+**Date**: March 15, 2026  
+**Role**: Kane (Security Engineer)  
+**Context**: v0.6.0 Release Group 1/2 Security Scanning  
+**Status**: ✅ Decisions logged, reassignment pending
+
+## Decision
+
+**REJECTED** all five security scanning PRs (#186-190) due to missing implementation. No actual code, workflows, or documentation delivered despite detailed specifications.
+
+## Problem
+
+@copilot was assigned issues #88-90 (SEC-1/2/3) and opened draft PRs #186-190, but failed to implement required work:
+
+- **PRs #186-188 (CI scanners)**: No `.github/workflows/` files created, no scanner configurations, no SARIF upload
+- **PR #189 (ZAP guide)**: No `docs/security/zap-audit.md` documentation
+- **PR #190 (Baseline tuning)**: No findings triage, no baseline documentation
+
+All five PRs contain only inherited RabbitMQ config changes from base branch. Single "Initial plan" commits indicate work was never started.
+
+## Security Impact
+
+Without these implementations, v0.6.0 is missing:
+- **Bandit** — Python SAST (no detection of hardcoded secrets, SQL injection, unsafe deserialization)
+- **Checkov** — IaC scanning (no detection of insecure Dockerfile/Actions patterns)
+- **Zizmor** — Supply chain scanning (no detection of GitHub Actions template injection)
+- **ZAP procedures** — Manual OWASP audit process (ad-hoc reviews, no repeatability)
+- **Baseline documentation** — No risk acceptance framework, uncontrolled exceptions
+
+## Specification Requirements (Re-stated)
+
+### SEC-1 (Bandit — Python SAST)
+- **Workflow**: `.github/workflows/security-bandit.yml`
+- **Targets**: All Python services (document-indexer, document-lister, embeddings-server, solr-search, qdrant-search, qdrant-clean)
+- **Output**: SARIF format → GitHub Code Scanning upload
+- **Mode**: Non-blocking (`continue-on-error: true`) on first run
+
+### SEC-2 (Checkov — IaC SAST)
+- **Workflow**: `.github/workflows/security-checkov.yml`
+- **Targets**: All Dockerfiles + GitHub Actions workflows
+- **Baseline exceptions**: CKV_DOCKER_2 (HEALTHCHECK), CKV_DOCKER_3 (USER directive)
+- **Output**: SARIF format → GitHub Code Scanning upload
+- **Mode**: Non-blocking (`soft_fail: true`)
+
+### SEC-3 (Zizmor — GitHub Actions Supply Chain)
+- **Workflow**: `.github/workflows/security-zizmor.yml`
+- **Targets**: `.github/workflows/*.yml`
+- **Focus**: template-injection, dangerous-triggers (P0)
+- **Output**: SARIF format → GitHub Code Scanning upload
+- **Mode**: Non-blocking (`continue-on-error: true`)
+
+### SEC-4 (OWASP ZAP Manual Audit Guide)
+- **Documentation**: `docs/security/zap-audit.md`
+- **Sections**: Prerequisites, proxy setup, manual explore, active scan, result interpretation, IaC review, reporting
+- **Cadence**: Quarterly or before major releases
+- **Audience**: Security auditors, release managers
+
+### SEC-5 (Baseline Tuning)
+- **Process**: Run scanners, triage findings (HIGH/CRITICAL fixed or documented, MEDIUM/LOW baseline allowed)
+- **Output**: `docs/security/baseline.md` (accepted risks, exceptions by scanner, mitigation strategies)
+- **Dependency**: File GitHub issues for deferred HIGH/CRITICAL (v0.7.0 target)
+
+## Release Impact
+
+- **v0.6.0 security milestone BLOCKED** until SEC-1/2/3 implemented
+- **Release risk**: No new security coverage beyond existing CodeQL
+- **Team capacity**: 5 issues require re-work or reassignment
+
+## Recommendations
+
+1. **Escalate to Ripley/Ralph** — @copilot work stalled; consider manual intervention
+2. **Break into smaller PRs** — One scanner per PR for easier verification
+3. **Kane direct implementation** — If @copilot re-work stalls, Kane can implement security tooling (in-scope)
+4. **Tighten review gates** — Require CI workflow validation before PR marked ready-for-review
+
+## Status
+
+- **PRs #186-190**: Changes Requested (detailed specs in review comments)
+- **Issues #88-90, #97-98**: OPEN (blocked on implementation)
+- **v0.6.0 Group 1/2**: BLOCKED
+
+**Next Review**: After @copilot re-implements or work is reassigned to team member.
+
+---
+
+# 2026-03-15T11:25: SEC-1 Implementation — Bandit Python SAST
+
+**Date:** 2026-03-15  
+**Author:** Kane (Security Engineer)  
+**Issue:** #88  
+**PR:** #193  
+**Status:** ✅ Merged to dev
+
+## Decision
+
+Implemented bandit Python SAST scanning in CI with the following configuration:
+
+### Workflow Design
+- **File:** `.github/workflows/security-bandit.yml`
+- **Triggers:** Push and PR to dev/main branches
+- **Non-blocking:** Uses `continue-on-error: true` to prevent CI failures
+- **Permissions:** Includes `security-events: write` for SARIF upload
+- **Output:** SARIF format uploaded to GitHub Code Scanning + artifact storage (30 days)
+
+### Configuration File
+- **File:** `.bandit` (centralized config)
+- **Rationale:** Centralized config is more maintainable than inline command flags
+- **Exclusions:** `.venv`, `venv`, `site-packages`, `node_modules`, `__pycache__`
+- **Targets:** All Python source directories (document-indexer, document-lister, solr-search, admin, embeddings-server, e2e)
+
+### Baseline Skip Rules (7 rules, 60+ pattern instances)
+- **S101:** Use of assert detected - Required by pytest test framework
+- **S104:** Binding to 0.0.0.0 - Legitimate for containerized services
+- **S603:** subprocess call - Used in e2e tests with controlled input
+- **S607:** Partial executable path - Used in e2e tests
+- **S105:** Hardcoded password string - False positives in test data
+- **S106:** Hardcoded password function arg - False positives in test data
+- **S108:** Temp file usage - Legitimate test fixtures
+
+## Rationale
+
+1. **Non-blocking approach:** Allows security visibility without breaking CI, enabling gradual remediation
+2. **SARIF upload:** Integrates findings into GitHub Security tab for centralized tracking
+3. **Artifact retention:** 30-day SARIF storage enables historical analysis and compliance audits
+4. **Skip rules:** Balance security scanning with pytest conventions and containerized deployment patterns
+5. **Centralized config:** `.bandit` file provides single source of truth for baseline exceptions
+
+## Alternatives Considered
+
+1. **Inline skip flags in workflow:** Rejected - harder to maintain and audit
+2. **Per-directory scanning:** Rejected - single scan with exclusions is simpler
+3. **Blocking workflow:** Rejected - current codebase has legitimate patterns that would fail
+
+## Impact
+
+- **Positive:** Automated Python security scanning in CI pipeline
+- **Positive:** GitHub Code Scanning integration for security dashboard
+- **Positive:** Non-blocking ensures CI velocity maintained
+- **Risk:** Skip rules may hide real vulnerabilities - requires SEC-5 manual triage
+
+## Next Steps
+
+1. Monitor first workflow run on PR merge
+2. Review SARIF output in GitHub Security tab
+3. Proceed with SEC-5 (baseline tuning) to triage actual findings
+4. Document any HIGH/CRITICAL findings requiring fixes
+
+---
+
+# 2026-03-15T11:25: SEC-2 Implementation — Checkov IaC Scanning
+
+**Decision Owner:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-15  
+**Issue:** #89 (SEC-2: Add checkov IaC scanning to CI)  
+**PR:** #191  
+**Status:** ✅ Merged to dev
+
+## Context
+
+Part of the security scanning initiative (#88-#90) to harden the CI/CD pipeline with automated security checks for Infrastructure-as-Code (IaC). SEC-2 specifically addresses static analysis of Dockerfiles and GitHub Actions workflows using checkov.
+
+## Decision
+
+Implemented automated checkov scanning in GitHub Actions with the following design:
+
+### 1. Workflow Configuration (.github/workflows/security-checkov.yml)
+
+**Trigger Strategy:**
+- Push to `dev` and `main` branches
+- Pull requests targeting `dev` and `main`
+- **Path filtering:** Only trigger when relevant files change:
+  - `**/Dockerfile`
+  - `.github/workflows/**`
+  - `docker-compose*.yml`
+
+**Rationale:** Path filtering reduces CI minutes waste by avoiding scans on irrelevant changes (e.g., documentation, application code).
+
+**Execution Strategy:**
+- Two separate scan jobs:
+  1. Dockerfile scanning (`--framework dockerfile`)
+  2. GitHub Actions workflow scanning (`--framework github_actions`)
+- Both use `soft_fail: true` flag (non-blocking)
+- Both use `continue-on-error: true` in workflow steps
+- SARIF output uploaded to GitHub Security → Code Scanning
+
+**Rationale:** Separate jobs provide better visibility in GitHub Actions UI and allow framework-specific configuration if needed. Non-blocking design per SEC-2 spec ensures scans never block deployments.
+
+### 2. Configuration File (.checkov.yml)
+
+**Documented Skip Exceptions:**
+
+```yaml
+skip-check:
+  - CKV_DOCKER_2  # HEALTHCHECK instruction missing
+  - CKV_DOCKER_3  # USER instruction missing (container runs as root)
+```
+
+**Justifications:**
+
+- **CKV_DOCKER_2 (HEALTHCHECK):** Health checks are managed centrally in `docker-compose.yml` instead of individual Dockerfiles. This provides:
+  - Better orchestration control
+  - Environment-specific configurations
+  - Consistency across all services
+  - Easier maintenance (single source of truth)
+
+- **CKV_DOCKER_3 (USER):** Official base images (python:3.11-slim, node:20-alpine, solr:9) either:
+  - Run as non-root by default (e.g., node, solr)
+  - Require root privileges for package installation during build
+  - Application processes run with appropriate permissions via docker-compose `user:` directives or base image defaults
+
+**Rationale:** These exceptions are architectural decisions, not security gaps. Documenting them in configuration prevents alert fatigue and provides audit trail.
+
+### 3. SARIF Integration
+
+**Upload Strategy:**
+- Use `github/codeql-action/upload-sarif@v3`
+- Category: `checkov-iac`
+- Upload occurs even on step failure (`if: always()`)
+
+**Rationale:** Centralized security findings in GitHub Security tab enables:
+- Cross-repository security posture tracking
+- Trend analysis over time
+- Integration with security policies and compliance tools
+
+### 4. Docker Compose Manual Review
+
+**Decision:** Docker Compose files (`docker-compose*.yml`) are **not** scanned by checkov due to tool limitations (checkov lacks comprehensive Docker Compose framework support as of 2026-03).
+
+**Mitigation:** Manual review process documented in OWASP ZAP hardening guide (SEC-4, issue #90).
+
+**Rationale:** Attempting to scan Docker Compose with incomplete framework support would generate false positives and alert fatigue. Manual review process ensures coverage without automation noise.
+
+## Alternatives Considered
+
+1. **Blocking enforcement (soft_fail: false):**
+   - **Rejected:** Would block CI/CD on every finding, including false positives and low-priority issues. Not suitable for brownfield project with existing Dockerfiles.
+
+2. **Single combined scan job:**
+   - **Rejected:** Mixing Dockerfile and GitHub Actions scans in one job reduces visibility in GitHub Actions UI and makes it harder to track which framework generated findings.
+
+3. **Scan Docker Compose with checkov:**
+   - **Rejected:** Tool limitation. Manual review via ZAP guide provides better coverage for Docker Compose security.
+
+4. **No path filtering (scan on every push):**
+   - **Rejected:** Wastes CI minutes scanning when no IaC files changed. Path filtering is GitHub Actions best practice.
+
+## Implementation Notes
+
+**Files Created:**
+- `.github/workflows/security-checkov.yml` (78 lines)
+- `.checkov.yml` (30 lines)
+
+**Services Scanned:**
+- admin/Dockerfile
+- aithena-ui/Dockerfile
+- document-indexer/Dockerfile
+- document-lister/Dockerfile
+- embeddings-server/Dockerfile
+- solr-search/Dockerfile
+- All .github/workflows/*.yml files
+
+**Permissions Required:**
+```yaml
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+```
+
+**Python Version:** 3.11 (matches CI standard)
+
+## Validation
+
+- [x] Workflow syntax validated (GitHub Actions schema)
+- [x] Configuration file syntax validated (checkov YAML schema)
+- [x] Path filters tested (only triggers on Dockerfile/workflow/compose changes)
+- [x] Targets `dev` branch (squad branching strategy)
+- [x] Co-authored-by trailer included in commit
+
+## Impact
+
+**Security Posture:**
+- +Automated scanning for 6 Dockerfiles
+- +Automated scanning for 7 GitHub Actions workflows
+- +SARIF results uploaded to GitHub Security tab
+- +Non-blocking design prevents CI/CD disruption
+
+**CI/CD Pipeline:**
+- +1 workflow (security-checkov.yml)
+- +Path-filtered triggers (efficient CI minute usage)
+- +Step summary output for visibility
+
+**Maintenance:**
+- +Documented skip exceptions (audit trail)
+- +Framework configuration centralized in .checkov.yml
+
+## Future Work
+
+1. **Expand skip exceptions** as new Dockerfiles are added or checkov rules evolve
+2. **Add Docker Compose scanning** when checkov framework support matures
+3. **Integrate with branch protection** if team decides to enforce blocking mode for critical checks
+4. **Add custom checkov policies** for aithena-specific security requirements
+
+## References
+
+- SEC-2 specification: `.squad/decisions.md`
+- PR: #191 (squad/89-sec2-checkov-scanning → dev)
+- Related issues: #88 (SEC-1: bandit), #90 (SEC-4: ZAP guide)
+- Checkov documentation: https://www.checkov.io/
+
+---
+
+# 2026-03-15T11:25: SEC-4 Decision — OWASP ZAP Manual Audit Guide
+
+**Date:** 2026-03-15  
+**Author:** Kane (Security Engineer)  
+**Issue:** #97  
+**PR:** #194  
+**Status:** ✅ Merged to dev
+
+## Context
+
+Implementing SEC-4 from v0.6.0 security scanning plan. Created comprehensive OWASP ZAP manual security audit guide as the primary dynamic application security testing (DAST) methodology before release.
+
+## Decision
+
+Created 30KB+ OWASP ZAP audit guide (`docs/security/owasp-zap-audit-guide.md`) covering:
+
+1. **DAST Workflow** — Prerequisites, environment setup, proxy config, manual explore phase, active scan, result interpretation, reporting
+2. **Docker Compose IaC Review** — Manual checklist for `docker-compose.yml` security (compensates for checkov's lack of docker-compose support)
+
+## Rationale
+
+**Why OWASP ZAP:**
+- Industry-standard DAST tool (OWASP project)
+- Free and open source
+- Supports both manual exploration (guided crawling) and automated active scanning
+- Generates SARIF reports for CI/CD integration (future work)
+
+**Why Manual Guide (Not Automated):**
+- v0.6.0 has no authentication yet — ZAP automation scripts require authenticated sessions
+- Manual exploration captures nuanced UI workflows (React search, PDF viewer, admin dashboards)
+- Allows security engineer judgment for baseline exceptions vs. true findings
+- Educational — team learns DAST methodology, not just CI job results
+
+**Why Docker Compose IaC Review:**
+- Checkov 3.2.508 does not support `--framework docker-compose` (confirmed in SEC-2)
+- docker-compose.yml is critical infrastructure surface (ports, volumes, networks, secrets)
+- Manual checklist provides structured review until checkov adds support or alternate tool adopted
+
+## Key Decisions
+
+### 1. ZAP Proxy Port: 8090 (Not Default 8080)
+
+**Reason:** aithena's `solr-search` service uses port 8080 (docker-compose.override.yml). Running ZAP on 8090 avoids port conflict while still testing solr-search through nginx proxy.
+
+### 2. Manual Explore Phase: 15-30 Minutes
+
+**Scope:**
+- React UI (search, pagination, PDF viewer, edge cases)
+- Search API (Swagger UI, all endpoints with valid + malicious inputs)
+- Admin interfaces (Streamlit, Solr, RabbitMQ, Redis)
+- File upload (if applicable)
+
+**Reason:** Thorough crawling builds complete ZAP site map before active scan, ensuring all endpoints tested.
+
+### 3. Docker Compose IaC Checklist: 7 Categories
+
+**Categories:**
+1. Port exposure (dev vs. prod ports, unnecessary publications)
+2. Volume mounts (host path security, read-only configs)
+3. Network isolation (frontend/backend/data segmentation)
+4. Secrets in env vars (hardcoded credentials, .env usage)
+5. Image pinning (version tags, SHA digests)
+6. Container privileges (privileged, cap_add, security_opt)
+7. Restart policies (crash loops, one-time init)
+
+**Reason:** Comprehensive coverage of docker-compose attack surface. Checklist ensures consistent review across releases.
+
+### 4. Result Interpretation: Baseline Exception Workflow
+
+**Triage Levels:**
+- **HIGH/CRITICAL:** MUST fix or document baseline exception with justification
+- **MEDIUM:** Fix recommended; low-priority exceptions allowed (if low exploitability)
+- **LOW/INFO:** Optional fix; exceptions allowed
+
+**Baseline Exception Template:**
+- Finding ID, severity, CWE, endpoint
+- Reason for exception (e.g., "Admin endpoints internal-only, firewalled in prod")
+- Mitigating controls (network ACLs, deployment docs, future issues)
+- Approved by, date, review date
+
+**Reason:** Balances security rigor with pragmatic release velocity. Documents risk acceptance for audit trail.
+
+## Implementation Notes
+
+### Known Baseline Exceptions Documented
+
+**HIGH Severity:**
+1. Missing authentication on `/admin/solr/`, `/admin/rabbitmq/`, `/admin/redis/` — Known issue #98, deferred to v0.7.0 (production deploys firewall these endpoints)
+2. Default RabbitMQ credentials (`guest/guest`) — Known issue #98, deferred to v0.7.0
+3. Redis no authentication — Known issue #98, deferred to v0.7.0
+
+**MEDIUM Severity:**
+1. Missing Anti-clickjacking Header — Acceptable (nginx not security boundary yet)
+2. No Content Security Policy — NEW finding, recommend for v0.6.1/v0.7.0
+3. Missing X-Content-Type-Options — Acceptable (informational hardening)
+
+**Docker Compose Findings:**
+1. 10+ internal ports exposed in `docker-compose.override.yml` — Dev-only, verified not in production deploy
+2. Solr nodes publish 8983-8985 directly — Should be internal-only in prod (document in deployment guide)
+3. Images lack SHA digest pinning — Supply chain risk, recommend SHA pinning for v0.7.0
+4. `redis` image lacks explicit version tag — Recommend `redis:7.2-alpine`
+
+### Architecture References
+
+**Verified Accurate:**
+- docker-compose.yml (production config)
+- docker-compose.override.yml (dev port exposures)
+- nginx/default.conf (proxy routes: /, /v1/, /admin/streamlit/, /admin/solr/, /admin/rabbitmq/, /admin/redis/, /documents/, /solr/)
+- Service ports: nginx (80/443), solr-search (8080), streamlit (8501), Solr (8983-8985), RabbitMQ (15672), Redis (6379), ZooKeeper (18080/2181-2183)
+
+## Benefits
+
+1. **Release Gating:** OWASP ZAP audit now required before major releases (v0.X.0)
+2. **Team Education:** Step-by-step guide trains developers on DAST methodology
+3. **IaC Coverage Gap:** Docker Compose checklist fills checkov limitation
+4. **Baseline Documentation:** Audit report template standardizes risk acceptance process
+5. **Future Automation:** Guide lays groundwork for zap-baseline.py / zap-full-scan.py CI integration (after auth implemented)
+
+## Risks
+
+1. **Manual Process:** Relies on security engineer availability and discipline
+   - **Mitigation:** Guide is thorough enough for any team member to execute; consider rotating responsibility
+2. **Checkov Gap:** docker-compose.yml still needs manual review
+   - **Mitigation:** Checklist is comprehensive; revisit if checkov adds support or adopt alternative tool
+3. **No Authentication Testing:** Guide skips auth workflows (none implemented yet)
+   - **Mitigation:** v0.7.0 guide update will add authenticated scan instructions
+
+## Future Work
+
+1. **v0.6.1/v0.7.0:** Add Content Security Policy header (ZAP finding NEW)
+2. **v0.7.0:** Update guide for authenticated scans (after implementing /admin/* auth)
+3. **v0.7.0:** Pin Docker images to SHA digests (supply chain hardening)
+4. **v0.7.0+:** Automate ZAP baseline scan in CI (`zap-baseline.py` on PR builds)
+5. **v0.7.0+:** Implement network segmentation (frontend/backend/data networks in docker-compose)
+
+## Related
+
+- **SEC-1 (Bandit):** Python SAST, complements ZAP's DAST
+- **SEC-2 (Checkov):** IaC scanning (Dockerfile + GitHub Actions), manual Compose review
+- **SEC-3 (Zizmor):** GitHub Actions supply chain security
+- **SEC-5 (#98):** Security baseline triage (will reference ZAP findings + baseline exceptions)
+
+## Approval
+
+**Reviewed by:** Ripley (Lead)  
+**Status:** ✅ Approved for v0.6.0  
+**PR:** #194 (targeting dev)  
+**Next:** SEC-5 triage (bandit/checkov/zizmor findings → security baseline document)

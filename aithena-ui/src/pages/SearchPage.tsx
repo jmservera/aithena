@@ -80,7 +80,12 @@ function SearchPage() {
   return (
     <div className="search-layout">
       <aside className="sidebar">
-        <FacetPanel facets={facets} filters={searchState.filters} onFilterChange={setFilter} />
+        <FacetPanel
+          facets={facets}
+          filters={searchState.filters}
+          onFilterChange={setFilter}
+          mode={searchState.mode}
+        />
       </aside>
 
       <main className="search-main">

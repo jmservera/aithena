@@ -74,3 +74,94 @@
 - `docker-compose.override.yml` restores the local debug surfaces: Redis `6379`, RabbitMQ `5672`/`15672`, solr-search `8080`, Streamlit `8501`, Redis Commander `8081`, ZooKeeper `18080`/`2181`-`2183`, Solr `8983`-`8985`, embeddings `8085`.
 - nginx already covers the UI and operator surfaces that production needs: `/`, `/v1/`, `/documents/`, `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, `/admin/redis/`.
 - This closes the earlier hardening gap about over-published Compose ports without breaking the local debugging workflow.
+
+### 2026-07-24 — v0.6.0 Group 6: Docker Compose hardening spec for #52
+
+**Task:** Review Ripley's v0.6.0 release plan and create production hardening specification for #52 (Phase 4 hardening).
+
+**Current state assessment (20+ services analyzed):**
+- ✅ **Already hardened:** Redis, RabbitMQ, ZooKeeper (zoo1-3), Solr (solr, solr2, solr3) have health checks and correct restart policies
+- ✅ **Port security correct:** Prod/dev split already implemented (nginx-only publishing in base compose, debug ports in override)
+- ❌ **Missing health checks (8 services):** embeddings-server, solr-search, document-lister, document-indexer, aithena-ui, streamlit-admin, redis-commander, nginx
+- ❌ **Restart policy gaps:** redis/rabbitmq use `on-failure` (should be `unless-stopped`); ZooKeeper nodes missing restart policy entirely
+- ❌ **No resource limits:** Zero services have memory/CPU limits or log rotation configured
+- ❌ **No graceful shutdown:** Solr/ZooKeeper/RabbitMQ/Redis need `stop_grace_period` (60s/60s/30s/30s respectively)
+- ❌ **depends_on gaps:** 5 services use `service_started` instead of `service_healthy` (embeddings in document-indexer, solr-search dependencies, nginx upstreams)
+- 🔴 **CRITICAL BUG:** embeddings-server has port conflict (`expose: 8080` but `PORT=8085` env var) — health checks will fail until fixed
+
+**Hardening spec deliverables (.squad/decisions/inbox/brett-hardening-spec.md):**
+1. **Service-by-service health checks:** 8 new health checks with specific intervals/timeouts/retries/start_periods
+2. **Restart policies:** 8 upgrades to `unless-stopped`, 3 new policies (ZooKeeper nodes)
+3. **Resource limits:** Memory limits for all services (128m-2g), CPU reservations for Solr/embeddings (1.0 core), log rotation (10m × 3 files)
+4. **Graceful shutdown:** `stop_grace_period` for Solr (60s), ZooKeeper (60s), RabbitMQ (30s), Redis (30s)
+5. **Dependency fixes:** 5 changes from `service_started` → `service_healthy`
+6. **Code changes:** Health endpoints for nginx (`/health`), solr-search (`/health`), embeddings-server (`/health`); fix embeddings port conflict
+7. **Documentation:** New `docs/deployment/production.md` with startup order, resource requirements, volume initialization, health validation, backup/restore, troubleshooting
+
+**Key architectural decisions:**
+- **Tiered service classification:** Tier 1 (core infra: high availability), Tier 2 (stateless apps), Tier 3 (one-shot init)
+- **Resource limit philosophy:** 2-2.5x observed usage headroom; CPU reservations (not hard limits) to avoid throttling; log rotation to prevent disk exhaustion
+- **Health check timing:** Conservative `start_period` values (embeddings 60s for model loading, ZooKeeper/Solr 30s for cluster formation)
+- **Dependency graph validation:** nginx is LAST to start (waits for all upstreams healthy) — ensures zero-downtime production startup
+- **Dev workflow preservation:** No changes to docker-compose.override.yml; all hardening in base compose
+
+**Changes to Ripley's plan:**
+1. Expand #52 acceptance criteria to include resource limits + graceful shutdown + production guide
+2. Group 6 can start in parallel with Groups 1-4 (no code dependencies except embeddings port fix)
+3. Change issue label from `squad:parker` to `squad:brett` (hardening is infra domain, not backend)
+
+**Implementation strategy for @copilot:**
+- Order: Fix embeddings port conflict → add health endpoints → add health checks → update restart/limits/grace/deps → log rotation → documentation
+- Validation: Cold start test, failure recovery test, graceful shutdown timing, resource limit check, log rotation verification
+- PR checklist: 7 validation commands for Brett review gate
+
+**Risk mitigations:**
+- Embeddings port conflict (HIGH): Remove `PORT=8085` env var, standardize on 8080 internal
+- False positive health checks (MEDIUM): All checks have appropriate `start_period` (10-60s)
+- Resource limits too tight (HIGH): Conservative 2-2.5x headroom based on observed usage
+- Graceful shutdown too short (MEDIUM): 60s grace = compromise between safety and operator patience
+
+### 2026-03-15 — v0.6.0 Release Planning Complete
+
+**Summary:** Docker hardening spec (#52) finalized and approved. Recorded in decisions.md. Ready for @copilot implementation after Groups 1-5 complete.
+
+**Key Infrastructure Decisions Confirmed:**
+- Health Checks: 8 new checks + 5 depends_on fixes (service_started → service_healthy)
+- Restart Policies: `unless-stopped` for critical/stateful services
+- Resource Limits: Memory (256m-2g) + CPU reservations + log rotation (10m × 3 files)
+- Graceful Shutdown: 60s Solr/ZooKeeper, 30s RabbitMQ/Redis
+- Critical Fix: embeddings-server port conflict (remove PORT=8085, standardize on 8080)
+- Documentation: docs/deployment/production.md with startup order, requirements, troubleshooting
+
+**Implementation Order:** Port fix → health endpoints → health checks → restart/limits/grace → depends_on fixes → log rotation → documentation
+
+**Next:** Awaiting Juanma approval of release plan → Groups 1-5 execution → Issue #52 created + assigned → Implementation
+
+### 2026-03-15 — SEC-2 Implementation: Checkov IaC Scanning
+
+**Summary:** Implemented issue #89 (SEC-2) to add automated IaC security scanning to CI pipeline using checkov.
+
+**Deliverables (PR #191):**
+- `.github/workflows/security-checkov.yml`: GitHub Actions workflow for checkov scanning
+  - Scans all Dockerfiles (admin, aithena-ui, document-indexer, document-lister, embeddings-server, solr-search)
+  - Scans GitHub Actions workflow files (.github/workflows/*.yml)
+  - Runs in `soft_fail` mode (non-blocking, per SEC-2 spec)
+  - Outputs SARIF results and uploads to GitHub Code Scanning
+  - Path-filtered triggers: only runs when Dockerfiles, workflows, or docker-compose files change
+- `.checkov.yml`: Configuration with documented skip exceptions
+  - `CKV_DOCKER_2` (HEALTHCHECK): Health checks managed centrally in docker-compose.yml
+  - `CKV_DOCKER_3` (USER): Official base images run as non-root by default
+
+**Key Design Decisions:**
+- **Non-blocking enforcement:** `soft_fail: true` + `continue-on-error: true` ensures scans never block CI/CD
+- **Path filtering:** Workflow only triggers on relevant file changes (Dockerfiles, .github/workflows/*, docker-compose*.yml) to avoid wasting CI minutes
+- **SARIF integration:** Results uploaded to GitHub Security tab for centralized vulnerability tracking
+- **Documented exceptions:** All skip rules include detailed justifications in .checkov.yml comments
+
+**Validation:**
+- Workflow syntax validated (GitHub Actions YAML structure correct)
+- Configuration follows checkov best practices (framework specification, skip-check array format)
+- PR targets `dev` branch per squad branching strategy
+
+**Branch:** squad/89-sec2-checkov-scanning → dev
+**Status:** PR #191 open, awaiting review

@@ -61,3 +61,58 @@
 **Integration:** embeddings-server called for query and document embeddings; Solr `/select` queries use BM25/kNN based on mode; Redis tracks `processed`/`failed` counts for stats endpoint.
 
 **Recent work:** closed 9 stale copilot PRs, applied branch guardrails, fixed document-lister wildcard scanning, renamed `save_state()` param for Redis safety, added CI unit tests, uv migration across all 4 services.
+
+### 2026-07-24 — v0.6.0 Upload Endpoint Design Review
+
+**Task:** Reviewed Ripley's v0.6.0 release plan and designed PDF upload endpoint spec for #49.
+
+**Key Architectural Decisions:**
+
+1. **Reuse Existing Pipeline:** Upload endpoint writes to `/data/documents/uploads/` and publishes file paths to existing `shortembeddings` RabbitMQ queue. No duplicate indexing logic — `document-indexer` handles all PDF processing.
+
+2. **Triple File Validation:** MIME type (`application/pdf`) + extension (`.pdf`) + magic number (`%PDF-` header) prevents content-type spoofing and ensures only valid PDFs enter the pipeline.
+
+3. **Per-Request RabbitMQ Connection:** FastAPI runs multi-worker in production; Pika `BlockingConnection` is NOT thread-safe. Spec requires per-request connection creation/teardown (~50-100ms overhead, acceptable for async workflow).
+
+4. **50 MB File Size Limit:** Configurable via `MAX_UPLOAD_SIZE_MB` env var. Prevents DoS attacks and disk exhaustion.
+
+5. **Filename Collision Handling:** Append `_{YYYYMMDD}_{HHMMSS}` timestamp suffix if upload filename already exists. Preserves original name in response metadata.
+
+**Integration Points:**
+- **Volume:** Shared `document-data` volume between `solr-search` and `document-indexer` (already mounted for PDF serving)
+- **Queue:** `shortembeddings` queue (existing, used by `document-lister`)
+- **Redis State:** Indexing status tracked by existing `/v1/status` endpoint (no changes needed)
+
+**API Contract:**
+- `POST /v1/upload` with `multipart/form-data`
+- Optional `category` parameter (deferred metadata override to future version)
+- Returns 202 Accepted with `upload_id` (SHA256 hash of path, matches Solr `id`)
+- Error codes: 400 (validation), 413 (size), 500 (storage), 502 (RabbitMQ)
+
+**Security:**
+- Path traversal prevention: sanitize filename to strip `..`, `/`, `\`
+- Content spoofing: triple validation (MIME + extension + magic)
+- Size limit: 50 MB cap
+
+**Concerns Flagged:**
+- RabbitMQ connection pooling required for thread safety (singleton pattern unsafe)
+- Missing queue health check in `/v1/status` (recommend separate issue)
+- Shared volume dependency (documented in spec, low risk)
+
+**Deliverable:** Design brief saved to `.squad/decisions/inbox/parker-upload-endpoint-spec.md` with full API contract, validation rules, error handling, test requirements, and implementation checklist for @copilot.
+
+### 2026-03-15 — v0.6.0 Release Planning Complete
+
+**Summary:** Upload endpoint spec (#49) finalized and approved. Recorded in decisions.md. Ready for @copilot implementation after Ripley's release plan is approved.
+
+**Key Specs Confirmed:**
+- Endpoint: POST /v1/upload (202 Accepted)
+- Validation: MIME type, extension, magic number (triple check)
+- Size limit: 50 MB configurable
+- Storage: /data/documents/uploads/ (shared volume)
+- RabbitMQ: Per-request connections (thread-safe)
+- Error handling: Comprehensive for validation, storage, queue failures
+- Tests: ≥8 unit tests required
+- Dependencies: pika, python-multipart, retry (all available)
+
+**Next:** Awaiting Juanma approval of release plan → Issue #49 created + assigned → Implementation

@@ -145,3 +145,34 @@
 - Added dark-theme styles in `App.css` for `.similar-books-panel`, `.similar-book-card`, and `.similarity-score`.
 - Added Vitest coverage for the new panel and SearchPage interaction; verified `npm run lint`, `npm run build`, and `npm test` all pass.
 
+### 2026-07-24T14:30 — Reviewed v0.6.0 Upload UI Spec for #50
+
+- Reviewed Ripley's v0.6.0 release plan focusing on Group 4 (PDF upload flow).
+- Examined existing UI codebase: tab navigation pattern (TabNav.tsx), page structure (SearchPage, StatsPage, etc.), hook patterns (useSearch, useStats with AbortController), and component conventions (BookCard, FacetPanel, etc.).
+- Identified architectural patterns: tab-based navigation with react-router-dom, hooks for API integration with buildApiUrl helper, dark theme styling (#282c34 background, #7ec8e3 accents), Vitest + React Testing Library for tests.
+- **Design decision:** Upload should be a dedicated tab (not modal/embedded in search) to maintain navigation consistency and avoid cluttering the search page.
+- **Technical decision:** Use XMLHttpRequest instead of fetch for upload to support deterministic progress tracking (xhr.upload.onprogress), matching user expectations for file uploads.
+- **Component structure:** UploadPage container with sub-components (FileDropZone, FileSelector, UploadProgress, UploadResult) following existing component granularity pattern.
+- **Hook pattern:** Created useUpload hook spec following existing hook conventions (AbortController cleanup, error normalization, state management).
+- Wrote comprehensive design brief to `.squad/decisions/inbox/dallas-upload-ui-spec.md` with 14 sections covering component hierarchy, UI flow, API integration, styling, testing requirements (≥12 tests), and acceptance criteria.
+- **Key concerns raised for Parker (#49):** Need clarity on upload ID usage, status polling requirements, rate limiting, and file name sanitization before implementation.
+- **Out of scope for v0.6.0:** Multi-file upload, upload history, status polling, drag-to-search-results — deferred to v0.7.0+.
+- Approved spec for @copilot implementation pending Parker's backend spec review.
+
+### 2026-03-15 — v0.6.0 Release Planning Complete
+
+**Summary:** Upload UI spec (#50) finalized and approved. Recorded in decisions.md. Ready for @copilot implementation after #49 backend endpoint is merged.
+
+**Key Design Decisions Confirmed:**
+- Navigation: New "Upload" tab (consistent with existing pattern)
+- UI Flow: 5-state progression (idle → selecting → uploading → success/error)
+- Components: UploadPage, FileDropZone, FileSelector, UploadProgress, UploadResult (5 total)
+- Hook: useUpload with XMLHttpRequest for progress tracking (no new dependencies)
+- File Validation: MIME type + 50MB size limit (client-side)
+- Styling: Dark theme, BEM CSS, matches existing search UI
+- Testing: ≥12 tests (8 UploadPage + 4 useUpload)
+
+**Code Changes:** Modify App.tsx, TabNav.tsx, App.css (3 files); create 6 components + 1 hook + 2 tests
+
+**Next:** Awaiting Juanma approval of release plan → #49 implementation → Issue #50 created + assigned → Implementation
+
