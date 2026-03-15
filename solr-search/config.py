@@ -40,6 +40,10 @@ class Settings:
     redis_key_pattern: str
     rabbitmq_host: str
     rabbitmq_port: int
+    # Phase 4 — upload endpoint
+    upload_dir: Path
+    max_upload_size_mb: int
+    rabbitmq_queue_name: str
 
     @property
     def select_url(self) -> str:
@@ -79,4 +83,8 @@ settings = Settings(
     redis_key_pattern=os.environ.get("REDIS_KEY_PATTERN", "doc:*"),
     rabbitmq_host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
     rabbitmq_port=int(os.environ.get("RABBITMQ_PORT", "5672")),
+    # Phase 4 — upload endpoint
+    upload_dir=Path(os.environ.get("UPLOAD_DIR", "/data/documents/uploads")).resolve(),
+    max_upload_size_mb=int(os.environ.get("MAX_UPLOAD_SIZE_MB", "50")),
+    rabbitmq_queue_name=os.environ.get("RABBITMQ_QUEUE_NAME", "shortembeddings"),
 )
