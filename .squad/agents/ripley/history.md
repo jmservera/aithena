@@ -147,7 +147,71 @@
 
 **Plan written to:** `.squad/decisions/inbox/ripley-v060-release-plan.md`
 
+### 2026-03-15 — v0.6.0 Security Scanning PR Review (Round 3)
+
+**Context:** Reviewed 4 security scanning PRs implementing the SEC-1/2/3/4 specifications from v0.6.0 release plan.
+
+**PRs Reviewed:**
+- **PR #193** (SEC-1 Bandit) — Kane — ✅ APPROVED
+- **PR #192** (SEC-3 Zizmor) — Kane — ✅ APPROVED  
+- **PR #194** (SEC-4 OWASP ZAP Guide) — Kane — ✅ APPROVED
+- **PR #191** (SEC-2 Checkov) — Brett — ✅ APPROVED
+
+**Review Findings:**
+
+**PR #193 (SEC-1 Bandit):**
+- Configuration (.bandit): All required skip rules present (S101/S104/S603 from spec + S607/S108/S105/S106 for test scenarios)
+- Workflow: Valid YAML, correct triggers (push/PR to dev+main), non-blocking (continue-on-error), SARIF upload configured
+- Scans all Python services (document-indexer, document-lister, solr-search, admin, embeddings-server, e2e)
+- Artifact retention (30 days), concurrency control, proper permissions
+
+**PR #192 (SEC-3 Zizmor):**
+- Workflow: Valid YAML, path-filtered triggers (.github/workflows/**), non-blocking
+- Uses official zizmorcore/zizmor-action@v0.1.1 with advanced-security: true (SARIF auto-upload)
+- Focuses on P0 findings (template-injection, dangerous-triggers) per spec
+- Security best practice: persist-credentials: false on checkout
+
+**PR #194 (SEC-4 OWASP ZAP Guide):**
+- Comprehensive 907-line guide covering all spec requirements
+- Proxy setup (addresses port 8080 conflict with solr-search)
+- Manual explore phase, active scan configuration, complete endpoint inventory
+- **Docker Compose IaC review checklist** (compensates for checkov's docker-compose gap — critical addition)
+- Result interpretation (severity levels, CWE mapping), triage workflow, baseline exception template
+- Professional audit report template with example findings
+- Security README created as documentation index
+
+**PR #191 (SEC-2 Checkov):**
+- Configuration (.checkov.yml): Skip rules documented (CKV_DOCKER_2/3) with justifications
+- Workflow: Dual scans (Dockerfiles + GitHub Actions), soft_fail: true, SARIF upload
+- Correct triggers (Dockerfiles, workflows, docker-compose files)
+- Concurrency control, proper permissions
+
+**Verdict:** All 4 PRs approved with no changes requested. All workflows validated for:
+1. YAML syntax correctness
+2. Trigger configuration (push/PR to dev+main)
+3. Non-blocking execution (continue-on-error or soft_fail)
+4. SARIF upload to Code Scanning
+5. Correct permissions (contents read, security-events write)
+6. Target branch (all PRs target `dev`)
+
+**Key Observations:**
+1. **Kane's security expertise shows:** All 3 Kane PRs (bandit, zizmor, ZAP guide) demonstrate deep understanding of security tooling. The ZAP guide's Docker Compose IaC checklist fills a critical gap.
+2. **Brett's IaC knowledge applied:** Checkov skip justifications reference centralized health checks and base image defaults — correct architectural reasoning.
+3. **Spec compliance 100%:** All PRs implement exactly what was specified in the SEC-1/2/3/4 decisions, with appropriate baseline exceptions documented.
+4. **Documentation quality:** The OWASP ZAP guide (30KB+) is production-ready — actionable for beginners, references actual aithena architecture, includes audit report template.
+
+**Next Steps:**
+1. Merge order: Any order (no dependencies between these PRs)
+2. After merge: SEC-5 (issue #98) triage of actual findings
+3. Monitor CI: First workflow runs will require GitHub UI approval (new workflows)
+
 **Learnings:**
+
+1. **Review efficiency with distributed authorship:** When squad members (Kane, Brett) implement separate specs in parallel, reviews are faster because each PR has narrow scope and clear success criteria from the spec.
+2. **Documentation as implementation:** SEC-4 (ZAP guide) is "just docs" but required the same rigor as code — verified endpoint accuracy, architectural alignment, checklist completeness. The Docker Compose IaC review checklist is a critical addition that compensates for tooling gaps.
+3. **Non-blocking scanners require dual safeguards:** All workflows use both `continue-on-error: true` (job level) AND `--soft-fail`/`--exit-zero` (tool level) to ensure CI doesn't break. This belt-and-suspenders approach is correct for initial rollout.
+4. **Baseline exceptions must be documented upfront:** .bandit and .checkov.yml both include skip rules with justifications. This prevents alert fatigue and makes SEC-5 triage focused on real issues.
+5. **Path filtering reduces noise:** Zizmor only triggers on .github/workflows/** changes, checkov on Dockerfiles/workflows/docker-compose — this prevents unnecessary scans and speeds up CI.
 1. **Release planning benefits from clear theme** — "Production Hardening & Security" gives focus vs trying to do everything
 2. **Defer aggressively** — 13 Dependabot issues are noise if they're all LOW severity transitive deps; batch into dedicated sprint
 3. **Review gates prevent rework** — Parker/Dallas/Kane/Brett review on design BEFORE copilot implements saves iteration cycles

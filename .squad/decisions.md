@@ -2643,3 +2643,381 @@ Without these implementations, v0.6.0 is missing:
 - **v0.6.0 Group 1/2**: BLOCKED
 
 **Next Review**: After @copilot re-implements or work is reassigned to team member.
+
+---
+
+# 2026-03-15T11:25: SEC-1 Implementation — Bandit Python SAST
+
+**Date:** 2026-03-15  
+**Author:** Kane (Security Engineer)  
+**Issue:** #88  
+**PR:** #193  
+**Status:** ✅ Merged to dev
+
+## Decision
+
+Implemented bandit Python SAST scanning in CI with the following configuration:
+
+### Workflow Design
+- **File:** `.github/workflows/security-bandit.yml`
+- **Triggers:** Push and PR to dev/main branches
+- **Non-blocking:** Uses `continue-on-error: true` to prevent CI failures
+- **Permissions:** Includes `security-events: write` for SARIF upload
+- **Output:** SARIF format uploaded to GitHub Code Scanning + artifact storage (30 days)
+
+### Configuration File
+- **File:** `.bandit` (centralized config)
+- **Rationale:** Centralized config is more maintainable than inline command flags
+- **Exclusions:** `.venv`, `venv`, `site-packages`, `node_modules`, `__pycache__`
+- **Targets:** All Python source directories (document-indexer, document-lister, solr-search, admin, embeddings-server, e2e)
+
+### Baseline Skip Rules (7 rules, 60+ pattern instances)
+- **S101:** Use of assert detected - Required by pytest test framework
+- **S104:** Binding to 0.0.0.0 - Legitimate for containerized services
+- **S603:** subprocess call - Used in e2e tests with controlled input
+- **S607:** Partial executable path - Used in e2e tests
+- **S105:** Hardcoded password string - False positives in test data
+- **S106:** Hardcoded password function arg - False positives in test data
+- **S108:** Temp file usage - Legitimate test fixtures
+
+## Rationale
+
+1. **Non-blocking approach:** Allows security visibility without breaking CI, enabling gradual remediation
+2. **SARIF upload:** Integrates findings into GitHub Security tab for centralized tracking
+3. **Artifact retention:** 30-day SARIF storage enables historical analysis and compliance audits
+4. **Skip rules:** Balance security scanning with pytest conventions and containerized deployment patterns
+5. **Centralized config:** `.bandit` file provides single source of truth for baseline exceptions
+
+## Alternatives Considered
+
+1. **Inline skip flags in workflow:** Rejected - harder to maintain and audit
+2. **Per-directory scanning:** Rejected - single scan with exclusions is simpler
+3. **Blocking workflow:** Rejected - current codebase has legitimate patterns that would fail
+
+## Impact
+
+- **Positive:** Automated Python security scanning in CI pipeline
+- **Positive:** GitHub Code Scanning integration for security dashboard
+- **Positive:** Non-blocking ensures CI velocity maintained
+- **Risk:** Skip rules may hide real vulnerabilities - requires SEC-5 manual triage
+
+## Next Steps
+
+1. Monitor first workflow run on PR merge
+2. Review SARIF output in GitHub Security tab
+3. Proceed with SEC-5 (baseline tuning) to triage actual findings
+4. Document any HIGH/CRITICAL findings requiring fixes
+
+---
+
+# 2026-03-15T11:25: SEC-2 Implementation — Checkov IaC Scanning
+
+**Decision Owner:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-15  
+**Issue:** #89 (SEC-2: Add checkov IaC scanning to CI)  
+**PR:** #191  
+**Status:** ✅ Merged to dev
+
+## Context
+
+Part of the security scanning initiative (#88-#90) to harden the CI/CD pipeline with automated security checks for Infrastructure-as-Code (IaC). SEC-2 specifically addresses static analysis of Dockerfiles and GitHub Actions workflows using checkov.
+
+## Decision
+
+Implemented automated checkov scanning in GitHub Actions with the following design:
+
+### 1. Workflow Configuration (.github/workflows/security-checkov.yml)
+
+**Trigger Strategy:**
+- Push to `dev` and `main` branches
+- Pull requests targeting `dev` and `main`
+- **Path filtering:** Only trigger when relevant files change:
+  - `**/Dockerfile`
+  - `.github/workflows/**`
+  - `docker-compose*.yml`
+
+**Rationale:** Path filtering reduces CI minutes waste by avoiding scans on irrelevant changes (e.g., documentation, application code).
+
+**Execution Strategy:**
+- Two separate scan jobs:
+  1. Dockerfile scanning (`--framework dockerfile`)
+  2. GitHub Actions workflow scanning (`--framework github_actions`)
+- Both use `soft_fail: true` flag (non-blocking)
+- Both use `continue-on-error: true` in workflow steps
+- SARIF output uploaded to GitHub Security → Code Scanning
+
+**Rationale:** Separate jobs provide better visibility in GitHub Actions UI and allow framework-specific configuration if needed. Non-blocking design per SEC-2 spec ensures scans never block deployments.
+
+### 2. Configuration File (.checkov.yml)
+
+**Documented Skip Exceptions:**
+
+```yaml
+skip-check:
+  - CKV_DOCKER_2  # HEALTHCHECK instruction missing
+  - CKV_DOCKER_3  # USER instruction missing (container runs as root)
+```
+
+**Justifications:**
+
+- **CKV_DOCKER_2 (HEALTHCHECK):** Health checks are managed centrally in `docker-compose.yml` instead of individual Dockerfiles. This provides:
+  - Better orchestration control
+  - Environment-specific configurations
+  - Consistency across all services
+  - Easier maintenance (single source of truth)
+
+- **CKV_DOCKER_3 (USER):** Official base images (python:3.11-slim, node:20-alpine, solr:9) either:
+  - Run as non-root by default (e.g., node, solr)
+  - Require root privileges for package installation during build
+  - Application processes run with appropriate permissions via docker-compose `user:` directives or base image defaults
+
+**Rationale:** These exceptions are architectural decisions, not security gaps. Documenting them in configuration prevents alert fatigue and provides audit trail.
+
+### 3. SARIF Integration
+
+**Upload Strategy:**
+- Use `github/codeql-action/upload-sarif@v3`
+- Category: `checkov-iac`
+- Upload occurs even on step failure (`if: always()`)
+
+**Rationale:** Centralized security findings in GitHub Security tab enables:
+- Cross-repository security posture tracking
+- Trend analysis over time
+- Integration with security policies and compliance tools
+
+### 4. Docker Compose Manual Review
+
+**Decision:** Docker Compose files (`docker-compose*.yml`) are **not** scanned by checkov due to tool limitations (checkov lacks comprehensive Docker Compose framework support as of 2026-03).
+
+**Mitigation:** Manual review process documented in OWASP ZAP hardening guide (SEC-4, issue #90).
+
+**Rationale:** Attempting to scan Docker Compose with incomplete framework support would generate false positives and alert fatigue. Manual review process ensures coverage without automation noise.
+
+## Alternatives Considered
+
+1. **Blocking enforcement (soft_fail: false):**
+   - **Rejected:** Would block CI/CD on every finding, including false positives and low-priority issues. Not suitable for brownfield project with existing Dockerfiles.
+
+2. **Single combined scan job:**
+   - **Rejected:** Mixing Dockerfile and GitHub Actions scans in one job reduces visibility in GitHub Actions UI and makes it harder to track which framework generated findings.
+
+3. **Scan Docker Compose with checkov:**
+   - **Rejected:** Tool limitation. Manual review via ZAP guide provides better coverage for Docker Compose security.
+
+4. **No path filtering (scan on every push):**
+   - **Rejected:** Wastes CI minutes scanning when no IaC files changed. Path filtering is GitHub Actions best practice.
+
+## Implementation Notes
+
+**Files Created:**
+- `.github/workflows/security-checkov.yml` (78 lines)
+- `.checkov.yml` (30 lines)
+
+**Services Scanned:**
+- admin/Dockerfile
+- aithena-ui/Dockerfile
+- document-indexer/Dockerfile
+- document-lister/Dockerfile
+- embeddings-server/Dockerfile
+- solr-search/Dockerfile
+- All .github/workflows/*.yml files
+
+**Permissions Required:**
+```yaml
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+```
+
+**Python Version:** 3.11 (matches CI standard)
+
+## Validation
+
+- [x] Workflow syntax validated (GitHub Actions schema)
+- [x] Configuration file syntax validated (checkov YAML schema)
+- [x] Path filters tested (only triggers on Dockerfile/workflow/compose changes)
+- [x] Targets `dev` branch (squad branching strategy)
+- [x] Co-authored-by trailer included in commit
+
+## Impact
+
+**Security Posture:**
+- +Automated scanning for 6 Dockerfiles
+- +Automated scanning for 7 GitHub Actions workflows
+- +SARIF results uploaded to GitHub Security tab
+- +Non-blocking design prevents CI/CD disruption
+
+**CI/CD Pipeline:**
+- +1 workflow (security-checkov.yml)
+- +Path-filtered triggers (efficient CI minute usage)
+- +Step summary output for visibility
+
+**Maintenance:**
+- +Documented skip exceptions (audit trail)
+- +Framework configuration centralized in .checkov.yml
+
+## Future Work
+
+1. **Expand skip exceptions** as new Dockerfiles are added or checkov rules evolve
+2. **Add Docker Compose scanning** when checkov framework support matures
+3. **Integrate with branch protection** if team decides to enforce blocking mode for critical checks
+4. **Add custom checkov policies** for aithena-specific security requirements
+
+## References
+
+- SEC-2 specification: `.squad/decisions.md`
+- PR: #191 (squad/89-sec2-checkov-scanning → dev)
+- Related issues: #88 (SEC-1: bandit), #90 (SEC-4: ZAP guide)
+- Checkov documentation: https://www.checkov.io/
+
+---
+
+# 2026-03-15T11:25: SEC-4 Decision — OWASP ZAP Manual Audit Guide
+
+**Date:** 2026-03-15  
+**Author:** Kane (Security Engineer)  
+**Issue:** #97  
+**PR:** #194  
+**Status:** ✅ Merged to dev
+
+## Context
+
+Implementing SEC-4 from v0.6.0 security scanning plan. Created comprehensive OWASP ZAP manual security audit guide as the primary dynamic application security testing (DAST) methodology before release.
+
+## Decision
+
+Created 30KB+ OWASP ZAP audit guide (`docs/security/owasp-zap-audit-guide.md`) covering:
+
+1. **DAST Workflow** — Prerequisites, environment setup, proxy config, manual explore phase, active scan, result interpretation, reporting
+2. **Docker Compose IaC Review** — Manual checklist for `docker-compose.yml` security (compensates for checkov's lack of docker-compose support)
+
+## Rationale
+
+**Why OWASP ZAP:**
+- Industry-standard DAST tool (OWASP project)
+- Free and open source
+- Supports both manual exploration (guided crawling) and automated active scanning
+- Generates SARIF reports for CI/CD integration (future work)
+
+**Why Manual Guide (Not Automated):**
+- v0.6.0 has no authentication yet — ZAP automation scripts require authenticated sessions
+- Manual exploration captures nuanced UI workflows (React search, PDF viewer, admin dashboards)
+- Allows security engineer judgment for baseline exceptions vs. true findings
+- Educational — team learns DAST methodology, not just CI job results
+
+**Why Docker Compose IaC Review:**
+- Checkov 3.2.508 does not support `--framework docker-compose` (confirmed in SEC-2)
+- docker-compose.yml is critical infrastructure surface (ports, volumes, networks, secrets)
+- Manual checklist provides structured review until checkov adds support or alternate tool adopted
+
+## Key Decisions
+
+### 1. ZAP Proxy Port: 8090 (Not Default 8080)
+
+**Reason:** aithena's `solr-search` service uses port 8080 (docker-compose.override.yml). Running ZAP on 8090 avoids port conflict while still testing solr-search through nginx proxy.
+
+### 2. Manual Explore Phase: 15-30 Minutes
+
+**Scope:**
+- React UI (search, pagination, PDF viewer, edge cases)
+- Search API (Swagger UI, all endpoints with valid + malicious inputs)
+- Admin interfaces (Streamlit, Solr, RabbitMQ, Redis)
+- File upload (if applicable)
+
+**Reason:** Thorough crawling builds complete ZAP site map before active scan, ensuring all endpoints tested.
+
+### 3. Docker Compose IaC Checklist: 7 Categories
+
+**Categories:**
+1. Port exposure (dev vs. prod ports, unnecessary publications)
+2. Volume mounts (host path security, read-only configs)
+3. Network isolation (frontend/backend/data segmentation)
+4. Secrets in env vars (hardcoded credentials, .env usage)
+5. Image pinning (version tags, SHA digests)
+6. Container privileges (privileged, cap_add, security_opt)
+7. Restart policies (crash loops, one-time init)
+
+**Reason:** Comprehensive coverage of docker-compose attack surface. Checklist ensures consistent review across releases.
+
+### 4. Result Interpretation: Baseline Exception Workflow
+
+**Triage Levels:**
+- **HIGH/CRITICAL:** MUST fix or document baseline exception with justification
+- **MEDIUM:** Fix recommended; low-priority exceptions allowed (if low exploitability)
+- **LOW/INFO:** Optional fix; exceptions allowed
+
+**Baseline Exception Template:**
+- Finding ID, severity, CWE, endpoint
+- Reason for exception (e.g., "Admin endpoints internal-only, firewalled in prod")
+- Mitigating controls (network ACLs, deployment docs, future issues)
+- Approved by, date, review date
+
+**Reason:** Balances security rigor with pragmatic release velocity. Documents risk acceptance for audit trail.
+
+## Implementation Notes
+
+### Known Baseline Exceptions Documented
+
+**HIGH Severity:**
+1. Missing authentication on `/admin/solr/`, `/admin/rabbitmq/`, `/admin/redis/` — Known issue #98, deferred to v0.7.0 (production deploys firewall these endpoints)
+2. Default RabbitMQ credentials (`guest/guest`) — Known issue #98, deferred to v0.7.0
+3. Redis no authentication — Known issue #98, deferred to v0.7.0
+
+**MEDIUM Severity:**
+1. Missing Anti-clickjacking Header — Acceptable (nginx not security boundary yet)
+2. No Content Security Policy — NEW finding, recommend for v0.6.1/v0.7.0
+3. Missing X-Content-Type-Options — Acceptable (informational hardening)
+
+**Docker Compose Findings:**
+1. 10+ internal ports exposed in `docker-compose.override.yml` — Dev-only, verified not in production deploy
+2. Solr nodes publish 8983-8985 directly — Should be internal-only in prod (document in deployment guide)
+3. Images lack SHA digest pinning — Supply chain risk, recommend SHA pinning for v0.7.0
+4. `redis` image lacks explicit version tag — Recommend `redis:7.2-alpine`
+
+### Architecture References
+
+**Verified Accurate:**
+- docker-compose.yml (production config)
+- docker-compose.override.yml (dev port exposures)
+- nginx/default.conf (proxy routes: /, /v1/, /admin/streamlit/, /admin/solr/, /admin/rabbitmq/, /admin/redis/, /documents/, /solr/)
+- Service ports: nginx (80/443), solr-search (8080), streamlit (8501), Solr (8983-8985), RabbitMQ (15672), Redis (6379), ZooKeeper (18080/2181-2183)
+
+## Benefits
+
+1. **Release Gating:** OWASP ZAP audit now required before major releases (v0.X.0)
+2. **Team Education:** Step-by-step guide trains developers on DAST methodology
+3. **IaC Coverage Gap:** Docker Compose checklist fills checkov limitation
+4. **Baseline Documentation:** Audit report template standardizes risk acceptance process
+5. **Future Automation:** Guide lays groundwork for zap-baseline.py / zap-full-scan.py CI integration (after auth implemented)
+
+## Risks
+
+1. **Manual Process:** Relies on security engineer availability and discipline
+   - **Mitigation:** Guide is thorough enough for any team member to execute; consider rotating responsibility
+2. **Checkov Gap:** docker-compose.yml still needs manual review
+   - **Mitigation:** Checklist is comprehensive; revisit if checkov adds support or adopt alternative tool
+3. **No Authentication Testing:** Guide skips auth workflows (none implemented yet)
+   - **Mitigation:** v0.7.0 guide update will add authenticated scan instructions
+
+## Future Work
+
+1. **v0.6.1/v0.7.0:** Add Content Security Policy header (ZAP finding NEW)
+2. **v0.7.0:** Update guide for authenticated scans (after implementing /admin/* auth)
+3. **v0.7.0:** Pin Docker images to SHA digests (supply chain hardening)
+4. **v0.7.0+:** Automate ZAP baseline scan in CI (`zap-baseline.py` on PR builds)
+5. **v0.7.0+:** Implement network segmentation (frontend/backend/data networks in docker-compose)
+
+## Related
+
+- **SEC-1 (Bandit):** Python SAST, complements ZAP's DAST
+- **SEC-2 (Checkov):** IaC scanning (Dockerfile + GitHub Actions), manual Compose review
+- **SEC-3 (Zizmor):** GitHub Actions supply chain security
+- **SEC-5 (#98):** Security baseline triage (will reference ZAP findings + baseline exceptions)
+
+## Approval
+
+**Reviewed by:** Ripley (Lead)  
+**Status:** ✅ Approved for v0.6.0  
+**PR:** #194 (targeting dev)  
+**Next:** SEC-5 triage (bandit/checkov/zizmor findings → security baseline document)
