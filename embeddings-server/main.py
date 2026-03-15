@@ -57,6 +57,12 @@ class ModelInfo(BaseModel):
     embedding_dim: int
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint for container orchestration."""
+    return {"status": "healthy", "model": MODEL_NAME, "embedding_dim": embedding_dim}
+
+
 @app.get("/v1/embeddings/model")
 async def model_info() -> ModelInfo:
     """Returns the active embedding model name and its output dimension."""
