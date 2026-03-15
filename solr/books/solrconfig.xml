@@ -982,7 +982,7 @@ https://solr.apache.org/guide/solr/latest/configuration-guide/configuring-solrco
     <processor
       class="org.apache.solr.update.processor.LangDetectLanguageIdentifierUpdateProcessorFactory">
       <str name="langid.fl">content,_text_</str>
-      <str name="langid.langField">language_s</str>
+      <str name="langid.langField">language_detected_s</str>
       <str name="langid.fallback">en</str>
       <!--         <str name="langid.model">langdetect-183.bin</str> -->
     </processor>

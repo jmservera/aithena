@@ -11,6 +11,7 @@ REQUIRED_METADATA_KEYS = {
     "author",
     "year",
     "category",
+    "language",
     "file_path",
     "folder_path",
     "file_size",
