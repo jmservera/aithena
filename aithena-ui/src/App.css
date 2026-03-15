@@ -1243,3 +1243,241 @@
   color: #7ec8e3;
   font-weight: 500;
 }
+
+/* ── Upload page ───────────────────────────────────────────────── */
+
+.upload-page {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #343541;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.upload-container {
+  max-width: 600px;
+  width: 100%;
+}
+
+.upload-title {
+  margin: 0 0 12px;
+  font-size: 1.6em;
+  font-weight: 700;
+  color: #e8e8f0;
+  text-align: center;
+}
+
+.upload-description {
+  margin: 0 0 32px;
+  font-size: 0.95em;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+}
+
+.upload-dropzone {
+  background-color: #40414f;
+  border: 2px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 60px 40px;
+  text-align: center;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+
+.upload-dropzone--drag-over {
+  border-color: #7ec8e3;
+  background-color: rgba(126, 200, 227, 0.08);
+}
+
+.upload-dropzone--uploading {
+  border-color: rgba(255, 255, 255, 0.15);
+  background-color: #40414f;
+}
+
+.upload-dropzone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.upload-icon {
+  font-size: 4em;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.upload-prompt {
+  margin: 0;
+  font-size: 1em;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.upload-browse-button {
+  background: none;
+  border: none;
+  color: #7ec8e3;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  transition: color 0.15s;
+}
+
+.upload-browse-button:hover {
+  color: #9ed9ec;
+}
+
+.upload-hint {
+  margin: 0;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.upload-progress-spinner {
+  font-size: 3em;
+  line-height: 1;
+  animation: upload-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes upload-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.upload-progress-text {
+  margin: 0;
+  font-size: 1.1em;
+  color: #e8e8f0;
+  font-weight: 600;
+}
+
+.upload-progress-bar {
+  width: 100%;
+  max-width: 400px;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.upload-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7ec8e3 0%, #9ed9ec 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease-out;
+}
+
+.upload-progress-stats {
+  margin: 0;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: 'Courier New', monospace;
+}
+
+.upload-result {
+  background-color: #40414f;
+  border-radius: 12px;
+  padding: 48px 40px;
+  text-align: center;
+}
+
+.upload-result--success {
+  border: 2px solid rgba(80, 200, 120, 0.4);
+}
+
+.upload-result--error {
+  border: 2px solid rgba(255, 100, 100, 0.4);
+}
+
+.upload-result-icon {
+  font-size: 4em;
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.upload-result-title {
+  margin: 0 0 12px;
+  font-size: 1.4em;
+  font-weight: 700;
+  color: #e8e8f0;
+}
+
+.upload-result-message {
+  margin: 0 0 24px;
+  font-size: 1em;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.upload-result-details {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.upload-result-details p {
+  margin: 8px 0;
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.upload-result-details strong {
+  color: #e8e8f0;
+  margin-right: 8px;
+}
+
+.upload-result-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.upload-result-button {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.upload-result-button:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.upload-result-button--primary {
+  background-color: #7ec8e3;
+  color: #1a1a2e;
+  border-color: #7ec8e3;
+}
+
+.upload-result-button--primary:hover {
+  background-color: #9ed9ec;
+  border-color: #9ed9ec;
+}
