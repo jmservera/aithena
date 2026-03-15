@@ -194,3 +194,9 @@ REDIS_PORT=6379
 - Worker-style services (`document-indexer`, `document-lister`) should log version and commit at startup rather than exposing an HTTP endpoint.
 - The Streamlit admin surface shows the injected app version in the sidebar as `Admin v{VERSION}` so container builds expose release identity without extra API calls.
 
+### 2026-03-15 — Admin Streamlit Page Conventions (#203)
+
+- The admin dashboard is a Streamlit multipage app: `src/main.py` is the landing dashboard and each file in `admin/src/pages/` becomes a sidebar page automatically.
+- Shared admin service endpoints should be centralized in `admin/src/pages/shared/config.py`; the System Status page reads `SOLR_SEARCH_URL` there and defaults to `http://solr-search:8080`.
+- The `/v1/admin/containers` endpoint currently reports the admin container as `streamlit-admin`, so the UI should present that service as `admin` for operator-facing labels while keeping the backend contract untouched.
+
