@@ -13,7 +13,19 @@ services:
       interval: 5s
       timeout: 15s
       retries: 1
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       default:
         aliases:
@@ -37,7 +49,19 @@ services:
       timeout: 30s
       retries: 12
       start_period: 30s
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       default:
         aliases:
@@ -46,7 +70,26 @@ services:
     build: ./embeddings-server
     expose:
       - "8080"
-    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       default:
         aliases:
@@ -65,7 +108,25 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: on-failure
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - document-data:/data/documents
     networks:
@@ -83,15 +144,32 @@ services:
       - EMBEDDINGS_HOST=embeddings-server
       - EMBEDDINGS_PORT=8080
     restart: on-failure
+    stop_grace_period: 10s
     deploy:
       replicas: 1
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
       embeddings-server:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     volumes:
       - document-data:/data/documents:ro
     networks:
@@ -104,10 +182,31 @@ services:
       dockerfile: ./solr-search/Dockerfile
     expose:
       - "8080"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
-      - solr
-      - embeddings-server
+      solr:
+        condition: service_healthy
+      embeddings-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - PORT=8080
       - SOLR_URL=http://solr:8983/solr
@@ -124,12 +223,30 @@ services:
     build: ./admin
     expose:
       - "8501"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -143,10 +260,28 @@ services:
     image: rediscommander/redis-commander:latest
     expose:
       - "8081"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - REDIS_HOSTS=local:redis:6379
       - URL_PREFIX=/admin/redis
@@ -156,27 +291,64 @@ services:
     build: ./aithena-ui
     expose:
       - "80"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
-      - solr-search
+      solr-search:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - default
   nginx:
     image: nginx:1.15-alpine
     restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
       aithena-ui:
-        condition: service_started
+        condition: service_healthy
       solr-search:
-        condition: service_started
+        condition: service_healthy
       streamlit-admin:
-        condition: service_started
+        condition: service_healthy
       redis-commander:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       solr:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "80:80"
       - "443:443"
@@ -215,6 +387,19 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   zoo2:
     image: zookeeper:3.9
     expose:
@@ -236,6 +421,19 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   zoo3:
     image: zookeeper:3.9
     expose:
@@ -257,12 +455,26 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   solr:
     image: solr:9.7
     # build:
     #   context: .
     #   dockerfile: ./solr/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     volumes:
       - solr-data:/var/solr/data
       - document-data:/data/documents:ro
@@ -279,6 +491,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # command: solr-precreate -c books
     depends_on:
       zoo1:
@@ -294,6 +518,7 @@ services:
     #   context: .
     #   dockerfile: ./solr/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     volumes:
       - solr-data2:/var/solr/data
       - document-data:/data/documents:ro
@@ -308,6 +533,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     #command: solr-create -c books
     depends_on:
       zoo1:
@@ -324,6 +561,7 @@ services:
     #   context: .
     #   dockerfile: ./solr/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     volumes:
       - solr-data3:/var/solr/data
       - document-data:/data/documents:ro
@@ -338,6 +576,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     #command: solr-create -c books
     depends_on:
       zoo1:
