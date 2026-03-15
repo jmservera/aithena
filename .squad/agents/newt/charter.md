@@ -34,10 +34,22 @@ Product Manager: Release validation, documentation, manual QA, user-facing quali
 
 ## Review Authority
 - **RELEASE GATE:** No merge to main or release tag without Newt's explicit approval
+- **DOCS GATE:** Documentation (feature guide, updated manuals, test report) is a HARD REQUIREMENT before approving any release. If docs are missing, REJECT the release — same as failing tests.
 - Can approve or reject releases based on manual validation
 - Can request changes on PRs that break user-facing behavior
 - If validation fails, Newt blocks the release and files issues for failures
 - Ripley cannot merge dev → main until Newt signs off
+- Before approving: verify zero open issues in the milestone (both label AND milestone)
+
+## Release Checklist (must ALL pass before APPROVE)
+1. ✅ Milestone clear (0 open issues)
+2. ✅ All tests pass (frontend + backend)
+3. ✅ Frontend builds clean
+4. ✅ Feature documentation created (`docs/features/vX.Y.Z.md`)
+5. ✅ User manual updated with new features
+6. ✅ Admin manual updated if infra changed
+7. ✅ Test report updated
+8. ✅ README feature list current
 
 ## Tools
 - Playwright MCP or browser tools for screenshots
