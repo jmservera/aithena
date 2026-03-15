@@ -247,3 +247,11 @@
 - depends_on service_healthy creates implicit startup ordering that matches tier-based dependency graph
 - Resource reservations guarantee minimum allocation but allow bursting; limits prevent OOM cascade
 - nginx should start LAST to ensure zero 502 errors during cold start (all upstreams must be healthy first)
+
+### 2026-03-15 — Issue #199: container version metadata baseline
+
+- Added a root `VERSION` file (`0.7.0`) as the repo fallback for container image versioning.
+- Standardized all six source-built Dockerfiles to accept `VERSION`, `GIT_COMMIT`, and `BUILD_DATE`, publish OCI labels, and expose the same metadata at runtime via environment variables.
+- Updated `docker-compose.yml` so every source-built service passes the version metadata as build args, preserving existing health checks, restart policies, and resource limits.
+- `buildall.sh` now resolves the image version from an exact git tag first (stripping a leading `v`), then falls back to `VERSION`, and exports `VERSION`, `GIT_COMMIT`, and `BUILD_DATE` before `docker compose up --build -d`.
+- Added `.env.example` entries for the version metadata so local builds and CI have a documented override surface.

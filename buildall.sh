@@ -4,6 +4,29 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+VERSION_FILE="$SCRIPT_DIR/VERSION"
+
+if git_tag="$(git describe --tags --exact-match 2>/dev/null)"; then
+  VERSION="${git_tag#v}"
+elif [[ -f "$VERSION_FILE" ]]; then
+  VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+else
+  VERSION="dev"
+fi
+
+if [[ -z "$VERSION" ]]; then
+  VERSION="dev"
+fi
+
+GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || printf 'unknown')"
+BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+export VERSION GIT_COMMIT BUILD_DATE
+
+echo "Building version ${VERSION}"
+echo "Git commit: ${GIT_COMMIT}"
+echo "Build date: ${BUILD_DATE}"
+
 python_service_dirs=(
   "admin"
   "document-indexer"

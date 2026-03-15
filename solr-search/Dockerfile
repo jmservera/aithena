@@ -1,6 +1,23 @@
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+
 FROM python:3.11-slim-bookworm
-ENV PYTHONUNBUFFERED=1
-ENV PORT=8080
+
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_DATE
+
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/jmservera/aithena" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}"
+
+ENV VERSION=${VERSION} \
+    GIT_COMMIT=${GIT_COMMIT} \
+    BUILD_DATE=${BUILD_DATE} \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
