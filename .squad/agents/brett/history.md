@@ -136,3 +136,32 @@
 **Implementation Order:** Port fix → health endpoints → health checks → restart/limits/grace → depends_on fixes → log rotation → documentation
 
 **Next:** Awaiting Juanma approval of release plan → Groups 1-5 execution → Issue #52 created + assigned → Implementation
+
+### 2026-03-15 — SEC-2 Implementation: Checkov IaC Scanning
+
+**Summary:** Implemented issue #89 (SEC-2) to add automated IaC security scanning to CI pipeline using checkov.
+
+**Deliverables (PR #191):**
+- `.github/workflows/security-checkov.yml`: GitHub Actions workflow for checkov scanning
+  - Scans all Dockerfiles (admin, aithena-ui, document-indexer, document-lister, embeddings-server, solr-search)
+  - Scans GitHub Actions workflow files (.github/workflows/*.yml)
+  - Runs in `soft_fail` mode (non-blocking, per SEC-2 spec)
+  - Outputs SARIF results and uploads to GitHub Code Scanning
+  - Path-filtered triggers: only runs when Dockerfiles, workflows, or docker-compose files change
+- `.checkov.yml`: Configuration with documented skip exceptions
+  - `CKV_DOCKER_2` (HEALTHCHECK): Health checks managed centrally in docker-compose.yml
+  - `CKV_DOCKER_3` (USER): Official base images run as non-root by default
+
+**Key Design Decisions:**
+- **Non-blocking enforcement:** `soft_fail: true` + `continue-on-error: true` ensures scans never block CI/CD
+- **Path filtering:** Workflow only triggers on relevant file changes (Dockerfiles, .github/workflows/*, docker-compose*.yml) to avoid wasting CI minutes
+- **SARIF integration:** Results uploaded to GitHub Security tab for centralized vulnerability tracking
+- **Documented exceptions:** All skip rules include detailed justifications in .checkov.yml comments
+
+**Validation:**
+- Workflow syntax validated (GitHub Actions YAML structure correct)
+- Configuration follows checkov best practices (framework specification, skip-check array format)
+- PR targets `dev` branch per squad branching strategy
+
+**Branch:** squad/89-sec2-checkov-scanning → dev
+**Status:** PR #191 open, awaiting review
