@@ -1,15 +1,13 @@
 # Bandit security scanning configuration
 # Baseline exceptions for legitimate patterns
 
-[bandit]
 # Exclude virtual environments and third-party code
-exclude_dirs = [
-    '.venv',
-    'venv',
-    'site-packages',
-    'node_modules',
-    '__pycache__'
-]
+exclude_dirs:
+  - .venv
+  - venv
+  - site-packages
+  - node_modules
+  - __pycache__
 
 # Skip rules for legitimate patterns
 # S101: Use of assert detected (required by pytest)
@@ -19,15 +17,11 @@ exclude_dirs = [
 # S108: Probable insecure usage of temp file/directory (test fixtures)
 # S105: Possible hardcoded password string (often false positives in test data)
 # S106: Possible hardcoded password function argument (often false positives)
-skips = S101,S104,S603,S607,S108,S105,S106
-
-# Scan all Python source directories
-targets = [
-    'document-indexer/document_indexer',
-    'document-indexer/tests',
-    'document-lister',
-    'solr-search',
-    'admin/src',
-    'embeddings-server',
-    'e2e'
-]
+skips:
+  - S101
+  - S104
+  - S603
+  - S607
+  - S108
+  - S105
+  - S106
