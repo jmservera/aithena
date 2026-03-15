@@ -25,3 +25,4 @@
 - The Docker Compose stack mounts the library through `BOOKS_PATH` into `/data/documents`, and `document-lister` scans `*.pdf` files every 60 seconds into the `shortembeddings` RabbitMQ queue.
 
 <!-- Append learnings below -->
+- v0.5.0 documentation had to be backfilled after release approval; this was a process failure. Newt must not approve a release until the feature guide, manual updates, and current test report are written and committed first.

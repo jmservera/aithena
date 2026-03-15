@@ -1,20 +1,22 @@
 # Aithena — Book Library Search Engine
 
-A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports semantic search via embeddings.
+A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
 ## What It Does
 
 - **Indexes multilingual texts** (Spanish, Catalan, French, English, including ancient/OCR texts)
 - **Extracts metadata** from filesystem paths: author, title, publication year, category
 - **Performs full-text search** via Solr with multilingual analyzers
-- **Detects language** automatically using `langid`
-- **Prepares for semantic search** with pre-extracted embeddings (Phase 2+)
+- **Supports semantic and hybrid search** with multilingual embeddings
+- **Detects language** from folder structure plus Solr `langid` processing
 
 ## Features
 
-- **Search page** for keyword search across indexed title, author, and full-text content
+- **Search page** for keyword, semantic, and hybrid search across indexed title, author, and full-text content
 - **Facet filtering** by author, category, language, and year
+- **Similar Books panel** that appears after opening a PDF and recommends semantically related titles
 - **PDF viewer** that opens from search results and jumps to the matched page when page metadata exists
+- **Admin tab** with an embedded Streamlit dashboard for queue visibility and document requeue/clear actions
 - **Status tab** with indexing progress plus Solr, Redis, and RabbitMQ health, refreshing every 10 seconds
 - **Stats tab** with indexed-book totals, page-count statistics, and breakdowns by language, author, year, and category
 
@@ -22,7 +24,9 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
+- [v0.5.0 Feature Guide](docs/features/v0.5.0.md)
 - [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
+- [v0.5.0 Test Report](docs/test-report-v0.5.0.md)
 
 ## Architecture
 
@@ -151,8 +155,9 @@ See [`solr/README.md`](solr/README.md) for schema design details. The FastAPI se
 ### Testing
 
 ```bash
-cd document-indexer
-python3 -m pytest tests/ -v
+cd solr-search && uv run pytest -v --tb=short
+cd document-indexer && uv run pytest -v --tb=short
+cd aithena-ui && npx vitest run
 ```
 
 ### E2E Tests

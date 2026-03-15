@@ -1,16 +1,18 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For a release-focused summary, see the [v0.4.0 Feature Guide](features/v0.4.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For a release-focused summary, see the [v0.5.0 Feature Guide](features/v0.5.0.md).
 
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
 
-- search by keyword
+- search by keyword, semantic meaning, or a hybrid of both
 - narrow results with facets
 - open PDFs directly from search results
+- use Similar Books recommendations after opening a document
 - check system health in the Status tab
 - view library-wide statistics in the Stats tab
+- open the Admin tab to load the embedded operator dashboard when you need admin tools
 
 ### How to access it
 
@@ -36,7 +38,23 @@ The **Search** tab is the main place to work.
 
 1. Open **Search**.
 2. Enter one or more keywords.
-3. Click **Search**.
+3. Pick a search mode if you want something other than the default.
+4. Click **Search**.
+
+### Search modes
+
+Use the mode buttons beside the search box to switch between:
+
+- **Keyword** — best for exact words, known titles, author names, and traditional full-text lookup.
+- **Semantic** — best when you want books that are conceptually related to a phrase or topic, even if they do not share the exact same wording.
+- **Hybrid** — combines both approaches and is usually the best starting point when you want broad discovery with some precision.
+
+Important behavior in the shipped UI:
+
+- **Keyword** is the default mode when the page opens.
+- Switching modes keeps your current query but resets results back to page 1.
+- The current mode is shown again next to the result count as a badge.
+- Semantic and hybrid search require a real query. If embeddings are not ready yet, the page shows an inline error instead of silently failing.
 
 ### What your keywords can match
 
@@ -134,6 +152,28 @@ You can close the PDF overlay by:
 
 If the embedded viewer cannot display the file, Aithena shows a fallback link so you can try opening the PDF in a new browser tab.
 
+## Finding similar books
+
+The **Similar Books** panel appears after you open a book from the search results.
+
+### Where to find it
+
+1. Run any search.
+2. Click **📄 Open PDF** on a result.
+3. Look below the search results area for the **Similar Books** panel.
+
+### How it works
+
+- The panel loads up to **5** semantically related books for the document you just opened.
+- Each card shows the title, author, optional year/category, and a rounded match score such as **91% match**.
+- While the request is running, the page shows loading text and placeholder cards.
+- If no recommendations are available, the panel says **No similar books found**.
+- If the request fails, the page shows a friendly message instead of breaking the rest of the search UI.
+
+### How to use recommendations
+
+Click any similar-book card to replace the currently selected PDF with that recommendation. This makes it easy to explore related titles without starting a new search from scratch.
+
 ## Understanding the Status tab
 
 The **Status** tab is a quick health dashboard.
@@ -190,6 +230,24 @@ The Stats tab loads when you open it. If new books have been indexed since the p
 
 ![Stats tab](images/stats-tab.png)
 
+## Using the Admin tab
+
+The **🛠️ Admin** tab opens an embedded operator dashboard inside the Aithena app.
+
+### What it shows
+
+The embedded Streamlit dashboard currently includes:
+
+- **Total Documents**, **Queued**, **Processed**, and **Failed** counters
+- **RabbitMQ Queue** metrics for ready, unacknowledged, and total messages
+- sidebar access to **Document Manager**, where operators can inspect queued, processed, and failed documents and trigger requeue or clear actions
+
+### What to expect
+
+- The Admin tab loads `/admin/streamlit/` inside the app rather than sending you to a different product.
+- It is mainly intended for operators and library administrators, not day-to-day readers.
+- If the dashboard cannot load, contact your administrator to confirm the admin services are running.
+
 ## Tips and tricks
 
 - Start broad, then narrow with facets.
@@ -202,4 +260,4 @@ The Stats tab loads when you open it. If new books have been indexed since the p
 ## Need more help?
 
 - For deployment and troubleshooting: [Admin Manual](admin-manual.md)
-- For release documentation and screenshots: [v0.4.0 Feature Guide](features/v0.4.0.md)
+- For release documentation and screenshots: [v0.5.0 Feature Guide](features/v0.5.0.md)

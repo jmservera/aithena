@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the release-facing feature summary, see the [v0.4.0 Feature Guide](features/v0.4.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the release-facing feature summary, see the [v0.5.0 Feature Guide](features/v0.5.0.md).
 
 ## System architecture overview
 
@@ -34,6 +34,20 @@ At a high level:
 3. `document-indexer` consumes queue messages and writes metadata plus extracted content into Solr.
 4. `solr-search` serves search results, PDF document links, status, and stats.
 5. `aithena-ui` and `nginx` present the user-facing application.
+
+### Pipeline dependency ordering (v0.5.0)
+
+The v0.5.0 Compose update tightens startup ordering so pipeline services wait for healthy dependencies instead of merely started containers.
+
+Current shipped behavior:
+
+- `document-lister` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
+- `document-indexer` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
+- `streamlit-admin` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
+- `redis-commander` waits for **Redis** health
+- `nginx` also waits for **RabbitMQ** health before exposing the admin surfaces
+
+This reduces startup races where the lister, indexer, or admin tools could come up before the queue or cache was actually ready.
 
 ## Deployment with Docker Compose
 
@@ -164,6 +178,44 @@ That means every service using `/data/documents` is reading from the same mounte
 - Solr nodes set `SOLR_MODULES=extraction,langid` and `ZK_HOST=zoo1:2181,zoo2:2181,zoo3:2181`
 - ZooKeeper nodes set `ZOO_4LW_COMMANDS_WHITELIST`, `ZOO_MY_ID`, and `ZOO_SERVERS`
 
+### RabbitMQ startup hardening (v0.5.0)
+
+The Compose definition now pins RabbitMQ to:
+
+- `rabbitmq:3.13-management`
+
+It also adds a more realistic health check:
+
+- command: `rabbitmqctl ping`
+- `interval: 10s`
+- `timeout: 30s`
+- `retries: 12`
+- `start_period: 30s`
+
+Additional runtime settings now include:
+
+- `RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6`
+- `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000`
+
+Operationally, this means RabbitMQ is given time to finish booting before Compose marks it unhealthy, and dependent services can safely rely on `service_healthy` ordering.
+
+### Language detection (v0.5.0)
+
+Language metadata now comes from two coordinated sources:
+
+1. **Solr langid** writes content-based detection into `language_detected_s`.
+2. **document-indexer** inspects folder names and writes recognized ISO 639-1 language folders into `language_s`.
+
+Examples of recognized top-level folders include `ca`, `es`, `fr`, `en`, and `la`.
+
+Why this matters:
+
+- prior to the fix, Solr's langid processor was aligned to the wrong field name,
+- folder-based language hints were not being captured at all,
+- the search API now reads language values with a `language_detected_s` first / `language_s` fallback for filters and normalized results.
+
+This improves language facets and search filters for libraries organized as `<language>/<category>/<author>/file.pdf`.
+
 ## Monitoring
 
 ### Use the Status tab
@@ -226,6 +278,43 @@ docker compose logs --tail=100 solr
 docker compose logs --tail=100 document-indexer
 docker compose logs --tail=100 document-lister
 ```
+
+## Full reindex procedure after the language fix
+
+Run a full reindex after deploying the v0.5.0 language detection changes so existing books are rebuilt with the corrected language fields.
+
+### Why the reindex is necessary
+
+Older documents may have been indexed before:
+
+- Solr's detected-language field was aligned to `language_detected_s`, and
+- folder-derived language hints were written into `language_s`.
+
+Without a reindex, language filters and language-facing reports can mix old and new metadata.
+
+### Recommended operator workflow
+
+1. Confirm the stack is healthy:
+   ```bash
+   docker compose ps
+   ```
+2. Open the embedded admin dashboard at **Admin** in the UI or directly at `http://localhost/admin/streamlit/`.
+3. In **Document Manager → Processed**, click **🗑️ Clear All** and confirm. This removes the Redis processed-state entries so the lister will rediscover the files.
+4. In **Document Manager → Failed**, click **🔄 Requeue All** if any failed documents are present.
+5. Wait for the next lister scan (default: **60 seconds**) or restart the lister/indexer services if you need the cycle to begin immediately.
+6. Watch progress from:
+   - the **Status** tab,
+   - the **Admin** dashboard counters,
+   - `docker compose logs --tail=100 document-lister document-indexer`
+7. Verify the rebuilt collection through the API:
+   ```bash
+   curl http://localhost/v1/stats/
+   curl "http://localhost/v1/search/?q=historia&fq_language=ca"
+   ```
+
+### Why this is safe
+
+The indexer uses deterministic document IDs derived from the file path, and chunk IDs are derived from that same parent ID plus the chunk index. Reindexing therefore refreshes the existing documents in place instead of creating duplicates for unchanged files.
 
 ## Troubleshooting common issues
 
