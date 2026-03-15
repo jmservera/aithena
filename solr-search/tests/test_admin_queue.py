@@ -14,6 +14,7 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 os.environ.setdefault("UPLOAD_DIR", "/tmp/test_uploads_admin")
+# QUEUE_NAME drives admin_queue_name; RABBITMQ_QUEUE_NAME is the upload queue name
 os.environ.setdefault("RABBITMQ_QUEUE_NAME", "shortembeddings")
 os.environ.setdefault("QUEUE_NAME", "shortembeddings")
 

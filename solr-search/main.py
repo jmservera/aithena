@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import contextlib
 import hashlib
 import json
@@ -808,7 +810,8 @@ def _get_admin_queue_documents() -> dict[str, list[dict[str, Any]]]:
             return {"queued": queued, "processed": processed, "failed": failed}
 
         values = client.mget(keys)
-        for key, raw in zip(keys, values, strict=False):
+        # mget returns one value per key in the same order; strict=True detects any mismatch
+        for key, raw in zip(keys, values, strict=True):
             if raw is None:
                 continue
             try:
@@ -831,20 +834,16 @@ def _get_admin_queue_documents() -> dict[str, list[dict[str, Any]]]:
 
 def _encode_queue_key(redis_key: str) -> str:
     """URL-safe base64 encode a Redis key for use in path parameters."""
-    import base64
-
     return base64.urlsafe_b64encode(redis_key.encode()).decode().rstrip("=")
 
 
 def _decode_queue_key(encoded: str) -> str:
     """Decode a URL-safe base64-encoded Redis key."""
-    import base64
-
     # Restore padding
     padded = encoded + "=" * (-len(encoded) % 4)
     try:
         return base64.urlsafe_b64decode(padded).decode()
-    except Exception as exc:
+    except (binascii.Error, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Invalid document key encoding") from exc
 
 
