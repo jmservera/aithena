@@ -36,6 +36,12 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-15 — Admin Containers Endpoint Contract (#202)
+
+- `solr-search` now exposes `GET /v1/admin/containers` (and trailing-slash alias) to aggregate container health/version data across app services, workers, and infrastructure.
+- HTTP services should be queried in parallel with a 2s timeout; `embeddings-server` uses `/version`, while non-HTTP services (`streamlit-admin`, `aithena-ui`) reuse shared build metadata (`VERSION`, `GIT_COMMIT`) plus TCP reachability.
+- Worker processes (`document-indexer`, `document-lister`) report `status: "unknown"` with shared repo version/commit because they do not expose stable runtime probes in codespaces without Docker runtime metadata.
+
 ### 2026-03-15 — Embeddings Container Contract
 
 - `embeddings-server` must run the repo's FastAPI app, not the Weaviate inference image, because downstream services expect `POST /v1/embeddings/` in OpenAI-compatible batch format.

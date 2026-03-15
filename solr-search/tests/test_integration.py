@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -1041,6 +1042,162 @@ def test_status_services_down_when_tcp_fails(
     assert data["services"]["solr"] == "down"
     assert data["services"]["redis"] == "down"
     assert data["services"]["rabbitmq"] == "down"
+
+
+def _container_by_name(containers: list[dict[str, str]], name: str) -> dict[str, str]:
+    return next(container for container in containers if container["name"] == name)
+
+
+@patch("main._tcp_check", return_value=True)
+@patch("main.requests.get")
+def test_admin_containers_endpoint_happy_path(
+    mock_requests_get: MagicMock,
+    _mock_tcp: MagicMock,
+) -> None:
+    """GET /v1/admin/containers returns all services with shared build metadata and health."""
+
+    def side_effect(url: str, *args: object, **kwargs: object) -> MagicMock:
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        if url.endswith("/admin/collections"):
+            response.json.return_value = {
+                "cluster": {
+                    "live_nodes": ["node1", "node2", "node3"],
+                    "collections": {
+                        "books": {
+                            "shards": {
+                                "shard1": {"replicas": {"replica1": {"index": {"numDocs": 76}}}}
+                            }
+                        }
+                    },
+                }
+            }
+            return response
+        if url.endswith("/version") and "embeddings-server" in url:
+            response.json.return_value = {
+                "service": "embeddings-server",
+                "version": "0.7.0",
+                "commit": "abc1234",
+                "built": "2026-03-15T00:00:00Z",
+            }
+            return response
+        raise AssertionError(f"Unexpected URL {url}")
+
+    mock_requests_get.side_effect = side_effect
+
+    client = get_client()
+    response = client.get("/v1/admin/containers")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total"] == 10
+    assert data["healthy"] == 8
+    assert data["last_updated"].endswith("Z")
+
+    solr_search = _container_by_name(data["containers"], "solr-search")
+    assert solr_search == {
+        "name": "solr-search",
+        "status": "up",
+        "type": "service",
+        "version": settings.version,
+        "commit": settings.commit,
+    }
+
+    embeddings = _container_by_name(data["containers"], "embeddings-server")
+    assert embeddings == {
+        "name": "embeddings-server",
+        "status": "up",
+        "type": "service",
+        "version": "0.7.0",
+        "commit": "abc1234",
+    }
+
+    assert _container_by_name(data["containers"], "streamlit-admin") == {
+        "name": "streamlit-admin",
+        "status": "up",
+        "type": "service",
+        "version": settings.version,
+        "commit": settings.commit,
+    }
+    assert _container_by_name(data["containers"], "aithena-ui") == {
+        "name": "aithena-ui",
+        "status": "up",
+        "type": "service",
+        "version": settings.version,
+        "commit": settings.commit,
+    }
+    assert _container_by_name(data["containers"], "document-indexer") == {
+        "name": "document-indexer",
+        "status": "unknown",
+        "type": "worker",
+        "version": settings.version,
+        "commit": settings.commit,
+    }
+    assert _container_by_name(data["containers"], "document-lister") == {
+        "name": "document-lister",
+        "status": "unknown",
+        "type": "worker",
+        "version": settings.version,
+        "commit": settings.commit,
+    }
+    assert _container_by_name(data["containers"], "solr") == {
+        "name": "solr",
+        "status": "up",
+        "type": "infrastructure",
+        "version": "unknown",
+        "commit": "unknown",
+    }
+    assert _container_by_name(data["containers"], "redis")["status"] == "up"
+    assert _container_by_name(data["containers"], "rabbitmq")["status"] == "up"
+    assert _container_by_name(data["containers"], "nginx")["status"] == "up"
+
+
+@patch("main.requests.get")
+def test_admin_containers_endpoint_degraded_path(mock_requests_get: MagicMock) -> None:
+    """GET /v1/admin/containers marks failed checks down while workers remain unknown."""
+
+    def requests_side_effect(url: str, *args: object, **kwargs: object) -> MagicMock:
+        if url.endswith("/admin/collections"):
+            raise Exception("solr unavailable")
+        if url.endswith("/version") and "embeddings-server" in url:
+            raise Exception("embeddings unavailable")
+        raise AssertionError(f"Unexpected URL {url}")
+
+    def tcp_side_effect(host: str, port: int, timeout: float = 2.0) -> bool:
+        host_statuses = {
+            "streamlit-admin": False,
+            settings.redis_host: True,
+            settings.rabbitmq_host: False,
+            "aithena-ui": True,
+            "nginx": True,
+            urlparse(settings.solr_url).hostname or settings.solr_url: False,
+        }
+        return host_statuses[host]
+
+    mock_requests_get.side_effect = requests_side_effect
+
+    with patch("main._tcp_check", side_effect=tcp_side_effect):
+        client = get_client()
+        response = client.get("/v1/admin/containers/")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total"] == 10
+    assert data["healthy"] == 4
+    assert _container_by_name(data["containers"], "embeddings-server") == {
+        "name": "embeddings-server",
+        "status": "down",
+        "type": "service",
+        "version": "unknown",
+        "commit": "unknown",
+    }
+    assert _container_by_name(data["containers"], "streamlit-admin")["status"] == "down"
+    assert _container_by_name(data["containers"], "solr")["status"] == "down"
+    assert _container_by_name(data["containers"], "rabbitmq")["status"] == "down"
+    assert _container_by_name(data["containers"], "document-indexer")["status"] == "unknown"
+    assert _container_by_name(data["containers"], "document-lister")["status"] == "unknown"
 
 
 def test_get_solr_status_on_connection_error() -> None:

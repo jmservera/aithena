@@ -9,7 +9,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
@@ -643,6 +643,143 @@ def service_status() -> dict[str, Any]:
             "redis": "up" if redis_up else "down",
             "rabbitmq": "up" if rabbitmq_up else "down",
         },
+    }
+
+
+CONTAINER_VERSION_TIMEOUT = 2.0
+
+
+def _build_container_entry(
+    name: str,
+    status: str,
+    container_type: str,
+    version: str = "unknown",
+    commit: str = "unknown",
+) -> dict[str, str]:
+    return {
+        "name": name,
+        "status": status,
+        "type": container_type,
+        "version": version,
+        "commit": commit,
+    }
+
+
+def _get_embeddings_version_url() -> str:
+    embeddings_url = settings.embeddings_url
+    if not embeddings_url.startswith(("http://", "https://")):
+        embeddings_url = f"http://{embeddings_url}"
+
+    parsed = urlparse(embeddings_url)
+    scheme = parsed.scheme or "http"
+    host = parsed.hostname or "embeddings-server"
+    port = f":{parsed.port}" if parsed.port else ""
+    return f"{scheme}://{host}{port}/version"
+
+
+def _get_http_container_status(
+    name: str,
+    version_url: str,
+    container_type: str = "service",
+    timeout: float = CONTAINER_VERSION_TIMEOUT,
+) -> dict[str, str]:
+    try:
+        response = requests.get(version_url, timeout=timeout)
+        response.raise_for_status()
+        payload = response.json()
+        return _build_container_entry(
+            name=name,
+            status="up",
+            container_type=container_type,
+            version=str(payload.get("version") or "unknown"),
+            commit=str(payload.get("commit") or "unknown"),
+        )
+    except Exception:
+        return _build_container_entry(name=name, status="down", container_type=container_type)
+
+
+def _get_tcp_container_status(
+    name: str,
+    host: str,
+    port: int,
+    container_type: str,
+    version: str = "unknown",
+    commit: str = "unknown",
+) -> dict[str, str]:
+    status = "up" if _tcp_check(host, port) else "down"
+    return _build_container_entry(name, status, container_type, version, commit)
+
+
+def _get_worker_container_status(name: str) -> dict[str, str]:
+    return _build_container_entry(
+        name=name,
+        status="unknown",
+        container_type="worker",
+        version=settings.version,
+        commit=settings.commit,
+    )
+
+
+def _get_solr_container_status() -> dict[str, str]:
+    parsed = urlparse(settings.solr_url)
+    solr_host = parsed.hostname or settings.solr_url
+    solr_port = parsed.port or 8983
+    solr_info = _get_solr_status(settings.solr_url, timeout=CONTAINER_VERSION_TIMEOUT)
+    status = "up" if _tcp_check(solr_host, solr_port) and solr_info["status"] != "error" else "down"
+    return _build_container_entry("solr", status, "infrastructure")
+
+
+@app.get("/v1/admin/containers/", include_in_schema=False, name="admin_containers_v1_slash")
+@app.get("/v1/admin/containers", name="admin_containers_v1")
+def admin_containers() -> dict[str, Any]:
+    """Return a combined version/health snapshot for app and infrastructure containers."""
+    checks = [
+        lambda: _build_container_entry(
+            "solr-search",
+            "up",
+            "service",
+            settings.version,
+            settings.commit,
+        ),
+        lambda: _get_http_container_status("embeddings-server", _get_embeddings_version_url()),
+        lambda: _get_tcp_container_status(
+            "streamlit-admin",
+            "streamlit-admin",
+            8501,
+            "service",
+            settings.version,
+            settings.commit,
+        ),
+        lambda: _get_tcp_container_status(
+            "aithena-ui",
+            "aithena-ui",
+            80,
+            "service",
+            settings.version,
+            settings.commit,
+        ),
+        lambda: _get_worker_container_status("document-indexer"),
+        lambda: _get_worker_container_status("document-lister"),
+        _get_solr_container_status,
+        lambda: _get_tcp_container_status("redis", settings.redis_host, settings.redis_port, "infrastructure"),
+        lambda: _get_tcp_container_status(
+            "rabbitmq",
+            settings.rabbitmq_host,
+            settings.rabbitmq_port,
+            "infrastructure",
+        ),
+        lambda: _get_tcp_container_status("nginx", "nginx", 80, "infrastructure"),
+    ]
+
+    with ThreadPoolExecutor(max_workers=len(checks)) as pool:
+        containers = [future.result() for future in [pool.submit(check) for check in checks]]
+
+    healthy = sum(1 for container in containers if container["status"] == "up")
+    return {
+        "containers": containers,
+        "last_updated": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "total": len(containers),
+        "healthy": healthy,
     }
 
 
