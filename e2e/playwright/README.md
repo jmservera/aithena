@@ -10,6 +10,8 @@ This suite exercises the React UI against a running local Aithena stack without 
 - Tab navigation across Search, Library, Status, and Stats
 - Search page empty state
 - Search pagination
+- File upload UI — entry point reachability, accept-attribute validation, and feedback
+- Similar-books UI — trigger visibility, panel behavior, source-book exclusion, and dismiss
 
 ## Prerequisites
 
@@ -62,10 +64,44 @@ npm run test:e2e:ui
 - If the stack has no indexed books, or no multi-page PDF is available, the data-dependent tests skip with an explicit reason instead of writing fixture data.
 - `global-setup.ts` waits for either `http://localhost/search` or `http://localhost:5173/search` to return the Aithena app shell before tests begin.
 
+## Deterministic vs data-gated tests
+
+Tests in this suite fall into two categories:
+
+| Category | Description | Requires |
+|---|---|---|
+| **Deterministic** | Always run; verify API contracts, error rejections, or UI structure that does not depend on indexed content | Running stack only |
+| **Data-gated** | Skipped with an explicit reason when the required data or service is unavailable | Indexed documents, embeddings service, or specific field values |
+
+### Deterministic tests (always run)
+
+- Empty search state renders correctly
+- Tab navigation across Search / Library / Status / Stats
+- Upload accept-attribute restricts non-PDF file types
+- Semantic / hybrid search rejects empty queries with HTTP 400
+- Similar-books API returns 404 for an unknown document ID
+
+### Data-gated tests (skip when data absent)
+
+| Test | Gating condition |
+|---|---|
+| Search result cards show title, author, snippet | At least one indexed document |
+| Author facet filtering and chip removal | Multiple documents from different authors |
+| PDF viewer opens from search result | At least one result with a `document_url` |
+| Search pagination | More than 10 indexed documents |
+| Semantic search returns results | Embeddings service up + indexed data |
+| Hybrid search returns results | Embeddings service up + indexed data |
+| Similar-books trigger visible on result card | At least one indexed document |
+| Similar-books panel loads related books | Embeddings service up + indexed data |
+| Source book excluded from similar-books results | Embeddings service up + indexed data |
+| Upload success/pending feedback | Backend upload + RabbitMQ configured |
+
 ## Files
 
 - `playwright.config.ts` — Playwright configuration
 - `global-setup.ts` — waits for the local app to be reachable
 - `tests/navigation.spec.ts` — empty state and tab navigation coverage
 - `tests/search.spec.ts` — search, facets, PDF viewer, and pagination coverage
+- `tests/upload.spec.ts` — upload UI entry point, file-type validation, and feedback
+- `tests/similar-books.spec.ts` — similar-books trigger, panel, exclusion, and dismiss
 - `tests/helpers.ts` — runtime discovery helpers for indexed test data
