@@ -9,6 +9,8 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Performs full-text search** via Solr with multilingual analyzers
 - **Supports semantic and hybrid search** with multilingual embeddings
 - **Detects language** from folder structure plus Solr `langid` processing
+- **Accepts PDF uploads** via drag-and-drop UI with client-side validation and rate limiting
+- **Scans for security issues** with bandit (Python), checkov (IaC), and zizmor (GitHub Actions)
 
 ## Features
 
@@ -16,16 +18,22 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Facet filtering** by author, category, language, and year
 - **Similar Books panel** that appears after opening a PDF and recommends semantically related titles
 - **PDF viewer** that opens from search results and jumps to the matched page when page metadata exists
-- **Admin tab** with an embedded Streamlit dashboard for queue visibility and document requeue/clear actions
+- **Upload tab** with drag-and-drop file upload and real-time progress tracking
+- **Admin tab** with an embedded Streamlit dashboard for queue visibility, document management, and system status
 - **Status tab** with indexing progress plus Solr, Redis, and RabbitMQ health, refreshing every 10 seconds
 - **Stats tab** with indexed-book totals, page-count statistics, and breakdowns by language, author, year, and category
+- **Container health checks** for all services with automatic restart on failure
+- **Resource limits** on memory for production stability
+- **Security scanning** in CI/CD pipeline to detect vulnerabilities early
 
 ## Documentation
 
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
+- [v0.6.0 Feature Guide](docs/features/v0.6.0.md)
 - [v0.5.0 Feature Guide](docs/features/v0.5.0.md)
 - [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
+- [Security Baseline](docs/security/baseline-v0.6.0.md)
 - [v0.5.0 Test Report](docs/test-report-v0.5.0.md)
 
 ## Architecture
