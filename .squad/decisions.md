@@ -2192,3 +2192,146 @@ When a running stack is available, capture and replace the placeholder images in
 **What:** Never merge a PR if CI is failing or has `action_required` status. Before starting a review, check if workflow runs need approval and ensure CI pipelines are actually running. If CI hasn't run (e.g., copilot branches not triggering CI), fix the trigger config or rerun manually before approving.
 **Why:** Juanma observed that copilot PRs were being merged with only CodeQL passing — the actual unit test and lint workflows showed `action_required` and never ran. This means untested code was being merged.
 
+---
+
+# 2026-03-15T07:55: User directives
+**By:** jmservera (via Copilot)
+
+**What (RabbitMQ bug):** For #166 (RabbitMQ Khepri timeout), Lambert must test locally by spinning up RabbitMQ in Docker Compose. Reference production-ready example: https://rabbitgui.com/blog/setup-rabbitmq-with-docker-and-docker-compose
+
+**What (Copilot re-trigger):** If @copilot doesn't pick up a task, remove and re-add the `squad:copilot` label. If this happens twice, review the GitHub Actions logs to check for issues with the auto-assign workflow.
+
+**Why:** User guidance for operational procedures.
+
+---
+
+# 2026-03-15T08:02: User directive — check both labels and milestones
+**By:** jmservera (via Copilot)
+**What:** Always check BOTH the `release:vX.Y.Z` label AND the GitHub milestone when determining which issues belong to a release. They may differ — Juanma sometimes reassigns milestones directly because it's easier. The milestone is the source of truth for grouping; the label is for filtering.
+**Why:** Labels and milestones can get out of sync. Both must be checked before any release action.
+
+---
+
+# 2026-03-15T08:35: v0.5.0 Release Verdict
+
+**Decision:** ✅ APPROVE  
+**Author:** Newt (Product Manager)  
+**Date:** 2026-03-15  
+**Scope:** Release gate — v0.5.0 merge to main and tag
+
+## Pre-checks
+
+| Check | Result |
+|-------|--------|
+| Milestone v0.5.0 | **0 open / 9 closed** ✅ |
+| Open issues with `release:v0.5.0` label | **None** ✅ |
+| Local branch synced with origin/dev | **Yes** (pulled PRs #176, #177) ✅ |
+
+## Build Validation
+
+| Component | Command | Result |
+|-----------|---------|--------|
+| Frontend build | `npm run build` | ✅ 44 modules, 3 assets |
+| Frontend tests | `npx vitest run` | ✅ **24/24 passed** (4 test files) |
+| Backend tests | `uv run pytest` (solr-search) | ✅ **78/78 passed** |
+| Indexer tests | `uv run pytest` (document-indexer) | ✅ **95/95 passed** |
+| **Total** | | **197 tests, 0 failures** |
+
+## Code Review — What Ships
+
+### Features (Phase 3 — Embeddings)
+
+1. **#163 — Search mode selector** ✅  
+   Three modes (keyword/semantic/hybrid) with `aria-pressed` buttons, mode passed as query param, backend handles all three including RRF fusion for hybrid. Frontend shows "Embeddings unavailable" fallback.
+
+2. **#47 — Similar Books panel** ✅  
+   `useSimilarBooks` hook with AbortController, module-level cache, skeleton loading UI with `aria-live`. 4 dedicated tests covering loading, empty, click, and error states.
+
+3. **#168 — Admin tab** ✅  
+   Streamlit iframe at relative path `/admin/streamlit/` with nginx proxy. Sandbox attribute applied.
+
+### Bug Fixes
+
+4. **#166 — RabbitMQ startup** ✅  
+   Image pinned to `rabbitmq:3.13-management`. Healthcheck: `rabbitmqctl ping`, interval 10s, timeout 30s, retries 12, `start_period: 30s`. Confirmed in docker-compose.yml after PR #176.
+
+5. **#167 — Pipeline dependency** ✅  
+   `document-lister`, `document-indexer`, and `streamlit-admin` all use `condition: service_healthy` for rabbitmq. Confirmed after PR #177.
+
+6. **#171 — Document-lister state tracking** ✅  
+   Test added for non-existent base path graceful handling.
+
+7. **#172 — Language detection** ✅  
+   langid field alignment + folder-path language extraction in indexer.
+
+### Tooling
+
+8. **#41 — Frontend test coverage** ✅  
+   Vitest setup with 4 test files, 24 tests covering FacetPanel, PdfViewer, SearchPage, SimilarBooks.
+
+## Follow-up Recommendations (Non-blocking)
+
+These are not release blockers but should be considered for v0.5.1 or v0.6.0:
+
+- **Admin iframe sandbox**: Consider removing `allow-popups` from sandbox attribute in `AdminPage.tsx` to tighten security.
+- **Similar books cache**: `useSimilarBooks` module-level cache is unbounded. Consider LRU eviction for long-lived sessions.
+- **Semantic mode facets**: Semantic search returns empty facet arrays. A UI hint ("Facets unavailable in semantic mode") would improve UX.
+- **Invalid search mode**: No backend test for `?mode=invalid` query parameter. Minor edge case.
+
+## Recommendation
+
+**Ship it.** All 9 milestone issues are resolved and verified. 197 tests pass across 3 components. Infrastructure fixes (#166, #167) are confirmed in the codebase. The codebase is ready for merge to `main` and tagging as `v0.5.0`.
+
+Ripley (Lead) or Juanma (Product Owner) may proceed with the merge.
+
+---
+
+# 2026-03-15T08:35: Ripley Decision — v0.5.0 Release Execution
+
+**Date**: March 15, 2026  
+**Role**: Ripley (Lead)  
+**Status**: ✅ Completed
+
+## Decision
+
+Successfully executed the v0.5.0 release from dev → main with tag creation and GitHub release publication.
+
+## What Was Done
+
+1. **Synced & Merged**: Checked out main, pulled latest, then merged dev into main with `--no-ff` flag
+2. **Resolved Conflict**: Fixed aithena-ui/package.json merge conflict by keeping dev's vitest version (4.1.0) and removing duplicate "test" script
+3. **Pushed Changes**: Merged commit pushed to origin/main
+4. **Tagged Release**: Created annotated tag v0.5.0 and pushed to origin
+5. **GitHub Release**: Published GitHub release with comprehensive release notes covering:
+   - Advanced search modes (keyword/semantic/hybrid with RRF)
+   - Similar Books feature
+   - Admin tab with Streamlit embed
+   - Frontend test coverage (24 Vitest tests)
+   - Infrastructure fixes (RabbitMQ, pipeline, language detection, document-lister)
+6. **Cleanup**: Returned to dev branch and cleaned up temporary files
+
+## Test Status
+
+- ✅ 197/197 tests passing
+- ✅ All smoke tests verified
+- ✅ All 9 verification issues resolved
+- ✅ Approved by Newt (Product Manager)
+
+## Release Details
+
+- **Version**: v0.5.0
+- **Commit**: 4ea0aa5 (merge commit on main)
+- **Tag**: v0.5.0
+- **Release URL**: https://github.com/jmservera/aithena/releases/tag/v0.5.0
+
+## Notes
+
+- Merge conflict in package.json was expected and straightforward to resolve (version mismatch + duplicate script)
+- All artifacts properly pushed and tagged
+- Repository is now in clean state with dev as active development branch
+- Ready for next sprint on dev
+
+---
+
+**Decision Impact**: Release complete. Main branch now contains v0.5.0. Dev remains active development branch.
+
