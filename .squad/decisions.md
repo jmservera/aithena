@@ -2335,3 +2335,194 @@ Successfully executed the v0.5.0 release from dev → main with tag creation and
 
 **Decision Impact**: Release complete. Main branch now contains v0.5.0. Dev remains active development branch.
 
+---
+
+## v0.6.0 Release Planning — 2026-03-15
+
+### Release Plan — v0.6.0 Production Hardening & Security
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-15  
+**Status:** PROPOSED — awaiting Juanma approval
+
+**Summary:**
+v0.6.0 focuses on Production Hardening & Security, completing Phase 4 polish and establishing security scanning baseline. Scope: 12 issues across 3 domains (3 Phase 4 features, 5 security scanning, 4 v0.5.0 polish, 1 hardening). Timeline: 3-4 weeks. Deferred 13 Dependabot vulnerabilities to v0.7.0 batch upgrade.
+
+**Key Decisions:**
+- **Dependency Order:** 6 task groups with explicit sequencing (Group 1 parallel → Group 2 gates → Groups 3-4 sequential → Group 5 parallel → Group 6 gates)
+- **Squad Assignments:** Copilot owns all code; Parker/Dallas/Brett/Kane gate reviews
+- **Issue Grouping:** Phase 4 (3), Security scanning (5), v0.5.0 polish (4, new)
+- **Review Gates:** 4 issues need squad review (2 security, 2 feature design, 1 hardening)
+- **New Issues to Create:** #178-#181 (sandbox fix, LRU cache, facet hint, search validation)
+
+**Next Steps:** Juanma approval → Ripley creates issues + milestone → Phase 1 setup (create 4 new issues, add labels, assign to v0.6.0 milestone)
+
+See full plan: `.squad/decisions/inbox/ripley-v060-release-plan.md` (archived as reference)
+
+---
+
+### API Specification — PDF Upload Endpoint (#49)
+
+**Author:** Parker (Backend)  
+**Date:** 2026-03-15  
+**Status:** APPROVED
+
+**Summary:**
+Endpoint specification for `POST /v1/upload`. Accepts multipart/form-data PDF files, validates type/size, publishes to RabbitMQ `shortembeddings` queue for asynchronous indexing.
+
+**Key Design Decisions:**
+- **Response:** 202 Accepted (file queued, processing async)
+- **File Validation:** Triple check (MIME type `application/pdf`, extension `.pdf`, magic number `%PDF-`)
+- **Size Limit:** 50 MB (configurable via `MAX_UPLOAD_SIZE_MB` env)
+- **Storage:** `/data/documents/uploads/` (shared volume with document-indexer)
+- **Queue Integration:** Publishes absolute file path to existing `shortembeddings` RabbitMQ queue
+- **Connection Pattern:** Per-request pika connections (thread-safe for uvicorn workers, ~50-100ms overhead acceptable)
+- **Error Handling:** 400 (validation), 413 (size), 500 (disk), 502 (RabbitMQ)
+- **Filename Sanitization:** Strip path traversal (`..`, `/`, `\`), append timestamp on collision
+- **Dependencies:** pika, python-multipart, retry (all already available)
+- **Tests:** ≥8 unit tests covering validation, RabbitMQ integration, error cases
+
+**Design Rationale:**
+- Reuses existing RabbitMQ indexing pipeline (no code duplication)
+- Per-request connections avoid threading issues with FastAPI uvicorn workers
+- Triple validation compensates for content-type spoofing attacks
+- 50MB limit prevents DoS while allowing typical PDFs (rate limiting deferred to nginx/v0.7.0)
+
+**Open Questions Resolved:**
+- ✅ Single vs. multi-file: Single-file only (multi-file deferred to v0.7.0)
+- ✅ Progress tracking: No progress API, HTTP upload shows frontend progress only
+- ✅ Duplicate detection: Handled by existing Redis state (indexer skips if unchanged)
+- ✅ Category metadata: Accept parameter but don't persist (user must rename file if needed)
+
+---
+
+### Design Specification — PDF Upload UI (#50)
+
+**Author:** Dallas (Frontend)  
+**Date:** 2026-03-15  
+**Status:** APPROVED
+
+**Summary:**
+Complete design for PDF upload feature in React UI. New tab-based upload page with 5-state UX flow (idle, selecting, uploading, success, error).
+
+**Key Design Decisions:**
+- **Navigation:** New "Upload" tab after Admin tab (consistent with existing tab pattern)
+- **UX Flow:** 5 states with clear transitions (idle → selecting → uploading → success/error)
+- **Components:** UploadPage, FileDropZone, FileSelector, UploadProgress, UploadResult (5 components)
+- **Hook:** useUpload with progress tracking via XMLHttpRequest (no new deps)
+- **File Validation:** Client-side MIME type check + 50MB size limit
+- **Progress Tracking:** XMLHttpRequest.upload.onprogress (deterministic, works in tests with mocking)
+- **Styling:** Dark theme (#7ec8e3 accents), BEM-ish CSS, zero new dependencies
+- **Tests:** ≥12 tests (8 UploadPage, 4 useUpload hook) using Vitest + React Testing Library
+- **Code Changes:** Modify App.tsx, TabNav.tsx, App.css (3 files); create 6 new components + 1 hook + 2 test files
+
+**Design Rationale:**
+- XMLHttpRequest chosen over fetch for upload progress (fetch lacks native upload tracking)
+- Reuses existing buildApiUrl helper from api.ts
+- Follows existing component/hook patterns (match useSimilarBooks, useSearch style)
+- Tab-based navigation matches existing design language
+- No multi-file or status polling in v0.6.0 (deferred features)
+
+**Key Risks Mitigated:**
+- ✅ Backend endpoint delay — wait for Parker spec before impl
+- ✅ File size mismatch — coordinate 50MB limit with Parker
+- ✅ XHR progress mocking in tests — use vi.stubGlobal('XMLHttpRequest', MockXHR)
+- ✅ Drag-and-drop compatibility — feature detection with button fallback
+
+---
+
+### Infrastructure Specification — Docker Hardening (#52)
+
+**Author:** Brett (Infrastructure)  
+**Date:** 2026-03-15  
+**Status:** DESIGN SPEC — ready for @copilot implementation
+
+**Summary:**
+Production-grade Docker Compose hardening for 20+ services. Adds health checks, restart policies, resource limits, graceful shutdown, and fixes dependency conditions.
+
+**Key Design Decisions:**
+- **Health Checks:** 8 new (embeddings-server, solr-search, document-lister, document-indexer, aithena-ui, streamlit-admin, redis-commander, nginx)
+- **Restart Policies:** `unless-stopped` for stateful/critical (redis, rabbitmq, zoo ensemble, solr-search, embeddings-server, UIs); `on-failure` for stateless workers
+- **Resource Limits:** Memory (256m-2g) + CPU reservations (0.5-1.0 core) + log rotation (10m × 3 files per service)
+- **Graceful Shutdown:** 60s for Solr/ZooKeeper, 30s for RabbitMQ/Redis, 10s default
+- **Dependency Fixes:** Change 5 `depends_on: service_started` → `service_healthy` (embeddings, solr-search, aithena-ui, nginx)
+- **Critical Fix:** embeddings-server port conflict (remove `PORT=8085` env, standardize internal port to 8080)
+- **Production Deployment Guide:** docs/deployment/production.md (service startup order, resource requirements, volume initialization, health validation, troubleshooting)
+
+**Design Principles:**
+- Fail-fast for stateless workers, conservative for stateful infrastructure
+- Health before readiness (all depends_on use service_healthy)
+- Resource caps prevent OOM cascade; CPU limits ensure fair scheduling
+- Production hardening in base docker-compose.yml; dev conveniences stay in override
+
+**Order of Implementation:**
+1. Fix embeddings-server port conflict
+2. Add /health endpoints to nginx, solr-search, embeddings-server
+3. Add health checks to docker-compose.yml
+4. Update restart policies, resource limits, stop_grace_period
+5. Fix depends_on conditions
+6. Create docs/deployment/production.md
+
+**Known Risks Mitigated:**
+- ✅ Health check false positives — start_period set appropriately (10-60s)
+- ✅ Resource limits too tight — 2-2.5x observed usage (monitor post-merge)
+- ✅ Graceful shutdown incomplete — 60s for stateful services
+- ✅ Log disk fill — rotation configured to 30MB max per service
+
+---
+
+### Security Specification — Scanning & Validation (#88-98)
+
+**Author:** Kane (Security)  
+**Date:** 2026-03-15  
+**Status:** APPROVED
+
+**Summary:**
+Security scanning specification for v0.6.0. Three CI scanners (bandit, checkov, zizmor) with non-blocking initial baselines + manual OWASP ZAP audit guide + baseline tuning.
+
+**Key Design Decisions:**
+
+**Group 1 (CI Scanners — Non-blocking):**
+- **SEC-1 Bandit (#88):** Python code scanning, 60+ rule skips documented (pytest assert, container binding, subprocess in tests), SARIF + Code Scanning upload
+- **SEC-2 Checkov (#89):** Dockerfile + GitHub Actions scanning, `soft_fail: true`, Docker Compose manual review via ZAP guide (tool limitation)
+- **SEC-3 Zizmor (#90):** GitHub Actions supply chain scanning, focus on template-injection + dangerous-triggers as P0, `continue-on-error: true`
+
+**Group 2 (Manual Validation — Kane review gate):**
+- **SEC-4 (#97):** OWASP ZAP audit guide with proxy setup, manual explore phase, active scan targets, result interpretation, Docker Compose IaC manual review, reporting
+- **SEC-5 (#98):** Bandit/checkov/zizmor findings triage (HIGH/CRITICAL fixed, MEDIUM/LOW documented or deferred), update config files with justified exceptions
+
+**Known Baseline Exceptions:**
+- Bandit: S101 (pytest assert), S104 (0.0.0.0 binding in containers), S603 (subprocess in e2e tests)
+- Checkov: CKV_DOCKER_2 (HEALTHCHECK not all containers), CKV_DOCKER_3 (USER not required for official images)
+- Zizmor: CKV_GHA_7 (pin actions to SHA, deferred to v0.7.0 audit)
+
+**Known Security Gaps (Deferred to v0.7.0):**
+- Missing auth on admin endpoints (/admin/solr, /admin/rabbitmq, /admin/redis, /admin/streamlit) — document as P0 risk
+- Insecure defaults (RabbitMQ guest/guest, Redis no password) — document requirement to change pre-production
+- Dependabot vulnerabilities (13 issues, batch v0.7.0 upgrade)
+
+**Risk Mitigation:**
+- ✅ Non-blocking scanners prevent dev halt while establishing visibility
+- ✅ Kane review gate ensures baseline quality before release
+- ✅ SEC-4 manual review compensates for checkov docker-compose gap
+- ⚠️ If CRITICAL vulns found in Group 1, may block v0.6.0 (escalate to Ripley for hotfix)
+
+---
+
+### Documentation Requirement — Release Gate
+
+**Author:** jmservera (via Copilot directive 2026-03-15T09:12)  
+**Date:** 2026-03-15  
+**Status:** ADOPTED
+
+**Decision:**
+Documentation (feature guide, updated manuals, test report, screenshots) is a HARD REQUIREMENT before any release. Newt (Product Manager) must generate all docs as part of release validation step, not after. If docs are missing, release is blocked — same gate as failing tests.
+
+**Rationale:**
+v0.5.0 was released without updated docs (regression from v0.4.0). Adding to Newt's release validation charter to prevent future regressions.
+
+**Impact on v0.6.0:**
+- Phase 6 (Release Validation) cannot pass until docs complete
+- Newt responsible for feature guide, deployment guide, manual verification, screenshots
+- No release to main until docs present and reviewed
+

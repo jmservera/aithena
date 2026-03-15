@@ -95,3 +95,74 @@
 2. PR #174 demonstrates multi-layer debugging: Solr config + Python metadata + indexer pipeline all needed coordinated fixes. Well-decomposed.
 3. The dual-field language architecture (`language_detected_s` for content analysis, `language_s` for folder-based) is a sound design that gives content detection priority with folder fallback.
 4. Merge order matters: #173 → #174, then schedule full reindex for the library.
+
+### 2026-07-24 — v0.6.0 Release Planning
+
+**Context:**
+- v0.5.0 shipped successfully (197 tests, 9 issues closed)
+- 22 open issues across Phase 4 features, security scanning, and Dependabot vulnerabilities
+- Newt's v0.5.0 verdict included 4 follow-up recommendations (admin iframe, similar books cache, facet hints, invalid mode test)
+
+**Release Plan Decisions:**
+
+1. **Scope: Production Hardening & Security (12 issues)**
+   - Phase 4 features: Upload endpoint (#49), upload UI (#50), docker hardening (#52)
+   - Security scanning: bandit (#88), checkov (#89), zizmor (#90), OWASP ZAP guide (#97), baseline tuning (#98)
+   - v0.5.0 polish: 4 new issues for Newt's recommendations (#178-#181)
+
+2. **Deferred to v0.7.0+:**
+   - 13 Dependabot issues (LOW severity, transitive deps) — batch into dedicated dependency audit sprint
+   - Admin migration (#169) — large scope, not blocking production
+
+3. **Squad Assignments Strategy:**
+   - Security foundation (SEC-1/2/3): @copilot parallel, 🟢 good fit
+   - Security validation (SEC-4/5): @copilot → Kane review (security judgment required)
+   - Upload backend (#49): @copilot → Parker review (API design validation)
+   - Upload frontend (#50): @copilot → Dallas review (UX design validation)
+   - v0.5.0 polish (#178-#181): @copilot parallel, 🟢 good fit
+   - Docker hardening (#52): @copilot → Brett review (production deployment expertise)
+
+4. **Execution Phases:**
+   - Week 1: Security foundation (SEC-1/2/3) + validation (SEC-4/5)
+   - Week 2: Upload feature (#49 → #50) + polish (#178-#181 parallel)
+   - Week 3-4: Hardening (#52) + release validation
+   - Total: 3-4 weeks
+
+5. **Key Risks Identified:**
+   - Security scanners may find critical issues → triage in SEC-5, may require emergency fixes
+   - Upload endpoint design may need iteration → Parker review gate before implementation
+   - Dependabot issues may escalate to CRITICAL → monitor advisories, pull into v0.6.0 if needed
+
+**Architectural Principles Applied:**
+- Use review gates (Parker/Dallas/Kane/Brett) for domain expertise validation BEFORE copilot implementation
+- Batch parallel work (SEC-1/2/3, polish issues) to maximize velocity
+- Sequence dependent work (upload endpoint before upload UI, security foundation before validation)
+- Defer low-impact work (Dependabot batch, admin migration) to dedicated sprints
+
+**Open Questions for Juanma:**
+- Upload scope: single-file or multi-file batch in v0.6.0?
+- Any Dependabot issues elevated to must-fix?
+- Confirm admin migration deferred to v0.7.0+?
+- 3-4 week timeline acceptable or compress to 2 weeks?
+
+**Plan written to:** `.squad/decisions/inbox/ripley-v060-release-plan.md`
+
+**Learnings:**
+1. **Release planning benefits from clear theme** — "Production Hardening & Security" gives focus vs trying to do everything
+2. **Defer aggressively** — 13 Dependabot issues are noise if they're all LOW severity transitive deps; batch into dedicated sprint
+3. **Review gates prevent rework** — Parker/Dallas/Kane/Brett review on design BEFORE copilot implements saves iteration cycles
+4. **Parallel + Sequential balance** — Group 1 (SEC-1/2/3) and Group 5 (polish) can run in parallel; upload and hardening must sequence
+5. **New issues for follow-ups** — Newt's recommendations deserve issue tracking (not just decision log) for visibility and PR linking
+
+### 2026-03-15 — v0.6.0 Release Planning Complete
+
+**Summary:** v0.6.0 release plan finalized and recorded in decisions.md. All specs from Parker, Dallas, Brett, Kane reviewed and approved. Ready for Juanma sign-off before Phase 1 issue creation.
+
+**Decisions Merged:**
+- Ripley: 12-issue release plan with 6-group dependency order
+- Parker: PDF upload endpoint spec (#49) — 202 Accepted, multipart/form-data, RabbitMQ integration
+- Dallas: PDF upload UI spec (#50) — Tab-based, 5-state flow, XMLHttpRequest progress
+- Brett: Docker hardening spec (#52) — 8 health checks, restart policies, resource limits, graceful shutdown
+- Kane: Security scanning plan (#88-98) — 3 CI scanners (non-blocking) + OWASP ZAP guide + baseline tuning
+
+**Next:** Awaiting Juanma approval → Ripley creates issues + milestone → Phase 1 setup
