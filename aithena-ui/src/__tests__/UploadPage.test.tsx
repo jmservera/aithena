@@ -24,7 +24,7 @@ describe('UploadPage', () => {
     _errorHandler?: () => void;
     _abortHandler?: () => void;
   };
-  let xhrInstances: typeof mockXHR[] = [];
+  let xhrInstances: (typeof mockXHR)[] = [];
 
   beforeEach(() => {
     xhrInstances = [];
