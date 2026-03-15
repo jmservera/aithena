@@ -2177,3 +2177,18 @@ When a running stack is available, capture and replace the placeholder images in
 
 **Bottom line:** Port reduction (decided above) is the first fix, but must be paired with service auth, admin-path auth, and abuse controls.
 
+
+---
+
+# 2026-03-14T23:36: User directive — use GitHub milestones
+**By:** jmservera (via Copilot)
+**What:** Always assign issues to the correct GitHub milestone (not just the release label). Before any release, verify zero open issues in that milestone. Labels are not enough — milestones group issues properly.
+**Why:** User preference — Juanma wants issues organized in milestones for proper tracking. Labels alone don't provide the grouping view needed for release management.
+
+---
+
+# 2026-03-14T23:50: User directive — CI must pass before merge
+**By:** jmservera (via Copilot)
+**What:** Never merge a PR if CI is failing or has `action_required` status. Before starting a review, check if workflow runs need approval and ensure CI pipelines are actually running. If CI hasn't run (e.g., copilot branches not triggering CI), fix the trigger config or rerun manually before approving.
+**Why:** Juanma observed that copilot PRs were being merged with only CodeQL passing — the actual unit test and lint workflows showed `action_required` and never ran. This means untested code was being merged.
+

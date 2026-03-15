@@ -68,7 +68,7 @@ services:
       rabbitmq:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: on-failure
     volumes:
       - document-data:/data/documents
@@ -93,7 +93,7 @@ services:
       rabbitmq:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       embeddings-server:
         condition: service_started
     volumes:
