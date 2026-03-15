@@ -130,6 +130,7 @@ def search(
     mode: str = Query(
         settings.default_search_mode,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
+        enum=list(VALID_SEARCH_MODES),
     ),
 ) -> dict[str, Any]:
     """Search for books.
