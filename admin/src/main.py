@@ -1,4 +1,5 @@
 import json
+import os
 
 import redis
 import requests
@@ -15,12 +16,14 @@ from pages.shared.config import (
 )
 
 rabbitmq_management_url = f"http://{RABBITMQ_HOST}:{RABBITMQ_MGMT_PORT}{RABBITMQ_MGMT_PATH_PREFIX}"
+admin_version = os.getenv("VERSION", "dev")
 
 st.set_page_config(page_title="Aithena Admin", page_icon="🏛️", layout="wide")
 st.title("🏛️ Aithena Admin Dashboard")
 st.caption(
     f"Redis: `{REDIS_HOST}:{REDIS_PORT}` · Queue: `{QUEUE_NAME}` · RabbitMQ management: `{rabbitmq_management_url}`"
 )
+st.sidebar.caption(f"Admin v{admin_version}")
 
 # ── Redis metrics ────────────────────────────────────────────────────────────
 try:

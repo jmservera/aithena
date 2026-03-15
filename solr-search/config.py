@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 TITLE = "Aithena Solr Search API"
-VERSION = "0.1.0"
+VERSION = "dev"
+GIT_COMMIT = "unknown"
+BUILD_DATE = "unknown"
 
 
 def _parse_origins(raw_value: str) -> list[str]:
@@ -16,6 +18,8 @@ def _parse_origins(raw_value: str) -> list[str]:
 class Settings:
     title: str
     version: str
+    commit: str
+    built: str
     port: int
     solr_url: str
     solr_collection: str
@@ -59,6 +63,8 @@ allow_credentials = (
 settings = Settings(
     title=os.environ.get("TITLE", TITLE),
     version=os.environ.get("VERSION", VERSION),
+    commit=os.environ.get("GIT_COMMIT", GIT_COMMIT),
+    built=os.environ.get("BUILD_DATE", BUILD_DATE),
     port=int(os.environ.get("PORT", "8080")),
     solr_url=os.environ.get("SOLR_URL", "http://solr:8983/solr").rstrip("/"),
     solr_collection=os.environ.get("SOLR_COLLECTION", "books"),

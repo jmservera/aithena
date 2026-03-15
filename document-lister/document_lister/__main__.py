@@ -12,12 +12,14 @@ from retry import retry
 from . import (
     BASE_PATH,
     DOCUMENT_WILDCARD,
+    GIT_COMMIT,
     POLL_INTERVAL,
     QUEUE_NAME,
     RABBITMQ_HOST,
     RABBITMQ_PORT,
     REDIS_HOST,
     REDIS_PORT,
+    VERSION,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -140,5 +142,5 @@ def produce():
 
 
 if __name__ == "__main__":
-    logger.info("Starting document-lister")
+    logger.info("Starting document-lister v%s (commit: %s)", VERSION, GIT_COMMIT)
     produce()

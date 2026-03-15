@@ -148,6 +148,16 @@ def info() -> dict[str, str]:
     return {"title": settings.title, "version": settings.version}
 
 
+@app.get("/version")
+def version() -> dict[str, str]:
+    return {
+        "service": "solr-search",
+        "version": settings.version,
+        "commit": settings.commit,
+        "built": settings.built,
+    }
+
+
 @app.get("/v1/search/", include_in_schema=False, name="search_v1")
 @app.get("/v1/search", include_in_schema=False, name="search_v1_no_slash")
 @app.get("/search")
