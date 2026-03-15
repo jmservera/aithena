@@ -77,4 +77,52 @@ describe('FacetPanel', () => {
     expect(screen.getByText('(3)')).toBeInTheDocument();
     expect(screen.getByText('(4)')).toBeInTheDocument();
   });
+
+  it('shows informational message when mode is semantic', () => {
+    const onFilterChange = vi.fn();
+    render(
+      <FacetPanel facets={facets} filters={{}} onFilterChange={onFilterChange} mode="semantic" />
+    );
+
+    const msg = screen.getByRole('note');
+    expect(msg).toBeInTheDocument();
+    expect(msg).toHaveTextContent('Facets are only available in keyword mode');
+  });
+
+  it('hides facet groups when mode is semantic', () => {
+    const onFilterChange = vi.fn();
+    render(
+      <FacetPanel facets={facets} filters={{}} onFilterChange={onFilterChange} mode="semantic" />
+    );
+
+    expect(screen.queryByText('Author')).not.toBeInTheDocument();
+    expect(screen.queryByText('Category')).not.toBeInTheDocument();
+  });
+
+  it('does not show the semantic message when mode is keyword', () => {
+    const onFilterChange = vi.fn();
+    render(
+      <FacetPanel facets={facets} filters={{}} onFilterChange={onFilterChange} mode="keyword" />
+    );
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(screen.getByText('Author')).toBeInTheDocument();
+  });
+
+  it('does not show the semantic message when mode is hybrid', () => {
+    const onFilterChange = vi.fn();
+    render(
+      <FacetPanel facets={facets} filters={{}} onFilterChange={onFilterChange} mode="hybrid" />
+    );
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(screen.getByText('Author')).toBeInTheDocument();
+  });
+
+  it('does not show the semantic message when mode is undefined', () => {
+    const onFilterChange = vi.fn();
+    render(<FacetPanel facets={facets} filters={{}} onFilterChange={onFilterChange} />);
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
 });
