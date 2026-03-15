@@ -44,3 +44,62 @@
 - Dependabot vulnerabilities (13 issues, v0.7.0 batch)
 
 **Next:** Awaiting Juanma approval of release plan → Issues #88-90 created + assigned → SEC-1/2/3 implementation → Kane review SEC-4/5
+
+### 2026-03-15 — SEC-4 Implementation Complete (OWASP ZAP Audit Guide)
+
+**Summary:** Created comprehensive OWASP ZAP manual security audit guide (PR #194, issue #97). 30KB+ documentation covering DAST workflow and Docker Compose IaC review.
+
+**Implementation Details:**
+
+**Files Created:**
+- `docs/security/owasp-zap-audit-guide.md` (900+ lines, 30KB)
+- `docs/security/README.md` (security docs index)
+
+**Guide Content:**
+1. **Prerequisites** — ZAP installation (v2.14.0+), browser proxy config, FoxyProxy setup
+2. **Environment Setup** — Local docker-compose stack startup, service health verification
+3. **Proxy Configuration** — ZAP on port 8090 (avoids conflict with solr-search:8080), browser config, SSL cert install
+4. **Manual Explore Phase** — 15-30 min guided crawling:
+   - React UI (search form, PDF viewer, edge cases with XSS/SQLi test strings)
+   - Search API (FastAPI /v1/search, /v1/documents with path traversal tests)
+   - Admin endpoints (Streamlit, Solr, RabbitMQ guest/guest, Redis no auth)
+   - Upload testing (malicious filenames, non-PDF files)
+5. **Active Scan Configuration** — Scan policies (Default, SQL Injection, XSS, Path Traversal), custom aithena policy, scope/thread settings
+6. **Scan Targets** — Complete endpoint inventory:
+   - User-facing (nginx:80, aithena-ui, solr-search:8080 via nginx)
+   - Admin (Streamlit:8501, Solr:8983, RabbitMQ:15672, Redis:8081)
+   - Dev-only ports (10+ exposed in docker-compose.override.yml)
+7. **Docker Compose IaC Review** — Manual checklist (compensates for checkov docker-compose gap):
+   - Port exposure audit (identified 10+ dev-only ports, Solr 8983-8985 direct access)
+   - Volume mount security (validated /source/volumes paths, read-only configs)
+   - Network isolation (single default network, no segmentation — documented for v0.7.0)
+   - Secrets in env vars (no hardcoded secrets in Compose, RabbitMQ/Redis defaults in app code)
+   - Image pinning (identified missing tags: redis lacks explicit version, no SHA digests)
+   - Container privileges (no privileged containers, no cap_add)
+8. **Result Interpretation** — Severity levels (High/Medium/Low), CWE mapping (CWE-89, CWE-79, CWE-22), triage workflow, baseline exception template
+9. **Reporting** — Audit report template with expected findings (missing auth, default credentials, insecure HTTP), baseline exception format
+
+**Key Features:**
+- Beginner-friendly (screenshot placeholders, step-by-step)
+- Architecture-accurate (references actual nginx routes, docker-compose ports, service names)
+- Documents known baseline exceptions (missing auth on /admin/*, RabbitMQ guest/guest, Redis no password)
+- Provides IaC checklist covering all 7 docker-compose security categories
+- Includes example audit report with finding classification, CVSS scores, mitigation steps
+
+**Architecture Research:**
+- Reviewed docker-compose.yml (production config) + docker-compose.override.yml (dev ports)
+- Analyzed nginx/default.conf routing (10 proxied endpoints, no auth_basic/auth_request)
+- Documented all exposed ports: nginx (80/443), direct services (8080, 8501, 8983-8985, 15672, 6379, etc.)
+- Identified ZAP port conflict with solr-search:8080 → recommended ZAP on 8090
+
+**Known Issues Documented:**
+- HIGH: Missing auth on /admin/solr, /admin/rabbitmq, /admin/redis (deferred to v0.7.0, issue #98)
+- HIGH: Default RabbitMQ credentials (guest/guest), Redis no auth (deferred to v0.7.0)
+- MEDIUM: No Content Security Policy on React UI (NEW finding — recommend for v0.6.1/v0.7.0)
+- MEDIUM: Image tags lack SHA digests (supply chain risk)
+- INFO: Single default network (no frontend/backend/data segmentation)
+
+**Outcome:**
+✅ SEC-4 complete — OWASP ZAP audit guide ready for v0.6.0 release validation  
+✅ PR #194 opened targeting dev (documentation only, no code changes)  
+✅ Next: SEC-5 (issue #98) — triage bandit/checkov/zizmor findings, establish security baseline
