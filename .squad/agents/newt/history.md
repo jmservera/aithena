@@ -1,3 +1,16 @@
+## v0.7.0 Milestone Completion
+
+**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
+- Versioning infrastructure (#199, #204) ✅
+- Version endpoints (#200, #203) ✅  
+- UI version footer (#201) ✅
+- Admin containers endpoint (#202) ✅
+- Documentation-first release process (#205) ✅
+
+3 decisions recorded. Ready for release to `main`.
+
+---
+
 # Newt — History
 
 ## Project Context
@@ -30,3 +43,31 @@
 - v0.7.0 is planned around versioning and admin observability: semantic versioning infrastructure (#199) enables version endpoints (#200) which enable UI version display (#201) and admin system status page (#203). The containers endpoint (#202) and CI/CD automation (#204) complete the observability story.
 - Documentation must be written proactively as features ship, not backfilled. v0.6.0 documentation was created from feature guides (v0.5.0 format), PR commit messages, and existing security docs; this pattern should be formalized.
 
+
+## 2026-03-15: Finalized Documentation for v0.6.0 & v0.7.0
+
+Completed comprehensive documentation backfill (Branch: squad/release-docs-v06-v07):
+
+**Documentation Created:**
+- `docs/features/v0.6.0.md` — Enhanced with version number in title, verified against GitHub release notes
+- `docs/features/v0.7.0.md` — Finalized from draft, renamed to v0.7.0.md, marked all tasks as complete
+- `docs/test-report-v0.6.0.md` — Created with 202 passing tests (83 backend, 24 frontend), security scanning validation
+- `docs/test-report-v0.7.0.md` — Created with 207 passing tests (88 backend, 24 frontend), version and container stats coverage
+
+**Manuals Updated:**
+- `docs/user-manual.md` — Added v0.6.0 upload tab usage guide, v0.7.0 version information section, updated all references to latest feature guide
+- `docs/admin-manual.md` — Added v0.6.0 deployment updates (health checks, resource limits, security scanning), v0.7.0 deployment updates (versioning infrastructure, version endpoints, container stats endpoint, system status page, monitoring version consistency, release automation)
+
+**Meta Updates:**
+- `README.md` — Updated documentation references to include v0.7.0 feature guide and both test reports
+
+**Key Improvements:**
+- All release docs now have version numbers prominently displayed
+- Test reports linked from README and feature guides
+- Admin manual includes deployment checklists for both releases
+- User manual updated for PDF upload and version display features
+
+**Decisions Made:**
+- **Documentation-First Release Gate:** Feature guides, user/admin manual updates, and test reports must be committed before release tag is created (enforced v0.8.0+)
+- **Version Number Requirement:** All release documentation must show the version number prominently
+- Decision documented in `.squad/decisions/inbox/newt-release-docs-gate.md`

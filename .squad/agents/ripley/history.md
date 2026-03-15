@@ -1,3 +1,16 @@
+## v0.7.0 Milestone Completion
+
+**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
+- Versioning infrastructure (#199, #204) ✅
+- Version endpoints (#200, #203) ✅  
+- UI version footer (#201) ✅
+- Admin containers endpoint (#202) ✅
+- Documentation-first release process (#205) ✅
+
+3 decisions recorded. Ready for release to `main`.
+
+---
+
 # Ripley — History
 
 ## Project Context
@@ -41,6 +54,28 @@
 ## Learnings
 
 <!-- Append learnings below -->
+
+### 2026-03-15 — v1.0 roadmap triage and milestone shaping
+
+- The remaining Mend issues in the #5-#35 range were stale automation, not a usable release plan: they pointed at Python 3.7 wheels, removed `qdrant-*` manifests, or old transitive resolutions that no longer match the current Python 3.11 stack.
+- Replacing noisy Mend alerts with one curated dependency-baseline issue (#214) keeps security work actionable and easier to route.
+- The clean path to v1.0 is two lean milestones: **v0.8.0** for admin parity + dependency baseline + E2E confidence, then **v0.9.0** for operational hardening (auth, metrics, failover, capacity, semantic degraded mode, release docs).
+- Semantic/hybrid search is already in the product; the remaining work is productization and operational hardening, not inventing the feature from scratch.
+
+### 2026-03-15 — Reskill Charter Optimization
+
+**What was extracted:**
+- Newt's release approval checklist was extracted into shared skill `.squad/skills/release-gate/SKILL.md`.
+- Copilot charter removed duplicated Branch/PR/Tech Stack/Project Context blocks and now defers to `squad-pr-workflow` and `project-conventions`.
+- Newt charter now keeps role, authority, and core responsibilities while deferring detailed release steps to `release-gate`.
+
+**Charter sizes:**
+- `copilot`: 3223 → 2249 bytes (saved 974)
+- `newt`: 2731 → 1315 bytes (saved 1416)
+- total charter footprint: 15592 → 13202 bytes (saved 2390)
+
+**Skills created:**
+- `release-gate`
 
 ### 2026-03-14T23:xx — Reskill: Current Codebase State & v0.5 Roadmap Update
 
@@ -230,3 +265,26 @@
 - Kane: Security scanning plan (#88-98) — 3 CI scanners (non-blocking) + OWASP ZAP guide + baseline tuning
 
 **Next:** Awaiting Juanma approval → Ripley creates issues + milestone → Phase 1 setup
+
+### 2026-03-15 — Full project state review
+
+- The repo is now past the "prototype" threshold: upload flow, security scanning, compose hardening, version provenance, container visibility, and admin status all exist on `dev`, and the current tree validates cleanly across backend and frontend.
+- The main blockers to v1.0 are no longer search features; they are production controls: protecting admin surfaces, tightening release automation, expanding E2E confidence, and finishing release-facing documentation.
+- The roadmap shape is sound (`v0.8.0` for admin/release confidence, `v0.9.0` for operability), but GitHub milestone hygiene needs cleanup because the board currently shows legacy open milestones and a duplicate-looking `v0.6.0` milestone state.
+- The `solr-search` service is emerging as the architectural center of gravity: search, upload, status, version, and admin container aggregation now converge there cleanly.
+- The current React admin page is still an iframe bridge, so the native admin dashboard work in `v0.8.0` is the right next architectural step.
+
+### 2026-03-15 — v0.11.0 Auth + Installer decomposition
+
+**Summary:** Planned the v0.11.0 authentication + setup-installer milestone, recorded the architecture in `.squad/decisions/inbox/ripley-v0.11-auth-installer.md`, and opened issues #250-#257 for execution.
+
+**Key Decisions:**
+- Local auth should live in `solr-search`; adding a separate auth service would be unnecessary service sprawl for this milestone.
+- Use a persistent SQLite user store with Argon2id password hashes; the installer seeds the initial admin user and `.env` carries runtime config such as JWT secret and paths.
+- Browser-only admin tools cannot rely on local-storage bearer headers alone, so the auth contract needs hybrid transport: bearer token for SPA/API calls plus a secure cookie for nginx-gated browser surfaces.
+- Split the work into narrow issues: architecture (#250) → backend auth (#251) → frontend/nginx/admin protection (#252-#254) plus installer (#255), compose/docs wiring (#256), and end-to-end coverage (#257).
+
+**Lead Learnings:**
+1. **Token transport matters as much as token format** — once nginx-gated browser tools enter scope, a pure localStorage + header plan is incomplete.
+2. **Installer and auth must be designed together** — the bootstrap path for the first user affects storage model, compose wiring, and operational docs immediately.
+3. **Security-sensitive milestone work should stay human-owned even when well specified** — only the compose/docs follow-through and the final test matrix looked suitable for explicit `@copilot` collaboration.

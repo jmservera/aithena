@@ -1,5 +1,133 @@
 # Squad Decisions
 
+# Decision: Container Version Metadata Baseline
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-15  
+**Status:** Proposed  
+**Issue:** #199 — Versioning infrastructure
+
+## Context
+
+The v0.7.0 milestone needs a single, repeatable way to stamp every source-built container with release metadata. Without a shared convention, local builds, CI builds, and tagged releases can drift, making support and debugging harder.
+
+## Decision
+
+Use a repo-root `VERSION` file as the default application version source, overridden by an exact git tag when present. Pass `VERSION`, `GIT_COMMIT`, and `BUILD_DATE` through Docker Compose build args into every source-built Dockerfile, and bake them into both OCI labels and runtime environment variables.
+
+## Rationale
+
+- Keeps release numbering aligned with the semver tagging flow on `dev` → `main`
+- Gives operators a stable fallback (`VERSION`) before a release tag exists
+- Makes image provenance visible both from container registries (OCI labels) and inside running containers (`ENV`)
+- Uses one metadata contract across Python, Node, and nginx-based images
+
+## Impact
+
+- Source-built services now share one image metadata schema
+- `buildall.sh` can build tagged and untagged snapshots consistently
+- CI/CD can override any of the three variables without patching Dockerfiles
+
+## Next steps
+
+1. Reuse the same metadata contract in release workflows that publish images
+2. Surface the runtime `VERSION` in application health/status endpoints where useful
+
+
+# Decision: Documentation-First Release Process
+
+**Author:** Newt (Product Manager)  
+**Date:** 2026-03-20  
+**Status:** Proposed  
+**Issue:** Release documentation requirements for v0.6.0 and beyond
+
+## Context
+
+v0.5.0 failed to include release documentation until after approval—a process failure that nearly resulted in shipping without user-facing guides. v0.6.0 shipped 5 major features but documentation was not prepared ahead of time, forcing backfill work.
+
+To prevent this pattern, Newt proposes a formalized documentation-first release process.
+
+## Decision
+
+**Feature documentation must be written and committed before release approval.**
+
+### Required artifacts before "Ready for Release"
+
+1. **Feature Guide** (`docs/features/vX.Y.Z.md`)
+   - Shipped features with user-facing descriptions
+   - Configuration changes (if any)
+   - Breaking changes (if any)
+   - See `docs/features/v0.6.0.md` as template
+
+2. **User Manual Updates** (`docs/user-manual.md`)
+   - New tabs, buttons, or workflows
+   - Step-by-step guides for new features
+   - Troubleshooting for new upload/admin flows
+
+3. **Admin Manual Updates** (`docs/admin-manual.md`)
+   - Deployment changes (new environment variables, ports, volumes)
+   - Configuration tuning options
+   - Monitoring and health check guidance
+   - Troubleshooting for new features
+
+4. **Test Report** (`docs/test-report-vX.Y.Z.md`)
+   - Test coverage summary
+   - Manual QA validation results
+   - Known issues and workarounds
+
+5. **README.md Updates**
+   - Feature list must reflect shipped capabilities
+   - Links to new documentation must be added
+   - Screenshots must be current
+
+### Release gate
+
+- Newt does NOT approve release until all above artifacts are committed to `dev` branch
+- PR reviewers check that documentation is present and current
+- Release notes are auto-generated from feature guide and test report
+
+### Documentation as code
+
+- Feature guides are stored in git alongside code
+- Changes to features require corresponding doc changes (checked in review)
+- Documentation is reviewed as rigorously as code
+
+## Rationale
+
+- **User support**: Users and operators need accurate, current documentation
+- **Consistency**: Same feature guide format across all releases (v0.6.0, v0.7.0, etc.)
+- **Traceability**: Feature docs are versioned alongside code; easy to find docs for any tag
+- **Process rigor**: Documentation is not optional or deferred
+
+## Impact
+
+- Adds 1–2 days to each release cycle for documentation
+- Prevents user confusion and support burden
+- Makes releases feel complete and professional
+
+## Next steps
+
+1. Formalize this decision in squad charter for Newt
+2. Create a release documentation checklist (GitHub issue template)
+3. Add PR check to enforce doc changes for feature PRs
+
+
+# Parker — Admin Containers Aggregation Decision
+
+## Context
+Issue #202 adds `GET /v1/admin/containers` in `solr-search` to summarize the running stack without using Docker SDK access.
+
+## Decision
+- Reuse the existing `/v1/status` probing approach inside `solr-search`: TCP reachability for infrastructure, Solr cluster probing for Solr, and direct HTTP `/version` calls for HTTP services.
+- For non-HTTP repo services (`streamlit-admin`, `aithena-ui`, `document-indexer`, `document-lister`), report shared build metadata from `VERSION` and `GIT_COMMIT` injected into the repo's container builds.
+- Mark worker processes as `status: "unknown"` instead of `down` because they do not expose stable network probes in this environment and Docker runtime label inspection is intentionally unavailable.
+
+## Why
+This keeps the endpoint fast, deterministic, and compatible with codespaces where Docker is unavailable, while still surfacing useful release metadata for the whole stack.
+
+
+---
+
 ## Active Decisions
 
 ### Architecture Plan — aithena Solr Migration (2026-03-13)
@@ -3251,3 +3379,311 @@ Use `object.__setattr__(settings, "field", value)` in test fixtures to modify fr
 2. E2E tests for upload → indexing → search pipeline
 3. Monitoring for RabbitMQ connection latency and upload metrics
 4. Stream validation enhancement (avoid 50MB memory load)
+
+
+---
+
+# Decision: Reskill Charter Optimization
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-15  
+**Status:** Proposed
+
+## Context
+
+The reskill audit found duplicated operational guidance spread across multiple agent charters. This inflated charter size, made updates error-prone, and mixed durable skills with role-specific responsibilities.
+
+## Decision
+
+1. Extract Newt's release approval checklist into shared skill `release-gate`.
+2. Remove duplicated workflow and project-context sections from `copilot` charter because they are already covered by `squad-pr-workflow` and `project-conventions`.
+3. Condense `newt` charter so it keeps role, authority, and responsibilities while delegating the detailed release process to `release-gate`.
+
+## Rationale
+
+- Shared skills are easier to update than repeating the same process in multiple charters.
+- Charters should define role boundaries and authority, not duplicate reusable operating instructions.
+- Centralizing the release checklist preserves Newt's gate authority while making the release process discoverable for the whole squad.
+
+## Impact
+
+- New release guidance now lives in `.squad/skills/release-gate/SKILL.md`.
+- Copilot and Newt charters are shorter and more focused.
+- Future release-process changes need one edit in the shared skill instead of charter-by-charter rewrites.
+
+
+# Ripley Full Project Review
+
+**Requested by:** jmservera  
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-15
+
+## Executive verdict
+
+Aithena has moved well beyond prototype status. The `dev` branch now has a credible search product with upload, semantic/hybrid search, observability, version provenance, and much stronger CI/security posture. The codebase is **healthy and progressing well**, but it is **not yet v1.0-ready**: the remaining blockers are mostly production controls and release discipline, not core feature delivery.
+
+I also validated the current tree directly:
+- `document-indexer`: **91 passed, 4 skipped**
+- `solr-search`: **93 passed**
+- `aithena-ui`: **54 tests passed**, lint clean, build clean
+
+## 1. What has been accomplished
+
+### v0.6.0 wave — security, hardening, and upload shipped
+Merged work from **#185, #191–#198** materially improved the product:
+
+- **Search UX polish**: #185 adds the semantic-mode facet hint so the UI explains why facets are unavailable in that mode.
+- **Security scanning baseline**: #191, #192, #193, #194, #195 establish Bandit, Checkov, Zizmor, the OWASP ZAP audit guide, and the baseline triage document.
+- **Operational hardening**: #196 upgrades `docker-compose.yml` with broader health checks, restart policies, resource limits, and production-focused deployment guidance.
+- **Upload capability**: #197 adds the FastAPI PDF upload endpoint; #198 adds the React upload flow with tests and progress handling.
+
+**Bottom line:** v0.6.0 converted Phase 4 from a plan into a shipped capability set: users can upload PDFs, operators have a documented security baseline, and the stack is substantially more production-aware.
+
+### v0.7.0 wave — versioning and observability shipped
+Merged work from **#205–#211** completed the observability/versioning wave:
+
+- **#206**: repo-root `VERSION` file, build propagation through Dockerfiles/Compose/build script.
+- **#207**: UI version footer.
+- **#208**: version/build metadata surfaced into Python services.
+- **#209**: `/v1/admin/containers` endpoint added to `solr-search`.
+- **#210**: System Status page added to the admin dashboard.
+- **#211**: release workflow updates for versioned releases.
+- **#205**: v0.6.0 release notes and v0.7.0 draft changelog.
+
+**Bottom line:** the stack now has a real provenance story. Operators can see what is running, and the product is much closer to supportable release management.
+
+## 2. Current state of the codebase
+
+### Architecture quality
+
+The service boundaries are good.
+
+- **Search/API**: `solr-search` is the strongest architectural area right now. It has a clean FastAPI entrypoint, separated config, a focused service module, strong request validation, and rich API surface (`/search`, `/stats`, `/status`, `/version`, `/v1/admin/containers`, `/v1/upload`).
+- **UI**: `aithena-ui` is cleanly organized by pages/hooks/components. Search, stats, status, upload, and admin entrypoints are easy to follow. The current Admin tab is still an iframe bridge into Streamlit, which is acceptable as a transition but should not be the end state.
+- **Compose stack**: `docker-compose.yml` now reflects a serious multi-service architecture: SolrCloud + ZooKeeper, Redis, RabbitMQ, embeddings, indexing workers, FastAPI, Streamlit admin, React UI, nginx, certbot.
+
+### Version propagation
+
+The new versioning model is sound:
+
+- `VERSION` at repo root is now the baseline source of truth.
+- `buildall.sh` resolves version from exact git tag first, then `VERSION`, then `dev`.
+- Docker build args propagate `VERSION`, `GIT_COMMIT`, and `BUILD_DATE` into source-built images.
+- UI picks up the build-time version for the footer.
+- Python services now expose build/version metadata, and `solr-search` aggregates that into admin-friendly status responses.
+
+This is the right direction for release traceability and supportability.
+
+### CI/CD and test posture
+
+The repo is in a much better place than earlier phases:
+
+- Python CI exists and is useful.
+- Frontend linting exists and is cleanly scoped.
+- Security scanners are wired into CI.
+- Release automation exists.
+- Local validation currently passes cleanly across backend and frontend.
+
+The important nuance: **confidence is good, but not complete**. CI is still uneven across domains, and release automation is not yet at the level I would call production-grade.
+
+### Security posture
+
+Security posture improved significantly today.
+
+Strengths:
+- automated SAST/IaC/workflow scanning is present;
+- a documented baseline exists;
+- no critical findings are called out in the baseline;
+- compose hardening is materially better than before.
+
+Limits:
+- scanners are still **non-blocking**;
+- admin surfaces remain broadly exposed through nginx;
+- there is still no real authentication/authorization story around operations surfaces.
+
+### Milestone roadmap review
+
+| Milestone | Read | Review |
+|---|---|---|
+| **v0.6.0** | 2 open issues remain | Correctly narrowed to the two copilot polish items now represented by draft PRs #183 and #184. |
+| **v0.7.0** | Complete | Good milestone: clear theme, coherent changes, shipped value. |
+| **v0.8.0 — Admin & Release Confidence** | Active | The right next milestone. GitHub currently shows **4 open issues**, with 4 matching draft PRs (#229–#232). If planning still says 5 open issues, the roadmap view should be reconciled. |
+| **v0.9.0 — Operability & Launch Prep** | 6 open issues | This is the real pre-v1.0 hardening milestone: auth/admin protection, metrics, failover, capacity, degraded mode, release readiness docs. |
+| **v1.0.0 — Production Ready** | Empty gate | Correct. Keep it as a release gate, not a feature bucket. |
+| **v1.1.0 — Monorepo Restructure** | 4 open issues | Correctly deferred until after v1.0. |
+
+**Roadmap concern:** milestone hygiene is slightly messy in GitHub right now. There is a duplicate-looking `v0.6.0` milestone situation and several legacy milestones remain open with zero active work. That does not hurt code quality, but it does reduce planning clarity.
+
+## 3. Active work in progress
+
+Per instruction, I did **not** review draft PR contents. I only noted their targets.
+
+### Current draft PRs from @copilot
+- **#183** — LRU eviction for the similar-books cache (**targets v0.6.0**, issue #179)
+- **#184** — return 400 for invalid search mode / validation + tests (**targets v0.6.0**, issue #181)
+- **#229** — native React admin dashboard parity (**targets v0.8.0**, issue #213)
+- **#230** — admin operations API for queue/document recovery (**targets v0.8.0**, issue #212)
+- **#231** — Python dependency re-baseline / stale Mend cleanup (**targets v0.8.0**, issue #214)
+- **#232** — expanded E2E coverage (**targets v0.8.0**, issue #215)
+
+This is a sensible queue. The active work lines up with the roadmap: close the last v0.6 polish items, then use v0.8 to remove operational weak spots.
+
+## 4. Risks and concerns
+
+### 1. Biggest production blocker: admin exposure and missing auth
+`nginx/default.conf` currently publishes:
+- `/admin/solr/`
+- `/admin/rabbitmq/`
+- `/admin/redis/`
+- `/admin/streamlit/`
+
+That is convenient for development and operator visibility, but it is the clearest pre-v1.0 risk in the repo. The codebase still lacks a hardened access-control model for operational surfaces.
+
+### 2. Release automation is improved, but still incomplete
+The current tree has a lightweight `release.yml`, but the repo does **not** yet look fully release-hardened.
+
+Key gaps:
+- no image build/publish path in the visible release workflow;
+- no strong semver gate in the working tree;
+- no complete release gate that enforces docs/tests/build artifacts together;
+- no signed/provenance-oriented release story yet.
+
+Notably, PR #211 indicates versioned release workflow work landed, but in the current tree I only see the release workflow itself; I do **not** see a separate `version-check.yml` file. That is worth reconciling before calling release automation complete.
+
+### 3. v0.7 documentation still looks transitional
+`docs/features/v0.7.0-draft.md` still reads like a planning document rather than a post-implementation release summary. That is acceptable for an in-flight milestone, but it should be converted into a factual shipped document before the release is cut.
+
+### 4. Compose hardening is good, not final
+The compose file is much better than before, but there are still practical operational gaps:
+- CPU controls are still uneven across services;
+- worker health is coarse (`pgrep` style health checks for Python workers);
+- some infrastructure/admin convenience surfaces remain very open.
+
+### 5. E2E confidence is not yet integrated into the main release path
+The repo has E2E infrastructure, but expanded E2E coverage is still explicitly open work. Until #232 lands and is wired into release confidence, v1.0 readiness would still rely too heavily on lower-level tests plus manual judgment.
+
+## 5. Recommendations for the path to v1.0
+
+### Immediate
+1. **Finish v0.6.0 cleanly** by merging #183 and #184 after review.
+2. **Treat v0.7.0 as complete in code, but not release-ready until docs are normalized** and the release workflow story is reconciled.
+
+### v0.8.0 should stay tightly focused
+Keep v0.8.0 exactly about confidence-building work:
+- replace the admin iframe with a native React admin surface;
+- land the admin operations API;
+- re-baseline Python dependencies;
+- expand E2E coverage.
+
+That milestone directly attacks the remaining weak points without reopening architecture.
+
+### v0.9.0 should be the true pre-v1.0 gate
+Use v0.9.0 to close the remaining launch blockers:
+- protect admin/ops surfaces;
+- rotate/default-credential cleanup;
+- metrics + alert thresholds;
+- failover and recovery drills;
+- capacity/sizing guidance;
+- degraded-mode behavior for semantic search;
+- final release documentation pack.
+
+### Before declaring v1.0
+I would require all of the following:
+1. **admin/auth story closed**;
+2. **release workflow reconciled and trusted**;
+3. **E2E coverage landed and exercised**;
+4. **milestone roadmap cleaned up** so the board reflects reality;
+5. **v0.7+ docs updated to shipped-state language**.
+
+## Final assessment
+
+The project is in a strong state.
+
+The team has already solved the hard product problems: indexing, search, hybrid retrieval, UI workflow, upload flow, and system visibility. What remains is the work every promising system faces before production: **operational safety, release rigor, and access control**.
+
+That is a good place to be.
+# Ripley — v1.0.0 Roadmap Plan
+
+**Author:** Ripley (Lead)  
+**Requested by:** Juanma (Product Owner)  
+**Date:** 2026-03-15  
+**Status:** Proposed
+
+## Context
+
+Aithena has completed v0.3.0 through v0.7.0, including search, upload, security scanning, container hardening, versioning, and observability. Two @copilot-owned v0.6.0 polish issues remain hands-off (#179, #181), and the remaining security milestone noise was a Mend batch tied to stale dependency snapshots.
+
+## Mend triage outcome
+
+I reviewed the open Mend issues in the #5-#35 range against the current repo state:
+
+- **Closed as stale / no longer actionable:** #5, #6, #7, #17, #18, #20, #29, #30, #31, #32, #33, #34, #35
+- **Why they were stale:** they referenced Python 3.7 wheels (`cp37`), removed `qdrant-*` manifests, or pre-`uv` transitive resolutions that no longer match the current Python 3.11 Solr-first stack
+- **Replacement tracking:** #214 — **Re-baseline Python dependencies and retire stale Mend alerts**
+
+This keeps v1.0 security work tied to the dependencies we actually ship rather than legacy Mend noise.
+
+## Key product/readiness assessment
+
+1. **Semantic search is already present.** The repo is not BM25-only anymore; semantic and hybrid search exist, but they still need degraded-mode hardening, tuning guidance, and stronger release evidence.
+2. **The biggest v1 blocker is admin UX.** Shipping v1.0 with a Streamlit iframe would feel incomplete and weaken testability.
+3. **Operational readiness still needs a final pass.** Metrics/alerts, admin auth/credential hardening, failover drills, and capacity guidance are still needed for a credible production-ready release.
+4. **Docs must be release-grade.** The project already chose a documentation-first release gate, so v1.0 needs a complete documentation pack and readiness checklist.
+
+## Milestone plan
+
+### v0.8.0 — Admin & Release Confidence
+
+Goal: remove the biggest visible stop-gaps and replace stale security noise with current, actionable work.
+
+1. **#169** — P4: Migrate Streamlit admin features to native React UI *(epic, moved from v0.6.0 hardening)*
+2. **#212** — Build admin operations API for queue triage and recovery
+3. **#213** — Implement React admin dashboard parity and retire the Streamlit iframe
+4. **#214** — Re-baseline Python dependencies and retire stale Mend alerts
+5. **#215** — Expand end-to-end coverage for upload, semantic search, and admin smoke flows
+
+### v0.9.0 — Operability & Launch Prep
+
+Goal: close the remaining production gaps before filling the v1.0 release milestone.
+
+1. **#216** — Protect production admin surfaces and rotate default service credentials
+2. **#217** — Add scrapeable metrics and alert thresholds for search and indexing
+3. **#218** — Run failover and recovery drills and publish operator runbooks
+4. **#219** — Benchmark search/indexing capacity and publish a sizing guide
+5. **#220** — Harden semantic search degraded-mode behavior and tuning guidance
+6. **#221** — Publish the v1.0 release documentation pack and readiness checklist
+
+## Routing decisions
+
+- **Parker:** backend admin API / migration epic (#169, #212)
+- **Dallas:** native React admin parity (#213)
+- **Kane:** dependency baseline and final auth/credential hardening (#214, #216)
+- **Lambert:** expanded end-to-end release confidence coverage (#215)
+- **Brett:** metrics/alerts plus failover/runbook work (#217, #218)
+- **Ash:** search capacity + semantic search productization (#219, #220)
+- **Newt:** release docs and final readiness pack (#221)
+
+## What stays outside this plan
+
+- **#179 and #181** stay in v0.6.0 and remain hands-off because they are already assigned to @copilot.
+- I did **not** pull new feature scope into the roadmap beyond what supports a real v1.0 release.
+- v1.0.0 itself stays empty for now; it should be populated only with verified release-gate leftovers after v0.8.0 and v0.9.0 burn down.
+
+## Recommended v1.0 entry criteria
+
+Do not mark v1.0.0 ready until all of the following are true:
+
+- React admin replaces the Streamlit iframe for normal operator workflows
+- stale dependency alerts are replaced by a fresh Python 3.11 security baseline
+- E2E coverage includes upload, semantic/similar-books behavior, and admin smoke coverage
+- production admin surfaces are authenticated and default service credentials are gone
+- operators have machine-readable metrics, alert thresholds, failover runbooks, and sizing guidance
+- README / manuals / release guide / readiness checklist are current and reviewable
+
+## GitHub actions completed
+
+- created milestone **v0.8.0 — Admin & Release Confidence**
+- created milestone **v0.9.0 — Operability & Launch Prep**
+- moved **#169** into v0.8.0 and marked it as an epic
+- created issues **#212–#221** for the roadmap work
+- closed stale Mend issues **#5, #6, #7, #17, #18, #20, #29, #30, #31, #32, #33, #34, #35**
