@@ -25,15 +25,41 @@ export interface UseSimilarBooksResult {
   error: string | null;
 }
 
+export const MAX_CACHE_SIZE = 100;
+
 const similarBookCache = new Map<string, SimilarBook>();
 
-export function getCachedSimilarBook(bookId: string): SimilarBook | undefined {
-  return similarBookCache.get(bookId);
+/** Returns the current number of entries in the cache. Intended for tests. */
+export function getSimilarBookCacheSize(): number {
+  return similarBookCache.size;
 }
 
-function cacheSimilarBooks(books: SimilarBook[]): void {
+/** Clears all entries from the cache. Intended for tests. */
+export function clearSimilarBookCache(): void {
+  similarBookCache.clear();
+}
+
+export function getCachedSimilarBook(bookId: string): SimilarBook | undefined {
+  const book = similarBookCache.get(bookId);
+  if (book !== undefined) {
+    // Refresh access order (LRU: move to most-recently-used position)
+    similarBookCache.delete(bookId);
+    similarBookCache.set(bookId, book);
+  }
+  return book;
+}
+
+/** Caches an array of books with LRU eviction. Exported for testing. */
+export function cacheSimilarBooks(books: SimilarBook[]): void {
   books.forEach((book) => {
+    // Delete before re-inserting to refresh insertion order for LRU tracking
+    similarBookCache.delete(book.id);
     similarBookCache.set(book.id, book);
+    if (similarBookCache.size > MAX_CACHE_SIZE) {
+      // Evict the least-recently-used entry (first key in insertion order)
+      const lruKey = similarBookCache.keys().next().value as string;
+      similarBookCache.delete(lruKey);
+    }
   });
 }
 
