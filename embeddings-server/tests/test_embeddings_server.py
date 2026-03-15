@@ -64,6 +64,20 @@ class TestModelInfo:
         assert main_module.embedding_dim == EMBEDDING_DIM
 
 
+class TestVersionEndpoint:
+    def test_version_endpoint_returns_build_metadata(self, app_client):
+        """/version returns service build metadata."""
+        client, main_module = app_client
+        response = client.get("/version")
+        assert response.status_code == 200
+        assert response.json() == {
+            "service": "embeddings-server",
+            "version": main_module.VERSION,
+            "commit": main_module.GIT_COMMIT,
+            "built": main_module.BUILD_DATE,
+        }
+
+
 class TestEmbeddingsEndpoint:
     def test_single_string_input(self, app_client):
         """A single string must be accepted and return one embedding."""

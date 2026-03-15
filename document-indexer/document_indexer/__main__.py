@@ -20,6 +20,7 @@ from . import (
     CHUNK_SIZE,
     EMBEDDINGS_HOST,
     EMBEDDINGS_PORT,
+    GIT_COMMIT,
     QUEUE_NAME,
     RABBITMQ_HOST,
     RABBITMQ_PORT,
@@ -28,6 +29,7 @@ from . import (
     SOLR_COLLECTION,
     SOLR_HOST,
     SOLR_PORT,
+    VERSION,
 )
 from .chunker import chunk_text_with_pages
 from .embeddings import get_embeddings
@@ -385,6 +387,7 @@ def consume() -> None:
 
 
 if __name__ == "__main__":
+    logger.info("Starting document-indexer v%s (commit: %s)", VERSION, GIT_COMMIT)
     logger.info(
         "Starting document-indexer against Solr %s:%s/%s",
         SOLR_HOST,

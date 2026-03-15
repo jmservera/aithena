@@ -3,7 +3,7 @@
 import logging
 import sys
 
-from config import MODEL_NAME, PORT
+from config import BUILD_DATE, GIT_COMMIT, MODEL_NAME, PORT, VERSION
 from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
@@ -20,7 +20,7 @@ except Exception as exc:
     logger.critical("Failed to load embedding model '%s': %s", MODEL_NAME, exc, exc_info=True)
     sys.exit(1)
 
-app = FastAPI(title="𐃆 Aithena Embeddings API")
+app = FastAPI(title="𐃆 Aithena Embeddings API", version=VERSION)
 
 
 class EmbeddingsInput(BaseModel):
@@ -68,6 +68,17 @@ async def health():
 async def model_info() -> ModelInfo:
     """Returns the active embedding model name and its output dimension."""
     return ModelInfo(model=MODEL_NAME, embedding_dim=embedding_dim)
+
+
+@app.get("/version", include_in_schema=False)
+async def version() -> dict[str, str]:
+    """Returns service build metadata."""
+    return {
+        "service": "embeddings-server",
+        "version": VERSION,
+        "commit": GIT_COMMIT,
+        "built": BUILD_DATE,
+    }
 
 
 @app.post("/v1/embeddings/")

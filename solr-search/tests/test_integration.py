@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from config import settings  # noqa: E402
 from main import app  # noqa: E402
 
 
@@ -267,6 +268,19 @@ def test_v1_health_and_info_aliases_return_ok() -> None:
 
     assert health_response.status_code == 200
     assert info_response.status_code == 200
+
+
+def test_version_endpoint_returns_build_metadata() -> None:
+    client = get_client()
+    response = client.get("/version")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "service": "solr-search",
+        "version": settings.version,
+        "commit": settings.commit,
+        "built": settings.built,
+    }
 
 
 @patch("main.requests.get")

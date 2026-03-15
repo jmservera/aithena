@@ -182,3 +182,9 @@ REDIS_PORT=6379
 3. E2E test: Add full pipeline test (upload → queue → indexing → search) in e2e/
 4. Monitoring: Consider logging upload metrics (file count, size distribution, RabbitMQ latency)
 
+### 2026-03-15 — Version Metadata Contract for Python Services
+
+- FastAPI backends expose `GET /version` with a shared payload shape: `{service, version, commit, built}` sourced from `VERSION`, `GIT_COMMIT`, and `BUILD_DATE` environment variables.
+- Worker-style services (`document-indexer`, `document-lister`) should log version and commit at startup rather than exposing an HTTP endpoint.
+- The Streamlit admin surface shows the injected app version in the sidebar as `Admin v{VERSION}` so container builds expose release identity without extra API calls.
+
