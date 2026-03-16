@@ -54,6 +54,9 @@ def test_run_setup_writes_env_and_hashes_password(tmp_path: Path) -> None:
     assert env_values["AUTH_DB_PATH"] == "/data/auth/users.db"
     assert env_values["AUTH_JWT_SECRET"] == "generated-secret-value"
     assert env_values["CORS_ORIGINS"] == "http://localhost"
+    assert env_values["RABBITMQ_USER"] == "aithena"
+    assert env_values["RABBITMQ_PASS"] == "generated-secret-value"
+    assert env_values["REDIS_PASSWORD"] == "generated-secret-value"
     assert "correct-horse-battery-staple" not in env_text
     assert authenticate_user(auth_db_path, "admin", "correct-horse-battery-staple") is not None
 
@@ -83,6 +86,9 @@ def test_placeholder_secret_is_regenerated(tmp_path: Path) -> None:
                 "AUTH_DB_PATH=/data/auth/users.db",
                 "AUTH_JWT_SECRET=generate-with-installer",
                 "AUTH_ADMIN_USERNAME=admin",
+                "RABBITMQ_USER=guest",
+                "RABBITMQ_PASS=generate-with-installer",
+                "REDIS_PASSWORD=generate-with-installer",
             ]
         )
         + "\n",
@@ -105,6 +111,9 @@ def test_placeholder_secret_is_regenerated(tmp_path: Path) -> None:
     env_values = load_env_file(env_path)
     assert result.generated_jwt_secret is True
     assert env_values["AUTH_JWT_SECRET"] == "fresh-generated-secret"
+    assert env_values["RABBITMQ_USER"] == "aithena"
+    assert env_values["RABBITMQ_PASS"] == "fresh-generated-secret"
+    assert env_values["REDIS_PASSWORD"] == "fresh-generated-secret"
 
 
 def test_rerun_preserves_existing_jwt_secret_and_users(tmp_path: Path) -> None:
@@ -133,10 +142,11 @@ def test_rerun_preserves_existing_jwt_secret_and_users(tmp_path: Path) -> None:
         connection.commit()
 
     env_path.write_text(
-        env_path.read_text(encoding="utf-8").replace(
-            "AUTH_JWT_SECRET=generated-secret-value",
-            "AUTH_JWT_SECRET=keep-existing-secret",
-        ),
+        env_path.read_text(encoding="utf-8")
+        .replace("AUTH_JWT_SECRET=generated-secret-value", "AUTH_JWT_SECRET=keep-existing-secret")
+        .replace("RABBITMQ_USER=aithena", "RABBITMQ_USER=custom-rabbitmq-user")
+        .replace("RABBITMQ_PASS=generated-secret-value", "RABBITMQ_PASS=keep-rabbitmq-secret")
+        .replace("REDIS_PASSWORD=generated-secret-value", "REDIS_PASSWORD=keep-redis-secret"),
         encoding="utf-8",
     )
 
@@ -156,6 +166,9 @@ def test_rerun_preserves_existing_jwt_secret_and_users(tmp_path: Path) -> None:
     env_values = load_env_file(env_path)
     assert result.generated_jwt_secret is False
     assert env_values["AUTH_JWT_SECRET"] == "keep-existing-secret"
+    assert env_values["RABBITMQ_USER"] == "custom-rabbitmq-user"
+    assert env_values["RABBITMQ_PASS"] == "keep-rabbitmq-secret"
+    assert env_values["REDIS_PASSWORD"] == "keep-redis-secret"
     assert authenticate_user(auth_db_path, "admin", "second-password") is not None
 
     with sqlite3.connect(auth_db_path) as connection:
@@ -207,6 +220,9 @@ def test_reset_recreates_auth_db(tmp_path: Path) -> None:
     assert result.admin_action == "created"
     assert result.generated_jwt_secret is True
     assert env_values["AUTH_JWT_SECRET"] == "second-secret"
+    assert env_values["RABBITMQ_USER"] == "aithena"
+    assert env_values["RABBITMQ_PASS"] == "second-secret"
+    assert env_values["REDIS_PASSWORD"] == "second-secret"
     assert authenticate_user(auth_db_path, "admin", "fresh-password") is not None
 
     with sqlite3.connect(auth_db_path) as connection:

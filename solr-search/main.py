@@ -31,6 +31,7 @@ from auth import (
 )
 from config import settings
 from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
+from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -90,6 +91,8 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         "/v1/auth/login/",
         "/v1/auth/validate",
         "/v1/auth/validate/",
+        "/v1/metrics",
+        "/v1/metrics/",
         "/docs",
         "/redoc",
         "/openapi.json",
@@ -198,6 +201,16 @@ def resolve_page_size(limit: int | None, page_size: int) -> int:
 
 def collect_search_filters(**filters: str | None) -> dict[str, str]:
     return {name: value.strip() for name, value in filters.items() if value and value.strip()}
+
+
+@contextlib.contextmanager
+def _track_search_metrics(mode: str) -> Generator[None, None, None]:
+    started = time.perf_counter()
+    metrics_registry.increment_search_request(mode)
+    try:
+        yield
+    finally:
+        metrics_registry.observe_search_latency(mode, time.perf_counter() - started)
 
 
 def _is_public_path(path: str) -> bool:
@@ -372,12 +385,13 @@ def search(
         year=fq_year,
     )
 
-    if mode == "keyword":
-        return _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-    if mode == "semantic":
-        return _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-    # hybrid
-    return _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+    with _track_search_metrics(mode):
+        if mode == "keyword":
+            return _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+        if mode == "semantic":
+            return _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+        # hybrid
+        return _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
 
 
 def _search_keyword(
@@ -418,20 +432,20 @@ def _search_keyword(
         for document in response.get("docs", [])
     ]
 
-    result = {
+    search_response: dict[str, Any] = {
         "query": q,
         "mode": "keyword",
         "sort": {"by": sort_by, "order": sort_order},
+        "degraded": degraded,
         **build_pagination(response.get("numFound", 0), page, page_size),
         "results": results,
         "facets": parse_facet_counts(payload),
     }
-    if degraded:
-        result["degraded"] = True
-        result["message"] = message or EMBEDDINGS_DEGRADED_MESSAGE
-        if requested_mode:
-            result["requested_mode"] = requested_mode
-    return result
+    if message is not None:
+        search_response["message"] = message
+    if requested_mode is not None and requested_mode != "keyword":
+        search_response["requested_mode"] = requested_mode
+    return search_response
 
 
 def _search_semantic(
@@ -486,8 +500,8 @@ def _search_semantic(
     return {
         "query": q,
         "mode": "semantic",
-        "degraded": False,
         "sort": {"by": "score", "order": "desc"},
+        "degraded": False,
         **build_pagination(response.get("numFound", len(results)), 1, top_k),
         "results": results,
         "facets": {"author": [], "category": [], "year": [], "language": []},
@@ -532,7 +546,7 @@ def _search_hybrid(
         kw_future = pool.submit(query_solr, kw_params)
         emb_future = pool.submit(_fetch_embedding, q)
 
-        kw_payload = kw_future.result()
+        kw_future_result = kw_future.result()
         try:
             vector = emb_future.result()
         except HTTPException as exc:
@@ -551,6 +565,8 @@ def _search_hybrid(
                     requested_mode="hybrid",
                 )
             raise
+
+        kw_payload = kw_future_result
 
     knn_payload = query_solr(
         build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
@@ -582,8 +598,8 @@ def _search_hybrid(
     return {
         "query": q,
         "mode": "hybrid",
-        "degraded": False,
         "sort": {"by": "score", "order": "desc"},
+        "degraded": False,
         **build_pagination(len(fused), 1, page_size),
         "results": fused,
         "facets": parse_facet_counts(kw_payload),
@@ -808,26 +824,29 @@ def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
     return {"status": solr_status, "nodes": node_count, "docs_indexed": docs_indexed}
 
 
-def _get_indexing_status(key_pattern: str) -> dict[str, int]:
-    """Scan Redis for *key_pattern* keys and tally indexing state counts."""
+def _get_indexing_status_details(key_pattern: str) -> tuple[dict[str, int], set[str] | None]:
+    """Scan Redis for *key_pattern* keys and return counts plus failed-key identities."""
+    empty = {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
     try:
         pool = _get_redis_pool()
         client = redis_lib.Redis(connection_pool=pool)
         keys = list(client.scan_iter(match=key_pattern, count=100))
         if not keys:
-            return {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+            return empty, set()
 
         values = client.mget(keys)
         indexed = 0
         failed = 0
         pending = 0
-        for val in values:
+        failed_keys: set[str] = set()
+        for key, val in zip(keys, values):
             if val is None:
                 pending += 1
             elif val == "text_indexed":
                 indexed += 1
             elif val == "failed":
                 failed += 1
+                failed_keys.add(str(key))
             else:
                 pending += 1
 
@@ -837,9 +856,14 @@ def _get_indexing_status(key_pattern: str) -> dict[str, int]:
             "indexed": indexed,
             "failed": failed,
             "pending": pending,
-        }
+        }, failed_keys
     except Exception:
-        return {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+        return empty, None
+
+
+def _get_indexing_status(key_pattern: str) -> dict[str, int]:
+    counts, _failed_keys = _get_indexing_status_details(key_pattern)
+    return counts
 
 
 @app.get("/v1/status/", include_in_schema=False, name="status_v1_slash")
@@ -851,7 +875,7 @@ def service_status() -> dict[str, Any]:
     - Solr CLUSTERSTATUS (node health + doc count)
     - Redis ``doc:*`` key scan (indexing state breakdown)
     - TCP reachability checks for Solr, Redis, and RabbitMQ
-    - embeddings readiness via the embeddings ``/version`` probe
+    - Embeddings `/version` probe for semantic-search readiness
     """
     parsed = urlparse(settings.solr_url)
     solr_host = parsed.hostname or settings.solr_url
@@ -863,17 +887,17 @@ def service_status() -> dict[str, Any]:
     solr_up = _tcp_check(solr_host, solr_port)
     redis_up = _tcp_check(settings.redis_host, settings.redis_port)
     rabbitmq_up = _tcp_check(settings.rabbitmq_host, settings.rabbitmq_port)
-    embeddings_up = _embeddings_available()
+    embeddings_available = _embeddings_available(timeout=CONTAINER_VERSION_TIMEOUT)
 
     return {
         "solr": solr_info,
         "indexing": indexing_info,
-        "embeddings_available": embeddings_up,
+        "embeddings_available": embeddings_available,
         "services": {
             "solr": "up" if solr_up else "down",
             "redis": "up" if redis_up else "down",
             "rabbitmq": "up" if rabbitmq_up else "down",
-            "embeddings": "up" if embeddings_up else "down",
+            "embeddings": "up" if embeddings_available else "down",
         },
     }
 
@@ -909,10 +933,6 @@ def _get_embeddings_version_url() -> str:
     return f"{scheme}://{host}{port}/version"
 
 
-def _embeddings_available() -> bool:
-    return _get_http_container_status("embeddings-server", _get_embeddings_version_url())["status"] == "up"
-
-
 def _get_http_container_status(
     name: str,
     version_url: str,
@@ -932,6 +952,44 @@ def _get_http_container_status(
         )
     except Exception:
         return _build_container_entry(name=name, status="down", container_type=container_type)
+
+
+def _embeddings_available(timeout: float = CONTAINER_VERSION_TIMEOUT) -> bool:
+    return (
+        _get_http_container_status(
+            "embeddings-server",
+            _get_embeddings_version_url(),
+            timeout=timeout,
+        )["status"]
+        == "up"
+    )
+
+
+def _get_indexing_queue_depth() -> int:
+    try:
+        client = _get_admin_redis_client()
+        return sum(1 for _key, _state, doc_status in _iter_admin_docs(client) if doc_status == "queued")
+    except HTTPException:
+        return 0
+
+
+def _refresh_metrics() -> None:
+    solr_info = _get_solr_status(settings.solr_url, timeout=settings.request_timeout)
+    metrics_registry.set_solr_live_nodes(int(solr_info.get("nodes", 0)))
+    metrics_registry.set_indexing_queue_depth(_get_indexing_queue_depth())
+
+    _indexing_counts, failed_keys = _get_indexing_status_details(settings.redis_key_pattern)
+    if failed_keys is not None:
+        metrics_registry.sync_indexing_failures(failed_keys)
+
+    metrics_registry.set_embeddings_available(1 if _embeddings_available() else 0)
+
+
+@app.get("/v1/metrics/", include_in_schema=False, name="metrics_v1_slash")
+@app.get("/v1/metrics", name="metrics_v1")
+def prometheus_metrics() -> Response:
+    _refresh_metrics()
+    return Response(content=metrics_registry.render(), headers={"Content-Type": METRICS_CONTENT_TYPE})
 
 
 def _get_tcp_container_status(

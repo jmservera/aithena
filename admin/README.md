@@ -27,12 +27,13 @@ All settings are read from environment variables (a `.env` file in `admin/src/` 
 |---|---|---|
 | `REDIS_HOST` | `localhost` | Redis hostname |
 | `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | _(empty)_ | Redis password when the server uses `requirepass` |
 | `QUEUE_NAME` | `shortembeddings` | Shared queue/key-prefix name (must match `document-lister` and `document-indexer`) |
 | `RABBITMQ_HOST` | `localhost` | RabbitMQ hostname |
 | `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ management HTTP API port |
 | `RABBITMQ_MGMT_PATH_PREFIX` | _(empty)_ | Optional management UI/API prefix such as `/admin/rabbitmq` when RabbitMQ is reverse-proxied |
-| `RABBITMQ_USER` | `guest` | RabbitMQ management API username |
-| `RABBITMQ_PASS` | `guest` | RabbitMQ management API password |
+| `RABBITMQ_USER` | `guest` | RabbitMQ management API username (rotate in production) |
+| `RABBITMQ_PASS` | `guest` | RabbitMQ management API password (rotate in production) |
 
 ## Requeue behaviour
 

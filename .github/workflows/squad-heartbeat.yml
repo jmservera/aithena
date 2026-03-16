@@ -256,9 +256,13 @@ jobs:
           COPILOT_ASSIGN_FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
-          github-token: ${{ env.COPILOT_ASSIGN_TOKEN || env.COPILOT_ASSIGN_FALLBACK_TOKEN }}
           script: |
+            const { getOctokit } = require('@actions/github');
             const fs = require('fs');
+
+            const authedGithub = getOctokit(
+              process.env.COPILOT_ASSIGN_TOKEN || process.env.COPILOT_ASSIGN_FALLBACK_TOKEN
+            );
 
             let teamFile = '.squad/team.md';
             if (!fs.existsSync(teamFile)) {
@@ -275,7 +279,7 @@ jobs:
 
             // Find issues labeled squad:copilot with no assignee
             try {
-              const { data: copilotIssues } = await github.rest.issues.listForRepo({
+              const { data: copilotIssues } = await authedGithub.rest.issues.listForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 labels: 'squad:copilot',
@@ -293,14 +297,14 @@ jobs:
               }
 
               // Get repo default branch
-              const { data: repoData } = await github.rest.repos.get({
+              const { data: repoData } = await authedGithub.rest.repos.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo
               });
 
               for (const issue of unassigned) {
                 try {
-                  await github.request('POST /repos/{owner}/{repo}/issues/{issue_number}/assignees', {
+                  await authedGithub.request('POST /repos/{owner}/{repo}/issues/{issue_number}/assignees', {
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     issue_number: issue.number,

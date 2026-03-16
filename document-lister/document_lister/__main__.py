@@ -16,14 +16,25 @@ from . import (
     POLL_INTERVAL,
     QUEUE_NAME,
     RABBITMQ_HOST,
+    RABBITMQ_PASS,
     RABBITMQ_PORT,
+    RABBITMQ_USER,
     REDIS_HOST,
+    REDIS_PASSWORD,
     REDIS_PORT,
     VERSION,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _rabbitmq_connection_parameters() -> pika.ConnectionParameters:
+    return pika.ConnectionParameters(
+        RABBITMQ_HOST,
+        RABBITMQ_PORT,
+        credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS),
+    )
 
 
 @retry(redis.exceptions.ConnectionError, delay=5, jitter=(1, 3))
@@ -122,9 +133,9 @@ def produce():
         pika.exceptions.ConnectionClosedByBroker: If the connection to the RabbitMQ server is closed
         by the broker.
     """
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
 
-    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT))
+    connection = pika.BlockingConnection(_rabbitmq_connection_parameters())
     channel = connection.channel()
     logger.info("Declaring queue %s", QUEUE_NAME)
     channel.queue_declare(queue=QUEUE_NAME, durable=True, auto_delete=False)

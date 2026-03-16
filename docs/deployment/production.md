@@ -130,7 +130,9 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
    ```
 
    The installer prompts for the book library path, admin credentials, and the public origin URL.
-   It writes `.env` (chmod 600) and bootstraps the SQLite auth DB at `AUTH_DB_DIR`.
+   It writes `.env` (chmod 600), bootstraps the SQLite auth DB at `AUTH_DB_DIR`,
+   and generates non-default RabbitMQ/Redis credentials unless you already have
+   secure values in place.
    For non-interactive environments (CI/scripts), use flags:
    ```bash
    python3 installer/setup.py \
@@ -143,7 +145,7 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
    > **Note:** `AUTH_DB_DIR` must exist on the host before `docker compose up` because Docker
    > Compose uses it as a bind-mount source for the auth database. The installer creates this
    > directory automatically. If you ever re-run the installer it preserves the existing JWT
-   > secret and user records unless you pass `--reset`.
+   > secret, service credentials, and user records unless you pass `--reset`.
 
 2. **Create volume directories**:
    ```bash
@@ -180,12 +182,29 @@ docker compose up -d
 # All services start with correct dependencies automatically
 ```
 
-To rotate the JWT secret or update the admin password, re-run the installer before restarting:
+To rotate the JWT secret, RabbitMQ password, Redis password, or bootstrap admin password, re-run the installer before restarting:
 
 ```bash
-python3 -m installer          # interactive — keeps existing secret unless it matches a known-insecure placeholder
-python3 -m installer --reset  # recreate auth DB and generate a new secret
-docker compose up -d
+python3 -m installer          # interactive — keeps existing secrets unless they match insecure placeholders
+python3 -m installer --reset  # recreate auth DB and rotate generated secrets
+```
+
+If you prefer to rotate service credentials manually, generate strong replacements (for example with `openssl rand -base64 32`), update `.env`, and then recreate every service that connects to Redis or RabbitMQ:
+
+```dotenv
+RABBITMQ_USER=aithena
+RABBITMQ_PASS=<strong-random-value>
+REDIS_PASSWORD=<strong-random-value>
+```
+
+- `docker-compose.yml` maps `RABBITMQ_USER` / `RABBITMQ_PASS` to RabbitMQ's `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` so the broker, management UI, and admin dashboard stay aligned.
+- `docker-compose.yml` injects `REDIS_PASSWORD` into the Redis container and enables `redis-server --requirepass` automatically when the variable is non-empty.
+- If you manage RabbitMQ credentials in `rabbitmq/rabbitmq.conf` instead, set `default_user` / `default_pass` there and keep `.env` in sync so `streamlit-admin`, `document-lister`, `document-indexer`, and `solr-search` still authenticate successfully.
+
+After any credential rotation:
+
+```bash
+docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx
 ```
 
 ## Health Validation
@@ -240,7 +259,7 @@ curl http://localhost/health
 docker compose logs document-lister | grep "Found.*documents"
 
 # Check RabbitMQ queue depth
-curl -u guest:guest http://localhost:15672/api/queues/%2F/shortembeddings | jq -r .messages
+docker compose exec rabbitmq rabbitmqctl list_queues name messages | grep shortembeddings
 
 # Check indexing progress via Streamlit admin
 open http://localhost/admin/streamlit/
@@ -302,8 +321,8 @@ docker compose logs -f | grep -i error
 Access service metrics via admin interfaces:
 
 - **Solr Admin**: http://localhost/admin/solr/ (JVM stats, query metrics, core stats)
-- **RabbitMQ Management**: http://localhost/admin/rabbitmq/ (queue depth, message rates, connections)
-- **Redis Commander**: http://localhost/admin/redis/ (keyspace, memory usage, commands/sec)
+- **RabbitMQ Management**: http://localhost/admin/rabbitmq/ (queue depth, message rates, connections; sign in with `RABBITMQ_USER` / `RABBITMQ_PASS` from `.env`)
+- **Redis Commander**: http://localhost/admin/redis/ (keyspace, memory usage, commands/sec; uses `REDIS_PASSWORD` from `.env` when configured)
 - **Streamlit Admin**: http://localhost/admin/streamlit/ (indexing pipeline stats, document counts)
 
 ### Resource Usage
@@ -525,13 +544,14 @@ If full system failure:
 Before going to production, verify:
 
 - [ ] Memory overcommit configured (`vm.overcommit_memory = 1`)
-- [ ] `python3 -m installer` completed successfully — `.env` written and auth DB created
+- [ ] `python3 -m installer` completed successfully — `.env` written, auth DB created, and generated secrets reviewed
 - [ ] Volume directories created with correct ownership
 - [ ] Firewall configured (only 80/443 public, block all other ports)
 - [ ] SSL certificates configured in nginx (Let's Encrypt via certbot)
-- [ ] RabbitMQ credentials changed from guest/guest (in `rabbitmq.conf`)
-- [ ] Redis password set (add `requirepass` to redis command)
-- [ ] Admin endpoints protected (add auth to nginx `/admin/*` locations)
+- [ ] RabbitMQ credentials rotated away from `guest/guest` via `.env` (`RABBITMQ_USER` / `RABBITMQ_PASS`) or matching `default_user` / `default_pass` settings in `rabbitmq/rabbitmq.conf`
+- [ ] Redis password set in `.env` (`REDIS_PASSWORD`) so Compose enables `redis-server --requirepass`
+- [ ] Rotated credentials applied with `docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx`
+- [ ] Admin endpoints protected by the nginx auth gate and login tested via `/admin/streamlit/`, `/admin/rabbitmq/`, and `/admin/redis/`
 - [ ] Auth DB directory (`AUTH_DB_DIR`) included in backup rotation
 - [ ] Backup cron job scheduled (daily at 2am: `0 2 * * * /opt/aithena/backup-aithena.sh`)
 - [ ] Monitoring alerts configured (disk space, memory usage, service health)
