@@ -1,4 +1,7 @@
+import { memo, useMemo } from 'react';
+
 import { SearchFilters } from '../hooks/search';
+import FilterChip from './FilterChip';
 
 interface ActiveFiltersProps {
   filters: SearchFilters;
@@ -13,10 +16,21 @@ const FILTER_LABELS: Record<keyof SearchFilters, string> = {
   year: 'Year',
 };
 
-function ActiveFilters({ filters, onRemove, onClearAll }: ActiveFiltersProps) {
-  const activeEntries = (
-    Object.entries(filters) as [keyof SearchFilters, string | undefined][]
-  ).filter(([, value]) => value !== undefined && value !== '');
+const ActiveFilters = memo(function ActiveFilters({
+  filters,
+  onRemove,
+  onClearAll,
+}: ActiveFiltersProps) {
+  const activeEntries = useMemo(
+    () =>
+      (Object.entries(filters) as [keyof SearchFilters, string | undefined][]).filter(
+        (entry): entry is [keyof SearchFilters, string] => {
+          const [, value] = entry;
+          return value !== undefined && value !== '';
+        }
+      ),
+    [filters]
+  );
 
   if (activeEntries.length === 0) return null;
 
@@ -24,17 +38,13 @@ function ActiveFilters({ filters, onRemove, onClearAll }: ActiveFiltersProps) {
     <div className="active-filters">
       <span className="active-filters-label">Active filters:</span>
       {activeEntries.map(([key, value]) => (
-        <span key={key} className="filter-chip">
-          <span className="filter-chip-label">{FILTER_LABELS[key]}:</span>
-          <span className="filter-chip-value">{value}</span>
-          <button
-            className="filter-chip-remove"
-            onClick={() => onRemove(key)}
-            aria-label={`Remove ${FILTER_LABELS[key]} filter`}
-          >
-            ×
-          </button>
-        </span>
+        <FilterChip
+          key={key}
+          filterKey={key}
+          label={FILTER_LABELS[key]}
+          value={value}
+          onRemove={onRemove}
+        />
       ))}
       {activeEntries.length > 1 && (
         <button className="clear-all-filters" onClick={onClearAll}>
@@ -43,6 +53,6 @@ function ActiveFilters({ filters, onRemove, onClearAll }: ActiveFiltersProps) {
       )}
     </div>
   );
-}
+});
 
 export default ActiveFilters;

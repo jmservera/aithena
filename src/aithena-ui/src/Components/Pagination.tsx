@@ -1,3 +1,5 @@
+import { memo, useMemo } from 'react';
+
 interface PaginationProps {
   page: number;
   limit: number;
@@ -5,22 +7,41 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
 }
 
-function Pagination({ page, limit, total, onPageChange }: PaginationProps) {
-  const totalPages = Math.ceil(total / limit);
-  if (totalPages <= 1) return null;
-
-  const pages: (number | '…')[] = [];
-  if (totalPages <= 7) {
-    for (let i = 1; i <= totalPages; i++) pages.push(i);
-  } else {
-    pages.push(1);
-    if (page > 3) pages.push('…');
-    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
-      pages.push(i);
+const Pagination = memo(function Pagination({ page, limit, total, onPageChange }: PaginationProps) {
+  const totalPages = useMemo(() => Math.ceil(total / limit), [total, limit]);
+  const pages = useMemo<(number | '…')[]>(() => {
+    if (totalPages <= 1) {
+      return [];
     }
-    if (page < totalPages - 2) pages.push('…');
-    pages.push(totalPages);
-  }
+
+    const nextPages: (number | '…')[] = [];
+    if (totalPages <= 7) {
+      for (let index = 1; index <= totalPages; index += 1) {
+        nextPages.push(index);
+      }
+      return nextPages;
+    }
+
+    nextPages.push(1);
+    if (page > 3) {
+      nextPages.push('…');
+    }
+    for (
+      let index = Math.max(2, page - 1);
+      index <= Math.min(totalPages - 1, page + 1);
+      index += 1
+    ) {
+      nextPages.push(index);
+    }
+    if (page < totalPages - 2) {
+      nextPages.push('…');
+    }
+    nextPages.push(totalPages);
+
+    return nextPages;
+  }, [page, totalPages]);
+
+  if (totalPages <= 1) return null;
 
   return (
     <nav className="pagination" aria-label="Search results pagination">
@@ -32,19 +53,19 @@ function Pagination({ page, limit, total, onPageChange }: PaginationProps) {
       >
         ‹
       </button>
-      {pages.map((p, i) =>
-        p === '…' ? (
-          <span key={`ellipsis-${i}`} className="pagination-ellipsis">
+      {pages.map((paginationItem, index) =>
+        paginationItem === '…' ? (
+          <span key={`ellipsis-${index}`} className="pagination-ellipsis">
             …
           </span>
         ) : (
           <button
-            key={p}
-            className={`pagination-btn${page === p ? ' active' : ''}`}
-            onClick={() => onPageChange(p as number)}
-            aria-current={page === p ? 'page' : undefined}
+            key={paginationItem}
+            className={`pagination-btn${page === paginationItem ? ' active' : ''}`}
+            onClick={() => onPageChange(paginationItem)}
+            aria-current={page === paginationItem ? 'page' : undefined}
           >
-            {p}
+            {paginationItem}
           </button>
         )
       )}
@@ -58,6 +79,6 @@ function Pagination({ page, limit, total, onPageChange }: PaginationProps) {
       </button>
     </nav>
   );
-}
+});
 
 export default Pagination;
