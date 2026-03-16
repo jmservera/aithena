@@ -132,6 +132,31 @@ describe('useAuth', () => {
     );
   });
 
+  it('includes the stored token in Authorization headers for protected requests', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockJsonResponse(loginResponse))
+      .mockResolvedValueOnce(mockJsonResponse({ ok: true }, 200));
+    const user = userEvent.setup();
+
+    renderAuthHarness();
+    await user.click(screen.getByRole('button', { name: 'Login' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('authenticated');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Protected request' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('request-status')).toHaveTextContent('200');
+    });
+
+    const protectedRequest = vi.mocked(fetch).mock.calls[1]?.[1];
+    expect(new Headers((protectedRequest as RequestInit | undefined)?.headers).get('Authorization')).toBe(
+      'Bearer jwt-123'
+    );
+  });
+
   it('auto-logs out after a 401 response from an API request', async () => {
     localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, 'jwt-123');
     vi.mocked(fetch)

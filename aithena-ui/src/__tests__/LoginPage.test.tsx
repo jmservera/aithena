@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { AUTH_TOKEN_STORAGE_KEY } from '../api';
 import LoginPage from '../pages/LoginPage';
-import { AuthContext, AuthContextValue } from '../contexts/AuthContext';
+import { AuthContext, AuthContextValue, AuthProvider } from '../contexts/AuthContext';
 
 function createAuthValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
@@ -18,6 +19,25 @@ function createAuthValue(overrides: Partial<AuthContextValue> = {}): AuthContext
     clearError: vi.fn(),
     ...overrides,
   };
+}
+
+const loginResponse = {
+  access_token: 'jwt-123',
+  token_type: 'bearer',
+  expires_in: 86400,
+  user: {
+    id: 1,
+    username: 'dallas',
+    role: 'admin',
+  },
+};
+
+function mockJsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  } as Response;
 }
 
 function renderLoginPage(
@@ -37,7 +57,31 @@ function renderLoginPage(
   );
 }
 
+function renderLoginPageWithProvider(
+  initialEntries: Parameters<typeof MemoryRouter>[0]['initialEntries'] = ['/login']
+) {
+  return render(
+    <AuthProvider>
+      <MemoryRouter initialEntries={initialEntries}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/search" element={<div>Search page</div>} />
+          <Route path="/admin" element={<div>Admin page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>
+  );
+}
+
 describe('LoginPage', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
   it('renders the login form', () => {
     renderLoginPage(createAuthValue());
 
@@ -86,6 +130,31 @@ describe('LoginPage', () => {
       expect(submittedCredentials).toEqual([['dallas', 'secret']]);
       expect(screen.getByText('Search page')).toBeInTheDocument();
     });
+  });
+
+  it('stores the token when the login form succeeds through the auth provider', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(mockJsonResponse(loginResponse));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    renderLoginPageWithProvider();
+
+    await user.type(screen.getByLabelText(/username/i), 'dallas');
+    await user.type(screen.getByLabelText(/password/i), 'secret');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Search page')).toBeInTheDocument();
+    });
+
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe('jwt-123');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/auth/login'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ username: 'dallas', password: 'secret' }),
+      })
+    );
   });
 
   it('redirects authenticated users to the original destination', async () => {
