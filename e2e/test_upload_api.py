@@ -209,7 +209,7 @@ class TestUploadAcceptance:
             headers=auth_headers,
             timeout=30,
         )
-        if resp.status_code in (500, 503):
+        if resp.status_code in (500, 502, 503):
             pytest.skip(
                 f"Upload endpoint returned {resp.status_code} — "
                 "RabbitMQ or upload directory may not be configured for this environment. "
