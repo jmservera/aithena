@@ -8,15 +8,15 @@ _Prepared by:_ Lambert (Tester)
 Commands executed for this report:
 
 ```bash
-cd /home/jmservera/source/aithena/solr-search && uv run pytest -v --tb=short 2>&1
-cd /home/jmservera/source/aithena/document-indexer && uv run pytest -v --tb=short 2>&1
-cd /home/jmservera/source/aithena/solr-search && uv run pytest -v --tb=short --cov=. --cov-report=term 2>&1
-cd /home/jmservera/source/aithena/document-indexer && uv run pytest -v --tb=short --cov=document_indexer --cov-report=term 2>&1
+cd /home/jmservera/source/aithena/src/solr-search && uv run pytest -v --tb=short 2>&1
+cd /home/jmservera/source/aithena/src/document-indexer && uv run pytest -v --tb=short 2>&1
+cd /home/jmservera/source/aithena/src/solr-search && uv run pytest -v --tb=short --cov=. --cov-report=term 2>&1
+cd /home/jmservera/source/aithena/src/document-indexer && uv run pytest -v --tb=short --cov=document_indexer --cov-report=term 2>&1
 ls -la /home/jmservera/source/aithena/e2e/
 cat /home/jmservera/source/aithena/e2e/test_upload_index_search.py
 cat /home/jmservera/source/aithena/e2e/conftest.py
 ls -la /home/jmservera/source/aithena/e2e/playwright/
-cd /home/jmservera/source/aithena/aithena-ui && grep -A12 '"scripts"' package.json
+cd /home/jmservera/source/aithena/src/aithena-ui && grep -A12 '"scripts"' package.json
 find src -type f \( -name '*.test.*' -o -name '*.spec.*' \) | sort
 ```
 

@@ -24,6 +24,33 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16T12:27Z — Validated local builds after src/ restructure (#223) [COMPLETE]
+
+- ✅ Issue #223 closed. All builds pass post-restructure.
+- Confirmed restructured frontend path `src/aithena-ui`; all build commands pass: `npm run lint`, `npm run build`, `npx vitest run` (12 test files, 83 tests).
+- Backend validation: `src/solr-search` 144 tests pass, `src/document-indexer` 91 tests pass (with `UV_NATIVE_TLS=1` env var for sandbox CA trust).
+- Root-level validation all pass: Docker Compose syntax, buildall.sh shell syntax, ruff checks.
+- Searched all active scripts/workflows/README commands — already using `src/...` paths; only historical test reports reference old paths (acceptable legacy).
+- Recorded decision: environment TLS issue isolated, not restructure regression. Document `UV_NATIVE_TLS=1` workaround for future sandbox validation if needed.
+- Ready for dev branch; no blockers for Brett's CI/CD validation.
+
+### 2026-03-16T12:27Z — Validated local builds after src/ restructure (#223)
+
+- Confirmed the restructured frontend path is `src/aithena-ui`; `npm run lint`, `npm run build`, and `npx vitest run` all pass there with 12 test files / 83 tests. Existing Upload/useUpload tests still emit the known React `act(...)` warnings but do not fail.
+- Confirmed backend validation commands pass from the new service roots: `src/solr-search` completed `uv run pytest -v --tb=short` with 144 passing tests, and `src/document-indexer` completed with 91 passing tests plus 4 maintainer-only skips.
+- In this sandbox, `document-indexer` needed `UV_NATIVE_TLS=1` so `uv` would trust the system CA store while downloading `pdfminer-six`; the plain command failed on certificate validation before tests started, so the issue was environmental rather than caused by the src/ move.
+- Verified root-level validation still matches the restructure: `docker compose -f docker-compose.yml config --quiet`, `bash -n buildall.sh`, and `ruff check src/solr-search/main.py src/embeddings-server/main.py --select S104` all pass.
+- Searched active scripts, workflows, and README commands and found they already use `src/...` paths; the only remaining old-path references are historical test reports in `docs/test-report-v0.4.0.md` and `docs/test-report-v0.5.0.md`.
+### 2026-03-16T13:45Z — Audited and updated documentation for src/ restructure (#225)
+
+- Conducted comprehensive audit of all documentation files in `docs/`, `README.md`, and `.github/copilot-instructions.md` to identify references to the pre-v1.0 service directory structure (flat root).
+- **Finding:** Parker's PR #287 (refactor: move all microservices into src/ directory) was comprehensive — nearly all documentation had already been updated to use `src/` paths, including README.md test commands, `.github/copilot-instructions.md` service architecture table, docker-compose.yml build contexts, and newer feature guides/test reports.
+- **Identified gaps:** Only the two oldest historical test reports (v0.4.0 and v0.5.0) retained pre-src/ command examples (e.g., `cd /home/jmservera/source/aithena/solr-search` instead of `cd /home/jmservera/source/aithena/src/solr-search`).
+- **Updated:** Two files with 8 total line changes to test-report-v0.4.0.md and test-report-v0.5.0.md, adding `src/` to all `cd` commands to match current directory structure.
+- **Verified:** All remaining references to service names (e.g., `docker compose logs solr-search`) and URL paths (e.g., `/admin/streamlit/`, `/v1/admin/containers`) are correct and unchanged — they refer to Docker service names and HTTP routes, not filesystem paths.
+- **Key learning:** Documentation audit methodology: distinguish between filesystem paths (need updating), service names in docker-compose (remain static), and HTTP routes (remain static).
+- PR #225 is ready for merge to `dev`.
+
 ### 2026-03-15T16:31 — Added build-time version footer to main UI (#201)
 
 - Wired the frontend build version through `vite.config.ts` with `define.__APP_VERSION__ = JSON.stringify(process.env.VERSION || 'dev')`, matching Brett's Dockerfile `VERSION` env setup from #199.

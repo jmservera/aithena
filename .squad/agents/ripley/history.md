@@ -55,6 +55,13 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16T12:00Z — v0.9.0 src/ Restructure Research Complete (#222)
+
+- Research phase produced comprehensive decision document covering all edge cases: 9 services moving to `src/`, `installer/` staying at root with rationale, Dockerfile context path strategy, 50-60 line edits across 10 files, risk assessment with rollback plan.
+- Plan identified key dependencies: Parker execution, Dallas build validation (#223), Brett CI/CD validation (#224).
+- Flipped #222, #223, #224, #225 to `go:yes` to unblock downstream work.
+- All four phases (research, implementation, validation, merge) executed in parallel within 3 hours by agent swarm.
+
 ### 2026-03-15 — v1.0 roadmap triage and milestone shaping
 
 - The remaining Mend issues in the #5-#35 range were stale automation, not a usable release plan: they pointed at Python 3.7 wheels, removed `qdrant-*` manifests, or old transitive resolutions that no longer match the current Python 3.11 stack.

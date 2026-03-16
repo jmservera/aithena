@@ -49,6 +49,14 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16T12:00Z — v0.9.0 src/ Restructure Implementation Complete (#222, PR #287)
+
+- Executed Ripley's restructure plan: moved 9 directories via `git mv` (admin, aithena-ui, document-indexer, document-lister, embeddings-server, nginx, rabbitmq, solr, solr-search).
+- Updated ~60 path references across docker-compose.yml, buildall.sh, .github/workflows/ci.yml, lint-frontend.yml, version-check.yml, .github/copilot-instructions.md, ruff.toml, docs/.
+- Recorded decision on Dockerfile context paths: keep repo-root context, update COPY paths inside Dockerfiles (avoids build-logic churn).
+- PR #287 merged to `dev` with all CI/CD validation passing.
+- Noted: local uv virtual environments may cache old shebangs; users may need `rm -rf .venv && uv sync` post-pull.
+
 ### 2026-03-15 — Admin Containers Endpoint Contract (#202)
 
 - `solr-search` now exposes `GET /v1/admin/containers` (and trailing-slash alias) to aggregate container health/version data across app services, workers, and infrastructure.

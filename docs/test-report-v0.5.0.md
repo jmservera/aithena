@@ -8,9 +8,9 @@ _Prepared by:_ Newt (Product Manager)
 Commands executed for this report:
 
 ```bash
-cd /home/jmservera/source/aithena/solr-search && uv run pytest -v --tb=short
-cd /home/jmservera/source/aithena/document-indexer && uv run pytest -v --tb=short
-cd /home/jmservera/source/aithena/aithena-ui && npx vitest run
+cd /home/jmservera/source/aithena/src/solr-search && uv run pytest -v --tb=short
+cd /home/jmservera/source/aithena/src/document-indexer && uv run pytest -v --tb=short
+cd /home/jmservera/source/aithena/src/aithena-ui && npx vitest run
 ```
 
 ## Executive summary

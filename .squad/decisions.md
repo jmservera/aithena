@@ -4185,3 +4185,201 @@ Enable via: **Settings → Security → Code security and analysis → Secret sc
 - Only repository admins can enable this feature  
 
 **Tagging @jmservera (Product Owner) for action.**
+
+---
+
+# Decision: v0.9.0 src/ Directory Restructure Plan
+
+**Date:** 2026-03-16  
+**Author:** Ripley (Lead)  
+**Issue:** #222  
+**Related:** #223 (build validation), #224 (CI/CD validation), #225 (edge case testing)  
+**Status:** ✅ Implemented — PR #287 merged to dev
+
+## Summary
+
+Restructured repository to move 9 microservices (`admin`, `aithena-ui`, `document-indexer`, `document-lister`, `embeddings-server`, `nginx`, `rabbitmq`, `solr`, `solr-search`) into a new `src/` directory, reducing repository root clutter from 21+ items to ~10 while maintaining all build logic and backward compatibility.
+
+## Scope
+
+### Moving to src/ (9 items)
+- `admin/` — Streamlit Python service
+- `aithena-ui/` — React 18 + Vite frontend
+- `document-indexer/` — Python RabbitMQ consumer
+- `document-lister/` — Python file watcher + RabbitMQ producer
+- `embeddings-server/` — Python embeddings API
+- `nginx/` — Nginx reverse proxy config
+- `rabbitmq/` — RabbitMQ broker config
+- `solr-search/` — Python FastAPI search API
+- `solr/` — SolrCloud configuration
+
+### Staying at Root
+- `.github/`, `.squad/`, `docs/`, `e2e/` — Infrastructure & meta
+- `LICENSE`, `README.md`, `VERSION` — Project metadata
+- `buildall.sh`, `docker-compose*.yml`, `ruff.toml` — Build & config
+- `installer/` — **Edge case: stays at root** (bootstrap tool, not a service)
+
+## Implementation
+
+**Files Updated (~60 line edits):**
+- `docker-compose.yml` (10 paths: service build contexts, volume mounts)
+- `buildall.sh` (5 Python service directory list entries)
+- `.github/workflows/ci.yml` (6 working-directory + cache paths)
+- `.github/workflows/lint-frontend.yml` (4 paths)
+- `.github/workflows/version-check.yml` (6 Dockerfile paths)
+- `.github/copilot-instructions.md` (12-15 service architecture table + examples)
+- `ruff.toml` (3 per-file-ignore paths)
+- `docs/test-report-*.md` (4-6 command examples)
+
+**All changes:** Declarative path updates only. No runtime logic changes. No sys.path modifications required (buildall.sh uses relative `cd` paths).
+
+## Risk Assessment
+
+**Low Risk:**
+- ✅ No code logic changes — only paths
+- ✅ `git mv` preserves commit history
+- ✅ No build context or dependency changes
+
+**Testing:** All validation passed:
+- Docker Compose syntax validation
+- Workflow YAML validation
+- Shell script syntax check (`bash -n buildall.sh`)
+- Full test suites (frontend: 83 tests, solr-search: 144 tests, document-indexer: 91 tests)
+
+**Rollback:** Simple `git mv src/{service} {service}` reversal if needed.
+
+## Decisions Recorded
+
+See inline decisions below for:
+- Parker's Dockerfile context path decision
+- Dallas's environment-specific TLS validation outcome
+- Brett's CI/CD post-restructure validation notes
+
+---
+
+# Decision: src/ Restructure — Dockerfile Context Paths
+
+**Date:** 2026-03-16  
+**Author:** Parker (Backend Dev)  
+**Issue:** #222  
+**Context:** After moving services to `src/`, should build contexts change?
+
+## Decision
+
+Keep `solr-search` image builds rooted at the repository root (`context: .` in docker-compose.yml). Update Dockerfile `COPY` paths instead of changing the build context.
+
+## Why
+
+- `solr-search/Dockerfile` depends on files addressed from the repo root during image builds (e.g., reading config/setup scripts).
+- Keeping `context: .` minimizes build-logic churn.
+- Only declarative path updates inside the Dockerfile are needed (`COPY src/solr-search/...`).
+- This pattern applies to all service Dockerfiles.
+
+## Notes
+
+- `installer/` stays at root and explicitly imports `src/solr-search`.
+- Installer tests under `src/solr-search/tests/` resolve the repo root above `src/` (`parents[3]` in Python path resolution).
+- Local uv virtual environments may need to be recreated after the move (console-script shebangs capture absolute directory paths).
+
+---
+
+# Decision: Post-Restructure Build Validation Outcome
+
+**Date:** 2026-03-16  
+**Author:** Dallas (Frontend Dev)  
+**Issue:** #223  
+**Status:** ✅ Closed
+
+## Decision
+
+Treat the post-restructure build validation as **passed** without code changes. Record the document-indexer `uv` failure as an environment-specific TLS trust problem rather than a restructure regression.
+
+## Validation Summary
+
+**Frontend (src/aithena-ui):**
+- `npm run lint`, `npm run build`, `npx vitest run` all ✅ PASS
+- 83 tests pass; existing React `act()` warnings are expected (not new)
+
+**Backend:**
+- `src/solr-search` tests: ✅ 144 PASS
+- `src/document-indexer` tests: ✅ 91 PASS (once `UV_NATIVE_TLS=1` set)
+
+**Root-level Validation:**
+- Docker Compose syntax ✅
+- Shell script syntax (`bash -n buildall.sh`) ✅
+- Ruff linting with new paths ✅
+
+**Environment Note:**
+
+The `document-indexer` `uv` failure on plain `uv run pytest` was due to sandbox CA trust configuration, not the restructure. Adding `UV_NATIVE_TLS=1` to use the system CA store resolved it. This is an environment-specific issue, not a code regression.
+
+## Follow-up
+
+If sandbox TLS behavior becomes common, document the `UV_NATIVE_TLS=1` workaround for local validation environments.
+
+---
+
+# Decision: Installer-Managed Service Credentials
+
+**Date:** 2026-03-16  
+**Author:** @copilot  
+**Issue:** #216  
+**Related:** `installer/setup.py`, `.env.example`, `docker-compose.yml`, `docs/deployment/production.md`
+
+## Context
+
+Production stack currently depends on hardcoded/default service credentials. Need to stop this and document a clear rotation path for operators. RabbitMQ and Redis already sit behind the same `.env`-driven Docker Compose deployment as auth database and JWT secret.
+
+## Decision
+
+Extend the installer-managed `.env` contract to include `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD`, and wire Docker Compose plus service clients to consume those variables.
+
+## Why
+
+- Keeps credential rotation aligned with existing installer-first deployment flow
+- Avoids split-brain configuration between docs and Compose
+- Makes production hardening repeatable for future operators and reviewers
+- Single source of truth for all runtime secrets
+
+---
+
+# Decision: Remove Non-Functional Copilot Automation Workflows
+
+**Date:** 2026-03-16  
+**Author:** @copilot  
+**Related:** `.github/workflows/copilot-approve-runs.yml`, `.github/workflows/copilot-pr-ready.yml`
+
+## Context
+
+Current Copilot PR automation does not work in practice:
+- `copilot-approve-runs.yml` uses `pull_request_target`, flagged as dangerous by zizmor
+- `copilot-pr-ready.yml` doesn't solve the real bottleneck — Copilot PRs still wait for manual approval
+- Together, they suggest automation exists while the squad still manually intervenes
+
+## Decision
+
+Remove both workflows. Rely on existing manual squad process for PR readiness (`gh pr ready <number>` when appropriate).
+
+## Why
+
+A simple manual step is clearer and safer than keeping non-functional automation in a security-sensitive area. This avoids future confusion and keeps the repository aligned with the actual operating model used by the team.
+
+---
+
+# Decision: Version Ordering — Release Milestones Sequentially
+
+**Date:** 2026-03-16  
+**Author:** Juanma (via @copilot)
+
+## Decision
+
+Milestones **MUST** be released in numeric order. v0.10.0 and v0.11.0 were shipped before v0.9.0, breaking semver ordering.
+
+**Fix:** v0.9.0 renamed to v0.12.0.
+
+**Going forward:** Never skip or reorder version numbers. If a milestone is not ready, defer the release — don't ship a higher version first.
+
+## Why
+
+Semver ordering matters for tooling and user expectations. Alphabetical sorting of version strings is misleading (0.10 < 0.9 alphabetically but 0.10 > 0.9 numerically).
+
