@@ -205,6 +205,44 @@
 
 **Orchestration:** Session documented in `.squad/orchestration-log/2026-03-16T07-36-36Z-kane.md`
 
+### 2026-03-17 — Stack Trace Exposure Investigation (Issue #291, Alert #104)
+
+**Summary:** Investigated and resolved CodeQL alert #104 (py/stack-trace-exposure) in solr-search. Determined the alert was a false positive but applied defense-in-depth fix.
+
+**Investigation Findings:**
+- **Alert Location:** `src/solr-search/main.py:223` — `{"detail": detail}` in `_unauthorized_response()`
+- **Data Flow:** `auth.py` raises `AuthenticationError` with exception chaining (`from exc`) → `main.py:266` catches and calls `str(exc)` → flows into JSON response
+- **Root Cause Analysis:**
+  - Python's `str(exc)` only returns the exception message, never the traceback
+  - All `AuthenticationError` messages are hardcoded ("Invalid authentication token", "Token expired")
+  - FastAPI is not in debug mode (no automatic stack trace exposure)
+  - No custom exception handlers that might leak stack traces
+  - **Conclusion: False positive** — no actual information exposure
+
+**Why CodeQL Flagged This:**
+- Exception chaining (`from exc`) creates `__cause__` and `__context__` attributes
+- CodeQL's conservative data flow analysis flags any exception-to-string conversion that might flow to user responses
+- Even though `str(exc)` is safe, the scanner can't guarantee custom `__str__` implementations won't leak
+
+**Defense-in-Depth Fix Applied:**
+- Removed exception chaining (`from exc`) at three sites in `auth.py`:
+  - JWT decoding: `ExpiredSignatureError` → `TokenExpiredError`
+  - JWT decoding: `JWTError` → `AuthenticationError`
+  - Payload validation: `KeyError/TypeError/ValueError` → `AuthenticationError`
+- Exception messages remain identical (no functional change)
+- All 144 solr-search tests pass
+- Eliminates theoretical attack surface
+
+**Rationale for Fix Despite False Positive:**
+1. CodeQL's flagging indicates a potential risk area worth hardening
+2. Exception chaining is unnecessary here (user messages are already clear)
+3. Removing the chain improves code clarity (no hidden internal exception context)
+4. Satisfies the security scanner and prevents future confusion
+
+**PR:** #308 (squad/291-stack-trace-exposure → dev)  
+**Testing:** All 144 solr-search tests pass (auth, integration, upload)  
+**Security Impact:** Reduces theoretical information exposure risk with zero functional impact
+
 ### 2026-03-16 — Security review of PR #263 (local auth module)
 
 **Summary:** Performed an auth-focused security review of PR #263 (`feat: add local auth module with JWT and SQLite user store`) covering `solr-search/auth.py`, `config.py`, `main.py`, auth tests/helpers, and dependency changes. I could not file a formal `CHANGES_REQUESTED` review because the authenticated GitHub account is the PR author, so I posted the blockers as a PR comment instead.
