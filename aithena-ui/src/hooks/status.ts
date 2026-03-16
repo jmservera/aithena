@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-import { buildApiUrl } from '../api';
+import { apiFetch, buildApiUrl } from '../api';
 
 const statusUrl = buildApiUrl('/v1/status/');
 
@@ -50,7 +50,7 @@ export function useStatus(): StatusState {
     async function fetchStatus() {
       controller = new AbortController();
       try {
-        const response = await fetch(statusUrl, { signal: controller.signal });
+        const response = await apiFetch(statusUrl, { signal: controller.signal });
         if (!response.ok) {
           throw new Error(`Status request failed: ${response.status}`);
         }

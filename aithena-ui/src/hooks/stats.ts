@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-import { buildApiUrl } from '../api';
+import { apiFetch, buildApiUrl } from '../api';
 
 const statsUrl = buildApiUrl('/v1/stats/');
 
@@ -43,7 +43,7 @@ export function useStats(): UseStatsResult {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(statsUrl);
+        const response = await apiFetch(statsUrl);
         if (!response.ok) {
           throw new Error(`Stats request failed: ${response.status}`);
         }

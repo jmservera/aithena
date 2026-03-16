@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const TABS = [
   { to: '/search', label: '🔍 Search' },
@@ -10,17 +11,45 @@ const TABS = [
 ];
 
 function TabNav() {
+  const { isAuthenticated, isLoading, logout, user } = useAuth();
+
   return (
     <nav className="tab-nav" aria-label="Main navigation">
-      {TABS.map((tab) => (
+      {isAuthenticated ? (
+        <>
+          {TABS.map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) =>
+                'tab-nav-link' + (isActive ? ' tab-nav-link--active' : '')
+              }
+            >
+              {tab.label}
+            </NavLink>
+          ))}
+          <div className="tab-nav-actions">
+            <span className="tab-nav-user">👤 {user?.username ?? 'Signed in'}</span>
+            <button
+              type="button"
+              className="tab-nav-button"
+              onClick={() => {
+                void logout();
+              }}
+              disabled={isLoading}
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      ) : (
         <NavLink
-          key={tab.to}
-          to={tab.to}
+          to="/login"
           className={({ isActive }) => 'tab-nav-link' + (isActive ? ' tab-nav-link--active' : '')}
         >
-          {tab.label}
+          🔐 Login
         </NavLink>
-      ))}
+      )}
     </nav>
   );
 }
