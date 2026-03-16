@@ -12,6 +12,7 @@ This directory contains security-related documentation for the aithena project.
 ### Audit Guides
 
 - **[OWASP ZAP Manual Audit Guide](owasp-zap-audit-guide.md)** — Step-by-step instructions for conducting dynamic application security testing (DAST) with OWASP ZAP, plus Docker Compose infrastructure-as-code (IaC) security review checklist.
+- **[Baseline Exceptions](baseline-exceptions.md)** — Security findings accepted as baseline with documented risk assessment and mitigation strategies.
 
 ---
 
