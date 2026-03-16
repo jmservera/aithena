@@ -1,15 +1,27 @@
+import { Suspense, lazy, type ReactNode } from 'react';
 import './App.css';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import TabNav from './Components/TabNav';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Footer from './Components/Footer';
+import { RouteErrorBoundary } from './Components/ErrorBoundary';
+import LoadingSpinner from './Components/LoadingSpinner';
 import ProtectedRoute from './Components/ProtectedRoute';
-import SearchPage from './pages/SearchPage';
-import LibraryPage from './pages/LibraryPage';
-import UploadPage from './pages/UploadPage';
-import StatusPage from './pages/StatusPage';
-import StatsPage from './pages/StatsPage';
-import AdminPage from './pages/AdminPage';
-import LoginPage from './pages/LoginPage';
+import TabNav from './Components/TabNav';
+
+const SearchPage = lazy(() => import('./pages/SearchPage'));
+const LibraryPage = lazy(() => import('./pages/LibraryPage'));
+const UploadPage = lazy(() => import('./pages/UploadPage'));
+const StatusPage = lazy(() => import('./pages/StatusPage'));
+const StatsPage = lazy(() => import('./pages/StatsPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+
+function renderLazyRoute(element: ReactNode, title: string, message: string) {
+  return (
+    <RouteErrorBoundary>
+      <Suspense fallback={<LoadingSpinner title={title} message={message} />}>{element}</Suspense>
+    </RouteErrorBoundary>
+  );
+}
 
 function App() {
   return (
@@ -23,15 +35,64 @@ function App() {
       </div>
       <div className="app-content">
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/login"
+            element={renderLazyRoute(
+              <LoginPage />,
+              'Loading sign in…',
+              'Getting the sign-in view ready.'
+            )}
+          />
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<Navigate to="/search" replace />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/library" element={<LibraryPage />} />
-            <Route path="/upload" element={<UploadPage />} />
-            <Route path="/status" element={<StatusPage />} />
-            <Route path="/stats" element={<StatsPage />} />
-            <Route path="/admin" element={<AdminPage />} />
+            <Route
+              path="/search"
+              element={renderLazyRoute(
+                <SearchPage />,
+                'Loading search…',
+                'Preparing your search workspace.'
+              )}
+            />
+            <Route
+              path="/library"
+              element={renderLazyRoute(
+                <LibraryPage />,
+                'Loading library…',
+                'Fetching your library view.'
+              )}
+            />
+            <Route
+              path="/upload"
+              element={renderLazyRoute(
+                <UploadPage />,
+                'Loading upload…',
+                'Preparing the upload tools.'
+              )}
+            />
+            <Route
+              path="/status"
+              element={renderLazyRoute(
+                <StatusPage />,
+                'Loading status…',
+                'Checking indexing and service status.'
+              )}
+            />
+            <Route
+              path="/stats"
+              element={renderLazyRoute(
+                <StatsPage />,
+                'Loading statistics…',
+                'Crunching the latest library numbers.'
+              )}
+            />
+            <Route
+              path="/admin"
+              element={renderLazyRoute(
+                <AdminPage />,
+                'Loading admin…',
+                'Getting the admin dashboard ready.'
+              )}
+            />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
