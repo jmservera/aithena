@@ -27,8 +27,9 @@ jobs:
           persist-credentials: false
 
       - name: Run zizmor security scan
-        uses: zizmorcore/zizmor-action@f52a838cfabf134edcbaa7c8b3677dde20045018  # v0.1.1
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8  # v0.5.2
         with:
           # SARIF output automatically uploaded to GitHub Code Scanning
           # Focuses on P0 findings: template-injection and dangerous-triggers
           advanced-security: true
+          config: .zizmor.yml

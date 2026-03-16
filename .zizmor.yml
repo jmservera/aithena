@@ -1,0 +1,15 @@
+rules:
+  secrets-outside-env:
+    ignore:
+      # Kane-approved risk acceptance for internal CI/CD automation only.
+      # These line-scoped exceptions preserve the audit everywhere else while
+      # accepting secure step-level secret handling in non-production workflows.
+      # Deployment environments remain deferred until production deployment
+      # workflows exist as part of the planned v1.5.0 release work.
+      - release-docs.yml:61
+      - release-docs.yml:161
+      - release-docs.yml:242
+      - squad-issue-assign.yml:123
+      - squad-heartbeat.yml:256
+      - squad-heartbeat.yml:257
+      - release.yml:83
