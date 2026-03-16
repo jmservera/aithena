@@ -213,3 +213,9 @@ REDIS_PORT=6379
 - Shared admin service endpoints should be centralized in `admin/src/pages/shared/config.py`; the System Status page reads `SOLR_SEARCH_URL` there and defaults to `http://solr-search:8080`.
 - The `/v1/admin/containers` endpoint currently reports the admin container as `streamlit-admin`, so the UI should present that service as `admin` for operator-facing labels while keeping the backend contract untouched.
 
+
+### 2026-03-16 — Local Auth Module in `solr-search` (#251)
+
+- `solr-search` now owns local auth: startup ensures a SQLite `users` table exists at `AUTH_DB_PATH`, passwords use Argon2id, and JWT access tokens are accepted from either `Authorization: Bearer` or the auth cookie.
+- FastAPI now treats `/v1/auth/login`, `/v1/auth/validate`, `/v1/status`, and health/info/version endpoints as public, while middleware guards the rest of the API and document/admin surfaces for the upcoming nginx `auth_request` wiring.
+- `AUTH_JWT_TTL` accepts duration strings like `24h`, and cookie issuance/deletion mirrors HTTPS detection so browser auth works cleanly in direct local HTTP tests and proxied HTTPS deployments.

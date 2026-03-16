@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from urllib.parse import urlparse
 
+os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")
+os.environ.setdefault("AUTH_JWT_SECRET", "test-auth-secret")
+os.environ.setdefault("AUTH_JWT_TTL", "24h")
+os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
+
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from fastapi.testclient import TestClient  # noqa: E402
 from config import settings  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 from main import app  # noqa: E402
+from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 
 def get_client() -> TestClient:
-    return TestClient(app)
+    return create_authenticated_client()
 
 
 @patch("main.requests.get")
