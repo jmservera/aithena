@@ -249,9 +249,12 @@ jobs:
       # Copilot auto-assign step (uses PAT if available)
       - name: Ralph — Assign @copilot issues
         if: success()
+        env:
+          COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+          COPILOT_ASSIGN_FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
-          github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN || secrets.GITHUB_TOKEN }}
+          github-token: ${{ env.COPILOT_ASSIGN_TOKEN || env.COPILOT_ASSIGN_FALLBACK_TOKEN }}
           script: |
             const fs = require('fs');
 
