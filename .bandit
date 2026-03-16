@@ -1,33 +1,27 @@
 # Bandit security scanning configuration
 # Baseline exceptions for legitimate patterns
 
-[bandit]
 # Exclude virtual environments and third-party code
-exclude_dirs = [
-    '.venv',
-    'venv',
-    'site-packages',
-    'node_modules',
-    '__pycache__'
-]
+exclude_dirs:
+  - .venv
+  - venv
+  - site-packages
+  - node_modules
+  - __pycache__
 
 # Skip rules for legitimate patterns
-# S101: Use of assert detected (required by pytest)
-# S104: Binding to 0.0.0.0 (legitimate for containerized services)
-# S603: subprocess call - check for execution of untrusted input (used in e2e tests)
-# S607: Starting a process with a partial executable path (used in e2e tests)
-# S108: Probable insecure usage of temp file/directory (test fixtures)
-# S105: Possible hardcoded password string (often false positives in test data)
-# S106: Possible hardcoded password function argument (often false positives)
-skips = S101,S104,S603,S607,S108,S105,S106
-
-# Scan all Python source directories
-targets = [
-    'document-indexer/document_indexer',
-    'document-indexer/tests',
-    'document-lister',
-    'solr-search',
-    'admin/src',
-    'embeddings-server',
-    'e2e'
-]
+# B101: Use of assert detected (required by pytest)
+# B104: Binding to 0.0.0.0 (legitimate for containerized services)
+# B603: subprocess call - check for execution of untrusted input (used in e2e tests)
+# B607: Starting a process with a partial executable path (used in e2e tests)
+# B108: Probable insecure usage of temp file/directory (test fixtures)
+# B105: Possible hardcoded password string (often false positives in test data)
+# B106: Possible hardcoded password function argument (often false positives)
+skips:
+  - B101
+  - B104
+  - B603
+  - B607
+  - B108
+  - B105
+  - B106
