@@ -54,3 +54,13 @@
 **Known test blockers:**
 - #166: RabbitMQ cold-start prevents document indexing in CI
 - #167: Document pipeline stalled; affects E2E test data population
+
+### 2026-03-17 — Full test suite validation for v1.2.0 release
+
+- **All 452 tests pass** across 6 services: aithena-ui (127), solr-search (176), document-indexer (91+4 skipped), document-lister (12), embeddings-server (9), admin (33)
+- All lint checks pass: ESLint, Ruff (solr-search, document-indexer, document-lister)
+- Frontend build (TypeScript + Vite) clean
+- Coverage: solr-search 94.46%, document-indexer 82.19% — both above thresholds
+- `UV_NATIVE_TLS=1` needed for `uv sync` when default SSL certs cause `UnknownIssuer` errors in codespace
+- embeddings-server `requirements.txt` missing test deps (`pytest`, `httpx`) — requires manual install
+- Test report written to `docs/test-report-v1.2.0.md`

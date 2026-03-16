@@ -57,6 +57,28 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16T23:20Z — Retro Action: Clean up stale remote branches
+
+**Task:** Address retro finding: 66 stale remote branches (38 from merged PRs + ~28 abandoned).
+
+**Execution:**
+1. Fetched and pruned remote branches (2 already removed by prior cleanup)
+2. Identified 44 branches with merged PRs across `copilot/*` and `squad/*` patterns
+3. Deleted all 44 in 9 batches of 5 branches each (smooth, no rate limiting)
+4. Verified 21 remaining branches all have active PRs (not abandoned)
+5. Protected branches kept: `main`, `dev`, `oldmain`, `squad/retro-migration-checkpoint`
+6. Enabled GitHub repository setting `delete_branch_on_merge=true` — future merged PRs will auto-delete
+
+**Outcome:**
+- 44 branches deleted (44/66 identified in retro)
+- Repository cleanup enables continuous head-branch housekeeping going forward
+- Reduced cognitive load on branch navigation; retro concern resolved
+
+**Branch breakdown:**
+- `copilot/*`: 12 merged deletions + 6 active PRs remain
+- `squad/*`: 32 merged deletions + 15 active PRs remain
+- Active PR branches are features in flight; no deletion risk
+
 ### 2026-03-16T16:10Z — Issue #356: solr-search E2E health check timing
 
 - The `solr-search` FastAPI container exposes a lightweight `/health` endpoint, but the app still runs auth DB initialization in its startup lifespan before that route is reachable.
