@@ -214,16 +214,13 @@ jobs:
         run: |
           set +e
 
-          for package in @github/copilot @githubnext/github-copilot-cli; do
-            echo "Trying to install ${package}"
-            if npm install -g "$package"; then
-              if command -v copilot >/dev/null 2>&1 || command -v github-copilot-cli >/dev/null 2>&1; then
-                echo "installed=true" >> "$GITHUB_OUTPUT"
-                echo "package=${package}" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-            fi
-          done
+          package='@github/copilot'
+          echo "Trying to install ${package}"
+          if npm install -g "$package" && command -v copilot >/dev/null 2>&1; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+            echo "package=${package}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           echo "installed=false" >> "$GITHUB_OUTPUT"
           echo "package=" >> "$GITHUB_OUTPUT"
@@ -249,7 +246,7 @@ jobs:
           artifact_dir="$RUNNER_TEMP/release-docs/artifacts"
 
           cat > "$prompt_file" <<EOF
-          Prepare Aithena release documentation for v${RELEASE_VERSION}.
+          Newt: generate release docs for v${RELEASE_VERSION}.
 
           Read these style guides first:
           - docs/release-notes-v0.11.0.md
@@ -270,15 +267,10 @@ jobs:
           - Treat integration-test screenshots and reports as optional supporting evidence.
           - If evidence is incomplete, note TODOs or placeholders instead of inventing test outcomes.
           - The workflow is an automation aid, not a release blocker.
-          - Write concise, reviewable markdown that Newt can refine in a PR.
+          - Write concise, reviewable markdown in Newt's release-doc voice.
           EOF
 
-          copilot_cmd="copilot"
-          if ! command -v "$copilot_cmd" >/dev/null 2>&1; then
-            copilot_cmd="github-copilot-cli"
-          fi
-
-          "$copilot_cmd" -p "$(cat "$prompt_file")" --allow-tool=shell --allow-tool=write --no-ask-user
+          copilot --agent squad --autopilot -p "$(cat "$prompt_file")" --allow-all-tools
           status=$?
 
           if [[ $status -eq 0 && -s "$RELEASE_NOTES_PATH" && -s "$TEST_REPORT_PATH" ]]; then

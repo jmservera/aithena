@@ -57,6 +57,13 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16T13:00Z — Issue #303: release-docs Copilot CLI refresh
+
+- Updated `.github/workflows/release-docs.yml` to install only the official `@github/copilot` package and rely on the documentation template fallback when CLI installation or generation fails.
+- Switched the workflow invocation to `copilot --agent squad --autopilot --allow-all-tools` and rewrote the prompt to address Newt explicitly as the release-doc author.
+- Preserved the existing fallback template generation path so release-note and test-report drafts still land in `docs/` when Copilot CLI is unavailable.
+
+
 ### 2026-03-16T12:27Z — Validated CI/CD pipelines post-restructure (#224) [COMPLETE]
 
 - ✅ Issue #224 closed. All workflows validated.
