@@ -17,10 +17,22 @@ from urllib.parse import urlparse
 import pika
 import redis as redis_lib
 import requests
+from auth import (
+    AuthenticationError,
+    AuthenticatedUser,
+    authenticate_user,
+    clear_auth_cookie,
+    create_access_token,
+    decode_access_token,
+    get_token_from_sources,
+    init_auth_db,
+    set_auth_cookie,
+)
 from config import settings
-from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 from search_service import (
     build_filter_queries,
     build_inline_content_disposition,
@@ -43,7 +55,51 @@ SortOrder = Literal["asc", "desc"]
 
 VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
 
-app = FastAPI(title=settings.title, version=settings.version)
+
+_INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme", "secret"})
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if settings.auth_jwt_secret in _INSECURE_JWT_SECRETS:
+        import warnings
+        warnings.warn(
+            "AUTH_JWT_SECRET is using an insecure default value. "
+            "Set a strong random secret via the AUTH_JWT_SECRET environment variable.",
+            stacklevel=1,
+        )
+    init_auth_db(settings.auth_db_path)
+    yield
+
+
+app = FastAPI(title=settings.title, version=settings.version, lifespan=lifespan)
+
+PUBLIC_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/v1/health",
+        "/info",
+        "/v1/info",
+        "/version",
+        "/status",
+        "/v1/status",
+        "/v1/status/",
+        "/v1/auth/login",
+        "/v1/auth/login/",
+        "/v1/auth/validate",
+        "/v1/auth/validate/",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/favicon.ico",
+    }
+)
+PUBLIC_PATH_PREFIXES = ("/docs", "/redoc", "/openapi.json")
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class RateLimiter:
@@ -75,6 +131,7 @@ class RateLimiter:
 
 
 upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 
 def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
@@ -137,6 +194,61 @@ def collect_search_filters(**filters: str | None) -> dict[str, str]:
     return {name: value.strip() for name, value in filters.items() if value and value.strip()}
 
 
+def _is_public_path(path: str) -> bool:
+    return path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES)
+
+
+def _unauthorized_response(detail: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=401,
+        content={"detail": detail},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _unauthorized_exception(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=401,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _request_uses_https(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    return forwarded_proto.lower() == "https" or request.url.scheme == "https"
+
+
+def _authenticate_request(request: Request) -> AuthenticatedUser:
+    token = get_token_from_sources(
+        request.headers.get("Authorization"),
+        request.cookies.get(settings.auth_cookie_name),
+    )
+    if token is None:
+        raise AuthenticationError("Not authenticated")
+    return decode_access_token(token, settings.auth_jwt_secret)
+
+
+def _get_current_user(request: Request) -> AuthenticatedUser:
+    current_user = getattr(request.state, "auth_user", None)
+    if isinstance(current_user, AuthenticatedUser):
+        return current_user
+    return _authenticate_request(request)
+
+
+@app.middleware("http")
+async def require_authentication(request: Request, call_next):
+    if request.method == "OPTIONS" or _is_public_path(request.url.path):
+        return await call_next(request)
+
+    try:
+        request.state.auth_user = _authenticate_request(request)
+    except AuthenticationError as exc:
+        return _unauthorized_response(str(exc))
+
+    return await call_next(request)
+
+
 @app.get("/v1/health", include_in_schema=False, name="health_v1")
 @app.get("/health")
 def health() -> dict[str, str]:
@@ -157,6 +269,56 @@ def version() -> dict[str, str]:
         "commit": settings.commit,
         "built": settings.built,
     }
+
+
+@app.post("/v1/auth/login/", include_in_schema=False, name="auth_login_v1_slash")
+@app.post("/v1/auth/login", name="auth_login_v1")
+def auth_login(credentials: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
+    client_ip = request.client.host if request.client else "unknown"
+    if not login_rate_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
+    user = authenticate_user(settings.auth_db_path, credentials.username, credentials.password)
+    if user is None:
+        raise _unauthorized_exception("Invalid username or password")
+
+    token = create_access_token(user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
+    set_auth_cookie(
+        response,
+        token,
+        settings.auth_cookie_name,
+        settings.auth_jwt_ttl_seconds,
+        secure=_request_uses_https(request),
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": settings.auth_jwt_ttl_seconds,
+        "user": user.to_dict(),
+    }
+
+
+@app.get("/v1/auth/validate/", include_in_schema=False, name="auth_validate_v1_slash")
+@app.get("/v1/auth/validate", name="auth_validate_v1")
+def auth_validate(request: Request) -> dict[str, Any]:
+    try:
+        user = _authenticate_request(request)
+    except AuthenticationError as exc:
+        raise _unauthorized_exception(str(exc)) from exc
+    return {"authenticated": True, "user": user.to_dict()}
+
+
+@app.post("/v1/auth/logout/", include_in_schema=False, name="auth_logout_v1_slash")
+@app.post("/v1/auth/logout", name="auth_logout_v1")
+def auth_logout(request: Request, response: Response) -> dict[str, str]:
+    clear_auth_cookie(response, settings.auth_cookie_name, secure=_request_uses_https(request))
+    return {"status": "logged_out"}
+
+
+@app.get("/v1/auth/me/", include_in_schema=False, name="auth_me_v1_slash")
+@app.get("/v1/auth/me", name="auth_me_v1")
+def auth_me(request: Request) -> dict[str, Any]:
+    return _get_current_user(request).to_dict()
 
 
 @app.get("/v1/search/", include_in_schema=False, name="search_v1")

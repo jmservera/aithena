@@ -11,16 +11,21 @@ import pytest
 os.environ["UPLOAD_DIR"] = "/tmp/test_uploads"
 os.environ["MAX_UPLOAD_SIZE_MB"] = "50"
 os.environ["RABBITMQ_QUEUE_NAME"] = "shortembeddings"
+os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")
+os.environ.setdefault("AUTH_JWT_SECRET", "test-auth-secret")
+os.environ.setdefault("AUTH_JWT_TTL", "24h")
+os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient  # noqa: E402
 from main import app  # noqa: E402
+from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(app)
+    return create_authenticated_client()
 
 
 @pytest.fixture

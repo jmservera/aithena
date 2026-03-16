@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from auth import parse_ttl_to_seconds
+
 TITLE = "Aithena Solr Search API"
 VERSION = "dev"
 GIT_COMMIT = "unknown"
@@ -31,24 +33,25 @@ class Settings:
     cors_origins: list[str]
     allow_credentials: bool
     document_url_base: str | None
-    # Phase 3 — hybrid search
     embeddings_url: str
     embeddings_timeout: float
     default_search_mode: str
     rrf_k: int
     knn_field: str
     book_embedding_field: str
-    # Phase 4 — status endpoint
     redis_host: str
     redis_port: int
     redis_key_pattern: str
     redis_queue_name: str
     rabbitmq_host: str
     rabbitmq_port: int
-    # Phase 4 — upload endpoint
     upload_dir: Path
     max_upload_size_mb: int
     rabbitmq_queue_name: str
+    auth_db_path: Path
+    auth_jwt_secret: str
+    auth_jwt_ttl_seconds: int
+    auth_cookie_name: str
 
     @property
     def select_url(self) -> str:
@@ -77,22 +80,23 @@ settings = Settings(
     cors_origins=parsed_cors_origins,
     allow_credentials=allow_credentials,
     document_url_base=os.environ.get("DOCUMENT_URL_BASE", "").rstrip("/") or None,
-    # Phase 3 — hybrid search
     embeddings_url=os.environ.get("EMBEDDINGS_URL", "http://embeddings-server:8001/v1/embeddings/").rstrip("/"),
     embeddings_timeout=float(os.environ.get("EMBEDDINGS_TIMEOUT", "120")),
     default_search_mode=os.environ.get("DEFAULT_SEARCH_MODE", "keyword"),
     rrf_k=int(os.environ.get("RRF_K", "60")),
     knn_field=os.environ.get("KNN_FIELD", "book_embedding"),
     book_embedding_field=os.environ.get("BOOK_EMBEDDING_FIELD", "book_embedding"),
-    # Phase 4 — status endpoint
     redis_host=os.environ.get("REDIS_HOST", "redis"),
     redis_port=int(os.environ.get("REDIS_PORT", "6379")),
     redis_key_pattern=os.environ.get("REDIS_KEY_PATTERN", "doc:*"),
     redis_queue_name=os.environ.get("REDIS_QUEUE_NAME", os.environ.get("QUEUE_NAME", "shortembeddings")),
     rabbitmq_host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
     rabbitmq_port=int(os.environ.get("RABBITMQ_PORT", "5672")),
-    # Phase 4 — upload endpoint
     upload_dir=Path(os.environ.get("UPLOAD_DIR", "/data/documents/uploads")).resolve(),
     max_upload_size_mb=int(os.environ.get("MAX_UPLOAD_SIZE_MB", "50")),
     rabbitmq_queue_name=os.environ.get("RABBITMQ_QUEUE_NAME", "shortembeddings"),
+    auth_db_path=Path(os.environ.get("AUTH_DB_PATH", "/data/auth/users.db")).resolve(),
+    auth_jwt_secret=os.environ.get("AUTH_JWT_SECRET", "development-only-change-me"),
+    auth_jwt_ttl_seconds=parse_ttl_to_seconds(os.environ.get("AUTH_JWT_TTL", "24h")),
+    auth_cookie_name=os.environ.get("AUTH_COOKIE_NAME", "aithena_auth"),
 )
