@@ -65,6 +65,31 @@
 - `docs/features/` — Feature guides for each release
 - `docs/security/` — Security documentation and baselines
 
+## 2026-03-17: Retroactive Release Documentation for v1.0.1, v1.1.0, v1.2.0
+
+**Milestone:** Backfill release notes and CHANGELOG for three completed but undocumented milestones
+
+**Files Created:**
+- `docs/release-notes-v1.0.1.md` — Security Hardening (8 issues): ecdsa CVE, stack trace exposure, GitHub Actions workflow hardening
+- `docs/release-notes-v1.1.0.md` — CI/CD & Documentation (7 issues): logging hardening, release automation, v1.x process docs
+- `docs/release-notes-v1.2.0.md` — Frontend Quality & Security (14 issues): Error Boundary, code splitting, accessibility, CSS Modules, PyJWT migration
+- `CHANGELOG.md` — Keep a Changelog format covering v1.0.0 through v1.2.0
+
+**Format Applied:**
+- Followed v1.0.0 release notes structure (summary, milestone closure, merged PRs, validation highlights)
+- Used consistent date (2026-03-17) for all three releases
+- Cross-referenced all 29 issues and 15+ merged PRs with GitHub issue/PR numbers
+- Included breaking changes, upgrade instructions, and security improvements where applicable
+- Created CHANGELOG.md in Keep a Changelog format per https://keepachangelog.com/ standard
+
+**Key Learnings:**
+- v1.0.1 focused on supply-chain security (ecdsa CVE, stack trace removal, secrets hardening)
+- v1.1.0 established operational foundation (logging standards, CI/CD automation, documentation for v1.x process)
+- v1.2.0 delivered production-grade frontend (Error Boundary, performance optimization, WCAG accessibility, CSS Modules, PyJWT security migration, E2E CI health fix)
+- The three releases together tell a coherent story: stabilize dependencies → establish operations → deliver quality frontend
+
+---
+
 ## Learnings
 
 - v0.4.0's user-facing flow is centered on Search, Status, and Stats; the visible Library tab is still a placeholder and should not be documented as a finished browse feature.
