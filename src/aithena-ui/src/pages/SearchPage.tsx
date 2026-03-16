@@ -179,14 +179,6 @@ function SearchResultsSection({
 }
 
 function SearchPage() {
-  const [inputValue, setInputValue] = useState('');
-  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
-  const resultsRegionRef = useRef<HTMLElement>(null);
-  const lastLoadingStateRef = useRef(false);
-  const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
-  const searchInputId = useId();
-  const resultsRegionId = useId();
-  const resultsSummaryId = useId();
   const {
     searchState,
     results,
@@ -202,6 +194,22 @@ function SearchPage() {
     setLimit,
     setMode,
   } = useSearch();
+
+  // Keep the text input in sync with the committed query from the URL so
+  // that deep-links and browser back / forward reflect the correct value.
+  const [inputValue, setInputValue] = useState(searchState.query);
+
+  useEffect(() => {
+    setInputValue(searchState.query);
+  }, [searchState.query]);
+
+  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const resultsRegionRef = useRef<HTMLElement>(null);
+  const lastLoadingStateRef = useRef(false);
+  const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
+  const searchInputId = useId();
+  const resultsRegionId = useId();
+  const resultsSummaryId = useId();
 
   useEffect(() => {
     if (searchState.query && lastLoadingStateRef.current && !loading) {
