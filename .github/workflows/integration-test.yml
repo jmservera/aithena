@@ -62,28 +62,65 @@ jobs:
 
           # Browser E2E runs through the reverse proxy, so re-enable nginx for CI.
           # Keep document-data in docker-compose.e2e.yml so it still binds to E2E_LIBRARY_PATH.
+          # NOTE: Docker Compose deep-merges volume driver_opts, so empty overrides
+          # do NOT clear bind-mount paths. We must explicitly set all three keys
+          # (type, device, o) to tmpfs to fully replace the production bind mounts.
           cat > docker-compose.github-actions.yml <<'EOF'
           services:
             nginx:
               profiles: []
           volumes:
             rabbitmq-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
             certbot-data-conf:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
             certbot-data-www:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
             redis-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
             solr-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
             solr-data2:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
             solr-data3:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
             zoo-data1_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data1_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data1_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data2_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data2_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data2_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data3_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data3_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-data3_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
             zoo-backup:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
           EOF
 
       - name: Generate sample PDF fixtures
