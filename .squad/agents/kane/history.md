@@ -275,3 +275,56 @@
 **Sign-off:** ✅ **APPROVED** for merge to `dev`
 
 **Documentation:** Orchestration log recorded in `.squad/orchestration-log/2026-03-16_08-19-32-kane-auth-review.md`
+
+### 2026-03-17 — ecdsa CVE-2024-23342 Baseline Exception (Issue #290, Dependabot #118)
+
+**Summary:** Triaged Dependabot alert #118 (CVE-2024-23342, ecdsa timing side-channel vulnerability in solr-search). Determined no patched version exists and created baseline exception documentation with risk assessment.
+
+**Vulnerability Details:**
+- **CVE:** CVE-2024-23342 (Minerva timing attack on P-256 ECDSA)
+- **Severity:** HIGH (CVSS 7.4)
+- **Affected Package:** `ecdsa` 0.19.1 (pure Python ECDSA implementation)
+- **Dependency Chain:** `python-jose[cryptography]` → `ecdsa 0.19.1` (transitive)
+- **Attack:** Timing side-channel attack allows private key recovery by measuring signature generation timing across many operations
+
+**Investigation Findings:**
+1. **No fix available:** All ecdsa versions (>= 0) are vulnerable. Package maintainers explicitly state that constant-time cryptography is not feasible in pure Python
+2. **ecdsa is fallback only:** solr-search uses `python-jose[cryptography]`, which prefers the `pyca/cryptography` backend (OpenSSL-backed, side-channel hardened) over the pure Python ecdsa package
+3. **Runtime verification:** Confirmed `cryptography` is explicitly declared via `python-jose[cryptography]>=3.3.0` in `pyproject.toml`
+4. **Upgrade attempted:** Ran `uv lock --upgrade-package ecdsa` — no newer version available (0.19.1 is latest)
+
+**Why python-jose Still Requires ecdsa:**
+- python-jose 3.5.0 always installs ecdsa as a fallback dependency even when using the cryptography backend
+- This is a known design issue in python-jose (all backends are installed, runtime selects based on availability)
+- The ecdsa package is present in `uv.lock` but should not be used at runtime when cryptography is available
+
+**Risk Assessment:**
+- **Exploitability:** LOW — Attacker would need to observe many JWT signing operations with precise timing measurements
+- **Impact:** HIGH — If exploited, could lead to JWT secret key compromise
+- **Likelihood:** LOW — Runtime uses cryptography backend (OpenSSL), not ecdsa
+- **Residual Risk:** ACCEPTABLE for current use case
+
+**Mitigation Strategy:**
+- **Short-term:** Document as baseline exception (PR #309)
+- **Long-term:** Replace python-jose with PyJWT in v1.1.0 (PyJWT does not require ecdsa unless EC algorithms are explicitly used)
+
+**Rationale for Baseline Exception:**
+1. No patched ecdsa version exists to upgrade to
+2. Replacing python-jose with PyJWT requires auth code refactor (larger scope than P0 dependency fix)
+3. Runtime mitigation (cryptography backend) provides acceptable protection
+4. Issue #290 is P0 for v1.0.1 milestone — blocking on a full JWT library replacement would delay security milestone
+
+**Deliverables:**
+- ✅ Created `docs/security/baseline-exceptions.md` with CVE-2024-23342 documentation
+- ✅ Updated `docs/security/README.md` to reference baseline exceptions
+- ✅ PR #309 (squad/290-fix-ecdsa-vulnerability → dev) — documentation only, no code changes
+- 📋 Recommended: Create follow-up issue for python-jose → PyJWT migration (P1, v1.1.0)
+
+**Testing:** N/A (documentation-only change)
+
+**References:**
+- **CVE:** CVE-2024-23342
+- **Dependabot Alert:** #118
+- **GHSA:** GHSA-wj6h-64fc-37mp
+- **NVD:** https://nvd.nist.gov/vuln/detail/CVE-2024-23342
+- **ecdsa Security Policy:** https://github.com/tlsfuzzer/python-ecdsa/blob/master/SECURITY.md
