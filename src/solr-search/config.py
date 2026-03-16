@@ -55,6 +55,10 @@ class Settings:
     auth_jwt_secret: str
     auth_jwt_ttl_seconds: int
     auth_cookie_name: str
+    cb_redis_failure_threshold: int
+    cb_redis_recovery_timeout: float
+    cb_solr_failure_threshold: int
+    cb_solr_recovery_timeout: float
 
     @property
     def select_url(self) -> str:
@@ -105,4 +109,8 @@ settings = Settings(
     auth_jwt_secret=os.environ.get("AUTH_JWT_SECRET", "development-only-change-me"),
     auth_jwt_ttl_seconds=parse_ttl_to_seconds(os.environ.get("AUTH_JWT_TTL", "24h")),
     auth_cookie_name=os.environ.get("AUTH_COOKIE_NAME", "aithena_auth"),
+    cb_redis_failure_threshold=int(os.environ.get("CB_REDIS_FAILURE_THRESHOLD", "5")),
+    cb_redis_recovery_timeout=float(os.environ.get("CB_REDIS_RECOVERY_TIMEOUT", "30")),
+    cb_solr_failure_threshold=int(os.environ.get("CB_SOLR_FAILURE_THRESHOLD", "5")),
+    cb_solr_recovery_timeout=float(os.environ.get("CB_SOLR_RECOVERY_TIMEOUT", "30")),
 )
