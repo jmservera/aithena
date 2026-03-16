@@ -204,3 +204,36 @@
 - #249 ready for merge approval
 
 **Orchestration:** Session documented in `.squad/orchestration-log/2026-03-16T07-36-36Z-kane.md`
+
+### 2026-03-16 — Security review of PR #263 (local auth module)
+
+**Summary:** Performed an auth-focused security review of PR #263 (`feat: add local auth module with JWT and SQLite user store`) covering `solr-search/auth.py`, `config.py`, `main.py`, auth tests/helpers, and dependency changes. I could not file a formal `CHANGES_REQUESTED` review because the authenticated GitHub account is the PR author, so I posted the blockers as a PR comment instead.
+
+**Blocking findings:**
+- `solr-search/config.py:99` falls back to the hardcoded JWT secret `development-only-change-me`. I also verified `docker-compose.yml` does not set `AUTH_JWT_SECRET` for `solr-search`, so the default deployment path would accept attacker-forged HS256 tokens unless startup fails closed.
+- `solr-search/auth.py:153-171` does not require an `exp` claim when decoding JWTs. I reproduced this locally by signing a token with only `sub`, `user_id`, `role`, and `iat`; `decode_access_token()` accepted it, proving expiration is not strictly enforced.
+- `solr-search/main.py:263-268` exposes a public Argon2-backed login endpoint with no brute-force/rate-limit control, despite the same module already implementing upload throttling. This leaves the auth surface open to online password guessing and CPU exhaustion.
+
+**Validated positives:**
+- Argon2 uses `Type.ID` with library-managed salts (`time_cost=3`, `memory_cost=65536`, `parallelism=4`).
+- SQLite queries in the auth path are parameterized.
+- Cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` on HTTPS requests.
+- Bearer and cookie token paths both flow through the same JWT decoder.
+
+**Verification:**
+- Ran `solr-search` auth-related tests locally: `tests/test_auth.py`, `tests/test_admin_documents.py`, `tests/test_integration.py`, and `tests/test_upload.py` → **99 passed**.
+- Posted blocker comment on PR #263: `https://github.com/jmservera/aithena/pull/263#issuecomment-4065855357`.
+
+### 2026-03-16 — Follow-up Approval: PR #263 (local auth module, all blockers resolved)
+
+**Status:** ✅ All blockers fixed and verified  
+**PR:** #263 (solr-search local auth implementation)  
+
+**Blocker resolutions:**
+1. **JWT secret fallback** → Environment variable now mandatory; raises `ConfigurationError` if missing/empty. Verified with missing env test.
+2. **Exp claim not enforced** → Added explicit `exp` claim check in JWT decode pipeline. Verified: token after expiry rejects with `TokenExpiredError`.
+3. **No login rate limiting** → Implemented Redis-backed rate limiter (10 attempts / 15 min per IP). Verified: 11th attempt triggers 429.
+
+**Sign-off:** ✅ **APPROVED** for merge to `dev`
+
+**Documentation:** Orchestration log recorded in `.squad/orchestration-log/2026-03-16_08-19-32-kane-auth-review.md`

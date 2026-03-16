@@ -219,3 +219,20 @@ REDIS_PORT=6379
 - `solr-search` now owns local auth: startup ensures a SQLite `users` table exists at `AUTH_DB_PATH`, passwords use Argon2id, and JWT access tokens are accepted from either `Authorization: Bearer` or the auth cookie.
 - FastAPI now treats `/v1/auth/login`, `/v1/auth/validate`, `/v1/status`, and health/info/version endpoints as public, while middleware guards the rest of the API and document/admin surfaces for the upcoming nginx `auth_request` wiring.
 - `AUTH_JWT_TTL` accepts duration strings like `24h`, and cookie issuance/deletion mirrors HTTPS detection so browser auth works cleanly in direct local HTTP tests and proxied HTTPS deployments.
+
+### 2026-03-16 — PR #263: Auth Module HTTP Endpoints Merged
+
+**Status:** ✅ Merged to `dev`  
+**Tests:** 129 pass (unit + integration)  
+**Security Review:** Approved by Kane; 3 blockers fixed:
+1. Hardcoded JWT secret fallback → now mandatory env var
+2. Missing JWT exp enforcement → added explicit check in decode
+3. No login rate limiting → Redis-backed 10 attempts/15 min per IP
+
+**API Contract:**
+- `POST /auth/login` — username/password → JWT token + secure cookie
+- `POST /auth/logout` — clears auth cookie
+- `GET /auth/validate` — returns current user or 401 if expired
+- Rate limiting (429) on excessive failed attempts
+
+**Next:** Ready for #252 (Login UI) and #253 (nginx auth_request gating)
