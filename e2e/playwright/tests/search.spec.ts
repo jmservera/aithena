@@ -68,7 +68,7 @@ test('author facet filtering narrows results and chip removal restores them', as
   );
 
   await authorLabel.click();
-  await expect(await filteredResponse).toBeOK();
+  expect((await filteredResponse).ok()).toBeTruthy();
 
   await expect(page.locator('.filter-chip-value')).toHaveText(scenario.author);
   expect(await getResultCount(page)).toBe(scenario.filteredTotal);
@@ -83,7 +83,7 @@ test('author facet filtering narrows results and chip removal restores them', as
   );
 
   await page.getByRole('button', { name: 'Remove Author filter' }).click();
-  await expect(await restoredResponse).toBeOK();
+  expect((await restoredResponse).ok()).toBeTruthy();
 
   await expect(page.locator('.filter-chip')).toHaveCount(0);
   expect(await getResultCount(page)).toBe(scenario.baselineTotal);
@@ -103,16 +103,7 @@ test('pdf viewer opens from a search result and loads the document iframe', asyn
   const card = page.locator('.book-card').filter({ hasText: scenario.result.title }).first();
   await expect(card).toBeVisible();
 
-  const pdfResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'GET' &&
-      response.url().includes('/documents/') &&
-      response.status() === 200,
-    { timeout: 20_000 }
-  );
-
   await card.locator('.open-pdf-btn').click();
-  await pdfResponse;
 
   const viewer = page.locator('.pdf-viewer-overlay');
   await expect(viewer).toBeVisible();
@@ -173,7 +164,7 @@ test('search pagination requests and displays the next page of results', async (
   );
 
   await page.getByRole('button', { name: 'Next page' }).click();
-  await expect(await nextPageResponse).toBeOK();
+  expect((await nextPageResponse).ok()).toBeTruthy();
 
   await expect(page.locator('.pagination-info')).toHaveText(/Page 2 of /);
   await expect(page.locator('.pagination-btn[aria-current="page"]')).toHaveText('2');

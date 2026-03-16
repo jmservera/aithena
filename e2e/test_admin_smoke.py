@@ -105,17 +105,17 @@ class TestInfoEndpoint:
         assert resp.status_code == 200
 
     def test_info_contains_required_fields(self, api_url: str, api_available: None) -> None:
-        """Info response must include 'name' and 'version' fields."""
+        """Info response must include 'title' and 'version' fields."""
         resp = requests.get(f"{api_url}/info", timeout=5)
         body = resp.json()
-        assert "name" in body, f"'name' missing from /info: {body}"
+        assert "title" in body, f"'title' missing from /info: {body}"
         assert "version" in body, f"'version' missing from /info: {body}"
 
-    def test_info_name_is_non_empty_string(self, api_url: str, api_available: None) -> None:
-        """The 'name' field must be a non-empty string."""
+    def test_info_title_is_non_empty_string(self, api_url: str, api_available: None) -> None:
+        """The 'title' field must be a non-empty string."""
         resp = requests.get(f"{api_url}/info", timeout=5)
-        name = resp.json().get("name", "")
-        assert isinstance(name, str) and name.strip(), f"'name' is empty or not a string: {name!r}"
+        title = resp.json().get("title", "")
+        assert isinstance(title, str) and title.strip(), f"'title' is empty or not a string: {title!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -209,36 +209,44 @@ class TestStatusEndpoint:
 class TestAdminContainersEndpoint:
     """Container version/health snapshot coverage."""
 
-    def test_admin_containers_returns_200(self, api_url: str, api_available: None) -> None:
+    def test_admin_containers_returns_200(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """GET /v1/admin/containers must return HTTP 200."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
         assert resp.status_code == 200
 
-    def test_admin_containers_slash_alias_returns_200(self, api_url: str, api_available: None) -> None:
+    def test_admin_containers_slash_alias_returns_200(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """GET /v1/admin/containers/ must return HTTP 200 (trailing slash alias)."""
-        resp = requests.get(f"{api_url}/v1/admin/containers/", timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers/", headers=auth_headers, timeout=10)
         assert resp.status_code == 200
 
-    def test_admin_containers_contains_containers_list(self, api_url: str, api_available: None) -> None:
+    def test_admin_containers_contains_containers_list(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """Admin containers response must include a 'containers' list."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
         body = resp.json()
         assert "containers" in body, f"'containers' key missing from /v1/admin/containers: {body}"
         assert isinstance(body["containers"], list), (
             f"'containers' must be a list, got {type(body['containers'])}"
         )
 
-    def test_admin_containers_list_is_non_empty(self, api_url: str, api_available: None) -> None:
+    def test_admin_containers_list_is_non_empty(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """The containers list must include at least one entry."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
         containers = resp.json().get("containers", [])
         assert len(containers) > 0, "Expected at least one container entry in /v1/admin/containers."
 
     def test_admin_containers_entries_have_required_fields(
-        self, api_url: str, api_available: None
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
     ) -> None:
         """Each container entry must include 'name', 'status', 'type', 'version', and 'commit'."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
         containers = resp.json().get("containers", [])
         required_fields = {"name", "status", "type", "version", "commit"}
         for entry in containers:
@@ -246,10 +254,10 @@ class TestAdminContainersEndpoint:
             assert not missing, f"Container entry missing fields {missing}: {entry}"
 
     def test_admin_containers_includes_solr_search_entry(
-        self, api_url: str, api_available: None
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
     ) -> None:
         """The containers list must include an entry for 'solr-search'."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
         containers = resp.json().get("containers", [])
         names = [c.get("name") for c in containers]
         assert "solr-search" in names, f"'solr-search' not found in container names: {names}"

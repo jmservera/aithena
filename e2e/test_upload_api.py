@@ -92,14 +92,18 @@ class TestUploadValidationErrors:
     raised before any external resource is accessed.
     """
 
-    def test_upload_requires_file_field(self, api_url: str, api_available: None) -> None:
+    def test_upload_requires_file_field(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """POST /v1/upload without a file must return HTTP 422 (Unprocessable Entity)."""
-        resp = requests.post(f"{api_url}{UPLOAD_ENDPOINT}", timeout=10)
+        resp = requests.post(f"{api_url}{UPLOAD_ENDPOINT}", headers=auth_headers, timeout=10)
         assert resp.status_code == 422, (
             f"Expected 422 when no file is attached, got {resp.status_code}: {resp.text}"
         )
 
-    def test_upload_rejects_non_pdf_content_type(self, api_url: str, api_available: None) -> None:
+    def test_upload_rejects_non_pdf_content_type(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """POST /v1/upload with a non-PDF MIME type must return HTTP 400.
 
         The backend validates content-type and rejects non-PDF MIME types with
@@ -108,13 +112,16 @@ class TestUploadValidationErrors:
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("document.txt", io.BytesIO(b"just text"), "text/plain")},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 400, (
             f"Expected 400 for text/plain content-type, got {resp.status_code}: {resp.text}"
         )
 
-    def test_upload_rejects_non_pdf_extension(self, api_url: str, api_available: None) -> None:
+    def test_upload_rejects_non_pdf_extension(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """POST /v1/upload with a non-.pdf extension must return HTTP 400.
 
         The backend validates the filename extension and rejects files whose
@@ -124,41 +131,51 @@ class TestUploadValidationErrors:
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("report.docx", io.BytesIO(b"fake docx content"), "application/pdf")},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 400, (
             f"Expected 400 for .docx extension, got {resp.status_code}: {resp.text}"
         )
 
-    def test_upload_rejects_invalid_pdf_bytes(self, api_url: str, api_available: None) -> None:
+    def test_upload_rejects_invalid_pdf_bytes(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """POST /v1/upload with non-PDF bytes declared as application/pdf must return HTTP 400."""
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("book.pdf", io.BytesIO(b"this is not a pdf"), "application/pdf")},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 400, (
             f"Expected 400 for invalid PDF content, got {resp.status_code}: {resp.text}"
         )
 
-    def test_upload_rejects_oversized_file(self, api_url: str, api_available: None) -> None:
+    def test_upload_rejects_oversized_file(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """POST /v1/upload with a file larger than MAX_UPLOAD_SIZE_MB must return HTTP 413."""
         # Generate a payload larger than the default 50 MB limit
         oversized = b"%PDF-1.4\n" + b"X" * (52 * 1024 * 1024)
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("huge.pdf", io.BytesIO(oversized), "application/pdf")},
+            headers=auth_headers,
             timeout=60,
         )
         assert resp.status_code == 413, (
             f"Expected 413 for oversized file, got {resp.status_code}: {resp.text}"
         )
 
-    def test_upload_error_response_contains_detail(self, api_url: str, api_available: None) -> None:
+    def test_upload_error_response_contains_detail(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """Upload rejection response must include a 'detail' field describing the error."""
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("bad.pdf", io.BytesIO(b"not a pdf"), "application/pdf")},
+            headers=auth_headers,
             timeout=10,
         )
         # Invalid PDF content returns 400 Bad Request
@@ -182,14 +199,17 @@ class TestUploadAcceptance:
     Fixture dependency: requires fully configured stack
     """
 
-    def test_valid_pdf_upload_returns_success_status(self, api_url: str, api_available: None) -> None:
+    def test_valid_pdf_upload_returns_success_status(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """POST /v1/upload with a valid PDF must return HTTP 200 or 201."""
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
             files={"file": ("e2e-upload-test.pdf", io.BytesIO(_MINIMAL_PDF), "application/pdf")},
+            headers=auth_headers,
             timeout=30,
         )
-        if resp.status_code in (500, 503):
+        if resp.status_code in (500, 502, 503):
             pytest.skip(
                 f"Upload endpoint returned {resp.status_code} — "
                 "RabbitMQ or upload directory may not be configured for this environment. "

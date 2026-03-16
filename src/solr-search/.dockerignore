@@ -1,0 +1,3 @@
+# solr-search uses the repo root as its build context, so ignore patterns are
+# defined in the root .dockerignore (not here). This file intentionally contains
+# no ignore patterns and exists only to document why.

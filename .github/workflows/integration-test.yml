@@ -60,15 +60,14 @@ jobs:
             --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
             --reset
 
-          # Browser E2E runs through the reverse proxy, so re-enable nginx for CI.
-          # Keep document-data in docker-compose.e2e.yml so it still binds to E2E_LIBRARY_PATH.
+          # Browser E2E runs through the reverse proxy, so we use --profile production
+          # in the 'up' command to activate nginx (which e2e.yml assigns to the
+          # production profile). profiles: [] does NOT clear profiles due to
+          # Docker Compose array deep-merge semantics.
           # NOTE: Docker Compose deep-merges volume driver_opts, so empty overrides
           # do NOT clear bind-mount paths. We must explicitly set all three keys
           # (type, device, o) to tmpfs to fully replace the production bind mounts.
           cat > docker-compose.github-actions.yml <<'EOF'
-          services:
-            nginx:
-              profiles: []
           volumes:
             rabbitmq-data:
               driver: local
@@ -135,6 +134,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             config >/dev/null
 
       - name: Build all container images
@@ -144,6 +144,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             build
 
       - name: Start full stack
@@ -153,6 +154,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             up -d
 
       - name: Wait for services to become healthy
@@ -178,6 +180,7 @@ jobs:
           }
 
           wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr"
+          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection"
           wait_for_url "http://localhost:8080/health" "solr-search API"
           wait_for_url "http://localhost/health" "nginx"
           wait_for_url "http://localhost/search" "Aithena UI"
@@ -187,6 +190,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             ps
 
       - name: Install Python E2E dependencies
@@ -208,7 +212,13 @@ jobs:
         env:
           E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
           E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
-        run: npx playwright test
+        run: |
+          export E2E_AUTH_COOKIE_NAME=aithena_auth
+          export E2E_API_TOKEN="$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$(python3 -c 'import json, os; print(json.dumps({"username": os.environ["E2E_USERNAME"], "password": os.environ["E2E_PASSWORD"]}))')" \
+            http://localhost/v1/auth/login | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')"
+          npx playwright test
 
       - name: Upload Python E2E results
         if: always()
@@ -238,6 +248,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             logs --no-color
 
       - name: Tear down integration stack
@@ -248,5 +259,6 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             down -v --remove-orphans
           rm -f docker-compose.github-actions.yml

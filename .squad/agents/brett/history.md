@@ -57,6 +57,12 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16T16:10Z — Issue #356: solr-search E2E health check timing
+
+- The `solr-search` FastAPI container exposes a lightweight `/health` endpoint, but the app still runs auth DB initialization in its startup lifespan before that route is reachable.
+- In CI, the original `start_period: 10s` for the Compose health check was too aggressive; increasing it to `30s` gives the container enough time to finish startup on slower runners without changing application code.
+- The `solr-search` image already includes `wget`, so the E2E failure was a readiness-timing problem, not a missing health check binary.
+
 ### 2026-03-16T15:25Z — Issue #304: release-docs workflow validation
 
 - Fixed a broken `gh run list | python3 - <<'PY'` pattern in `.github/workflows/release-docs.yml`; the heredoc consumed stdin, so integration-test run IDs were never parsed for artifact download.
