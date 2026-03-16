@@ -155,17 +155,17 @@ def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
         payload = jwt.decode(
             token, secret, algorithms=[JWT_ALGORITHM], options={"require_exp": True}
         )
-    except ExpiredSignatureError as exc:
-        raise TokenExpiredError("Token expired") from exc
-    except JWTError as exc:
-        raise AuthenticationError("Invalid authentication token") from exc
+    except ExpiredSignatureError:
+        raise TokenExpiredError("Token expired")
+    except JWTError:
+        raise AuthenticationError("Invalid authentication token")
 
     try:
         user_id = int(payload["user_id"])
         username = str(payload["sub"])
         role = str(payload["role"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise AuthenticationError("Invalid authentication token") from exc
+    except (KeyError, TypeError, ValueError):
+        raise AuthenticationError("Invalid authentication token")
 
     if not username or not role:
         raise AuthenticationError("Invalid authentication token")

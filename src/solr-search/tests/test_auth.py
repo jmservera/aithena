@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from jose import jwt
 
-os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")
+os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")  # noqa: S108
 os.environ.setdefault("AUTH_JWT_SECRET", "test-auth-secret")
 os.environ.setdefault("AUTH_JWT_TTL", "24h")
 os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
@@ -61,7 +61,7 @@ def test_login_returns_jwt_and_sets_cookie(client: TestClient, seeded_user: Auth
     data = response.json()
     claims = jwt.decode(data["access_token"], settings.auth_jwt_secret, algorithms=["HS256"])
 
-    assert data["token_type"] == "bearer"
+    assert data["token_type"] == "bearer"  # noqa: S105
     assert data["user"] == {"id": seeded_user.id, "username": seeded_user.username, "role": seeded_user.role}
     assert data["expires_in"] == settings.auth_jwt_ttl_seconds
     assert response.cookies.get(settings.auth_cookie_name) == data["access_token"]

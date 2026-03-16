@@ -31,9 +31,9 @@ from auth import (
 )
 from config import settings
 from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
-from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from pydantic import BaseModel
 from search_service import (
     build_filter_queries,
@@ -839,7 +839,7 @@ def _get_indexing_status_details(key_pattern: str) -> tuple[dict[str, int], set[
         failed = 0
         pending = 0
         failed_keys: set[str] = set()
-        for key, val in zip(keys, values):
+        for key, val in zip(keys, values, strict=False):
             if val is None:
                 pending += 1
             elif val == "text_indexed":

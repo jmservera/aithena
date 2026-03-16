@@ -49,6 +49,36 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16 — Embeddings-Server Logging Security Fix (#299, PR #314)
+
+**Task:** Fixed stack trace exposure vulnerability in embeddings-server model loading error handler.
+
+**Changes Made:**
+- Removed `exc_info=True` from CRITICAL-level log call at main.py:20
+- Modified critical log to include error message and exception type: `logger.critical("Failed to load embedding model '%s': %s (%s)", MODEL_NAME, exc, type(exc).__name__)`
+- Added DEBUG-level log with full stack trace: `logger.debug("Model loading stack trace:", exc_info=True)`
+
+**Security Rationale:**
+Production deployments typically run at INFO or WARNING level. Stack traces contain:
+- Internal file paths and directory structure
+- Library versions (dependency fingerprinting)
+- Environment details
+- Potentially sensitive variable values in frames
+
+By moving `exc_info=True` to DEBUG level, we preserve debugging capability while preventing information disclosure in production logs.
+
+**Testing Notes:**
+- embeddings-server uses `requirements.txt` (not uv) — tested with venv-based pytest install
+- Existing test `test_startup_fails_when_model_unavailable` validates sys.exit(1) behavior on model load failure
+- Python syntax validated with `python3 -m py_compile`
+
+**Pattern for Other Services:**
+This pattern should be applied consistently:
+- CRITICAL/ERROR logs: message + exception type (user-facing, safe for production)
+- DEBUG logs: full stack trace via exc_info=True (troubleshooting only)
+
+PR #314 merged to `dev`.
+
 ### 2026-03-16T12:00Z — v0.9.0 src/ Restructure Implementation Complete (#222, PR #287)
 
 - Executed Ripley's restructure plan: moved 9 directories via `git mv` (admin, aithena-ui, document-indexer, document-lister, embeddings-server, nginx, rabbitmq, solr, solr-search).
@@ -251,3 +281,22 @@ REDIS_PORT=6379
 - `installer/setup.py` and `src/solr-search/tests/test_setup_installer.py` must treat the repo root as the parent of `src/`; installer imports now resolve `ROOT / "src" / "solr-search"` and the installer test needs `parents[3]` to reach the repository root.
 - `src/solr-search/Dockerfile` keeps the repo root as its build context, so COPY paths must use `src/solr-search/...` even though the Dockerfile itself lives inside `src/solr-search/`.
 - After moving uv-managed projects on disk, recreate local `.venv` directories before trusting `uv run ...` console scripts; their shebangs can retain the old absolute path and break pytest entrypoints until the environment is rebuilt.
+
+### 2026-03-16 — Issue #302: Document-Indexer Logging Security Fix (PR #310)
+
+**Task:** Replace `logger.exception()` with `logger.error()` in production error paths to prevent information disclosure in container logs.
+
+**Changes Made:**
+- Line 379: `logger.exception("Failed to process %s", file_path)` → `logger.error("Failed to process %s: %s", file_path, exc)` + `logger.debug()` with `exc_info=True`
+- Line 383: `logger.exception("Unable to persist failed state for %s", file_path)` → `logger.error("Unable to persist failed state for %s: %s", file_path, persist_exc)` + `logger.debug()` with `exc_info=True`
+
+**Security Impact:**
+- `logger.exception()` includes full stack traces with internal paths and library versions in container logs at INFO/ERROR level
+- `logger.error()` logs only the error message and exception type
+- `logger.debug()` with `exc_info=True` preserves full stack traces for troubleshooting when DEBUG logging is enabled
+
+**Testing:**
+- ✅ All 91 tests pass (`cd src/document-indexer && uv run pytest -v --tb=short`)
+- No behavior changes, only logging output format
+
+**Decision:** Standard practice for production error logging should be `logger.error()` for user-facing messages and `logger.debug()` with `exc_info=True` for full stack traces. Reserved `logger.exception()` for unexpected internal errors where stack traces are always needed.

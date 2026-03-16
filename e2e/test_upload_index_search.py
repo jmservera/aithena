@@ -28,7 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import subprocess
+import subprocess  # noqa: S404 — diagnostic logging only, uses list args for safety
 from pathlib import Path
 
 import requests

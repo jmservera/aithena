@@ -2,6 +2,10 @@
 
 A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
+**Current Release:** v1.0.0 ✅ — Production-ready with authentication, PDF upload, admin dashboard, and security hardening.  
+**Development:** v1.x milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
+**[View v1.x Milestones](https://github.com/jmservera/aithena/milestones)** | **[v1.0.0 Release Notes](docs/release-notes-v1.0.0.md)**
+
 ## What It Does
 
 - **Indexes multilingual texts** (Spanish, Catalan, French, English, including ancient/OCR texts)
@@ -30,6 +34,57 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Container health checks** for all services with automatic restart on failure
 - **Resource limits** on memory for production stability
 - **Security-hardening CI/CD pipeline** with bandit, checkov, zizmor, SHA-pinned actions, least-privilege workflow permissions, and `persist-credentials: false` checkout defaults
+
+## v1.x Development Process
+
+This section documents how the team develops, branches, and releases v1.x versions.
+
+### Branching Strategy
+
+- **`dev` branch** — Active development. All feature branches create pull requests against `dev`.
+- **`main` branch** — Production releases only. Merges from `dev` happen at release boundaries (e.g., v1.0.0 → v1.1.0).
+- **Feature branches** — Use the squad naming convention: `squad/{issue-number}-{kebab-case-slug}`
+  - Example: `squad/298-update-v1x-docs`
+
+### Pull Request Workflow
+
+1. **Create a feature branch** from `dev`:
+   ```bash
+   git checkout dev && git pull origin dev
+   git checkout -b squad/{issue-number}-{kebab-case-slug}
+   ```
+
+2. **Push and open a PR against `dev`**:
+   ```bash
+   git push origin squad/...
+   gh pr create --base dev --title "..." --body "Closes #{issue-number}"
+   ```
+
+3. **PR Reviews & Merging**:
+   - All PRs require review before merge (branch protection on `dev`).
+   - Squad members or designated reviewers approve.
+   - Maintainers merge to `dev` using `gh pr merge` or the GitHub UI.
+
+### Release Process
+
+When a v1.x milestone is complete:
+
+1. **Create a release tag** on `dev`:
+   ```bash
+   git tag -a v1.x.y -m "Release v1.x.y" && git push origin v1.x.y
+   ```
+
+2. **Merge `dev` → `main`**:
+   ```bash
+   git checkout main && git pull origin main
+   git merge dev && git push origin main
+   ```
+
+3. **Update version file** (if needed for next development cycle):
+   - Edit `VERSION` file in the repo root
+   - Commit and push to `dev`
+
+See [Release Process Overview](#release-process-overview) below for full details.
 
 ## Documentation
 
@@ -265,6 +320,90 @@ See `src/document-indexer/tests/test_metadata.py` for test cases and real librar
 **Phase 4**: PDF upload, file watcher, admin dashboard, production hardening  
 
 Current branch: `jmservera/solrstreamlitui`
+
+## Release Process Overview
+
+### Preflight Checks
+
+Before tagging a release, verify:
+
+1. **Tests pass locally:**
+   ```bash
+   cd src/solr-search && uv run pytest -v --tb=short
+   cd src/document-indexer && uv run pytest -v --tb=short
+   cd src/aithena-ui && npm run build && npx vitest run
+   ```
+
+2. **Docker Compose validates:**
+   ```bash
+   python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))"
+   ```
+
+3. **E2E suite passes:**
+   ```bash
+   export E2E_LIBRARY_PATH=/tmp/aithena-e2e-library && mkdir -p "$E2E_LIBRARY_PATH"
+   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+   cd e2e && pip install -r requirements.txt && pytest
+   ```
+
+### Documentation Requirements
+
+Every release must include:
+
+- **Release Notes** (`docs/release-notes-v1.x.y.md`) — Feature summary and breaking changes
+- **Test Report** (`docs/test-report-v1.x.y.md`) — Test counts and coverage
+- **User/Admin Manual Updates** (`docs/user-manual.md`, `docs/admin-manual.md`) — Updated instructions for new features
+- **README.md Updates** — Feature list and links to new documentation
+
+Documentation must be **committed to `dev` before the release tag is created**.
+
+### Cutting the Release
+
+1. **Ensure `dev` is up to date and clean:**
+   ```bash
+   git checkout dev && git pull origin dev && git status
+   ```
+
+2. **Update VERSION file** (if not already set):
+   ```bash
+   echo "1.x.y" > VERSION && git add VERSION && git commit -m "Version bump: v1.x.y"
+   ```
+
+3. **Tag the release:**
+   ```bash
+   git tag -a v1.x.y -m "Release v1.x.y: {summary}" && git push origin v1.x.y
+   ```
+
+4. **Merge to `main` (production):**
+   ```bash
+   git checkout main && git pull origin main
+   git merge dev
+   git push origin main
+   ```
+
+5. **Publish GitHub release** (manual or via CI):
+   ```bash
+   gh release create v1.x.y --target main --notes-file docs/release-notes-v1.x.y.md
+   ```
+
+### Rollback
+
+If a release needs to be rolled back:
+
+1. **Create a hotfix branch from `main`:**
+   ```bash
+   git checkout main && git pull origin main
+   git checkout -b squad/{issue}-hotfix-{slug}
+   ```
+
+2. **Fix and test locally**, then open a PR against `main`.
+
+3. **After merge, cherry-pick the fix to `dev`:**
+   ```bash
+   git checkout dev && git pull origin dev
+   git cherry-pick {commit-sha}
+   git push origin dev
+   ```
 
 ## Troubleshooting
 

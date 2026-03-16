@@ -6,8 +6,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
-DEFAULT_OUTPUT_DIR = "/tmp/aithena-e2e-library"
+DEFAULT_OUTPUT_DIR = "/tmp/aithena-e2e-library"  # noqa: S108
 
 
 def _escape_pdf_text(text: str) -> str:
