@@ -60,15 +60,14 @@ jobs:
             --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
             --reset
 
-          # Browser E2E runs through the reverse proxy, so re-enable nginx for CI.
-          # Keep document-data in docker-compose.e2e.yml so it still binds to E2E_LIBRARY_PATH.
+          # Browser E2E runs through the reverse proxy, so we use --profile production
+          # in the 'up' command to activate nginx (which e2e.yml assigns to the
+          # production profile). profiles: [] does NOT clear profiles due to
+          # Docker Compose array deep-merge semantics.
           # NOTE: Docker Compose deep-merges volume driver_opts, so empty overrides
           # do NOT clear bind-mount paths. We must explicitly set all three keys
           # (type, device, o) to tmpfs to fully replace the production bind mounts.
           cat > docker-compose.github-actions.yml <<'EOF'
-          services:
-            nginx:
-              profiles: []
           volumes:
             rabbitmq-data:
               driver: local
@@ -135,6 +134,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             config >/dev/null
 
       - name: Build all container images
@@ -144,6 +144,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             build
 
       - name: Start full stack
@@ -153,13 +154,14 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             up -d nginx
 
       - name: Show container logs on failure
         if: failure()
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml logs solr-search --tail=50
-          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml ps
+          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml --profile production logs solr-search nginx --tail=50
+          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml --profile production ps
 
       - name: Wait for services to become healthy
         run: |
@@ -193,6 +195,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             ps
 
       - name: Install Python E2E dependencies
@@ -244,6 +247,7 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             logs --no-color
 
       - name: Tear down integration stack
@@ -254,5 +258,6 @@ jobs:
             -f docker-compose.override.yml \
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
+            --profile production \
             down -v --remove-orphans
           rm -f docker-compose.github-actions.yml
