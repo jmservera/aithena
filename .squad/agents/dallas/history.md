@@ -41,6 +41,15 @@
 - In this sandbox, `document-indexer` needed `UV_NATIVE_TLS=1` so `uv` would trust the system CA store while downloading `pdfminer-six`; the plain command failed on certificate validation before tests started, so the issue was environmental rather than caused by the src/ move.
 - Verified root-level validation still matches the restructure: `docker compose -f docker-compose.yml config --quiet`, `bash -n buildall.sh`, and `ruff check src/solr-search/main.py src/embeddings-server/main.py --select S104` all pass.
 - Searched active scripts, workflows, and README commands and found they already use `src/...` paths; the only remaining old-path references are historical test reports in `docs/test-report-v0.4.0.md` and `docs/test-report-v0.5.0.md`.
+### 2026-03-16T13:45Z — Audited and updated documentation for src/ restructure (#225)
+
+- Conducted comprehensive audit of all documentation files in `docs/`, `README.md`, and `.github/copilot-instructions.md` to identify references to the pre-v1.0 service directory structure (flat root).
+- **Finding:** Parker's PR #287 (refactor: move all microservices into src/ directory) was comprehensive — nearly all documentation had already been updated to use `src/` paths, including README.md test commands, `.github/copilot-instructions.md` service architecture table, docker-compose.yml build contexts, and newer feature guides/test reports.
+- **Identified gaps:** Only the two oldest historical test reports (v0.4.0 and v0.5.0) retained pre-src/ command examples (e.g., `cd /home/jmservera/source/aithena/solr-search` instead of `cd /home/jmservera/source/aithena/src/solr-search`).
+- **Updated:** Two files with 8 total line changes to test-report-v0.4.0.md and test-report-v0.5.0.md, adding `src/` to all `cd` commands to match current directory structure.
+- **Verified:** All remaining references to service names (e.g., `docker compose logs solr-search`) and URL paths (e.g., `/admin/streamlit/`, `/v1/admin/containers`) are correct and unchanged — they refer to Docker service names and HTTP routes, not filesystem paths.
+- **Key learning:** Documentation audit methodology: distinguish between filesystem paths (need updating), service names in docker-compose (remain static), and HTTP routes (remain static).
+- PR #225 is ready for merge to `dev`.
 
 ### 2026-03-15T16:31 — Added build-time version footer to main UI (#201)
 
