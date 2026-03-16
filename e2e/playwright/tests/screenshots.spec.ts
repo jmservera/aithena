@@ -47,7 +47,8 @@ test('captures curated screenshots for release documentation', async ({ browser,
   });
 
   await test.step('capture admin dashboard', async () => {
-    await page.goto(new URL('/admin', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+    await page.locator('a.tab-nav-link[href="/admin"]').click();
+    await expect(page).toHaveURL(/\/admin$/);
     await expect(page.locator('.admin-title')).toHaveText('🏛️ Admin Dashboard');
     await saveScreenshot(page, testInfo, 'admin-dashboard.png');
   });
