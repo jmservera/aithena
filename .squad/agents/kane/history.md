@@ -205,6 +205,44 @@
 
 **Orchestration:** Session documented in `.squad/orchestration-log/2026-03-16T07-36-36Z-kane.md`
 
+### 2026-03-17 — Stack Trace Exposure Investigation (Issue #291, Alert #104)
+
+**Summary:** Investigated and resolved CodeQL alert #104 (py/stack-trace-exposure) in solr-search. Determined the alert was a false positive but applied defense-in-depth fix.
+
+**Investigation Findings:**
+- **Alert Location:** `src/solr-search/main.py:223` — `{"detail": detail}` in `_unauthorized_response()`
+- **Data Flow:** `auth.py` raises `AuthenticationError` with exception chaining (`from exc`) → `main.py:266` catches and calls `str(exc)` → flows into JSON response
+- **Root Cause Analysis:**
+  - Python's `str(exc)` only returns the exception message, never the traceback
+  - All `AuthenticationError` messages are hardcoded ("Invalid authentication token", "Token expired")
+  - FastAPI is not in debug mode (no automatic stack trace exposure)
+  - No custom exception handlers that might leak stack traces
+  - **Conclusion: False positive** — no actual information exposure
+
+**Why CodeQL Flagged This:**
+- Exception chaining (`from exc`) creates `__cause__` and `__context__` attributes
+- CodeQL's conservative data flow analysis flags any exception-to-string conversion that might flow to user responses
+- Even though `str(exc)` is safe, the scanner can't guarantee custom `__str__` implementations won't leak
+
+**Defense-in-Depth Fix Applied:**
+- Removed exception chaining (`from exc`) at three sites in `auth.py`:
+  - JWT decoding: `ExpiredSignatureError` → `TokenExpiredError`
+  - JWT decoding: `JWTError` → `AuthenticationError`
+  - Payload validation: `KeyError/TypeError/ValueError` → `AuthenticationError`
+- Exception messages remain identical (no functional change)
+- All 144 solr-search tests pass
+- Eliminates theoretical attack surface
+
+**Rationale for Fix Despite False Positive:**
+1. CodeQL's flagging indicates a potential risk area worth hardening
+2. Exception chaining is unnecessary here (user messages are already clear)
+3. Removing the chain improves code clarity (no hidden internal exception context)
+4. Satisfies the security scanner and prevents future confusion
+
+**PR:** #308 (squad/291-stack-trace-exposure → dev)  
+**Testing:** All 144 solr-search tests pass (auth, integration, upload)  
+**Security Impact:** Reduces theoretical information exposure risk with zero functional impact
+
 ### 2026-03-16 — Security review of PR #263 (local auth module)
 
 **Summary:** Performed an auth-focused security review of PR #263 (`feat: add local auth module with JWT and SQLite user store`) covering `solr-search/auth.py`, `config.py`, `main.py`, auth tests/helpers, and dependency changes. I could not file a formal `CHANGES_REQUESTED` review because the authenticated GitHub account is the PR author, so I posted the blockers as a PR comment instead.
@@ -237,3 +275,56 @@
 **Sign-off:** ✅ **APPROVED** for merge to `dev`
 
 **Documentation:** Orchestration log recorded in `.squad/orchestration-log/2026-03-16_08-19-32-kane-auth-review.md`
+
+### 2026-03-17 — ecdsa CVE-2024-23342 Baseline Exception (Issue #290, Dependabot #118)
+
+**Summary:** Triaged Dependabot alert #118 (CVE-2024-23342, ecdsa timing side-channel vulnerability in solr-search). Determined no patched version exists and created baseline exception documentation with risk assessment.
+
+**Vulnerability Details:**
+- **CVE:** CVE-2024-23342 (Minerva timing attack on P-256 ECDSA)
+- **Severity:** HIGH (CVSS 7.4)
+- **Affected Package:** `ecdsa` 0.19.1 (pure Python ECDSA implementation)
+- **Dependency Chain:** `python-jose[cryptography]` → `ecdsa 0.19.1` (transitive)
+- **Attack:** Timing side-channel attack allows private key recovery by measuring signature generation timing across many operations
+
+**Investigation Findings:**
+1. **No fix available:** All ecdsa versions (>= 0) are vulnerable. Package maintainers explicitly state that constant-time cryptography is not feasible in pure Python
+2. **ecdsa is fallback only:** solr-search uses `python-jose[cryptography]`, which prefers the `pyca/cryptography` backend (OpenSSL-backed, side-channel hardened) over the pure Python ecdsa package
+3. **Runtime verification:** Confirmed `cryptography` is explicitly declared via `python-jose[cryptography]>=3.3.0` in `pyproject.toml`
+4. **Upgrade attempted:** Ran `uv lock --upgrade-package ecdsa` — no newer version available (0.19.1 is latest)
+
+**Why python-jose Still Requires ecdsa:**
+- python-jose 3.5.0 always installs ecdsa as a fallback dependency even when using the cryptography backend
+- This is a known design issue in python-jose (all backends are installed, runtime selects based on availability)
+- The ecdsa package is present in `uv.lock` but should not be used at runtime when cryptography is available
+
+**Risk Assessment:**
+- **Exploitability:** LOW — Attacker would need to observe many JWT signing operations with precise timing measurements
+- **Impact:** HIGH — If exploited, could lead to JWT secret key compromise
+- **Likelihood:** LOW — Runtime uses cryptography backend (OpenSSL), not ecdsa
+- **Residual Risk:** ACCEPTABLE for current use case
+
+**Mitigation Strategy:**
+- **Short-term:** Document as baseline exception (PR #309)
+- **Long-term:** Replace python-jose with PyJWT in v1.1.0 (PyJWT does not require ecdsa unless EC algorithms are explicitly used)
+
+**Rationale for Baseline Exception:**
+1. No patched ecdsa version exists to upgrade to
+2. Replacing python-jose with PyJWT requires auth code refactor (larger scope than P0 dependency fix)
+3. Runtime mitigation (cryptography backend) provides acceptable protection
+4. Issue #290 is P0 for v1.0.1 milestone — blocking on a full JWT library replacement would delay security milestone
+
+**Deliverables:**
+- ✅ Created `docs/security/baseline-exceptions.md` with CVE-2024-23342 documentation
+- ✅ Updated `docs/security/README.md` to reference baseline exceptions
+- ✅ PR #309 (squad/290-fix-ecdsa-vulnerability → dev) — documentation only, no code changes
+- 📋 Recommended: Create follow-up issue for python-jose → PyJWT migration (P1, v1.1.0)
+
+**Testing:** N/A (documentation-only change)
+
+**References:**
+- **CVE:** CVE-2024-23342
+- **Dependabot Alert:** #118
+- **GHSA:** GHSA-wj6h-64fc-37mp
+- **NVD:** https://nvd.nist.gov/vuln/detail/CVE-2024-23342
+- **ecdsa Security Policy:** https://github.com/tlsfuzzer/python-ecdsa/blob/master/SECURITY.md
