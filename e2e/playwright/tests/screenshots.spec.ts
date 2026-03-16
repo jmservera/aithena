@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Browser, type Page, type TestInfo } from '@playwright/test';
 
 import { discoverCatalogScenario, getAppBaseURL, gotoSearchPage, loginToApp, runSearch } from './helpers';
 
@@ -8,8 +8,20 @@ async function saveScreenshot(page: Page, testInfo: TestInfo, fileName: string) 
   await testInfo.attach(fileName, { path: screenshotPath, contentType: 'image/png' });
 }
 
+async function captureUnauthenticatedLoginPage(browser: Browser, appBaseURL: string, testInfo: TestInfo): Promise<void> {
+  const context = await browser.newContext({ storageState: undefined });
+  const page = await context.newPage();
 
-test('captures curated screenshots for release documentation', async ({ page, request }, testInfo) => {
+  try {
+    await page.goto(new URL('/login', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.login-title')).toHaveText('Sign in to Aithena');
+    await saveScreenshot(page, testInfo, 'login-page.png');
+  } finally {
+    await context.close();
+  }
+}
+
+test('captures curated screenshots for release documentation', async ({ browser, page, request }, testInfo) => {
   test.slow();
 
   const appBaseURL = getAppBaseURL();
@@ -19,9 +31,7 @@ test('captures curated screenshots for release documentation', async ({ page, re
   await page.setViewportSize({ width: 1440, height: 1024 });
 
   await test.step('capture login page', async () => {
-    await page.goto(new URL('/login', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.login-title')).toHaveText('Sign in to Aithena');
-    await saveScreenshot(page, testInfo, 'login-page.png');
+    await captureUnauthenticatedLoginPage(browser, appBaseURL, testInfo);
   });
 
   await loginToApp(page, appBaseURL);
