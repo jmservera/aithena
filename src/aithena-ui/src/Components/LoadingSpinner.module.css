@@ -1,4 +1,4 @@
-.loading-spinner {
+.loadingSpinner {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,43 +13,43 @@
   color: #fff;
 }
 
-.loading-spinner__indicator {
+.loadingSpinnerIndicator {
   width: 48px;
   height: 48px;
   border: 4px solid rgba(255, 255, 255, 0.18);
   border-top-color: #7ec8e3;
   border-radius: 999px;
-  animation: loading-spinner-rotate 0.85s linear infinite;
+  animation: loadingSpinnerRotate 0.85s linear infinite;
   flex-shrink: 0;
 }
 
-.loading-spinner__content {
+.loadingSpinnerContent {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-width: 420px;
 }
 
-.loading-spinner__title {
+.loadingSpinnerTitle {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
 }
 
-.loading-spinner__message {
+.loadingSpinnerMessage {
   margin: 0;
   color: rgba(255, 255, 255, 0.72);
   line-height: 1.6;
 }
 
-@keyframes loading-spinner-rotate {
+@keyframes loadingSpinnerRotate {
   to {
     transform: rotate(360deg);
   }
 }
 
 @media (max-width: 768px) {
-  .loading-spinner {
+  .loadingSpinner {
     flex-direction: column;
     text-align: center;
     min-height: 220px;

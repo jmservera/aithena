@@ -1,4 +1,4 @@
-import './LoadingSpinner.css';
+import styles from './LoadingSpinner.module.css';
 
 interface LoadingSpinnerProps {
   title?: string;
@@ -10,11 +10,11 @@ function LoadingSpinner({
   message = 'Please wait while Aithena prepares this view.',
 }: LoadingSpinnerProps) {
   return (
-    <div className="loading-spinner" role="status" aria-live="polite">
-      <div className="loading-spinner__indicator" aria-hidden="true" />
-      <div className="loading-spinner__content">
-        <h2 className="loading-spinner__title">{title}</h2>
-        <p className="loading-spinner__message">{message}</p>
+    <div className={styles.loadingSpinner} role="status" aria-live="polite">
+      <div className={styles.loadingSpinnerIndicator} aria-hidden="true" />
+      <div className={styles.loadingSpinnerContent}>
+        <h2 className={styles.loadingSpinnerTitle}>{title}</h2>
+        <p className={styles.loadingSpinnerMessage}>{message}</p>
       </div>
     </div>
   );
