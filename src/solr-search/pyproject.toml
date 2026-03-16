@@ -23,10 +23,10 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=search_service --cov=main --cov=auth --cov=config --cov=metrics --cov-report=term-missing --cov-report=html -ra"
+addopts = "--cov=search_service --cov=main --cov=auth --cov=config --cov=metrics --cov=correlation --cov=logging_config --cov-report=term-missing --cov-report=html -ra"
 
 [tool.coverage.run]
-source = ["search_service", "main", "auth", "config", "metrics"]
+source = ["search_service", "main", "auth", "config", "metrics", "correlation", "logging_config"]
 omit = ["tests/*", "__pycache__/*"]
 
 [tool.coverage.report]

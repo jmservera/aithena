@@ -17,6 +17,7 @@ import os
 import sys
 from datetime import UTC, datetime
 
+from correlation import CorrelationIdFilter, get_correlation_id
 from pythonjsonlogger.json import JsonFormatter
 
 
@@ -33,6 +34,9 @@ class AithenaJsonFormatter(JsonFormatter):
         log_record["level"] = record.levelname
         log_record["service"] = self.service_name
         log_record["logger"] = record.name
+        cid = get_correlation_id()
+        if cid:
+            log_record["correlation_id"] = cid
         if record.exc_info and not log_record.get("exc_info"):
             log_record["exc_info"] = self.formatException(record.exc_info)
 
@@ -47,6 +51,9 @@ class AithenaPrettyFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
         base = f"{timestamp} [{record.levelname:<8}] {self.service_name} | {record.name} | {record.getMessage()}"
+        cid = get_correlation_id()
+        if cid:
+            base += f" cid={cid}"
         if record.exc_info and not record.exc_text:
             record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
@@ -85,6 +92,7 @@ def setup_logging(service_name: str = "unknown") -> logging.Logger:
         )
 
     root_logger.addHandler(handler)
+    handler.addFilter(CorrelationIdFilter())
 
     # Reduce noise from third-party libraries
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

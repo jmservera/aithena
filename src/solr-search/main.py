@@ -32,6 +32,7 @@ from auth import (
 )
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from config import settings
+from correlation import CorrelationIdMiddleware, get_correlation_id
 from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -181,7 +182,9 @@ if settings.cors_origins:
         allow_headers=["*"],
     )
 
+# Correlation ID middleware — extracts or generates a correlation ID per request,
 # stores it in a ContextVar, and returns it in the X-Correlation-ID response header.
+app.add_middleware(CorrelationIdMiddleware)
 
 
 @app.middleware("http")
@@ -190,6 +193,7 @@ async def request_logging_middleware(request: Request, call_next):
     start_time = time.monotonic()
     response = await call_next(request)
     duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+    cid = get_correlation_id()
     logger.info(
         "%s %s %s %.2fms",
         request.method,
@@ -201,6 +205,7 @@ async def request_logging_middleware(request: Request, call_next):
             "http_path": request.url.path,
             "http_status": response.status_code,
             "duration_ms": duration_ms,
+            "correlation_id": cid,
         },
     )
     return response

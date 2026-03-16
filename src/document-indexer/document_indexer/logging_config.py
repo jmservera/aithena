@@ -33,6 +33,9 @@ class AithenaJsonFormatter(JsonFormatter):
         log_record["level"] = record.levelname
         log_record["service"] = self.service_name
         log_record["logger"] = record.name
+        cid = getattr(record, "correlation_id", "")
+        if cid:
+            log_record["correlation_id"] = cid
         if record.exc_info and not log_record.get("exc_info"):
             log_record["exc_info"] = self.formatException(record.exc_info)
 

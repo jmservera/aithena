@@ -2,6 +2,7 @@
 
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -112,11 +113,20 @@ def push_file_to_queue(channel, file):
     Returns:
         None
     """
+    correlation_id = str(uuid.uuid4())
+    logger.info(
+        "Enqueuing %s",
+        file,
+        extra={"file_path": str(file), "correlation_id": correlation_id},
+    )
     channel.basic_publish(
         exchange="",
         routing_key=QUEUE_NAME,
         body=f"{file}",
-        properties=pika.BasicProperties(delivery_mode=2),
+        properties=pika.BasicProperties(
+            delivery_mode=2,
+            headers={"X-Correlation-ID": correlation_id},
+        ),
     )
 
 
