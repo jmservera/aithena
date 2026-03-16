@@ -1,22 +1,38 @@
 ---
-updated_at: 2026-03-15T10:40:00Z
-focus_area: v0.6.0 planning complete — awaiting GitHub setup to assign copilot
+updated_at: 2026-03-17T22:55:00Z
+focus_area: Machine migration — retro complete, 3 unreleased milestones, preparing for Docker env
 active_issues:
-  - v060-scope: "12 issues across 6 groups (security, upload, hardening, polish)"
-  - pending-github: "Need gh auth to create milestone, issues, labels"
-  - specs-ready: "Parker, Dallas, Brett, Kane specs in decisions/inbox/"
+  - pr-393: "Correlation IDs PR needs rebase + CI + merge (v1.3.0)"
+  - retro-actions: "P0: Ship v1.0.1/v1.1.0/v1.2.0 retroactively before more milestone work"
+  - branch-cleanup: "66 stale remote branches need deletion"
+  - integration-tests: "#343 not started (v1.3.0)"
 ---
 
 # What We're Focused On
 
-**v0.5.0:** ✅ SHIPPED (197 tests, 9 issues, tagged)
+**Completed milestones (NOT YET RELEASED):**
+- v1.0.1: ✅ 8/8 closed — security patch
+- v1.1.0: ✅ 7/7 closed — release workflow & CI/CD
+- v1.2.0: ✅ 14/14 closed — frontend quality & performance
 
-**v0.6.0 (Production Hardening & Security):** PLANNING COMPLETE
-- Ripley's release plan: `.squad/decisions/inbox/ripley-v060-release-plan.md`
-- 12 issues, 6 groups, dependency order defined
-- All 4 reviewer specs written and approved
+**v1.3.0 (Backend Observability & Hardening):** 6/8 closed
+- PR #393 (correlation IDs) — needs rebase onto dev, CI, merge
+- #343 (integration tests) — not started
 
-**Next Action:** Run `.squad/scripts/setup-v060-milestone.sh` after `gh auth login`
-Then: "Ralph, go" to start the copilot → review → merge pipeline
+**Retrospective completed** — `.squad/decisions/inbox/ripley-retro-process-gaps.md`
+Major finding: 3 milestones completed without shipping releases. No CHANGELOG, no VERSION bump, no milestones closed, no branches cleaned up, no design meetings run.
 
-**Deferred to v0.7.0+:** 13 Dependabot issues, #169 (admin migration)
+**Priority on resume:**
+1. P0: Retroactively release v1.0.1, v1.1.0, v1.2.0 (tags, GitHub releases, notes, close milestones, bump VERSION)
+2. P1: Clean up 66 stale branches, create CHANGELOG.md
+3. P1: Merge PR #393, then dispatch #343 → close v1.3.0
+4. Start v1.4.0 after v1.3.0 ships
+
+**Decision inbox (unmerged):**
+- `kane-zizmor-secrets-acceptance.md`
+- `ripley-retro-process-gaps.md`
+
+**Environment:** Moving to Docker-capable machine. New env will allow local E2E testing before pushing to GitHub Actions.
+
+**Team:** Ripley, Parker, Dallas, Ash, Lambert, Brett, Kane, Newt, Copilot, Juanma (PO)
+
