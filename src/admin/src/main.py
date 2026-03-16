@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 
 import redis
 import requests
 import streamlit as st
+from auth import AuthSettings, logout, require_auth
 from pages.shared.config import (
+    AUTH_ENABLED,
     QUEUE_NAME,
     RABBITMQ_HOST,
     RABBITMQ_MGMT_PATH_PREFIX,
@@ -16,6 +19,18 @@ from pages.shared.config import (
     REDIS_PORT,
 )
 
+auth_user = None
+if AUTH_ENABLED:
+    try:
+        settings = AuthSettings.from_env()
+    except ValueError as exc:
+        st.error(f"Authentication configuration error: {exc}")
+        st.stop()
+    auth_user = require_auth(settings)
+
+setup_logging(service_name="admin")
+logger = logging.getLogger(__name__)
+
 rabbitmq_management_url = f"http://{RABBITMQ_HOST}:{RABBITMQ_MGMT_PORT}{RABBITMQ_MGMT_PATH_PREFIX}"
 admin_version = os.getenv("VERSION", "dev")
 
@@ -24,7 +39,13 @@ st.title("🏛️ Aithena Admin Dashboard")
 st.caption(
     f"Redis: `{REDIS_HOST}:{REDIS_PORT}` · Queue: `{QUEUE_NAME}` · RabbitMQ management: `{rabbitmq_management_url}`"
 )
+
 st.sidebar.caption(f"Admin v{admin_version}")
+if auth_user is not None:
+    st.sidebar.markdown(f"Signed in as **{auth_user.username}**")
+    if st.sidebar.button("🚪 Sign out"):
+        logout()
+        st.rerun()
 
 # ── Redis metrics ────────────────────────────────────────────────────────────
 try:
@@ -55,6 +76,7 @@ try:
     col4.metric("❌ Failed", failed)
 
 except redis.exceptions.ConnectionError:
+    logger.error("Cannot connect to Redis", extra={"redis_host": REDIS_HOST, "redis_port": REDIS_PORT})
     st.error(f"Cannot connect to Redis at {REDIS_HOST}:{REDIS_PORT}")
 
 # ── RabbitMQ management API ──────────────────────────────────────────────────

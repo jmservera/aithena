@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import logging
 import re
 import socket
 import threading
@@ -33,6 +34,7 @@ from config import settings
 from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from logging_config import setup_logging
 from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from pydantic import BaseModel
 from search_service import (
@@ -52,6 +54,9 @@ from search_service import (
     solr_escape,
 )
 
+setup_logging(service_name="solr-search")
+logger = logging.getLogger(__name__)
+
 SortBy = Literal["score", "title", "author", "year", "category", "language"]
 SortOrder = Literal["asc", "desc"]
 
@@ -65,14 +70,14 @@ _INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme",
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI):
     if settings.auth_jwt_secret in _INSECURE_JWT_SECRETS:
-        import warnings
-        warnings.warn(
+        logger.warning(
             "AUTH_JWT_SECRET is using an insecure default value. "
-            "Set a strong random secret via the AUTH_JWT_SECRET environment variable.",
-            stacklevel=1,
+            "Set a strong random secret via the AUTH_JWT_SECRET environment variable."
         )
     init_auth_db(settings.auth_db_path)
+    logger.info("solr-search started", extra={"version": settings.version, "port": settings.port})
     yield
+    logger.info("solr-search shutting down")
 
 
 app = FastAPI(title=settings.title, version=settings.version, lifespan=lifespan)
@@ -154,6 +159,28 @@ if settings.cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    """Log every HTTP request with method, path, status code, and duration."""
+    start_time = time.monotonic()
+    response = await call_next(request)
+    duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+    logger.info(
+        "%s %s %s %.2fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+        extra={
+            "http_method": request.method,
+            "http_path": request.url.path,
+            "http_status": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
+    return response
 
 
 def query_solr(params: dict[str, Any]) -> dict[str, Any]:

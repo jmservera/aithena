@@ -24,8 +24,9 @@ from . import (
     REDIS_PORT,
     VERSION,
 )
+from .logging_config import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging(service_name="document-lister")
 logger = logging.getLogger(__name__)
 
 
@@ -153,5 +154,10 @@ def produce():
 
 
 if __name__ == "__main__":
-    logger.info("Starting document-lister v%s (commit: %s)", VERSION, GIT_COMMIT)
+    logger.info(
+        "Starting document-lister v%s (commit: %s)",
+        VERSION,
+        GIT_COMMIT,
+        extra={"version": VERSION, "commit": GIT_COMMIT},
+    )
     produce()
