@@ -37,4 +37,4 @@ ENV SOLR_COLLECTION="books"
 ENV BASE_PATH="/data/documents"
 ENV CORS_ORIGINS="http://localhost:5173"
 
-CMD ["sh","-c","python -m uvicorn --port=$PORT --host 0.0.0.0 main:app"]
+CMD ["sh","-c","uv run python -m uvicorn --port=$PORT --host 0.0.0.0 main:app"]

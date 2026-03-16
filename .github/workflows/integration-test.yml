@@ -155,6 +155,12 @@ jobs:
             -f docker-compose.github-actions.yml \
             up -d
 
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml logs solr-search --tail=50
+          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml ps
+
       - name: Wait for services to become healthy
         run: |
           wait_for_url() {
