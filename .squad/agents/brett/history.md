@@ -358,3 +358,57 @@
 
 **Time:** ~30 minutes (systematic validation of all 10 checklist items)
 **Result:** Issue #224 closed — all CI/CD pipelines validated and correct ✓
+
+### 2026-03-16 — Issue #294: Fix secrets-outside-env in squad-issue-assign.yml (#94) [PR #313]
+
+**Summary:** Fixed security alert #94 by removing step-level `env:` block exposing `COPILOT_ASSIGN_TOKEN` in `.github/workflows/squad-issue-assign.yml`.
+
+**Changes:**
+- Removed `env: COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}` block from step
+- Passed secret directly as inline parameter: `github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN }}`
+- This prevents the secret from being exposed as an environment variable in the step execution context
+
+**Security rationale:**
+- Secrets passed via `with:` parameters to actions are handled securely by the action runtime
+- Exposing secrets in `env:` blocks makes them available to all commands in the step, increasing attack surface
+- Direct parameter passing limits secret exposure to only the specific action that needs it
+
+**Validation:**
+- ✅ YAML syntax validated with `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/squad-issue-assign.yml'))"`
+- ✅ No functional change — PAT still used to assign copilot-swe-agent bot
+- ✅ Follows GitHub security best practices for workflow secrets handling
+
+**Lessons learned:**
+1. **Prefer inline secret parameters over env blocks:** When an action accepts a token parameter (like `github-token`), pass secrets directly via `with:` rather than through `env:`
+2. **Zizmor secrets-outside-env rule intent:** The rule flags secrets that could be accessed by unintended commands or scripts in the step
+3. **Step-level vs inline secrets:** Step-level `env:` makes secrets available to all bash commands; inline `with:` parameters restrict access to the action itself
+
+### 2026-03-16 — Issue #305: Add release milestone labels for v1.x milestones [PR #315]
+
+**Summary:** Added five new release milestone labels (v1.0.1 through v1.4.0) to the sync-squad-labels workflow automation.
+
+**Changes:**
+- Extended `RELEASE_LABELS` array in `.github/workflows/sync-squad-labels.yml` with:
+  - `release:v1.0.1`, `release:v1.1.0`, `release:v1.2.0`, `release:v1.3.0`, `release:v1.4.0`
+- Used blue color theme (`0075ca`) for v1.x labels to visually distinguish them from v0.x labels (which use `6B8EB5` and `8B7DB5`)
+- Labels were already created manually by jmservera — this change brings them under automation control
+
+**Rationale:**
+- Issue #305 was assigned to v1.1.0 milestone, which triggered the need for milestone labels
+- Labels need to exist in the workflow file so they're automatically synced, updated, and maintained
+- Consistent color scheme helps users quickly identify the release series (v0.x vs v1.x)
+
+**Technical notes:**
+- The workflow uses GitHub's `issues.createLabel` and `issues.updateLabel` REST APIs
+- Labels are synced on push to `.squad/team.md` or via manual `workflow_dispatch`
+- Adding labels to the array ensures they won't be deleted by automation and their metadata (color, description) stays consistent
+
+**Validation:**
+- ✅ YAML syntax validated with `python3 -c "import yaml; yaml.safe_load(...)"`
+- ✅ Branch created following squad convention: `squad/305-add-milestone-labels`
+- ✅ PR #315 created targeting `dev` branch
+
+**Lessons learned:**
+1. **Label automation is declarative:** The workflow treats the `RELEASE_LABELS` array as the source of truth and syncs the repo to match
+2. **Color coding conventions:** Use consistent color themes within label families (all v1.x labels share `0075ca`, v0.x labels use purples/blues)
+3. **Manual labels need workflow updates:** When labels are created manually, they must be added to the workflow file to prevent drift
