@@ -57,6 +57,12 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-16T15:25Z — Issue #304: release-docs workflow validation
+
+- Fixed a broken `gh run list | python3 - <<'PY'` pattern in `.github/workflows/release-docs.yml`; the heredoc consumed stdin, so integration-test run IDs were never parsed for artifact download.
+- Added a release-context fallback so milestone-based PR queries can drop back to recent merged PRs on `dev` when no PRs are tagged with the selected milestone.
+- Removed the stale `Closes #270` footer from generated release-doc PR bodies so future automation runs do not reference the original bootstrap issue.
+
 ### 2026-03-16T13:00Z — Issue #303: release-docs Copilot CLI refresh
 
 - Updated `.github/workflows/release-docs.yml` to install only the official `@github/copilot` package and rely on the documentation template fallback when CLI installation or generation fails.

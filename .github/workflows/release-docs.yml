@@ -68,6 +68,7 @@ jobs:
           mkdir -p "$context_dir"
           issues_json="$context_dir/issues.json"
           prs_json="$context_dir/prs.json"
+          pr_context_note="recent merged PRs on dev"
 
           if [[ -n "$RELEASE_MILESTONE" ]]; then
             gh issue list \
@@ -82,6 +83,17 @@ jobs:
               --search "repo:$GITHUB_REPOSITORY milestone:\"$RELEASE_MILESTONE\" is:merged" \
               --limit 100 \
               --json number,title,url,mergedAt > "$prs_json" || echo '[]' > "$prs_json"
+            if [[ "$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1], encoding="utf-8"))))' "$prs_json")" == "0" ]]; then
+              gh pr list \
+                --repo "$GITHUB_REPOSITORY" \
+                --state merged \
+                --base dev \
+                --limit 20 \
+                --json number,title,url,mergedAt > "$prs_json" || echo '[]' > "$prs_json"
+              pr_context_note="recent merged PRs on dev fallback (milestone search returned no PRs)"
+            else
+              pr_context_note="merged PRs tagged with the selected milestone"
+            fi
           else
             gh issue list \
               --repo "$GITHUB_REPOSITORY" \
@@ -97,6 +109,7 @@ jobs:
           fi
 
           export RELEASE_CONTEXT_DIR="$context_dir"
+          export RELEASE_PR_CONTEXT_NOTE="$pr_context_note"
           python3 - <<'PY'
           import json
           import os
@@ -105,6 +118,7 @@ jobs:
           context_dir = Path(os.environ["RELEASE_CONTEXT_DIR"])
           version = os.environ["RELEASE_VERSION"]
           milestone = os.environ.get("RELEASE_MILESTONE", "").strip()
+          pr_context_note = os.environ["RELEASE_PR_CONTEXT_NOTE"]
 
           issues = json.loads((context_dir / "issues.json").read_text())
           prs = json.loads((context_dir / "prs.json").read_text())
@@ -113,6 +127,7 @@ jobs:
               f"# Release documentation context for v{version}",
               "",
               f"- Milestone filter: {milestone or 'not provided — using recent closed issues and merged PRs on dev'}",
+              f"- Pull request source: {pr_context_note}",
               f"- Closed issues captured: {len(issues)}",
               f"- Merged pull requests captured: {len(prs)}",
               "",
@@ -150,21 +165,13 @@ jobs:
           artifact_dir="$RUNNER_TEMP/release-docs/artifacts"
           mkdir -p "$artifact_dir"
 
-          run_id="$({
-            gh run list \
-              --repo "$GITHUB_REPOSITORY" \
-              --workflow integration-test.yml \
-              --branch dev \
-              --status success \
-              --limit 20 \
-              --json databaseId
-          } | python3 - <<'PY'
-          import json
-          import sys
-
-          runs = json.load(sys.stdin)
-          print(runs[0]["databaseId"] if runs else "")
-          PY
+          run_id="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow integration-test.yml \
+            --branch dev \
+            --status success \
+            --limit 20 \
+            --json databaseId | python3 -c 'import json, sys; runs = json.load(sys.stdin); print(runs[0]["databaseId"] if runs else "")'
           )"
 
           if [[ -n "$run_id" ]]; then
@@ -454,4 +461,4 @@ jobs:
             --base dev \
             --head "$RELEASE_BRANCH" \
             --title "docs: prepare release docs for v${RELEASE_VERSION}" \
-            --body "Automated release documentation for v${RELEASE_VERSION}.\n\nCloses #270"
+            --body "Automated release documentation for v${RELEASE_VERSION}.\n\nGenerated files:\n- ${RELEASE_NOTES_PATH}\n- ${TEST_REPORT_PATH}"
