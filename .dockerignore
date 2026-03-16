@@ -1,0 +1,33 @@
+# Virtual environments (uv/pip) — prevent local venvs from overwriting
+# container venvs during Docker builds.
+**/.venv/
+**/__pycache__/
+**/*.pyc
+
+# Version control
+.git/
+.github/
+.gitignore
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation and metadata not needed in images
+docs/
+e2e/
+*.md
+LICENSE
+ruff.toml
+
+# Squad / CI metadata
+.squad/
+.worktrees/
+
+# Docker Compose files
+docker-compose*.yml
+
+# Installer (runs on host, not in container)
+installer/
