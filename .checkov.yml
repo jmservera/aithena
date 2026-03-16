@@ -20,6 +20,16 @@ skip-check:
   # base image defaults.
   - CKV_DOCKER_3
 
+  # CKV_GHA_7: GitHub Actions workflow_dispatch inputs MUST be empty
+  # Reason: The release-docs.yml workflow is an internal documentation
+  # automation tool that requires version and milestone parameters to
+  # function. This is not a build/release pipeline for artifacts, but
+  # rather a workflow that generates release notes and test reports.
+  # The version input is validated with regex in the workflow steps.
+  # Risk is acceptable as this is maintainer-only workflow with protected
+  # branch requirements.
+  - CKV_GHA_7
+
 # Scan configuration
 framework:
   - dockerfile
