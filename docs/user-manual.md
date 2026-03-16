@@ -1,11 +1,12 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v0.7.0 Feature Guide](features/v0.7.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v0.11.0 Feature Guide](features/v0.11.0.md).
 
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
 
+- sign in with the account created during installation (v0.11.0+)
 - search by keyword, semantic meaning, or a hybrid of both
 - narrow results with facets
 - open PDFs directly from search results
@@ -27,6 +28,15 @@ In a local Docker Compose setup, the main entry point is usually:
 If you are running the frontend in Vite development mode instead of the full stack, the UI may also be available on:
 
 - `http://localhost:5173`
+
+With the v0.11.0 auth flow enabled, visiting protected pages redirects you to `/login` until you sign in successfully.
+
+### Sign in (v0.11.0+)
+
+1. Open the main Aithena URL.
+2. Enter the username and password created by the installer.
+3. Submit the login form.
+4. After login, Aithena keeps your browser session active and automatically attaches auth to protected requests until you log out or the session expires.
 
 ![Aithena tab navigation](images/tab-navigation.png)
 
@@ -248,11 +258,12 @@ The embedded Streamlit dashboard currently includes:
 
 - The Admin tab loads `/admin/streamlit/` inside the app rather than sending you to a different product.
 - It is mainly intended for operators and library administrators, not day-to-day readers.
-- If the dashboard cannot load, contact your administrator to confirm the admin services are running.
+- The admin dashboard now requires an authenticated session; if your session expires, Aithena redirects you back to `/login`.
+- If the dashboard cannot load after you sign in, contact your administrator to confirm the admin services are running and your account has been provisioned correctly.
 
 ## Uploading PDFs (v0.6.0+)
 
-The **Upload** tab lets you add PDFs to the library without logging in to the server.
+The **Upload** tab lets authenticated users add PDFs to the library without direct server access.
 
 ### How to upload
 
