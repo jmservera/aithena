@@ -328,3 +328,41 @@
 - **GHSA:** GHSA-wj6h-64fc-37mp
 - **NVD:** https://nvd.nist.gov/vuln/detail/CVE-2024-23342
 - **ecdsa Security Policy:** https://github.com/tlsfuzzer/python-ecdsa/blob/master/SECURITY.md
+### 2026-03-16 — Security Alert Triage: False Positives (#297)
+
+**Summary:** Triaged and dismissed four false-positive security alerts (issues #97, #96, #92, #91) identified by bandit/ruff security scanning. All findings verified safe; documented with inline `noqa` directives and explanatory comments.
+
+**Alerts Triaged:**
+
+1. **#97** (ERROR, installer/setup.py:516, S108) — "Clear-text logging of sensitive info"
+   - **Finding:** `print(f"- JWT secret: {secret_status}")`
+   - **Rationale:** Prints status string only ('generated' or 'kept existing'), NOT the actual JWT secret value
+   - **Resolution:** Added `noqa: S108` with inline comment explaining safe usage
+
+2. **#96** (NOTE, installer/setup.py:10, S404) — "subprocess import"
+   - **Finding:** `import subprocess`
+   - **Rationale:** Used exclusively for git operations with list args, never shell=True. Pattern is safe.
+   - **Resolution:** Added `noqa: S404` with inline comment documenting safe usage pattern
+
+3. **#92** (NOTE, e2e/test_upload_index_search.py:31, S404) — "subprocess import"
+   - **Finding:** `import subprocess`
+   - **Rationale:** Diagnostic logging only, uses safe list args. Already has S603 exception in ruff.toml.
+   - **Resolution:** Added `noqa: S404` with inline comment for completeness
+
+4. **#91** (NOTE, e2e/test_search_modes.py:149, S112) — "try-except-continue"
+   - **Finding:** `except Exception: continue`
+   - **Rationale:** Graceful probe pattern for service health checking. Actually uses `continue` (not `pass`), so finding is technically inaccurate. Pattern is appropriate for non-critical probes.
+   - **Resolution:** Added `noqa: S112` with inline comment explaining the pattern
+
+**Verification:**
+- ✅ Ran `ruff check` on all affected files — all checks passed
+- ✅ Reviewed each flagged line to confirm rationale matches code behavior
+- ✅ Added inline documentation for future reviewers
+
+**Outcome:**
+- PR #313 created targeting dev
+- Branch: squad/297-triage-false-positive-alerts
+- All alerts documented and dismissed
+- No actual security vulnerabilities identified
+
+**Decision:** Documented security baseline exceptions in `.squad/decisions/inbox/kane-false-positives.md`

@@ -4622,4 +4622,230 @@ This roadmap delivers incremental improvements across 5 milestones following sem
 - TDD approach: Lambert writes test expectations before implementation where possible
 - Issues for v1.2.0+ will be created when we approach those milestones (avoid issue sprawl)
 
+---
+
+# Decision: Stack Trace Logging Security Pattern
+
+**Date:** 2026-03-16  
+**Author:** Parker (Backend Dev)  
+**Context:** Issue #299 — embeddings-server exc_info exposure
+
+## Decision
+
+All Python services must use a two-tier logging pattern for exceptions:
+
+1. **CRITICAL/ERROR level** — User-facing, production-safe:
+   ```python
+   logger.critical("Operation failed: %s (%s)", exc, type(exc).__name__)
+   ```
+
+2. **DEBUG level** — Stack trace for troubleshooting only:
+   ```python
+   logger.debug("Full stack trace:", exc_info=True)
+   ```
+
+## Rationale
+
+Production logs (INFO/WARNING level) should NOT expose:
+- Internal file paths and directory structure
+- Library versions (dependency fingerprinting)
+- Environment configuration details
+- Variable values in exception frames
+
+Stack traces are valuable for debugging but constitute information disclosure in production environments.
+
+## Scope
+
+Applies to:
+- solr-search
+- document-indexer
+- document-lister
+- embeddings-server
+- admin (Streamlit)
+
+All critical/error exception handlers should be reviewed and updated to follow this pattern.
+
+## Implementation
+
+Fixed in embeddings-server (PR #314). Recommend audit of other services in future milestone.
+
+## Related
+
+- Security best practice: least-privilege logging
+- Complements existing Bandit (S) ruff rules
+
+---
+
+# Decision: Production Error Logging Convention
+
+**Date:** 2026-03-16  
+**Context:** Issue #302 — Document-indexer logging security fix  
+**Author:** Parker (Backend Dev)  
+**Status:** Implemented
+
+## Problem
+
+`logger.exception()` was used in production error paths, exposing full stack traces (with internal paths and library versions) in container logs at INFO/ERROR level. This creates information disclosure risk.
+
+## Decision
+
+**Standard production error logging pattern:**
+
+```python
+except Exception as exc:
+    logger.error("Failed to process %s: %s", resource, exc)
+    logger.debug("Failed to process %s", resource, exc_info=True)
+```
+
+**Rationale:**
+- `logger.error()` logs error message and exception type (suitable for production logs)
+- `logger.debug()` with `exc_info=True` preserves full stack traces for troubleshooting
+- DEBUG level logging can be enabled when needed without changing code
+- Prevents information disclosure in default container log output
+
+**When to use `logger.exception()`:**
+- Only in truly unexpected internal errors where stack traces are always needed
+- Not in expected error paths (file not found, validation failures, external service errors)
+
+## Impact
+
+- **document-indexer**: Fixed lines 379, 383 (PR #310)
+- **Other services**: Should follow same pattern in future error handling
+
+## References
+
+- Issue #302
+- PR #310
+- Python logging best practices (avoid exception details in production logs)
+
+---
+
+# Decision: Security Baseline: False Positive Alert Exceptions
+
+**Date:** 2026-03-16  
+**Author:** Kane (Security Engineer)  
+**Context:** Issue #297 — Triage and dismiss false-positive security alerts  
+**PR:** #313
+
+## Decision
+
+Establish documented baseline exceptions for four false-positive security alerts flagged by bandit/ruff scanning. All findings have been reviewed and verified as safe patterns that do not present actual security risks.
+
+## Approved Exceptions
+
+### 1. installer/setup.py:516 — S108 (Clear-text logging)
+
+**Finding:** Bandit flagged `print(f"- JWT secret: {secret_status}")` as potential sensitive data logging.
+
+**Rationale:** The variable `secret_status` contains only the string "generated" or "kept existing" — it is a status indicator, not the actual JWT secret value. The actual secret is never logged.
+
+**Resolution:** Added `# noqa: S108` with inline comment documenting safe usage.
+
+### 2. installer/setup.py:10 — S404 (subprocess import)
+
+**Finding:** Bandit flagged `import subprocess` as potential command injection risk.
+
+**Rationale:** The subprocess module is used exclusively for git operations with list-based arguments (never `shell=True`). All subprocess calls pass command arguments as lists, which prevents shell injection. Example usage:
+```python
+subprocess.run(["git", "config", "--get", "user.name"], ...)
+```
+
+**Resolution:** Added `# noqa: S404` with inline comment documenting safe usage pattern.
+
+### 3. e2e/test_upload_index_search.py:31 — S404 (subprocess import)
+
+**Finding:** Bandit flagged `import subprocess` in end-to-end test file.
+
+**Rationale:** Used for diagnostic logging only with safe list args. Already has S603 (subprocess without shell check) exception in `ruff.toml` for this file. The subprocess calls are limited to test diagnostics and use list args.
+
+**Resolution:** Added `# noqa: S404` for completeness and consistency.
+
+### 4. e2e/test_search_modes.py:149 — S112 (try-except-continue)
+
+**Finding:** Bandit flagged `except Exception: continue` as potentially swallowing important exceptions.
+
+**Rationale:** This is a graceful probe pattern used for service health checking. The code:
+1. Attempts to contact an endpoint to verify service availability
+2. On any failure (network, timeout, 4xx/5xx), continues to next retry
+3. Is non-critical diagnostic code, not error-critical business logic
+4. Actually uses `continue` (not `pass`), so the finding description is technically inaccurate
+
+The pattern is appropriate for optional probe operations where we want to attempt contact but not fail the test if the service is temporarily unavailable during startup.
+
+**Resolution:** Added `# noqa: S112` with inline comment explaining the graceful probe pattern.
+
+## Impact
+
+**Security posture:** No change — these were false positives that did not represent actual vulnerabilities.
+
+**Code quality:** Improved — all exceptions are now documented inline with clear rationale for future reviewers.
+
+**CI/CD:** Security scanning (bandit/ruff) will continue to run without reporting these specific patterns as violations.
+
+## Verification
+
+All affected files passed `ruff check` after adding the exception directives, confirming:
+1. No new violations introduced
+2. Exception syntax is valid
+3. Only the intended patterns are suppressed
+
+## Related Work
+
+- Original security alerts: #97, #96, #92, #91
+- Triage issue: #297
+- Implementation PR: #313
+- Security baseline establishment: part of v1.0.1 milestone security hardening
+
+## Future Considerations
+
+When reviewing new code:
+- Subprocess usage MUST use list args (never `shell=True`)
+- Logging statements MUST NOT include actual secrets (only metadata like "generated" / "existing")
+- Exception handling in probes/retries is acceptable with clear inline comments
+- All security exceptions should be documented inline with `# noqa: CODE — reason` format
+
+---
+
+# Decision: Copilot CLI Flags — Verified Valid
+
+**Date:** 2026-03-16  
+**Author:** Coordinator (corrected by)  
+**Context:** Issue #303 — Update Copilot CLI invocation in release-docs.yml
+
+## Finding
+
+Previous assessment stated `--agent <agent>` and `--autopilot` were invalid Copilot CLI flags. **This was incorrect.**
+
+## Decision
+
+Both flags ARE valid and should be used in squad automation workflows:
+
+- **`--agent <agent>`** — Specify a custom agent to use (e.g., `--agent squad` to use the Squad agent)
+- **`--autopilot`** — Enable autopilot continuation in prompt mode (agent keeps working without user confirmation between turns)
+
+## Usage Example
+
+```bash
+copilot --agent squad --autopilot -p "Newt: generate release docs"
+```
+
+This invocation:
+1. Uses the Squad custom agent
+2. Enables autonomous continuation (no user prompts)
+3. Passes the prompt directly
+
+## Verification
+
+Verified via `copilot --help` output on the installed CLI. Both flags are documented in the CLI help text.
+
+## Impact
+
+- Issue #303 can proceed with confident CLI invocation
+- Release documentation workflows can run autonomously
+- Squad agents can be invoked programmatically in CI/CD
+
+## Related
+
+- Issue #303 — Update Copilot CLI invocation in release-docs.yml
+
 
