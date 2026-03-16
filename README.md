@@ -11,6 +11,7 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Detects language** from folder structure plus Solr `langid` processing
 - **Accepts PDF uploads** via drag-and-drop UI with client-side validation and rate limiting
 - **Scans for security issues** with bandit (Python), checkov (IaC), and zizmor (GitHub Actions)
+- **Hardens GitHub Actions supply chain** with SHA-pinned actions, least-privilege permissions, and non-persistent checkout credentials
 
 ## Features
 
@@ -24,13 +25,15 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Stats tab** with indexed-book totals, page-count statistics, and breakdowns by language, author, year, and category
 - **Container health checks** for all services with automatic restart on failure
 - **Resource limits** on memory for production stability
-- **Security scanning** in CI/CD pipeline to detect vulnerabilities early
+- **Security-hardening CI/CD pipeline** with bandit, checkov, zizmor, SHA-pinned actions, least-privilege workflow permissions, and `persist-credentials: false` checkout defaults
 
 ## Documentation
 
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
-- [v0.7.0 Feature Guide](docs/features/v0.7.0.md) — Latest release
+- [v0.10.0 Release Notes](docs/release-notes-v0.10.0.md)
+- [v0.10.0 Test Report](docs/test-report-v0.10.0.md)
+- [v0.7.0 Feature Guide](docs/features/v0.7.0.md)
 - [v0.6.0 Feature Guide](docs/features/v0.6.0.md)
 - [v0.5.0 Feature Guide](docs/features/v0.5.0.md)
 - [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
