@@ -325,6 +325,12 @@ services:
       - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - SOLR_SEARCH_URL=http://solr-search:8080
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-change-me-in-production}
+      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
+      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
+      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
     networks:
       - default
   redis-commander:
