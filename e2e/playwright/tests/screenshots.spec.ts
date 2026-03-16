@@ -1,9 +1,6 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
-import { discoverCatalogScenario, getAppBaseURL, gotoSearchPage, runSearch } from './helpers';
-
-const LOGIN_USERNAME = process.env.E2E_USERNAME || 'admin';
-const LOGIN_PASSWORD = process.env.E2E_PASSWORD || 'admin';
+import { discoverCatalogScenario, getAppBaseURL, gotoSearchPage, loginToApp, runSearch } from './helpers';
 
 async function saveScreenshot(page: Page, testInfo: TestInfo, fileName: string) {
   const screenshotPath = testInfo.outputPath(fileName);
@@ -11,17 +8,6 @@ async function saveScreenshot(page: Page, testInfo: TestInfo, fileName: string) 
   await testInfo.attach(fileName, { path: screenshotPath, contentType: 'image/png' });
 }
 
-async function login(page: Page, appBaseURL: string) {
-  await page.goto(new URL('/login', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('.login-title')).toHaveText('Sign in to Aithena');
-  await page.getByLabel('Username').fill(LOGIN_USERNAME);
-  await page.getByLabel('Password').fill(LOGIN_PASSWORD);
-  await Promise.all([
-    page.waitForURL(/\/search$/, { timeout: 20_000 }),
-    page.getByRole('button', { name: 'Sign in' }).click(),
-  ]);
-  await expect(page.locator('.tab-nav-user')).toContainText(LOGIN_USERNAME);
-}
 
 test('captures curated screenshots for release documentation', async ({ page, request }, testInfo) => {
   test.slow();
@@ -38,7 +24,7 @@ test('captures curated screenshots for release documentation', async ({ page, re
     await saveScreenshot(page, testInfo, 'login-page.png');
   });
 
-  await login(page, appBaseURL);
+  await loginToApp(page, appBaseURL);
 
   const screenshotQuery =
     catalog.highlightScenario?.query || catalog.pdfScenario?.query || catalog.multiPagePdfScenario?.query || catalog.broadQuery;

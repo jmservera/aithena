@@ -69,7 +69,7 @@ test('upload page or upload trigger is reachable from the main UI', async ({ pag
   }
 
   // Fallback: navigate directly to the upload path and check it is handled
-  await page.goto(new URL('/upload', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+  await gotoAppPage(page, appBaseURL, '/upload');
   const bodyText = (await page.locator('body').textContent()) ?? '';
 
   // Acceptable outcomes: a proper upload UI, or a redirect back to search
@@ -91,7 +91,7 @@ test('upload page or upload trigger is reachable from the main UI', async ({ pag
 
 test('upload input rejects non-PDF file types via accept attribute', async ({ page }) => {
   // Navigate to wherever an upload input may be found
-  await page.goto(new URL('/upload', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+  await gotoAppPage(page, appBaseURL, '/upload');
 
   const fileInput = page.locator('input[type="file"]').first();
   const inputVisible = await fileInput.isVisible().catch(() => false);
@@ -139,7 +139,7 @@ test('valid PDF upload shows success or pending feedback in the UI', async ({ pa
     return;
   }
 
-  await page.goto(new URL('/upload', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+  await gotoAppPage(page, appBaseURL, '/upload');
 
   const fileInput = page.locator('input[type="file"]').first();
   const inputVisible = await fileInput.isVisible().catch(() => false);
