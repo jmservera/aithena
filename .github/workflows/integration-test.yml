@@ -1,0 +1,191 @@
+name: Integration Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-and-e2e:
+    name: Docker Compose integration + E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      E2E_LIBRARY_PATH: /tmp/aithena-e2e-library
+      CI_ADMIN_USERNAME: ci-admin
+      CI_ADMIN_PASSWORD: ci-password-ChangeMe123!
+      BASE_URL: http://localhost
+      FALLBACK_BASE_URL: http://localhost
+      SEARCH_API_URL: http://localhost:8080
+      SOLR_URL: http://localhost:8983/solr/books
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/playwright/package-lock.json
+
+      - name: Bootstrap CI auth + compose overrides
+        run: |
+          mkdir -p "$E2E_LIBRARY_PATH"
+          mkdir -p "$RUNNER_TEMP/aithena-auth"
+
+          uv run --project solr-search python -m installer \
+            --library-path "$E2E_LIBRARY_PATH" \
+            --admin-user "$CI_ADMIN_USERNAME" \
+            --admin-password "$CI_ADMIN_PASSWORD" \
+            --origin "http://localhost" \
+            --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
+            --reset
+
+          # Browser E2E runs through the reverse proxy, so re-enable nginx for CI.
+          cat > docker-compose.github-actions.yml <<'EOF'
+          services:
+            nginx:
+              profiles: []
+          EOF
+
+      - name: Validate merged Docker Compose config
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            config >/dev/null
+
+      - name: Build all container images
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            build
+
+      - name: Start full stack
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            up -d
+
+      - name: Wait for services to become healthy
+        run: |
+          wait_for_url() {
+            local url="$1"
+            local label="$2"
+            local attempts="${3:-60}"
+            local sleep_seconds="${4:-5}"
+
+            for ((attempt=1; attempt<=attempts; attempt+=1)); do
+              if curl --fail --silent --show-error "$url" >/dev/null; then
+                echo "$label is ready ($url)"
+                return 0
+              fi
+
+              echo "[$attempt/$attempts] Waiting for $label at $url"
+              sleep "$sleep_seconds"
+            done
+
+            echo "$label did not become ready in time ($url)" >&2
+            return 1
+          }
+
+          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr"
+          wait_for_url "http://localhost:8080/health" "solr-search API"
+          wait_for_url "http://localhost/health" "nginx"
+          wait_for_url "http://localhost/search" "Aithena UI"
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            ps
+
+      - name: Install Python E2E dependencies
+        working-directory: e2e
+        run: pip install -r requirements.txt
+
+      - name: Run Python E2E tests
+        working-directory: e2e
+        run: pytest -v --junitxml=pytest-results.xml
+
+      - name: Install Playwright dependencies
+        working-directory: e2e/playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright browser tests
+        working-directory: e2e/playwright
+        env:
+          E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
+          E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
+        run: npx playwright test
+
+      - name: Upload Python E2E results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: python-e2e-results
+          path: e2e/pytest-results.xml
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload Playwright report and screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: playwright-e2e-results
+          path: |
+            e2e/playwright/playwright-report
+            e2e/playwright/test-results
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Dump Compose logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            logs --no-color
+
+      - name: Tear down integration stack
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            down -v --remove-orphans
+          rm -f docker-compose.github-actions.yml
