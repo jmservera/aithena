@@ -152,9 +152,9 @@ describe('useAuth', () => {
     });
 
     const protectedRequest = vi.mocked(fetch).mock.calls[1]?.[1];
-    expect(new Headers((protectedRequest as RequestInit | undefined)?.headers).get('Authorization')).toBe(
-      'Bearer jwt-123'
-    );
+    expect(
+      new Headers((protectedRequest as RequestInit | undefined)?.headers).get('Authorization')
+    ).toBe('Bearer jwt-123');
   });
 
   it('auto-logs out after a 401 response from an API request', async () => {
