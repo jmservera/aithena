@@ -2,6 +2,8 @@
 
 This guide covers production deployment of the Aithena book library search system using Docker Compose.
 
+For service-by-service outage handling and recovery drills, see the [failover runbook](failover-runbook.md).
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -13,6 +15,7 @@ This guide covers production deployment of the Aithena book library search syste
 - [Monitoring & Logging](#monitoring--logging)
 - [Troubleshooting](#troubleshooting)
 - [Backup & Restore](#backup--restore)
+- [Failover Runbook](failover-runbook.md)
 
 ## Prerequisites
 
