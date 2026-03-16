@@ -4849,3 +4849,84 @@ Verified via `copilot --help` output on the installed CLI. Both flags are docume
 - Issue #303 — Update Copilot CLI invocation in release-docs.yml
 
 
+
+---
+
+## Decision: Copilot CLI Flags Validation (2026-03-16)
+
+**Author:** Juanma (Product Owner) — Corrected by Squad Coordinator  
+**Date:** 2026-03-16  
+**Status:** Confirmed  
+**Issue:** #303 — Release-docs.yml automation
+
+### What Was Corrected
+
+Previous assessment incorrectly stated that `--agent <agent>` and `--autopilot` were not valid Copilot CLI flags. **This was wrong.**
+
+### Confirmed Facts
+
+Both flags ARE valid and documented:
+- `--agent <agent>` — Specify a custom agent to use (e.g., `--agent squad` to invoke the Squad agent)
+- `--autopilot` — Enable autopilot continuation in prompt mode (agent keeps working without user confirmation between turns)
+
+**Verification:** Tested via `copilot --help` on installed CLI.
+
+### Impact
+
+- Issue #303 (Update Copilot CLI invocation in release-docs.yml) can proceed with confidence using these flags
+- **Recommended invocation:** `copilot --agent squad --autopilot -p "Newt: generate release docs for v${VERSION}"`
+- The workflow can invoke Newt to produce documentation autonomously, without user confirmation between turns
+
+### References
+
+- Issue #303
+- Copilot CLI built-in help (`--help`)
+
+---
+
+## Decision: Production Error Logging Convention (2026-03-16)
+
+**Author:** Parker (Backend Developer)  
+**Date:** 2026-03-16  
+**Status:** Confirmed  
+**Issue:** #302 — Document-indexer logging security fix
+
+### Problem
+
+`logger.exception()` was used in production error paths, exposing full stack traces (with internal paths, library versions, and module structure) in container logs at INFO/ERROR level. This creates an information disclosure vulnerability.
+
+### Decision
+
+**Standard production error logging pattern across all services:**
+
+```python
+except Exception as exc:
+    logger.error("Failed to process %s: %s", resource, exc)
+    logger.debug("Failed to process %s", resource, exc_info=True)
+```
+
+### Rationale
+
+- `logger.error()` logs error message and exception type — sufficient for production alerting without disclosing internals
+- `logger.debug()` with `exc_info=True` preserves full stack traces for troubleshooting when needed
+- DEBUG level logging can be enabled dynamically (e.g., `LOGLEVEL=DEBUG` environment variable) without code changes
+- Prevents information disclosure in default container log output (which typically captures INFO and higher)
+
+### When to Use `logger.exception()`
+
+Only in truly unexpected internal errors where stack traces are always needed for debugging:
+- Not for expected error paths (file not found, validation failures)
+- Not for external service errors (API timeouts, network failures)
+- Not for user input errors (invalid format, missing fields)
+
+### Implementation Status
+
+- ✅ **document-indexer:** Fixed in PR #310 (lines 379, 383)
+- 🔄 **Other services:** Should follow same pattern in future error handling
+- 📋 **Code review checklist:** Verify new exception handlers use this pattern
+
+### References
+
+- Issue #302
+- PR #310 (document-indexer fix)
+- Python logging best practices (docs, logging module guidance)

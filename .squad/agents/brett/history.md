@@ -431,3 +431,34 @@
 1. **Label automation is declarative:** The workflow treats the `RELEASE_LABELS` array as the source of truth and syncs the repo to match
 2. **Color coding conventions:** Use consistent color themes within label families (all v1.x labels share `0075ca`, v0.x labels use purples/blues)
 3. **Manual labels need workflow updates:** When labels are created manually, they must be added to the workflow file to prevent drift
+### 2026-03-16 — Issue #296: CKV_GHA_7 Exception for release-docs.yml
+
+**Summary:** Fixed Checkov alert #103 (CKV_GHA_7) by adding documented exception to `.checkov.yml` for release-docs.yml workflow.
+
+**Problem:** CKV_GHA_7 policy requires empty `workflow_dispatch` inputs per SLSA guidelines (build outputs must not be affected by user parameters). The release-docs.yml workflow triggered alert #103 because it defines `version` and `milestone` inputs.
+
+**Solution:** Added CKV_GHA_7 to skip-check list in `.checkov.yml` with comprehensive justification:
+- The release-docs.yml workflow is an internal documentation automation tool (not a build/release pipeline)
+- Requires version and milestone parameters to function (generates release notes and test reports)
+- Version input is validated with regex in workflow steps (lines 46-50)
+- Protected by maintainer-only access and branch protection requirements
+- Does not affect build artifacts or supply chain integrity
+
+**Learnings:**
+- CKV_GHA_7 enforces SLSA supply chain security by requiring empty workflow_dispatch inputs
+- The policy aims to prevent arbitrary user parameters from affecting build behavior
+- Documented exceptions are appropriate when:
+  1. Workflow is not part of build/release pipeline for artifacts
+  2. Inputs are validated and protected by access controls
+  3. Risk is assessed and accepted with clear justification
+- `.checkov.yml` skip-check pattern requires detailed comments explaining rationale
+- Follows existing exception pattern (CKV_DOCKER_2, CKV_DOCKER_3)
+
+**Deliverables:**
+- PR #316: squad/296-fix-ckv-gha7-release-docs → dev
+- Added 10 lines to `.checkov.yml` documenting CKV_GHA_7 exception
+- YAML validation passed for both `.checkov.yml` and `release-docs.yml`
+- Resolves alert #103, closes issue #296
+
+**Branch:** squad/296-fix-ckv-gha7-release-docs → dev
+**Status:** PR #316 open (https://github.com/jmservera/aithena/pull/316)
