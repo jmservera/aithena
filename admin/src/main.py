@@ -12,6 +12,7 @@ from pages.shared.config import (
     RABBITMQ_PASS,
     RABBITMQ_USER,
     REDIS_HOST,
+    REDIS_PASSWORD,
     REDIS_PORT,
 )
 
@@ -27,7 +28,7 @@ st.sidebar.caption(f"Admin v{admin_version}")
 
 # ── Redis metrics ────────────────────────────────────────────────────────────
 try:
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
     keys = redis_client.keys(f"/{QUEUE_NAME}/*")
 
     total = len(keys)

@@ -5,7 +5,15 @@ services:
     # run this in your VM:
     # echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/nextcloud-aio-memory-overcommit.conf
     image: redis
-    command: redis-server --save 20 1 --loglevel warning
+    command: >-
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
+        exec redis-server --save 20 1 --loglevel warning --requirepass "$$REDIS_PASSWORD";
+      else
+        exec redis-server --save 20 1 --loglevel warning;
+      fi'
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDISCLI_AUTH=${REDIS_PASSWORD:-}
     expose:
       - 6379
     healthcheck:
@@ -36,6 +44,9 @@ services:
     image: rabbitmq:3.12-management
     command: rabbitmq-server
     hostname: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
     expose:
       - 5672
       - 15672
@@ -108,7 +119,10 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
       - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - DOCUMENT_WILDCARD=*.pdf
@@ -150,7 +164,10 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
       - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - SOLR_HOST=solr
@@ -242,9 +259,12 @@ services:
       - MAX_UPLOAD_SIZE_MB=50
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
       - RABBITMQ_QUEUE_NAME=shortembeddings
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
@@ -292,10 +312,13 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - QUEUE_NAME=shortembeddings
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_MGMT_PORT=15672
       - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
     networks:
       - default
   redis-commander:
@@ -325,7 +348,9 @@ services:
         max-size: "10m"
         max-file: "3"
     environment:
-      - REDIS_HOSTS=local:redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - URL_PREFIX=/admin/redis
     networks:
       - default

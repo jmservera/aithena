@@ -23,8 +23,11 @@ from . import (
     GIT_COMMIT,
     QUEUE_NAME,
     RABBITMQ_HOST,
+    RABBITMQ_PASS,
     RABBITMQ_PORT,
+    RABBITMQ_USER,
     REDIS_HOST,
+    REDIS_PASSWORD,
     REDIS_PORT,
     SOLR_COLLECTION,
     SOLR_HOST,
@@ -42,8 +45,17 @@ SOLR_TIMEOUT = 300
 SOLR_STARTUP_TIMEOUT = 10
 SOLR_STARTUP_DELAY = 5
 SOLR_STARTUP_ATTEMPTS = 60
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
 queue = None
+
+
+def _rabbitmq_connection_parameters() -> pika.ConnectionParameters:
+    return pika.ConnectionParameters(
+        RABBITMQ_HOST,
+        RABBITMQ_PORT,
+        heartbeat=600,
+        credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS),
+    )
 
 
 def get_queue(channel: BlockingChannel):
@@ -375,7 +387,7 @@ def callback(
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
 def consume() -> None:
-    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT, heartbeat=600))
+    connection = pika.BlockingConnection(_rabbitmq_connection_parameters())
     channel = connection.channel()
     get_queue(channel)
     channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
