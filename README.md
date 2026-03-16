@@ -15,6 +15,10 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 
 ## Features
 
+- **Local authentication** with SQLite-backed users, Argon2id password hashing, JWT sessions, and browser/login flows
+- **Protected React routes** with a dedicated login page, auth context, and automatic bearer auth for protected API calls
+- **nginx auth_request gating** for browser-facing API, document, and admin routes
+- **First-run installer CLI** that writes `.env`, creates auth storage, and seeds the initial admin account
 - **Search page** for keyword, semantic, and hybrid search across indexed title, author, and full-text content
 - **Facet filtering** by author, category, language, and year
 - **Similar Books panel** that appears after opening a PDF and recommends semantically related titles
@@ -31,6 +35,9 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
+- [v0.11.0 Feature Guide](docs/features/v0.11.0.md)
+- [v0.11.0 Release Notes](docs/release-notes-v0.11.0.md)
+- [v0.11.0 Test Report](docs/test-report-v0.11.0.md)
 - [v0.10.0 Release Notes](docs/release-notes-v0.10.0.md)
 - [v0.10.0 Test Report](docs/test-report-v0.10.0.md)
 - [v0.7.0 Feature Guide](docs/features/v0.7.0.md)

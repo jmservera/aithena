@@ -67,7 +67,19 @@ Example:
 export BOOKS_PATH=/absolute/path/to/your/booklibrary
 ```
 
-### 2. Start the stack
+### 2. Run the installer (v0.11.0+)
+
+Before starting the stack, bootstrap the runtime configuration and auth storage:
+
+```bash
+python3 -m installer
+# or: python3 installer/setup.py --library-path /absolute/path/to/books \
+#       --admin-user admin --admin-password 'change-me' --origin http://localhost
+```
+
+The installer writes `.env`, creates the host auth directory used by Docker Compose, generates the JWT secret, and seeds the initial admin account. Re-run it whenever you need to rotate credentials or rebuild auth storage.
+
+### 3. Start the stack
 
 ```bash
 docker compose up -d
@@ -81,7 +93,7 @@ For a production-style run with only the nginx gateway exposed on the host, use:
 docker compose -f docker-compose.yml up -d
 ```
 
-### 3. Watch initial bootstrap
+### 4. Watch initial bootstrap
 
 The `solr-init` container waits for all three Solr nodes, uploads the `books` configset, creates the `books` collection if needed, and applies the config overlay.
 
@@ -92,22 +104,23 @@ docker compose ps
 docker compose logs -f solr-init
 ```
 
-### 4. Open the service endpoints
+### 5. Open the service endpoints
 
 Common local URLs:
 
-| Surface | URL |
-|---|---|
-| Main UI | `http://localhost/` |
-| Search API | `http://localhost/v1/search/` |
-| Status API | `http://localhost/v1/status/` |
-| Stats API | `http://localhost/v1/stats/` |
-| Solr admin | `http://localhost/admin/solr/` |
-| RabbitMQ management | `http://localhost/admin/rabbitmq/` |
-| Streamlit admin | `http://localhost/admin/streamlit/` |
-| Redis Commander | `http://localhost/admin/redis/` |
+| Surface | URL | Access |
+|---|---|---|
+| Main UI | `http://localhost/` | Protected — redirects to `/login` until authenticated |
+| Login page | `http://localhost/login` | Public |
+| Search API | `http://localhost/v1/search/` | Protected |
+| Status API | `http://localhost/v1/status/` | Protected |
+| Stats API | `http://localhost/v1/stats/` | Protected |
+| Solr admin | `http://localhost/admin/solr/` | Protected |
+| RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
+| Streamlit admin | `http://localhost/admin/streamlit/` | Protected |
+| Redis Commander | `http://localhost/admin/redis/` | Protected |
 
-Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8501`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
+Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8501`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
 
 ## Configuration
 
@@ -163,6 +176,10 @@ That means every service using `/data/documents` is reading from the same mounte
 | `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
 | `UPLOAD_STAGING_DIR` | `/data/uploads/` | Temporary upload staging area (v0.6.0+) |
 | `EXPOSE_CONTAINER_STATS` | `false` | Enable `/v1/admin/containers` endpoint (v0.7.0+) |
+| `AUTH_DB_PATH` | `/data/auth/users.db` | SQLite auth database path inside the container (v0.11.0+) |
+| `AUTH_JWT_SECRET` | installer-generated | JWT signing secret required at startup (v0.11.0+) |
+| `AUTH_JWT_TTL` | `24h` | Session lifetime for issued JWTs (v0.11.0+) |
+| `AUTH_COOKIE_NAME` | `aithena_auth` | Cookie name used for browser auth (v0.11.0+) |
 
 #### `streamlit-admin`
 
@@ -697,7 +714,10 @@ Before calling a deployment healthy, confirm:
 
 - `docker compose ps` shows core services running
 - `solr-init` completed successfully
-- `http://localhost/v1/status/` returns JSON
-- `http://localhost/v1/stats/` returns JSON
-- the main UI at `http://localhost/` loads Search, Status, and Stats
+- the installer has written `.env` and the `AUTH_DB_DIR` host path exists
+- `http://localhost/login` loads and accepts the installer-seeded admin credentials
+- `http://localhost/v1/status/` returns JSON after authentication
+- `http://localhost/v1/stats/` returns JSON after authentication
+- the main UI at `http://localhost/` loads Search, Status, and Stats after login
 - a known PDF can be searched and opened from results
+- `/admin/streamlit/`, `/admin/solr/`, and `/admin/rabbitmq/` redirect or deny access when unauthenticated
