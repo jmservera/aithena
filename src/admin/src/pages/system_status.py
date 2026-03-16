@@ -111,14 +111,13 @@ def render_container_group(title: str, containers: list[dict[str, Any]], columns
         commit = shorten_commit(container.get("commit"))
         error = container.get("error")
 
-        with columns[index % columns_per_row]:
-            with st.container(border=True):
-                st.markdown(f"**{emoji} {get_display_name(container)}**")
-                st.markdown(f"Status: :{color}[{status}]")
-                st.markdown(f"Version: `{version}`")
-                st.markdown(f"Commit: `{commit}`")
-                if error:
-                    st.warning(str(error))
+        with columns[index % columns_per_row], st.container(border=True):
+            st.markdown(f"**{emoji} {get_display_name(container)}**")
+            st.markdown(f"Status: :{color}[{status}]")
+            st.markdown(f"Version: `{version}`")
+            st.markdown(f"Commit: `{commit}`")
+            if error:
+                st.warning(str(error))
 
 
 summary_col, action_col = st.columns([4, 1])

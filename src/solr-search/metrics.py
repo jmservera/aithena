@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Iterable
+from collections.abc import Iterable
 
 METRICS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 _SEARCH_MODES = ("keyword", "semantic", "hybrid")
@@ -122,7 +122,7 @@ class MetricsRegistry:
         )
         for mode in self._search_modes:
             counts = search_latency_bucket_counts.get(mode, [0 for _ in self._latency_buckets])
-            for bucket, count in zip(self._latency_buckets, counts):
+            for bucket, count in zip(self._latency_buckets, counts, strict=False):
                 labels = _format_labels({"mode": mode, "le": _format_bucket(bucket)})
                 lines.append(f"aithena_search_latency_seconds_bucket{labels} {_format_number(count)}")
             inf_labels = _format_labels({"mode": mode, "le": "+Inf"})
@@ -139,7 +139,10 @@ class MetricsRegistry:
                 "# HELP aithena_indexing_queue_depth Number of queued indexing documents tracked in Redis.",
                 "# TYPE aithena_indexing_queue_depth gauge",
                 f"aithena_indexing_queue_depth {_format_number(indexing_queue_depth)}",
-                "# HELP aithena_indexing_failures_total Total number of indexing failures observed from Redis failed keys since process start.",
+                (
+                    "# HELP aithena_indexing_failures_total Total number of indexing failures "
+                    "observed from Redis failed keys since process start."
+                ),
                 "# TYPE aithena_indexing_failures_total counter",
                 f"aithena_indexing_failures_total {_format_number(indexing_failures_total)}",
                 "# HELP aithena_embeddings_available Embeddings service availability (1 = up, 0 = down).",
