@@ -44,12 +44,12 @@ jobs:
         shell: bash
         run: |
           dockerfiles=(
-            admin/Dockerfile
-            aithena-ui/Dockerfile
-            document-indexer/Dockerfile
-            document-lister/Dockerfile
-            embeddings-server/Dockerfile
-            solr-search/Dockerfile
+            src/admin/Dockerfile
+            src/aithena-ui/Dockerfile
+            src/document-indexer/Dockerfile
+            src/document-lister/Dockerfile
+            src/embeddings-server/Dockerfile
+            src/solr-search/Dockerfile
           )
 
           for dockerfile in "${dockerfiles[@]}"; do

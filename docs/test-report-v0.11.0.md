@@ -8,9 +8,9 @@ _Prepared by:_ Newt (Product Manager / QA Lead)
 Commands executed for this release gate:
 
 ```bash
-cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short 2>&1 | tail -10
-cd /workspaces/aithena/aithena-ui && npx vitest run 2>&1 | tail -10
-cd /workspaces/aithena/aithena-ui && npm run lint && npm run build
+cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short 2>&1 | tail -10
+cd /workspaces/aithena/src/aithena-ui && npx vitest run 2>&1 | tail -10
+cd /workspaces/aithena/src/aithena-ui && npm run lint && npm run build
 ```
 
 ## Executive summary
@@ -18,7 +18,7 @@ cd /workspaces/aithena/aithena-ui && npm run lint && npm run build
 - **Overall result:** HOLD
 - **Backend validation:** PASS — `solr-search` test suite passed with 140 tests.
 - **Frontend validation:** PASS — `aithena-ui` Vitest suite passed with 83 tests when rerun in isolation to confirm the final result.
-- **Frontend quality gate:** FAIL — `npm run lint && npm run build` stopped at the lint step because of a Prettier violation in `aithena-ui/src/__tests__/useAuth.test.tsx`; the build did not execute.
+- **Frontend quality gate:** FAIL — `npm run lint && npm run build` stopped at the lint step because of a Prettier violation in `src/aithena-ui/src/__tests__/useAuth.test.tsx`; the build did not execute.
 - **Release gate decision:** Documentation is ready, but release approval should remain paused until the frontend lint failure is fixed and the lint/build command is rerun cleanly.
 
 ## CI status summary
@@ -36,7 +36,7 @@ Latest reviewed release-relevant results on `dev`:
 
 ### `solr-search`
 
-**Command:** `cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short 2>&1 | tail -10`  
+**Command:** `cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short 2>&1 | tail -10`  
 **Status:** PASS
 
 Observed tail output:
@@ -56,7 +56,7 @@ tests/test_upload.py::test_upload_rate_limiting PASSED                   [100%]
 
 ### `aithena-ui`
 
-**Command:** `cd /workspaces/aithena/aithena-ui && npx vitest run 2>&1 | tail -10`  
+**Command:** `cd /workspaces/aithena/src/aithena-ui && npx vitest run 2>&1 | tail -10`  
 **Status:** PASS
 
 Observed tail output:
@@ -75,13 +75,13 @@ Observed tail output:
 
 ### `aithena-ui` lint + build
 
-**Command:** `cd /workspaces/aithena/aithena-ui && npm run lint && npm run build`  
+**Command:** `cd /workspaces/aithena/src/aithena-ui && npm run lint && npm run build`  
 **Status:** FAIL
 
 Observed tail output:
 
 ```text
-/workspaces/aithena/aithena-ui/src/__tests__/useAuth.test.tsx
+/workspaces/aithena/src/aithena-ui/src/__tests__/useAuth.test.tsx
   155:12  error  Replace `new·Headers((protectedRequest·as·RequestInit·|·undefined)?.headers).get('Authorization')).toBe(⏎······'Bearer·jwt-123'⏎····` with `⏎······new·Headers((protectedRequest·as·RequestInit·|·undefined)?.headers).get('Authorization')⏎····).toBe('Bearer·jwt-123'`  prettier/prettier
 
 ✖ 1 problem (1 error, 0 warnings)

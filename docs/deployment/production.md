@@ -204,7 +204,7 @@ REDIS_PASSWORD=<strong-random-value>
 
 - `docker-compose.yml` maps `RABBITMQ_USER` / `RABBITMQ_PASS` to RabbitMQ's `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` so the broker, management UI, and admin dashboard stay aligned.
 - `docker-compose.yml` injects `REDIS_PASSWORD` into the Redis container and enables `redis-server --requirepass` automatically when the variable is non-empty.
-- If you manage RabbitMQ credentials in `rabbitmq/rabbitmq.conf` instead, set `default_user` / `default_pass` there and keep `.env` in sync so `streamlit-admin`, `document-lister`, `document-indexer`, and `solr-search` still authenticate successfully.
+- If you manage RabbitMQ credentials in `src/rabbitmq/rabbitmq.conf` instead, set `default_user` / `default_pass` there and keep `.env` in sync so `streamlit-admin`, `document-lister`, `document-indexer`, and `solr-search` still authenticate successfully.
 
 After any credential rotation:
 
@@ -553,7 +553,7 @@ Before going to production, verify:
 - [ ] Volume directories created with correct ownership
 - [ ] Firewall configured (only 80/443 public, block all other ports)
 - [ ] SSL certificates configured in nginx (Let's Encrypt via certbot)
-- [ ] RabbitMQ credentials rotated away from `guest/guest` via `.env` (`RABBITMQ_USER` / `RABBITMQ_PASS`) or matching `default_user` / `default_pass` settings in `rabbitmq/rabbitmq.conf`
+- [ ] RabbitMQ credentials rotated away from `guest/guest` via `.env` (`RABBITMQ_USER` / `RABBITMQ_PASS`) or matching `default_user` / `default_pass` settings in `src/rabbitmq/rabbitmq.conf`
 - [ ] Redis password set in `.env` (`REDIS_PASSWORD`) so Compose enables `redis-server --requirepass`
 - [ ] Rotated credentials applied with `docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx`
 - [ ] Admin endpoints protected by the nginx auth gate and login tested via `/admin/streamlit/`, `/admin/rabbitmq/`, and `/admin/redis/`

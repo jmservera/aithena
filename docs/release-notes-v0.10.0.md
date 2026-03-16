@@ -35,7 +35,7 @@ This milestone hardens CI/CD and repository security posture, but it does not ch
    - `persist-credentials: false` on checkout steps
 3. If you maintain a custom Bandit configuration, ensure it is valid YAML and uses Bandit’s `B`-prefixed test IDs.
 4. Re-run the standard validation set after upgrading:
-   - `cd solr-search && uv run pytest -v --tb=short`
-   - `cd aithena-ui && npx vitest run`
-   - `cd aithena-ui && npm run lint && npm run build`
+   - `cd src/solr-search && uv run pytest -v --tb=short`
+   - `cd src/aithena-ui && npx vitest run`
+   - `cd src/aithena-ui && npm run lint && npm run build`
 5. No application configuration changes, database migrations, or user-facing feature toggles are required for this release.

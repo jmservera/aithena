@@ -25,10 +25,10 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 
-COPY solr-search/pyproject.toml solr-search/uv.lock ./
+COPY src/solr-search/pyproject.toml src/solr-search/uv.lock ./
 
 RUN uv sync --frozen --no-dev --no-install-project
-COPY solr-search/ .
+COPY src/solr-search/ .
 
 ENV PATH="/app/.venv/bin:${PATH}"
 

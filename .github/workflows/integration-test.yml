@@ -52,7 +52,7 @@ jobs:
           mkdir -p "$E2E_LIBRARY_PATH"
           mkdir -p "$RUNNER_TEMP/aithena-auth"
 
-          uv run --project solr-search python -m installer \
+          uv run --project src/solr-search python -m installer \
             --library-path "$E2E_LIBRARY_PATH" \
             --admin-user "$CI_ADMIN_USERNAME" \
             --admin-password "$CI_ADMIN_PASSWORD" \

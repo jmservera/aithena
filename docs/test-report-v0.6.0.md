@@ -8,9 +8,9 @@ _Prepared by:_ Newt (Product Manager)
 Commands executed for this report:
 
 ```bash
-cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short
-cd /workspaces/aithena/document-indexer && uv run pytest -v --tb=short
-cd /workspaces/aithena/aithena-ui && npx vitest run
+cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short
+cd /workspaces/aithena/src/document-indexer && uv run pytest -v --tb=short
+cd /workspaces/aithena/src/aithena-ui && npx vitest run
 ```
 
 ## Executive summary
@@ -35,7 +35,7 @@ cd /workspaces/aithena/aithena-ui && npx vitest run
 ### `solr-search`
 
 **Status:** PASS  
-**Command:** `cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short`
+**Command:** `cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short`
 
 **Run summary:**
 
@@ -68,7 +68,7 @@ These warnings did not cause failures, but they remain upgrade-risk signals for 
 ### `document-indexer`
 
 **Status:** PASS  
-**Command:** `cd /workspaces/aithena/document-indexer && uv run pytest -v --tb=short`
+**Command:** `cd /workspaces/aithena/src/document-indexer && uv run pytest -v --tb=short`
 
 **Run summary:**
 
@@ -92,7 +92,7 @@ These warnings did not cause failures, but they remain upgrade-risk signals for 
 ### `aithena-ui`
 
 **Status:** PASS  
-**Command:** `cd /workspaces/aithena/aithena-ui && npx vitest run`
+**Command:** `cd /workspaces/aithena/src/aithena-ui && npx vitest run`
 
 **Run summary:**
 

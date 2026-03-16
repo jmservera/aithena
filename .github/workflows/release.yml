@@ -49,23 +49,23 @@ jobs:
       matrix:
         service:
           - image: admin
-            context: ./admin
-            dockerfile: ./admin/Dockerfile
+            context: ./src/admin
+            dockerfile: ./src/admin/Dockerfile
           - image: aithena-ui
-            context: ./aithena-ui
-            dockerfile: ./aithena-ui/Dockerfile
+            context: ./src/aithena-ui
+            dockerfile: ./src/aithena-ui/Dockerfile
           - image: document-indexer
-            context: ./document-indexer
-            dockerfile: ./document-indexer/Dockerfile
+            context: ./src/document-indexer
+            dockerfile: ./src/document-indexer/Dockerfile
           - image: document-lister
-            context: ./document-lister
-            dockerfile: ./document-lister/Dockerfile
+            context: ./src/document-lister
+            dockerfile: ./src/document-lister/Dockerfile
           - image: embeddings-server
-            context: ./embeddings-server
-            dockerfile: ./embeddings-server/Dockerfile
+            context: ./src/embeddings-server
+            dockerfile: ./src/embeddings-server/Dockerfile
           - image: solr-search
             context: .
-            dockerfile: ./solr-search/Dockerfile
+            dockerfile: ./src/solr-search/Dockerfile
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1

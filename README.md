@@ -166,7 +166,7 @@ For production-style runs (`docker compose -f docker-compose.yml up`), only ngin
 
 ## Solr Schema & Fields
 
-See [`solr/README.md`](solr/README.md) for schema design details. The FastAPI service in `solr-search/` exposes `/search`, `/facets`, and client-safe `/documents/{token}` URLs against these fields. Key fields:
+See [`src/solr/README.md`](src/solr/README.md) for schema design details. The FastAPI service in `src/solr-search/` exposes `/search`, `/facets`, and client-safe `/documents/{token}` URLs against these fields. Key fields:
 
 - `title_s`, `title_t` — Book title (string + text)
 - `author_s`, `author_t` — Author (string + text)
@@ -182,9 +182,9 @@ See [`solr/README.md`](solr/README.md) for schema design details. The FastAPI se
 ### Testing
 
 ```bash
-cd solr-search && uv run pytest -v --tb=short
-cd document-indexer && uv run pytest -v --tb=short
-cd aithena-ui && npx vitest run
+cd src/solr-search && uv run pytest -v --tb=short
+cd src/document-indexer && uv run pytest -v --tb=short
+cd src/aithena-ui && npx vitest run
 ```
 
 ### E2E Tests
@@ -253,7 +253,7 @@ Unknown patterns fallback conservatively:
 - `title` = filename stem
 - `author` = "Unknown"
 
-See `document-indexer/tests/test_metadata.py` for test cases and real library examples.
+See `src/document-indexer/tests/test_metadata.py` for test cases and real library examples.
 
 ### Project Phases
 

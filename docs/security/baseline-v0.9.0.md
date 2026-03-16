@@ -43,13 +43,13 @@ pip-audit --requirement <service>/pyproject.toml -f json
 | CVE-2024-47874 | `starlette` (transitive) | 0.27.0 | ≥ 0.40.0 (locked: 0.52.1) | HIGH |
 | CVE-2025-54121 | `starlette` (transitive) | 0.27.0 | ≥ 0.47.2 (locked: 0.52.1) | HIGH |
 
-**Fix applied:** `solr-search/pyproject.toml`  
+**Fix applied:** `src/solr-search/pyproject.toml`  
 - `fastapi[all]` pinned from `==0.99.1` → minimum floor `>=0.115.0,<1`  
 - `uvicorn[standard]` pinned from `==0.23.1` → minimum floor `>=0.30.0,<1`  
 - `python-multipart` floor raised from `>=0.0.6` → `>=0.0.7` (required by fastapi ≥0.115)  
 - Dev constraint `httpx<0.28` removed (updated to `>=0.27`)
 
-`solr-search/requirements.txt` (fallback) updated to match.  
+`src/solr-search/requirements.txt` (fallback) updated to match.  
 `uv.lock` regenerated: fastapi 0.135.1, starlette 0.52.1, uvicorn 0.41.0.  
 **All 93 existing tests pass.**
 
@@ -62,10 +62,10 @@ pip-audit --requirement <service>/pyproject.toml -f json
 | CVE-2025-64512 | `pdfminer-six` (transitive via pdfplumber) | 20221105 | ≥ 20251107 | HIGH |
 | CVE-2025-70559 | `pdfminer-six` (transitive via pdfplumber) | 20221105 | ≥ 20251230 | HIGH |
 
-**Fix applied:** `document-indexer/pyproject.toml`  
+**Fix applied:** `src/document-indexer/pyproject.toml`  
 - `pdfplumber` pinned from `==0.10.0` → minimum floor `>=0.11.9,<1`
 
-`document-indexer/requirements.txt` (fallback) updated to match.  
+`src/document-indexer/requirements.txt` (fallback) updated to match.  
 `uv.lock` regenerated: pdfplumber 0.11.9, pdfminer-six 20251230.  
 **All 91 existing tests pass (4 skipped — require maintainer file system).**
 
@@ -77,12 +77,12 @@ pip-audit --requirement <service>/pyproject.toml -f json
 |----------|---------|-------------|---------------|----------|
 | CVE-2026-25990 | `pillow` (transitive via streamlit) | 10.4.0 | ≥ 12.1.1 | HIGH |
 
-**Fix applied:** `admin/pyproject.toml`  
+**Fix applied:** `src/admin/pyproject.toml`  
 - `streamlit` pinned from `==1.37.0` → minimum floor `>=1.51.0,<2`  
   (streamlit ≥1.51.0 ships with `pillow<13,>=7.1.0`, resolving to 12.1.1 as of this baseline)  
 - Added explicit `pillow>=12.1.1` direct dependency to enforce the security floor at the manifest level, independent of streamlit's internal constraint
 
-`admin/src/requirements.txt` (fallback) updated to match.  
+`src/admin/src/requirements.txt` (fallback) updated to match.  
 `uv.lock` regenerated: streamlit 1.55.0, pillow 12.1.1.
 
 ---
@@ -154,13 +154,13 @@ The following issues should be created for the v0.9.0 / v1.0.0 roadmap:
 
 | File | Change |
 |------|--------|
-| `solr-search/pyproject.toml` | `fastapi[all]` `==0.99.1` → `>=0.115.0,<1`; `uvicorn[standard]` `==0.23.1` → `>=0.30.0,<1`; `python-multipart` `>=0.0.6` → `>=0.0.7`; `httpx<0.28` → `>=0.27` |
-| `solr-search/requirements.txt` | Same as above (fallback file) |
-| `solr-search/uv.lock` | Regenerated: fastapi 0.135.1, starlette 0.52.1, uvicorn 0.41.0 |
-| `document-indexer/pyproject.toml` | `pdfplumber` `==0.10.0` → `>=0.11.9,<1` |
-| `document-indexer/requirements.txt` | Same as above (fallback file) |
-| `document-indexer/uv.lock` | Regenerated: pdfplumber 0.11.9, pdfminer-six 20251230 |
-| `admin/pyproject.toml` | `streamlit` `==1.37.0` → `>=1.51.0,<2`; added `pillow>=12.1.1` |
-| `admin/src/requirements.txt` | `streamlit` `==1.37.0` → `>=1.51.0,<2`; added `pillow>=12.1.1` (fallback file) |
-| `admin/uv.lock` | Regenerated: streamlit 1.55.0, pillow 12.1.1 |
-| `solr-search/Dockerfile` | Changed install from `uv pip install --system -r pyproject.toml` → `uv sync --frozen --no-dev --no-install-project`; added `ENV PATH="/app/.venv/bin:${PATH}"` so production image is built from the reviewed lockfile |
+| `src/solr-search/pyproject.toml` | `fastapi[all]` `==0.99.1` → `>=0.115.0,<1`; `uvicorn[standard]` `==0.23.1` → `>=0.30.0,<1`; `python-multipart` `>=0.0.6` → `>=0.0.7`; `httpx<0.28` → `>=0.27` |
+| `src/solr-search/requirements.txt` | Same as above (fallback file) |
+| `src/solr-search/uv.lock` | Regenerated: fastapi 0.135.1, starlette 0.52.1, uvicorn 0.41.0 |
+| `src/document-indexer/pyproject.toml` | `pdfplumber` `==0.10.0` → `>=0.11.9,<1` |
+| `src/document-indexer/requirements.txt` | Same as above (fallback file) |
+| `src/document-indexer/uv.lock` | Regenerated: pdfplumber 0.11.9, pdfminer-six 20251230 |
+| `src/admin/pyproject.toml` | `streamlit` `==1.37.0` → `>=1.51.0,<2`; added `pillow>=12.1.1` |
+| `src/admin/src/requirements.txt` | `streamlit` `==1.37.0` → `>=1.51.0,<2`; added `pillow>=12.1.1` (fallback file) |
+| `src/admin/uv.lock` | Regenerated: streamlit 1.55.0, pillow 12.1.1 |
+| `src/solr-search/Dockerfile` | Changed install from `uv pip install --system -r pyproject.toml` → `uv sync --frozen --no-dev --no-install-project`; added `ENV PATH="/app/.venv/bin:${PATH}"` so production image is built from the reviewed lockfile |
