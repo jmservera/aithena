@@ -480,6 +480,74 @@ git log --oneline -5 | head -3
 cat VERSION
 ```
 
+## Deployment Updates for v0.12.0 (Metrics, Credential Rotation, Resilience)
+
+### `/v1/metrics` and monitoring setup
+
+`solr-search` now exposes Prometheus-compatible metrics at `/v1/metrics`. Because the public nginx surface protects `/v1/*`, operators should normally scrape the internal service target (`solr-search:8080`) or another private/authenticated path rather than relying on the public URL.
+
+Current metrics cover:
+
+- request volume by search mode (`keyword`, `semantic`, `hybrid`)
+- search latency histograms
+- indexing queue depth and failure counters
+- embeddings availability
+- Solr live-node count
+
+For a ready-to-use scrape example and starter alert thresholds, see the dedicated [Monitoring guide](monitoring.md).
+
+### Credential rotation procedure
+
+The v0.12.0 deployment path assumes operator-managed credential rotation for the auth bootstrap user, JWT secret, RabbitMQ credentials, and Redis password.
+
+Preferred workflow:
+
+1. Re-run the installer:
+   ```bash
+   python3 -m installer
+   python3 -m installer --reset  # when you need to rebuild auth storage and rotate generated secrets
+   ```
+2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD`.
+3. Recreate every dependent service so clients reconnect with the new credentials:
+   ```bash
+   docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx
+   ```
+
+The full production procedure and recovery notes are documented in the [Production deployment guide](deployment/production.md).
+
+### Degraded-mode semantic search behavior
+
+When Solr is healthy but the embeddings service is unavailable, semantic and hybrid requests no longer fail closed. Instead, `solr-search` automatically reruns the request in keyword mode and returns a normal search payload with extra metadata describing the degradation:
+
+- `degraded: true`
+- `message: "Embeddings unavailable — showing keyword results"`
+- `requested_mode: "semantic"` or `"hybrid"`
+- `mode: "keyword"` to show the effective execution path
+
+Operationally, this keeps the UI and API available during embeddings outages. It does **not** replace Solr failover; if Solr is down, all search modes still fail.
+
+### Failover runbook and drill reference
+
+v0.12.0 adds an operator runbook for outage handling across Solr, Redis, RabbitMQ, embeddings-server, and nginx.
+
+Use these artifacts together:
+
+- [Failover & Recovery Runbook](deployment/failover-runbook.md)
+- `e2e/failover-drill.sh` for rehearsal in a Docker-capable environment
+
+The runbook also calls out an important limitation in the current Compose deployment: the application tier still targets the primary `solr` service directly, so losing that node is a user-visible outage even when replica nodes remain healthy.
+
+### Sizing guide and benchmark reference
+
+Capacity planning for v0.12.0 is documented in the [Search and Indexing Sizing Guide](deployment/sizing-guide.md). It includes:
+
+- analytical sizing formulas for chunk counts, vector footprint, and Solr memory/disk planning
+- deployment profiles for small, medium, and large libraries
+- Redis, RabbitMQ, embeddings-server, and document-indexer sizing guidance
+- `e2e/benchmark.sh` for replacing the analytical baseline with measured results on your own hardware
+
+Treat the published numbers as planning guidance until you have benchmark data from representative production hardware.
+
 ## Monitoring
 
 ### Use the Status tab
