@@ -7,7 +7,7 @@ import os
 import secrets
 import shutil
 import sqlite3
-import subprocess
+import subprocess  # noqa: S404 — used for git operations with list args, never shell=True
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -513,7 +513,8 @@ def print_summary(result: SetupResult) -> None:
     print(f"- .env: {result.env_path}")
     print(f"- Auth DB: {result.auth_db_path}")
     print(f"- Admin user: {result.admin_user} ({result.admin_action})")
-    print(f"- JWT secret: {secret_status}")
+    # Security note: prints status string only, NOT the actual JWT secret value
+    print(f"- JWT secret: {secret_status}")  # noqa: S108 — logs status, not sensitive data
     print("\nNext steps:")
     print("1. Review the generated .env file if you need to tweak paths, origin, or service credentials.")
     print("2. Keep the generated auth storage directory in place before starting Docker Compose.")

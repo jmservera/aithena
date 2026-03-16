@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")
+os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")  # noqa: S108
 os.environ.setdefault("AUTH_JWT_SECRET", "test-auth-secret")
 os.environ.setdefault("AUTH_JWT_TTL", "24h")
 os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
@@ -16,8 +16,8 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient  # noqa: E402
-from main import app  # noqa: E402
 from metrics import METRICS_CONTENT_TYPE, metrics_registry  # noqa: E402
+
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 PROMETHEUS_SAMPLE_RE = re.compile(
@@ -81,7 +81,10 @@ def test_metrics_endpoint_returns_prometheus_format(
 
 @patch("main._embeddings_available", return_value=True)
 @patch("main._get_indexing_queue_depth", return_value=0)
-@patch("main._get_indexing_status_details", return_value=({"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}, set()))
+@patch(
+    "main._get_indexing_status_details",
+    return_value=({"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}, set()),
+)
 @patch("main._get_solr_status", return_value={"status": "ok", "nodes": 3, "docs_indexed": 0})
 @patch("main.requests.get")
 def test_search_requests_counter_increments(
