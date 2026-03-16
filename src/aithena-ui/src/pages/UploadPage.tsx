@@ -1,7 +1,8 @@
-import { ChangeEvent, DragEvent, RefObject, useId, useRef, useState } from 'react';
+import { ChangeEvent, DragEvent, Profiler, RefObject, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import { useUpload, UploadProgress, UploadResult } from '../hooks/upload';
+import { onRenderCallback } from '../utils/profiler';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -267,24 +268,26 @@ function UploadPage() {
         </p>
 
         <ErrorBoundary fallback={renderUploadFallback}>
-          <UploadContent
-            dragOver={dragOver}
-            error={error}
-            fileInputId={fileInputId}
-            fileInputRef={fileInputRef}
-            progress={progress}
-            result={result}
-            uploadHintId={uploadHintId}
-            uploadStatusId={uploadStatusId}
-            uploading={uploading}
-            onBrowseClick={handleBrowseClick}
-            onDrop={handleDrop}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onFileInputChange={handleFileInputChange}
-            onReset={handleReset}
-          />
+          <Profiler id="UploadForm" onRender={onRenderCallback}>
+            <UploadContent
+              dragOver={dragOver}
+              error={error}
+              fileInputId={fileInputId}
+              fileInputRef={fileInputRef}
+              progress={progress}
+              result={result}
+              uploadHintId={uploadHintId}
+              uploadStatusId={uploadStatusId}
+              uploading={uploading}
+              onBrowseClick={handleBrowseClick}
+              onDrop={handleDrop}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onFileInputChange={handleFileInputChange}
+              onReset={handleReset}
+            />
+          </Profiler>
         </ErrorBoundary>
       </div>
     </div>

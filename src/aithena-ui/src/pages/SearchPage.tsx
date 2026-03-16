@@ -1,4 +1,13 @@
-import { FormEvent, RefObject, useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  FormEvent,
+  Profiler,
+  RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
@@ -9,6 +18,7 @@ import SimilarBooks from '../Components/SimilarBooks';
 import { SearchFilters } from '../hooks/search';
 import { getCachedSimilarBook } from '../hooks/similarBooks';
 import { useSearch, BookResult, SearchMode } from '../hooks/search';
+import { onRenderCallback } from '../utils/profiler';
 
 const SORT_OPTIONS = [
   { value: 'score desc', label: 'Relevance' },
@@ -169,14 +179,6 @@ function SearchResultsSection({
 }
 
 function SearchPage() {
-  const [inputValue, setInputValue] = useState('');
-  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
-  const resultsRegionRef = useRef<HTMLElement>(null);
-  const lastLoadingStateRef = useRef(false);
-  const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
-  const searchInputId = useId();
-  const resultsRegionId = useId();
-  const resultsSummaryId = useId();
   const {
     searchState,
     results,
@@ -192,6 +194,22 @@ function SearchPage() {
     setLimit,
     setMode,
   } = useSearch();
+
+  // Keep the text input in sync with the committed query from the URL so
+  // that deep-links and browser back / forward reflect the correct value.
+  const [inputValue, setInputValue] = useState(searchState.query);
+
+  useEffect(() => {
+    setInputValue(searchState.query);
+  }, [searchState.query]);
+
+  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const resultsRegionRef = useRef<HTMLElement>(null);
+  const lastLoadingStateRef = useRef(false);
+  const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
+  const searchInputId = useId();
+  const resultsRegionId = useId();
+  const resultsSummaryId = useId();
 
   useEffect(() => {
     if (searchState.query && lastLoadingStateRef.current && !loading) {
@@ -368,24 +386,26 @@ function SearchPage() {
         </header>
 
         <ErrorBoundary fallback={renderSearchResultsFallback}>
-          <SearchResultsSection
-            error={error}
-            hasActiveFilters={hasActiveFilters}
-            loading={loading}
-            page={searchState.page}
-            limit={searchState.limit}
-            query={searchState.query}
-            results={results}
-            resultsRegionId={resultsRegionId}
-            resultsRegionRef={resultsRegionRef}
-            resultsSummaryId={resultsSummaryId}
-            selectedBook={selectedBook}
-            total={total}
-            onOpenPdf={handleOpenPdf}
-            onPageChange={setPage}
-            onPdfClose={handleClosePdf}
-            onSelectSimilarBook={handleSelectSimilarBook}
-          />
+          <Profiler id="SearchResults" onRender={onRenderCallback}>
+            <SearchResultsSection
+              error={error}
+              hasActiveFilters={hasActiveFilters}
+              loading={loading}
+              page={searchState.page}
+              limit={searchState.limit}
+              query={searchState.query}
+              results={results}
+              resultsRegionId={resultsRegionId}
+              resultsRegionRef={resultsRegionRef}
+              resultsSummaryId={resultsSummaryId}
+              selectedBook={selectedBook}
+              total={total}
+              onOpenPdf={handleOpenPdf}
+              onPageChange={setPage}
+              onPdfClose={handleClosePdf}
+              onSelectSimilarBook={handleSelectSimilarBook}
+            />
+          </Profiler>
         </ErrorBoundary>
       </main>
     </div>

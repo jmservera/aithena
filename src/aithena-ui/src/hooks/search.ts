@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { apiFetch, buildApiUrl } from '../api';
+import { useSearchState } from './useSearchState';
 
 const searchBaseURL = buildApiUrl('/v1/search');
 
@@ -58,19 +59,10 @@ export interface SearchState {
   mode: SearchMode;
 }
 
-const defaultSearchState: SearchState = {
-  query: '',
-  filters: {},
-  page: 1,
-  limit: 10,
-  sort: 'score desc',
-  mode: 'keyword',
-};
-
 const modeLabel = (mode: SearchMode) => mode.charAt(0).toUpperCase() + mode.slice(1);
 
 export function useSearch() {
-  const [searchState, setSearchState] = useState<SearchState>(defaultSearchState);
+  const [searchState, setSearchState] = useSearchState();
   const [results, setResults] = useState<BookResult[]>([]);
   const [facets, setFacets] = useState<FacetGroups>({});
   const [total, setTotal] = useState(0);
@@ -138,37 +130,55 @@ export function useSearch() {
     runSearch(searchState);
   }, [searchState, runSearch]);
 
-  const setQuery = useCallback((query: string) => {
-    setSearchState((prev) => ({ ...prev, query, page: 1 }));
-  }, []);
+  const setQuery = useCallback(
+    (query: string) => {
+      setSearchState((prev) => ({ ...prev, query, page: 1 }), 'push');
+    },
+    [setSearchState]
+  );
 
-  const setFilter = useCallback((key: keyof SearchFilters, value: string | undefined) => {
-    setSearchState((prev) => ({
-      ...prev,
-      page: 1,
-      filters: { ...prev.filters, [key]: value },
-    }));
-  }, []);
+  const setFilter = useCallback(
+    (key: keyof SearchFilters, value: string | undefined) => {
+      setSearchState((prev) => ({
+        ...prev,
+        page: 1,
+        filters: { ...prev.filters, [key]: value },
+      }));
+    },
+    [setSearchState]
+  );
 
   const clearFilters = useCallback(() => {
     setSearchState((prev) => ({ ...prev, page: 1, filters: {} }));
-  }, []);
+  }, [setSearchState]);
 
-  const setPage = useCallback((page: number) => {
-    setSearchState((prev) => ({ ...prev, page }));
-  }, []);
+  const setPage = useCallback(
+    (page: number) => {
+      setSearchState((prev) => ({ ...prev, page }), 'push');
+    },
+    [setSearchState]
+  );
 
-  const setSort = useCallback((sort: string) => {
-    setSearchState((prev) => ({ ...prev, sort, page: 1 }));
-  }, []);
+  const setSort = useCallback(
+    (sort: string) => {
+      setSearchState((prev) => ({ ...prev, sort, page: 1 }));
+    },
+    [setSearchState]
+  );
 
-  const setLimit = useCallback((limit: number) => {
-    setSearchState((prev) => ({ ...prev, limit, page: 1 }));
-  }, []);
+  const setLimit = useCallback(
+    (limit: number) => {
+      setSearchState((prev) => ({ ...prev, limit, page: 1 }));
+    },
+    [setSearchState]
+  );
 
-  const setMode = useCallback((mode: SearchMode) => {
-    setSearchState((prev) => ({ ...prev, mode, page: 1 }));
-  }, []);
+  const setMode = useCallback(
+    (mode: SearchMode) => {
+      setSearchState((prev) => ({ ...prev, mode, page: 1 }));
+    },
+    [setSearchState]
+  );
 
   return {
     searchState,
