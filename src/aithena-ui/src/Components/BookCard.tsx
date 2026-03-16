@@ -1,3 +1,5 @@
+import { memo, useCallback, useMemo } from 'react';
+
 import { BookResult } from '../hooks/search';
 
 interface BookCardProps {
@@ -26,7 +28,23 @@ function formatFoundPages(pageStart: number, pageEnd: number): string {
   return `Found on page ${pageStart}`;
 }
 
-function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
+const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
+  const foundPagesLabel = useMemo(
+    () => (book.pages ? formatFoundPages(book.pages[0], book.pages[1]) : null),
+    [book.pages]
+  );
+  const highlightMarkup = useMemo(
+    () =>
+      book.highlights?.map((snippet, index) => ({
+        id: `${book.id}-highlight-${index}`,
+        html: `\u2026${sanitizeHighlight(snippet)}\u2026`,
+      })) ?? [],
+    [book.highlights, book.id]
+  );
+  const handleOpenPdf = useCallback(() => {
+    onOpenPdf?.(book);
+  }, [book, onOpenPdf]);
+
   return (
     <article className={`book-card${isSelected ? ' book-card--active' : ''}`}>
       <h2 className="book-title">{book.title}</h2>
@@ -56,20 +74,18 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
             <span className="book-meta-label">Pages:</span> {book.page_count}
           </span>
         )}
-        {book.pages && (
-          <span className="book-meta-item book-found-pages">
-            {formatFoundPages(book.pages[0], book.pages[1])}
-          </span>
+        {foundPagesLabel && (
+          <span className="book-meta-item book-found-pages">{foundPagesLabel}</span>
         )}
       </div>
-      {book.highlights && book.highlights.length > 0 && (
+      {highlightMarkup.length > 0 && (
         <div className="book-highlights">
-          {book.highlights.map((snippet, i) => (
+          {highlightMarkup.map((snippet) => (
             <p
-              key={i}
+              key={snippet.id}
               className="book-highlight-snippet"
               dangerouslySetInnerHTML={{
-                __html: `\u2026${sanitizeHighlight(snippet)}\u2026`,
+                __html: snippet.html,
               }}
             />
           ))}
@@ -80,7 +96,7 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
         {book.document_url && onOpenPdf && (
           <button
             className="open-pdf-btn"
-            onClick={() => onOpenPdf(book)}
+            onClick={handleOpenPdf}
             aria-label={`Open PDF for ${book.title}`}
           >
             📄 Open PDF
@@ -89,6 +105,6 @@ function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
       </div>
     </article>
   );
-}
+});
 
 export default BookCard;

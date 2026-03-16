@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import { FacetGroups, SearchFilters, SearchMode } from '../hooks/search';
 
 interface FacetPanelProps {
@@ -16,7 +18,12 @@ const FACET_LABELS: Record<keyof FacetGroups, string> = {
 
 const FACET_KEYS = ['author', 'category', 'language', 'year'] as const;
 
-function FacetPanel({ facets, filters, onFilterChange, mode }: FacetPanelProps) {
+const FacetPanel = memo(function FacetPanel({
+  facets,
+  filters,
+  onFilterChange,
+  mode,
+}: FacetPanelProps) {
   return (
     <div className="facet-panel">
       {mode === 'semantic' && (
@@ -56,6 +63,6 @@ function FacetPanel({ facets, filters, onFilterChange, mode }: FacetPanelProps) 
         })}
     </div>
   );
-}
+});
 
 export default FacetPanel;
