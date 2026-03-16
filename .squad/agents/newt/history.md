@@ -11,6 +11,39 @@
 
 ---
 
+## 2026-03-16: Updated v1.x Development Documentation
+
+**Issue #298** — Updated project documentation to reflect v1.0.0 release and v1.x development workflow.
+
+**Branch:** `squad/298-update-v1x-docs`  
+**PR:** #317
+
+**Documentation Updates:**
+- **README.md:**
+  - Added status line: v1.0.0 ✅ shipped, v1.x milestones active
+  - Added link to GitHub v1.x milestones
+  - New **v1.x Development Process** section:
+    - Branching strategy (dev/main branches, squad/ naming convention)
+    - PR workflow (create from dev, push, open against dev)
+    - Basic release process overview
+  - New **Release Process Overview** section (pre-release → shipping):
+    - Preflight checks (test passing, Docker validation, E2E suite)
+    - Documentation requirements (feature guide, test report, manual updates)
+    - Step-by-step release and rollback procedures
+- **User/Admin Manuals:** Updated feature guide references to v1.0.0 Release Notes
+
+**Key Realizations:**
+- With v1.0.0 shipped, the team needs explicit process docs for branching, releases, and rollbacks
+- The release process should include validation steps (tests, Docker compose config, E2E)
+- Documentation requirements must be stated upfront: every release needs feature notes, test report, and manual updates
+- The squad naming convention (`squad/{issue}-{slug}`) should be documented in README for visibility to new contributors
+
+**Decisions Applied:**
+- Applied existing "Documentation-First Release Gate" decision to v1.x process
+- Codified dev→main merge strategy as the standard release path
+
+---
+
 # Newt — History
 
 ## Project Context
