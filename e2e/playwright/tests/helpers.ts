@@ -2,6 +2,11 @@ import { APIRequestContext, expect, Page } from '@playwright/test';
 
 const DEV_UI_PORTS = new Set(['3000', '4173', '4174', '5173', '5174']);
 const BROAD_QUERY = '*';
+const LOGIN_USERNAME = process.env.E2E_USERNAME || 'admin';
+const LOGIN_PASSWORD = process.env.E2E_PASSWORD || 'admin';
+const API_TOKEN = process.env.E2E_API_TOKEN || '';
+const AUTH_COOKIE_NAME = process.env.E2E_AUTH_COOKIE_NAME || 'aithena_auth';
+let cachedApiAuthHeaders: Record<string, string> | null = null;
 const HIGHLIGHT_QUERY_CANDIDATES = [
   'amades',
   'etnologia',
@@ -84,8 +89,57 @@ export function getApiBaseURL(appBaseURL: string): string {
   return normalizeUrl(url.origin);
 }
 
+async function applyAuthCookie(page: Page, appBaseURL: string): Promise<void> {
+  if (!API_TOKEN) {
+    return;
+  }
+
+  const url = new URL(appBaseURL);
+  await page.context().addCookies([
+    {
+      name: AUTH_COOKIE_NAME,
+      value: API_TOKEN,
+      domain: url.hostname,
+      path: '/',
+      httpOnly: false,
+      secure: url.protocol === 'https:',
+      sameSite: 'Lax',
+    },
+  ]);
+}
+
+export async function loginToApp(page: Page, appBaseURL: string): Promise<void> {
+  if (API_TOKEN) {
+    await applyAuthCookie(page, appBaseURL);
+    await page.goto(new URL('/search', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+    const loginVisible = await page.locator('.login-title').isVisible().catch(() => false);
+    if (!loginVisible) {
+      return;
+    }
+  }
+
+  await page.goto(new URL('/login', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.login-title')).toHaveText('Sign in to Aithena');
+  await page.getByLabel('Username').fill(LOGIN_USERNAME);
+  await page.getByLabel('Password').fill(LOGIN_PASSWORD);
+  await Promise.all([
+    page.waitForURL(/\/search$/, { timeout: 20_000 }),
+    page.getByRole('button', { name: 'Sign in' }).click(),
+  ]);
+  await expect(page.locator('.tab-nav-user')).toContainText(LOGIN_USERNAME);
+}
+
 export async function gotoAppPage(page: Page, appBaseURL: string, path = '/search'): Promise<void> {
   await page.goto(new URL(path, `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+
+  const loginVisible = await page.locator('.login-title').isVisible().catch(() => false);
+  if (loginVisible) {
+    await loginToApp(page, appBaseURL);
+    if (path !== '/search') {
+      await page.goto(new URL(path, `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+    }
+  }
+
   await expect(page.locator('h1.sidebar-title')).toHaveText(/Aithena/);
 }
 
@@ -129,7 +183,7 @@ export async function runSearch(page: Page, query: string): Promise<void> {
   }
 
   await expect(page.locator('button.search-btn')).toHaveText('Search');
-  await expect(page.locator('.search-result-count')).toContainText(`"${query}"`);
+  await expect(page.locator('.search-result-count')).toContainText(query);
 }
 
 export async function getVisibleTitles(page: Page): Promise<string[]> {
@@ -157,12 +211,41 @@ export async function expectVisibleCardsToMatchAuthor(page: Page, author: string
   }
 }
 
+async function getApiAuthHeaders(request: APIRequestContext, apiBaseURL: string): Promise<Record<string, string>> {
+  if (cachedApiAuthHeaders) {
+    return cachedApiAuthHeaders;
+  }
+
+  if (API_TOKEN) {
+    cachedApiAuthHeaders = { Authorization: `Bearer ${API_TOKEN}` };
+    return cachedApiAuthHeaders;
+  }
+
+  const response = await request.post(`${apiBaseURL}/v1/auth/login`, {
+    data: { username: LOGIN_USERNAME, password: LOGIN_PASSWORD },
+    timeout: 15_000,
+  });
+
+  if (!response.ok()) {
+    throw new Error(`API login failed (${response.status()}) at ${response.url()}: ${await response.text()}`);
+  }
+
+  const payload = (await response.json()) as { access_token?: string };
+  if (!payload.access_token) {
+    throw new Error(`API login response missing access_token: ${JSON.stringify(payload)}`);
+  }
+
+  cachedApiAuthHeaders = { Authorization: `Bearer ${payload.access_token}` };
+  return cachedApiAuthHeaders;
+}
+
 export async function discoverCatalogScenario(
   request: APIRequestContext,
   appBaseURL: string
 ): Promise<CatalogScenario> {
   const apiBaseURL = getApiBaseURL(appBaseURL);
   const searchCache = new Map<string, SearchResponse>();
+  const authHeaders = await getApiAuthHeaders(request, apiBaseURL);
 
   const search = async (
     query: string,
@@ -182,6 +265,7 @@ export async function discoverCatalogScenario(
         limit: String(limit),
         ...extraParams,
       },
+      headers: authHeaders,
       timeout: 15_000,
     });
 

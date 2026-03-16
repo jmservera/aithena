@@ -15,10 +15,12 @@ jobs:
   sync-labels:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Parse roster and sync labels
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             const fs = require('fs');
@@ -79,6 +81,11 @@ jobs:
               { name: 'release:v0.5.0', color: '6B8EB5', description: 'Targeted for v0.5.0' },
               { name: 'release:v0.6.0', color: '8B7DB5', description: 'Targeted for v0.6.0' },
               { name: 'release:v1.0.0', color: '8B7DB5', description: 'Targeted for v1.0.0' },
+              { name: 'release:v1.0.1', color: '0075ca', description: 'Targeted for v1.0.1' },
+              { name: 'release:v1.1.0', color: '0075ca', description: 'Targeted for v1.1.0' },
+              { name: 'release:v1.2.0', color: '0075ca', description: 'Targeted for v1.2.0' },
+              { name: 'release:v1.3.0', color: '0075ca', description: 'Targeted for v1.3.0' },
+              { name: 'release:v1.4.0', color: '0075ca', description: 'Targeted for v1.4.0' },
               { name: 'release:backlog', color: 'D4E5F7', description: 'Not yet targeted' }
             ];
 

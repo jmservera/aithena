@@ -1,0 +1,132 @@
+const DEV_UI_PORTS = new Set(['3000', '4173', '4174', '5173', '5174']);
+const authFailureHandlers = new Set<() => void>();
+
+export const AUTH_TOKEN_STORAGE_KEY = 'aithena.auth.token';
+
+export interface AuthUser {
+  id: number | string;
+  username: string;
+  role: string;
+}
+
+export interface AuthSession {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: AuthUser;
+}
+
+interface ApiFetchOptions extends RequestInit {
+  skipAuth?: boolean;
+  skipUnauthorizedHandler?: boolean;
+}
+
+function normalizeApiBaseUrl(rawUrl?: string): string {
+  const trimmed = rawUrl?.trim();
+  if (!trimmed || trimmed === '.') {
+    if (typeof window !== 'undefined') {
+      const { hostname, port, protocol } = window.location;
+      const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+      if (isLocalhost && DEV_UI_PORTS.has(port)) {
+        return `${protocol}//${hostname}:8080`;
+      }
+    }
+
+    return '';
+  }
+
+  return trimmed.replace(/\/+$/, '');
+}
+
+function withAuthorization(headers?: HeadersInit, skipAuth = false): Headers {
+  const nextHeaders = new Headers(headers ?? {});
+  const authHeader = !skipAuth ? getAuthorizationHeaderValue() : null;
+
+  if (authHeader && !nextHeaders.has('Authorization')) {
+    nextHeaders.set('Authorization', authHeader);
+  }
+
+  return nextHeaders;
+}
+
+function createRequestUrl(input: string): string {
+  return /^https?:\/\//i.test(input) ? input : buildApiUrl(input);
+}
+
+const apiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
+
+export function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${apiBaseUrl}${normalizedPath}`;
+}
+
+export function resolveDocumentUrl(documentUrl?: string | null): string | null {
+  if (!documentUrl) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(documentUrl)) {
+    return documentUrl;
+  }
+
+  return buildApiUrl(documentUrl);
+}
+
+export function getStoredToken(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+export function storeToken(token: string): void {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+  }
+}
+
+export function clearStoredToken(): void {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  }
+}
+
+export function getAuthorizationHeaderValue(): string | null {
+  const token = getStoredToken();
+  return token ? `Bearer ${token}` : null;
+}
+
+export function registerAuthFailureHandler(handler: () => void): () => void {
+  authFailureHandlers.add(handler);
+  return () => {
+    authFailureHandlers.delete(handler);
+  };
+}
+
+export function notifyAuthFailure(): void {
+  clearStoredToken();
+  authFailureHandlers.forEach((handler) => handler());
+}
+
+export async function apiFetch(input: string, options: ApiFetchOptions = {}): Promise<Response> {
+  const { skipAuth = false, skipUnauthorizedHandler = false, headers, ...rest } = options;
+  const response = await fetch(createRequestUrl(input), {
+    ...rest,
+    headers: withAuthorization(headers, skipAuth),
+  });
+
+  if ((response.status === 401 || response.status === 403) && !skipUnauthorizedHandler) {
+    notifyAuthFailure();
+  }
+
+  return response;
+}
+
+export function applyAuthorizationHeader(xhr: XMLHttpRequest): void {
+  const authHeader = getAuthorizationHeaderValue();
+  if (authHeader) {
+    xhr.setRequestHeader('Authorization', authHeader);
+  }
+}

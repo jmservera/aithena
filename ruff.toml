@@ -5,9 +5,10 @@ line-length = 120
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "S"]
 
 [lint.per-file-ignores]
-"**/tests/*.py" = ["S101"]
+"**/tests/*.py" = ["S101", "S105", "S106", "S107"]
 "e2e/*.py" = ["S101"]
 "e2e/conftest.py" = ["S108"]
 "e2e/test_upload_index_search.py" = ["S603"]
-"embeddings-server/main.py" = ["S104"]
-"solr-search/main.py" = ["S104"]
+"src/embeddings-server/main.py" = ["S104"]
+"src/solr-search/main.py" = ["S104"]
+"src/solr-search/tests/test_upload.py" = ["S108"]

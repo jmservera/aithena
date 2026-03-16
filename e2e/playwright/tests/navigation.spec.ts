@@ -32,13 +32,13 @@ test('navigates across the Search, Library, Status, and Stats tabs', async ({ pa
     },
     {
       path: '/status',
-      heading: '🟢 Status',
-      subtitle: 'System and indexing status.',
+      selector: '.status-title',
+      text: '🟢 System Status',
     },
     {
       path: '/stats',
-      heading: '📊 Stats',
-      subtitle: 'Collection and search statistics.',
+      selector: '.stats-page-title',
+      text: '📊 Collection Stats',
     },
   ] as const;
 
@@ -51,6 +51,11 @@ test('navigates across the Search, Library, Status, and Stats tabs', async ({ pa
 
     if ('assertion' in testCase) {
       await testCase.assertion();
+      continue;
+    }
+
+    if ('selector' in testCase) {
+      await expect(page.locator(testCase.selector)).toHaveText(testCase.text);
       continue;
     }
 

@@ -1,0 +1,81 @@
+# Aithena v0.12.0 Release Notes — Operability & Launch Prep
+
+_Date:_ 2026-03-16  
+_Prepared by:_ Newt (Product Manager)
+
+Aithena **v0.12.0** completes the **Operability & Launch Prep** milestone. This release strengthens operator readiness with credential rotation, Prometheus-compatible metrics, failover runbooks and drills, sizing guidance, graceful semantic-search degradation, a v1.0 readiness docs pack, and stronger GitHub Actions validation/release automation.
+
+## Summary of shipped changes
+
+- **Credential rotation for RabbitMQ and Redis** with installer-driven `.env` generation, documented rotation procedures, and Compose wiring for every dependent service (**#216 / PR #277**).
+- **Prometheus-compatible `/v1/metrics`** in `solr-search`, including request counters, latency histograms, queue/failure signals, embeddings availability, and Solr live-node reporting (**#217 / PR #278**).
+- **Failover and recovery documentation** with a service-by-service runbook plus the executable `e2e/failover-drill.sh` script for rehearsal in Docker-based environments (**#218 / PR #282**).
+- **Capacity planning guidance** via `docs/deployment/sizing-guide.md` and `e2e/benchmark.sh`, covering small/medium/large deployments and measured benchmarking follow-up (**#219 / PR #283**).
+- **Graceful degraded-mode search** so semantic and hybrid requests fall back to keyword search when the embeddings service is unavailable, instead of surfacing avoidable upstream failures (**#220 / PR #280**).
+- **v1.0 readiness documentation pack** with the new readiness checklist plus refreshed operator/admin docs for monitoring, credential hygiene, failover, and sizing (**#221 / PR #284**).
+- **A new integration-test GitHub Actions workflow** using Docker Compose plus Playwright to exercise release-critical flows in CI (**#269 / PR #279**).
+- **A Copilot-powered `release-docs` workflow** to automate milestone context gathering, artifact collection, and release documentation generation (**#270 / PR #281**).
+- **GitHub Actions security hardening** that resolved 17 zizmor alerts, removed the broken `copilot-approve-runs` and `copilot-pr-ready` workflows, restored the working `github-token` heartbeat pattern, and switched `release.yml` from `softprops/action-gh-release` to the native `gh release create` flow (**PR #276** plus the follow-up heartbeat fix commit).
+
+## Merged pull requests
+
+- **#276** — `security: fix workflow alerts and remove broken Copilot automation`
+- **#277** — `security: add credential rotation for RabbitMQ and Redis`
+- **#278** — `feat: add Prometheus-compatible metrics and monitoring docs`
+- **#279** — `ci: add integration-test workflow with Docker Compose and Playwright`
+- **#280** — `feat: add graceful degradation for semantic search`
+- **#281** — `ci: add Copilot-powered release-docs workflow`
+- **#282** — `ops: add failover runbooks and drill script`
+- **#283** — `docs: add search/indexing sizing guide and benchmark script`
+- **#284** — `docs: publish v1.0 readiness checklist and docs pack`
+
+## Breaking changes
+
+**Yes — operator-facing configuration changes require attention.**
+
+- `AUTH_DB_DIR` is now treated as a required bind-mount source in `docker-compose.yml`; deployments should re-run the installer before restarting the stack.
+- RabbitMQ and Redis credential variables are now part of the documented runtime contract (`RABBITMQ_USER`, `RABBITMQ_PASS`, `REDIS_PASSWORD`) and should be rotated or verified during upgrade.
+- Monitoring setups can now scrape `/v1/metrics`; operators should add this endpoint intentionally rather than assuming metrics are exposed elsewhere.
+
+## Upgrade instructions
+
+1. Update to the **v0.12.0** release commit or tag once published.
+2. Re-run the installer before `docker compose up` so the environment file and auth/credential directories are in sync:
+
+   ```bash
+   python3 -m installer
+   # or, for scripted environments:
+   python3 installer/setup.py \
+     --library-path /absolute/path/to/books \
+     --admin-user admin \
+     --admin-password 'change-me' \
+     --origin http://localhost
+   ```
+
+3. Confirm the generated `.env` includes or preserves the release-critical values:
+   - `AUTH_DB_DIR`
+   - `AUTH_DB_PATH`
+   - `AUTH_JWT_SECRET`
+   - `RABBITMQ_USER`
+   - `RABBITMQ_PASS`
+   - `REDIS_PASSWORD`
+4. Recreate the affected services after credential changes so every Redis/RabbitMQ client reconnects with the updated values:
+
+   ```bash
+   docker compose up -d --force-recreate \
+     redis rabbitmq redis-commander streamlit-admin \
+     document-lister document-indexer solr-search nginx
+   ```
+
+5. If you operate Prometheus, add a scrape target for `solr-search:8080` with `metrics_path: /v1/metrics` and review the alert thresholds documented in `docs/monitoring.md`.
+6. Review `docs/deployment/failover-runbook.md`, then run `e2e/failover-drill.sh` and `e2e/benchmark.sh` when preparing the production launch candidate.
+7. Validate `/v1/status`, keyword search, and semantic/hybrid search behavior after restart; semantic and hybrid modes should now degrade cleanly to keyword results if embeddings are unavailable.
+
+## Documentation updated for this release
+
+- `docs/monitoring.md`
+- `docs/deployment/production.md`
+- `docs/deployment/failover-runbook.md`
+- `docs/deployment/sizing-guide.md`
+- `docs/admin-manual.md`
+- `docs/v1-readiness-checklist.md`

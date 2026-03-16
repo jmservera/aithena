@@ -1,23 +1,22 @@
 ---
-updated_at: 2026-03-13T23:00:00Z
-focus_area: Phase 1 complete — Phase 2/3 parallel dev — 8 PRs in conflict resolution queue
+updated_at: 2026-03-15T10:40:00Z
+focus_area: v0.6.0 planning complete — awaiting GitHub setup to assign copilot
 active_issues:
-  - pr-conflicts: "#55, #59 (merge conflicts)"
-  - service-mismatch: "#56, #58 (wrong target)"
-  - backlog: "#81-#100 (UV/security/linting)"
+  - v060-scope: "12 issues across 6 groups (security, upload, hardening, polish)"
+  - pending-github: "Need gh auth to create milestone, issues, labels"
+  - specs-ready: "Parker, Dallas, Brett, Kane specs in decisions/inbox/"
 ---
 
 # What We're Focused On
 
-**Phase 1 (Core Solr Indexing):** COMPLETE  
-Solr schema live, indexer rewritten for Tika extraction, metadata extraction from filesystem paths active.
+**v0.5.0:** ✅ SHIPPED (197 tests, 9 issues, tagged)
 
-**Phase 2 & 3:** IN PROGRESS  
-FastAPI search service and React UI in development. Embeddings model evaluation ready to start.
+**v0.6.0 (Production Hardening & Security):** PLANNING COMPLETE
+- Ripley's release plan: `.squad/decisions/inbox/ripley-v060-release-plan.md`
+- 12 issues, 6 groups, dependency order defined
+- All 4 reviewer specs written and approved
 
-**Immediate Blockers:** 8 PRs waiting on @copilot  
-- 2 PRs with merge conflicts (#55, #59) — need resolution
-- 2 PRs with wrong service targets (#56, #58) — need rerouting
-- 4 more PRs expected to merge after conflicts resolved
+**Next Action:** Run `.squad/scripts/setup-v060-milestone.sh` after `gh auth login`
+Then: "Ralph, go" to start the copilot → review → merge pipeline
 
-**Next Phase:** Phase 3 (embeddings/hybrid search) — 22 issues created (#81-#100) for follow-up quality work (UV security, linting, type checking).
+**Deferred to v0.7.0+:** 13 Dependabot issues, #169 (admin migration)

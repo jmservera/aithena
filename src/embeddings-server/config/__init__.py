@@ -1,0 +1,17 @@
+import os
+
+EMBEDDINGS_HOST = os.environ.get("EMBEDDINGS_HOST", "localhost")
+EMBEDDINGS_PORT = os.environ.get("EMBEDDINGS_PORT", 8000)
+QDRANT_HOST = os.environ.get("QDRANT_HOST", "localhost")
+QDRANT_PORT = os.environ.get("QDRANT_PORT", 6333)
+STORAGE_ACCOUNT_NAME = os.environ.get("STORAGE_ACCOUNT_NAME")
+STORAGE_CONTAINER = os.environ.get("STORAGE_CONTAINER")
+EMBEDDINGS_TIMEOUT = os.environ.get("EMBEDDINGS_TIMEOUT", 30 * 60)  # 30 minutes
+CHAT_HOST = os.environ.get("CHAT_HOST", "localhost")
+CHAT_PORT = os.environ.get("CHAT_PORT", 8001)
+PORT = int(os.environ.get("PORT", 8080))
+VERSION = os.environ.get("VERSION", "dev")
+GIT_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
+BUILD_DATE = os.environ.get("BUILD_DATE", "unknown")
+# ADR-004: standardized multilingual embedding model
+MODEL_NAME = os.environ.get("MODEL_NAME", "sentence-transformers/distiluse-base-multilingual-cased-v2")

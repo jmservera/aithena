@@ -8,15 +8,15 @@ _Prepared by:_ Lambert (Tester)
 Commands executed for this report:
 
 ```bash
-cd /home/jmservera/source/aithena/solr-search && uv run pytest -v --tb=short 2>&1
-cd /home/jmservera/source/aithena/document-indexer && uv run pytest -v --tb=short 2>&1
-cd /home/jmservera/source/aithena/solr-search && uv run pytest -v --tb=short --cov=. --cov-report=term 2>&1
-cd /home/jmservera/source/aithena/document-indexer && uv run pytest -v --tb=short --cov=document_indexer --cov-report=term 2>&1
+cd /home/jmservera/source/aithena/src/solr-search && uv run pytest -v --tb=short 2>&1
+cd /home/jmservera/source/aithena/src/document-indexer && uv run pytest -v --tb=short 2>&1
+cd /home/jmservera/source/aithena/src/solr-search && uv run pytest -v --tb=short --cov=. --cov-report=term 2>&1
+cd /home/jmservera/source/aithena/src/document-indexer && uv run pytest -v --tb=short --cov=document_indexer --cov-report=term 2>&1
 ls -la /home/jmservera/source/aithena/e2e/
 cat /home/jmservera/source/aithena/e2e/test_upload_index_search.py
 cat /home/jmservera/source/aithena/e2e/conftest.py
 ls -la /home/jmservera/source/aithena/e2e/playwright/
-cd /home/jmservera/source/aithena/aithena-ui && grep -A12 '"scripts"' package.json
+cd /home/jmservera/source/aithena/src/aithena-ui && grep -A12 '"scripts"' package.json
 find src -type f \( -name '*.test.*' -o -name '*.spec.*' \) | sort
 ```
 
@@ -86,7 +86,7 @@ These are not failures today, but they are upgrade-risk signals.
 
 ## Backend unit tests
 
-### `document-indexer/tests/test_chunker.py` — 28 passed
+### `src/document-indexer/tests/test_chunker.py` — 28 passed
 
 **Status:** PASS  
 **What it covers:** text chunking, overlap semantics, whitespace normalization, invalid arguments, and page-aware chunk/page-range propagation.
@@ -97,7 +97,7 @@ These are not failures today, but they are upgrade-risk signals.
 
 **Assessment:** excellent low-level coverage of the chunking logic, including edge cases that matter for semantic/chunk-based search.
 
-### `document-indexer/tests/test_indexer.py` — 30 passed
+### `src/document-indexer/tests/test_indexer.py` — 30 passed
 
 **Status:** PASS  
 **What it covers:** document chunk doc construction, chunk upload orchestration, Solr startup gating, failure-state recording, and high-level indexing flow with mocked dependencies.
@@ -112,7 +112,7 @@ These are not failures today, but they are upgrade-risk signals.
 
 **Assessment:** strong orchestration coverage, but still mocked. It validates control flow and Redis state updates without proving the real services interoperate.
 
-### `document-indexer/tests/test_metadata.py` — 15 passed (10 test functions, 15 collected cases)
+### `src/document-indexer/tests/test_metadata.py` — 15 passed (10 test functions, 15 collected cases)
 
 **Status:** PASS  
 **What it covers:** metadata extraction heuristics across root files, author folders, category folders, Unicode filenames, non-PDF paths, deep nested paths, conservative fallbacks, and real-library naming patterns.
@@ -136,7 +136,7 @@ These are not failures today, but they are upgrade-risk signals.
 
 **Assessment:** this is the strongest evidence that the parser is aligned with the real book library naming conventions.
 
-### `solr-search/tests/test_search_service.py` — 28 passed
+### `src/solr-search/tests/test_search_service.py` — 28 passed
 
 **Status:** PASS  
 **What it covers:** pure helper/service logic for Solr parameter building, facet parsing, filter query construction, result normalization, page-range normalization, tokenized document URLs, traversal protection, query sanitization, inline content disposition, pagination, kNN parameter building, reciprocal rank fusion, Solr escaping, and stats parsing.
@@ -175,7 +175,7 @@ These are not failures today, but they are upgrade-risk signals.
 
 ## Backend integration tests
 
-### `solr-search/tests/test_integration.py` — 50 passed
+### `src/solr-search/tests/test_integration.py` — 50 passed
 
 **Status:** PASS  
 **Type:** API-level integration with `FastAPI TestClient`; external Solr/embeddings/Redis interactions mocked.  
@@ -309,7 +309,7 @@ That leaves component behavior, hook behavior, and regression prevention under-c
    - Runtime-only paths such as `consume()`, `callback()`, queue declaration, Redis retry behavior, and real PDF page counting are not thoroughly exercised
 
 5. **Search API integration is mocked, not live**
-   - `solr-search/tests/test_integration.py` proves API behavior with mocked dependencies, not with a real Solr collection or live embeddings responses
+   - `src/solr-search/tests/test_integration.py` proves API behavior with mocked dependencies, not with a real Solr collection or live embeddings responses
 
 ### Medium-priority gaps
 
