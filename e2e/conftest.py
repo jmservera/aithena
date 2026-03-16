@@ -114,8 +114,12 @@ def api_url() -> str:
 @pytest.fixture(scope="session")
 def auth_headers(api_url: str) -> dict[str, str]:
     """Log into the live API and return bearer auth headers for protected endpoints."""
-    username = os.environ.get("E2E_USERNAME", os.environ.get("CI_ADMIN_USERNAME", "ci-admin"))
-    password = os.environ.get("E2E_PASSWORD", os.environ.get("CI_ADMIN_PASSWORD", "ci-password-ChangeMe123!"))
+    username = os.environ.get("E2E_USERNAME", os.environ.get("CI_ADMIN_USERNAME", "admin"))
+    password = os.environ.get("E2E_PASSWORD")
+    if not password:
+        password = os.environ.get("CI_ADMIN_PASSWORD")
+    if not password:
+        pytest.skip("E2E_PASSWORD environment variable must be set for authenticated endpoints")
 
     resp = requests.post(
         f"{api_url}/v1/auth/login",

@@ -1,3 +1,3 @@
-# Not needed — solr-search uses repo root as build context.
-# The root .dockerignore handles exclusions for this service.
-# This file exists only to document why there is no service-level .dockerignore.
+# solr-search uses the repo root as its build context, so ignore patterns are
+# defined in the root .dockerignore (not here). This file intentionally contains
+# no ignore patterns and exists only to document why.

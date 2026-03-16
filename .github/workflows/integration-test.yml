@@ -157,12 +157,6 @@ jobs:
             --profile production \
             up -d
 
-      - name: Show container logs on failure
-        if: failure()
-        run: |
-          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml --profile production logs solr-search nginx --tail=50
-          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.e2e.yml -f docker-compose.github-actions.yml --profile production ps
-
       - name: Wait for services to become healthy
         run: |
           wait_for_url() {

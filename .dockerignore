@@ -31,3 +31,7 @@ docker-compose*.yml
 
 # Installer (runs on host, not in container)
 installer/
+
+# Frontend build artifacts
+**/node_modules/
+**/dist/
