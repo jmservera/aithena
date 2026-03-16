@@ -122,18 +122,19 @@ jobs:
           COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
-          github-token: ${{ env.COPILOT_ASSIGN_TOKEN }}
           script: |
+            const { getOctokit } = require('@actions/github');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const issue_number = context.payload.issue.number;
+            const authedGithub = getOctokit(process.env.COPILOT_ASSIGN_TOKEN);
 
             // Get the default branch name (main, master, etc.)
-            const { data: repoData } = await github.rest.repos.get({ owner, repo });
+            const { data: repoData } = await authedGithub.rest.repos.get({ owner, repo });
             const baseBranch = repoData.default_branch;
 
             try {
-              await github.request('POST /repos/{owner}/{repo}/issues/{issue_number}/assignees', {
+              await authedGithub.request('POST /repos/{owner}/{repo}/issues/{issue_number}/assignees', {
                 owner,
                 repo,
                 issue_number,
@@ -154,7 +155,7 @@ jobs:
               core.warning(`Assignment with agent_assignment failed: ${err.message}`);
               // Fallback: try without agent_assignment
               try {
-                await github.rest.issues.addAssignees({
+                await authedGithub.rest.issues.addAssignees({
                   owner, repo, issue_number,
                   assignees: ['copilot-swe-agent']
                 });
