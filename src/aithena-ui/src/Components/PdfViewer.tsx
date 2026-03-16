@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { resolveDocumentUrl } from '../api';
 import { BookResult } from '../hooks/search';
 
@@ -7,19 +7,71 @@ interface PdfViewerProps {
   onClose: () => void;
 }
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), iframe, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
   const [loadError, setLoadError] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
 
-  // Reset error state when a new document is opened
   useEffect(() => {
     setLoadError(false);
   }, [result.document_url]);
 
-  // Close on Escape key
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
     };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !panelRef.current) {
+        return;
+      }
+
+      const focusableElements = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      ).filter((element) => !element.hasAttribute('disabled'));
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        panelRef.current.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+      const focusInsidePanel =
+        activeElement instanceof HTMLElement && panelRef.current.contains(activeElement);
+
+      if (event.shiftKey) {
+        if (!focusInsidePanel || activeElement === firstElement) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+        return;
+      }
+
+      if (!focusInsidePanel || activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
@@ -33,22 +85,25 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
     : null;
 
   return (
-    <div
-      className="pdf-viewer-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`PDF viewer: ${result.title || 'document'}`}
-    >
-      <div className="pdf-viewer-panel">
+    <div className="pdf-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div ref={panelRef} className="pdf-viewer-panel" tabIndex={-1}>
         <div className="pdf-viewer-header">
           <div className="pdf-viewer-title">
-            <span className="pdf-viewer-icon">📄</span>
+            <span className="pdf-viewer-icon" aria-hidden="true">
+              📄
+            </span>
             <div>
-              <strong>{result.title || 'Document'}</strong>
+              <strong id={titleId}>{result.title || 'Document'}</strong>
               {result.author && <span className="pdf-viewer-author"> — {result.author}</span>}
             </div>
           </div>
-          <button className="pdf-viewer-close" onClick={onClose} aria-label="Close PDF viewer">
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="pdf-viewer-close"
+            onClick={onClose}
+            aria-label="Close PDF viewer"
+          >
             ✕
           </button>
         </div>

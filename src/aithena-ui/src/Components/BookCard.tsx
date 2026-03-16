@@ -8,10 +8,6 @@ interface BookCardProps {
   isSelected?: boolean;
 }
 
-/**
- * Sanitize Solr highlight snippets to allow only <em> tags.
- * Solr uses <em>…</em> to wrap matched terms; all other HTML is stripped.
- */
 function sanitizeHighlight(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
@@ -37,7 +33,7 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
     () =>
       book.highlights?.map((snippet, index) => ({
         id: `${book.id}-highlight-${index}`,
-        html: `\u2026${sanitizeHighlight(snippet)}\u2026`,
+        html: `…${sanitizeHighlight(snippet)}…`,
       })) ?? [],
     [book.highlights, book.id]
   );
@@ -95,9 +91,12 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
         {book.file_path && <p className="book-filepath">{book.file_path}</p>}
         {book.document_url && onOpenPdf && (
           <button
+            type="button"
             className="open-pdf-btn"
             onClick={handleOpenPdf}
             aria-label={`Open PDF for ${book.title}`}
+            aria-haspopup="dialog"
+            aria-expanded={isSelected}
           >
             📄 Open PDF
           </button>

@@ -7,7 +7,6 @@ import {
   CreateCompletionRequestField,
 } from './types/CreateCompletionRequest';
 
-// Define a component for the sidebar
 const Configbar = ({
   props,
   setProps,
@@ -15,7 +14,6 @@ const Configbar = ({
   props: ChatMessageProps;
   setProps: React.Dispatch<React.SetStateAction<ChatMessageProps>>;
 }) => {
-  // Handle input changes and update the props state
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     setProps((prevProps) => ({ ...prevProps, [name]: value }));
@@ -84,9 +82,9 @@ const Configbar = ({
       <span key="limit-span">{props.limit}</span>
       <br key="limit-br" />
       {CreateCompletionRequestDef.map((value, index) => renderPropertyEditor(value, index))}
-      <div key="side-key" className="side-menu-button" onClick={handleResetClick}>
-        <span>🧹</span>Reset
-      </div>
+      <button key="side-key" type="button" className="side-menu-button" onClick={handleResetClick}>
+        <span aria-hidden="true">🧹</span> Reset
+      </button>
     </div>
   );
 };

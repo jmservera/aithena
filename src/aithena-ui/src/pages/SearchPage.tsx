@@ -1,14 +1,14 @@
-import { useState, useCallback, FormEvent } from 'react';
+import { FormEvent, RefObject, useCallback, useEffect, useId, useRef, useState } from 'react';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
-import { useSearch, BookResult, SearchMode } from '../hooks/search';
-import { SearchFilters } from '../hooks/search';
-import { getCachedSimilarBook } from '../hooks/similarBooks';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
 import BookCard from '../Components/BookCard';
 import Pagination from '../Components/Pagination';
 import PdfViewer from '../Components/PdfViewer';
 import SimilarBooks from '../Components/SimilarBooks';
+import { SearchFilters } from '../hooks/search';
+import { getCachedSimilarBook } from '../hooks/similarBooks';
+import { useSearch, BookResult, SearchMode } from '../hooks/search';
 
 const SORT_OPTIONS = [
   { value: 'score desc', label: 'Relevance' },
@@ -38,6 +38,9 @@ interface SearchResultsSectionProps {
   limit: number;
   query: string;
   results: BookResult[];
+  resultsRegionId: string;
+  resultsRegionRef: RefObject<HTMLElement>;
+  resultsSummaryId: string;
   selectedBook: BookResult | null;
   total: number;
   onOpenPdf: (book: BookResult) => void;
@@ -80,6 +83,9 @@ function SearchResultsSection({
   limit,
   query,
   results,
+  resultsRegionId,
+  resultsRegionRef,
+  resultsSummaryId,
   selectedBook,
   total,
   onOpenPdf,
@@ -88,14 +94,32 @@ function SearchResultsSection({
   onSelectSimilarBook,
 }: SearchResultsSectionProps) {
   const totalPages = Math.ceil(total / limit);
+  const resultsHeadingId = `${resultsRegionId}-heading`;
 
   return (
     <>
-      <section className="search-results">
+      <section
+        id={resultsRegionId}
+        ref={resultsRegionRef}
+        className="search-results"
+        role="region"
+        aria-labelledby={resultsHeadingId}
+        aria-describedby={query ? resultsSummaryId : undefined}
+        aria-busy={loading}
+        tabIndex={-1}
+      >
+        <h2 id={resultsHeadingId} className="visually-hidden">
+          Search results
+        </h2>
+
         {error && (
           <div className="search-error" role="alert">
             ⚠️ {error}
           </div>
+        )}
+
+        {!loading && !error && !query && (
+          <div className="search-empty">Enter a search term above to find books.</div>
         )}
 
         {!loading && !error && query && results.length === 0 && (
@@ -105,18 +129,19 @@ function SearchResultsSection({
           </div>
         )}
 
-        {!query && !loading && (
-          <div className="search-empty">Enter a search term above to find books.</div>
+        {results.length > 0 && (
+          <ul className="search-results-list">
+            {results.map((book) => (
+              <li key={book.id} className="search-results-item">
+                <BookCard
+                  book={book}
+                  onOpenPdf={onOpenPdf}
+                  isSelected={selectedBook?.id === book.id}
+                />
+              </li>
+            ))}
+          </ul>
         )}
-
-        {results.map((book) => (
-          <BookCard
-            key={book.id}
-            book={book}
-            onOpenPdf={onOpenPdf}
-            isSelected={selectedBook?.id === book.id}
-          />
-        ))}
       </section>
 
       {selectedBook && (
@@ -125,7 +150,13 @@ function SearchResultsSection({
 
       {total > 0 && (
         <footer className="search-footer">
-          <Pagination page={page} limit={limit} total={total} onPageChange={onPageChange} />
+          <Pagination
+            page={page}
+            limit={limit}
+            total={total}
+            onPageChange={onPageChange}
+            controlsId={resultsRegionId}
+          />
           <p className="pagination-info">
             Page {page} of {totalPages}
           </p>
@@ -140,6 +171,12 @@ function SearchResultsSection({
 function SearchPage() {
   const [inputValue, setInputValue] = useState('');
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const resultsRegionRef = useRef<HTMLElement>(null);
+  const lastLoadingStateRef = useRef(false);
+  const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
+  const searchInputId = useId();
+  const resultsRegionId = useId();
+  const resultsSummaryId = useId();
   const {
     searchState,
     results,
@@ -156,8 +193,16 @@ function SearchPage() {
     setMode,
   } = useSearch();
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    if (searchState.query && lastLoadingStateRef.current && !loading) {
+      resultsRegionRef.current?.focus();
+    }
+
+    lastLoadingStateRef.current = loading;
+  }, [loading, searchState.query]);
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
     setQuery(inputValue.trim());
   }
 
@@ -166,15 +211,33 @@ function SearchPage() {
   }
 
   const hasActiveFilters = Object.values(searchState.filters).some(
-    (v) => v !== undefined && v !== ''
+    (value) => value !== undefined && value !== ''
   );
 
   const handleOpenPdf = useCallback((book: BookResult) => {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      lastPdfTriggerRef.current = activeElement;
+    }
+
     setSelectedBook(book);
+  }, []);
+
+  const handleClosePdf = useCallback(() => {
+    setSelectedBook(null);
+
+    window.requestAnimationFrame(() => {
+      lastPdfTriggerRef.current?.focus();
+    });
   }, []);
 
   const handleSelectSimilarBook = useCallback(
     (bookId: string) => {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        lastPdfTriggerRef.current = activeElement;
+      }
+
       const similarBook = getCachedSimilarBook(bookId);
       const searchResult = results.find((book) => book.id === bookId);
 
@@ -196,13 +259,22 @@ function SearchPage() {
 
       <main className="search-main">
         <header className="search-header">
-          <form className="search-form" onSubmit={handleSubmit}>
+          <form
+            className="search-form"
+            role="search"
+            aria-label="Search the library"
+            onSubmit={handleSubmit}
+          >
+            <label className="visually-hidden" htmlFor={searchInputId}>
+              Search books by title, author, or content
+            </label>
             <input
+              id={searchInputId}
               className="search-input"
               type="search"
               value={inputValue}
               placeholder="Search books by title, author, or content…"
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(event) => setInputValue(event.target.value)}
               aria-label="Search query"
             />
             <button className="search-btn" type="submit" disabled={loading}>
@@ -211,23 +283,29 @@ function SearchPage() {
           </form>
 
           <div className="mode-selector" role="group" aria-label="Search mode">
-            {MODE_OPTIONS.map((opt) => (
+            {MODE_OPTIONS.map((option) => (
               <button
-                key={opt.value}
+                key={option.value}
                 type="button"
-                className={`mode-btn${searchState.mode === opt.value ? ' mode-btn--active' : ''}`}
-                onClick={() => setMode(opt.value)}
-                title={opt.title}
-                aria-pressed={searchState.mode === opt.value}
+                className={`mode-btn${searchState.mode === option.value ? ' mode-btn--active' : ''}`}
+                onClick={() => setMode(option.value)}
+                title={option.title}
+                aria-pressed={searchState.mode === option.value}
               >
-                {opt.label}
+                {option.label}
               </button>
             ))}
           </div>
 
           {searchState.query && (
             <div className="search-controls">
-              <span className="search-result-count">
+              <p
+                id={resultsSummaryId}
+                className="search-result-count"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 {loading ? (
                   'Searching…'
                 ) : (
@@ -237,12 +315,13 @@ function SearchPage() {
                     <span
                       className={`mode-badge ${MODE_BADGE_CLASS[searchState.mode]}`}
                       title={`Search mode: ${searchState.mode}`}
+                      aria-label={`Search mode: ${searchState.mode}`}
                     >
                       {searchState.mode}
                     </span>
                   </>
                 )}
-              </span>
+              </p>
               <div className="search-sort-limit">
                 <label htmlFor="sort-select" className="control-label">
                   Sort:
@@ -251,11 +330,11 @@ function SearchPage() {
                   id="sort-select"
                   className="sort-select"
                   value={searchState.sort}
-                  onChange={(e) => setSort(e.target.value)}
+                  onChange={(event) => setSort(event.target.value)}
                 >
-                  {SORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
@@ -267,11 +346,11 @@ function SearchPage() {
                   id="limit-select"
                   className="sort-select"
                   value={searchState.limit}
-                  onChange={(e) => setLimit(Number(e.target.value))}
+                  onChange={(event) => setLimit(Number(event.target.value))}
                 >
-                  {[10, 20, 50].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
+                  {[10, 20, 50].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
                     </option>
                   ))}
                 </select>
@@ -297,11 +376,14 @@ function SearchPage() {
             limit={searchState.limit}
             query={searchState.query}
             results={results}
+            resultsRegionId={resultsRegionId}
+            resultsRegionRef={resultsRegionRef}
+            resultsSummaryId={resultsSummaryId}
             selectedBook={selectedBook}
             total={total}
             onOpenPdf={handleOpenPdf}
             onPageChange={setPage}
-            onPdfClose={() => setSelectedBook(null)}
+            onPdfClose={handleClosePdf}
             onSelectSimilarBook={handleSelectSimilarBook}
           />
         </ErrorBoundary>

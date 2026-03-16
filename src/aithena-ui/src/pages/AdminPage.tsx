@@ -1,7 +1,13 @@
-import { useEffect, useState } from 'react';
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdmin, AdminDocument } from '../hooks/admin';
 
 type TabKey = 'queued' | 'processed' | 'failed';
+
+const ADMIN_TABS: { key: TabKey; getLabel: (counts: Record<TabKey, number>) => string }[] = [
+  { key: 'queued', getLabel: (counts) => `⏳ Queued (${counts.queued})` },
+  { key: 'processed', getLabel: (counts) => `✅ Processed (${counts.processed})` },
+  { key: 'failed', getLabel: (counts) => `❌ Failed (${counts.failed})` },
+];
 
 function formatTimestamp(ts?: string): string {
   if (!ts) return '—';
@@ -24,6 +30,7 @@ function QueuedTable({ docs }: QueuedTableProps) {
   if (docs.length === 0) {
     return <p className="admin-empty">No documents currently queued. ✓</p>;
   }
+
   return (
     <div className="admin-table-wrapper">
       <table className="admin-table">
@@ -71,6 +78,7 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
               Clear {docs.length} processed document(s)?
             </span>
             <button
+              type="button"
               className="admin-btn admin-btn--danger"
               onClick={() => {
                 setConfirmClear(false);
@@ -80,12 +88,18 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
             >
               ✅ Confirm
             </button>
-            <button className="admin-btn" onClick={() => setConfirmClear(false)} disabled={busy}>
+            <button
+              type="button"
+              className="admin-btn"
+              onClick={() => setConfirmClear(false)}
+              disabled={busy}
+            >
               Cancel
             </button>
           </>
         ) : (
           <button
+            type="button"
             className="admin-btn admin-btn--danger"
             onClick={() => setConfirmClear(true)}
             disabled={busy}
@@ -140,7 +154,12 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
     <>
       <div className="admin-doc-toolbar">
         <span className="admin-doc-toolbar-spacer" />
-        <button className="admin-btn admin-btn--primary" onClick={onRequeueAll} disabled={busy}>
+        <button
+          type="button"
+          className="admin-btn admin-btn--primary"
+          onClick={onRequeueAll}
+          disabled={busy}
+        >
           🔄 Requeue All ({docs.length})
         </button>
       </div>
@@ -167,7 +186,12 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
                 </td>
                 <td>{formatTimestamp(doc.timestamp)}</td>
                 <td>
-                  <button className="admin-btn" onClick={() => onRequeue(doc.id)} disabled={busy}>
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    onClick={() => onRequeue(doc.id)}
+                    disabled={busy}
+                  >
                     🔄 Requeue
                   </button>
                 </td>
@@ -186,6 +210,11 @@ function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('queued');
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({
+    queued: null,
+    processed: null,
+    failed: null,
+  });
 
   useEffect(() => {
     refresh();
@@ -204,6 +233,52 @@ function AdminPage() {
   }
 
   const isLoading = loading && !data;
+  const counts = useMemo<Record<TabKey, number>>(
+    () => ({
+      queued: data?.queued ?? 0,
+      processed: data?.processed ?? 0,
+      failed: data?.failed ?? 0,
+    }),
+    [data]
+  );
+  const queuedDocs = useMemo(
+    () => data?.documents.filter((document) => document.status === 'queued') ?? [],
+    [data]
+  );
+  const processedDocs = useMemo(
+    () => data?.documents.filter((document) => document.status === 'processed') ?? [],
+    [data]
+  );
+  const failedDocs = useMemo(
+    () => data?.documents.filter((document) => document.status === 'failed') ?? [],
+    [data]
+  );
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
+    let nextIndex: number | null = null;
+
+    switch (event.key) {
+      case 'ArrowRight':
+        nextIndex = (currentIndex + 1) % ADMIN_TABS.length;
+        break;
+      case 'ArrowLeft':
+        nextIndex = (currentIndex - 1 + ADMIN_TABS.length) % ADMIN_TABS.length;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = ADMIN_TABS.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    const nextTab = ADMIN_TABS[nextIndex].key;
+    setActiveTab(nextTab);
+    tabRefs.current[nextTab]?.focus();
+  };
 
   return (
     <main className="admin-page">
@@ -211,6 +286,7 @@ function AdminPage() {
         <h2 className="admin-title">🏛️ Admin Dashboard</h2>
         <div className="admin-actions">
           <button
+            type="button"
             className="admin-btn"
             onClick={() => runAction(refresh)}
             disabled={loading || busy}
@@ -255,41 +331,82 @@ function AdminPage() {
             </div>
           </section>
 
-          <div className="admin-tabs" role="tablist">
-            {(['queued', 'processed', 'failed'] as TabKey[]).map((tab) => (
-              <button
-                key={tab}
-                role="tab"
-                aria-selected={activeTab === tab}
-                className={`admin-tab-btn ${activeTab === tab ? 'admin-tab-btn--active' : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab === 'queued' && `⏳ Queued (${data.queued})`}
-                {tab === 'processed' && `✅ Processed (${data.processed})`}
-                {tab === 'failed' && `❌ Failed (${data.failed})`}
-              </button>
-            ))}
+          <div
+            className="admin-tabs"
+            role="tablist"
+            aria-label="Document status tabs"
+            aria-orientation="horizontal"
+          >
+            {ADMIN_TABS.map((tab, index) => {
+              const tabId = `admin-tab-${tab.key}`;
+              const panelId = `admin-panel-${tab.key}`;
+              const isActive = activeTab === tab.key;
+
+              return (
+                <button
+                  key={tab.key}
+                  id={tabId}
+                  ref={(node) => {
+                    tabRefs.current[tab.key] = node;
+                  }}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={panelId}
+                  tabIndex={isActive ? 0 : -1}
+                  className={`admin-tab-btn ${isActive ? 'admin-tab-btn--active' : ''}`}
+                  onClick={() => setActiveTab(tab.key)}
+                  onKeyDown={(event) => handleTabKeyDown(event, index)}
+                >
+                  {tab.getLabel(counts)}
+                </button>
+              );
+            })}
           </div>
 
           {activeTab === 'queued' && (
-            <QueuedTable docs={data.documents.filter((d) => d.status === 'queued')} />
+            <section
+              id="admin-panel-queued"
+              className="admin-tab-panel"
+              role="tabpanel"
+              aria-labelledby="admin-tab-queued"
+              tabIndex={0}
+            >
+              <QueuedTable docs={queuedDocs} />
+            </section>
           )}
 
           {activeTab === 'processed' && (
-            <ProcessedTable
-              docs={data.documents.filter((d) => d.status === 'processed')}
-              onClearAll={() => runAction(clearProcessed)}
-              busy={busy}
-            />
+            <section
+              id="admin-panel-processed"
+              className="admin-tab-panel"
+              role="tabpanel"
+              aria-labelledby="admin-tab-processed"
+              tabIndex={0}
+            >
+              <ProcessedTable
+                docs={processedDocs}
+                onClearAll={() => runAction(clearProcessed)}
+                busy={busy}
+              />
+            </section>
           )}
 
           {activeTab === 'failed' && (
-            <FailedTable
-              docs={data.documents.filter((d) => d.status === 'failed')}
-              onRequeue={(id) => runAction(() => requeueDocument(id))}
-              onRequeueAll={() => runAction(requeueAllFailed)}
-              busy={busy}
-            />
+            <section
+              id="admin-panel-failed"
+              className="admin-tab-panel"
+              role="tabpanel"
+              aria-labelledby="admin-tab-failed"
+              tabIndex={0}
+            >
+              <FailedTable
+                docs={failedDocs}
+                onRequeue={(id) => runAction(() => requeueDocument(id))}
+                onRequeueAll={() => runAction(requeueAllFailed)}
+                busy={busy}
+              />
+            </section>
           )}
         </>
       )}
