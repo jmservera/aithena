@@ -36,9 +36,10 @@ from . import (
 )
 from .chunker import chunk_text_with_pages
 from .embeddings import get_embeddings
+from .logging_config import setup_logging
 from .metadata import extract_metadata
 
-logging.basicConfig(level=logging.INFO)
+setup_logging(service_name="document-indexer")
 logger = logging.getLogger(__name__)
 
 SOLR_TIMEOUT = 300
@@ -100,7 +101,11 @@ def wait_for_solr_collection(
             if '"/update/extract"' not in config_response.text:
                 raise RuntimeError(f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler.")
 
-            logger.info("Solr collection %s is ready.", SOLR_COLLECTION)
+            logger.info(
+                "Solr collection %s is ready.",
+                SOLR_COLLECTION,
+                extra={"solr_collection": SOLR_COLLECTION},
+            )
             return
         except (requests.RequestException, RuntimeError, ValueError) as exc:
             last_error = exc
@@ -365,7 +370,12 @@ def callback(
     """Process a single queued document path."""
     file_path = body.decode("utf-8")
     remaining = get_queue(channel).method.message_count
-    logger.info("Received %s. Remaining messages: %s", file_path, remaining)
+    logger.info(
+        "Received %s. Remaining messages: %s",
+        file_path,
+        remaining,
+        extra={"file_path": file_path, "remaining_messages": remaining},
+    )
 
     try:
         metadata = index_document(Path(file_path))
@@ -374,9 +384,20 @@ def callback(
             metadata["title"],
             metadata["author"],
             SOLR_COLLECTION,
+            extra={
+                "title": metadata["title"],
+                "author": metadata["author"],
+                "solr_collection": SOLR_COLLECTION,
+                "file_path": file_path,
+            },
         )
     except Exception as exc:  # pragma: no cover - runtime integration path
-        logger.error("Failed to process %s: %s", file_path, exc)
+        logger.error(
+            "Failed to process %s: %s",
+            file_path,
+            exc,
+            extra={"file_path": file_path, "error": str(exc)},
+        )
         logger.debug("Failed to process %s", file_path, exc_info=True)
         try:
             mark_failure(Path(file_path), str(exc), stage="unknown")
@@ -401,12 +422,18 @@ def consume() -> None:
 
 
 if __name__ == "__main__":
-    logger.info("Starting document-indexer v%s (commit: %s)", VERSION, GIT_COMMIT)
+    logger.info(
+        "Starting document-indexer v%s (commit: %s)",
+        VERSION,
+        GIT_COMMIT,
+        extra={"version": VERSION, "commit": GIT_COMMIT},
+    )
     logger.info(
         "Starting document-indexer against Solr %s:%s/%s",
         SOLR_HOST,
         SOLR_PORT,
         SOLR_COLLECTION,
+        extra={"solr_host": SOLR_HOST, "solr_port": SOLR_PORT, "solr_collection": SOLR_COLLECTION},
     )
     wait_for_solr_collection()
     consume()
