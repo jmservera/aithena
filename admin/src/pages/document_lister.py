@@ -3,12 +3,12 @@ import json
 import pandas as pd
 import redis
 import streamlit as st
-from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PORT
+from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
 
 st.set_page_config(page_title="Document Manager", page_icon="📄", layout="wide")
 st.title("📄 Document Manager")
 
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
 
 
 def load_documents() -> tuple[list[dict], list[dict], list[dict]]:
