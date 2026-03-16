@@ -453,6 +453,36 @@ def test_search_semantic_empty_query_returns_400(mock_solr_get: MagicMock, mock_
 
 @patch("main.requests.post")
 @patch("main.requests.get")
+def test_search_semantic_falls_back_to_keyword_when_embeddings_fail(
+    mock_solr_get: MagicMock,
+    mock_emb_post: MagicMock,
+) -> None:
+    import requests
+
+    mock_emb_post.side_effect = requests.ConnectionError("embeddings unavailable")
+
+    mock_solr_resp = MagicMock()
+    mock_solr_resp.status_code = 200
+    mock_solr_resp.json.return_value = _solr_payload(_make_solr_docs(2))
+    mock_solr_get.return_value = mock_solr_resp
+
+    client = get_client()
+    response = client.get("/search", params={"q": "catalan history", "mode": "semantic"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "keyword"
+    assert data["requested_mode"] == "semantic"
+    assert data["degraded"] is True
+    assert data["message"] == "Embeddings unavailable — showing keyword results"
+    assert len(data["results"]) == 2
+
+    mock_solr_get.assert_called_once()
+    assert mock_solr_get.call_args[1]["params"]["q"] == "catalan history"
+
+
+@patch("main.requests.post")
+@patch("main.requests.get")
 def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
     """Hybrid mode must combine keyword + kNN results using RRF."""
     mock_emb_resp = MagicMock()
@@ -516,6 +546,35 @@ def test_search_hybrid_empty_query_returns_400(mock_solr_get: MagicMock, mock_em
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "hybrid"})
     assert response.status_code == 400
+
+
+@patch("main.requests.post")
+@patch("main.requests.get")
+def test_search_hybrid_falls_back_to_keyword_when_embeddings_fail(
+    mock_solr_get: MagicMock,
+    mock_emb_post: MagicMock,
+) -> None:
+    import requests
+
+    mock_emb_post.side_effect = requests.Timeout("embeddings timeout")
+
+    mock_solr_resp = MagicMock()
+    mock_solr_resp.status_code = 200
+    mock_solr_resp.json.return_value = _solr_payload(_make_solr_docs(3))
+    mock_solr_get.return_value = mock_solr_resp
+
+    client = get_client()
+    response = client.get("/search", params={"q": "folklore", "mode": "hybrid", "page_size": 2})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "keyword"
+    assert data["requested_mode"] == "hybrid"
+    assert data["degraded"] is True
+    assert data["message"] == "Embeddings unavailable — showing keyword results"
+    assert len(data["results"]) == 3
+    assert mock_solr_get.call_count == 2
+    assert all("{!knn" not in call[1]["params"]["q"] for call in mock_solr_get.call_args_list)
 
 
 # ---------------------------------------------------------------------------
@@ -998,6 +1057,7 @@ def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -
 # ---------------------------------------------------------------------------
 
 
+@patch("main._embeddings_available")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1005,6 +1065,7 @@ def test_status_endpoint_returns_expected_shape(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_embeddings_available: MagicMock,
 ) -> None:
     """GET /v1/status/ must return solr, indexing, and services keys."""
     mock_solr_status.return_value = {"status": "ok", "nodes": 3, "docs_indexed": 76}
@@ -1015,6 +1076,7 @@ def test_status_endpoint_returns_expected_shape(
         "pending": 91,
     }
     mock_tcp.return_value = True
+    mock_embeddings_available.return_value = True
 
     client = get_client()
     response = client.get("/v1/status")
@@ -1029,9 +1091,11 @@ def test_status_endpoint_returns_expected_shape(
         "failed": 2,
         "pending": 91,
     }
-    assert data["services"] == {"solr": "up", "redis": "up", "rabbitmq": "up"}
+    assert data["embeddings_available"] is True
+    assert data["services"] == {"solr": "up", "redis": "up", "rabbitmq": "up", "embeddings": "up"}
 
 
+@patch("main._embeddings_available")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1039,6 +1103,7 @@ def test_status_endpoint_slash_alias(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_embeddings_available: MagicMock,
 ) -> None:
     """/v1/status/ (with trailing slash) must also return 200."""
     mock_solr_status.return_value = {"status": "ok", "nodes": 3, "docs_indexed": 0}
@@ -1049,6 +1114,7 @@ def test_status_endpoint_slash_alias(
         "pending": 0,
     }
     mock_tcp.return_value = True
+    mock_embeddings_available.return_value = True
 
     client = get_client()
     response = client.get("/v1/status/")
@@ -1056,6 +1122,7 @@ def test_status_endpoint_slash_alias(
     assert response.status_code == 200
 
 
+@patch("main._embeddings_available")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1063,6 +1130,7 @@ def test_status_services_down_when_tcp_fails(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_embeddings_available: MagicMock,
 ) -> None:
     """Services must report 'down' when TCP check fails."""
     mock_solr_status.return_value = {"status": "error", "nodes": 0, "docs_indexed": 0}
@@ -1073,15 +1141,18 @@ def test_status_services_down_when_tcp_fails(
         "pending": 0,
     }
     mock_tcp.return_value = False
+    mock_embeddings_available.return_value = False
 
     client = get_client()
     response = client.get("/v1/status")
 
     assert response.status_code == 200
     data = response.json()
+    assert data["embeddings_available"] is False
     assert data["services"]["solr"] == "down"
     assert data["services"]["redis"] == "down"
     assert data["services"]["rabbitmq"] == "down"
+    assert data["services"]["embeddings"] == "down"
 
 
 def _container_by_name(containers: list[dict[str, str]], name: str) -> dict[str, str]:
