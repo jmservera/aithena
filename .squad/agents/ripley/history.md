@@ -288,3 +288,27 @@
 1. **Token transport matters as much as token format** — once nginx-gated browser tools enter scope, a pure localStorage + header plan is incomplete.
 2. **Installer and auth must be designed together** — the bootstrap path for the first user affects storage model, compose wiring, and operational docs immediately.
 3. **Security-sensitive milestone work should stay human-owned even when well specified** — only the compose/docs follow-through and the final test matrix looked suitable for explicit `@copilot` collaboration.
+
+### 2026-03-16 — Ralph backlog diagnostic
+
+- Ralph’s current repo-side scan only looks at 20 open issues/PRs, so the six oldest v0.9.0 issues (#216-#221) are invisible to the default board check even though five of them are actionable squad work.
+- Repo automation does not match the promise in the docs: the heartbeat cron is disabled, the workflow only auto-triages untriaged issues plus `squad:copilot` assignment, and it does not advance already-labeled human-owned work.
+- Current issue hygiene is confusing the monitor: 9 open issues are assigned to Copilot without the `squad:copilot` label, 6 issues have multiple `squad:*` owners, and 6 issues carry contradictory `go:*` labels.
+- The v0.10.0 sub-issues (#244/#246/#248) are no longer truly “waiting on @copilot”: each has an updated draft PR with follow-up commits pushed after review comments, so the next action is squad re-review, not another blind retry loop.
+- The v0.11.0 design gate (#250) is effectively already written in `.squad/decisions/inbox/ripley-v0.11-auth-installer.md`; until GitHub issue state catches up, downstream work like #251 and #255 looks more blocked than it really is.
+
+### 2026-03-16 — Ralph diagnostic remediation and board cleanup session
+
+**Session summary:** Ralph's stalling was root-caused to Coordinator routing inconsistencies. Diagnostic published to decisions.md. User directive on Ralph hygiene approved.
+
+**Issues resolved:**
+- Coordinator removed incorrect Copilot assignee from 9 issues (#216-#223, #225) — these are squad human-owned work without `squad:copilot` labels
+- Closed #250 (v0.11.0 design gate now complete)
+- Merged PR #245 (security Bandit fix)
+- v0.11.0 auth + installer architecture moved from inbox to decisions.md
+
+**Approved automation improvements:**
+- Ralph loop MUST verify board hygiene: owner label ↔ assignee match, stale CHANGES_REQUESTED PRs with new commits, mismatched Copilot assignees, @copilot mentions in review comments
+- Coordinator enforces hygiene to prevent recurrence
+
+**Orchestration:** Session documented in `.squad/orchestration-log/2026-03-16T07-36-36Z-ripley.md`

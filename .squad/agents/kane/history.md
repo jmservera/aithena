@@ -188,3 +188,19 @@
 - Ready for review and merge
 
 **Next:** SEC-3 complete → Awaiting SEC-1/SEC-2 completion → Kane review SEC-4/SEC-5
+
+### 2026-03-16 — Follow-up review approvals for PRs #245, #247, #249
+
+**Summary:** Reviewed the post-feedback commits on three security PRs and approved all three after the follow-ups addressed the previously requested corrections.
+
+- **PR #245** — Approved after commit `3991f68` corrected the Bandit skip list from invalid `S*` IDs to valid `B*` IDs, which resolves the misconfigured baseline-exception issue raised in review.
+- **PR #247** — Approved after commit `33d664b` moved secret references into named `env:` entries and continued passing them explicitly through `with: github-token`, preserving the PAT override without reintroducing the zizmor complaint.
+- **PR #249** — Approved after commit `467fcda` fixed the actual `zizmor/artipacked` root cause by adding `persist-credentials: false` to the affected `actions/checkout@v4` steps across the impacted workflows.
+
+**Outcome:** 
+- Follow-up reviews submitted on all three PRs with approval from Kane (Security)
+- #245 merged by Coordinator
+- #247 has merge conflicts pending Copilot rebase
+- #249 ready for merge approval
+
+**Orchestration:** Session documented in `.squad/orchestration-log/2026-03-16T07-36-36Z-kane.md`

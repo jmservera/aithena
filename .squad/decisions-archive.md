@@ -1,9 +1,9 @@
 # Squad Decisions Archive
 
-**Last updated:** 2026-03-15  
+**Last updated:** 2026-03-16  
 **Archived:** Decisions older than 30 days, moved from decisions.md to reduce file size.
 
----
+------
 
 # Decision: Container Version Metadata Baseline
 

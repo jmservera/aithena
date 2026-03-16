@@ -3687,3 +3687,469 @@ Do not mark v1.0.0 ready until all of the following are true:
 - moved **#169** into v0.8.0 and marked it as an epic
 - created issues **#212–#221** for the roadmap work
 - closed stale Mend issues **#5, #6, #7, #17, #18, #20, #29, #30, #31, #32, #33, #34, #35**
+
+
+# Brett — CI/CD release automation decision
+
+## Context
+Issue #204 adds the first container release automation for the six source-built services after issue #199 standardized `VERSION`, `GIT_COMMIT`, and `BUILD_DATE` Docker build args.
+
+## Decision
+- Release publication is now driven by stable semver tags only (`vX.Y.Z`).
+- `.github/workflows/release.yml` publishes six GHCR images (`ghcr.io/jmservera/aithena-{service}`) using a matrix build and `docker/build-push-action`.
+- Every release tag produces four image tags per service: `X.Y.Z`, `X.Y`, `X`, and `latest`.
+- The release workflow preserves GitHub Releases by creating a GitHub release with generated notes after all image pushes succeed.
+- `.github/workflows/version-check.yml` now validates the root `VERSION` file and verifies that all release Dockerfiles declare `ARG VERSION` on PRs to `dev` and `main`.
+
+## Why
+This keeps the squad's semver release flow from DEC-070 aligned across git tags, container image tags, and the repo `VERSION` file. It also keeps the existing GitHub release notes ceremony intact while making container publication repeatable and auditable.
+
+
+### 2026-03-15: Auto-approve workflow runs on @copilot PRs
+**By:** Brett (Infrastructure Architect)
+**What:** Created copilot-approve-runs.yml using pull_request_target trigger
+**Why:** Manual approval of bot workflow runs blocks the review cycle. Instructions don't work — automation is needed.
+**Security:** pull_request_target runs trusted base-branch code. No PR checkout — API-only. Only approves runs from verified @copilot PRs.
+**Alternative rejected:** Adding to copilot-pr-ready.yml — wrong timing (triggers on review_requested, not on push).
+**Alternative rejected:** Instructions in charter/AGENTS.md — team forgets.
+
+
+# Brett — Copilot PR auto-ready decision
+
+## Context
+
+`@copilot` opens draft PRs, finishes work, requests review, and sometimes leaves the PR in draft state. That blocks the squad because reviewable work is hidden until someone manually inspects PR status.
+
+## Workflow review
+
+- `squad-heartbeat.yml` does **not** listen for `pull_request` `review_requested`; it only listens for `pull_request: [closed]`, issue events, and manual dispatch.
+- `squad-heartbeat.yml` currently has `pull-requests: read`, so it cannot mark PRs ready without a permission increase.
+- There was no existing workflow that marks draft Copilot PRs ready when review is requested.
+
+## Options evaluated
+
+### Option A — Dedicated workflow on `pull_request.review_requested`
+**Pros**
+- Best event fidelity: reacts exactly when Copilot requests review.
+- Least privilege: only needs `pull-requests: write`.
+- Small and easy to audit.
+- No checkout required, so it avoids running PR code.
+
+**Cons**
+- One additional workflow file.
+
+### Option B — Extend `squad-heartbeat.yml`
+**Pros**
+- Reuses existing workflow.
+- Fewer workflow files.
+
+**Cons**
+- Broadens Ralph's monitoring workflow with write access to pull requests.
+- Mixes unrelated responsibilities (board monitoring + PR state mutation).
+- Current heartbeat cadence is not a strong fallback because the schedule is disabled.
+
+### Option C — Dedicated workflow + heartbeat fallback
+**Pros**
+- Highest theoretical resilience.
+
+**Cons**
+- More moving parts for a small automation.
+- Heartbeat fallback is weak until the schedule is re-enabled.
+- Extra maintenance for limited practical gain.
+
+## Decision
+
+Chosen: **Option A**.
+
+Add a dedicated workflow, `.github/workflows/copilot-pr-ready.yml`, triggered by `pull_request` `review_requested`. When the PR author is `copilot-swe-agent[bot]`, `app/copilot-swe-agent`, or `copilot-swe-agent` and the PR is still draft, the workflow marks it ready for review using `github.rest.pulls.readyForReview()`.
+
+## Notes
+
+- Yes, we **could** add `review_requested` to `squad-heartbeat.yml`, but the dedicated workflow is cleaner and more secure.
+- I did **not** remove `[WIP]` from PR titles. Draft state is the real workflow gate, while title rewriting is more opinionated and can surprise humans.
+- If Ralph's scheduled heartbeat is re-enabled later, a lightweight fallback scan can be added then if we observe missed events in practice.
+
+
+### 2026-03-16T07:28Z: User directive — Ralph loop hygiene checks
+**By:** Juanma (Product Owner)
+**What:** Ralph's continuous loop MUST include board hygiene tasks on every cycle: (1) verify every issue has exactly one owner label matching its assignee, (2) verify any PR review comment with instructions for @copilot includes the @copilot mention, (3) remove Copilot assignee from issues that don't carry `squad:copilot`, (4) detect stale draft PRs with CHANGES_REQUESTED where copilot already pushed follow-up commits (these need re-review, not more waiting). The coordinator created these inconsistencies — the coordinator must fix and prevent them.
+**Why:** User correction — the coordinator was the source of routing confusion that caused Ralph to stall. These checks must be automated in the loop to prevent recurrence.
+
+
+### 2026-03-15T21:46: User directive
+**By:** Juanma (via Copilot)
+**What:** Every milestone MUST have a documentation issue assigned to Newt as the LAST item before release. Newt has release gate authority — can pause or approve the release based on integration test results and documentation completeness. This is a process rule, not optional.
+**Why:** Newt keeps forgetting docs. Making it a required issue per milestone ensures it's tracked and can't be skipped. Newt's release gate role is reaffirmed.
+
+
+### 2026-03-15T21:44: User directive
+**By:** Juanma (via Copilot)
+**What:** (1) Always include the version number in release documentation. (2) Documentation MUST be completed before any release is cut — this is a hard gate. Newt forgot docs for v0.6.0 and v0.7.0.
+**Why:** User request — release quality gate. No release without docs.
+
+
+# Decision: Documentation as Hard Release Gate
+
+**Date:** 2026-03-15  
+**Author:** Newt (Product Manager)  
+**Status:** PROPOSED — awaiting team approval
+
+## The Problem
+
+v0.6.0 and v0.7.0 GitHub releases were cut without finalizing documentation. This left users and operators without:
+
+- Feature guides explaining what shipped
+- User manual updates for new functionality
+- Admin manual updates for deployment changes
+- Test reports validating the release
+
+Discovery happened after the releases were already published, requiring retroactive documentation work.
+
+## The Decision
+
+**Effective immediately, documentation is a hard gate before any release can be cut.**
+
+The release checklist now requires:
+
+1. ✅ Milestone clear (0 open issues)
+2. ✅ All tests pass (frontend + backend)
+3. ✅ Frontend builds clean
+4. ✅ **Feature documentation created** (`docs/features/vX.Y.Z.md`) — **NOW REQUIRED BEFORE RELEASE**
+5. ✅ **User manual updated** with new features — **NOW REQUIRED BEFORE RELEASE**
+6. ✅ **Admin manual updated** if infra changed — **NOW REQUIRED BEFORE RELEASE**
+7. ✅ **Test report created** (`docs/test-report-vX.Y.Z.md`) — **NOW REQUIRED BEFORE RELEASE**
+8. ✅ **README feature list current** — **NOW REQUIRED BEFORE RELEASE**
+
+## Requirements for Release Documentation
+
+### Version Numbers (mandatory)
+
+- **Every release doc must have the version number prominently in the title**
+  - ✅ `# v0.6.0 — PDF Upload, Security Scanning, Docker Hardening`
+  - ❌ `# Feature Guide` (unclear which version)
+
+- **Feature guides should include the version in section headers where relevant**
+  - ✅ `## Docker Hardening (v0.6.0)`
+  - ✅ `## Versioning Infrastructure (v0.7.0)`
+
+### Feature Documentation (`docs/features/vX.Y.Z.md`)
+
+- Describe all major features shipped in this release
+- Include implementation details, API contracts, configuration options
+- Cover user-facing features and operational changes
+- Validate against GitHub release notes
+
+### Test Reports (`docs/test-report-vX.Y.Z.md`)
+
+- Document which tests exist and their pass/fail status
+- Link to CI/CD workflows or provide test execution commands
+- Report coverage by area (backend, frontend, security scanning)
+- Verify no regressions from previous release
+
+### Manual Updates
+
+- **User Manual**: Add new user-facing capabilities
+- **Admin Manual**: Add deployment changes, new environment variables, configuration updates
+- Both should reference the new feature guide and version numbers
+
+### README.md
+
+- Update the "What It Does" section with new capabilities
+- Update the "Features" list
+- Update the "Documentation" section to reference the latest feature guide and test report
+
+## Implementation
+
+All release documentation must be:
+
+1. **Committed and merged to `dev` before the release tag is cut**
+2. **Reviewed as part of the PR review process** (not backfilled after tagging)
+3. **Linked in the GitHub Release** notes for discoverability
+
+## Rollout
+
+- **v0.6.0 and v0.7.0**: Documentation being backfilled (this is the corrective action)
+- **v0.8.0 and later**: Documentation-first gate will be enforced
+
+For v0.8.0: Ripley (Lead) will not approve the release until all documentation is committed and reviewed.
+
+## Approval Chain
+
+- [ ] Ripley (Lead) — approve enforcement for v0.8.0 forward
+- [ ] Juanma (Product Owner) — approve as policy
+
+## Related Documents
+
+- `.squad/agents/newt/charter.md` — Newt's responsibility for documentation
+- `docs/features/v0.6.0.md` — v0.6.0 documentation (backfilled)
+- `docs/features/v0.7.0.md` — v0.7.0 documentation (backfilled)
+- `docs/test-report-v0.6.0.md` — v0.6.0 test report (backfilled)
+- `docs/test-report-v0.7.0.md` — v0.7.0 test report (backfilled)
+
+
+# Ripley — Ralph backlog diagnostic
+
+**Date:** 2026-03-16  
+**Requested by:** Juanma (Product Owner)  
+**Scope:** Why Ralph stops after 1-2 rounds even though 26 issues are still open
+
+## 1. Issue inventory
+
+**Board totals:** 26 open issues = **11 actionable by squad agents**, **14 blocked**, **1 needs triage**, **0 genuinely waiting on @copilot right now**.
+
+> Key nuance: the three `squad:copilot` issues (#244/#246/#248) already have follow-up commits pushed on PRs #245/#247/#249 after Juanma’s review comments. They are now waiting for human re-review, not a fresh Copilot pass.
+
+| Issue | Title | Milestone | Assigned-to | Status | Actionable-by |
+|---|---|---|---|---|---|
+| #216 | Protect production admin surfaces and rotate default service credentials | v0.9.0 | Kane label; assignees `jmservera`,`Copilot` | needs triage | Kane/Brett after splitting overlap with v0.11 auth work |
+| #217 | Add scrapeable metrics and alert thresholds for search and indexing | v0.9.0 | Brett label; assignees `jmservera`,`Copilot` | actionable by squad agents | Brett |
+| #218 | Run failover and recovery drills and publish operator runbooks | v0.9.0 | Brett label; assignees `jmservera`,`Copilot` | actionable by squad agents | Brett |
+| #219 | Benchmark search/indexing capacity and publish a sizing guide | v0.9.0 | Ash label; assignees `jmservera`,`Copilot` | actionable by squad agents | Ash |
+| #220 | Harden semantic search degraded-mode behavior and tuning guidance | v0.9.0 | Ash label; assignees `jmservera`,`Copilot` | actionable by squad agents | Ash |
+| #221 | Publish the v1.0 release documentation pack and readiness checklist | v0.9.0 | Newt label; assignees `jmservera`,`Copilot` | actionable by squad agents | Newt |
+| #222 | Move all microservices into `src/` directory | v1.0.0 | Parker + Dallas labels; assignees `jmservera`,`Copilot` | blocked | Deferred/postponed v1.0 work; not blocking current milestones |
+| #223 | Validate all local builds after `src/` restructure | v1.0.0 | Dallas label; assignees `jmservera`,`Copilot` | blocked | Depends on #222 |
+| #224 | Validate CI/CD pipelines after `src/` restructure | v1.0.0 | Dallas + Brett labels | blocked | Depends on #222 |
+| #225 | Update documentation for new `src/` layout | v1.0.0 | Dallas label; assignees `jmservera`,`Copilot` | blocked | Depends on #222 |
+| #241 | Security: Triage and remediate code scanning alerts | v0.10.0 | Parker label | blocked | Parker/Kane once sub-issues are reviewed/merged |
+| #244 | Fix bandit configuration and resolve Python security findings | v0.10.0 | `squad:copilot` + Dallas review label; draft PR #245 | actionable by squad agents | Re-review PR #245; Copilot already pushed follow-up fix |
+| #246 | Fix GitHub Actions permissions and secrets handling | v0.10.0 | `squad:copilot` + Parker review label; draft PR #247 | actionable by squad agents | Re-review PR #247; Copilot already pushed follow-up fix |
+| #248 | Upgrade upload-artifact to v4 and enable secret scanning | v0.10.0 | `squad:copilot` + Parker review label; draft PR #249 | actionable by squad agents | Re-review PR #249; Copilot already pushed follow-up fix |
+| #250 | Design local authentication and setup installer architecture | v0.11.0 | Ripley label | actionable by squad agents | Ripley; design is already written in decisions inbox and should be ratified/closed |
+| #251 | Build FastAPI auth module with JWT validation and local user store | v0.11.0 | Parker label | actionable by squad agents | Parker; implementation contract already exists from #250 plan |
+| #252 | Add login UX and protected routes to the React frontend | v0.11.0 | Dallas label | blocked | Wait for #251 backend contract to land |
+| #253 | Gate API and document routes in nginx with `auth_request` | v0.11.0 | Brett label | blocked | Wait for #251 |
+| #254 | Protect browser-facing admin tools behind the new auth flow | v0.11.0 | Brett label | blocked | Wait for #251-#253 |
+| #255 | Create idempotent setup installer CLI for first-run configuration | v0.11.0 | Parker label | actionable by squad agents | Parker; can start from the #250 contract |
+| #256 | Wire installer-generated environment into docker compose and docs | v0.11.0 | Brett label | blocked | Wait for #255 and settled auth wiring |
+| #257 | Add auth and installer end-to-end coverage | v0.11.0 | Lambert label | blocked | Wait for #251-#256 |
+| #259 | Release documentation and validation gate — v0.10.0 | v0.10.0 | Parker + Newt labels; assignee `jmservera` | blocked | Release gate; last issue in milestone |
+| #260 | Release documentation and validation gate — v1.0.0 | v1.0.0 | Parker + Newt labels; assignee `jmservera` | blocked | Release gate for postponed v1.0 work |
+| #261 | Release documentation and validation gate — v0.9.0 | v0.9.0 | Parker + Newt labels; assignee `jmservera` | blocked | Release gate; last issue in milestone |
+| #262 | Release documentation and validation gate — v0.11.0 | v0.11.0 | Parker + Newt labels; assignee `jmservera` | blocked | Release gate; last issue in milestone |
+
+## 2. Root cause analysis
+
+1. **Ralph’s default scan window is too small.**  
+   The documented work-check loop and the repo heartbeat both use `--limit 20` / `per_page: 20`. With 26 open issues, Ralph’s default view misses **#216-#221 entirely**. Those six hidden issues include **five immediately actionable v0.9.0 items** (#217-#221).
+
+2. **The repo implementation is weaker than the Ralph docs/tips promise.**  
+   The docs say Ralph “triages issues, assigns them, spawns agents, and reports every 3-5 rounds.” In this repo, `.github/workflows/squad-heartbeat.yml` has the **cron disabled** and only does two real things: auto-triage untriaged issues and auto-assign `squad:copilot` issues. It does **not** launch Parker/Brett/Ash/Dallas/Lambert work or move already-labeled human-owned issues forward.
+
+3. **The heartbeat’s definition of “unstarted” is narrower than the written Ralph spec.**  
+   The Ralph instructions say “assigned but unstarted” means `squad:{member}` + **no assignee or no PR**. The workflow implementation only counts **no assignee**. That means an issue can have an assignee but still have no PR and no actual progress, and the heartbeat won’t surface it as pending work.
+
+4. **Issue routing data is inconsistent enough to confuse automation.**  
+   Current board hygiene does not match Ralph’s mental model:
+   - only **3** open issues have `squad:copilot`
+   - **12** open issues are assigned to Copilot
+   - **9** of those 12 are assigned to Copilot **without** `squad:copilot`
+   - **6** issues have multiple `squad:*` owner labels (#222, #224, #259-#262)
+   - **6** issues carry contradictory `go:*` labels (`go:yes` and `go:needs-research` together)
+
+   Ralph expects one owner and one clear state. The board currently violates both assumptions.
+
+5. **The board mixes active work, blocked dependency work, release gates, and postponed epics without explicit state labels.**  
+   Four release-gate issues (#259-#262) are intentionally last-in-milestone. Four v1.0 issues (#222-#225) are postponed and not blocking current work. Parent issue #241 is a tracker, not a direct coding task. Ralph has no explicit category for “release gate,” “postponed,” or “parent tracker,” so “nothing actionable in my narrow categories” can collapse into “board clear.”
+
+6. **The three open Copilot PRs are not actually waiting on Copilot anymore.**  
+   Juanma left review comments on PRs #245/#247/#249, and `copilot-swe-agent` replied with follow-up commits on all three. CI is green. The next move is **human re-review**, but the PRs are still draft and the board still reads like they are “in progress.” That creates a false sense that Ralph should wait, when the actual unblocker is reviewer attention.
+
+7. **v0.11.0 has actionable work that GitHub state makes look blocked.**  
+   The architecture for #250 already exists in `.squad/decisions/inbox/ripley-v0.11-auth-installer.md`. That means #250 is effectively ready to ratify/close, and #251 + #255 can start. Because the issue remains open and there is no explicit dependency metadata on GitHub, Ralph cannot infer that those downstream items are now fair game.
+
+8. **I do not need a “context window exhaustion” theory to explain the stall.**  
+   It may happen occasionally after heavy fan-out, but the current repo state already provides enough concrete reasons for premature idling: the 20-item cap, disabled heartbeat, triage-only automation, ambiguous labels, draft PRs needing manual re-review, and open-but-non-actionable gate issues.
+
+## 3. What Juanma is doing wrong
+
+1. **Using `squad triage` as if it were “Ralph, go.”**  
+   Triage is not the same as continuous execution. The tips doc points at “Ralph, start monitoring” / watch mode for backlog grinding. In this repo, the workflow-backed automation only triages/assigns; it does not continuously execute already-routed human-owned issues.
+
+2. **Mixing routing signals.**  
+   Assigning Copilot on issues that do not carry `squad:copilot` makes the board lie. Ralph sees “Copilot is on it” while the label says “human-owned milestone work.” Pick one routing source of truth.
+
+3. **Keeping too many non-active issues in the same open pool.**  
+   Postponed v1.0 restructure work and milestone release gates are open beside active implementation work. That inflates the raw count to 26, but many of those are intentionally not “do this now” items.
+
+4. **Leaving issue #250 open even though the design doc already exists.**  
+   That makes #251/#255 look blocked longer than necessary. GitHub issue state is now lagging behind the actual architecture work.
+
+5. **Allowing multi-owner and contradictory labels.**  
+   Issues like #222, #224, and #259-#262 have more than one `squad:*` owner. Several issues also have both `go:yes` and `go:needs-research`. Humans can mentally resolve that. Automation cannot do it reliably.
+
+6. **Expecting Copilot to own work that the charter says should stay human-owned.**  
+   Security/auth/performance/design work is explicitly weak-fit or red-fit for Copilot. Several of the open issues touching those domains still have Copilot assignee noise attached to them.
+
+## 4. Recommended fixes (ordered by impact)
+
+1. **Clean the routing model first.**  
+   Make every open issue have exactly one real owner label. Use `squad:copilot` only when the issue is truly meant for Copilot. Remove Copilot assignee noise from the 9 mismatched issues (#216-#221, #222, #223, #225).
+
+2. **Split “active backlog” from “not now.”**  
+   Mark release gates as blocked/last, and move postponed v1.0 work out of the active queue (close, defer, or add an explicit postponed label/milestone policy). Ralph should not treat #222-#225 and #260 as current throughput work.
+
+3. **Close the loop on v0.11 architecture immediately.**  
+   Ratify/close #250 using the existing inbox plan, then let Parker start #251 and #255. That alone gives Ralph a clean, current lane of human-owned work.
+
+4. **Review the three Copilot PRs instead of waiting for more magic.**  
+   Re-review PRs #245/#247/#249 now. If they are good, approve/merge them and close the sub-issues; if not, leave one precise follow-up comment each. Treat them as review work, not as “still waiting on Copilot.”
+
+5. **Tighten Ralph’s implementation, not just the prose.**  
+   Update the monitor logic so it:
+   - paginates past 20 issues/PRs
+   - treats “no PR” as unstarted even when assignees exist
+   - detects Copilot-assignee-without-`squad:copilot` mismatch
+   - distinguishes release gates, postponed work, parent trackers, and multi-owner issues
+   - treats updated draft PRs with stale `CHANGES_REQUESTED` as “needs re-review” instead of “still waiting”
+
+6. **Use the right mode for continuous backlog handling.**  
+   For active sessions, use “Ralph, go.” For unattended monitoring, re-enable the heartbeat cron or run `squad watch`. Do not expect `squad triage` alone to behave like a full execution loop.
+
+7. **Re-scope #216 before anyone picks it up.**  
+   Split the “credential rotation / docs hardening” portion from the new v0.11 auth-protection work, or explicitly tie it to #254 so Kane/Brett are not solving the same admin-surface problem twice.
+
+## Bottom line
+
+Ralph is not stalling because the board is truly empty. Ralph is stalling because the repo’s current automation only understands a narrow subset of board states, the default scan literally misses 6 issues, and the issue hygiene makes several human-owned tasks look like Copilot-owned or blocked work. Clean the routing signals, close #250, review the three open PRs, and Ralph will suddenly have a much more truthful board to work from.
+
+
+# Ripley — v0.11.0 Auth + Installer Plan
+
+**Date:** 2026-03-15  
+**Requested by:** Juanma (Product Owner)  
+**Scope:** Local authentication and first-run setup installer for milestone `v0.11.0 — New Features`
+
+## Context
+
+Aithena currently exposes the React UI, FastAPI API, Streamlit admin dashboard, Solr admin, RabbitMQ admin, and Redis Commander without authentication. The product owner requested a simple username/password login flow with browser-cached JWTs and a setup installer that removes the need to hand-edit configuration before first run.
+
+## Architecture Decisions
+
+### 1. Authentication lives inside `solr-search`; do not add a new auth microservice
+
+**Decision:** Implement the login, token issuance, and token validation endpoints in `solr-search`.
+
+**Why:**
+- `solr-search` is already the public application API behind nginx.
+- It already follows environment-driven configuration and is the natural place to centralize auth contracts.
+- Adding a separate auth service would increase service count, compose complexity, and operational burden for a v0.11.0 feature that is intentionally simple.
+
+**Resulting endpoints:**
+- `POST /v1/auth/login` — validate credentials and mint JWT
+- `GET /v1/auth/validate` — lightweight token validation endpoint for nginx `auth_request`
+- `GET /v1/auth/me` — optional caller identity endpoint for the UI/admin
+
+### 2. Store users in a local SQLite database with Argon2id password hashes
+
+**Decision:** Use a small SQLite database file for local users; store password hashes with Argon2id.
+
+**Why:**
+- SQLite is simple, portable, and persistent without adding a database service.
+- It supports more than one user later without redesigning the storage model.
+- Argon2id is stronger than bcrypt for a new security feature and is well supported from Python.
+
+**Storage contract:**
+- Database path comes from installer-generated configuration.
+- Database file lives in a persistent mounted volume, separate from source code.
+- Installer seeds the first admin user; password is never stored in plaintext.
+
+### 3. Use signed JWT access tokens only for v0.11.0, transported by both header and secure cookie
+
+**Decision:** Issue signed JWT access tokens with an expiration; do not add refresh tokens in this milestone. After login, cache the token in browser storage for the React app and also set a secure same-site cookie so browser navigations and embedded admin tools can be gated by nginx.
+
+**Why:**
+- The requirement is simple username/password login with a browser-cached token.
+- Access-token-only keeps the first implementation small and reviewable.
+- Browser-only surfaces such as Streamlit, Solr admin, RabbitMQ admin, and Redis Commander cannot rely on local-storage headers alone.
+- A hybrid header + cookie transport keeps the React experience simple while making central nginx gating feasible.
+
+**Token contract:**
+- Login returns a JWT payload for the React app and sets a secure cookie for same-origin browser requests.
+- React stores the token locally and sends `Authorization: Bearer <token>` on API requests.
+- nginx validation accepts either the bearer token or the auth cookie.
+- JWT signing secret and TTL come from installer-generated configuration.
+
+### 4. Enforcement uses both frontend route guards and nginx `auth_request`
+
+**Decision:**
+- Protect React application routes with a login page and client-side route guard.
+- Protect `/v1/*`, `/documents/*`, and `/admin/*` at nginx with `auth_request` backed by `solr-search` token validation.
+- Keep `/login`, health checks, and ACME challenge paths public.
+
+**Why:**
+- nginx can centrally gate API and browser-facing admin surfaces with standard `auth_request` support.
+- React route guards still provide the correct UX for SPA navigation and token-expiry handling.
+- The combined model closes the current open deployment without introducing a new identity service.
+
+**Protected surfaces for v0.11.0:**
+- React UI application routes (via login + protected routes)
+- FastAPI endpoints under `/v1/` except auth/login and health/info endpoints explicitly left public
+- Document fetches under `/documents/`
+- Streamlit admin and admin tool prefixes under `/admin/streamlit/`, `/admin/solr/`, `/admin/rabbitmq/`, `/admin/redis/`
+
+### 5. The installer is a Python CLI that writes `.env` and bootstraps the auth database
+
+**Decision:** Build a Python-based installer CLI for first-run setup.
+
+**Why:**
+- The repo is already Python-heavy and the required tasks (prompting, hashing, secret generation, SQLite bootstrap) fit Python well.
+- The installer can share validation and hashing logic with backend auth code.
+- It avoids manual editing of compose variables and makes first run repeatable.
+
+**Installer responsibilities:**
+- Prompt for the book library path
+- Prompt for initial admin username and password
+- Ask for any required runtime values that do not have safe defaults (for example public origin / CORS origin)
+- Generate a JWT signing secret
+- Write `.env` for Docker Compose variable substitution
+- Create or update the SQLite auth database with the initial admin user
+- Be idempotent: re-running updates configuration safely and does not wipe existing data unless explicitly requested
+
+### 6. Docker Compose consumes installer-generated values rather than hardcoded auth defaults
+
+**Decision:** Update compose wiring so services read auth and installer values from `.env` / environment substitution.
+
+**Why:**
+- The current stack only expects `BOOKS_PATH` and build metadata in `.env.example`.
+- Auth introduces new runtime settings that must be explicit, reproducible, and documentable.
+- Keeping configuration in `.env` matches current Docker Compose conventions in the repo.
+
+**Expected new config surface:**
+- `BOOKS_PATH`
+- `CORS_ORIGINS` or equivalent public-origin setting
+- `AUTH_DB_PATH`
+- `AUTH_JWT_SECRET`
+- `AUTH_JWT_TTL_MINUTES`
+- `AUTH_ADMIN_USERNAME` only if needed for bootstrap metadata (not as the source of truth once the database exists)
+
+## Delivery Shape
+
+The implementation should be broken into narrow issues rather than a single auth epic implementation. The architecture and security contract come first; installer work can begin in parallel once the contract is agreed.
+
+## Dependency Graph
+
+```text
+#250 Design local authentication and setup installer architecture
+├── #251 Build FastAPI auth module with JWT validation and local user store
+│   ├── #252 Add login UX and protected routes to the React frontend
+│   └── #253 Gate API and document routes in nginx with auth_request
+├── #255 Create idempotent setup installer CLI for first-run configuration
+│   └── #256 Wire installer-generated environment into docker compose and docs
+├── #254 Protect browser-facing admin tools behind the new auth flow
+│   ├── depends on #251 backend auth contract
+│   ├── depends on #252 login UX
+│   └── should land after or alongside #253 ingress gating
+└── #257 Add auth and installer end-to-end coverage
+    ├── depends on #251 backend auth
+    ├── depends on #252 frontend login UX
+    ├── depends on #253 nginx API/document gating
+    ├── depends on #254 admin browser-surface protection
+    └── depends on #255 + #256 installer/compose wiring
+```
+
+## Notes for Reviewers
+
+- This milestone intentionally avoids SSO, OAuth, refresh tokens, and a dedicated identity provider.
+- If later requirements need server-side token revocation, multi-user roles, or audit trails, extend the local-auth design instead of introducing SSO prematurely.
+- For v0.11.0, the priority is closing the current unauthenticated exposure with the smallest architecture that can be operated by a single-node/self-hosted deployment.
