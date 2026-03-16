@@ -75,21 +75,24 @@ Frontend / Search API
 
 ## Quick Start
 
-### 1. Configure Book Library Path
+### 1. Run the first-run installer
 
-Set the host library directory before you start the stack:
+Generate `.env`, create the auth database, and seed the initial admin user:
 
 ```bash
-export BOOKS_PATH=/absolute/path/to/your/booklibrary
+python3 -m installer
+# or: python3 installer/setup.py
 ```
 
-`docker-compose.yml` binds that host path into the shared `document-data` volume. If `BOOKS_PATH` is not set, the stack falls back to `/data/booklibrary`.
+The installer prompts for the book library path, admin credentials, and the public origin URL, then writes `.env` and bootstraps the SQLite auth DB. Run it before `docker compose up` so the auth storage directory exists for the bind mount.
 
 ### 2. Start All Services
 
 ```bash
 docker compose up -d
 ```
+
+Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, and `--origin`.
 
 By default, Docker Compose also auto-loads `docker-compose.override.yml`, so local development/debug ports stay published.
 

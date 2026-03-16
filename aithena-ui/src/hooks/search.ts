@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import { buildApiUrl } from '../api';
+import { apiFetch, buildApiUrl } from '../api';
 
 const searchBaseURL = buildApiUrl('/v1/search');
 
@@ -108,7 +108,7 @@ export function useSearch() {
       if (state.filters.language) params.set('fq_language', state.filters.language);
       if (state.filters.year) params.set('fq_year', state.filters.year);
 
-      const response = await fetch(`${searchBaseURL}?${params.toString()}`);
+      const response = await apiFetch(`${searchBaseURL}?${params.toString()}`);
       if (!response.ok) {
         if (response.status === 400 && state.mode !== 'keyword') {
           const body = await response.json().catch(() => ({}));

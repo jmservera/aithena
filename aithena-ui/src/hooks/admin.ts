@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { buildApiUrl } from '../api';
+import { apiFetch, buildApiUrl } from '../api';
 
 // GET /v1/admin/documents — canonical API contract from the admin operations API
 const documentsUrl = buildApiUrl('/v1/admin/documents');
@@ -50,8 +50,8 @@ export interface UseAdminReturn extends AdminState {
   clearProcessed: () => Promise<void>;
 }
 
-async function apiFetch(url: string, options?: RequestInit): Promise<unknown> {
-  const response = await fetch(url, options);
+async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await apiFetch(url, options);
   if (!response.ok) {
     let detail = `Request failed: ${response.status}`;
     try {
@@ -62,7 +62,7 @@ async function apiFetch(url: string, options?: RequestInit): Promise<unknown> {
     }
     throw new Error(detail);
   }
-  return response.json();
+  return (await response.json()) as T;
 }
 
 export function useAdmin(): UseAdminReturn {
@@ -74,7 +74,7 @@ export function useAdmin(): UseAdminReturn {
     setLoading(true);
     setError(null);
     try {
-      const json = (await apiFetch(documentsUrl)) as AdminDocumentsResponse;
+      const json = await apiRequest<AdminDocumentsResponse>(documentsUrl);
       setData(json);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load queue state');
@@ -85,19 +85,19 @@ export function useAdmin(): UseAdminReturn {
 
   const requeueDocument = useCallback(
     async (id: string) => {
-      await apiFetch(buildApiUrl(`/v1/admin/documents/${id}/requeue`), { method: 'POST' });
+      await apiRequest(buildApiUrl(`/v1/admin/documents/${id}/requeue`), { method: 'POST' });
       await refresh();
     },
     [refresh]
   );
 
   const requeueAllFailed = useCallback(async () => {
-    await apiFetch(buildApiUrl('/v1/admin/documents/requeue-failed'), { method: 'POST' });
+    await apiRequest(buildApiUrl('/v1/admin/documents/requeue-failed'), { method: 'POST' });
     await refresh();
   }, [refresh]);
 
   const clearProcessed = useCallback(async () => {
-    await apiFetch(buildApiUrl('/v1/admin/documents/processed'), { method: 'DELETE' });
+    await apiRequest(buildApiUrl('/v1/admin/documents/processed'), { method: 'DELETE' });
     await refresh();
   }, [refresh]);
 

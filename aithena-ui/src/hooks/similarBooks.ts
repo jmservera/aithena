@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { buildApiUrl } from '../api';
+import { apiFetch, buildApiUrl } from '../api';
 
 const DEFAULT_LIMIT = 5;
 const DEFAULT_MIN_SCORE = 0.0;
@@ -94,7 +94,7 @@ export function useSimilarBooks(documentId: string | null): UseSimilarBooksResul
       setError(null);
 
       try {
-        const response = await fetch(buildSimilarBooksUrl(currentDocumentId), {
+        const response = await apiFetch(buildSimilarBooksUrl(currentDocumentId), {
           signal: controller.signal,
         });
         if (!response.ok) {

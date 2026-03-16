@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { buildApiUrl } from '../api';
+import { applyAuthorizationHeader, buildApiUrl, notifyAuthFailure } from '../api';
 
 const uploadUrl = buildApiUrl('/v1/upload');
 
@@ -79,7 +79,7 @@ export function useUpload(): UseUploadReturn {
             const data = JSON.parse(xhr.responseText);
             setResult(data);
             resolve();
-          } catch (err) {
+          } catch {
             const msg = 'Invalid response from server';
             setError(msg);
             reject(new Error(msg));
@@ -95,6 +95,8 @@ export function useUpload(): UseUploadReturn {
             // Use status-based message if JSON parsing fails
             if (xhr.status === 400) {
               errorMessage = 'Invalid file. Please ensure it is a valid PDF.';
+            } else if (xhr.status === 401 || xhr.status === 403) {
+              errorMessage = 'Your session has expired. Please sign in again.';
             } else if (xhr.status === 413) {
               errorMessage = 'File is too large. Maximum size is 50MB.';
             } else if (xhr.status === 429) {
@@ -104,6 +106,10 @@ export function useUpload(): UseUploadReturn {
             } else if (xhr.status === 502) {
               errorMessage = 'Service temporarily unavailable. Please try again.';
             }
+          }
+
+          if (xhr.status === 401 || xhr.status === 403) {
+            notifyAuthFailure();
           }
 
           setError(errorMessage);
@@ -128,6 +134,7 @@ export function useUpload(): UseUploadReturn {
       });
 
       xhr.open('POST', uploadUrl);
+      applyAuthorizationHeader(xhr);
       xhr.send(formData);
     });
   }, []);

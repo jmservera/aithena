@@ -235,7 +235,7 @@ services:
       - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
       - BASE_PATH=/data/documents
-      - CORS_ORIGINS=http://localhost:5173
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
       - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
       - DEFAULT_SEARCH_MODE=keyword
       - UPLOAD_DIR=/data/documents/uploads
@@ -245,8 +245,15 @@ services:
       - RABBITMQ_QUEUE_NAME=shortembeddings
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
+      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
+      - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
     volumes:
       - document-data:/data/documents
+      - type: bind
+        source: ${AUTH_DB_DIR:-/tmp/aithena-auth}
+        target: /data/auth
     networks:
       - default
   streamlit-admin:

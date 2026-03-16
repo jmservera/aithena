@@ -8,18 +8,19 @@ import socket
 import threading
 import time
 from collections import defaultdict, deque
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Generator, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
 import pika
 import redis as redis_lib
 import requests
 from auth import (
-    AuthenticationError,
     AuthenticatedUser,
+    AuthenticationError,
     authenticate_user,
     clear_auth_cookie,
     create_access_token,
@@ -1009,8 +1010,8 @@ def _iter_admin_docs(
     """
     try:
         keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
-    except Exception:
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis") from exc
 
     for key in keys:
         raw = client.get(key)
@@ -1064,8 +1065,8 @@ def _delete_admin_key(redis_key: str) -> bool:
     try:
         client = _get_admin_redis_client()
         return bool(client.delete(redis_key))
-    except Exception:
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis") from exc
 
 
 @app.get("/v1/admin/documents/", include_in_schema=False, name="admin_documents_v1_slash")
@@ -1138,8 +1139,8 @@ def admin_requeue_document(doc_id: str) -> dict[str, Any]:
     """
     try:
         redis_key = _decode_admin_key(doc_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid document id")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid document id") from exc
 
     if not redis_key.startswith(f"/{settings.redis_queue_name}/"):
         raise HTTPException(status_code=400, detail="Invalid document id")

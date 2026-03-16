@@ -1,6 +1,6 @@
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 
-import { buildApiUrl } from '../api';
+import { buildApiUrl, getAuthorizationHeaderValue, notifyAuthFailure } from '../api';
 import {
   CreateCompletionRequest,
   defaultCreateCompletionRequest,
@@ -38,6 +38,7 @@ export async function ChatMessage(
       temperature: requestModelProperties.temperature,
     },
   });
+  const authHeader = getAuthorizationHeaderValue();
 
   await fetchEventSource(serverBaseURL, {
     signal,
@@ -47,11 +48,17 @@ export async function ChatMessage(
       Accept: 'text/event-stream',
       'Content-Type': 'application/json',
       'X-Accel-Buffering': 'no',
+      ...(authHeader ? { Authorization: authHeader } : {}),
     },
     body: msg,
     async onopen(res) {
       if (res.ok && res.status === 200) {
         return;
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        notifyAuthFailure();
+        throw new Error('Authentication required');
       }
 
       if (res.status >= 400 && res.status < 500 && res.status !== 429) {
