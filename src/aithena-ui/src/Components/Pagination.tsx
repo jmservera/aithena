@@ -5,9 +5,16 @@ interface PaginationProps {
   limit: number;
   total: number;
   onPageChange: (page: number) => void;
+  controlsId?: string;
 }
 
-const Pagination = memo(function Pagination({ page, limit, total, onPageChange }: PaginationProps) {
+const Pagination = memo(function Pagination({
+  page,
+  limit,
+  total,
+  onPageChange,
+  controlsId,
+}: PaginationProps) {
   const totalPages = useMemo(() => Math.ceil(total / limit), [total, limit]);
   const pages = useMemo<(number | '…')[]>(() => {
     if (totalPages <= 1) {
@@ -46,34 +53,40 @@ const Pagination = memo(function Pagination({ page, limit, total, onPageChange }
   return (
     <nav className="pagination" aria-label="Search results pagination">
       <button
+        type="button"
         className="pagination-btn"
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
         aria-label="Previous page"
+        aria-controls={controlsId}
       >
         ‹
       </button>
       {pages.map((paginationItem, index) =>
         paginationItem === '…' ? (
-          <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+          <span key={`ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">
             …
           </span>
         ) : (
           <button
             key={paginationItem}
+            type="button"
             className={`pagination-btn${page === paginationItem ? ' active' : ''}`}
             onClick={() => onPageChange(paginationItem)}
             aria-current={page === paginationItem ? 'page' : undefined}
+            aria-controls={controlsId}
           >
             {paginationItem}
           </button>
         )
       )}
       <button
+        type="button"
         className="pagination-btn"
         disabled={page >= totalPages}
         onClick={() => onPageChange(page + 1)}
         aria-label="Next page"
+        aria-controls={controlsId}
       >
         ›
       </button>

@@ -1,25 +1,46 @@
-import { useState } from 'react';
+import { KeyboardEvent, useState } from 'react';
 
-interface props {
+interface Props {
   list: string[];
 }
 
-function List({ list }: props) {
+function List({ list }: Props) {
   const [selectedItem, setSelectedItem] = useState(-1);
+
+  const activateItem = (index: number) => {
+    setSelectedItem(index);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLLIElement>, index: number) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activateItem(index);
+    }
+  };
 
   return (
     <div>
-      <h1>Title</h1>
-      <ul className="list-group">
-        {list.map((item, index) => (
-          <li
-            className={selectedItem === index ? 'list-group-item active' : 'list-group-item'}
-            key={item}
-            onClick={() => setSelectedItem(index)}
-          >
-            {item}
-          </li>
-        ))}
+      <h2>Title</h2>
+      <ul className="list-group" role="listbox" aria-label="Items">
+        {list.map((item, index) => {
+          const isSelected = selectedItem === index;
+          const isFocusable = isSelected || (selectedItem === -1 && index === 0);
+
+          return (
+            <li
+              className={isSelected ? 'list-group-item active' : 'list-group-item'}
+              key={item}
+              role="option"
+              aria-selected={isSelected}
+              tabIndex={isFocusable ? 0 : -1}
+              onClick={() => activateItem(index)}
+              onFocus={() => setSelectedItem(index)}
+              onKeyDown={(event) => handleKeyDown(event, index)}
+            >
+              {item}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

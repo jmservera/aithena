@@ -1,4 +1,4 @@
-import { useState, useRef, DragEvent, ChangeEvent, RefObject } from 'react';
+import { ChangeEvent, DragEvent, RefObject, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import { useUpload, UploadProgress, UploadResult } from '../hooks/upload';
@@ -12,9 +12,12 @@ function formatFileSize(bytes: number): string {
 interface UploadContentProps {
   dragOver: boolean;
   error: string | null;
+  fileInputId: string;
   fileInputRef: RefObject<HTMLInputElement>;
   progress: UploadProgress | null;
   result: UploadResult | null;
+  uploadHintId: string;
+  uploadStatusId: string;
   uploading: boolean;
   onBrowseClick: () => void;
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
@@ -54,9 +57,12 @@ function renderUploadFallback({ reset, reload }: ErrorBoundaryFallbackProps) {
 function UploadContent({
   dragOver,
   error,
+  fileInputId,
   fileInputRef,
   progress,
   result,
+  uploadHintId,
+  uploadStatusId,
   uploading,
   onBrowseClick,
   onDrop,
@@ -75,34 +81,64 @@ function UploadContent({
           onDragLeave={onDragLeave}
           onDragOver={onDragOver}
           onDrop={onDrop}
+          aria-busy={uploading}
         >
+          <label className="visually-hidden" htmlFor={fileInputId}>
+            Choose a PDF file to upload
+          </label>
           <input
+            id={fileInputId}
             ref={fileInputRef}
+            className="visually-hidden"
             type="file"
             accept="application/pdf,.pdf"
             onChange={onFileInputChange}
-            style={{ display: 'none' }}
+            aria-describedby={uploadHintId}
             disabled={uploading}
           />
 
           {!uploading && (
             <div className="upload-dropzone-content">
-              <div className="upload-icon">📄</div>
+              <div className="upload-icon" aria-hidden="true">
+                📄
+              </div>
               <p className="upload-prompt">
                 Drag and drop a PDF file here, or{' '}
-                <button type="button" className="upload-browse-button" onClick={onBrowseClick}>
+                <button
+                  type="button"
+                  className="upload-browse-button"
+                  onClick={onBrowseClick}
+                  aria-describedby={uploadHintId}
+                >
                   browse
                 </button>
               </p>
-              <p className="upload-hint">Maximum file size: 50MB</p>
+              <p id={uploadHintId} className="upload-hint">
+                Maximum file size: 50MB
+              </p>
             </div>
           )}
 
           {uploading && progress && (
-            <div className="upload-progress">
-              <div className="upload-progress-spinner">⏳</div>
-              <p className="upload-progress-text">Uploading...</p>
-              <div className="upload-progress-bar">
+            <div
+              id={uploadStatusId}
+              className="upload-progress"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <div className="upload-progress-spinner" aria-hidden="true">
+                ⏳
+              </div>
+              <p className="upload-progress-text">Uploading…</p>
+              <div
+                className="upload-progress-bar"
+                role="progressbar"
+                aria-label="Upload progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress.percentage)}
+              >
                 <div
                   className="upload-progress-bar-fill"
                   style={{ width: `${progress.percentage}%` }}
@@ -118,19 +154,23 @@ function UploadContent({
       )}
 
       {error && (
-        <div className="upload-result upload-result--error">
-          <div className="upload-result-icon">❌</div>
+        <div className="upload-result upload-result--error" role="alert">
+          <div className="upload-result-icon" aria-hidden="true">
+            ❌
+          </div>
           <h3 className="upload-result-title">Upload Failed</h3>
           <p className="upload-result-message">{error}</p>
-          <button className="upload-result-button" onClick={onReset}>
+          <button type="button" className="upload-result-button" onClick={onReset}>
             Try Again
           </button>
         </div>
       )}
 
       {result && (
-        <div className="upload-result upload-result--success">
-          <div className="upload-result-icon">✅</div>
+        <div className="upload-result upload-result--success" role="status" aria-live="polite">
+          <div className="upload-result-icon" aria-hidden="true">
+            ✅
+          </div>
           <h3 className="upload-result-title">Upload Successful</h3>
           <p className="upload-result-message">{result.message}</p>
           <div className="upload-result-details">
@@ -148,7 +188,7 @@ function UploadContent({
             <Link to="/search" className="upload-result-button upload-result-button--primary">
               Back to Search
             </Link>
-            <button className="upload-result-button" onClick={onReset}>
+            <button type="button" className="upload-result-button" onClick={onReset}>
               Upload Another
             </button>
           </div>
@@ -162,37 +202,40 @@ function UploadPage() {
   const { uploading, progress, result, error, uploadFile, reset } = useUpload();
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputId = useId();
+  const uploadHintId = useId();
+  const uploadStatusId = useId();
 
-  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
     setDragOver(true);
   };
 
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
     setDragOver(false);
   };
 
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
     setDragOver(false);
 
-    const files = e.dataTransfer.files;
+    const files = event.dataTransfer.files;
     if (files.length > 0) {
       handleFileSelected(files[0]);
     }
   };
 
-  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
     if (files && files.length > 0) {
       handleFileSelected(files[0]);
     }
@@ -200,7 +243,7 @@ function UploadPage() {
 
   const handleFileSelected = (file: File) => {
     uploadFile(file).catch(() => {
-      // Error is already handled by the upload hook's error state
+      // Error is already handled by the upload hook's error state.
     });
   };
 
@@ -227,9 +270,12 @@ function UploadPage() {
           <UploadContent
             dragOver={dragOver}
             error={error}
+            fileInputId={fileInputId}
             fileInputRef={fileInputRef}
             progress={progress}
             result={result}
+            uploadHintId={uploadHintId}
+            uploadStatusId={uploadStatusId}
             uploading={uploading}
             onBrowseClick={handleBrowseClick}
             onDrop={handleDrop}

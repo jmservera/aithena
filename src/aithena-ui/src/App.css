@@ -322,8 +322,10 @@ select:focus-visible,
 }
 
 .search-result-count {
+  margin: 0;
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .search-sort-limit {
@@ -455,7 +457,7 @@ select:focus-visible,
 }
 
 .search-empty {
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.62);
   text-align: center;
   margin-top: 60px;
   font-size: 1em;
@@ -838,7 +840,7 @@ select:focus-visible,
 
 .pdf-viewer-author {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .pdf-viewer-close {
@@ -884,7 +886,7 @@ select:focus-visible,
 
 .pdf-viewer-error-detail {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .pdf-viewer-fallback-link {
@@ -1099,8 +1101,9 @@ select:focus-visible,
 }
 
 .mode-badge--keyword {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.26);
 }
 
 .mode-badge--semantic {
@@ -1252,7 +1255,7 @@ select:focus-visible,
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   font-size: 0.9em;
   font-weight: 500;
@@ -1263,7 +1266,13 @@ select:focus-visible,
 }
 
 .admin-tab-btn:hover {
-  color: rgba(255, 255, 255, 0.85);
+  color: #ffffff;
+}
+
+.admin-tab-panel:focus {
+  outline: 2px solid #7ec8e3;
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 
 .admin-tab-btn--active {
@@ -1608,7 +1617,7 @@ select:focus-visible,
 .upload-hint {
   margin: 0;
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.64);
 }
 
 .upload-progress {
@@ -1660,7 +1669,7 @@ select:focus-visible,
 .upload-progress-stats {
   margin: 0;
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.68);
   font-family: 'Courier New', monospace;
 }
 
