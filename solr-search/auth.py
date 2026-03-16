@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerifyMismatchError, VerificationError
-from jose import JWTError, ExpiredSignatureError, jwt
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from jose import ExpiredSignatureError, JWTError, jwt
 
 JWT_ALGORITHM = "HS256"
 _PASSWORD_HASHER = PasswordHasher()
