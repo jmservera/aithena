@@ -372,3 +372,52 @@
 - URL state (BE-4) must maintain backward compatibility with existing search flow
 
 **Next Action:** Awaiting Juanma approval before creating 36 GitHub issues. Plan written to `.squad/milestone-plans.md`.
+
+---
+
+## 2026-03-16 — Created GitHub Issues for v1.2.0, v1.3.0, v1.4.0 Milestones
+
+**Context:** Juanma approved the milestone plans and mandated a hard security gate. Created all issues for three milestones plus security prerequisite work.
+
+**Actions Taken:**
+
+1. **Security Gate Issues (4 issues):**
+   - #323: Trigger CodeQL re-scan to close 7 stale alerts (Kane, P1)
+   - #324: Accept or remediate zizmor secrets-outside-env findings (Kane + Brett, P1)
+   - #325: Accept or remediate ecdsa CVE-2024-23342 baseline exception (Kane, P1)
+   - #326: Migrate python-jose to PyJWT (Parker, P1)
+
+2. **v1.2.0 — Frontend Quality & Performance (8 issues):**
+   - FE-1 through FE-8: Error boundaries, code splitting, performance, accessibility, CSS modules, profiler, tests, docs
+   - Assignees: Dallas (6), Lambert (1), Newt (1)
+   - All issues blocked by security gate clearance
+
+3. **v1.3.0 — Backend Observability & Hardening (8 issues):**
+   - BE-1 through BE-8: Structured logging, admin auth, coverage reports, URL state, circuit breaker, correlation IDs, runbook, tests
+   - Assignees: Parker (3), Dallas (1), Ash (1), Lambert (2), Newt (1)
+
+4. **v1.4.0 — Dependency Modernization (10 issues):**
+   - DEP-1 through DEP-10: React 19 evaluation, ESLint upgrade, Python audit, Python 3.12, Node 22, Dependabot automation, dependency upgrades, regression testing, docs
+   - Assignees: Dallas (3), Parker (2), Brett (3), Lambert (1), Newt (1)
+
+**Total:** 30 issues created (323-326, 328-353). Issue #327 was a duplicate and closed.
+
+**Summary File:** Created `.squad/created-issues-summary.md` with full breakdown.
+
+**Labels Applied:**
+- All issues: `squad` + assignee label (`squad:🔒 kane`, etc.)
+- Priority: P0 (blocking), P1 (this sprint), P2 (next sprint)
+- Type: `type:security`, `type:feature`, `type:chore`, `type:test`, `type:spike`, `type:docs`
+- Go: `go:yes` (well-defined), `go:needs-research` (needs investigation)
+
+**Critical Path:**
+1. Security Gate (2-3 weeks) → v1.2.0 can start
+2. v1.2.0 (5-6 weeks) → v1.3.0 can start
+3. v1.3.0 (6-7 weeks) → v1.4.0 can start
+
+**Next Steps:**
+- Security team (Kane, Brett, Parker) starts immediately on issues #323-326
+- Frontend team waits for security gate clearance
+- All teams review assigned issues and surface any concerns
+
+**Decision:** All PR work MUST target `dev` branch (not `main`). Main is production-only.
