@@ -146,7 +146,7 @@ def any_embedded_document_id(api_url: str, api_available: None, embeddings_avail
                 )
                 if probe.status_code == 200:
                     return doc_id
-            except Exception:
+            except Exception:  # noqa: S112 — graceful probe pattern, uses continue (not pass)
                 continue
         return None
     except Exception:
