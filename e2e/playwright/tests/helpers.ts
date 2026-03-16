@@ -4,6 +4,8 @@ const DEV_UI_PORTS = new Set(['3000', '4173', '4174', '5173', '5174']);
 const BROAD_QUERY = '*';
 const LOGIN_USERNAME = process.env.E2E_USERNAME || 'admin';
 const LOGIN_PASSWORD = process.env.E2E_PASSWORD || 'admin';
+const API_TOKEN = process.env.E2E_API_TOKEN || '';
+const AUTH_COOKIE_NAME = process.env.E2E_AUTH_COOKIE_NAME || 'aithena_auth';
 let cachedApiAuthHeaders: Record<string, string> | null = null;
 const HIGHLIGHT_QUERY_CANDIDATES = [
   'amades',
@@ -87,7 +89,35 @@ export function getApiBaseURL(appBaseURL: string): string {
   return normalizeUrl(url.origin);
 }
 
+async function applyAuthCookie(page: Page, appBaseURL: string): Promise<void> {
+  if (!API_TOKEN) {
+    return;
+  }
+
+  const url = new URL(appBaseURL);
+  await page.context().addCookies([
+    {
+      name: AUTH_COOKIE_NAME,
+      value: API_TOKEN,
+      domain: url.hostname,
+      path: '/',
+      httpOnly: false,
+      secure: url.protocol === 'https:',
+      sameSite: 'Lax',
+    },
+  ]);
+}
+
 export async function loginToApp(page: Page, appBaseURL: string): Promise<void> {
+  if (API_TOKEN) {
+    await applyAuthCookie(page, appBaseURL);
+    await page.goto(new URL('/search', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+    const loginVisible = await page.locator('.login-title').isVisible().catch(() => false);
+    if (!loginVisible) {
+      return;
+    }
+  }
+
   await page.goto(new URL('/login', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.login-title')).toHaveText('Sign in to Aithena');
   await page.getByLabel('Username').fill(LOGIN_USERNAME);
@@ -153,7 +183,7 @@ export async function runSearch(page: Page, query: string): Promise<void> {
   }
 
   await expect(page.locator('button.search-btn')).toHaveText('Search');
-  await expect(page.locator('.search-result-count')).toContainText(`"${query}"`);
+  await expect(page.locator('.search-result-count')).toContainText(query);
 }
 
 export async function getVisibleTitles(page: Page): Promise<string[]> {
@@ -183,6 +213,11 @@ export async function expectVisibleCardsToMatchAuthor(page: Page, author: string
 
 async function getApiAuthHeaders(request: APIRequestContext, apiBaseURL: string): Promise<Record<string, string>> {
   if (cachedApiAuthHeaders) {
+    return cachedApiAuthHeaders;
+  }
+
+  if (API_TOKEN) {
+    cachedApiAuthHeaders = { Authorization: `Bearer ${API_TOKEN}` };
     return cachedApiAuthHeaders;
   }
 

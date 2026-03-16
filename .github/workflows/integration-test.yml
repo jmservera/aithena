@@ -218,7 +218,13 @@ jobs:
         env:
           E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
           E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
-        run: npx playwright test
+        run: |
+          export E2E_AUTH_COOKIE_NAME=aithena_auth
+          export E2E_API_TOKEN="$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$(python3 -c 'import json, os; print(json.dumps({"username": os.environ["E2E_USERNAME"], "password": os.environ["E2E_PASSWORD"]}))')" \
+            http://localhost/v1/auth/login | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')"
+          npx playwright test
 
       - name: Upload Python E2E results
         if: always()
