@@ -369,12 +369,18 @@ def callback(
 ):
     """Process a single queued document path."""
     file_path = body.decode("utf-8")
+
+    # Extract correlation ID from RabbitMQ message headers (propagated by document-lister).
+    correlation_id = ""
+    if properties.headers and "X-Correlation-ID" in properties.headers:
+        correlation_id = properties.headers["X-Correlation-ID"]
+
     remaining = get_queue(channel).method.message_count
     logger.info(
         "Received %s. Remaining messages: %s",
         file_path,
         remaining,
-        extra={"file_path": file_path, "remaining_messages": remaining},
+        extra={"file_path": file_path, "remaining_messages": remaining, "correlation_id": correlation_id},
     )
 
     try:
@@ -389,6 +395,7 @@ def callback(
                 "author": metadata["author"],
                 "solr_collection": SOLR_COLLECTION,
                 "file_path": file_path,
+                "correlation_id": correlation_id,
             },
         )
     except Exception as exc:  # pragma: no cover - runtime integration path
@@ -396,7 +403,7 @@ def callback(
             "Failed to process %s: %s",
             file_path,
             exc,
-            extra={"file_path": file_path, "error": str(exc)},
+            extra={"file_path": file_path, "error": str(exc), "correlation_id": correlation_id},
         )
         logger.debug("Failed to process %s", file_path, exc_info=True)
         try:
