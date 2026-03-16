@@ -205,3 +205,47 @@ def test_reset_recreates_auth_db(tmp_path: Path) -> None:
         usernames = [row[0] for row in connection.execute("SELECT username FROM users ORDER BY username")]
 
     assert usernames == ["admin"]
+
+
+def test_env_injection_via_newline_in_username(tmp_path: Path) -> None:
+    import pytest
+    from installer.setup import normalize_username
+
+    with pytest.raises(ValueError, match="invalid characters"):
+        normalize_username("admin\nMALICIOUS_KEY=evil")
+
+
+def test_env_file_strips_newlines_from_values(tmp_path: Path) -> None:
+    from installer.setup import write_env_file, load_env_file
+
+    env_path = tmp_path / ".env"
+    values = {key: "normal" for key, _ in __import__("installer.setup", fromlist=["ENV_COMMENTS"]).ENV_COMMENTS}
+    values["AUTH_JWT_SECRET"] = "secret\nINJECTED=bad"
+
+    write_env_file(env_path, values)
+    reloaded = load_env_file(env_path)
+
+    assert "\n" not in reloaded["AUTH_JWT_SECRET"]
+    assert "INJECTED" not in reloaded.get("INJECTED", "")
+
+
+def test_env_file_has_restricted_permissions(tmp_path: Path) -> None:
+    library_path = tmp_path / "lib"
+    env_path = tmp_path / ".env"
+    auth_db_path = tmp_path / "auth.db"
+
+    run_setup(
+        InstallerConfig(
+            library_path=str(library_path),
+            admin_user="admin",
+            admin_password="test-pass-123",
+            origin="http://localhost",
+            auth_db_path=auth_db_path,
+            env_path=env_path,
+        ),
+        interactive=False,
+        secret_factory=fake_secret,
+    )
+
+    assert env_path.stat().st_mode & 0o077 == 0, ".env should be owner-only (0600)"
+    assert auth_db_path.stat().st_mode & 0o077 == 0, "auth DB should be owner-only (0600)"

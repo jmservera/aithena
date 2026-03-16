@@ -89,6 +89,10 @@ def write_env_file(path: Path, values: dict[str, str]) -> None:
         lines.append(f"{key}={_quote_env_value(value)}")
         lines.append("")
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def resolve_library_path(raw_value: str) -> Path:
@@ -110,6 +114,8 @@ def normalize_username(raw_value: str) -> str:
     username = raw_value.strip()
     if not username:
         raise ValueError("Admin username is required")
+    if any(c in username for c in ("\n", "\r", "\x00", "=")):
+        raise ValueError("Username contains invalid characters")
     return username
 
 
@@ -137,6 +143,10 @@ def bootstrap_admin_user(
 
     hash_password_fn, init_auth_db_fn = load_auth_helpers()
     init_auth_db_fn(db_path)
+    try:
+        db_path.chmod(0o600)
+    except OSError:
+        pass
     normalized_username = normalize_username(username)
 
     with sqlite3.connect(db_path) as connection:
@@ -418,10 +428,11 @@ def utc_now_iso() -> str:
 
 
 def _quote_env_value(value: str) -> str:
-    if any(character.isspace() for character in value) or "#" in value:
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    sanitized = value.replace("\n", "").replace("\r", "").replace("\x00", "")
+    if any(character.isspace() for character in sanitized) or "#" in sanitized:
+        escaped = sanitized.replace("\\", "\\\\").replace('"', '\\"')
         return f'"{escaped}"'
-    return value
+    return sanitized
 
 
 def _unquote_env_value(value: str) -> str:
