@@ -293,7 +293,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8501/_stcore/health"]
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8501/admin/streamlit/_stcore/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -331,7 +331,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8081/"]
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8081/admin/redis"]
       interval: 30s
       timeout: 10s
       retries: 3
