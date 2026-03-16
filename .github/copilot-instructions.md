@@ -37,13 +37,15 @@ npx vitest run        # Alternative: run tests without watch mode
 
 ### Python Services (solr-search, document-indexer, document-lister, admin)
 ```bash
-cd src/solr-search && uv run pytest -v --tb=short          # 78+ tests
-cd src/document-indexer && uv run pytest -v --tb=short      # unit tests
+cd src/solr-search && uv run pytest -v --tb=short
+cd src/document-indexer && uv run pytest -v --tb=short
+cd src/document-lister && uv run pytest -v --tb=short
+cd src/embeddings-server && uv run pytest -v --tb=short
 cd src/solr-search && uv run ruff check .                   # lint
 cd src/document-indexer && uv run ruff check .              # lint
 ```
 
-All Python services use `pyproject.toml` + `uv.lock` (install with `uv sync --frozen`) **except** `embeddings-server`, which uses only `requirements.txt`.
+All six services have tests: solr-search, document-indexer, document-lister, embeddings-server, aithena-ui (Vitest), and admin. All Python services use `pyproject.toml` + `uv.lock` (install with `uv sync --frozen`) **except** `embeddings-server`, which uses only `requirements.txt`.
 
 ### Ruff Configuration (all Python)
 Global `ruff.toml`: line-length=120, target py311, rules: E, F, W, I, UP, B, SIM, S (bandit). Tests may use `assert` (S101 suppressed).
@@ -62,13 +64,14 @@ bash -n buildall.sh   # validate shell scripts
 
 ## Environment Constraints
 
+- **Fully on-premises project.** There are NO cloud dependencies (Azure, AWS, GCP). All services must run self-contained via Docker Compose without external network access. Dismiss Dependabot alerts for cloud SDKs (e.g., `azure-identity`).
 - **No Docker daemon** in this codespace. Never run `docker build`, `docker compose up`, or `docker compose config`. Validate YAML with Python's yaml module instead.
 - **Docker base images** are minimal. Debian-based images (embeddings-server, solr-search) don't include `wget` — add it if health checks need it. Alpine-based images (document-lister, document-indexer) don't include `procps`.
 - Health checks are defined in `docker-compose.yml` (not Dockerfiles), per `.checkov.yml` policy.
 
 ## Versioning
 
-- `VERSION` file at repo root is the source of truth (currently `0.7.0`).
+- `VERSION` file at repo root is the source of truth.
 - `buildall.sh` exports `VERSION`, `GIT_COMMIT`, `BUILD_DATE` as Docker build args.
 - All Dockerfiles accept these as `ARG` and set OCI labels.
 - Python services expose `/version` endpoints (with `include_in_schema=False`).
@@ -93,6 +96,23 @@ When merging PRs sequentially, expect "base branch was modified" errors. Solutio
 - Use `gh pr merge --admin` to bypass branch protection
 - Or retry with a short delay between merges
 - If conflicts occur, rebase the PR branch onto dev before merging
+
+## Release Process
+
+Before any release:
+
+1. **Milestone check:** All issues in the target milestone must be closed. Never ship a release with open milestone issues.
+2. **Tests:** All service tests must pass (`solr-search`, `document-indexer`, `document-lister`, `embeddings-server`, `aithena-ui`). Integration tests must also pass.
+3. **Documentation:** Release documentation (feature guide, test report, updated user/admin manuals) must be generated before tagging.
+4. **Screenshots:** Capture UI screenshots for the release notes using Playwright or the running app.
+5. **Version:** Update the `VERSION` file before release.
+
+## Milestone and Issue Management
+
+- Issues **MUST** be assigned to a GitHub milestone, not just a label. The user tracks progress via milestones.
+- Before releasing, verify all issues in the milestone are closed — check both the milestone view **and** the release label.
+- The user may reassign issues to milestones directly; always check both label and milestone assignment before release.
+- Milestones must be released in sequential numeric order. Never ship a higher version before a lower one is done.
 
 ## Python Service Conventions
 
