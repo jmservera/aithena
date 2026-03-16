@@ -17,7 +17,8 @@ try:
     embedding_dim = model.get_sentence_embedding_dimension()
     logger.info("Model loaded successfully: %s (embedding_dim=%d)", MODEL_NAME, embedding_dim)
 except Exception as exc:
-    logger.critical("Failed to load embedding model '%s': %s", MODEL_NAME, exc, exc_info=True)
+    logger.critical("Failed to load embedding model '%s': %s (%s)", MODEL_NAME, exc, type(exc).__name__)
+    logger.debug("Model loading stack trace:", exc_info=True)
     sys.exit(1)
 
 app = FastAPI(title="𐃆 Aithena Embeddings API", version=VERSION)
