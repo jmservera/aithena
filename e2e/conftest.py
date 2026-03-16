@@ -2,7 +2,8 @@
 Shared fixtures for the aithena E2E test suite.
 
 Environment variables (with defaults for the local dev stack):
-  SOLR_URL        Solr base URL, e.g. http://localhost:8983/solr/books
+  SOLR_URL          Solr base URL, e.g. http://localhost:8983/solr/books
+  SEARCH_API_URL    solr-search base URL, e.g. http://localhost:8080
   E2E_LIBRARY_PATH  Absolute path used as the test book library root.
                     The document-data volume must be bound to the same path
                     when running the stack with docker-compose.e2e.yml.
@@ -26,8 +27,6 @@ import requests
 SOLR_URL: str = os.environ.get("SOLR_URL", "http://localhost:8983/solr/books")
 SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
 E2E_LIBRARY_PATH: str = os.environ.get("E2E_LIBRARY_PATH", "/tmp/aithena-e2e-library")
-API_USER: str | None = os.environ.get("CI_ADMIN_USERNAME") or os.environ.get("E2E_USERNAME")
-API_PASS: str | None = os.environ.get("CI_ADMIN_PASSWORD") or os.environ.get("E2E_PASSWORD")
 
 # Relative path inside the library; uses the Author - Title (Year) pattern so
 # the metadata extractor produces deterministic fields.
@@ -107,14 +106,20 @@ def solr_available(solr_url: str) -> None:
 
 
 @pytest.fixture(scope="session")
-def auth_headers() -> dict[str, str]:
+def api_url() -> str:
+    """Resolved base URL for the solr-search API."""
+    return SEARCH_API_URL.rstrip("/")
+
+
+@pytest.fixture(scope="session")
+def auth_headers(api_url: str) -> dict[str, str]:
     """Log into the live API and return bearer auth headers for protected endpoints."""
-    if not API_USER or not API_PASS:
-        pytest.skip("Protected E2E tests require CI_ADMIN_USERNAME/CI_ADMIN_PASSWORD (or E2E_USERNAME/E2E_PASSWORD).")
+    username = os.environ.get("E2E_USERNAME", os.environ.get("CI_ADMIN_USERNAME", "ci-admin"))
+    password = os.environ.get("E2E_PASSWORD", os.environ.get("CI_ADMIN_PASSWORD", "ci-password-ChangeMe123!"))
 
     resp = requests.post(
-        f"{SEARCH_API_URL.rstrip('/')}/v1/auth/login",
-        json={"username": API_USER, "password": API_PASS},
+        f"{api_url}/v1/auth/login",
+        json={"username": username, "password": password},
         timeout=10,
     )
     resp.raise_for_status()
