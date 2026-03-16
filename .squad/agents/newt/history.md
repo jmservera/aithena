@@ -42,6 +42,8 @@
 - v0.6.0 shipped 5 major features (PDF upload, bandit, checkov, zizmor, Docker hardening) spanning 8 issues (#191–#198). The security scanning work (SEC-1 through SEC-5) produced a comprehensive baseline document (638 lines) that catalogs 287 findings and guides v0.7.0 roadmap.
 - v0.7.0 is planned around versioning and admin observability: semantic versioning infrastructure (#199) enables version endpoints (#200) which enable UI version display (#201) and admin system status page (#203). The containers endpoint (#202) and CI/CD automation (#204) complete the observability story.
 - Documentation must be written proactively as features ship, not backfilled. v0.6.0 documentation was created from feature guides (v0.5.0 format), PR commit messages, and existing security docs; this pattern should be formalized.
+- v1.0.0 is the final restructure-and-operability release: contributor commands, validation steps, and service-source references should now assume `src/...` paths, especially `src/solr-search` and `src/aithena-ui`.
+- The v1.0.0 release gate is anchored by three explicit checks: 144 passing backend tests, 83 passing frontend tests, and a clean `docker compose -f docker-compose.yml config --quiet` render with auth environment variables set; CI evidence should also record the 13-workflow validation and the integration tmpfs volume fix.
 
 
 ## 2026-03-15: Finalized Documentation for v0.6.0 & v0.7.0
