@@ -319,3 +319,56 @@
 - Coordinator enforces hygiene to prevent recurrence
 
 **Orchestration:** Session documented in `.squad/orchestration-log/2026-03-16T07-36-36Z-ripley.md`
+
+### 2026-03-16T16:00Z — Milestone Planning: v1.2.0, v1.3.0, v1.4.0
+
+**Context:** Juanma requested milestone plans for three post-1.0 releases: Frontend Quality (v1.2.0), Backend Observability (v1.3.0), and Dependency Modernization (v1.4.0). Critical constraint: 10 open security findings block all releases.
+
+**Key Architectural Decisions:**
+
+1. **Security Gate as Hard Blocker:** Established that no milestone can ship until all P0+P1 security issues are resolved (directive from Juanma). This prevents accumulating security debt and ensures production readiness.
+
+2. **Milestone Sequencing:** Frontend quality → Backend observability → Dependencies creates a logical progression:
+   - v1.2.0 improves user-facing stability (Error Boundary, performance, accessibility)
+   - v1.3.0 adds operational tooling on stable frontend (logging, auth, coverage)
+   - v1.4.0 modernizes dependencies on stable foundation (React 19, ESLint 9, Python 3.12)
+
+3. **Security Issue Triage:** Classified 10 findings into P0 (2 errors + 1 CVE), P1 (3 warnings), P2 (4 workflow warnings). P0+P1 must close; P2 requires Juanma approval for tech debt acceptance.
+
+**Current State Analysis:**
+
+- **Frontend (47 TypeScript files):** No Error Boundary, minimal React.memo usage (28 instances), global CSS (3 files), no code splitting, no URL-based search state
+- **Backend (4 Python services):** No structured logging (print statements in use), Streamlit admin has no authentication, no coverage reporting in CI, pytest exists but coverage not tracked
+- **Dependencies:** React 18.2.0 (stable), ESLint 8 (flat config available in v9+), Python 3.11 (3.12 LTS available), Node base images need review
+- **Test Coverage:** solr-search has 78+ tests, aithena-ui has 12 test files, document-indexer/lister have unit tests, but no coverage metrics published
+
+**Scope Decisions:**
+
+- **Deferred to future:** Metrics platform integration (Prometheus), distributed tracing, E2E automation, design system overhaul, Python 3.13, breaking API changes
+- **Included guardrails:** Review gates (Ripley, Parker, Kane, Juanma), conditional work (DEP-7 only if DEP-1 recommends), backward compatibility (URL state must not break bookmarks)
+
+**Effort Estimates:**
+- Security Gate: 2-3 weeks (Kane: 6 issues, Brett: 4 issues, Lambert: 1 issue)
+- v1.2.0: 5-6 weeks (Dallas: 21d, Lambert: 3d, Newt: 1d)
+- v1.3.0: 6-7 weeks (Parker: 15d, Dallas: 4d, Ash: 3d, Lambert: 7d, Newt: 2d)
+- v1.4.0: 6-7 weeks (Dallas: 11d, Parker: 6d, Brett: 10d, Lambert: 3d, Newt: 2d)
+- **Total: 20-23 weeks (5-6 months)**
+
+**36 Issues Planned:**
+- Security Gate: 10 issues (all blocking v1.2.0)
+- v1.2.0 Frontend: 8 issues (Error Boundary, code splitting, perf, a11y, CSS)
+- v1.3.0 Backend: 8 issues (logging, auth, coverage, URL state, graceful degradation)
+- v1.4.0 Dependencies: 10 issues (React 19 eval, ESLint 9, Python 3.12, Node 22, Dependabot workflow)
+
+**Critical Paths Identified:**
+- Security Gate → FE-1 (Error Boundary) → FE-2 (code splitting) → FE-7 (tests)
+- BE-1 (logging) → BE-5 (graceful degradation) → BE-6 (correlation IDs)
+- DEP-1 (React 19 spike) → DEP-7 (migration, conditional) → DEP-9 (regression tests)
+
+**Risk Mitigations:**
+- React 19 migration gated by research spike (DEP-1) + Juanma approval before implementation
+- Performance work (FE-3) requires Lambert test validation to prevent regressions
+- Coverage reporting (BE-3) reveals actual test gaps, requires plan to 80% before ship
+- URL state (BE-4) must maintain backward compatibility with existing search flow
+
+**Next Action:** Awaiting Juanma approval before creating 36 GitHub issues. Plan written to `.squad/milestone-plans.md`.
