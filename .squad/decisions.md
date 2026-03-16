@@ -4383,3 +4383,243 @@ Milestones **MUST** be released in numeric order. v0.10.0 and v0.11.0 were shipp
 
 Semver ordering matters for tooling and user expectations. Alphabetical sorting of version strings is misleading (0.10 < 0.9 alphabetically but 0.10 > 0.9 numerically).
 
+# Decision: v1.x Patch Roadmap
+
+**Date:** 2026-03-16
+**Author:** Ripley (Lead)
+**Requested by:** Juanma (Product Owner)
+**Status:** 📋 Planned — milestones and issues created for v1.0.1 and v1.1.0
+
+---
+
+## Executive Summary
+
+Comprehensive assessment of the v1.0.0 codebase reveals a well-architected system with clean service boundaries, solid test coverage (143+76+12+9+83 = 323 tests across services), and good security practices. The main gaps are: 14 open security scanning alerts (mostly low-severity or false positives), a never-run release-docs workflow, outdated frontend dependencies, missing observability (no structured logging), and several performance optimization opportunities in the frontend.
+
+This roadmap delivers incremental improvements across 5 milestones following semver strictly: one patch release (v1.0.1) for pure security fixes, followed by four minor releases (v1.1.0–v1.4.0) for feature work.
+
+---
+
+## Full Application Assessment
+
+### Architecture — Grade: A
+
+**Service Boundaries (Clean):**
+| Service | Role | Tests | Health |
+|---------|------|-------|--------|
+| solr-search | FastAPI search API, auth, upload | 143 | ✅ Excellent |
+| document-indexer | RabbitMQ consumer, Tika+embeddings pipeline | 76 | ✅ Good |
+| document-lister | Filesystem poller, state in Redis | 12 | ✅ Adequate |
+| embeddings-server | Sentence-Transformers API | 9 | ✅ Adequate |
+| admin | Streamlit operations dashboard | 0 | ⚠️ No tests |
+| aithena-ui | React 18 + Vite search interface | 83 | ✅ Good |
+
+**Communication Patterns:**
+- Async messaging: RabbitMQ (document-lister → document-indexer)
+- Sync HTTP: FastAPI endpoints (UI → solr-search → Solr/embeddings)
+- State: Redis (document state, session cache)
+- Search: SolrCloud 3-node cluster with ZooKeeper ensemble
+
+**Data Flow:** Files → document-lister (poll) → RabbitMQ → document-indexer (Tika extract + chunk + embed) → Solr (index). UI → nginx → solr-search (query) → Solr + embeddings-server (semantic).
+
+**Strengths:** Clean Architecture pattern, proper health checks on all services, memory limits set, durable queues with manual ACK, JWT auth with Argon2 hashing.
+
+**Gaps:** No distributed tracing, no centralized logging, admin dashboard has no auth.
+
+### Security — Grade: B+
+
+**Auth Model:** JWT + SQLite (Argon2 hashing, rate-limited login, httponly cookies, configurable TTL). Solid.
+
+**Input Validation:** PDF upload validates content-type, extension, magic bytes, file size. Search queries properly escaped. Rate limiting on auth and upload.
+
+**14 Open Security Alerts — Triage:**
+
+| # | Severity | File | Finding | Verdict |
+|---|----------|------|---------|---------|
+| #118 | HIGH | solr-search/uv.lock | ecdsa dependency vulnerability | **Fix** — update dependency |
+| #104 | ERROR | solr-search/main.py:223 | Stack trace exposure | **Investigate** — solr-search uses HTTPException abstraction, may be false positive |
+| #103 | ERROR | release-docs.yml:6 | CKV_GHA_7 workflow_dispatch inputs | **Fix** — remove or restructure inputs |
+| #97 | ERROR | installer/setup.py:516 | Clear-text logging of sensitive info | **False positive** — prints "generated"/"kept existing", not the secret |
+| #102–#98 | WARNING | release-docs.yml | 5× secrets-outside-env | **Fix** — move secrets to step-level or use environment blocks |
+| #94 | WARNING | squad-issue-assign.yml:122 | secrets-outside-env | **Fix** — restructure secret usage |
+| #93 | WARNING | squad-heartbeat.yml:255 | secrets-outside-env | **Fix** — restructure secret usage |
+| #96 | NOTE | installer/setup.py:10 | B404 subprocess import | **Dismiss** — justified usage, safe (list args, no shell=True) |
+| #92 | NOTE | e2e/test_upload_index_search.py:31 | B404 subprocess import | **Dismiss** — already ignored in ruff.toml, safe diagnostic usage |
+| #91 | NOTE | e2e/test_search_modes.py:149 | B112 try-except-pass | **Dismiss** — actually uses `continue`, not `pass`; graceful probe pattern |
+
+**Secrets Management:** Installer generates secrets into `.env`, Docker Compose injects via environment. Good pattern. Workflow secrets need env-block restructuring.
+
+### Design & Usability — Grade: A-
+
+**UI:** React 18 + Vite, clean component hierarchy (15 components + 7 pages + 8 hooks). SearchPage with FacetPanel, ActiveFilters, BookCard, PdfViewer, Pagination. Good tab navigation.
+
+**Accessibility:** 82 ARIA attributes found, proper form labeling, semantic HTML. Missing: skip-to-content link, ARIA live regions for dynamic content, no automated a11y testing.
+
+**Error Handling:** Try-catch in async operations, user-friendly error messages, but **no Error Boundary** — runtime React errors crash the whole app silently.
+
+**Search state not URL-persisted** — search resets on navigation (no deep linking to search results).
+
+### Performance — Grade: B
+
+**Frontend:** No route-based code splitting (all pages imported eagerly). No React.memo on BookCard/FacetPanel (unnecessary re-renders). No virtual scrolling for long lists. Debounced search is good. Estimated bundle ~150-200KB (acceptable).
+
+**Backend:** Single-prefetch RabbitMQ consumption (backpressure is correct for PDF processing). Embeddings model loaded once and cached. Redis caching for document state. Solr queries are efficient (field-specific, paginated).
+
+**Infrastructure:** Memory limits set. Health checks properly configured. SolrCloud 3-node cluster for availability. Redis 256MB reserved.
+
+### Code Quality — Grade: A-
+
+**Testing:** 323 total tests (143 solr-search, 76 document-indexer, 12 document-lister, 9 embeddings-server, 83 frontend). No coverage thresholds configured. Admin has 0 tests.
+
+**Linting:** Ruff (Python) with E/F/W/I/UP/B/SIM/S rules. ESLint + Prettier (TypeScript) with strict mode, zero warnings. TypeScript strict mode enabled.
+
+**Technical Debt:** App.css is 1,848 lines (monolithic). React 18.2 is 5 minor versions behind. ESLint 8.x is 2 major versions behind. TypeScript 5.0.2 is behind. Bootstrap declared but not used.
+
+### CI/CD — Grade: B+
+
+**13 workflows** covering unit tests, integration tests, lint, release, 3 security scanners (Bandit, Checkov, Zizmor), squad automation, label sync, and version check.
+
+**Gap:** release-docs.yml has never been run (0 runs). It has 7 security alerts and uncertain Copilot CLI package references.
+
+### Release Docs Workflow — Detailed Analysis
+
+**What it does:** Collects milestone context (issues, PRs, test artifacts), invokes Copilot CLI to generate release notes + test report, falls back to templates if CLI unavailable, commits docs and opens PR against `dev`.
+
+**Copilot CLI Research:**
+- Packages tried: `@github/copilot` (primary), `@githubnext/github-copilot-cli` (fallback)
+- CLI invocation: `copilot -p "$(cat $prompt_file)" --allow-tool=shell --allow-tool=write --no-ask-user`
+- ✅ **CORRECTED (2026-03-16): `--agent` and `--autopilot` ARE valid CLI flags.** `--agent <agent>` specifies a custom agent (e.g., `--agent squad`). `--autopilot` enables autopilot continuation in prompt mode. Verified via `copilot --help`.
+- **Recommendation:** Use `copilot --agent squad --autopilot -p "Newt: generate release docs for v${VERSION}" --allow-all-tools` to have Newt produce documentation autonomously in the release-docs workflow.
+
+**Issues to fix:**
+1. CKV_GHA_7: Move `workflow_dispatch` inputs handling or restructure
+2. 5× secrets-outside-env: Use step-level secrets or `environment:` blocks
+3. Token overloading: `GITHUB_TOKEN` should be `${{ github.token }}`, not `COPILOT_TOKEN`
+4. Validate CLI package names still work (may need updating)
+5. Test the workflow end-to-end
+
+---
+
+## Milestone Plan
+
+### v1.0.1 — Security Patch 🔒
+
+**Theme:** Zero known vulnerabilities. Pure fixes, no new features.
+**Target:** 1 week after approval
+**Branch convention:** `squad/{issue}-{slug}` → PR to `dev`
+
+| # | Issue Title | Owner | Priority | Deps |
+|---|-------------|-------|----------|------|
+| 1 | Fix ecdsa dependency vulnerability in solr-search | 🔒 Kane | P0 | — |
+| 2 | Investigate and resolve stack trace exposure alert (solr-search #104) | 🔒 Kane | P0 | — |
+| 3 | Fix secrets-outside-env in release-docs.yml (5 alerts) | ⚙️ Brett | P0 | — |
+| 4 | Fix secrets-outside-env in squad-issue-assign.yml | ⚙️ Brett | P1 | — |
+| 5 | Fix secrets-outside-env in squad-heartbeat.yml | ⚙️ Brett | P1 | — |
+| 6 | Fix CKV_GHA_7 workflow_dispatch inputs in release-docs.yml | ⚙️ Brett | P1 | #3 |
+| 7 | Triage and dismiss false-positive alerts (#97, #96, #92, #91) | 🔒 Kane | P1 | — |
+| 8 | Security patch test validation | 🧪 Lambert | P1 | #1–#7 |
+
+### v1.1.0 — Release Workflow & CI/CD 🚀
+
+**Theme:** Make release-docs workflow operational. Clean CI/CD pipelines.
+**Target:** 2 weeks after v1.0.1
+**Depends on:** v1.0.1 (workflow security fixes must land first)
+
+| # | Issue Title | Owner | Priority | Deps |
+|---|-------------|-------|----------|------|
+| 1 | Fix and validate release-docs.yml end-to-end | ⚙️ Brett | P0 | v1.0.1 |
+| 2 | Update Copilot CLI package references and invocation | ⚙️ Brett | P1 | #1 |
+| 3 | Add release milestone labels for v1.x milestones | ⚙️ Brett | P2 | — |
+| 4 | Add error handling improvements to document-indexer logging | 🔧 Parker | P1 | — |
+| 5 | Fix embeddings-server exc_info stack trace exposure | 🔧 Parker | P1 | — |
+| 6 | E2E test: release-docs workflow smoke test | 🧪 Lambert | P1 | #1, #2 |
+| 7 | Update project documentation for v1.x development process | 📝 Newt | P2 | — |
+
+### v1.2.0 — Frontend Quality & Performance ⚛️ (Planned)
+
+**Theme:** Error resilience, performance optimization, accessibility.
+**Target:** 3 weeks after v1.1.0
+
+**Planned issues (to be created when approaching milestone):**
+
+| # | Issue Title | Owner | Priority |
+|---|-------------|-------|----------|
+| 1 | Add React Error Boundary with graceful fallback UI | ⚛️ Dallas | P0 |
+| 2 | Implement React.lazy() route-based code splitting | ⚛️ Dallas | P1 |
+| 3 | Add React.memo to BookCard and FacetPanel components | ⚛️ Dallas | P1 |
+| 4 | Modularize App.css into component-scoped CSS files | ⚛️ Dallas | P2 |
+| 5 | Add skip-to-content link and ARIA live regions | ⚛️ Dallas | P2 |
+| 6 | Update React to 18.3.x (patch), TypeScript to 5.9.x | ⚛️ Dallas | P1 |
+| 7 | Add frontend test coverage thresholds (80% target) | 🧪 Lambert | P1 |
+| 8 | Remove unused Bootstrap dependency from package.json | 🤖 @copilot | P2 |
+
+### v1.3.0 — Backend Observability & Hardening 🔧 (Planned)
+
+**Theme:** Structured logging, monitoring, admin security.
+**Target:** 4 weeks after v1.2.0
+
+**Planned issues:**
+
+| # | Issue Title | Owner | Priority |
+|---|-------------|-------|----------|
+| 1 | Implement structured JSON logging across all Python services | 🔧 Parker | P0 |
+| 2 | Add authentication to Streamlit admin dashboard | 🔧 Parker | P1 |
+| 3 | Add URL-based search state persistence (deep linking) | ⚛️ Dallas | P1 |
+| 4 | Add admin dashboard unit tests (currently 0 tests) | 🧪 Lambert | P1 |
+| 5 | Add backend test coverage reporting to CI | 🧪 Lambert | P2 |
+| 6 | Add distributed request tracing headers | 🔧 Parker | P2 |
+
+### v1.4.0 — Dependency Modernization 📦 (Planned)
+
+**Theme:** Major dependency upgrades, supply chain security.
+**Target:** 6 weeks after v1.3.0
+
+**Planned issues:**
+
+| # | Issue Title | Owner | Priority |
+|---|-------------|-------|----------|
+| 1 | Evaluate React 19 migration — compatibility assessment | ⚛️ Dallas | P0 |
+| 2 | React 19 migration (if assessment passes) | ⚛️ Dallas | P0 |
+| 3 | ESLint 9.x/10.x upgrade with flat config migration | ⚛️ Dallas | P1 |
+| 4 | Python dependency audit and update cycle | 🔧 Parker | P1 |
+| 5 | Add automated dependency update policy (Dependabot config) | ⚙️ Brett | P2 |
+| 6 | Container base image audit and updates | ⚙️ Brett | P2 |
+
+---
+
+## Copilot CLI Research Findings
+
+**`--agent` and `--autopilot` parameters:**
+- ✅ **CORRECTED (2026-03-16): Both ARE valid CLI flags.** Verified via `copilot --help`.
+- `--agent <agent>` — Specify a custom agent to use (e.g., `--agent squad`)
+- `--autopilot` — Enable autopilot continuation in prompt mode
+- **Recommended invocation:** `copilot --agent squad --autopilot -p "Newt: generate release docs for v${VERSION}" --allow-all-tools`
+
+**Package names:**
+- `@github/copilot` is the current official package
+- `@githubnext/github-copilot-cli` was the preview-era package (may be deprecated)
+- The workflow's fallback approach is correct but should be tested
+
+---
+
+## Risk Assessment
+
+| Milestone | Risk | Mitigation |
+|-----------|------|------------|
+| v1.0.1 | Low — pure fixes, well-defined alerts | Kane + Brett have clear targets. Lambert validates. |
+| v1.1.0 | Medium — workflow has never been tested | Brett should test in a fork first. Fallback templates exist. |
+| v1.2.0 | Low — frontend changes are self-contained | Dallas has strong test coverage. No API changes. |
+| v1.3.0 | Medium — logging changes touch all services | Parker should use feature flags. Lambert runs E2E suite. |
+| v1.4.0 | High — React 19 is a major version upgrade | Assessment-first approach. Can defer if breaking changes found. |
+
+---
+
+## Notes
+
+- All PRs target `dev` branch
+- Branch naming: `squad/{issue-number}-{slug}`
+- Each milestone should be released from `dev` → `main` by Ripley or Juanma
+- TDD approach: Lambert writes test expectations before implementation where possible
+- Issues for v1.2.0+ will be created when we approach those milestones (avoid issue sprawl)
+
+
