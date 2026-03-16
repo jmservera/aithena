@@ -59,10 +59,18 @@ def test_login_returns_jwt_and_sets_cookie(client: TestClient, seeded_user: Auth
 
     assert response.status_code == 200
     data = response.json()
+    claims = jwt.decode(data["access_token"], settings.auth_jwt_secret, algorithms=["HS256"])
+
     assert data["token_type"] == "bearer"
     assert data["user"] == {"id": seeded_user.id, "username": seeded_user.username, "role": seeded_user.role}
     assert data["expires_in"] == settings.auth_jwt_ttl_seconds
     assert response.cookies.get(settings.auth_cookie_name) == data["access_token"]
+    assert claims["sub"] == seeded_user.username
+    assert claims["user_id"] == seeded_user.id
+    assert claims["role"] == seeded_user.role
+    assert isinstance(claims["iat"], int)
+    assert isinstance(claims["exp"], int)
+    assert claims["exp"] - claims["iat"] == settings.auth_jwt_ttl_seconds
 
 
 def test_login_rejects_invalid_credentials(client: TestClient, seeded_user: AuthenticatedUser) -> None:
@@ -78,6 +86,13 @@ def test_validate_rejects_invalid_token(client: TestClient) -> None:
     response = client.get("/v1/auth/validate", headers={"Authorization": "Bearer invalid-token"})
 
     assert response.status_code == 401
+
+
+def test_validate_requires_authentication(client: TestClient) -> None:
+    response = client.get("/v1/auth/validate")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
 
 
 def test_validate_rejects_expired_token(client: TestClient, seeded_user: AuthenticatedUser) -> None:
@@ -123,6 +138,32 @@ def test_me_returns_current_user_info(client: TestClient, seeded_user: Authentic
     assert response.json() == {"id": seeded_user.id, "username": seeded_user.username, "role": seeded_user.role}
 
 
+def test_me_accepts_cookie_auth(client: TestClient, seeded_user: AuthenticatedUser) -> None:
+    token = create_access_token(seeded_user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
+    client.cookies.set(settings.auth_cookie_name, token)
+
+    response = client.get("/v1/auth/me")
+
+    assert response.status_code == 200
+    assert response.json() == {"id": seeded_user.id, "username": seeded_user.username, "role": seeded_user.role}
+
+
+def test_me_rejects_expired_token(client: TestClient, seeded_user: AuthenticatedUser) -> None:
+    payload = {
+        "sub": seeded_user.username,
+        "user_id": seeded_user.id,
+        "role": seeded_user.role,
+        "iat": int((datetime.now(UTC) - timedelta(hours=2)).timestamp()),
+        "exp": int((datetime.now(UTC) - timedelta(hours=1)).timestamp()),
+    }
+    token = jwt.encode(payload, settings.auth_jwt_secret, algorithm="HS256")
+
+    response = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Token expired"}
+
+
 def test_logout_clears_auth_cookie(client: TestClient, seeded_user: AuthenticatedUser) -> None:
     token = create_access_token(seeded_user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
 
@@ -133,11 +174,12 @@ def test_logout_clears_auth_cookie(client: TestClient, seeded_user: Authenticate
     assert "Max-Age=0" in response.headers["set-cookie"] or "expires=" in response.headers["set-cookie"].lower()
 
 
-def test_search_requires_authentication() -> None:
-    client = TestClient(app)
-    response = client.get("/search", params={"q": "folklore"})
+@pytest.mark.parametrize("path", ["/search", "/v1/search"])
+def test_search_requires_authentication(client: TestClient, path: str) -> None:
+    response = client.get(path, params={"q": "folklore"})
 
     assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
 
 
 def test_login_rate_limiting(client: TestClient, seeded_user: AuthenticatedUser) -> None:

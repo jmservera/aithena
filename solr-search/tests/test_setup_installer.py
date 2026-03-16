@@ -15,11 +15,14 @@ if str(SOLR_SEARCH_DIR) not in sys.path:
     sys.path.append(str(SOLR_SEARCH_DIR))
 
 from auth import authenticate_user  # noqa: E402
-from installer.setup import InstallerConfig, load_env_file, run_setup  # noqa: E402
+from installer.setup import ENV_COMMENTS, InstallerConfig, find_user, load_env_file, run_setup  # noqa: E402
 
 
 def fake_secret(_: int) -> str:
     return "generated-secret-value"
+
+
+REQUIRED_ENV_KEYS = {key for key, _ in ENV_COMMENTS}
 
 
 def test_run_setup_writes_env_and_hashes_password(tmp_path: Path) -> None:
@@ -41,25 +44,30 @@ def test_run_setup_writes_env_and_hashes_password(tmp_path: Path) -> None:
     )
 
     env_values = load_env_file(env_path)
+    env_text = env_path.read_text(encoding="utf-8")
+
     assert result.generated_jwt_secret is True
+    assert REQUIRED_ENV_KEYS.issubset(env_values)
     assert env_values["BOOKS_PATH"] == str(library_path.resolve())
     assert env_values["BOOK_LIBRARY_PATH"] == str(library_path.resolve())
     assert env_values["AUTH_DB_DIR"] == str(auth_db_path.resolve().parent)
     assert env_values["AUTH_DB_PATH"] == "/data/auth/users.db"
     assert env_values["AUTH_JWT_SECRET"] == "generated-secret-value"
     assert env_values["CORS_ORIGINS"] == "http://localhost"
+    assert "correct-horse-battery-staple" not in env_text
     assert authenticate_user(auth_db_path, "admin", "correct-horse-battery-staple") is not None
 
     with sqlite3.connect(auth_db_path) as connection:
         row = connection.execute(
-            "SELECT username, password_hash, role FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, role FROM users WHERE username = ?",
             ("admin",),
         ).fetchone()
 
-    assert row[0] == "admin"
-    assert row[2] == "admin"
-    assert row[1] != "correct-horse-battery-staple"
-    assert row[1].startswith("$argon2id$")
+    assert row[1] == "admin"
+    assert row[3] == "admin"
+    assert row[2] != "correct-horse-battery-staple"
+    assert row[2].startswith("$argon2id$")
+    assert find_user(auth_db_path, "admin") == {"id": row[0], "username": "admin", "role": "admin"}
 
 
 def test_placeholder_secret_is_regenerated(tmp_path: Path) -> None:
@@ -99,7 +107,7 @@ def test_placeholder_secret_is_regenerated(tmp_path: Path) -> None:
     assert env_values["AUTH_JWT_SECRET"] == "fresh-generated-secret"
 
 
-def test_rerun_preserves_existing_secret_and_users(tmp_path: Path) -> None:
+def test_rerun_preserves_existing_jwt_secret_and_users(tmp_path: Path) -> None:
     library_path = tmp_path / "library"
     env_path = tmp_path / ".env"
     auth_db_path = tmp_path / "state" / "users.db"
@@ -229,7 +237,7 @@ def test_env_file_strips_newlines_from_values(tmp_path: Path) -> None:
     assert "INJECTED" not in reloaded.get("INJECTED", "")
 
 
-def test_env_file_has_restricted_permissions(tmp_path: Path) -> None:
+def test_env_file_and_auth_db_have_restricted_permissions(tmp_path: Path) -> None:
     library_path = tmp_path / "lib"
     env_path = tmp_path / ".env"
     auth_db_path = tmp_path / "auth.db"
