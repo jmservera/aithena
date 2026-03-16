@@ -20,3 +20,22 @@ dev = [
     "pytest-cov",
     "httpx>=0.27",
 ]
+
+[tool.pytest.ini_options]
+addopts = "--cov=search_service --cov=main --cov=auth --cov=config --cov=metrics --cov-report=term-missing --cov-report=html -ra"
+
+[tool.coverage.run]
+source = ["search_service", "main", "auth", "config", "metrics"]
+omit = ["tests/*", "__pycache__/*"]
+
+[tool.coverage.report]
+fail_under = 88
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

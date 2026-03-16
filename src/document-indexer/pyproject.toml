@@ -9,6 +9,7 @@ dependencies = [
     "pdfplumber>=0.11.9,<1",
     "requests==2.32.4",
     "retry==0.9.2",
+    "python-json-logger>=4.0.0",
 ]
 
 [dependency-groups]
@@ -20,4 +21,20 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "--cov=document_indexer --cov-report=term-missing --cov-report=html -ra"
+
+[tool.coverage.run]
+source = ["document_indexer"]
+omit = ["tests/*", "__pycache__/*"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

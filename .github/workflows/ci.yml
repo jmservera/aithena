@@ -39,9 +39,17 @@ jobs:
         working-directory: src/document-indexer
         run: uv sync --frozen
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: src/document-indexer
-        run: uv run pytest -v --tb=short --cov=document_indexer --cov-report=term-missing
+        run: uv run pytest -v --tb=short
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: document-indexer-coverage
+          path: src/document-indexer/htmlcov/
+          retention-days: 14
 
   solr-search-tests:
     name: solr-search tests
@@ -66,13 +74,17 @@ jobs:
         working-directory: src/solr-search
         run: uv sync --frozen
 
-      - name: Run unit tests
+      - name: Run tests with coverage
         working-directory: src/solr-search
-        run: uv run pytest tests/test_search_service.py -v --tb=short --cov=search_service --cov-report=term-missing
+        run: uv run pytest -v --tb=short
 
-      - name: Run integration tests
-        working-directory: src/solr-search
-        run: uv run pytest tests/test_integration.py -v --tb=short
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: solr-search-coverage
+          path: src/solr-search/htmlcov/
+          retention-days: 14
 
   python-lint:
     name: Python lint (ruff)
@@ -93,4 +105,3 @@ jobs:
       - python-lint
     steps:
       - run: echo "All tests passed successfully!"
-
