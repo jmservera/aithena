@@ -3,7 +3,18 @@ import json
 import pandas as pd
 import redis
 import streamlit as st
-from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
+from pages.shared.config import AUTH_ENABLED, QUEUE_NAME, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
+
+if AUTH_ENABLED:
+    from auth import AuthSettings, require_auth
+
+    try:
+        _settings = AuthSettings.from_env()
+    except ValueError as _exc:
+        st.error(f"Authentication configuration error: {_exc}")
+        st.stop()
+    require_auth(_settings)
+
 
 st.set_page_config(page_title="Document Manager", page_icon="📄", layout="wide")
 st.title("📄 Document Manager")
