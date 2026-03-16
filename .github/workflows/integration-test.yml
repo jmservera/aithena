@@ -155,7 +155,7 @@ jobs:
             -f docker-compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
-            up -d nginx
+            up -d
 
       - name: Show container logs on failure
         if: failure()
@@ -186,6 +186,7 @@ jobs:
           }
 
           wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr"
+          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection"
           wait_for_url "http://localhost:8080/health" "solr-search API"
           wait_for_url "http://localhost/health" "nginx"
           wait_for_url "http://localhost/search" "Aithena UI"

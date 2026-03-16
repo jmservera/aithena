@@ -24,7 +24,10 @@ import requests
 # ---------------------------------------------------------------------------
 
 SOLR_URL: str = os.environ.get("SOLR_URL", "http://localhost:8983/solr/books")
+SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
 E2E_LIBRARY_PATH: str = os.environ.get("E2E_LIBRARY_PATH", "/tmp/aithena-e2e-library")
+API_USER: str | None = os.environ.get("CI_ADMIN_USERNAME") or os.environ.get("E2E_USERNAME")
+API_PASS: str | None = os.environ.get("CI_ADMIN_PASSWORD") or os.environ.get("E2E_PASSWORD")
 
 # Relative path inside the library; uses the Author - Title (Year) pattern so
 # the metadata extractor produces deterministic fields.
@@ -93,14 +96,32 @@ def solr_url() -> str:
 
 @pytest.fixture(scope="session")
 def solr_available(solr_url: str) -> None:
-    """Fail fast if Solr is not reachable."""
+    """Fail fast if the Solr books collection is not reachable."""
     try:
-        resp = requests.get(f"{solr_url}/admin/ping", timeout=5)
+        resp = requests.get(f"{solr_url}/admin/ping", params={"distrib": "true"}, timeout=5)
         resp.raise_for_status()
     except Exception as exc:
         pytest.skip(
             f"Solr not reachable at {solr_url} — start the stack first (see README.md §E2E Tests). Error: {exc}"
         )
+
+
+@pytest.fixture(scope="session")
+def auth_headers() -> dict[str, str]:
+    """Log into the live API and return bearer auth headers for protected endpoints."""
+    if not API_USER or not API_PASS:
+        pytest.skip("Protected E2E tests require CI_ADMIN_USERNAME/CI_ADMIN_PASSWORD (or E2E_USERNAME/E2E_PASSWORD).")
+
+    resp = requests.post(
+        f"{SEARCH_API_URL.rstrip('/')}/v1/auth/login",
+        json={"username": API_USER, "password": API_PASS},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    token = resp.json().get("access_token")
+    if not isinstance(token, str) or not token:
+        pytest.fail(f"Login response missing access_token: {resp.text}")
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(scope="session")

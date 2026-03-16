@@ -79,12 +79,13 @@ def api_available(api_url: str) -> None:
 
 
 @pytest.fixture(scope="session")
-def embeddings_available(api_url: str, api_available: None) -> bool:
+def embeddings_available(api_url: str, api_available: None, auth_headers: dict[str, str]) -> bool:
     """Return True when the embeddings service is reachable via a probe search."""
     try:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "test", "mode": "semantic", "limit": "1"},
+            headers=auth_headers,
             timeout=10,
         )
         # 200 = embeddings working; 503/502 = embeddings down
@@ -94,12 +95,13 @@ def embeddings_available(api_url: str, api_available: None) -> bool:
 
 
 @pytest.fixture(scope="session")
-def any_document_id(api_url: str, api_available: None) -> str | None:
+def any_document_id(api_url: str, api_available: None, auth_headers: dict[str, str]) -> str | None:
     """Return the Solr id of the first indexed document, or None if no data."""
     try:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "*", "mode": "keyword", "limit": "1"},
+            headers=auth_headers,
             timeout=10,
         )
         if resp.status_code != 200:
@@ -111,7 +113,9 @@ def any_document_id(api_url: str, api_available: None) -> str | None:
 
 
 @pytest.fixture(scope="session")
-def any_embedded_document_id(api_url: str, api_available: None, embeddings_available: bool) -> str | None:
+def any_embedded_document_id(
+    api_url: str, api_available: None, embeddings_available: bool, auth_headers: dict[str, str]
+) -> str | None:
     """Return the id of a document that has a stored embedding vector, or None.
 
     Unlike ``any_document_id``, this fixture probes the ``/v1/books/{id}/similar``
@@ -129,6 +133,7 @@ def any_embedded_document_id(api_url: str, api_available: None, embeddings_avail
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "*", "mode": "keyword", "limit": str(MAX_EMBEDDING_PROBE_ATTEMPTS)},
+            headers=auth_headers,
             timeout=10,
         )
         if resp.status_code != 200:
@@ -142,6 +147,7 @@ def any_embedded_document_id(api_url: str, api_available: None, embeddings_avail
                 probe = requests.get(
                     f"{api_url}{_similar_endpoint(doc_id)}",
                     params={"limit": "1"},
+                    headers=auth_headers,
                     timeout=10,
                 )
                 if probe.status_code == 200:
@@ -161,22 +167,24 @@ def any_embedded_document_id(api_url: str, api_available: None, embeddings_avail
 class TestKeywordSearch:
     """Keyword (BM25) search mode — response contract verification."""
 
-    def test_keyword_search_returns_200(self, api_url: str, api_available: None) -> None:
+    def test_keyword_search_returns_200(self, api_url: str, api_available: None, auth_headers: dict[str, str]) -> None:
         """GET /v1/search?q=*&mode=keyword must return HTTP 200."""
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "*", "mode": "keyword"},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
 
     def test_keyword_search_response_has_required_fields(
-        self, api_url: str, api_available: None
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
     ) -> None:
         """Keyword search response must include query, total, results, and facets."""
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "*", "mode": "keyword"},
+            headers=auth_headers,
             timeout=10,
         )
         body = resp.json()
@@ -184,12 +192,13 @@ class TestKeywordSearch:
             assert field in body, f"'{field}' missing from search response: {body}"
 
     def test_keyword_search_mode_field_is_keyword(
-        self, api_url: str, api_available: None
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
     ) -> None:
         """The 'mode' field in the keyword search response must be 'keyword'."""
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "*", "mode": "keyword"},
+            headers=auth_headers,
             timeout=10,
         )
         body = resp.json()
@@ -197,17 +206,24 @@ class TestKeywordSearch:
             f"Expected mode='keyword', got {body.get('mode')!r}"
         )
 
-    def test_keyword_search_v1_alias_returns_200(self, api_url: str, api_available: None) -> None:
+    def test_keyword_search_v1_alias_returns_200(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """GET /v1/search/ (trailing slash alias) must return HTTP 200."""
         resp = requests.get(
             f"{api_url}/v1/search/",
             params={"q": "*", "mode": "keyword"},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 200
 
     def test_keyword_search_results_have_id_and_title(
-        self, api_url: str, api_available: None, any_document_id: str | None
+        self,
+        api_url: str,
+        api_available: None,
+        any_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """Each result in a keyword search must include 'id' and 'title' fields."""
         if not any_document_id:
@@ -216,6 +232,7 @@ class TestKeywordSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "*", "mode": "keyword", "limit": "5"},
+            headers=auth_headers,
             timeout=10,
         )
         body = resp.json()
@@ -234,7 +251,9 @@ class TestKeywordSearch:
 class TestSemanticSearch:
     """Semantic (kNN) search mode — requires embeddings service."""
 
-    def test_semantic_empty_query_returns_400(self, api_url: str, api_available: None) -> None:
+    def test_semantic_empty_query_returns_400(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """GET /v1/search with mode=semantic and an empty query must return HTTP 400.
 
         This is deterministic — the validation happens before the embeddings
@@ -243,6 +262,7 @@ class TestSemanticSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "", "mode": "semantic"},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 400, (
@@ -255,6 +275,7 @@ class TestSemanticSearch:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """GET /v1/search?mode=semantic must return HTTP 200 when embeddings service is up.
 
@@ -268,6 +289,7 @@ class TestSemanticSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "book", "mode": "semantic", "limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         assert resp.status_code == 200, (
@@ -280,6 +302,7 @@ class TestSemanticSearch:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """Semantic search response must include mode='semantic'.
 
@@ -293,6 +316,7 @@ class TestSemanticSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "book", "mode": "semantic", "limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         body = resp.json()
@@ -306,6 +330,7 @@ class TestSemanticSearch:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """Semantic search response must include a 'results' list.
 
@@ -319,6 +344,7 @@ class TestSemanticSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "book", "mode": "semantic", "limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         body = resp.json()
@@ -335,7 +361,9 @@ class TestSemanticSearch:
 class TestHybridSearch:
     """Hybrid (BM25 + kNN RRF) search mode — requires embeddings service."""
 
-    def test_hybrid_empty_query_returns_400(self, api_url: str, api_available: None) -> None:
+    def test_hybrid_empty_query_returns_400(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """GET /v1/search with mode=hybrid and an empty query must return HTTP 400.
 
         This is deterministic — the validation happens before the embeddings
@@ -344,6 +372,7 @@ class TestHybridSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "", "mode": "hybrid"},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 400, (
@@ -356,6 +385,7 @@ class TestHybridSearch:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """GET /v1/search?mode=hybrid must return HTTP 200 when embeddings service is up.
 
@@ -369,6 +399,7 @@ class TestHybridSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "book", "mode": "hybrid", "limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         assert resp.status_code == 200, (
@@ -381,6 +412,7 @@ class TestHybridSearch:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """Hybrid search response must include mode='hybrid'.
 
@@ -394,6 +426,7 @@ class TestHybridSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "book", "mode": "hybrid", "limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         body = resp.json()
@@ -407,6 +440,7 @@ class TestHybridSearch:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """Each hybrid result must include 'id' and 'title' fields.
 
@@ -420,6 +454,7 @@ class TestHybridSearch:
         resp = requests.get(
             f"{api_url}{SEARCH_ENDPOINT}",
             params={"q": "book", "mode": "hybrid", "limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         results = resp.json().get("results", [])
@@ -436,7 +471,9 @@ class TestHybridSearch:
 class TestSimilarBooks:
     """Similar-books endpoint behavior — /v1/books/{id}/similar."""
 
-    def test_similar_unknown_id_returns_404(self, api_url: str, api_available: None) -> None:
+    def test_similar_unknown_id_returns_404(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """GET /v1/books/{id}/similar with a non-existent ID must return HTTP 404.
 
         This is deterministic — no indexed data or embeddings required.
@@ -444,6 +481,7 @@ class TestSimilarBooks:
         resp = requests.get(
             f"{api_url}/v1/books/nonexistent-document-id-e2e/similar",
             params={"limit": "5"},
+            headers=auth_headers,
             timeout=10,
         )
         assert resp.status_code == 404, (
@@ -456,6 +494,7 @@ class TestSimilarBooks:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """GET /v1/books/{id}/similar must return a list of similar books.
 
@@ -470,6 +509,7 @@ class TestSimilarBooks:
         resp = requests.get(
             f"{api_url}{_similar_endpoint(any_embedded_document_id)}",
             params={"limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         assert resp.status_code == 200, (
@@ -485,6 +525,7 @@ class TestSimilarBooks:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """Similar-books results must not include the source document itself.
 
@@ -498,6 +539,7 @@ class TestSimilarBooks:
         resp = requests.get(
             f"{api_url}{_similar_endpoint(any_embedded_document_id)}",
             params={"limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         assert resp.status_code == 200, (
@@ -517,6 +559,7 @@ class TestSimilarBooks:
         api_available: None,
         embeddings_available: bool,
         any_embedded_document_id: str | None,
+        auth_headers: dict[str, str],
     ) -> None:
         """Each similar-books result entry must include 'id' and 'title'.
 
@@ -530,6 +573,7 @@ class TestSimilarBooks:
         resp = requests.get(
             f"{api_url}{_similar_endpoint(any_embedded_document_id)}",
             params={"limit": "5"},
+            headers=auth_headers,
             timeout=30,
         )
         assert resp.status_code == 200, (
@@ -541,7 +585,9 @@ class TestSimilarBooks:
             assert "id" in doc, f"Similar result missing 'id': {doc}"
             assert "title" in doc, f"Similar result missing 'title': {doc}"
 
-    def test_v1_similar_alias_is_registered(self, api_url: str, api_available: None) -> None:
+    def test_v1_similar_alias_is_registered(
+        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+    ) -> None:
         """GET /v1/books/{id}/similar must be reachable (404 for unknown id, not 405/501).
 
         This is deterministic — just verifies the route is registered.
@@ -549,6 +595,7 @@ class TestSimilarBooks:
         resp = requests.get(
             f"{api_url}/v1/books/probe-id-e2e-test/similar",
             params={"limit": "1"},
+            headers=auth_headers,
             timeout=10,
         )
         # 404 = route registered but document not found (expected)
