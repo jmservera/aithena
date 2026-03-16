@@ -234,8 +234,7 @@ jobs:
         if: steps.install_copilot.outputs.installed == 'true'
         shell: bash
         env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
           RELEASE_MILESTONE: ${{ env.INPUT_MILESTONE }}
