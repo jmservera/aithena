@@ -376,11 +376,13 @@ def callback(
             SOLR_COLLECTION,
         )
     except Exception as exc:  # pragma: no cover - runtime integration path
-        logger.exception("Failed to process %s", file_path)
+        logger.error("Failed to process %s: %s", file_path, exc)
+        logger.debug("Failed to process %s", file_path, exc_info=True)
         try:
             mark_failure(Path(file_path), str(exc), stage="unknown")
-        except Exception:
-            logger.exception("Unable to persist failed state for %s", file_path)
+        except Exception as persist_exc:
+            logger.error("Unable to persist failed state for %s: %s", file_path, persist_exc)
+            logger.debug("Unable to persist failed state for %s", file_path, exc_info=True)
     finally:
         channel.basic_ack(delivery_tag=method.delivery_tag)
 
