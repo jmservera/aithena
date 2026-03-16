@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-This guide covers production deployment of the Aithena book library search system using Docker Compose.
+This guide covers production deployment of the Aithena book library search system using Docker Compose. Pair it with the [Search and indexing sizing guide](sizing-guide.md) when you need capacity estimates for Solr, Redis, RabbitMQ, the embeddings server, and indexing throughput.
 
 For service-by-service outage handling and recovery drills, see the [failover runbook](failover-runbook.md).
 
