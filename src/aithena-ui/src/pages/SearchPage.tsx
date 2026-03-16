@@ -1,4 +1,5 @@
 import { useState, useCallback, FormEvent } from 'react';
+import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import { useSearch, BookResult, SearchMode } from '../hooks/search';
 import { SearchFilters } from '../hooks/search';
 import { getCachedSimilarBook } from '../hooks/similarBooks';
@@ -28,6 +29,113 @@ const MODE_BADGE_CLASS: Record<SearchMode, string> = {
   semantic: 'mode-badge--semantic',
   hybrid: 'mode-badge--hybrid',
 };
+
+interface SearchResultsSectionProps {
+  error: string | null;
+  hasActiveFilters: boolean;
+  loading: boolean;
+  page: number;
+  limit: number;
+  query: string;
+  results: BookResult[];
+  selectedBook: BookResult | null;
+  total: number;
+  onOpenPdf: (book: BookResult) => void;
+  onPageChange: (page: number) => void;
+  onPdfClose: () => void;
+  onSelectSimilarBook: (bookId: string) => void;
+}
+
+function renderSearchResultsFallback({ reset, reload }: ErrorBoundaryFallbackProps) {
+  return (
+    <section className="error-boundary error-boundary--section" role="alert" aria-live="assertive">
+      <h2 className="error-boundary__title error-boundary__title--section">
+        Search results are temporarily unavailable.
+      </h2>
+      <p className="error-boundary__message">
+        Your current search settings are still here. Try loading the results again or reload the
+        app.
+      </p>
+      <div className="error-boundary__actions">
+        <button type="button" className="error-boundary__button" onClick={reset}>
+          Try again
+        </button>
+        <button
+          type="button"
+          className="error-boundary__button error-boundary__button--secondary"
+          onClick={reload}
+        >
+          Reload app
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function SearchResultsSection({
+  error,
+  hasActiveFilters,
+  loading,
+  page,
+  limit,
+  query,
+  results,
+  selectedBook,
+  total,
+  onOpenPdf,
+  onPageChange,
+  onPdfClose,
+  onSelectSimilarBook,
+}: SearchResultsSectionProps) {
+  const totalPages = Math.ceil(total / limit);
+
+  return (
+    <>
+      <section className="search-results">
+        {error && (
+          <div className="search-error" role="alert">
+            ⚠️ {error}
+          </div>
+        )}
+
+        {!loading && !error && query && results.length === 0 && (
+          <div className="search-empty">
+            No results found for &ldquo;{query}&rdquo;
+            {hasActiveFilters && ' with the selected filters'}.
+          </div>
+        )}
+
+        {!query && !loading && (
+          <div className="search-empty">Enter a search term above to find books.</div>
+        )}
+
+        {results.map((book) => (
+          <BookCard
+            key={book.id}
+            book={book}
+            onOpenPdf={onOpenPdf}
+            isSelected={selectedBook?.id === book.id}
+          />
+        ))}
+      </section>
+
+      {selectedBook && (
+        <SimilarBooks documentId={selectedBook.id} onSelectBook={onSelectSimilarBook} />
+      )}
+
+      {total > 0 && (
+        <footer className="search-footer">
+          <Pagination page={page} limit={limit} total={total} onPageChange={onPageChange} />
+          <p className="pagination-info">
+            Page {page} of {totalPages}
+          </p>
+        </footer>
+      )}
+
+      {selectedBook && <PdfViewer result={selectedBook} onClose={onPdfClose} />}
+    </>
+  );
+}
 
 function SearchPage() {
   const [inputValue, setInputValue] = useState('');
@@ -74,8 +182,6 @@ function SearchPage() {
     },
     [results]
   );
-
-  const totalPages = Math.ceil(total / searchState.limit);
 
   return (
     <div className="search-layout">
@@ -182,54 +288,24 @@ function SearchPage() {
           )}
         </header>
 
-        <section className="search-results">
-          {error && (
-            <div className="search-error" role="alert">
-              ⚠️ {error}
-            </div>
-          )}
-
-          {!loading && !error && searchState.query && results.length === 0 && (
-            <div className="search-empty">
-              No results found for &ldquo;{searchState.query}&rdquo;
-              {hasActiveFilters && ' with the selected filters'}.
-            </div>
-          )}
-
-          {!searchState.query && !loading && (
-            <div className="search-empty">Enter a search term above to find books.</div>
-          )}
-
-          {results.map((book) => (
-            <BookCard
-              key={book.id}
-              book={book}
-              onOpenPdf={handleOpenPdf}
-              isSelected={selectedBook?.id === book.id}
-            />
-          ))}
-        </section>
-
-        {selectedBook && (
-          <SimilarBooks documentId={selectedBook.id} onSelectBook={handleSelectSimilarBook} />
-        )}
-
-        {total > 0 && (
-          <footer className="search-footer">
-            <Pagination
-              page={searchState.page}
-              limit={searchState.limit}
-              total={total}
-              onPageChange={setPage}
-            />
-            <p className="pagination-info">
-              Page {searchState.page} of {totalPages}
-            </p>
-          </footer>
-        )}
+        <ErrorBoundary fallback={renderSearchResultsFallback}>
+          <SearchResultsSection
+            error={error}
+            hasActiveFilters={hasActiveFilters}
+            loading={loading}
+            page={searchState.page}
+            limit={searchState.limit}
+            query={searchState.query}
+            results={results}
+            selectedBook={selectedBook}
+            total={total}
+            onOpenPdf={handleOpenPdf}
+            onPageChange={setPage}
+            onPdfClose={() => setSelectedBook(null)}
+            onSelectSimilarBook={handleSelectSimilarBook}
+          />
+        </ErrorBoundary>
       </main>
-
-      {selectedBook && <PdfViewer result={selectedBook} onClose={() => setSelectedBook(null)} />}
     </div>
   );
 }

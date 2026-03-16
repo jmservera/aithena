@@ -244,3 +244,10 @@
 - **PR #198** created targeting `dev`, references issue #50, ready for review after Parker's backend merge.
 - **Learnings**: userEvent.upload respects `accept` attribute in tests — use manual dispatchEvent for non-accepted file types; waitFor must wrap XHR handler calls to ensure they execute after XHR creation; state updates in hooks are async, always wrap assertions in waitFor.
 
+### 2026-03-16T16:40Z — Added route-aware Error Boundaries to aithena-ui (#328)
+
+- Moved `BrowserRouter` to `main.tsx` so the new top-level `RouteErrorBoundary` can key off `useLocation()` and automatically reset the app shell when navigation changes.
+- Added a reusable class-based `ErrorBoundary` component with dev-only technical details, console logging in development, and reload/reset callbacks; nested boundaries now isolate the search-results area and upload panel instead of crashing the full UI.
+- Added `ErrorBoundary.test.tsx` covering normal rendering, fallback rendering, reload behavior, and route-change resets with React Router memory navigation.
+- Verified the frontend with `npx vitest run`, `npm run lint`, and `npm run build`; the suite now passes with 13 test files / 87 tests.
+
