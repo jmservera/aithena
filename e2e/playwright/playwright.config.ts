@@ -1,6 +1,8 @@
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 const baseURL = process.env.BASE_URL || 'http://localhost';
+const storageState = path.resolve(__dirname, '.auth/state.json');
 
 export default defineConfig({
   testDir: './tests',
@@ -16,6 +18,7 @@ export default defineConfig({
   outputDir: 'test-results',
   use: {
     baseURL,
+    storageState,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
