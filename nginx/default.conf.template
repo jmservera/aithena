@@ -31,6 +31,8 @@ server {
     }
 
     location /admin/solr/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -48,6 +50,8 @@ server {
     }
 
     location /solr/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -60,6 +64,8 @@ server {
     }
 
     location /admin/rabbitmq/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header Upgrade $http_upgrade;
@@ -75,6 +81,8 @@ server {
     }
 
     location /admin/streamlit/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header Upgrade $http_upgrade;
@@ -92,6 +100,8 @@ server {
     }
 
     location /admin/redis/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header Upgrade $http_upgrade;
@@ -115,6 +125,10 @@ server {
     location @auth_error {
         default_type application/json;
         return 401 '{"detail":"Not authenticated"}';
+    }
+
+    location @auth_redirect {
+        return 302 /?redirect=$request_uri;
     }
 
     location = /v1/auth/login {
