@@ -55,6 +55,7 @@ SortBy = Literal["score", "title", "author", "year", "category", "language"]
 SortOrder = Literal["asc", "desc"]
 
 VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
+EMBEDDINGS_DEGRADED_MESSAGE = "Embeddings unavailable — showing keyword results"
 
 
 _INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme", "secret"})
@@ -175,6 +176,10 @@ def _fetch_embedding(text: str) -> list[float]:
         raise HTTPException(status_code=502, detail="Embeddings server request failed") from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+def _should_degrade_to_keyword(exc: HTTPException) -> bool:
+    return exc.status_code in {502, 504}
 
 
 def build_document_url(request: Request, file_path: str | None) -> str | None:
@@ -370,9 +375,9 @@ def search(
     if mode == "keyword":
         return _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
     if mode == "semantic":
-        return _search_semantic(request, q, resolved_page_size, filters)
+        return _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
     # hybrid
-    return _search_hybrid(request, q, resolved_page_size, sort_by, sort_order, sort, filters)
+    return _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
 
 
 def _search_keyword(
@@ -384,6 +389,10 @@ def _search_keyword(
     sort_order: str,
     sort: str | None,
     filters: dict[str, str],
+    *,
+    degraded: bool = False,
+    message: str | None = None,
+    requested_mode: str | None = None,
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -409,7 +418,7 @@ def _search_keyword(
         for document in response.get("docs", [])
     ]
 
-    return {
+    result = {
         "query": q,
         "mode": "keyword",
         "sort": {"by": sort_by, "order": sort_order},
@@ -417,12 +426,22 @@ def _search_keyword(
         "results": results,
         "facets": parse_facet_counts(payload),
     }
+    if degraded:
+        result["degraded"] = True
+        result["message"] = message or EMBEDDINGS_DEGRADED_MESSAGE
+        if requested_mode:
+            result["requested_mode"] = requested_mode
+    return result
 
 
 def _search_semantic(
     request: Request,
     q: str,
+    page: int,
     top_k: int,
+    sort_by: str,
+    sort_order: str,
+    sort: str | None,
     filters: dict[str, str],
 ) -> dict[str, Any]:
     """Execute a Solr kNN semantic search using the ``book_embedding`` field.
@@ -433,7 +452,25 @@ def _search_semantic(
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query must not be empty for semantic search")
 
-    vector = _fetch_embedding(q)
+    try:
+        vector = _fetch_embedding(q)
+    except HTTPException as exc:
+        if _should_degrade_to_keyword(exc):
+            return _search_keyword(
+                request,
+                q,
+                page,
+                top_k,
+                sort_by,
+                sort_order,
+                sort,
+                filters,
+                degraded=True,
+                message=EMBEDDINGS_DEGRADED_MESSAGE,
+                requested_mode="semantic",
+            )
+        raise
+
     payload = query_solr(build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)))
 
     response = payload.get("response", {})
@@ -449,6 +486,7 @@ def _search_semantic(
     return {
         "query": q,
         "mode": "semantic",
+        "degraded": False,
         "sort": {"by": "score", "order": "desc"},
         **build_pagination(response.get("numFound", len(results)), 1, top_k),
         "results": results,
@@ -459,6 +497,7 @@ def _search_semantic(
 def _search_hybrid(
     request: Request,
     q: str,
+    page: int,
     page_size: int,
     sort_by: str,
     sort_order: str,
@@ -494,7 +533,24 @@ def _search_hybrid(
         emb_future = pool.submit(_fetch_embedding, q)
 
         kw_payload = kw_future.result()
-        vector = emb_future.result()
+        try:
+            vector = emb_future.result()
+        except HTTPException as exc:
+            if _should_degrade_to_keyword(exc):
+                return _search_keyword(
+                    request,
+                    q,
+                    page,
+                    page_size,
+                    sort_by,
+                    sort_order,
+                    sort,
+                    filters,
+                    degraded=True,
+                    message=EMBEDDINGS_DEGRADED_MESSAGE,
+                    requested_mode="hybrid",
+                )
+            raise
 
     knn_payload = query_solr(
         build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
@@ -526,6 +582,7 @@ def _search_hybrid(
     return {
         "query": q,
         "mode": "hybrid",
+        "degraded": False,
         "sort": {"by": "score", "order": "desc"},
         **build_pagination(len(fused), 1, page_size),
         "results": fused,
@@ -794,6 +851,7 @@ def service_status() -> dict[str, Any]:
     - Solr CLUSTERSTATUS (node health + doc count)
     - Redis ``doc:*`` key scan (indexing state breakdown)
     - TCP reachability checks for Solr, Redis, and RabbitMQ
+    - embeddings readiness via the embeddings ``/version`` probe
     """
     parsed = urlparse(settings.solr_url)
     solr_host = parsed.hostname or settings.solr_url
@@ -805,14 +863,17 @@ def service_status() -> dict[str, Any]:
     solr_up = _tcp_check(solr_host, solr_port)
     redis_up = _tcp_check(settings.redis_host, settings.redis_port)
     rabbitmq_up = _tcp_check(settings.rabbitmq_host, settings.rabbitmq_port)
+    embeddings_up = _embeddings_available()
 
     return {
         "solr": solr_info,
         "indexing": indexing_info,
+        "embeddings_available": embeddings_up,
         "services": {
             "solr": "up" if solr_up else "down",
             "redis": "up" if redis_up else "down",
             "rabbitmq": "up" if rabbitmq_up else "down",
+            "embeddings": "up" if embeddings_up else "down",
         },
     }
 
@@ -846,6 +907,10 @@ def _get_embeddings_version_url() -> str:
     host = parsed.hostname or "embeddings-server"
     port = f":{parsed.port}" if parsed.port else ""
     return f"{scheme}://{host}{port}/version"
+
+
+def _embeddings_available() -> bool:
+    return _get_http_container_status("embeddings-server", _get_embeddings_version_url())["status"] == "up"
 
 
 def _get_http_container_status(

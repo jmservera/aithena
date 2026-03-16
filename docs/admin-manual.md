@@ -171,7 +171,10 @@ That means every service using `/data/documents` is reading from the same mounte
 | `BASE_PATH` | `/data/documents` | Base path for document downloads |
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed dev origin |
 | `EMBEDDINGS_URL` | `http://embeddings-server:8001/v1/embeddings/` | Embeddings endpoint |
+| `EMBEDDINGS_TIMEOUT` | `120` | Max wait for query embeddings before semantic/hybrid degrade to keyword |
 | `DEFAULT_SEARCH_MODE` | `keyword` | Default API search mode |
+| `RRF_K` | `60` | Reciprocal-rank fusion damping constant for hybrid ranking |
+| `KNN_FIELD` | `book_embedding` | Dense-vector field used by the semantic/hybrid kNN leg |
 | `UPLOAD_MAX_SIZE_MB` | `50` | Maximum upload file size (v0.6.0+) |
 | `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
 | `UPLOAD_STAGING_DIR` | `/data/uploads/` | Temporary upload staging area (v0.6.0+) |
@@ -219,6 +222,24 @@ Additional runtime settings now include:
 - `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000`
 
 Operationally, this means RabbitMQ is given time to finish booting before Compose marks it unhealthy, and dependent services can safely rely on `service_healthy` ordering.
+
+### Search mode and hybrid tuning
+
+`solr-search` supports three request modes:
+
+- `keyword` — BM25 / edismax only
+- `semantic` — embeddings + Solr kNN only
+- `hybrid` — BM25 plus kNN, merged with Reciprocal Rank Fusion (RRF)
+
+Operators can tune the search path with these controls:
+
+- `DEFAULT_SEARCH_MODE` sets the API default when clients do not pass a `mode` query parameter.
+- Clients can switch modes per request with `GET /v1/search?mode=keyword|semantic|hybrid`.
+- `RRF_K` controls how aggressively hybrid mode favors top-ranked documents from each leg.
+- `KNN_FIELD` selects the Solr dense-vector field used by semantic and hybrid search.
+- `EMBEDDINGS_TIMEOUT` controls how long semantic/hybrid requests wait before falling back to keyword results.
+
+Hybrid currently uses equal contribution from the BM25 and semantic legs through standard RRF. There are no separate per-leg weight environment variables today.
 
 ### Language detection (v0.5.0)
 
@@ -491,6 +512,12 @@ This endpoint aggregates:
 - Solr `CLUSTERSTATUS`
 - Redis `doc:*` state counts
 - TCP reachability checks for Solr, Redis, and RabbitMQ
+- embeddings service availability via the embeddings `/version` probe
+
+The response now includes:
+
+- `embeddings_available` — boolean summary for semantic-search readiness
+- `services.embeddings` — `up` or `down`
 
 #### Stats endpoint
 
@@ -664,6 +691,17 @@ The `/v1/documents/{document_id}` endpoint only serves files that resolve inside
 - **Solr status = ok**: 3 live Solr nodes were detected
 - **Solr status = degraded**: Solr answered, but fewer than 3 live nodes were detected
 - **Solr status = error**: Solr cluster status could not be read or no live nodes were found
+
+### Semantic and hybrid degraded mode
+
+If Solr is healthy but the embeddings service is unavailable, `mode=semantic` and `mode=hybrid` requests no longer fail with `5xx`. Instead, `solr-search` automatically reruns the request as a keyword search and returns normal results with extra metadata:
+
+- `degraded: true`
+- `message: "Embeddings unavailable — showing keyword results"`
+- `requested_mode: "semantic"` or `"hybrid"`
+- `mode: "keyword"` to show the effective execution path
+
+This degraded path keeps the search UI and API usable during embeddings outages. If Solr itself is unavailable, the request still fails because there is no keyword fallback source.
 
 ### What Compose health means
 
