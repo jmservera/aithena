@@ -252,7 +252,7 @@ services:
     volumes:
       - document-data:/data/documents
       - type: bind
-        source: ${AUTH_DB_DIR:-/tmp/aithena-auth}
+        source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
         target: /data/auth
     networks:
       - default

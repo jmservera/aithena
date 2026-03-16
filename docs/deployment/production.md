@@ -123,7 +123,29 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
 
 ### First-Time Setup
 
-1. **Create volume directories**:
+1. **Run the first-run installer** to generate `.env`, create the auth database, and seed the admin user:
+   ```bash
+   python3 -m installer
+   # or: python3 installer/setup.py
+   ```
+
+   The installer prompts for the book library path, admin credentials, and the public origin URL.
+   It writes `.env` (chmod 600) and bootstraps the SQLite auth DB at `AUTH_DB_DIR`.
+   For non-interactive environments (CI/scripts), use flags:
+   ```bash
+   python3 installer/setup.py \
+     --library-path /path/to/books \
+     --admin-user admin \
+     --admin-password secret \
+     --origin http://localhost
+   ```
+
+   > **Note:** `AUTH_DB_DIR` must exist on the host before `docker compose up` because Docker
+   > Compose uses it as a bind-mount source for the auth database. The installer creates this
+   > directory automatically. If you ever re-run the installer it preserves the existing JWT
+   > secret and user records unless you pass `--reset`.
+
+2. **Create volume directories**:
    ```bash
    sudo mkdir -p /source/volumes/{solr-data,solr-data2,solr-data3}
    sudo mkdir -p /source/volumes/{zoo-data1,zoo-data2,zoo-data3}/{data,logs,datalog}
@@ -131,15 +153,6 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
    sudo mkdir -p /source/volumes/certbot-data/{conf,www}
    sudo chown -R 8983:8983 /source/volumes/solr-data*  # Solr UID
    sudo chown -R 1000:1000 /source/volumes/zoo-data*   # ZooKeeper UID
-   ```
-
-2. **Configure books library path** (`.env`):
-   ```bash
-   # Copy example config
-   cp .env.example .env
-   
-   # Edit BOOKS_PATH to point to your PDF library
-   nano .env
    ```
 
 3. **Start infrastructure tier**:
@@ -165,6 +178,14 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
 ```bash
 docker compose up -d
 # All services start with correct dependencies automatically
+```
+
+To rotate the JWT secret or update the admin password, re-run the installer before restarting:
+
+```bash
+python3 -m installer          # interactive — keeps existing secret unless it matches a known-insecure placeholder
+python3 -m installer --reset  # recreate auth DB and generate a new secret
+docker compose up -d
 ```
 
 ## Health Validation
@@ -417,6 +438,7 @@ docker compose restart nginx
 - `/source/volumes/zoo-data*` — ZooKeeper cluster state
 - `/source/volumes/rabbitmq-data` — Queue state (if important)
 - `/source/volumes/redis` — Pipeline state (optional)
+- `AUTH_DB_DIR` (from `.env`) — SQLite auth database containing user accounts
 
 **Read-Only Data** (backup separately):
 - Book library (`BOOKS_PATH`) — Source PDFs
@@ -438,6 +460,12 @@ sudo tar -czf $BACKUP_DIR/solr-data.tar.gz -C /source/volumes solr-data solr-dat
 sudo tar -czf $BACKUP_DIR/zoo-data.tar.gz -C /source/volumes zoo-data1 zoo-data2 zoo-data3
 sudo tar -czf $BACKUP_DIR/rabbitmq-data.tar.gz -C /source/volumes rabbitmq-data
 sudo tar -czf $BACKUP_DIR/redis.tar.gz -C /source/volumes redis
+
+# Backup auth database (path from .env)
+AUTH_DB_DIR=$(grep '^AUTH_DB_DIR=' .env | cut -d= -f2 | tr -d '"')
+if [ -n "$AUTH_DB_DIR" ] && [ -d "$AUTH_DB_DIR" ]; then
+  sudo cp -a "$AUTH_DB_DIR" "$BACKUP_DIR/auth-db"
+fi
 
 # Restart services
 docker compose up -d
@@ -461,6 +489,13 @@ sudo tar -xzf $BACKUP_DIR/solr-data.tar.gz -C /source/volumes
 sudo tar -xzf $BACKUP_DIR/zoo-data.tar.gz -C /source/volumes
 sudo tar -xzf $BACKUP_DIR/rabbitmq-data.tar.gz -C /source/volumes
 sudo tar -xzf $BACKUP_DIR/redis.tar.gz -C /source/volumes
+
+# Restore auth database
+AUTH_DB_DIR=$(grep '^AUTH_DB_DIR=' .env | cut -d= -f2 | tr -d '"')
+if [ -n "$AUTH_DB_DIR" ] && [ -d "$BACKUP_DIR/auth-db" ]; then
+  mkdir -p "$AUTH_DB_DIR"
+  sudo cp -a "$BACKUP_DIR/auth-db/." "$AUTH_DB_DIR/"
+fi
 
 # Fix permissions
 sudo chown -R 8983:8983 /source/volumes/solr-data*
@@ -490,13 +525,14 @@ If full system failure:
 Before going to production, verify:
 
 - [ ] Memory overcommit configured (`vm.overcommit_memory = 1`)
+- [ ] `python3 -m installer` completed successfully — `.env` written and auth DB created
 - [ ] Volume directories created with correct ownership
-- [ ] `.env` file configured with correct `BOOKS_PATH`
 - [ ] Firewall configured (only 80/443 public, block all other ports)
 - [ ] SSL certificates configured in nginx (Let's Encrypt via certbot)
 - [ ] RabbitMQ credentials changed from guest/guest (in `rabbitmq.conf`)
 - [ ] Redis password set (add `requirepass` to redis command)
 - [ ] Admin endpoints protected (add auth to nginx `/admin/*` locations)
+- [ ] Auth DB directory (`AUTH_DB_DIR`) included in backup rotation
 - [ ] Backup cron job scheduled (daily at 2am: `0 2 * * * /opt/aithena/backup-aithena.sh`)
 - [ ] Monitoring alerts configured (disk space, memory usage, service health)
 - [ ] Log aggregation enabled (ship logs to central syslog/ELK)
