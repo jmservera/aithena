@@ -152,7 +152,9 @@ def create_access_token(
 
 def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
     try:
-        payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, secret, algorithms=[JWT_ALGORITHM], options={"require_exp": True}
+        )
     except ExpiredSignatureError as exc:
         raise TokenExpiredError("Token expired") from exc
     except JWTError as exc:

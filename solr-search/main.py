@@ -56,8 +56,18 @@ SortOrder = Literal["asc", "desc"]
 VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
 
 
+_INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme", "secret"})
+
+
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if settings.auth_jwt_secret in _INSECURE_JWT_SECRETS:
+        import warnings
+        warnings.warn(
+            "AUTH_JWT_SECRET is using an insecure default value. "
+            "Set a strong random secret via the AUTH_JWT_SECRET environment variable.",
+            stacklevel=1,
+        )
     init_auth_db(settings.auth_db_path)
     yield
 
@@ -121,6 +131,7 @@ class RateLimiter:
 
 
 upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 
 def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
@@ -263,6 +274,10 @@ def version() -> dict[str, str]:
 @app.post("/v1/auth/login/", include_in_schema=False, name="auth_login_v1_slash")
 @app.post("/v1/auth/login", name="auth_login_v1")
 def auth_login(credentials: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
+    client_ip = request.client.host if request.client else "unknown"
+    if not login_rate_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
     user = authenticate_user(settings.auth_db_path, credentials.username, credentials.password)
     if user is None:
         raise _unauthorized_exception("Invalid username or password")

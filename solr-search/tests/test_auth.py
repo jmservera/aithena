@@ -138,3 +138,33 @@ def test_search_requires_authentication() -> None:
     response = client.get("/search", params={"q": "folklore"})
 
     assert response.status_code == 401
+
+
+def test_login_rate_limiting(client: TestClient, seeded_user: AuthenticatedUser) -> None:
+    from main import login_rate_limiter
+
+    original_max = login_rate_limiter.max_requests
+    login_rate_limiter.max_requests = 2
+    login_rate_limiter.requests.clear()
+    try:
+        for _ in range(2):
+            client.post("/v1/auth/login", json={"username": "x", "password": "y"})
+        response = client.post("/v1/auth/login", json={"username": "x", "password": "y"})
+        assert response.status_code == 429
+    finally:
+        login_rate_limiter.max_requests = original_max
+        login_rate_limiter.requests.clear()
+
+
+def test_jwt_without_exp_is_rejected(client: TestClient, seeded_user: AuthenticatedUser) -> None:
+    payload = {
+        "sub": seeded_user.username,
+        "user_id": seeded_user.id,
+        "role": seeded_user.role,
+        "iat": int(datetime.now(UTC).timestamp()),
+    }
+    token = jwt.encode(payload, settings.auth_jwt_secret, algorithm="HS256")
+
+    response = client.get("/v1/auth/validate", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
