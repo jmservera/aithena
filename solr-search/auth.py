@@ -58,6 +58,7 @@ def parse_ttl_to_seconds(raw_value: str) -> int:
 
 def init_auth_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.parent.chmod(0o700)
     with sqlite3.connect(db_path) as connection:
         connection.execute(
             """
@@ -71,6 +72,7 @@ def init_auth_db(db_path: Path) -> None:
             """
         )
         connection.commit()
+    db_path.chmod(0o600)
 
 
 def hash_password(password: str) -> str:

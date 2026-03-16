@@ -19,4 +19,5 @@ dev = [
     "pytest",
     "pytest-cov",
     "httpx>=0.27",
+    "ruff>=0.15.6",
 ]

@@ -96,7 +96,7 @@ settings = Settings(
     max_upload_size_mb=int(os.environ.get("MAX_UPLOAD_SIZE_MB", "50")),
     rabbitmq_queue_name=os.environ.get("RABBITMQ_QUEUE_NAME", "shortembeddings"),
     auth_db_path=Path(os.environ.get("AUTH_DB_PATH", "/data/auth/users.db")).resolve(),
-    auth_jwt_secret=os.environ.get("AUTH_JWT_SECRET", "development-only-change-me"),
+    auth_jwt_secret=os.environ.get("AUTH_JWT_SECRET", ""),
     auth_jwt_ttl_seconds=parse_ttl_to_seconds(os.environ.get("AUTH_JWT_TTL", "24h")),
     auth_cookie_name=os.environ.get("AUTH_COOKIE_NAME", "aithena_auth"),
 )

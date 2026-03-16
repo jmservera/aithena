@@ -246,7 +246,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
-      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-development-only-change-me}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET must be set. Run the installer first: python installer/setup.py}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
     volumes:

@@ -62,11 +62,9 @@ _INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme",
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI):
     if settings.auth_jwt_secret in _INSECURE_JWT_SECRETS:
-        import warnings
-        warnings.warn(
-            "AUTH_JWT_SECRET is using an insecure default value. "
-            "Set a strong random secret via the AUTH_JWT_SECRET environment variable.",
-            stacklevel=1,
+        raise RuntimeError(
+            "AUTH_JWT_SECRET is not set or uses an insecure default value. "
+            "Run the installer to generate a strong secret: python installer/setup.py"
         )
     init_auth_db(settings.auth_db_path)
     yield
