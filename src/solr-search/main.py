@@ -9,11 +9,11 @@ import socket
 import threading
 import time
 from collections import defaultdict, deque
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypeVar
 from urllib.parse import urlparse
 
 import pika
@@ -30,6 +30,7 @@ from auth import (
     init_auth_db,
     set_auth_cookie,
 )
+from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from config import settings
 from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,6 +58,8 @@ from search_service import (
 setup_logging(service_name="solr-search")
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
 SortBy = Literal["score", "title", "author", "year", "category", "language"]
 SortOrder = Literal["asc", "desc"]
 
@@ -81,6 +84,24 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title=settings.title, version=settings.version, lifespan=lifespan)
+
+# ---------------------------------------------------------------------------
+# Circuit breakers — configured via CB_* environment variables (see config.py)
+# ---------------------------------------------------------------------------
+
+redis_circuit = CircuitBreaker(
+    name="redis",
+    failure_threshold=settings.cb_redis_failure_threshold,
+    recovery_timeout=settings.cb_redis_recovery_timeout,
+    expected_exceptions=(redis_lib.RedisError, OSError, ConnectionError),
+)
+
+solr_circuit = CircuitBreaker(
+    name="solr",
+    failure_threshold=settings.cb_solr_failure_threshold,
+    recovery_timeout=settings.cb_solr_recovery_timeout,
+    expected_exceptions=(requests.RequestException, ValueError),
+)
 
 PUBLIC_PATHS: frozenset[str] = frozenset(
     {
@@ -160,6 +181,8 @@ if settings.cors_origins:
         allow_headers=["*"],
     )
 
+# stores it in a ContextVar, and returns it in the X-Correlation-ID response header.
+
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
@@ -183,11 +206,21 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 
+def _raw_solr_query(params: dict[str, Any]) -> dict[str, Any]:
+    """Execute a Solr HTTP request.  Raised exceptions feed the circuit breaker."""
+    response = requests.get(settings.select_url, params=params, timeout=settings.request_timeout)
+    response.raise_for_status()
+    return response.json()
+
+
 def query_solr(params: dict[str, Any]) -> dict[str, Any]:
     try:
-        response = requests.get(settings.select_url, params=params, timeout=settings.request_timeout)
-        response.raise_for_status()
-        return response.json()
+        return solr_circuit.call(_raw_solr_query, params)
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Search service temporarily unavailable — Solr circuit breaker is open",
+        ) from exc
     except requests.Timeout as exc:
         raise HTTPException(status_code=504, detail="Timed out waiting for Solr") from exc
     except requests.RequestException as exc:
@@ -297,8 +330,26 @@ async def require_authentication(request: Request, call_next):
 
 @app.get("/v1/health", include_in_schema=False, name="health_v1")
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": settings.title, "version": settings.version}
+def health() -> dict[str, Any]:
+    redis_cb = redis_circuit.get_status()
+    solr_cb = solr_circuit.get_status()
+
+    if solr_cb["state"] == CircuitState.OPEN.value:
+        overall = "unavailable"
+    elif redis_cb["state"] == CircuitState.OPEN.value:
+        overall = "degraded"
+    else:
+        overall = "ok"
+
+    return {
+        "status": overall,
+        "service": settings.title,
+        "version": settings.version,
+        "circuit_breakers": {
+            "redis": redis_cb,
+            "solr": solr_cb,
+        },
+    }
 
 
 @app.get("/v1/info", include_in_schema=False, name="info_v1")
@@ -805,6 +856,11 @@ def _get_redis_pool() -> redis_lib.ConnectionPool:
     return _redis_pool
 
 
+def _redis_call(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    """Execute *func* through the Redis circuit breaker."""
+    return redis_circuit.call(func, *args, **kwargs)
+
+
 def _tcp_check(host: str, port: int, timeout: float = 2.0) -> bool:
     """Return True if a TCP connection to *host*:*port* succeeds within *timeout* seconds."""
     try:
@@ -851,39 +907,48 @@ def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
     return {"status": solr_status, "nodes": node_count, "docs_indexed": docs_indexed}
 
 
+def _raw_indexing_status(key_pattern: str) -> tuple[dict[str, int], set[str]]:
+    """Inner Redis scan — raised exceptions feed the circuit breaker."""
+    pool = _get_redis_pool()
+    client = redis_lib.Redis(connection_pool=pool)
+    keys = list(client.scan_iter(match=key_pattern, count=100))
+    empty: dict[str, int] = {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+    if not keys:
+        return empty, set()
+
+    values = client.mget(keys)
+    indexed = 0
+    failed = 0
+    pending = 0
+    failed_keys: set[str] = set()
+    for key, val in zip(keys, values, strict=False):
+        if val is None:
+            pending += 1
+        elif val == "text_indexed":
+            indexed += 1
+        elif val == "failed":
+            failed += 1
+            failed_keys.add(str(key))
+        else:
+            pending += 1
+
+    total = len(keys)
+    return {
+        "total_discovered": total,
+        "indexed": indexed,
+        "failed": failed,
+        "pending": pending,
+    }, failed_keys
+
+
 def _get_indexing_status_details(key_pattern: str) -> tuple[dict[str, int], set[str] | None]:
-    """Scan Redis for *key_pattern* keys and return counts plus failed-key identities."""
-    empty = {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
+    """Scan Redis for *key_pattern* keys — routes through Redis circuit breaker."""
+    empty: dict[str, int] = {"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}
     try:
-        pool = _get_redis_pool()
-        client = redis_lib.Redis(connection_pool=pool)
-        keys = list(client.scan_iter(match=key_pattern, count=100))
-        if not keys:
-            return empty, set()
-
-        values = client.mget(keys)
-        indexed = 0
-        failed = 0
-        pending = 0
-        failed_keys: set[str] = set()
-        for key, val in zip(keys, values, strict=False):
-            if val is None:
-                pending += 1
-            elif val == "text_indexed":
-                indexed += 1
-            elif val == "failed":
-                failed += 1
-                failed_keys.add(str(key))
-            else:
-                pending += 1
-
-        total = len(keys)
-        return {
-            "total_discovered": total,
-            "indexed": indexed,
-            "failed": failed,
-            "pending": pending,
-        }, failed_keys
+        return _redis_call(_raw_indexing_status, key_pattern)
+    except CircuitOpenError:
+        logger.warning("redis_circuit_open: skipping indexing status check")
+        return empty, None
     except Exception:
         return empty, None
 
@@ -1159,7 +1224,14 @@ def _iter_admin_docs(
     Raises HTTPException 503 if the Redis scan itself fails.
     """
     try:
-        keys = list(client.scan_iter(match=_admin_key_pattern(), count=100))
+        keys: list[str] = _redis_call(
+            lambda: list(client.scan_iter(match=_admin_key_pattern(), count=100)),
+        )
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Redis circuit breaker is open — admin operations temporarily unavailable",
+        ) from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Cannot connect to Redis") from exc
 
@@ -1214,7 +1286,12 @@ def _delete_admin_key(redis_key: str) -> bool:
     """Delete *redis_key* from Redis.  Returns True if the key existed."""
     try:
         client = _get_admin_redis_client()
-        return bool(client.delete(redis_key))
+        return bool(_redis_call(client.delete, redis_key))
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Redis circuit breaker is open — admin operations temporarily unavailable",
+        ) from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Cannot connect to Redis") from exc
 
