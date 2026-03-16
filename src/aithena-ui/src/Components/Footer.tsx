@@ -1,9 +1,9 @@
-import './Footer.css';
+import styles from './Footer.module.css';
 
 function Footer() {
   return (
-    <footer className="app-footer" role="contentinfo" aria-label="Application version">
-      <span className="app-footer__text">Aithena v{__APP_VERSION__}</span>
+    <footer className={styles.appFooter} role="contentinfo" aria-label="Application version">
+      <span className={styles.appFooterText}>Aithena v{__APP_VERSION__}</span>
     </footer>
   );
 }

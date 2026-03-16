@@ -1,4 +1,4 @@
-.app-footer {
+.appFooter {
   position: fixed;
   right: 16px;
   bottom: 12px;
@@ -6,7 +6,7 @@
   pointer-events: none;
 }
 
-.app-footer__text {
+.appFooterText {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
