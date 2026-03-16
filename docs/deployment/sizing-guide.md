@@ -298,8 +298,8 @@ If many PDFs exceed those batch sizes:
 Current timeout-related settings in the repo:
 
 - `solr-search`: `EMBEDDINGS_TIMEOUT=120` seconds for query-time embeddings
-- `document-indexer/document_indexer/embeddings.py`: hardcoded request timeout of **300** seconds
-- `embeddings-server/config/__init__.py`: `EMBEDDINGS_TIMEOUT` default of **30 minutes**, but the server currently does not enforce request timeout itself
+- `src/document-indexer/document_indexer/embeddings.py`: hardcoded request timeout of **300** seconds
+- `src/embeddings-server/config/__init__.py`: `EMBEDDINGS_TIMEOUT` default of **30 minutes**, but the server currently does not enforce request timeout itself
 
 Practical guidance:
 

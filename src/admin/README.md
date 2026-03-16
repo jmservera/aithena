@@ -10,7 +10,7 @@ A Streamlit-based operations dashboard for monitoring and managing the document 
 ## Running locally
 
 ```bash
-cd admin
+cd src/admin
 uv sync
 uv run streamlit run src/main.py
 ```
@@ -21,7 +21,7 @@ When you run the full Docker Compose stack, nginx exposes this dashboard at `htt
 
 ## Configuration
 
-All settings are read from environment variables (a `.env` file in `admin/src/` is supported via `python-dotenv`).
+All settings are read from environment variables (a `.env` file in `src/admin/src/` is supported via `python-dotenv`).
 
 | Variable | Default | Description |
 |---|---|---|

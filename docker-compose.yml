@@ -52,7 +52,7 @@ services:
       - 15672
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
-      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./src/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
 
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
@@ -79,7 +79,7 @@ services:
           - rabbitmq
   embeddings-server:
     build:
-      context: ./embeddings-server
+      context: ./src/embeddings-server
       args:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
@@ -112,7 +112,7 @@ services:
           - embeddings-server
   document-lister:
     build:
-      context: ./document-lister
+      context: ./src/document-lister
       args:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
@@ -157,7 +157,7 @@ services:
       - default
   document-indexer:
     build:
-      context: ./document-indexer
+      context: ./src/document-indexer
       args:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
@@ -211,7 +211,7 @@ services:
   solr-search:
     build:
       context: .
-      dockerfile: ./solr-search/Dockerfile
+      dockerfile: ./src/solr-search/Dockerfile
       args:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
@@ -278,7 +278,7 @@ services:
       - default
   streamlit-admin:
     build:
-      context: ./admin
+      context: ./src/admin
       args:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
@@ -356,7 +356,7 @@ services:
       - default
   aithena-ui:
     build:
-      context: ./aithena-ui
+      context: ./src/aithena-ui
       args:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
@@ -425,8 +425,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./src/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./src/nginx/html:/usr/share/nginx/html:ro
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
@@ -544,7 +544,7 @@ services:
     image: solr:9.7
     # build:
     #   context: .
-    #   dockerfile: ./solr/Dockerfile
+    #   dockerfile: ./src/solr/Dockerfile
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
@@ -588,7 +588,7 @@ services:
     image: solr:9.7
     # build:
     #   context: .
-    #   dockerfile: ./solr/Dockerfile
+    #   dockerfile: ./src/solr/Dockerfile
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
@@ -631,7 +631,7 @@ services:
     image: solr:9.7
     # build:
     #   context: .
-    #   dockerfile: ./solr/Dockerfile
+    #   dockerfile: ./src/solr/Dockerfile
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
@@ -680,8 +680,8 @@ services:
       solr3:
         condition: service_healthy
     volumes:
-      - ./solr/books:/configsets/books:ro
-      - ./solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+      - ./src/solr/books:/configsets/books:ro
+      - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
     entrypoint:
       - /bin/bash
       - -ceu

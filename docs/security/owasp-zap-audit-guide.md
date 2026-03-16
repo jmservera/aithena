@@ -805,7 +805,7 @@ The React UI does not set a Content Security Policy (CSP) header. This increases
 While no active XSS vulnerabilities were found, CSP provides defense-in-depth.
 
 **Mitigation:**
-Add CSP header in `nginx/default.conf`:
+Add CSP header in `src/nginx/default.conf`:
 
 ```nginx
 add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';" always;

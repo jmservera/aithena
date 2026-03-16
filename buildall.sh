@@ -28,11 +28,11 @@ echo "Git commit: ${GIT_COMMIT}"
 echo "Build date: ${BUILD_DATE}"
 
 python_service_dirs=(
-  "admin"
-  "document-indexer"
-  "document-lister"
-  "embeddings-server"
-  "solr-search"
+  "src/admin"
+  "src/document-indexer"
+  "src/document-lister"
+  "src/embeddings-server"
+  "src/solr-search"
 )
 
 for service_dir in "${python_service_dirs[@]}"; do

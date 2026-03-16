@@ -8,8 +8,8 @@ _Prepared by:_ Newt (Product Manager / QA Lead)
 Commands executed for this release gate:
 
 ```bash
-cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short
-cd /workspaces/aithena/aithena-ui && npm run lint && npm run build && npx vitest run
+cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short
+cd /workspaces/aithena/src/aithena-ui && npm run lint && npm run build && npx vitest run
 ```
 
 ## Executive summary
@@ -24,7 +24,7 @@ cd /workspaces/aithena/aithena-ui && npm run lint && npm run build && npx vitest
 
 ### `solr-search`
 
-**Command:** `cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short`  
+**Command:** `cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short`  
 **Status:** PASS
 
 Observed summary:
@@ -40,7 +40,7 @@ tests/test_upload.py::test_upload_rate_limiting PASSED                   [100%]
 
 ### `aithena-ui`
 
-**Command:** `cd /workspaces/aithena/aithena-ui && npm run lint && npm run build && npx vitest run`  
+**Command:** `cd /workspaces/aithena/src/aithena-ui && npm run lint && npm run build && npx vitest run`  
 **Status:** PASS
 
 Observed summary:

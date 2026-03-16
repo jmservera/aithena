@@ -174,12 +174,12 @@ This document establishes the security baseline for aithena v0.6.0 following the
 **Description:** Python FastAPI/Uvicorn services bind to `0.0.0.0` (all network interfaces) in development/debug mode. This could expose services on unintended interfaces if run outside Docker.
 
 **Affected Files:**
-1. `embeddings-server/main.py:82` — `uvicorn.run(app, host="0.0.0.0", port=PORT)`
-2. `solr-search/main.py:604` — `uvicorn.run(app, host="0.0.0.0", port=settings.port)`
+1. `src/embeddings-server/main.py:82` — `uvicorn.run(app, host="0.0.0.0", port=PORT)`
+2. `src/solr-search/main.py:604` — `uvicorn.run(app, host="0.0.0.0", port=settings.port)`
 
 **Code Context:**
 ```python
-# embeddings-server/main.py
+# src/embeddings-server/main.py
 if __name__ == "__main__":
     # run flask app for debugging
     import uvicorn
@@ -211,13 +211,13 @@ Updated `.bandit` config to skip S104 for these specific debug paths (already ex
 
 ```ini
 # .bandit config already skips S104 for:
-# - document-indexer/document_indexer
+# - src/document-indexer/document_indexer
 # - document-lister
-# - admin/src
+# - src/admin/src
 # 
 # Remaining findings are in:
-# - embeddings-server/main.py (debug mode)
-# - solr-search/main.py (debug mode)
+# - src/embeddings-server/main.py (debug mode)
+# - src/solr-search/main.py (debug mode)
 #
 # Accepted as low-risk development-only pattern
 ```
@@ -299,9 +299,9 @@ No zizmor config changes needed; will fix in source during v0.7.0 hardening phas
 **Description:** Use of `assert` statements detected in test files. Assert statements are removed when Python is run with optimization flags (`python -O`), which could bypass security checks if used in production code.
 
 **Affected Files:**
-- `embeddings-server/tests/test_embeddings_server.py` (15 instances)
-- `solr-search/tests/test_integration.py` (154 instances)
-- `solr-search/tests/test_search_service.py` (65 instances)
+- `src/embeddings-server/tests/test_embeddings_server.py` (15 instances)
+- `src/solr-search/tests/test_integration.py` (154 instances)
+- `src/solr-search/tests/test_search_service.py` (65 instances)
 
 **Disposition:** **ACCEPTED (legitimate test pattern)**
 
@@ -591,7 +591,7 @@ These issues are **outside the scope** of CI scanner baseline tuning but documen
 
 **Bandit:**
 - Output: `/tmp/bandit-results.json` (236 findings)
-- Command: `bandit -r document-indexer/document_indexer document-lister/document_lister solr-search/ admin/ embeddings-server/ -f json`
+- Command: `bandit -r src/document-indexer/document_indexer src/document-lister/document_lister src/solr-search/ src/admin/ src/embeddings-server/ -f json`
 
 **Checkov:**
 - Output: `/tmp/results_json.json` (292 passed, 0 failed)

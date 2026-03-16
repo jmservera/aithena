@@ -4,7 +4,7 @@ E2E tests for the upload API error paths and validation.
 These tests run against the live solr-search /v1/upload endpoint and verify
 that the API correctly rejects invalid uploads and accepts valid ones.
 
-Unlike the unit tests in ``solr-search/tests/test_upload.py`` (which mock
+Unlike the unit tests in ``src/solr-search/tests/test_upload.py`` (which mock
 RabbitMQ and the filesystem), these tests exercise the full production code
 path against the running service.  They are designed to be repeatable and
 self-contained — they do not leave persistent state.
@@ -103,7 +103,7 @@ class TestUploadValidationErrors:
         """POST /v1/upload with a non-PDF MIME type must return HTTP 400.
 
         The backend validates content-type and rejects non-PDF MIME types with
-        400 Bad Request (matching solr-search/tests/test_upload.py behaviour).
+        400 Bad Request (matching src/solr-search/tests/test_upload.py behaviour).
         """
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",
@@ -119,7 +119,7 @@ class TestUploadValidationErrors:
 
         The backend validates the filename extension and rejects files whose
         name does not end in .pdf with 400 Bad Request (matching
-        solr-search/tests/test_upload.py behaviour).
+        src/solr-search/tests/test_upload.py behaviour).
         """
         resp = requests.post(
             f"{api_url}{UPLOAD_ENDPOINT}",

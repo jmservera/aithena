@@ -1,6 +1,6 @@
 # Failover & Recovery Runbook
 
-This runbook covers operator recovery for the Docker Compose deployment defined in `docker-compose.yml`. It is based on the current Compose wiring, health checks, volumes, and `solr-search` behavior in `solr-search/main.py`.
+This runbook covers operator recovery for the Docker Compose deployment defined in `docker-compose.yml`. It is based on the current Compose wiring, health checks, volumes, and `solr-search` behavior in `src/solr-search/main.py`.
 
 > Docker is not available in this sandbox, so the steps below are based on code analysis rather than a live drill. Use `e2e/failover-drill.sh` in a Docker-capable environment to validate the procedure.
 

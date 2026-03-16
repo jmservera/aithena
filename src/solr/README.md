@@ -210,7 +210,7 @@ for semantic and hybrid search.
 
 ## Search API — Mode Behaviour
 
-The `solr-search` FastAPI service (`solr-search/main.py`) wraps this Solr collection and
+The `solr-search` FastAPI service (`src/solr-search/main.py`) wraps this Solr collection and
 supports three search modes via the `?mode=` query parameter.
 
 ### `keyword` (default, backward-compatible)

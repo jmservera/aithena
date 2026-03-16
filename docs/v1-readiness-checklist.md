@@ -114,10 +114,10 @@ These milestone issues define the final release gate and must be referenced in t
 
 ### Standard validation set to confirm before v1.0
 
-- [ ] `cd solr-search && uv run pytest -v --tb=short`
-- [ ] `cd document-indexer && uv run pytest -v --tb=short`
-- [ ] `cd aithena-ui && npx vitest run`
-- [ ] `cd aithena-ui && npm run lint && npm run build`
+- [ ] `cd src/solr-search && uv run pytest -v --tb=short`
+- [ ] `cd src/document-indexer && uv run pytest -v --tb=short`
+- [ ] `cd src/aithena-ui && npx vitest run`
+- [ ] `cd src/aithena-ui && npm run lint && npm run build`
 - [ ] Confirm the GitHub integration-test workflow is green on the release candidate branch/PR (**#224**)
 - [ ] Confirm the security workflows complete cleanly enough for Code Scanning review, even where configured as non-blocking (**#224**, **#260**)
 

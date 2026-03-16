@@ -8,9 +8,9 @@ _Prepared by:_ Newt (Product Manager / QA Lead)
 Commands executed for this release gate:
 
 ```bash
-cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short 2>&1 | tail -5
-cd /workspaces/aithena/aithena-ui && npx vitest run 2>&1 | tail -5
-cd /workspaces/aithena/aithena-ui && npm run lint && npm run build
+cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short 2>&1 | tail -5
+cd /workspaces/aithena/src/aithena-ui && npx vitest run 2>&1 | tail -5
+cd /workspaces/aithena/src/aithena-ui && npm run lint && npm run build
 ```
 
 ## Executive summary
@@ -39,7 +39,7 @@ Latest reviewed workflow results:
 
 ### `solr-search`
 
-**Command:** `cd /workspaces/aithena/solr-search && uv run pytest -v --tb=short 2>&1 | tail -5`  
+**Command:** `cd /workspaces/aithena/src/solr-search && uv run pytest -v --tb=short 2>&1 | tail -5`  
 **Status:** PASS
 
 Observed tail output:
@@ -54,7 +54,7 @@ tests/test_upload.py::test_upload_rate_limiting PASSED                   [100%]
 
 ### `aithena-ui`
 
-**Command:** `cd /workspaces/aithena/aithena-ui && npx vitest run 2>&1 | tail -5`  
+**Command:** `cd /workspaces/aithena/src/aithena-ui && npx vitest run 2>&1 | tail -5`  
 **Status:** PASS
 
 Observed tail output:
@@ -68,7 +68,7 @@ Observed tail output:
 
 ## Lint and build verification
 
-**Command:** `cd /workspaces/aithena/aithena-ui && npm run lint && npm run build`  
+**Command:** `cd /workspaces/aithena/src/aithena-ui && npm run lint && npm run build`  
 **Status:** PASS
 
 Key outcome:

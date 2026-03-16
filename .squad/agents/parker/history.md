@@ -236,3 +236,10 @@ REDIS_PORT=6379
 - Rate limiting (429) on excessive failed attempts
 
 **Next:** Ready for #252 (Login UI) and #253 (nginx auth_request gating)
+
+### 2026-03-16 — v1.0.0 `src/` Repository Restructure (#222)
+
+- Service directories now live under `src/` (`src/admin`, `src/aithena-ui`, `src/document-indexer`, `src/document-lister`, `src/embeddings-server`, `src/nginx`, `src/rabbitmq`, `src/solr-search`, `src/solr`). Root-level `installer/`, `docs/`, and `e2e/` stay in place.
+- `installer/setup.py` and `src/solr-search/tests/test_setup_installer.py` must treat the repo root as the parent of `src/`; installer imports now resolve `ROOT / "src" / "solr-search"` and the installer test needs `parents[3]` to reach the repository root.
+- `src/solr-search/Dockerfile` keeps the repo root as its build context, so COPY paths must use `src/solr-search/...` even though the Dockerfile itself lives inside `src/solr-search/`.
+- After moving uv-managed projects on disk, recreate local `.venv` directories before trusting `uv run ...` console scripts; their shebangs can retain the old absolute path and break pytest entrypoints until the environment is rebuilt.

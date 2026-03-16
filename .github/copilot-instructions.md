@@ -8,16 +8,16 @@ Aithena is a book library search engine with semantic and keyword search. It's a
 
 | Service | Technology | Directory | Port (dev) |
 |---------|-----------|-----------|------------|
-| **aithena-ui** | React 18 + Vite + TypeScript | `aithena-ui/` | 5173 |
-| **solr-search** | Python 3.11 + FastAPI | `solr-search/` | 8080 |
-| **embeddings-server** | Python 3.11 + FastAPI | `embeddings-server/` | 8085 |
-| **document-indexer** | Python 3.11 (RabbitMQ consumer) | `document-indexer/` | — |
-| **document-lister** | Python 3.11 (RabbitMQ consumer) | `document-lister/` | — |
-| **admin** | Python 3.11 + Streamlit | `admin/` | 8501 |
-| **nginx** | Nginx reverse proxy | `nginx/` | 80 |
-| **solr** | SolrCloud (3-node + ZooKeeper) | `solr/` | 8983 |
+| **aithena-ui** | React 18 + Vite + TypeScript | `src/aithena-ui/` | 5173 |
+| **solr-search** | Python 3.11 + FastAPI | `src/solr-search/` | 8080 |
+| **embeddings-server** | Python 3.11 + FastAPI | `src/embeddings-server/` | 8085 |
+| **document-indexer** | Python 3.11 (RabbitMQ consumer) | `src/document-indexer/` | — |
+| **document-lister** | Python 3.11 (RabbitMQ consumer) | `src/document-lister/` | — |
+| **admin** | Python 3.11 + Streamlit | `src/admin/` | 8501 |
+| **nginx** | Nginx reverse proxy | `src/nginx/` | 80 |
+| **solr** | SolrCloud (3-node + ZooKeeper) | `src/solr/` | 8983 |
 | **redis** | Redis | — | 6379 |
-| **rabbitmq** | RabbitMQ | `rabbitmq/` | 5672/15672 |
+| **rabbitmq** | RabbitMQ | `src/rabbitmq/` | 5672/15672 |
 
 **Data flow:** File library → document-lister → RabbitMQ → document-indexer → Solr → solr-search API → aithena-ui
 
@@ -27,7 +27,7 @@ Aithena is a book library search engine with semantic and keyword search. It's a
 
 ### Frontend (aithena-ui)
 ```bash
-cd aithena-ui
+cd src/aithena-ui
 npm run lint          # ESLint
 npm run format:check  # Prettier
 npm run build         # TypeScript + Vite build
@@ -37,10 +37,10 @@ npx vitest run        # Alternative: run tests without watch mode
 
 ### Python Services (solr-search, document-indexer, document-lister, admin)
 ```bash
-cd solr-search && uv run pytest -v --tb=short          # 78+ tests
-cd document-indexer && uv run pytest -v --tb=short      # unit tests
-cd solr-search && uv run ruff check .                   # lint
-cd document-indexer && uv run ruff check .              # lint
+cd src/solr-search && uv run pytest -v --tb=short          # 78+ tests
+cd src/document-indexer && uv run pytest -v --tb=short      # unit tests
+cd src/solr-search && uv run ruff check .                   # lint
+cd src/document-indexer && uv run ruff check .              # lint
 ```
 
 All Python services use `pyproject.toml` + `uv.lock` (install with `uv sync --frozen`) **except** `embeddings-server`, which uses only `requirements.txt`.
