@@ -326,9 +326,12 @@ uv run pytest --cov=SERVICE --cov-report=term-missing --cov-fail-under=70
 
 ### Consolidated CI Workflow
 
-**File:** `.github/workflows/ci.yml`
+**Example workflow (proposed):** `.github/workflows/ci.yml`
 
 ```yaml
+# NOTE: This is a hypothetical coverage-enabled CI config.
+# The current .github/workflows/ci.yml only runs solr-search and
+# document-indexer tests plus ruff, without a matrix or --cov.
 name: CI - Tests & Coverage
 
 on: [push, pull_request]
