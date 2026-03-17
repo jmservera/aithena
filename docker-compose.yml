@@ -418,8 +418,6 @@ services:
         condition: service_healthy
       streamlit-admin:
         condition: service_healthy
-      redis-commander:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       solr:
