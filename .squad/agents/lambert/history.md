@@ -64,3 +64,13 @@
 - `UV_NATIVE_TLS=1` needed for `uv sync` when default SSL certs cause `UnknownIssuer` errors in codespace
 - embeddings-server `requirements.txt` missing test deps (`pytest`, `httpx`) — requires manual install
 - Test report written to `docs/test-report-v1.2.0.md`
+
+### 2026-07-14 — Integration tests for auth flow and URL state (#343)
+
+- **Admin auth tests** (`src/admin/tests/test_auth_integration.py`): 48 new integration tests covering full auth lifecycle, JWT security (none-algorithm attack, tampered payload, missing claims), protected route gating via `check_auth`, and `require_auth` with mocked Streamlit session.
+- **Frontend URL state tests** (`src/aithena-ui/src/__tests__/useSearchState.integration.test.tsx`): 60+ new tests covering URL state restoration, filter/sort/pagination/mode/limit persistence, edge cases (NaN, Infinity, unicode, special chars), multi-step state changes, and comprehensive round-trips.
+- **Total test counts post-merge:** admin 81 (33+48), aithena-ui 180 (120+60)
+- `hmac.compare_digest()` in `authenticate_user` raises `TypeError` for non-ASCII strings — discovered and tested as edge case
+- Past-dated JWT tokens in tests must use `verify_exp: False` when decoding, or use current timestamps — tokens with 2025 `now` values are already expired
+- Same-second JWT generation produces identical tokens (same iat) — sleep or offset needed to test token replacement
+- PR: #397, branch: `squad/343-integration-tests`
