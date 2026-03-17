@@ -2,7 +2,7 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-FROM python:3.11-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 ARG VERSION
 ARG GIT_COMMIT
