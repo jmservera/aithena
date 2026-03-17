@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pre-commit hook: runs zizmor on any staged workflow files.
+# Install: git config core.hooksPath .github/hooks
+
+set -euo pipefail
+
+WORKFLOWS=$(git diff --cached --name-only --diff-filter=ACM | grep '^\.github/workflows/.*\.yml$' || true)
+
+if [ -z "$WORKFLOWS" ]; then
+  exit 0
+fi
+
+if ! command -v zizmor &>/dev/null; then
+  echo "⚠️  zizmor not found — skipping workflow security scan."
+  echo "   Install: pip install zizmor"
+  exit 0
+fi
+
+echo "🔍 Running zizmor on staged workflows..."
+
+ZIZMOR_CONFIG=""
+if [ -f .zizmor.yml ]; then
+  ZIZMOR_CONFIG="--config .zizmor.yml"
+fi
+
+# shellcheck disable=SC2086
+if ! zizmor $ZIZMOR_CONFIG --min-severity medium $WORKFLOWS; then
+  echo ""
+  echo "❌ zizmor found issues in workflow files. Fix them before committing."
+  echo "   Run: zizmor --config .zizmor.yml .github/workflows/"
+  exit 1
+fi
+
+echo "✅ Workflow security scan passed."
