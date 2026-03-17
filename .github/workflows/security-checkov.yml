@@ -5,20 +5,10 @@ on:
     branches:
       - dev
       - main
-    paths:
-      - '**/Dockerfile'
-      - 'docker-compose*.yml'
-      - '.github/workflows/**'
-      - '.checkov.yml'
   pull_request:
     branches:
       - dev
       - main
-    paths:
-      - '**/Dockerfile'
-      - 'docker-compose*.yml'
-      - '.github/workflows/**'
-      - '.checkov.yml'
 
 permissions:
   contents: read

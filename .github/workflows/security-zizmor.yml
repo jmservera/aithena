@@ -5,16 +5,10 @@ on:
     branches:
       - dev
       - main
-    paths:
-      - '.github/workflows/**'
-      - '.zizmor.yml'
   pull_request:
     branches:
       - dev
       - main
-    paths:
-      - '.github/workflows/**'
-      - '.zizmor.yml'
 
 permissions:
   contents: read
