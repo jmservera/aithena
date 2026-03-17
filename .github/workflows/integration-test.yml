@@ -305,8 +305,13 @@ jobs:
     steps:
       - name: Evaluate results
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
           TEST_RESULT: ${{ needs.run-integration-tests.result }}
         run: |
+          if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
+            echo "❌ Change detection failed"
+            exit 1
+          fi
           if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
             echo "❌ Integration tests failed"
             exit 1

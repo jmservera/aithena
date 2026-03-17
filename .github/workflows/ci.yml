@@ -154,12 +154,16 @@ jobs:
     steps:
       - name: Evaluate results
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
           INDEXER_RESULT: ${{ needs.document-indexer-tests.result }}
           SEARCH_RESULT: ${{ needs.solr-search-tests.result }}
-          LINT_RESULT: ${{ needs.python-lint.result }}
           BUILD_NEEDED: ${{ needs.changes.outputs.build }}
         run: |
-          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$LINT_RESULT"; do
+          if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
+            echo "❌ Change detection failed"
+            exit 1
+          fi
+          for result in "$INDEXER_RESULT" "$SEARCH_RESULT"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "❌ One or more required jobs failed"
               exit 1

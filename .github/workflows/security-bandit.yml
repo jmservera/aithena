@@ -6,14 +6,14 @@ on:
       - dev
       - main
     paths:
-      - 'src/**/*.py'
+      - '**/*.py'
       - '.bandit'
   pull_request:
     branches:
       - dev
       - main
     paths:
-      - 'src/**/*.py'
+      - '**/*.py'
       - '.bandit'
 
 # Required for SARIF upload to Code Scanning
