@@ -4010,3 +4010,528 @@ These 4 must land before any dependency work.
 - Copilot not assigned to v1.4.0 work (all issues fit existing squad members)
 - No emoji in squad labels; all replaced with clean format
 - Dependency sequence is gated (e.g., DEP-9 waits on DEP-4 + DEP-7 + DEP-8)
+
+---
+
+# Decision: Tiered Test Strategy — Integration Tests on Dev PRs
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-17  
+**Status:** Proposed  
+**Context:** Integration test workflow (~60 min) on every PR to dev is too slow. Proposal to tier tests for faster feedback on dev PRs while keeping full integration coverage for releases.
+
+## Problem
+
+The `integration-test.yml` workflow triggers on every PR to `dev` and takes ~60 minutes:
+- Builds 6+ Docker images (~15-20 min)
+- Starts full SolrCloud 3-node cluster + ZooKeeper + all services (~5-10 min)
+- Waits for health checks (~5 min)
+- Runs Python E2E tests: upload, indexing pipeline, search modes, admin smoke (~5 min)
+- Installs Playwright + runs browser tests: navigation, search, upload, similar books, screenshots (~10 min)
+- Teardown (~2 min)
+
+This blocks developer velocity. Most dev PRs change a single service; waiting 60 minutes for Docker to build and start the entire stack is disproportionate.
+
+## Current Test Landscape (Audit)
+
+### What already runs on dev PRs (< 3 min total):
+| Workflow | Coverage | Gap |
+|----------|----------|-----|
+| `ci.yml` | solr-search (228 tests), document-indexer (76 tests), ruff lint | ❌ Missing: document-lister, embeddings-server, admin, aithena-ui |
+| `lint-frontend.yml` | ESLint + Prettier | ❌ Missing: `npm run build`, Vitest |
+| Security workflows (3) | Bandit, Checkov, Zizmor | ✅ Adequate |
+| `version-check.yml` | VERSION + Dockerfile ARG validation | ✅ Adequate |
+
+### Services with tests NOT in CI (known gap since v0.5!):
+| Service | Test count | Framework | Status |
+|---------|-----------|-----------|--------|
+| document-lister | 12 tests | pytest | ❌ Not in any CI workflow |
+| embeddings-server | 9 tests | pytest | ❌ Not in any CI workflow |
+| admin | 71 tests | pytest | ❌ Not in any CI workflow |
+| aithena-ui | 127 tests | Vitest | ❌ Not in any CI workflow |
+
+**This is the biggest gap:** We have ~219 tests that never run in CI.
+
+## Decision: Three-Tier Test Strategy
+
+### Tier 1: Dev Branch PR Gate (target: < 5 min)
+
+**Expand `ci.yml` to include ALL service unit tests:**
+- `document-lister`: 12 tests (pytest)
+- `embeddings-server`: 9 tests (pytest)
+- `admin`: 71 tests (pytest)
+- `aithena-ui`: 127 tests (Vitest)
+
+**Docker Compose YAML validation** (no daemon needed):
+```bash
+python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))"
+```
+
+This brings CI from ~230 tests to ~350+ tests, covering every service.
+
+### Tier 2: Release Gate (dev → main PRs)
+
+**Move `integration-test.yml` trigger** from `pull_request: branches: [dev]` to `pull_request: branches: [main]`:
+
+Full Docker stack + E2E + Playwright runs only when merging dev→main.
+
+### Tier 3: On-Demand & Nightly
+
+**Keep `workflow_dispatch`** for manual runs (already supported).
+
+**Add optional nightly schedule** (recommended but not required).
+
+## New Test Types to Bridge the Gap
+
+### 1. API Contract Validation
+
+- Validate all registered routes exist and return expected status codes using FastAPI TestClient
+- Verify response schema shapes (required fields, types) for key endpoints
+- **Catches:** endpoint renames, removed routes, response shape changes
+
+### 2. Cross-Service Schema Tests
+
+- Verify document-indexer output field names match solr-search expected field names
+- Import config/constants from both services and compare
+- **Catches:** field rename in one service breaking the other
+
+### 3. Docker Compose Structural Validation
+
+- Parse all compose YAML files
+- Verify all services declare health checks
+- Verify volume mounts reference valid paths
+- **Catches:** compose config errors without needing Docker daemon
+
+## Implementation Plan
+
+| Task | Assignee | Priority | Effort |
+|------|----------|----------|--------|
+| Add 4 missing service test jobs to ci.yml | Brett (CI/CD) | P0 | 1 hour |
+| Move integration-test.yml trigger to main | Brett (CI/CD) | P0 | 5 min |
+| Add nightly schedule to integration-test.yml | Brett (CI/CD) | P1 | 5 min |
+| Create API contract tests | Lambert (Tester) | P1 | 2 hours |
+| Create cross-service schema tests | Lambert (Tester) | P2 | 2 hours |
+| Create compose structural validation | Brett (CI/CD) | P2 | 1 hour |
+
+**Total effort:** ~6 hours. **Expected payoff:** 55+ minutes saved per PR, ~120 more tests running in CI.
+
+## Rollback Plan
+
+If dev→main release PRs consistently fail integration tests:
+1. Re-enable integration tests on dev PRs
+2. Add path filtering to only run for Docker/infra changes
+3. Consider splitting integration tests into "fast smoke" (health checks, ~10 min) and "full E2E" (~60 min)
+
+---
+
+# Decision: CI/CD Test Strategy Restructuring
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-17  
+**Status:** Proposed  
+**Triggered by:** Feedback that integration-test.yml (60 min) blocks developer iteration
+
+## Problem Statement
+
+- Integration test workflow (Docker Compose + E2E) takes ~60 minutes
+- Runs on every dev PR, blocking developer iteration
+- Most changes don't require full E2E validation (unit tests sufficient)
+- Release candidates get same tests as daily feature development
+
+## Decision
+
+**Split test strategy by branch:**
+
+1. **Dev PRs (dev branch):** Fast lightweight checks (~5 min)
+   - Compose validation
+   - Dockerfile linting
+   - Build validation
+   - Health check syntax
+   - Python imports
+
+2. **Release PRs (main/release/* branches):** Full integration tests (~60 min)
+   - Docker Compose + E2E stack
+
+## Rationale
+
+- Most issues caught by fast static checks (syntax, linting, build failures)
+- Full E2E tests only needed before releases (rare events)
+- Developers test locally before pushing (standard practice)
+- Safety net: main branch requires full E2E + infrastructure checks
+- CI cost reduced by ~80% for typical feature development
+
+## Implementation
+
+### Workflow Changes
+
+- **ci.yml:** Add 5 lightweight jobs (docker-compose-validate, dockerfile-lint, build-images-validation, compose-healthchecks, python-imports)
+- **integration-test.yml:** Change trigger from `branches: [dev]` to `branches: [main, release/*]`
+
+### GitHub Configuration
+
+- Branch protection for `dev`: require `infrastructure-gate` (new)
+- Branch protection for `main`: require `infrastructure-gate` + `integration-gate` (updated)
+
+## Risks & Mitigations
+
+| Risk | Mitigation |
+|------|-----------|
+| Infrastructure issues slip through dev | Lightweight checks catch 80% of issues; main branch has full E2E |
+| Developers skip local testing | Release checklist enforces manual testing before tag |
+| Service startup failures in dev | Build validation catches import/dependency issues early |
+
+## Timeline
+
+- Phase 1: Add lightweight checks to ci.yml (1–2 hours)
+- Phase 2: Update integration-test.yml triggers (15 min)
+- Phase 3: GitHub branch protection configuration (manual, 10 min)
+
+---
+
+# Decision: Fast Test Suite for Dev PRs
+
+**Author:** Lambert (Tester)  
+**Date:** 2026-03-17  
+**Status:** Proposed  
+**Context:** Integration test (Docker + E2E, 10–60 min) is too slow for every dev PR. Proposal to add fast unit tests that catch 90% of bugs without Docker.
+
+## Current State
+
+### Test inventory (overview):
+
+| Service | In CI? | Status |
+|---------|--------|--------|
+| solr-search | ✅ ci.yml | Good |
+| document-indexer | ✅ ci.yml | Good |
+| aithena-ui | ❌ NOT in CI | Gap |
+| admin | ❌ NOT in CI | Gap |
+| document-lister | ❌ NOT in CI | Gap |
+| embeddings-server | ❌ NOT in CI | Gap |
+
+**Finding:** Tests for several services never run in CI, leaving meaningful coverage gaps.
+
+## Gap Analysis: Bugs We'd Miss
+
+1. **Cross-service contract breaks** — High risk
+2. **Frontend regressions** — 127 tests not run
+3. **Admin auth flow breaks** — 71 tests not run
+4. **Document-lister config bugs** — 12 tests not run
+5. **Embeddings server startup issues** — 9 tests not run
+6. **Docker build failures** — Dockerfile syntax, missing deps
+7. **Config mismatches** — Env var naming changes
+8. **Frontend build failures** — TypeScript errors, missing imports
+
+## Proposed Fast Tests (< 5 min total)
+
+### Tier 1: Add missing service tests to ci.yml (EASY, highest impact)
+
+**New jobs for ci.yml:**
+- `aithena-ui` tests: `npm test -- --run` (127 tests, ~15 sec)
+- `admin` tests: `uv run pytest -v` (71 tests, ~20 sec)
+- `document-lister` tests: `uv run pytest -v` (12 tests, ~10 sec)
+- `embeddings-server` tests: `pip install pytest httpx && pytest` (9 tests, ~10 sec)
+
+**Total: ~55 sec added. 219 more tests. Zero new test code needed.**
+
+### Tier 2: API contract tests (MEDIUM)
+
+- **Embeddings API contract:** Validate solr-search client sends requests matching embeddings-server API schema (~2 sec)
+- **Solr OpenAPI snapshot:** Generate schema, compare against committed snapshot to detect unintentional API breaks (~2 sec)
+
+### Tier 3: Import/startup smoke tests (EASY)
+
+- **Service importability:** For each Python service, verify main module imports without errors (~3 sec)
+- **Frontend build validation:** Run `npm run build` to catch TypeScript errors (~20 sec)
+
+### Tier 4: Config & infrastructure validation (EASY-MEDIUM)
+
+- **Docker Compose validation:** Parse YAML, check service references, verify health checks (~1 sec)
+- **Nginx config validation:** Basic syntax checks (~1 sec)
+- **Environment variable documentation:** Grep config.py, verify all env vars in docker-compose or .env (~2 sec)
+
+### Tier 5: Mock integration tests (HARD)
+
+- **Search pipeline mock:** Test full search flow (query → embeddings → Solr → response) with mocked services (~3 sec)
+- **Document indexing mock:** Test full indexing pipeline with mocked external services (~3 sec)
+
+## Summary
+
+| Tier | Tests Added | New Code? | Run Time | Priority |
+|------|------------|-----------|----------|----------|
+| **1** | 219 existing | No | ~55 sec | **P0** |
+| **2** | 2 contract tests | Yes | ~4 sec | **P1** |
+| **3** | Import + build | Minimal | ~23 sec | **P1** |
+| **4** | Config validators | Yes | ~4 sec | **P2** |
+| **5** | Mock integration | Yes (complex) | ~6 sec | **P3** |
+
+**Total: ~92 seconds, catching ~90% of bugs without Docker.**
+
+## Recommendation
+
+1. **Tier 1 (immediate):** Add 4 missing service test jobs to `ci.yml` (1–2 hours, Brett/Lambert)
+2. **Tier 2-3 (next sprint):** API contract + import smoke tests (4 new test files, Lambert)
+3. **Tier 4-5 (future):** Config validation + mock integration (when capacity allows)
+
+# CI Chores Work Plan — Issues #457 & #458
+
+**Date:** 2026-07-25
+**Author:** Ripley (Lead)
+**Status:** Ready for execution
+
+## Context
+
+PR #454 (`squad/ci-path-filters`) is already merged to `dev`. Both issues need fresh branches off `dev`.
+
+Current `ci.yml` runs 3 jobs: `document-indexer-tests`, `solr-search-tests`, `python-lint`.
+Issue #457 adds 4 missing services. Issue #458 changes when integration tests run.
+
+---
+
+## Issue #457 — Add missing service tests to CI
+
+**Branch:** `squad/457-ci-missing-tests` (off `dev`)
+**PR:** Single PR targeting `dev`
+**File:** `.github/workflows/ci.yml`
+
+### Work Item 1 — ⚙️ Brett (Infra): Add 4 new test jobs to ci.yml
+
+**What to do:**
+
+Add these 4 jobs to `.github/workflows/ci.yml`, all with `needs: changes` and the same
+`if: needs.changes.outputs.build == 'true'` guard as existing jobs:
+
+**Job 1: `aithena-ui-tests`**
+```yaml
+aithena-ui-tests:
+  name: aithena-ui tests
+  needs: changes
+  if: needs.changes.outputs.build == 'true'
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: src/aithena-ui/package-lock.json
+    - name: Install dependencies
+      working-directory: src/aithena-ui
+      run: npm ci
+    - name: Lint
+      working-directory: src/aithena-ui
+      run: npm run lint
+    - name: Type-check & build
+      working-directory: src/aithena-ui
+      run: npm run build
+    - name: Run tests
+      working-directory: src/aithena-ui
+      run: npm test
+```
+
+**Job 2: `admin-tests`**
+```yaml
+admin-tests:
+  name: admin tests
+  needs: changes
+  if: needs.changes.outputs.build == 'true'
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      with:
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: src/admin/uv.lock
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      with:
+        python-version: "3.12"
+    - name: Install dependencies
+      working-directory: src/admin
+      run: uv sync --frozen
+    - name: Run tests
+      working-directory: src/admin
+      run: uv run pytest -v --tb=short
+```
+
+**Job 3: `document-lister-tests`**
+```yaml
+document-lister-tests:
+  name: document-lister tests
+  needs: changes
+  if: needs.changes.outputs.build == 'true'
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      with:
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: src/document-lister/uv.lock
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      with:
+        python-version: "3.12"
+    - name: Install dependencies
+      working-directory: src/document-lister
+      run: uv sync --frozen
+    - name: Run tests
+      working-directory: src/document-lister
+      run: uv run pytest -v --tb=short
+```
+
+**Job 4: `embeddings-server-tests`**
+```yaml
+embeddings-server-tests:
+  name: embeddings-server tests
+  needs: changes
+  if: needs.changes.outputs.build == 'true'
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      with:
+        python-version: "3.12"
+    - name: Install dependencies
+      working-directory: src/embeddings-server
+      run: pip install -r requirements.txt
+    - name: Run tests
+      working-directory: src/embeddings-server
+      run: pytest -v --tb=short
+```
+
+### Work Item 2 — ⚙️ Brett (Infra): Update `all-tests-passed` gate
+
+**Same file, same PR.** Update the `all-tests-passed` job:
+
+1. Add all 4 new jobs to `needs`:
+   ```yaml
+   needs:
+     - changes
+     - document-indexer-tests
+     - solr-search-tests
+     - python-lint
+     - aithena-ui-tests       # NEW
+     - admin-tests             # NEW
+     - document-lister-tests   # NEW
+     - embeddings-server-tests # NEW
+   ```
+
+2. Add new result variables to the `env` block and include them in the failure check loop:
+   ```yaml
+   env:
+     # ... existing vars ...
+     UI_RESULT: ${{ needs.aithena-ui-tests.result }}
+     ADMIN_RESULT: ${{ needs.admin-tests.result }}
+     LISTER_RESULT: ${{ needs.document-lister-tests.result }}
+     EMBEDDINGS_RESULT: ${{ needs.embeddings-server-tests.result }}
+   run: |
+     # ... existing changes check ...
+     for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$ADMIN_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT"; do
+       if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+         echo "❌ One or more required jobs failed"
+         exit 1
+       fi
+     done
+     # ... rest unchanged ...
+   ```
+
+### Work Item 3 — 🧪 Lambert (Tester): Pre-flight test verification
+
+**Before Brett starts**, Lambert runs all 4 test suites locally to confirm they pass clean:
+
+```bash
+cd src/aithena-ui && npm ci && npm run lint && npm run build && npm test
+cd src/admin && uv sync --frozen && uv run pytest -v --tb=short
+cd src/document-lister && uv sync --frozen && uv run pytest -v --tb=short
+cd src/embeddings-server && pip install -r requirements.txt && pytest -v --tb=short
+```
+
+**Report:** Confirm pass/fail counts match issue expectations (127 + 71 + 12 + 9 = 219).
+Flag any failures so Brett doesn't ship a red CI.
+
+**Dependency:** Lambert must complete WI-3 before Brett starts WI-1/WI-2.
+
+### Work Item 4 — 🧪 Lambert (Tester): Post-merge CI validation
+
+After PR merges, verify the CI run on `dev` shows all 8 jobs green (6 test + lint + gate).
+Confirm total CI time stays under 5 minutes (acceptance criterion).
+
+---
+
+## Issue #458 — Move integration tests to release gate only
+
+**Branch:** `squad/458-integration-release-gate` (off `dev`)
+**PR:** Separate PR targeting `dev` — MUST NOT be bundled with #457
+**File:** `.github/workflows/integration-test.yml`
+
+### Work Item 5 — ⚙️ Brett (Infra): Change integration-test.yml triggers
+
+**Changes to `.github/workflows/integration-test.yml`:**
+
+1. Change `pull_request` target branch from `dev` to `main`:
+   ```yaml
+   on:
+     workflow_dispatch:
+     pull_request:
+       branches:
+         - main    # was: dev
+     schedule:
+       - cron: "0 3 * * 1-5"   # NEW: weeknights at 3 AM UTC
+   ```
+
+2. No other changes needed. The path-filter logic, jobs, and gate all stay the same.
+
+**Dependency:** #457 must be merged first (expanded unit tests must protect `dev` before removing the integration gate).
+
+### Work Item 6 — 👤 Juanma (Manual): Update branch protection
+
+After WI-5 PR merges:
+
+1. Go to repo Settings → Branches → `dev` branch protection rule
+2. Remove "Docker Compose integration + E2E" from required status checks
+3. Optionally add it as required on `main` branch protection (if not already)
+
+**This is a manual step — cannot be automated by the squad.**
+
+---
+
+## Execution Order
+
+```
+Phase 1 (parallel):
+  WI-3: Lambert verifies all 4 test suites pass locally
+
+Phase 2 (after WI-3):
+  WI-1 + WI-2: Brett adds jobs + gate update to ci.yml → PR for #457
+
+Phase 3 (after #457 PR merges):
+  WI-4: Lambert validates CI run on dev
+  WI-5: Brett opens separate PR for #458 trigger changes
+
+Phase 4 (after #458 PR merges):
+  WI-6: Juanma updates branch protection settings
+```
+
+## Summary Table
+
+| # | Assignee | Task | File | Depends On | Branch |
+|---|----------|------|------|------------|--------|
+| WI-1 | ⚙️ Brett | Add 4 test jobs | `.github/workflows/ci.yml` | WI-3 | `squad/457-ci-missing-tests` |
+| WI-2 | ⚙️ Brett | Update gate job | `.github/workflows/ci.yml` | WI-3 | same branch |
+| WI-3 | 🧪 Lambert | Pre-flight test run | local only | none | n/a |
+| WI-4 | 🧪 Lambert | Post-merge CI check | CI dashboard | #457 merged | n/a |
+| WI-5 | ⚙️ Brett | Change triggers | `.github/workflows/integration-test.yml` | #457 merged | `squad/458-integration-release-gate` |
+| WI-6 | 👤 Juanma | Branch protection | GitHub Settings | #458 merged | n/a |
+
+## Notes
+
+- **No Dallas work needed.** The frontend job (WI-1) is CI config, not React code — Brett owns it.
+- **No Parker work needed.** All Python test jobs use existing test suites; no backend code changes.
+- **Pin action SHAs.** Brett must use the same pinned action versions already in ci.yml (listed in the job specs above).
+- **embeddings-server uses pip**, not uv — it has `requirements.txt` only, no `pyproject.toml`/`uv.lock`.
+- **CI budget:** All 4 new jobs run in parallel. Expected wall-clock addition is ~1-2 min (Node install + Vitest is the long pole). Total CI should stay well under 5 min.

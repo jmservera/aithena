@@ -173,3 +173,74 @@ Key active decisions managed in .squad/decisions.md:
 - **Copilot:** Issue-by-issue implementation (good fit for well-scoped tasks)
 - **Ripley:** Architecture, roadmap, team coordination, decision arbitration
 
+
+### 2026-03-17T19:50Z — Analyzed Test Tier Strategy & Found 219 Untested Tests
+
+**Context:** Juanma reported integration-test.yml (60 min) blocks dev PR iteration. Led audit of current test coverage across 6 services.
+
+**Analysis Findings:**
+
+**Test Inventory (469 total):**
+- solr-search: 193 tests ✅ in ci.yml
+- document-indexer: 91 tests ✅ in ci.yml
+- aithena-ui: 127 tests ❌ NOT in CI
+- admin: 71 tests ❌ NOT in CI
+- document-lister: 12 tests ❌ NOT in CI
+- embeddings-server: 9 tests ❌ NOT in CI
+
+**Gap:** 219 tests (4 of 6 services) never run in CI. This is the core problem.
+
+**Proposed 3-Tier Strategy:**
+
+1. **Tier 1 (Dev PRs, < 5 min):** Add all 219 missing tests to ci.yml
+   - Zero new test code — just CI job config
+   - Covers every service
+
+2. **Tier 2 (Release PRs, ~60 min):** Move integration-test.yml from dev→main
+   - Full Docker stack + E2E
+   - Only runs before releases
+
+3. **Tier 3 (Optional):** Nightly schedule for long-running integration tests
+
+**Risk Assessment (acceptable for dev PRs):**
+| Risk | Severity | Mitigation |
+|------|----------|-----------|
+| Docker build failures | Low | Caught at release gate |
+| Cross-service breaks | Medium | API contract tests (new) |
+| Frontend regressions | Medium | Add aithena-ui tests to CI |
+| Auth flow breaks | Low | Unit tests in solr-search + admin |
+| Full-stack startup failure | Low | Only for infra changes |
+
+**Expected Outcome:**
+- Dev PRs: 55+ minutes faster (~80% CI cost reduction)
+- Release PRs: Same rigorous testing (full E2E)
+- Coverage: 350+ tests in CI (vs. ~230 today)
+
+**Related decisions:** brett-ci-restructure.md, lambert-fast-tests.md (both merged to decisions.md)
+
+**Status:** Decision recorded in `.squad/decisions.md`. Awaiting team sign-off for implementation.
+
+## 2026-03-17 — CI Chores Orchestration (WI-0 Lead)
+
+**Session:** CI chores implementation — #457 & #458
+**Date:** 2026-03-17T20:10Z
+**Status:** ✅ Completed
+
+**Work Item 0 — Lead Facilitation:**
+- Facilitated implementation meeting with Lambert (Tester) and Brett (Infra)
+- Produced comprehensive 6-item work plan with phased execution and clear dependencies
+- Recorded decision: Single PR (#459) for WI-1 + WI-2 (same file, ci.yml)
+- Recorded decision: Separate PR (#460) for WI-5 (different file, integration-test.yml)
+- Identified WI-6 (branch protection) as manual step for user
+
+**Plan Output:** `.squad/decisions/inbox/ripley-ci-chores-plan.md` (now merged to decisions.md)
+- 6 work items with role assignments
+- Phased execution order with dependencies
+- Summary table mapping work items to assignees, files, and branches
+
+**Outcomes:**
+- ✅ Lambert completed WI-3 (pre-flight test verification) — 219 tests passing
+- ✅ Brett completed WI-1 + WI-2 (added 4 CI jobs, updated gate) — PR #459 ready
+- ✅ Work plan and decisions merged to squad state files
+
+**Role:** Team lead and decision facilitator for CI hardening initiative.

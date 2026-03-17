@@ -628,3 +628,47 @@
 **Branch:** `squad/fix-redis-commander-e2e`
 
 **PR:** #424 (targeting `dev`)
+
+### 2026-03-17T19:50Z — Proposed CI/CD Test Strategy Restructuring
+
+**Context:** Juanma reported that integration-test.yml (60 min) blocks dev PR iteration. Team analyzed test coverage and proposed restructuring.
+
+**Proposal:** Split test workflows by branch:
+- **Dev PRs:** Fast lightweight checks (~5 min) — compose validation, Dockerfile linting, build validation, health check syntax, Python imports
+- **Release PRs (main/release/*):** Full integration tests (~60 min) — Docker Compose + E2E
+
+**Rationale:**
+- Most issues caught by static checks; full E2E only needed before releases
+- Developers test locally before pushing
+- Main branch protected with full E2E
+- CI cost reduced ~80% for typical feature development
+
+**Implementation (3 phases):**
+1. Add 5 lightweight jobs to ci.yml (1–2 hours)
+2. Move integration-test.yml trigger from `dev` to `main` (15 min)
+3. Update GitHub branch protection config (10 min, manual)
+
+**Related decisions:** ripley-test-tiers.md, lambert-fast-tests.md (both merged to decisions.md)
+
+**Status:** Decision recorded in `.squad/decisions.md`. Implementation pending team approval.
+
+## 2026-03-17 — CI Chores Implementation (WI-1 + WI-2)
+
+**Session:** CI chores orchestration — #457 & #458
+**Date:** 2026-03-17T20:10Z
+**Status:** ✅ Implemented
+
+**Work:** Added 4 missing service test jobs to CI pipeline + updated gate.
+- **aithena-ui-tests:** React + Vite tests (127 tests)
+- **admin-tests:** Streamlit Python tests (71 tests)
+- **document-lister-tests:** Python consumer tests (12 tests)
+- **embeddings-server-tests:** Python embeddings tests (9 tests)
+
+**Files Modified:**
+- `.github/workflows/ci.yml` — Added 4 job definitions + updated `all-tests-passed` gate
+
+**PR:** #459 (targeting `dev`, WI-1 + WI-2 combined)
+
+**Next:** WI-4 post-merge validation by Lambert; then WI-5 (separate PR #460 for integration-test.yml trigger changes)
+
+**Pre-flight:** All 4 test suites verified passing (Lambert, WI-3).

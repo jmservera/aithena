@@ -134,6 +134,155 @@ jobs:
           path: src/solr-search/htmlcov/
           retention-days: 14
 
+  aithena-ui-tests:
+    name: aithena-ui tests
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/aithena-ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/aithena-ui
+        run: npm ci
+
+      - name: Lint
+        working-directory: src/aithena-ui
+        run: npm run lint
+
+      - name: Build
+        working-directory: src/aithena-ui
+        run: npm run build
+
+      - name: Run tests
+        working-directory: src/aithena-ui
+        run: npx vitest run
+
+  admin-tests:
+    name: admin tests
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/admin/uv.lock
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: src/admin
+        run: uv sync --frozen
+
+      - name: Run tests with coverage
+        working-directory: src/admin
+        run: uv run pytest -v --tb=short
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: admin-coverage
+          path: src/admin/htmlcov/
+          retention-days: 14
+
+  document-lister-tests:
+    name: document-lister tests
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/document-lister/uv.lock
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: src/document-lister
+        run: uv sync --frozen
+
+      - name: Run tests with coverage
+        working-directory: src/document-lister
+        run: uv run pytest -v --tb=short
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: document-lister-coverage
+          path: src/document-lister/htmlcov/
+          retention-days: 14
+
+  embeddings-server-tests:
+    name: embeddings-server tests
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('src/embeddings-server/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        working-directory: src/embeddings-server
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.4 httpx==0.27.2 pytest-cov==6.1.1
+
+      - name: Run tests with coverage
+        working-directory: src/embeddings-server
+        run: pytest -v --tb=short --cov=main --cov=config --cov-report=term-missing --cov-report=html
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: embeddings-server-coverage
+          path: src/embeddings-server/htmlcov/
+          retention-days: 14
+
   python-lint:
     name: Python lint (ruff)
     needs: changes
@@ -153,6 +302,10 @@ jobs:
       - changes
       - document-indexer-tests
       - solr-search-tests
+      - aithena-ui-tests
+      - admin-tests
+      - document-lister-tests
+      - embeddings-server-tests
       - python-lint
     steps:
       - name: Evaluate results
@@ -160,13 +313,18 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           INDEXER_RESULT: ${{ needs.document-indexer-tests.result }}
           SEARCH_RESULT: ${{ needs.solr-search-tests.result }}
+          UI_RESULT: ${{ needs.aithena-ui-tests.result }}
+          ADMIN_RESULT: ${{ needs.admin-tests.result }}
+          LISTER_RESULT: ${{ needs.document-lister-tests.result }}
+          EMBEDDINGS_RESULT: ${{ needs.embeddings-server-tests.result }}
+          LINT_RESULT: ${{ needs.python-lint.result }}
           BUILD_NEEDED: ${{ needs.changes.outputs.build }}
         run: |
           if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
             echo "❌ Change detection failed"
             exit 1
           fi
-          for result in "$INDEXER_RESULT" "$SEARCH_RESULT"; do
+          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$ADMIN_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "❌ One or more required jobs failed"
               exit 1
