@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
-from jose import ExpiredSignatureError, JWTError, jwt
+from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
 
 JWT_ALGORITHM = "HS256"
 _PASSWORD_HASHER = PasswordHasher()
@@ -153,11 +154,11 @@ def create_access_token(
 def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
     try:
         payload = jwt.decode(
-            token, secret, algorithms=[JWT_ALGORITHM], options={"require_exp": True}
+            token, secret, algorithms=[JWT_ALGORITHM], options={"require": ["exp"]}
         )
     except ExpiredSignatureError as err:
         raise TokenExpiredError("Token expired") from err
-    except JWTError as err:
+    except (DecodeError, InvalidTokenError) as err:
         raise AuthenticationError("Invalid authentication token") from err
 
     try:

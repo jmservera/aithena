@@ -6,8 +6,8 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import jwt
 import pytest
-from jose import jwt
 
 os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")  # noqa: S108
 os.environ.setdefault("AUTH_JWT_SECRET", "test-auth-secret")
