@@ -6014,3 +6014,268 @@ The RabbitMQ `ACCESS_REFUSED` errors and 502s on `/stats`/`/search` endpoints ar
 - **Code Change:** `src/solr-search/main.py:854`
 - **Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-parker.md`
 - **Session Log:** `.squad/log/2026-03-17T08-13-infra-diagnosis.md`
+
+---
+
+## Decision: Respect Downstream API URL Conventions in Configuration
+
+**Context:** Issue #406 — semantic search returning 502 errors
+
+**Date:** 2026-03-15
+
+**Author:** Ash (Search Engineer)
+
+### Problem
+
+The `embeddings_url` configuration in `solr-search/config.py` was applying `.rstrip("/")` to sanitize the URL, but this broke semantic search because the embeddings-server FastAPI endpoint expects the trailing slash:
+
+- Embeddings server endpoint: `@app.post("/v1/embeddings/")`
+- Config after sanitization: `"http://embeddings-server:8001/v1/embeddings"` (no slash)
+- Result: POST requests don't match the route → 502 error
+
+### Decision
+
+**Do not strip trailing slashes from URLs that are used as-is in HTTP requests.**
+
+Configuration sanitization (like `.rstrip("/")`) is appropriate for:
+- Base URLs that will be concatenated with paths (e.g., `SOLR_URL`)
+- Display URLs (e.g., `DOCUMENT_URL_BASE`)
+
+But **not** for:
+- Complete endpoint URLs that are passed directly to HTTP clients
+- URLs where the trailing slash is semantically significant (FastAPI, Django, etc.)
+
+### Implementation
+
+Removed `.rstrip("/")` from `embeddings_url` in `config.py` line 90.
+
+**Before:**
+```python
+embeddings_url=os.environ.get("EMBEDDINGS_URL", "http://embeddings-server:8001/v1/embeddings/").rstrip("/"),
+```
+
+**After:**
+```python
+embeddings_url=os.environ.get("EMBEDDINGS_URL", "http://embeddings-server:8001/v1/embeddings/"),
+```
+
+### Implications
+
+- Developers setting `EMBEDDINGS_URL` must include the trailing slash if the downstream API requires it
+- The default value preserves the correct behavior
+- This pattern applies to any future endpoint URL configurations
+
+### Related
+
+- Issue: #406
+- PR: #410
+- Files: `src/solr-search/config.py`, `src/embeddings-server/main.py`
+
+---
+
+## Decision: Library Page is Unimplemented Feature, Not a Bug
+
+**Date:** 2026-03-17  
+**Author:** Dallas (Frontend Dev)  
+**Issue:** #405 — Library page shows empty  
+**Category:** Feature Gap / Technical Debt  
+
+### Context
+
+The Library page at `/library` shows only a placeholder title despite 127+ documents being indexed. Initial triage suspected a bug (wrong API endpoint, auth issue, or rendering bug).
+
+### Investigation Findings
+
+1. **LibraryPage.tsx** is a 10-line placeholder component with only static JSX — no API calls, no data fetching, no hooks.
+2. **Backend support exists**: The `/v1/search` endpoint accepts empty query strings (`q=""`) and returns all indexed books as documented in the API.
+3. **Frontend gap**: The `useSearch` hook explicitly blocks empty queries (lines 73-85) — this was intentional for semantic/hybrid search but prevents "browse all" functionality.
+4. **Nginx proxy**: Routing is correct — `/v1/` endpoints properly forwarded to solr-search:8080.
+
+### Decision
+
+**This is a missing feature, not a bug.** The Library tab was added during tab navigation scaffolding (PR #123, commit 166a3f2) but the page content was never implemented.
+
+**Recommended Solution:**
+- Create a new `useLibrary` hook or modify `useSearch` to support browse mode (empty query allowed for keyword search only)
+- Build LibraryPage component with:
+  - Pagination controls
+  - Filter panel (author/category/language/year)
+  - Book grid display (reuse BookCard component from SearchPage)
+  - Loading states and error handling
+- Add tests (≥8 component tests + 4 hook tests)
+
+**Estimated Effort:** ~200 LOC (hook + component + tests)
+
+### Implications
+
+- Users who click the Library tab see only a placeholder — poor UX
+- The feature was promised by the tab navigation but never delivered
+- Backend already supports this — no API changes needed
+
+### Action Items
+
+1. Update issue #405 to reflect this is a feature request, not a bug
+2. Assign to Dallas for implementation in next sprint
+3. Add acceptance criteria: pagination, filters, keyword-only mode, ≥80% test coverage
+
+---
+
+## Decision: Dedicated /v1/books Endpoint for Library Browsing
+
+**Date:** 2026-03-17  
+**Author:** Parker (Backend Developer)  
+**Context:** Issue #405 — Library page shows empty  
+**PR:** #409
+
+### Problem
+
+The Library page needed a way to retrieve all indexed books for browsing. While the `/v1/search` endpoint supports empty queries (`q=""`) that return all books, this approach has several drawbacks:
+- Not semantically clear or discoverable
+- Confuses search vs. browse use cases
+- Default sort (by relevance score) doesn't make sense for browsing
+
+### Decision
+
+Created a dedicated `/v1/books` endpoint with:
+- RESTful design pattern (`/v1/books` for collection listing)
+- Default sort by title ascending (more appropriate for library browsing)
+- Same pagination, filtering, and faceting capabilities as search
+- Reuses existing infrastructure (normalize_book, build_pagination, parse_facet_counts)
+
+### Implementation
+
+```python
+@app.get("/v1/books/", include_in_schema=False, name="books_v1")
+@app.get("/v1/books", include_in_schema=False, name="books_v1_no_slash")
+@app.get("/books")
+def list_books(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size),
+    sort_by: Annotated[SortBy, Query()] = "title",
+    sort_order: Annotated[SortOrder, Query()] = "asc",
+    fq_author: str | None = Query(None),
+    fq_category: str | None = Query(None),
+    fq_language: str | None = Query(None),
+    fq_year: str | None = Query(None),
+) -> dict[str, Any]:
+    """Browse the complete library of indexed books."""
+    # Uses Solr *:* query to match all documents
+```
+
+### Rationale
+
+1. **Separation of Concerns:** Search and browse are different use cases with different UX expectations
+2. **Discoverability:** A dedicated `/books` endpoint is more intuitive than "search with an empty query"
+3. **Appropriate Defaults:** Title sorting for browsing vs. score sorting for search results
+4. **API Consistency:** Follows RESTful conventions for resource collections
+
+### Alternatives Considered
+
+1. **Use search endpoint with empty query:** Rejected — confuses search/browse semantics
+2. **Create separate response format:** Rejected — reusing search response structure reduces frontend complexity
+3. **No filtering support:** Rejected — filters enable "browse by category/author" UX patterns
+
+### Impact
+
+- Frontend can now implement proper library browsing UI
+- Backend API is more RESTful and self-documenting
+- No breaking changes to existing endpoints
+- All existing tests pass
+
+### Follow-up
+
+- Frontend team needs to implement LibraryPage component calling this endpoint
+- Consider adding search box to library page (calls /v1/search instead)
+
+---
+
+## v1.4.0 Triage Decisions (Ripley)
+
+**Date:** 2026-03-17  
+**Triaged:** 14 issues (4 bugs + 10 dependency upgrades)
+
+### Triage Outcomes
+
+#### BUGS (Priority 1)
+
+| # | Title | Routing | Rationale |
+|---|-------|---------|-----------|
+| **#407** | release.yml missing checkout | `squad:brett` | CI/CD fix, missing `actions/checkout` step. Well-defined, structural. Brett (Infra) owns GitHub Actions workflows. |
+| **#406** | Semantic search returns 502 | `squad:ash` | Vector field / embeddings pipeline investigation. Ash (Search Engineer) owns Solr + embeddings architecture. |
+| **#405** | Library page shows empty | `squad:parker` + `squad:dallas` | Backend book serving + frontend rendering. Both backend (Parker) and frontend (Dallas) need to collaborate. |
+| **#404** | Stats show chunks not books | `squad:ash` | Requires Solr parent/child schema redesign. Impacts indexer + stats endpoint. Ash (Search Engineer) owns schema. |
+
+#### DEPENDENCY UPGRADES (Priority 2)
+
+##### Research & Planning
+
+| # | Title | Routing | Rationale |
+|---|-------|---------|-----------|
+| **#344** | DEP-1: React 19 evaluation | `squad:dallas` | Research spike — benefit/effort/risk. Foundation for DEP-7. Dallas (Frontend) evaluates React ecosystem. |
+| **#346** | DEP-3: Python dependency audit | `squad:parker` | Create dependency matrix. Foundation for DEP-4 + DEP-8. Parker (Backend) owns Python services. |
+
+##### Implementation (Infrastructure)
+
+| # | Title | Routing | Rationale |
+|---|-------|---------|-----------|
+| **#348** | DEP-5: Node 22 LTS | `squad:brett` | Dockerfile base image upgrade. Infrastructure task. Brett (Infra) owns containers. |
+| **#347** | DEP-4: Python 3.12 | `squad:parker` + `squad:brett` | Upgrade pyproject.toml, Dockerfiles, CI. Both backend (Parker) and infra (Brett) involved. |
+| **#349** | DEP-6: Dependabot auto-merge | `squad:brett` | CI/CD workflow. Brett (Infra) owns GitHub Actions. |
+
+##### Implementation (Frontend)
+
+| # | Title | Routing | Rationale |
+|---|-------|---------|-----------|
+| **#345** | DEP-2: ESLint v8 → v9 | `squad:dallas` | Flat config migration. Frontend tooling. Dallas (Frontend) owns ESLint. |
+| **#350** | DEP-7: React 19 migration | `squad:dallas` | Frontend refactor (conditional on #344). Dallas (Frontend) executes. |
+
+##### Implementation (Backend)
+
+| # | Title | Routing | Rationale |
+|---|-------|---------|-----------|
+| **#351** | DEP-8: Update Python deps | `squad:parker` | Upgrade dependencies (depends on #346). Parker (Backend) manages Python packages. |
+
+##### Validation & Release
+
+| # | Title | Routing | Rationale |
+|---|-------|---------|-----------|
+| **#352** | DEP-9: Full regression tests | `squad:lambert` | Validation gate (depends on #347, #351). Lambert (Tester) owns test suite execution. |
+| **#353** | DEP-10: Document upgrades | `squad:newt` | Release validation (depends on #352). Newt (Product Manager) documents decisions + rollback. |
+
+### Label Cleanup
+
+Removed emoji-based labels (🔧 parker, ⚛️ dallas, 📊 ash, ⚙️ brett, 🧪 lambert, 📝 newt) and replaced with clean format: `squad:parker`, `squad:dallas`, etc.
+
+### Dependency Chain
+
+```
+DEP-1 (Research React 19) ─→ DEP-7 (Migrate React 19)
+                              ├─→ DEP-9 (Regression tests) ─→ DEP-10 (Docs + release)
+
+DEP-3 (Audit Python)      ─→ DEP-4 (Python 3.12)
+                              ├─→ DEP-8 (Update deps)
+                              ├─→ DEP-9 (Regression tests) ─→ DEP-10
+
+DEP-5 (Node 22 LTS)       ─→ DEP-9 (Regression tests) ─→ DEP-10
+
+DEP-2 (ESLint v9)         ─→ DEP-9 (Regression tests) ─→ DEP-10
+
+DEP-6 (Dependabot workflow) — standalone
+```
+
+### Critical Bugs First
+
+v1.4.0 has 4 high-impact bugs blocking release:
+- **#405**: Empty library (0 books shown) — blocks usability
+- **#406**: Semantic search broken (502) — blocks core feature
+- **#407**: Release workflow broken — blocks CI/CD
+- **#404**: Stats wrong (chunks vs books) — needs schema redesign
+
+These 4 must land before any dependency work.
+
+### Notes
+
+- Copilot not assigned to v1.4.0 work (all issues fit existing squad members)
+- No emoji in squad labels; all replaced with clean format
+- Dependency sequence is gated (e.g., DEP-9 waits on DEP-4 + DEP-7 + DEP-8)
