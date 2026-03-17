@@ -29,6 +29,7 @@ HOST="${AITHENA_HOST:-localhost}"
 TIMEOUT="${AITHENA_TIMEOUT:-10}"
 ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+AUTH_TOKEN=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -94,8 +95,17 @@ check_http() {
     local url="$2"
     local expected_status="${3:-200}"
     local extra_args="${4:-}"
-    
-    if curl -sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}" $extra_args "$url" | grep -q "^${expected_status}$"; then
+
+    local -a curl_opts=(-sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        curl_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    if [[ -n "$extra_args" ]]; then
+        curl_opts+=("$extra_args")
+    fi
+    curl_opts+=("$url")
+
+    if curl "${curl_opts[@]}" | grep -q "^${expected_status}$"; then
         log_pass "$name"
         return 0
     else
@@ -109,15 +119,24 @@ check_http_json() {
     local url="$2"
     local json_field="$3"
     local extra_args="${4:-}"
-    
+
+    local -a curl_opts=(-sf -m "$TIMEOUT")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        curl_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    if [[ -n "$extra_args" ]]; then
+        curl_opts+=("$extra_args")
+    fi
+    curl_opts+=("$url")
+
     local response
-    response=$(curl -sf -m "$TIMEOUT" $extra_args "$url" 2>/dev/null || true)
-    
+    response=$(curl "${curl_opts[@]}" 2>/dev/null || true)
+
     if [[ -z "$response" ]]; then
         log_fail "$name - No response from $url"
         return 1
     fi
-    
+
     if echo "$response" | grep -q "\"${json_field}\""; then
         log_pass "$name"
         return 0
@@ -138,7 +157,7 @@ test_health_endpoints() {
     check_http "Nginx health check" "http://${HOST}/health"
     
     # Solr-search API health (via nginx proxy)
-    check_http "API health endpoint" "http://${HOST}/api/health"
+    check_http "API health endpoint" "http://${HOST}/v1/health"
     
     # Admin dashboard health (via nginx proxy to streamlit)
     # Streamlit health endpoint is at /admin/streamlit/_stcore/health
@@ -153,11 +172,11 @@ test_version_endpoints() {
     log_info "Testing version endpoints..."
     
     # API version endpoint
-    check_http_json "API version endpoint" "http://${HOST}/api/version" "version"
+    check_http_json "API version endpoint" "http://${HOST}/v1/version" "version"
     
     # Check that version field is not empty
     local version
-    version=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/version" 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
+    version=$(curl -sf -m "$TIMEOUT" "http://${HOST}/v1/version" 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ -n "$version" && "$version" != "dev" ]]; then
         log_pass "API version is set: $version"
     elif [[ "$version" == "dev" ]]; then
@@ -175,19 +194,19 @@ test_search_api() {
     log_info "Testing search API endpoints..."
     
     # Search endpoint (should return 200 even with no query - returns all docs)
-    check_http "Search endpoint" "http://${HOST}/api/search"
+    check_http "Search endpoint" "http://${HOST}/v1/search"
     
     # Search with query parameter
-    check_http "Search with query" "http://${HOST}/api/search?q=test"
+    check_http "Search with query" "http://${HOST}/v1/search?q=test"
     
     # Facets endpoint
-    check_http "Facets endpoint" "http://${HOST}/api/facets"
+    check_http "Facets endpoint" "http://${HOST}/v1/facets"
     
     # Stats endpoint
-    check_http "Stats endpoint" "http://${HOST}/api/stats"
+    check_http "Stats endpoint" "http://${HOST}/v1/stats"
     
     # Books endpoint
-    check_http "Books endpoint" "http://${HOST}/api/books"
+    check_http "Books endpoint" "http://${HOST}/v1/books"
 }
 
 # ============================================================================
@@ -238,11 +257,11 @@ test_solr_cluster() {
     log_info "Testing Solr cluster health..."
     
     # Solr is not directly exposed, but we can check via the API status endpoint
-    check_http_json "Solr status via API" "http://${HOST}/api/v1/status" "solr"
+    check_http_json "Solr status via API" "http://${HOST}/v1/status" "solr"
     
     # Check that Solr is reported as healthy
     local solr_status
-    solr_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/v1/status" 2>/dev/null | grep -o '"solr":"[^"]*"' | cut -d'"' -f4 || true)
+    solr_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/v1/status" 2>/dev/null | grep -o '"solr":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ "$solr_status" == "healthy" ]]; then
         log_pass "Solr cluster is healthy"
     elif [[ -n "$solr_status" ]]; then
@@ -261,7 +280,7 @@ test_redis() {
     
     # Redis is not directly exposed, check via API status endpoint
     local redis_status
-    redis_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/v1/status" 2>/dev/null | grep -o '"redis":"[^"]*"' | cut -d'"' -f4 || true)
+    redis_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/v1/status" 2>/dev/null | grep -o '"redis":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ "$redis_status" == "connected" ]]; then
         log_pass "Redis is connected"
     elif [[ -n "$redis_status" ]]; then
@@ -280,7 +299,7 @@ test_rabbitmq() {
     
     # RabbitMQ is not directly exposed, check via API status endpoint
     local rabbitmq_status
-    rabbitmq_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/v1/status" 2>/dev/null | grep -o '"rabbitmq":"[^"]*"' | cut -d'"' -f4 || true)
+    rabbitmq_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/v1/status" 2>/dev/null | grep -o '"rabbitmq":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ "$rabbitmq_status" == "connected" ]]; then
         log_pass "RabbitMQ is connected"
     elif [[ -n "$rabbitmq_status" ]]; then
@@ -304,7 +323,7 @@ test_authenticated_endpoints() {
     
     # Login and get token
     local login_response
-    login_response=$(curl -sf -m "$TIMEOUT" -X POST "http://${HOST}/api/v1/auth/login" \
+    login_response=$(curl -sf -m "$TIMEOUT" -X POST "http://${HOST}/v1/auth/login" \
         -H "Content-Type: application/json" \
         -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
         2>/dev/null || true)
@@ -323,12 +342,15 @@ test_authenticated_endpoints() {
     fi
     
     log_pass "Admin login successful"
+    AUTH_TOKEN="$access_token"
     
     # Test /v1/admin/containers endpoint with auth
-    check_http_json "Admin containers endpoint" "http://${HOST}/api/v1/admin/containers" "containers" "-H 'Authorization: Bearer ${access_token}'"
+    check_http_json "Admin containers endpoint" "http://${HOST}/v1/admin/containers" "containers"
     
     # Test /v1/auth/validate endpoint
-    check_http_json "Auth validate endpoint" "http://${HOST}/api/v1/auth/validate" "username" "-H 'Authorization: Bearer ${access_token}'"
+    check_http_json "Auth validate endpoint" "http://${HOST}/v1/auth/validate" "username"
+    
+    AUTH_TOKEN=""
 }
 
 # ============================================================================
@@ -355,7 +377,7 @@ test_similar_books() {
     # For smoke test, just verify the endpoint exists and returns 404 for invalid ID
     # (not 500 or connection error)
     local status_code
-    status_code=$(curl -sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}" "http://${HOST}/api/books/nonexistent-id/similar" || echo "000")
+    status_code=$(curl -sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}" "http://${HOST}/v1/books/nonexistent-id/similar" || echo "000")
     
     if [[ "$status_code" == "404" ]]; then
         log_pass "Similar books endpoint exists (returned 404 for invalid ID)"
