@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const TABS = [
   { to: '/search', label: '🔍 Search' },
@@ -29,6 +30,7 @@ function TabNav() {
             </NavLink>
           ))}
           <div className="tab-nav-actions">
+            <LanguageSwitcher />
             <span className="tab-nav-user">👤 {user?.username ?? 'Signed in'}</span>
             <button
               type="button"

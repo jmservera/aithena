@@ -623,3 +623,50 @@ The React AdminPage and Streamlit admin **are functionally redundant**. Both cal
 
 **Key principle reinforced:** `pull_request_target` is safe when you (1) explicitly gate on trusted actors, (2) checkout explicit SHAs, and (3) disable credential persistence. The workflow demonstrates best practices.
 
+
+### PR #416 Review — Stats Book Count Fix (2026-03-17)
+
+**Context:** Reviewed and merged jmservera's PR #416 implementing Phase 1 quick win for issue #404 (stats showing chunk count instead of book count).
+
+**Architectural Decision:**
+- ✅ Approved Solr grouping approach (`group=true&group.field=parent_id_s&group.limit=0`)
+- Uses existing `parent_id_s` field already populated by document-indexer
+- Extracts `ngroups` from grouped response instead of `numFound` from flat response
+- No schema changes or reindexing required
+
+**Quality Assessment:**
+- All 193 tests pass (7 stats tests + 4 unit tests updated)
+- Integration tests verify correct Solr parameters sent
+- Clean code with descriptive Phase 1 context in comments
+- Parker documented learning in their history
+
+**Learning:** Solr grouping with `ngroups` is the ideal pattern for counting distinct parent entities in parent/child document relationships. This Phase 1 quick win delivers accurate user-facing stats (3 books vs 127 chunks) without the complexity of full parent/child hierarchy (which would be Phase 2 if needed for search result deduplication).
+
+**Decision Rationale:** The minimal-change approach is architecturally sound. It solves the immediate problem (stats accuracy) while keeping the door open for future enhancements (full parent/child search deduplication) if needed.
+
+**Outcome:** PR #416 merged to `dev`, closes #404.
+
+---
+
+## 2026-03-17 — PR #416 Review & Approval
+
+**Context:** Issue #404 — Stats showing chunk count instead of book count
+
+**Decision:** Approved Phase 1 quick win using Solr grouping (`group.field=parent_id_s`) to count distinct books.
+
+**Rationale:**
+- Minimal change (48 additions, 12 deletions)
+- Zero migration/reindexing cost
+- Solr grouping is standard, performant for this use case
+- Full parent/child hierarchy can be Phase 2 if needed later
+
+**Verification:**
+- All 193 tests pass; 7 stats tests updated to grouped response format
+- Integration tests verify correct Solr parameters
+- PR #416 merged to `dev`, closes #404
+
+**Team Impact:** Pattern established for counting distinct entities in Solr. Parker/Ash to use grouping when counting distinct books, authors, categories, etc.
+
+**Documentation:** PR #421 created with architecture notes.
+
+**Status:** ✅ COMPLETE

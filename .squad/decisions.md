@@ -6752,3 +6752,141 @@ v1.2.0  → main HEAD (8ac0d3d)
 2. **Consider:** Document this tagging strategy in contribution guide (for team awareness)
 3. **Track:** Monitor v1.2.0 release for user feedback, issues
 
+
+---
+
+# Decision: Stats Book Count Architecture (PR #416)
+
+**Date:** 2026-03-17  
+**Decider:** Ripley (Lead)  
+**Context:** Issue #404 — Stats showing chunk count (127) instead of book count (3)
+
+## Decision
+
+Approved Phase 1 quick win using **Solr grouping** to count distinct books instead of implementing full parent/child document hierarchy.
+
+## Implementation
+
+**Approach:**
+- Use `group=true&group.field=parent_id_s&group.limit=0` in stats query
+- Extract `ngroups` from grouped response (distinct parent count)
+- Replace previous `numFound` extraction (total document count)
+
+**Why This Works:**
+- The `parent_id_s` field already exists in schema and is populated by document-indexer
+- No schema changes required
+- No reindexing required
+- Solr grouping is a standard, performant feature for this exact use case
+
+## Rationale
+
+**Trade-offs Considered:**
+1. **Phase 1 (chosen):** Grouping for stats only
+   - ✅ Minimal change (48 additions, 12 deletions)
+   - ✅ Solves user-facing problem immediately
+   - ✅ Zero migration/reindexing cost
+   - ⚠️ Doesn't deduplicate search results (not a requirement yet)
+
+2. **Full parent/child hierarchy:** Separate parent + child documents
+   - ❌ Requires schema redesign
+   - ❌ Requires reindexing all documents
+   - ❌ Adds complexity to search logic
+   - ✅ Would enable search result deduplication (if needed later)
+
+**Decision:** Phase 1 is architecturally sound. Full hierarchy can be Phase 2 if search deduplication becomes a requirement.
+
+## Pattern for Future Use
+
+**When to use Solr grouping for stats:**
+- Counting distinct parent entities in a parent/child relationship
+- The `ngroups` field gives exact unique parent count
+- More efficient than nested documents when you only need counts, not result deduplication
+
+## Team Impact
+
+- **Parker/Ash:** Pattern established for counting distinct entities in Solr
+- **Future stats work:** Use grouping when counting distinct books, authors, categories, etc.
+- **Search deduplication:** If needed later, implement full parent/child hierarchy as Phase 2
+
+## Verification
+
+- ✅ All 193 tests pass (7 stats tests updated to grouped response format)
+- ✅ Integration tests verify correct Solr parameters
+- ✅ PR #416 merged to `dev`, closes #404
+
+## References
+
+- **Issue:** #404
+- **PR:** #416
+- **Follow-up:** Documentation PR #421
+
+---
+
+# Decision: Security Decision: PR #419 CI Failures — Real Issues Require Fixes
+
+**Date:** 2026-03-17  
+**Owner:** Kane (Security Engineer)  
+**Status:** ⚠️ BLOCKING — PR cannot merge until fixed  
+**PR:** #419 — "feat: add Dependabot auto-merge workflow"
+
+## Decision
+
+PR #419 has **2 legitimate security CI failures** that are NOT false positives. The PR author must apply fixes before merge.
+
+### Failing Checks
+1. **zizmor** (GitHub Actions Supply Chain) — ✗ FAIL
+2. **Checkov** (Infrastructure as Code scanning) — ✗ FAIL (reported as "CodeQL" in UI)
+
+### Root Causes
+
+**#1: zizmor — secrets-outside-env**
+- Workflow uses `${{ github.token }}` outside a GitHub Deployment Environment
+- Applied to: `auto-merge` job (lines 142, 150) and `manual-review` job (lines 156, 162)
+- Zizmor rule: Secrets should be gated by deployment environments for additional approval controls
+
+**#2: Checkov (CKV2_GHA_1) — Least-privilege permissions**
+- Workflow declares overly broad permissions: `contents: write` (entire repo write access)
+- Applied to: Top-level `permissions` block (lines 7-9)
+- Checkov rule: All permissions must be scoped to minimum required access
+
+### Blocking Status
+✅ **YES — DO NOT MERGE**
+
+These are real patterns correctly flagged by security policy. The failures are not:
+- False positives
+- Configuration issues
+- Pre-existing problems unrelated to PR #419
+
+## Evidence & Justification
+
+### Pattern: Team Policy Alignment
+
+The repo's `.zizmor.yml` has an explicit **ignore list** for `secrets-outside-env` exceptions. The `dependabot-automerge.yml` is NOT in that list, confirming findings should be fixed, not ignored.
+
+### Security Risk Assessment
+
+Both are **legitimate findings**:
+- Secrets outside env: 🟡 MEDIUM — Approval gates bypassed
+- Overly broad permissions: 🟡 MEDIUM — Repo write access if compromised
+
+## Recommended Fixes
+
+**Fix #1: Deployment Environment**
+Create `dependabot-auto-merge` environment in repo settings, add `environment: dependabot-auto-merge` to jobs.
+
+**Fix #2: Least-Privilege Permissions**
+Change `contents: write` to `contents: read`, add `issues: write`.
+
+## Implementation
+
+**Owner:** jmservera (PR author)  
+**Due:** Before merge to dev  
+**Reviewer:** Kane + Ripley
+
+No merge until both fixes applied and all 16/16 checks pass.
+
+## References
+
+- **PR:** #419
+- **CI Tool:** zizmor, Checkov
+- **Blocking:** Yes
