@@ -17,7 +17,7 @@ updates:
       semver-patch-days: 2
 
   # Python services using uv (pyproject.toml)
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/src/solr-search"
     schedule:
       interval: "weekly"
@@ -27,7 +27,7 @@ updates:
       semver-minor-days: 3
       semver-patch-days: 2
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/src/document-indexer"
     schedule:
       interval: "weekly"
@@ -37,7 +37,7 @@ updates:
       semver-minor-days: 3
       semver-patch-days: 2
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/src/document-lister"
     schedule:
       interval: "weekly"
@@ -47,7 +47,7 @@ updates:
       semver-minor-days: 3
       semver-patch-days: 2
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/src/embeddings-server"
     schedule:
       interval: "weekly"
@@ -57,7 +57,7 @@ updates:
       semver-minor-days: 3
       semver-patch-days: 2
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/src/admin"
     schedule:
       interval: "weekly"
