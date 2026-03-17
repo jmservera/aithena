@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
 import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
+import { I18nProvider } from './contexts/I18nContext';
 import './normal.css';
 
 async function bootstrap() {
@@ -23,13 +24,15 @@ async function bootstrap() {
 
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      <BrowserRouter>
-        <AuthProvider>
-          <RouteErrorBoundary>
-            <App />
-          </RouteErrorBoundary>
-        </AuthProvider>
-      </BrowserRouter>
+      <I18nProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <RouteErrorBoundary>
+              <App />
+            </RouteErrorBoundary>
+          </AuthProvider>
+        </BrowserRouter>
+      </I18nProvider>
     </React.StrictMode>
   );
 }
