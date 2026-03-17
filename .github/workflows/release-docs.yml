@@ -39,6 +39,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fetch tags for release resolution
+        shell: bash
+        run: |
+          git fetch --tags --force --prune
+
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
@@ -48,6 +53,23 @@ jobs:
         id: release
         shell: bash
         run: |
+          # If triggered via workflow_run, prefer deriving the version from a tag
+          # pointing at the workflow_run head SHA when INPUT_VERSION is not a semver.
+          head_sha="${{ github.event.workflow_run.head_sha || '' }}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            # Only attempt to override when INPUT_VERSION is empty or non-semver (e.g., "dev").
+            if ! [[ "${INPUT_VERSION#v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              if [[ -n "${head_sha}" ]]; then
+                # Find a tag pointing at the head SHA that matches vX.Y.Z or X.Y.Z.
+                candidate_tag="$(git tag --points-at "${head_sha}" | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+                if [[ -n "${candidate_tag}" ]]; then
+                  INPUT_VERSION="${candidate_tag}"
+                fi
+              fi
+            fi
+          fi
+
           version="${INPUT_VERSION#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Expected version input in the form X.Y.Z or vX.Y.Z, got: ${INPUT_VERSION}" >&2
