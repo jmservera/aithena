@@ -5911,3 +5911,106 @@ The Design Review gap is the same pattern at a different scale: the ceremony exi
 ---
 
 *Retrospective facilitated by Ripley (Lead), 2026-03-17. Findings to be reviewed by full squad.*
+
+---
+
+# Decision: Infrastructure Cascading Failures (RabbitMQ, ZooKeeper, Solr Timing)
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-17  
+**Status:** Code fixes applied (operational fixes documented)
+
+## Problem
+
+Three independent root causes compounded into a full-stack outage affecting RabbitMQ connectivity, service startup sequencing, and collection availability.
+
+## Root Causes Identified
+
+### 1. RabbitMQ Auth Failure (Primary Blocker)
+
+The `/source/volumes/rabbitmq-data` volume contained a Mnesia database from a prior run initialized with different credentials (guest/guest). The `RABBITMQ_DEFAULT_USER` and `RABBITMQ_DEFAULT_PASS` environment variables only take effect on first initialization and are ignored when existing data is present.
+
+**Impact:** All RabbitMQ-dependent services failed to connect or retried indefinitely.
+
+**Operational Fix:** Clear the volume with `sudo rm -rf /source/volumes/rabbitmq-data/*` and restart Docker Compose.
+
+### 2. ZooKeeper Health Check Log Noise
+
+The health check command piped the `mntr` 4LW command output (~1KB) to `grep -Eq`, causing the process to exit after finding the match. This triggered SIGPIPE on the `nc` process, generating benign "broken pipe" error messages in the ZooKeeper log that obscured real issues.
+
+**Impact:** Cosmetic only — health checks passed correctly; log noise was confusing.
+
+**Code Fix:** Simplified health checks from `ruok + mntr grep` → `ruok`-only. The `ruok` command is sufficient for compose-level health gating; Solr's internal ZK client handles quorum detection.
+
+### 3. Books Collection Not Yet Created
+
+The `solr-init` one-shot container creates the books collection after the full startup chain (zoo1/2/3 healthy → solr/solr2/solr3 healthy → solr-init runs). The `document-indexer` had no compose-level dependency on Solr and started polling before Solr was ready, wasting 300 seconds (60 × 5s retries) on failed collection checks.
+
+**Impact:** Startup slowdown and unnecessary failed requests.
+
+**Code Fix:** Added `solr: condition: service_healthy` to document-indexer's `depends_on` to serialize the startup chain.
+
+## Code Changes
+
+1. **docker-compose.yml (zoo1/zoo2/zoo3 health checks):**
+   - Changed from multi-step `ruok + mntr grep` to single `ruok` command
+   - Eliminates SIGPIPE on process exit
+
+2. **docker-compose.yml (document-indexer depends_on):**
+   - Added `solr: condition: service_healthy`
+   - Ensures Solr is running before indexer begins polling for collections
+
+## Prevention
+
+To prevent the RabbitMQ stale-volume issue from recurring:
+- Document in deployment guide that changing `RABBITMQ_USER`/`RABBITMQ_PASS` in `.env` requires clearing `/source/volumes/rabbitmq-data/`
+- Consider adding a startup script to detect credential mismatches and warn the operator
+
+## References
+
+- **Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-brett.md`
+- **Session Log:** `.squad/log/2026-03-17T08-13-infra-diagnosis.md`
+
+---
+
+# Decision: solr-search Redis ConnectionPool Authentication
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-17  
+**Status:** Applied and tested
+
+## Problem
+
+The solr-search service's `_get_redis_pool()` function created a `redis.ConnectionPool` without passing the `password` parameter, despite `settings.redis_password` being correctly loaded from the `REDIS_PASSWORD` environment variable. This caused silent authentication failures when Redis required authentication.
+
+## Decision
+
+Add `password=settings.redis_password` to the `ConnectionPool` constructor in `src/solr-search/main.py:854`.
+
+## Implementation
+
+The redis-py library gracefully handles `password=None` by skipping authentication, making this change backward-compatible with non-authenticated Redis instances.
+
+## Verification
+
+- All 193 solr-search tests pass after the change
+- Manual verification confirms correct credential propagation
+- Related services (admin, document-lister, document-indexer) already pass credentials correctly and were verified free of similar issues
+
+## Impact
+
+- Fixes Redis connectivity for solr-search when authentication is required (production standard via `.env`)
+- No breaking changes to other services
+- Zero impact on non-authenticated deployments
+
+## Related Issues
+
+The RabbitMQ `ACCESS_REFUSED` errors and 502s on `/stats`/`/search` endpoints are separate issues:
+- RabbitMQ failure is due to stale Docker volume (operational issue, documented in infrastructure decision)
+- 502s caused by missing Solr `books` collection (timing/dependency issue, fixed in infrastructure decision)
+
+## References
+
+- **Code Change:** `src/solr-search/main.py:854`
+- **Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-parker.md`
+- **Session Log:** `.squad/log/2026-03-17T08-13-infra-diagnosis.md`

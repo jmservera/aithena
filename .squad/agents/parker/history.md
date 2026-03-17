@@ -300,3 +300,51 @@ REDIS_PORT=6379
 - No behavior changes, only logging output format
 
 **Decision:** Standard practice for production error logging should be `logger.error()` for user-facing messages and `logger.debug()` with `exc_info=True` for full stack traces. Reserved `logger.exception()` for unexpected internal errors where stack traces are always needed.
+
+### 2026-03-16 — Redis Password Bug in solr-search (ConnectionPool)
+
+**Task:** Investigated credential handling across all Python services after user reported Redis connection failures, RabbitMQ auth refused, 502s on /stats and /search.
+
+**Root Cause Found:**
+- `src/solr-search/main.py` line 854: `redis_lib.ConnectionPool()` was missing the `password=settings.redis_password` parameter. The config correctly reads `REDIS_PASSWORD` from env, but it was never passed to the pool constructor. This means solr-search cannot authenticate to Redis when a password is set, causing all Redis-dependent features (status tracking, caching) to fail.
+
+**Fix Applied:**
+- Added `password=settings.redis_password,` to the `ConnectionPool` constructor in `_get_redis_pool()`.
+
+**Other Services Verified (no bugs found):**
+- `src/admin/src/` — Redis: password passed correctly. RabbitMQ: uses Management HTTP API with Basic Auth, credentials from env correctly.
+- `src/document-lister/` — RabbitMQ: `pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)` correct. Redis: password passed correctly.
+- `src/document-indexer/` — RabbitMQ: same pattern as lister, correct. Redis: password passed correctly.
+- All env var names (`RABBITMQ_USER`, `RABBITMQ_PASS`, `REDIS_PASSWORD`) match between docker-compose.yml and Python code.
+
+**502 Root Causes:**
+- `/stats` 502: depends on Solr `query_solr()`. If books collection doesn't exist → Solr error → 503/502 through nginx.
+- `/search` 502: same Solr dependency. Semantic/hybrid modes also need embeddings-server.
+- RabbitMQ `ACCESS_REFUSED`: likely stale Docker volume with old guest credentials. Code-level credential names are correct.
+
+**Key File Paths:**
+- `src/solr-search/main.py:854` — Redis ConnectionPool (fixed)
+- `src/solr-search/config.py:98` — redis_password from env
+- `src/document-lister/__init__.py:5-8` — RabbitMQ env vars
+- `src/document-indexer/__init__.py:3-6` — RabbitMQ env vars
+- `src/admin/src/pages/shared/config.py:8-17` — All admin env vars
+
+### 2026-03-17 — Redis auth wiring audit coordinated with Brett
+
+**Status:** Orchestrated background agent diagnosis of service authentication wiring + systematic audit of credential propagation.
+
+**Outcomes:**
+- Found and fixed missing Redis password in solr-search ConnectionPool (main.py:854)
+- Audited all other services — admin, document-lister, document-indexer all correct
+- All 193 solr-search tests pass after fix
+- RabbitMQ and Solr failures confirmed as non-code issues (documented in Brett's infrastructure diagnosis)
+
+**Files Modified:** src/solr-search/main.py
+
+**Decisions:** 2 merged to decisions.md
+- `.squad/decisions.md#solr-search-Redis-ConnectionPool-Authentication`
+- `.squad/decisions.md#Infrastructure-Cascading-Failures`
+
+**Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-parker.md`
+
+**Cross-Coordination:** Brett diagnosed infrastructure issues independently; merged into single coordinated decision set showing full system health.

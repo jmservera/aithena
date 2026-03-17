@@ -497,3 +497,43 @@
 
 **Branch:** squad/296-fix-ckv-gha7-release-docs → dev
 **Status:** PR #316 open (https://github.com/jmservera/aithena/pull/316)
+
+### 2026-03-17 — Cascading Docker Compose failure diagnosis
+
+**Symptoms:** RabbitMQ auth failure, ZK broken pipe errors, missing books collection, 502s from nginx.
+
+**Root causes identified:**
+1. **RabbitMQ stale volume** — `/source/volumes/rabbitmq-data` contained Mnesia DB from prior run with different credentials. `RABBITMQ_DEFAULT_USER/PASS` only works on first init. Fix: clear the volume data.
+2. **ZK health check noise** — `mntr` 4LW command output piped to `grep -Eq` caused SIGPIPE when grep exits after matching. Server-side "broken pipe" log messages are cosmetic; health check still passes. Simplified to `ruok`-only check.
+3. **Books collection timing** — `solr-init` one-shot container creates the collection after full ZK+Solr startup chain. document-indexer had no compose-level `solr` dependency, so it started polling before Solr was running.
+
+**Code changes:**
+- Simplified zoo1/zoo2/zoo3 health checks from `ruok + mntr leader/follower grep` → `ruok` only
+- Added `solr: condition: service_healthy` to document-indexer's `depends_on`
+- Decision doc written to `.squad/decisions/inbox/brett-infra-diagnosis.md`
+
+**Key learnings:**
+- RabbitMQ `RABBITMQ_DEFAULT_USER/PASS` env vars are **first-init only** — changing them requires clearing the volume
+- ZK `ruok` is sufficient for compose health gating; Solr's ZK client handles quorum detection
+- The `solr-init` container (`restart: "no"`) creates the books collection with configset upload + collection CREATE + add-conf-overlay.sh
+- document-indexer's `wait_for_solr_collection()` polls 60×5s (300s) and also verifies `/update/extract` handler exists
+- document-indexer's RabbitMQ retry is **infinite** (no `tries` param on `@retry` decorator) — will never give up on auth failure
+
+### 2026-03-17 — Infrastructure diagnosis coordinated with Parker
+
+**Status:** Orchestrated background agent diagnosis of cascading Docker Compose failures + Redis auth wiring.
+
+**Outcomes:**
+- ZooKeeper health checks simplified (ruok-only) — removed SIGPIPE noise
+- document-indexer now depends on Solr (condition: service_healthy) — prevents premature polling
+- RabbitMQ stale volume issue identified and documented (operational fix)
+
+**Files Modified:** docker-compose.yml
+
+**Decisions:** 2 merged to decisions.md
+- `.squad/decisions.md#Infrastructure-Cascading-Failures`
+- `.squad/decisions.md#solr-search-Redis-ConnectionPool-Authentication`
+
+**Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-brett.md`
+
+**Cross-Coordination:** Parker diagnosed Redis auth issue independently; both root causes merged into single decision set for holistic system view.
