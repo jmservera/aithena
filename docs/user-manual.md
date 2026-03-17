@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.0.0 Release Notes](release-notes-v1.0.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.3.0 Release Notes](release-notes-v1.3.0.md).
 
 ## Getting started
 
@@ -104,7 +104,34 @@ After you search, you can change:
 - **Per page**: 10, 20, or 50 results
 - **Pagination**: move between result pages with the controls at the bottom
 
-## Using facets to filter results
+### Shareable search links (v1.3.0+)
+
+Your current search, including filters, sort order, and page number, is automatically encoded in the URL. This makes it easy to share results with colleagues.
+
+#### How to share a search
+
+1. Run a search with your filters, sort, and page selection exactly as you want them.
+2. Copy the URL from your browser's address bar.
+3. Send the URL to a colleague via email, chat, or any messaging tool.
+4. When they open the link, they'll see the exact same filtered results without re-running the search.
+
+#### Browser history
+
+- Use your browser's **back** button to return to a previous search.
+- Use your browser's **forward** button to move forward through your search history.
+- Each change to filters, sort order, or page number is tracked in the browser history, so you can step through your search workflow.
+
+#### What gets saved in the URL
+
+The URL encodes:
+
+- your search query
+- all active filters (language, author, year, category)
+- sort order (relevance, year, title, author)
+- current page number
+- results per page (10, 20, or 50)
+
+
 
 Facet filters appear in the left sidebar.
 

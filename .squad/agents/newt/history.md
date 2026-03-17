@@ -103,8 +103,49 @@
 - v1.0.0 is the final restructure-and-operability release: contributor commands, validation steps, and service-source references should now assume `src/...` paths, especially `src/solr-search` and `src/aithena-ui`.
 - The v1.0.0 release gate is anchored by three explicit checks: 144 passing backend tests, 83 passing frontend tests, and a clean `docker compose -f docker-compose.yml config --quiet` render with auth environment variables set; CI evidence should also record the 13-workflow validation and the integration tmpfs volume fix.
 
+## 2026-03-17: Generated v1.3.0 Release Documentation
 
-## 2026-03-15: Finalized Documentation for v0.6.0 & v0.7.0
+**Milestone:** Comprehensive release documentation for v1.3.0 (Backend Excellence & Observability)
+
+**Deliverables Created:**
+
+- `docs/release-notes-v1.3.0.md` — Full release notes with 8 issues (BE-1 through BE-8):
+  - Structured JSON logging (#336)
+  - Admin dashboard authentication (#337)
+  - pytest-cov coverage configuration (#338)
+  - URL-based search state management (#339)
+  - Circuit breaker resilience (#340)
+  - Correlation ID tracking (#341)
+  - Observability runbook (#342)
+  - Integration tests for auth and URL state (#343)
+
+- `CHANGELOG.md` — Added v1.3.0 entry in Keep a Changelog format with Added/Changed/Fixed/Security sections
+
+- `docs/user-manual.md` — Updated reference to v1.3.0; added new "Shareable search links" section documenting URL-based state, browser history, and query parameter structure
+
+- `docs/admin-manual.md` — Updated reference to v1.3.0; added comprehensive v1.3.0 Deployment Updates section covering:
+  - Structured JSON logging configuration, log level environment variable, JSON parsing examples with jq
+  - Admin dashboard authentication behavior, environment variables, credential setup via installer
+  - Circuit breaker pattern for Redis and Solr, fallback behavior, health check status reporting
+  - Correlation ID tracking flow, tracing examples, debugging with correlation IDs
+  - Observability runbook reference
+  - URL-based search state for users
+
+**Release Notes Format:**
+
+- Consistent with v1.2.0 structure: summary, detailed changes by category, milestone closure, merged PRs, breaking changes, user-facing improvements, upgrade instructions, validation highlights, updated documentation references
+- Codename: "Backend Excellence & Observability"
+- Date: 2026-03-17
+- Emphasized operational visibility, resilience, and enterprise-grade monitoring
+
+**Key Learnings:**
+
+- v1.3.0 completes the operational foundation established in v1.1.0: logging standards from BE-1, correlation IDs from BE-6, and comprehensive observability runbook from BE-7 now enable operators to trace requests, analyze failures, and debug production issues with full system visibility.
+- The release spans backend infrastructure (structured logging, circuit breaker, correlation IDs), frontend UX (URL state), and operational tooling (observability runbook, pytest-cov). This breadth reflects the cross-team coordination needed to deliver "operational excellence."
+- URL-based search state (#339) is a user-facing quality-of-life improvement that depends on no backend changes; it's purely a frontend enhancement using React Router hooks. This is a good example of shipping valuable UX features without API modifications.
+- The breaking changes are limited but real: (1) JSON log format requires tooling updates, (2) admin dashboard now requires authentication (adds friction but improves security), (3) search URL parameter structure may not preserve state in old links (users should regenerate shareable links).
+
+
 
 Completed comprehensive documentation backfill (Branch: squad/release-docs-v06-v07):
 

@@ -57,6 +57,19 @@
 
 <!-- Append learnings below -->
 
+### Release checklist and docs-gate-the-tag pattern
+
+**Decision:** Release docs must be generated and merged BEFORE tagging (Option B: docs gate the tag). This is formalized in `.github/ISSUE_TEMPLATE/release.md` with an ordered checklist.
+
+**Key paths:**
+- `.github/ISSUE_TEMPLATE/release.md` — release checklist issue template
+- `.github/workflows/release-docs.yml` — generates release notes, test reports, and reviews admin/user manuals
+- `.github/workflows/release.yml` — triggers on `v*.*.*` tags to build Docker images
+
+**Token scope lesson:** GitHub blocks ALL Git Data API operations (trees, commits, refs) that touch `.github/workflows/` paths without the `workflow` scope. This includes the low-level Git Data API, not just the Contents API. When automating workflow file changes, ensure the token has `workflow` scope or use a GitHub App token with that permission.
+
+**Manuals:** Both `docs/admin-manual.md` and `docs/user-manual.md` exist and are now included in the release-docs workflow Copilot CLI prompt for review each release.
+
 ### 2026-03-16T23:20Z — Retro Action: Clean up stale remote branches
 
 **Task:** Address retro finding: 66 stale remote branches (38 from merged PRs + ~28 abandoned).
