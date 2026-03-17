@@ -497,3 +497,67 @@
 
 **Branch:** squad/296-fix-ckv-gha7-release-docs → dev
 **Status:** PR #316 open (https://github.com/jmservera/aithena/pull/316)
+
+### 2026-03-17 — Cascading Docker Compose failure diagnosis
+
+**Symptoms:** RabbitMQ auth failure, ZK broken pipe errors, missing books collection, 502s from nginx.
+
+**Root causes identified:**
+1. **RabbitMQ stale volume** — `/source/volumes/rabbitmq-data` contained Mnesia DB from prior run with different credentials. `RABBITMQ_DEFAULT_USER/PASS` only works on first init. Fix: clear the volume data.
+2. **ZK health check noise** — `mntr` 4LW command output piped to `grep -Eq` caused SIGPIPE when grep exits after matching. Server-side "broken pipe" log messages are cosmetic; health check still passes. Simplified to `ruok`-only check.
+3. **Books collection timing** — `solr-init` one-shot container creates the collection after full ZK+Solr startup chain. document-indexer had no compose-level `solr` dependency, so it started polling before Solr was running.
+
+**Code changes:**
+- Simplified zoo1/zoo2/zoo3 health checks from `ruok + mntr leader/follower grep` → `ruok` only
+- Added `solr: condition: service_healthy` to document-indexer's `depends_on`
+- Decision doc written to `.squad/decisions/inbox/brett-infra-diagnosis.md`
+
+**Key learnings:**
+- RabbitMQ `RABBITMQ_DEFAULT_USER/PASS` env vars are **first-init only** — changing them requires clearing the volume
+- ZK `ruok` is sufficient for compose health gating; Solr's ZK client handles quorum detection
+- The `solr-init` container (`restart: "no"`) creates the books collection with configset upload + collection CREATE + add-conf-overlay.sh
+- document-indexer's `wait_for_solr_collection()` polls 60×5s (300s) and also verifies `/update/extract` handler exists
+- document-indexer's RabbitMQ retry is **infinite** (no `tries` param on `@retry` decorator) — will never give up on auth failure
+
+### 2026-03-17 — Infrastructure diagnosis coordinated with Parker
+
+**Status:** Orchestrated background agent diagnosis of cascading Docker Compose failures + Redis auth wiring.
+
+**Outcomes:**
+- ZooKeeper health checks simplified (ruok-only) — removed SIGPIPE noise
+- document-indexer now depends on Solr (condition: service_healthy) — prevents premature polling
+- RabbitMQ stale volume issue identified and documented (operational fix)
+
+**Files Modified:** docker-compose.yml
+
+**Decisions:** 2 merged to decisions.md
+- `.squad/decisions.md#Infrastructure-Cascading-Failures`
+- `.squad/decisions.md#solr-search-Redis-ConnectionPool-Authentication`
+
+**Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-brett.md`
+
+**Cross-Coordination:** Parker diagnosed Redis auth issue independently; both root causes merged into single decision set for holistic system view.
+
+### 2026-03-17T08:40Z — RabbitMQ 4.0 upgrade + credential fix (PR #403)
+
+**Problem:** Two issues: (1) RabbitMQ 3.12 is EOL — log warned "end of life and is no longer supported". (2) Credential mismatch — user 'aithena' couldn't authenticate because the Mnesia data volume was initialized with old credentials.
+
+**Root cause for credentials:** `RABBITMQ_DEFAULT_USER`/`RABBITMQ_DEFAULT_PASS` are only applied on first initialization. The bind-mount volume at `/source/volumes/rabbitmq-data` retained stale Mnesia data even after the Docker named volume was deleted, because the local driver with `type: none, o: bind` means the host directory IS the volume.
+
+**Fix applied:**
+1. Upgraded `rabbitmq:3.12-management` → `rabbitmq:4.0-management` (RabbitMQ 4.0.9, current LTS)
+2. Cleared stale Mnesia data from `/source/volumes/rabbitmq-data/mnesia` and `.erlang.cookie`
+3. `rabbitmq.conf` (management.path_prefix, vm_memory_high_watermark, consumer_timeout) is fully compatible with 4.0
+
+**Key learning — RabbitMQ 3.x → 4.0 upgrade path:**
+- RabbitMQ 4.0 requires all feature flags from 3.x to be enabled before upgrade. If upgrading in-place, run `rabbitmqctl enable_feature_flag all` on 3.x first.
+- For a clean install (no data to preserve), just wipe the Mnesia directory.
+- The `stream_filtering` feature flag is the specific blocker for 3.12 → 4.0.
+- Bind-mount volumes: `docker volume rm` does NOT clear host data. Must `rm -rf` the host directory contents.
+
+**Also included in PR:**
+- Parker's Redis auth fix: added `password=settings.redis_password` to solr-search ConnectionPool
+- ZK health checks simplified to ruok-only (eliminated mntr broken pipe noise)
+- document-indexer depends_on solr (service_healthy) for startup ordering
+
+**Observation:** solr-init collection creation is failing independently (400 error on CREATE collection). This is a pre-existing Solr configset issue, not related to this fix.

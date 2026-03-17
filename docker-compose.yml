@@ -41,7 +41,7 @@ services:
     volumes:
       - redis-data:/data
   rabbitmq:
-    image: rabbitmq:3.12-management
+    image: rabbitmq:4.0-management
     command: rabbitmq-server
     hostname: rabbitmq
     environment:
@@ -195,6 +195,8 @@ services:
       redis:
         condition: service_healthy
       embeddings-server:
+        condition: service_healthy
+      solr:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "pgrep", "-f", "python"]
@@ -472,7 +474,11 @@ services:
       - zoo-data1_datalog:/datalog
       - zoo-backup:/backup
     healthcheck:
-      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      # ruok is the canonical ZK liveness check; the previous mntr-based
+      # leader/follower test caused broken-pipe noise because grep exits
+      # before nc finishes writing the large mntr response.  Solr's own
+      # ZK client handles quorum detection, so ruok is sufficient here.
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -506,7 +512,7 @@ services:
       - zoo-data2_datalog:/datalog
       - zoo-backup:/backup
     healthcheck:
-      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -540,7 +546,7 @@ services:
       - zoo-data3_datalog:/datalog
       - zoo-backup:/backup
     healthcheck:
-      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok && printf mntr | nc -w 2 localhost 2181 | grep -Eq 'zk_server_state\\s+(leader|follower)'"]
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
       timeout: 5s
       retries: 10
