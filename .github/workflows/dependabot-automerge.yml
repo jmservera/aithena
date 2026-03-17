@@ -67,8 +67,8 @@ jobs:
         working-directory: src/embeddings-server
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.4
 
       - name: Run tests
         working-directory: src/${{ matrix.service }}
@@ -76,7 +76,7 @@ jobs:
           if [ -f pyproject.toml ]; then
             uv run pytest -v --tb=short
           else
-            pytest -v --tb=short
+            python -m pytest -v --tb=short
           fi
 
   frontend-tests:
