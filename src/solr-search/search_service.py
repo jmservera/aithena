@@ -371,7 +371,7 @@ def parse_stats_response(payload: dict[str, Any]) -> dict[str, Any]:
     """
     grouped = payload.get("grouped", {})
     parent_id_groups = grouped.get("parent_id_s", {})
-    total_books: int = parent_id_groups.get("ngroups", 0)
+    total_books: int = parent_id_groups.get("ngroups", 0) or parent_id_groups.get("matches", 0)
 
     facet_fields: dict[str, list[Any]] = payload.get("facet_counts", {}).get("facet_fields", {})
 
