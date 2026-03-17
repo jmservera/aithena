@@ -93,7 +93,7 @@
 ### v1.1.0 Release — Dependabot Workflow Safety
 - **Reviewed PR #412:** Auto-merge workflow for low-risk updates (patch/minor)
 - **Security validation:** pull_request_target is safe with explicit guards (trusted actors, SHA checkout, disabled creds)
-- **Completeness check:** Runs 4 Python services + frontend; noted missing src/admin tests (Streamlit app doesn't have test suite)
+- **Completeness check:** Runs 4 Python services + frontend; noted that the workflow did not run src/admin tests (Streamlit admin test suite was excluded at this stage)
 - **Decision:** Approved for merge; reduces manual overhead without compromising security
 
 ### v1.0.1 Release — Security Baseline Exceptions Pattern
