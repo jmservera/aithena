@@ -57,6 +57,28 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-17T13:42Z — Issue #363: Release Packaging Strategy (PR #427)
+
+**Task:** Create a production-ready release tarball with docker-compose.prod.yml, .env.prod.example, installer script, and deployment documentation.
+
+**Execution:**
+1. Designed release packaging strategy with GHCR pull model (no build step in production)
+2. Created `docker-compose.prod.yml` (image pulls instead of builds for all custom services)
+3. Created `.env.prod.example` with all variables documented inline
+4. Created `docs/quickstart.md` with deployment quick-start instructions
+5. Extended `.github/workflows/release.yml` with `package-release` job (creates tarball, uploads as release asset)
+6. SHA-pinned all GitHub Actions (upload-artifact, download-artifact)
+7. Validated YAML, volume mount paths, resource limits preservation
+
+**Key decisions documented in decisions.md:**
+- Image distribution via GHCR (pull model, lightweight, enables version pinning)
+- Volume convention: preserve `/source/volumes/` bind mounts (explicit control for operators)
+- Configuration via .env + installer (no cloud secret managers—fully on-premises)
+- Package scope: deployment bundle only (~100 KB, no source code)
+- Workflow integration: attach tarball to GitHub Release as asset
+
+**Outcome:** PR #427 merged; users now have complete production deployment package.
+
 ### Release checklist and docs-gate-the-tag pattern
 
 **Decision:** Release docs must be generated and merged BEFORE tagging (Option B: docs gate the tag). This is formalized in `.github/ISSUE_TEMPLATE/release.md` with an ordered checklist.
