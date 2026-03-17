@@ -561,3 +561,34 @@
 - document-indexer depends_on solr (service_healthy) for startup ordering
 
 **Observation:** solr-init collection creation is failing independently (400 error on CREATE collection). This is a pre-existing Solr configset issue, not related to this fix.
+
+### 2026-03-17T14:30Z — Fixed redis-commander health check (PR #424)
+
+**Problem:** E2E tests failing in CI with "dependency failed to start: container aithena-redis-commander-1 is unhealthy". Blocked PRs #418, #419, #411.
+
+**Root cause:** The redis-commander health check had multiple issues:
+1. Used `CMD` instead of `CMD-SHELL` — the Node.js one-liner wasn't executing properly in the array format
+2. No timeout handling on the HTTP request — health checks could hang indefinitely
+3. `start_period: 10s` was too short — redis-commander needs more initialization time in CI environments
+4. Only 3 retries — insufficient for services that need warmup in constrained CI runners
+
+**Fix applied:**
+- Changed health check from `CMD` to `CMD-SHELL` for proper shell execution of Node.js inline script
+- Added explicit timeout handling (5000ms) to the HTTP GET request with proper cleanup
+- Increased `start_period` from 10s to 30s — allows redis-commander to fully initialize before health checks begin
+- Increased retries from 3 to 5 — better resilience for CI cold-start scenarios
+- Accept any 2xx-4xx status code (not 5xx) — handles redirects and partial initialization states
+
+**Key learning — Docker health check best practices:**
+- `CMD` requires each argument as separate array element (no shell expansion)
+- `CMD-SHELL` passes entire string to `/bin/sh -c` — allows complex one-liners
+- For Node.js containers without `curl`/`wget`, use Node's built-in `http` module
+- Always set explicit timeouts on network calls in health checks to prevent hanging
+- `start_period` should account for worst-case initialization (database migrations, service discovery, etc.)
+- In CI, services start slower than on dev machines — pad `start_period` by 2-3x
+
+**File modified:** `docker-compose.yml` (redis-commander service)
+
+**Branch:** `squad/fix-redis-commander-e2e`
+
+**PR:** #424 (targeting `dev`)
