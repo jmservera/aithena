@@ -145,11 +145,11 @@ See `.github/workflows/dependabot-automerge.yml` (PR #412).
 **Key features:**
 - Patch + minor: auto-merge after tests pass
 - Major + breaking: manual review required
-- All 6 test suites run in parallel
+- Runs tests for `document-indexer`, `document-lister`, `solr-search`, `embeddings-server`, and the frontend (`aithena-ui`) in parallel
 - Concurrency limit prevents queue explosion
 
 **Limitations (as of 2026-03-18):**
-- Does NOT test `src/admin` (Streamlit app has no test suite)
+- Does **not** run the `src/admin` (Streamlit) test suite (e.g., `src/admin/tests/test_auth*.py`) in this workflow yet
 - Security scan is placeholder; should add `npm audit` + `pip-audit`
 
 ---
