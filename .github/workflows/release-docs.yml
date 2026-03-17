@@ -11,28 +11,39 @@ on:
         description: 'Optional milestone name used to gather closed issues and merged PRs'
         required: false
         type: string
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
 
 permissions:
   contents: write
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.version }}
+  group: ${{ github.workflow }}-${{ github.event.inputs.version || github.event.workflow_run.head_sha || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   generate-release-docs:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     name: Generate release documentation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      INPUT_VERSION: ${{ inputs.version }}
-      INPUT_MILESTONE: ${{ inputs.milestone }}
+      INPUT_VERSION: ${{ github.event.inputs.version || github.event.workflow_run.head_branch }}
+      INPUT_MILESTONE: ${{ github.event.inputs.milestone }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+          ref: dev
+      - name: Fetch tags for release resolution
+        shell: bash
+        run: |
+          git fetch --tags --force --prune
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
@@ -42,7 +53,26 @@ jobs:
       - name: Normalize release metadata
         id: release
         shell: bash
+        env:
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
         run: |
+          # If triggered via workflow_run, prefer deriving the version from a tag
+          # pointing at the workflow_run head SHA when INPUT_VERSION is not a semver.
+          head_sha="${WORKFLOW_RUN_HEAD_SHA}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            # Only attempt to override when INPUT_VERSION is empty or non-semver (e.g., "dev").
+            if ! [[ "${INPUT_VERSION#v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              if [[ -n "${head_sha}" ]]; then
+                # Find a tag pointing at the head SHA that matches vX.Y.Z or X.Y.Z.
+                candidate_tag="$(git tag --points-at "${head_sha}" | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+                if [[ -n "${candidate_tag}" ]]; then
+                  INPUT_VERSION="${candidate_tag}"
+                fi
+              fi
+            fi
+          fi
+
           version="${INPUT_VERSION#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Expected version input in the form X.Y.Z or vX.Y.Z, got: ${INPUT_VERSION}" >&2
