@@ -32,7 +32,11 @@ jobs:
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-              --paginate --jq '.[].filename')
+              --paginate --jq '.[].filename' 2>/dev/null || echo "FORCE_BUILD")
+            if [ "$CHANGED" = "FORCE_BUILD" ]; then
+              echo "build=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           elif [ "${{ github.event_name }}" = "push" ] && \
                [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             CHANGED=$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
