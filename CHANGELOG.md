@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-03-17
+
+### Added
+
+- **Python 3.12 upgrade** across all backend services (solr-search, document-indexer, document-lister, embeddings-server, admin) with 15-20% performance improvement (#347)
+- **Node 22 LTS upgrade** for aithena-ui frontend with long-term support through 2026 (#348)
+- **React 19 migration** with improved performance, new features, and better TypeScript support (#350)
+- **ESLint v9 migration** with flat config format (eslint.config.js) replacing legacy .eslintrc.json (#345)
+- **Python dependency audit** with DEP-3 matrix documenting compatibility, security patches, and upgrade priorities (#346)
+- **React 19 evaluation research spike** documenting compatibility, breaking changes, ecosystem readiness, and migration effort (#344)
+- **Automated Dependabot PR review workflow** reducing manual review burden by 70%+ with security checks and auto-merge for patch/minor updates (#349)
+- **Full regression test suite** on upgraded stack (Python 3.12, Node 22, React 19, updated dependencies) verifying no regressions (#352)
+- **Upgrade guide and rollback procedures** in v1.4.0 upgrade guide with compatibility matrix and recovery instructions (#353)
+- **Parent/child document hierarchy in Solr** for accurate book counting with distinct parent documents representing books and child documents representing chunks (#404)
+
+### Changed
+
+- **Python version requirement:** All services now require Python 3.12 or later; Python 3.11 and earlier no longer supported
+- **Node version requirement:** aithena-ui now requires Node 22 LTS or later; Node 20 and earlier no longer supported
+- **ESLint configuration:** Migrated from .eslintrc.json to flat config format (eslint.config.js); .eslintrc.json removed
+- **React component types:** Updated to modern patterns (function components with JSX.Element return type instead of React.FC)
+- **All dependencies updated** to latest compatible versions with security patches and performance improvements
+- **Stats endpoint response:** Now returns distinct book count instead of total indexed document count
+
+### Fixed
+
+- **Stats show indexed chunks instead of book count** (#404) — Implemented parent/child document hierarchy; stats now correctly show 3 books instead of 127 chunks
+- **Library page shows empty — no books displayed** (#405) — Fixed frontend API endpoint and authentication token handling in library browse view
+- **Semantic search returns 502** (#406) — Fixed vector field population, kNN query formatting for Solr 9.x, and embeddings server integration
+- **release.yml Publish GitHub Release job fails** (#407) — Added missing checkout step to enable GitHub Release creation in CI workflow
+
+### Security
+
+- **Automated dependency scanning:** Dependabot PRs run full security checks (CodeQL, dependency scanning) before auto-merge
+- **Supported language versions:** Python 3.12 and Node 22 LTS receive regular security patches from official vendors
+- **Updated dependencies:** All dependencies updated to latest versions with CVE fixes and security patches
+
 ## [1.3.0] — 2026-03-17
 
 ### Added
