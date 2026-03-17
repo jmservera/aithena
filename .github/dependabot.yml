@@ -11,7 +11,7 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
       semver-minor-days: 3
       semver-patch-days: 2
@@ -22,7 +22,7 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
       semver-minor-days: 3
       semver-patch-days: 2
@@ -32,7 +32,7 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
       semver-minor-days: 3
       semver-patch-days: 2
@@ -42,7 +42,7 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
       semver-minor-days: 3
       semver-patch-days: 2
@@ -52,7 +52,7 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
       semver-minor-days: 3
       semver-patch-days: 2
@@ -62,7 +62,7 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
       semver-major-days: 7
       semver-minor-days: 3
       semver-patch-days: 2
@@ -73,7 +73,7 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -81,4 +81,4 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 3
+      default-days: 7
