@@ -818,7 +818,9 @@ def similar_books(
 def list_books(
     request: Request,
     page: int = Query(1, ge=1, description="Page number for pagination."),
-    page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size, description="Results per page."),
+    page_size: int = Query(
+        settings.default_page_size, ge=1, le=settings.max_page_size, description="Results per page."
+    ),
     sort_by: Annotated[SortBy, Query()] = "title",
     sort_order: Annotated[SortOrder, Query()] = "asc",
     fq_author: str | None = Query(None, description="Filter by author name."),
