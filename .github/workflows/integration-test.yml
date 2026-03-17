@@ -31,7 +31,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             if ! CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
               --paginate --jq '.[].filename'); then
-              echo "Failed to fetch changed files from GitHub; defaulting to build=true"
+              echo "Failed to fetch changed files — running all checks"
               echo "build=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
