@@ -25,6 +25,8 @@ export interface AuthContextValue {
   clearError: () => void;
 }
 
+// Context + Provider colocated intentionally; fast refresh works on the Provider component.
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 async function getErrorMessage(response: Response, fallback: string): Promise<string> {
