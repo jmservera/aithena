@@ -16,5 +16,24 @@ package = false
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=6.1.0",
     "ruff>=0.4",
 ]
+
+[tool.pytest.ini_options]
+addopts = "--cov=document_lister --cov-report=term-missing --cov-report=html -ra"
+
+[tool.coverage.run]
+source = ["document_lister"]
+omit = ["tests/*", "__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

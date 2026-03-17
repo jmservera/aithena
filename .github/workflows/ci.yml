@@ -260,11 +260,19 @@ jobs:
         working-directory: src/embeddings-server
         run: |
           pip install -r requirements.txt
-          pip install pytest httpx
+          pip install pytest httpx pytest-cov
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: src/embeddings-server
-        run: pytest -v --tb=short
+        run: pytest -v --tb=short --cov=main --cov=config --cov-report=term-missing --cov-report=html
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: embeddings-server-coverage
+          path: src/embeddings-server/htmlcov/
+          retention-days: 14
 
   python-lint:
     name: Python lint (ruff)
