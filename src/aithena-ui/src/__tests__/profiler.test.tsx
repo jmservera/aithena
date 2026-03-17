@@ -94,7 +94,7 @@ describe('Profiler utility', () => {
 
     try {
       // Call the callback directly to verify the guard.
-      onRenderCallback('Prod', 'mount', 1.23, 4.56, 0, 10, new Set());
+      onRenderCallback('Prod', 'mount', 1.23, 4.56, 0, 10);
       expect(debugSpy).not.toHaveBeenCalled();
     } finally {
       import.meta.env.DEV = original;

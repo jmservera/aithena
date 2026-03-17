@@ -14,7 +14,7 @@ interface UploadContentProps {
   dragOver: boolean;
   error: string | null;
   fileInputId: string;
-  fileInputRef: RefObject<HTMLInputElement>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
   progress: UploadProgress | null;
   result: UploadResult | null;
   uploadHintId: string;
