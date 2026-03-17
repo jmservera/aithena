@@ -1,4 +1,19 @@
 rules:
+  bot-conditions:
+    ignore:
+      # Kane-approved baseline exception: github.actor == 'dependabot[bot]' is
+      # acceptable because (1) the workflow uses pull_request trigger (no privilege
+      # escalation), (2) GitHub reserves [bot] suffix for bot accounts so regular
+      # users cannot spoof it, (3) all tests must pass before auto-merge, and
+      # (4) only patch/minor updates are auto-merged.
+      # Follow-up: switch to github.event.pull_request.user.login for
+      # defense-in-depth when the codespace gains workflow push scope.
+      - dependabot-automerge.yml:20
+      - dependabot-automerge.yml:34
+      - dependabot-automerge.yml:86
+      - dependabot-automerge.yml:120
+      - dependabot-automerge.yml:142
+      - dependabot-automerge.yml:170
   secrets-outside-env:
     ignore:
       # Kane-approved risk acceptance for internal CI/CD automation only.

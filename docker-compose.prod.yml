@@ -1,0 +1,795 @@
+services:
+  redis:
+    image: redis
+    command: >-
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
+        exec redis-server --save 20 1 --loglevel warning --requirepass "$$REDIS_PASSWORD";
+      else
+        exec redis-server --save 20 1 --loglevel warning;
+      fi'
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDISCLI_AUTH=${REDIS_PASSWORD:-}
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 15s
+      retries: 1
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      default:
+        aliases:
+          - redis
+    volumes:
+      - redis-data:/data
+  rabbitmq:
+    image: rabbitmq:4.0-management
+    command: rabbitmq-server
+    hostname: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+    expose:
+      - 5672
+      - 15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./src/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      default:
+        aliases:
+          - rabbitmq
+  embeddings-server:
+    image: ghcr.io/jmservera/aithena-embeddings-server:${VERSION:-latest}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      default:
+        aliases:
+          - embeddings-server
+  document-lister:
+    image: ghcr.io/jmservera/aithena-document-lister:${VERSION:-latest}
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - QUEUE_NAME=shortembeddings
+      - BASE_PATH=/data/documents/
+      - DOCUMENT_WILDCARD=*.pdf
+      - POLL_INTERVAL=60
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: on-failure
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - document-data:/data/documents
+    networks:
+      - default
+  document-indexer:
+    image: ghcr.io/jmservera/aithena-document-indexer:${VERSION:-latest}
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - QUEUE_NAME=shortembeddings
+      - BASE_PATH=/data/documents/
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books
+      - EMBEDDINGS_HOST=embeddings-server
+      - EMBEDDINGS_PORT=8080
+    restart: on-failure
+    stop_grace_period: 10s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      embeddings-server:
+        condition: service_healthy
+      solr:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - document-data:/data/documents:ro
+    networks:
+      - default
+  solr-search:
+    image: ghcr.io/jmservera/aithena-solr-search:${VERSION:-latest}
+    expose:
+      - "8080"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    depends_on:
+      solr:
+        condition: service_healthy
+      embeddings-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - PORT=8080
+      - SOLR_URL=http://solr:8983/solr
+      - SOLR_COLLECTION=books
+      - BASE_PATH=/data/documents
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+      - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
+      - DEFAULT_SEARCH_MODE=keyword
+      - UPLOAD_DIR=/data/documents/uploads
+      - MAX_UPLOAD_SIZE_MB=50
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_QUEUE_NAME=shortembeddings
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
+      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
+      - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
+    volumes:
+      - document-data:/data/documents
+      - type: bind
+        source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
+        target: /data/auth
+    networks:
+      - default
+  streamlit-admin:
+    image: ghcr.io/jmservera/aithena-admin:${VERSION:-latest}
+    expose:
+      - "8501"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from urllib.request import urlopen; urlopen('http://localhost:8501/admin/streamlit/_stcore/health').read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - QUEUE_NAME=shortembeddings
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_MGMT_PORT=15672
+      - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - SOLR_SEARCH_URL=http://solr-search:8080
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-change-me-in-production}
+      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
+      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
+      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+    networks:
+      - default
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    expose:
+      - "8081"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:8081/admin/redis', (res) => process.exit(res.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - URL_PREFIX=/admin/redis
+    networks:
+      - default
+  aithena-ui:
+    image: ghcr.io/jmservera/aithena-aithena-ui:${VERSION:-latest}
+    expose:
+      - "80"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    depends_on:
+      solr-search:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - default
+  nginx:
+    image: nginx:1.15-alpine
+    restart: unless-stopped
+    stop_grace_period: 10s
+    depends_on:
+      aithena-ui:
+        condition: service_healthy
+      solr-search:
+        condition: service_healthy
+      streamlit-admin:
+        condition: service_healthy
+      redis-commander:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      solr:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./src/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./src/nginx/html:/usr/share/nginx/html:ro
+      - certbot-data-conf:/etc/letsencrypt
+      - certbot-data-www:/var/www/certbot
+    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - certbot-data-conf:/etc/letsencrypt
+      - certbot-data-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+  zoo1:
+    image: zookeeper:3.9
+    expose:
+      - "8080"
+      - "2181"
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data1_logs:/logs
+      - zoo-data1_data:/data
+      - zoo-data1_datalog:/datalog
+      - zoo-backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  zoo2:
+    image: zookeeper:3.9
+    expose:
+      - "2181"
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data2_logs:/logs
+      - zoo-data2_data:/data
+      - zoo-data2_datalog:/datalog
+      - zoo-backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  zoo3:
+    image: zookeeper:3.9
+    expose:
+      - "2181"
+    networks:
+      - default
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+    volumes:
+      - zoo-data3_logs:/logs
+      - zoo-data3_data:/data
+      - zoo-data3_datalog:/datalog
+      - zoo-backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  solr:
+    image: solr:9.7
+    restart: unless-stopped
+    stop_grace_period: 60s
+    volumes:
+      - solr-data:/var/solr/data
+      - document-data:/data/documents:ro
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    expose:
+      - "8983"
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+  solr2:
+    image: solr:9.7
+    restart: unless-stopped
+    stop_grace_period: 60s
+    volumes:
+      - solr-data2:/var/solr/data
+      - document-data:/data/documents:ro
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    expose:
+      - "8983"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+      solr:
+        condition: service_healthy
+  solr3:
+    image: solr:9.7
+    restart: unless-stopped
+    stop_grace_period: 60s
+    volumes:
+      - solr-data3:/var/solr/data
+      - document-data:/data/documents:ro
+    environment:
+      SOLR_MODULES: extraction,langid
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+    expose:
+      - "8983"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      zoo1:
+        condition: service_healthy
+      zoo2:
+        condition: service_healthy
+      zoo3:
+        condition: service_healthy
+      solr2:
+        condition: service_healthy
+  solr-init:
+    image: solr:9.7
+    depends_on:
+      solr:
+        condition: service_healthy
+      solr2:
+        condition: service_healthy
+      solr3:
+        condition: service_healthy
+    volumes:
+      - ./src/solr/books:/configsets/books:ro
+      - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+    entrypoint:
+      - /bin/bash
+      - -ceu
+      - |
+          set -o pipefail
+          ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
+          SOLR_URL="http://solr:8983"
+
+          until curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null; do
+            sleep 2
+          done
+
+          until [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ]; do
+            sleep 2
+          done
+
+          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
+            solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
+          fi
+
+          if ! curl -fsS "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
+            curl -fsS "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
+          fi
+
+          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" sh /scripts/add-conf-overlay.sh
+
+          echo "Solr init complete"
+    networks:
+      - default
+    restart: "no"
+volumes:
+  rabbitmq-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/rabbitmq-data"
+  certbot-data-conf:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/certbot-data/conf"
+  certbot-data-www:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/certbot-data/www"
+  redis-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/redis"
+  document-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${BOOKS_PATH:-/data/booklibrary}"
+  solr-data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data"
+  solr-data2:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data2"
+  solr-data3:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/solr-data3"
+  zoo-data1_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/logs"
+  zoo-data1_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/data"
+  zoo-data1_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data1/datalog"
+  zoo-data2_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/logs"
+  zoo-data2_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/data"
+  zoo-data2_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data2/datalog"
+  zoo-data3_logs:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/logs"
+  zoo-data3_data:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/data"
+  zoo-data3_datalog:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-data3/datalog"
+  zoo-backup:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "/source/volumes/zoo-backup"
+networks:
+  default:
