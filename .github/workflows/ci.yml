@@ -10,14 +10,56 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.filter.outputs.build }}
+    steps:
+      - name: Check for build-relevant changes
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NON_BUILD='^(\.squad/|\.github/(ISSUE_TEMPLATE|agents)/|docs/|[^/]*\.md$|LICENSE$|\.gitattributes$|\.gitignore$)'
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+              --paginate --jq '.[].filename')
+          elif [ "${{ github.event_name }}" = "push" ] && \
+               [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            CHANGED=$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
+              --jq '.files[].filename' 2>/dev/null || echo "FORCE_BUILD")
+            if [ "$CHANGED" = "FORCE_BUILD" ]; then
+              echo "build=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BUILD_FILES=$(echo "$CHANGED" | grep -v -E "$NON_BUILD" || true)
+
+          if [ -n "$BUILD_FILES" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Build-relevant changes detected"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ No build-relevant changes — skipping tests"
+          fi
+
   document-indexer-tests:
     name: document-indexer tests
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -53,6 +95,8 @@ jobs:
 
   solr-search-tests:
     name: solr-search tests
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -88,6 +132,8 @@ jobs:
 
   python-lint:
     name: Python lint (ruff)
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -98,10 +144,27 @@ jobs:
 
   all-tests-passed:
     name: All tests passed
+    if: always()
     runs-on: ubuntu-latest
     needs:
+      - changes
       - document-indexer-tests
       - solr-search-tests
       - python-lint
     steps:
-      - run: echo "All tests passed successfully!"
+      - name: Evaluate results
+        run: |
+          for result in \
+            "${{ needs.document-indexer-tests.result }}" \
+            "${{ needs.solr-search-tests.result }}" \
+            "${{ needs.python-lint.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "❌ One or more required jobs failed"
+              exit 1
+            fi
+          done
+          if [ "${{ needs.changes.outputs.build }}" = "false" ]; then
+            echo "⏭️ Tests skipped — no build-relevant changes"
+          else
+            echo "✅ All tests passed!"
+          fi
