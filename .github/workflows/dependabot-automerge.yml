@@ -1,13 +1,10 @@
 name: Dependabot Auto-Merge
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
 
-permissions:
-  contents: write
-  pull-requests: write
-  checks: read
+permissions: read-all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -17,6 +14,9 @@ jobs:
   metadata:
     name: Extract Dependabot metadata
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     if: github.actor == 'dependabot[bot]'
     outputs:
       update-type: ${{ steps.metadata.outputs.update-type }}
@@ -29,6 +29,8 @@ jobs:
   python-tests:
     name: Python tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.actor == 'dependabot[bot]'
     needs: metadata
     strategy:
@@ -41,7 +43,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Set up Python 3.11
@@ -80,6 +81,8 @@ jobs:
   frontend-tests:
     name: Frontend tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.actor == 'dependabot[bot]'
     needs: metadata
     defaults:
@@ -88,7 +91,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -113,12 +115,13 @@ jobs:
   security-checks:
     name: Security validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.actor == 'dependabot[bot]'
     needs: metadata
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Check for known vulnerabilities
@@ -131,6 +134,9 @@ jobs:
   auto-merge:
     name: Auto-merge PR
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     needs: [metadata, python-tests, frontend-tests, security-checks]
     if: |
       github.actor == 'dependabot[bot]' &&
@@ -141,20 +147,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          gh pr review "$PR_NUMBER" --approve --body "Auto-approved: patch/minor dependency update with all tests passing"
-          gh pr merge "$PR_NUMBER" --auto --squash
+          gh pr review "$PR_NUMBER" --repo "$REPO" --approve --body "Auto-approved: patch/minor dependency update with all tests passing"
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash
         continue-on-error: true
 
       - name: Add auto-merge label
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: gh pr edit "$PR_NUMBER" --add-label "dependabot:auto-merge"
+          REPO: ${{ github.repository }}
+        run: gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:auto-merge"
 
   manual-review:
     name: Flag for manual review
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     needs: [metadata, python-tests, frontend-tests, security-checks]
     if: |
       github.actor == 'dependabot[bot]' &&
@@ -164,6 +174,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          gh pr edit "$PR_NUMBER" --add-label "dependabot:manual-review"
-          gh pr comment "$PR_NUMBER" --body "⚠️ **Major version update** - Manual review required before merging. All tests have passed."
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:manual-review"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "⚠️ **Major version update** - Manual review required before merging. All tests have passed."
