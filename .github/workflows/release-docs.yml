@@ -52,10 +52,12 @@ jobs:
       - name: Normalize release metadata
         id: release
         shell: bash
+        env:
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
         run: |
           # If triggered via workflow_run, prefer deriving the version from a tag
           # pointing at the workflow_run head SHA when INPUT_VERSION is not a semver.
-          head_sha="${{ github.event.workflow_run.head_sha || '' }}"
+          head_sha="${WORKFLOW_RUN_HEAD_SHA}"
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
             # Only attempt to override when INPUT_VERSION is empty or non-semver (e.g., "dev").
