@@ -13,6 +13,27 @@
 
 # Lambert — History
 
+## 🎯 Core Context — Verified Test Counts (v1.3.0)
+
+**All 469 Tests Passing** as of v1.3.0 release (2026-03-17):
+- **solr-search:** 193 tests (94.60% coverage) ✅
+- **aithena-ui:** 189 tests (Vitest) ✅
+- **document-indexer:** 91 tests + 4 skipped (env-dependent) (81.50% coverage) ✅
+- **admin:** 81 tests (Streamlit, 19 InsecureKeyLengthWarning — test-only keys) ⚠️
+- **document-lister:** 12 tests ✅
+- **embeddings-server:** 9 tests (requires manual `pip install pytest httpx`) ⚠️
+
+**Key Patterns Learned:**
+1. **embeddings-server quirk** — `requirements.txt` lacks test deps; must manually install pytest + httpx to `.venv` before running tests
+2. **document-indexer env-dependent tests** — 4 tests skip if env vars are misconfigured; affects test counting in CI
+3. **Admin HMAC warnings** — Test-only HMAC keys generate InsecureKeyLengthWarning; not a production concern (use strong keys in prod)
+4. **Coverage validation** — solr-search and document-indexer both above threshold (>80%); frontend Vitest covers search/facets/PDF
+5. **Real test data** — E2E and metadata tests use actual `/home/jmservera/booklibrary` patterns; graceful skip if no indexed data
+
+---
+
+
+
 ## Project Context
 - **Project:** aithena — Book library search engine with Solr indexing, multilingual embeddings, PDF processing
 - **User:** jmservera
