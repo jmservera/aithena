@@ -537,3 +537,27 @@
 **Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-brett.md`
 
 **Cross-Coordination:** Parker diagnosed Redis auth issue independently; both root causes merged into single decision set for holistic system view.
+
+### 2026-03-17T08:40Z — RabbitMQ 4.0 upgrade + credential fix (PR #403)
+
+**Problem:** Two issues: (1) RabbitMQ 3.12 is EOL — log warned "end of life and is no longer supported". (2) Credential mismatch — user 'aithena' couldn't authenticate because the Mnesia data volume was initialized with old credentials.
+
+**Root cause for credentials:** `RABBITMQ_DEFAULT_USER`/`RABBITMQ_DEFAULT_PASS` are only applied on first initialization. The bind-mount volume at `/source/volumes/rabbitmq-data` retained stale Mnesia data even after the Docker named volume was deleted, because the local driver with `type: none, o: bind` means the host directory IS the volume.
+
+**Fix applied:**
+1. Upgraded `rabbitmq:3.12-management` → `rabbitmq:4.0-management` (RabbitMQ 4.0.9, current LTS)
+2. Cleared stale Mnesia data from `/source/volumes/rabbitmq-data/mnesia` and `.erlang.cookie`
+3. `rabbitmq.conf` (management.path_prefix, vm_memory_high_watermark, consumer_timeout) is fully compatible with 4.0
+
+**Key learning — RabbitMQ 3.x → 4.0 upgrade path:**
+- RabbitMQ 4.0 requires all feature flags from 3.x to be enabled before upgrade. If upgrading in-place, run `rabbitmqctl enable_feature_flag all` on 3.x first.
+- For a clean install (no data to preserve), just wipe the Mnesia directory.
+- The `stream_filtering` feature flag is the specific blocker for 3.12 → 4.0.
+- Bind-mount volumes: `docker volume rm` does NOT clear host data. Must `rm -rf` the host directory contents.
+
+**Also included in PR:**
+- Parker's Redis auth fix: added `password=settings.redis_password` to solr-search ConnectionPool
+- ZK health checks simplified to ruok-only (eliminated mntr broken pipe noise)
+- document-indexer depends_on solr (service_healthy) for startup ordering
+
+**Observation:** solr-init collection creation is failing independently (400 error on CREATE collection). This is a pre-existing Solr configset issue, not related to this fix.

@@ -348,3 +348,37 @@ REDIS_PORT=6379
 **Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-parker.md`
 
 **Cross-Coordination:** Brett diagnosed infrastructure issues independently; merged into single coordinated decision set showing full system health.
+
+### 2026-03-17 — Service Rebuild, Solr Collection Fix, Full Stack Verification
+
+**Task:** Rebuild stale containers after code changes, fix solr-init collection creation, verify full stack health.
+
+**Issues Found & Fixed:**
+
+1. **solr-search Redis circuit breaker cycling (stale container):** The running solr-search container was ~20 min old, still using pre-fix code without Redis password in ConnectionPool. Rebuilt the image with `docker compose build solr-search` and restarted. After restart, Redis circuit breaker immediately went to CLOSED with 0 failures — confirming the password fix from the earlier session works.
+
+2. **streamlit-admin stale container:** Rebuilt and restarted admin service. Came up healthy.
+
+3. **nginx stale upstream IPs:** Restarted nginx to pick up new container IPs after RabbitMQ volume reset.
+
+4. **solr-init 400 error — ROOT CAUSE: host volume permissions:** The books collection creation was failing with "Couldn't persist core properties to /var/solr/data/books_shard1_replica_n4/core.properties". The host bind-mounted volumes at `/source/volumes/solr-data*` were owned by `root:root` (mode 755), but Solr runs as UID 8983. Fixed with `sudo chown -R 8983:8983 /source/volumes/solr-data*`. After fixing permissions and re-running solr-init, the books collection was created successfully with 3 replicas across all 3 Solr nodes.
+
+5. **document-indexer timed out waiting for books collection:** Restarted after collection was created. Immediately found the books collection and began processing. 127 documents indexed successfully.
+
+**Verification Results:**
+- All 17 services healthy
+- Redis circuit breaker: CLOSED, 0 failures
+- Solr circuit breaker: CLOSED, 0 failures
+- Books collection: created with 3 replicas, 127 documents indexed
+- UI: login page renders correctly with Aithena branding
+- API health endpoint: fully operational
+- Document pipeline: lister → RabbitMQ → indexer → Solr working end-to-end
+
+**Key Learnings:**
+- Host-mounted Solr data volumes must be owned by UID 8983 (the solr user). When volumes are created by the host OS or by root, Solr can't write core properties and collection creation fails with a cryptic 400 error.
+- The Solr error message "Underlying core creation failed" doesn't say *why* — you need to check individual Solr node logs (solr2, solr3) to find the "Couldn't persist core properties" root cause.
+- Always rebuild containers after code changes. Restarting an existing container does NOT pick up code changes — it reuses the same image.
+
+**Files Modified:** None (operational fix — volume permissions on host filesystem)
+
+**Screenshots saved:** Session files directory (01-home.png, 05-api-health.png)
