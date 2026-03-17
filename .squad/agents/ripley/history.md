@@ -579,3 +579,47 @@ The React AdminPage and Streamlit admin **are functionally redundant**. Both cal
 **Fallback if issues arise:** Keep Streamlit admin as a "developer tool" in docker-compose.override.yml, not the main production image.
 
 ---
+
+## Learnings
+
+### 2026-03-18: Reviewed Ash's #404 Stats Schema Proposal
+
+**Context:** Ash investigated why stats show 127 documents instead of 3 books—root cause is flat Solr indexing (parent books + child chunks in same collection without hierarchy).
+
+**Architectural Decision:**
+- ✅ Approved **Phase 1 (Quick Win)** for v1.4.0: Use Solr grouping by `parent_id_s` to count distinct books in stats endpoint
+  - Zero schema changes, zero reindex risk
+  - Limitation: facet counts still reflect chunks (acceptable, document in release notes)
+  - Assign to Parker for implementation
+- ✅ Approved **Phase 2** in principle for v1.5.0: Add `doc_type` discriminator field ("book" vs "chunk")
+  - Enables clean parent/child separation
+  - Search results should collapse to one result per book with best-matching chunk snippet
+  - Full reindex preferred over partial update (cleaner, avoids inconsistency)
+  - Defer implementation to gather usage data from Phase 1 first
+- ❌ Rejected true nested documents (Block Join): Adds complexity without ROI. The `doc_type` discriminator is sufficient long-term unless we hit scaling issues (>1M books).
+
+**Key principle reinforced:** Pragmatic incrementalism—ship the quick win, validate with users, then invest in the proper architecture. Don't over-engineer for hypothetical scale.
+
+### 2026-03-18: Reviewed Brett's #412 Dependabot Auto-Merge Workflow
+
+**Context:** Brett created a GitHub Actions workflow to auto-merge low-risk Dependabot PRs (patch/minor updates) after all tests pass.
+
+**Security Review:**
+- ✅ `pull_request_target` usage is **SAFE**:
+  - All jobs gate on `github.actor == 'dependabot[bot]'`
+  - Checkout uses explicit SHA (`github.event.pull_request.head.sha`), not branch name
+  - `persist-credentials: false` prevents token leakage
+  - No arbitrary code execution from PR content (uses locked dependencies, not PR-modified lockfiles)
+- ✅ Concurrency control prevents race conditions
+- ✅ Version classification is correct (patch/minor auto-merge, major manual review)
+
+**Completeness Review:**
+- ✅ Runs all test suites: 4 Python services + frontend (lint/format/tests)
+- ✅ Proper labels for tracking (`dependabot:auto-merge`, `dependabot:manual-review`)
+- ⚠️ Minor gap: doesn't test `src/admin` (Streamlit app). Noted for future enhancement.
+- ⚠️ Security check is a placeholder—suggested adding `npm audit` / `pip-audit` for proactive CVE scanning
+
+**Decision:** ✅ Approved for merge. This will reduce manual review overhead on low-risk dependency updates without compromising security.
+
+**Key principle reinforced:** `pull_request_target` is safe when you (1) explicitly gate on trusted actors, (2) checkout explicit SHAs, and (3) disable credential persistence. The workflow demonstrates best practices.
+

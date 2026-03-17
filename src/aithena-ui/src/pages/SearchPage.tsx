@@ -49,7 +49,7 @@ interface SearchResultsSectionProps {
   query: string;
   results: BookResult[];
   resultsRegionId: string;
-  resultsRegionRef: RefObject<HTMLElement>;
+  resultsRegionRef: RefObject<HTMLElement | null>;
   resultsSummaryId: string;
   selectedBook: BookResult | null;
   total: number;
