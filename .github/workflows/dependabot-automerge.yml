@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@42fe8f20073db6b1b8c665c2bbef5f4db85bb93a  # v2.3.0
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a  # v2.5.0
 
   python-tests:
     name: Python tests
