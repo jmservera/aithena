@@ -3721,7 +3721,7 @@ Before merging PR #427:
 - [x] Resource limits and health checks preserved from docker-compose.yml
 
 After merge, before next release:
-- [ ] Test full release workflow on a tag (e.g., v1.3.1-rc1)
+- [ ] Test full release workflow on a tag (e.g., v1.3.1)
 - [ ] Extract tarball and verify `docker compose -f docker-compose.prod.yml pull` works
 - [ ] Run installer and verify `.env` file generation
 - [ ] Test cold-start deployment on clean VM
