@@ -3674,7 +3674,7 @@ validate-tag → build-and-push → package-release → github-release
 
 ### SHA-Pinned Actions
 
-- `actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882` (v4.6.0)
+- `actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02` (v4.6.2)
 - `actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16` (v4.1.8)
 
 Both verified via GitHub API to match expected commits.
