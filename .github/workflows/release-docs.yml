@@ -11,6 +11,10 @@ on:
         description: 'Optional milestone name used to gather closed issues and merged PRs'
         required: false
         type: string
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
 
 permissions:
   contents: write
@@ -22,11 +26,12 @@ concurrency:
 
 jobs:
   generate-release-docs:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     name: Generate release documentation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      INPUT_VERSION: ${{ inputs.version }}
+      INPUT_VERSION: ${{ inputs.version || github.event.workflow_run.head_branch }}
       INPUT_MILESTONE: ${{ inputs.milestone }}
     steps:
       - name: Checkout repository
