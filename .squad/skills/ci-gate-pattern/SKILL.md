@@ -137,7 +137,7 @@ Transitive vulnerabilities can sneak in. Always run full test suite.
 
 ## Example: Aithena Dependabot Auto-Merge Workflow
 
-See `.github/workflows/dependabot-auto-merge.yml` (PR #412).
+See `.github/workflows/dependabot-automerge.yml` (PR #412).
 
 **Key features:**
 - Patch + minor: auto-merge after tests pass
