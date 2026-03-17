@@ -507,3 +507,30 @@
 **Team Impact:** Template added to blocking security checklist for future GitHub Actions workflows
 
 **Status:** ✅ INVESTIGATION COMPLETE; AWAITING AUTHOR FIXES
+
+### 2026-07-25 — PR #419 Security Review Follow-up (Dependabot Auto-Merge)
+
+**Summary:** Reviewed jmservera's security fixes on `squad/349-dependabot-clean`. All critical fixes applied correctly. Added zizmor baseline exceptions for `bot-conditions`. Discovered impostor commit blocking merge.
+
+**Security Assessment:**
+- ✅ `pull_request` trigger (not `pull_request_target`) — privilege escalation prevented
+- ✅ Top-level `permissions: read-all` with job-level least-privilege blocks
+- ✅ SHA-pinned actions with version comments (4 of 5 verified)
+- ✅ `persist-credentials: false` on all checkout steps
+- ✅ `--repo` flag on all gh CLI commands
+- ✅ Environment variables for GitHub expressions (no template injection)
+- ✅ `bot-conditions` findings baselined in `.zizmor.yml` (6 findings, acceptable risk)
+
+**Blocking Finding:**
+- 🚨 `dependabot/fetch-metadata@42fe8f20...` — SHA returns 404 from upstream repo
+- Zizmor flags as `impostor-commit` (error severity) and `ref-version-mismatch` (warning)
+- Correct SHA for v2.3.0: `d7267f607e9d3fb96fc2fbe83e0af444713e90b7`
+- Cannot push fix from codespace (OAuth `workflow` scope required)
+- PR comment posted with fix instructions for jmservera
+
+**Actions Taken:**
+1. Pushed `.zizmor.yml` update with `bot-conditions` baseline exceptions
+2. Posted detailed PR comment with security review and required fix
+3. All CI checks pass except Code Scanning (impostor-commit blocks)
+
+**Status:** ⚠️ AWAITING AUTHOR FIX — one-line SHA correction needed before merge
