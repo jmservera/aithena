@@ -4197,18 +4197,18 @@ If dev→main release PRs consistently fail integration tests:
 
 ## Current State
 
-### Test inventory (469 total):
+### Test inventory (overview):
 
-| Service | Unit Tests | In CI? | Status |
-|---------|-----------|--------|--------|
-| solr-search | 193 | ✅ ci.yml | Good |
-| document-indexer | 91 (+4 skip) | ✅ ci.yml | Good |
-| aithena-ui | 127 | ❌ NOT in CI | Gap |
-| admin | 71 | ❌ NOT in CI | Gap |
-| document-lister | 12 | ❌ NOT in CI | Gap |
-| embeddings-server | 9 | ❌ NOT in CI | Gap |
+| Service | In CI? | Status |
+|---------|--------|--------|
+| solr-search | ✅ ci.yml | Good |
+| document-indexer | ✅ ci.yml | Good |
+| aithena-ui | ❌ NOT in CI | Gap |
+| admin | ❌ NOT in CI | Gap |
+| document-lister | ❌ NOT in CI | Gap |
+| embeddings-server | ❌ NOT in CI | Gap |
 
-**Finding:** 219 tests (4 of 6 services) never run in CI.
+**Finding:** Tests for several services never run in CI, leaving meaningful coverage gaps.
 
 ## Gap Analysis: Bugs We'd Miss
 
