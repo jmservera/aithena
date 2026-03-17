@@ -16,9 +16,7 @@ on:
     types:
       - completed
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.inputs.version || github.event.workflow_run.head_sha || github.run_id }}
@@ -26,10 +24,15 @@ concurrency:
 
 jobs:
   generate-release-docs:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: |
+      github.repository == 'jmservera/aithena' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     name: Generate release documentation
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
     env:
       INPUT_VERSION: ${{ github.event.inputs.version || github.event.workflow_run.head_branch }}
       INPUT_MILESTONE: ${{ github.event.inputs.milestone }}
