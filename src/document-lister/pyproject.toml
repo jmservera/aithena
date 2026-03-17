@@ -21,6 +21,8 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
 addopts = "--cov=document_lister --cov-report=term-missing --cov-report=html -ra"
 
 [tool.coverage.run]

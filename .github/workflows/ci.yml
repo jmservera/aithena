@@ -259,8 +259,9 @@ jobs:
       - name: Install dependencies
         working-directory: src/embeddings-server
         run: |
-          pip install -r requirements.txt
-          pip install pytest httpx pytest-cov
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.4 httpx==0.27.2 pytest-cov==6.1.1
 
       - name: Run tests with coverage
         working-directory: src/embeddings-server
