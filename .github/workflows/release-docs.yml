@@ -21,7 +21,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.version }}
+  group: ${{ github.workflow }}-${{ inputs.version || github.event.workflow_run.head_sha || github.run_id }}
   cancel-in-progress: false
 
 jobs:
