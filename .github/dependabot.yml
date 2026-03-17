@@ -47,7 +47,7 @@ updates:
       semver-minor-days: 3
       semver-patch-days: 2
 
-  - package-ecosystem: "uv"
+  - package-ecosystem: "pip"
     directory: "/src/embeddings-server"
     schedule:
       interval: "weekly"
