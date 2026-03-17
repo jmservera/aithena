@@ -2,7 +2,7 @@
 name = "aithena-admin"
 version = "0.1.0"
 description = "Aithena Admin Dashboard"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "streamlit>=1.51.0,<2",
     "redis==4.6.0",
