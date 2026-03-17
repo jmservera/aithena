@@ -1,4 +1,11 @@
 rules:
+  dangerous-triggers:
+    ignore:
+      # Kane-approved: workflow_run trigger is hardened with repository guard
+      # (github.repository == 'jmservera/aithena'), conclusion check, pinned
+      # checkout ref (dev), and job-level permissions. The workflow legitimately
+      # needs write access to create release doc branches and PRs.
+      - release-docs.yml
   bot-conditions:
     ignore:
       # Kane-approved baseline exception: github.actor == 'dependabot[bot]' is
@@ -21,9 +28,9 @@ rules:
       # accepting secure step-level secret handling in non-production workflows.
       # Deployment environments remain deferred until production deployment
       # workflows exist as part of the planned v1.5.0 release work.
-      - release-docs.yml:61
-      - release-docs.yml:161
-      - release-docs.yml:242
+      - release-docs.yml:94
+      - release-docs.yml:194
+      - release-docs.yml:275
       - squad-issue-assign.yml:123
       - squad-heartbeat.yml:256
       - squad-heartbeat.yml:257
