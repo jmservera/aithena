@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-03-17
+
+### Added
+
+- **Docker image tagging and versioning strategy** for GHCR, enabling semantic version tracking and reproducible releases (#358)
+- **GitHub Actions CI/CD workflow** for building and pushing production-grade Docker images to GHCR with multi-architecture support (#359)
+- **Production docker-compose.yml** using pre-built GHCR images instead of local builds, enabling deployments without source code (#360)
+- **Production install script** automating configuration, secret management, and deployment setup (#361)
+- **Production environment variables and secrets management** with support for external vault integration (#362)
+- **GitHub Release package** bundling production artifacts (compose file, install script, smoke tests) for distribution (#363)
+- **Production deployment and rollback procedures documentation** providing step-by-step operator guides (#364)
+- **Smoke test suite** (91 tests) validating production deployments end-to-end: service startup, health checks, inter-service connectivity, search functionality, and data persistence (#365)
+- **Production nginx image and UI build optimization** for nginx reverse proxy deployment (#366)
+- **GHCR authentication documentation** guiding developers and operators through credential setup and private registry access (#367)
+- **Production volume mount and data persistence validation** ensuring all persistent data survives container restarts (#368)
+- **Release checklist and CI/CD automation integration** documenting pre-release validation gates (#369)
+
+### Changed
+
+- **Deployment model:** Production deployments now use pre-built GHCR images instead of source-code-based local builds
+- **Installation workflow:** Production install script automates environment configuration and replaces manual .env setup
+- **Docker Compose usage:** Production deployments explicitly use `-f docker-compose.yml` without override files
+
+### Fixed
+
+- **Data persistence validation:** All volumes now validated and tested to ensure data survives container restarts
+- **Release artifacts:** Standardized GitHub Release format with checksums and comprehensive documentation
+
+### Security
+
+- **Image signing and provenance:** Docker images include SBOM and security scanning results from GHCR
+- **Environment variable hardening:** Production configuration supports external secret vaults; secrets not hardcoded in .env
+- **Private registry RBAC:** GHCR image repositories support role-based access control via GitHub PAT authentication
+
 ## [1.3.0] — 2026-03-17
 
 ### Added
