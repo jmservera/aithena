@@ -1,3 +1,67 @@
+## 2026-03-17: Generated v1.5.0 Release Documentation
+
+**Milestone:** Comprehensive release documentation for v1.5.0 (Production Deployment & Infrastructure)
+
+**Deliverables Created:**
+
+- `docs/release-notes-v1.5.0.md` — Full release notes with 12 issues (PI-1 through PI-12):
+  - Docker image tagging and versioning strategy for GHCR (#358)
+  - GitHub Actions CI/CD workflow for building/pushing images (#359)
+  - Production docker-compose.yml with pre-built GHCR images (#360)
+  - Production install script for automated setup (#361)
+  - Production environment variables and secrets configuration (#362)
+  - GitHub Release package with artifacts and checksums (#363)
+  - Production deployment and rollback procedures documentation (#364)
+  - Smoke test suite for deployment validation (91 tests) (#365)
+  - Production nginx image and UI build optimization (#366)
+  - GHCR authentication documentation for developers/operators (#367)
+  - Production volume mount and data persistence validation (#368)
+  - Release checklist and CI/CD automation integration (#369)
+
+- `docs/test-report-v1.5.0.md` — Test report with comprehensive coverage:
+  - 575 total tests passing across 6 services
+  - 91 smoke tests validating production deployments
+  - Per-service test counts (solr-search 198, document-indexer 94, document-lister 13, embeddings-server 11, admin 36, aithena-ui 132)
+  - Smoke test coverage: service startup, health checks, inter-service connectivity, search functionality, data persistence
+  - All smoke tests pass in production composition mode
+
+- `CHANGELOG.md` — Added v1.5.0 entry in Keep a Changelog format:
+  - Added/Changed/Fixed/Security sections
+  - All 12 issues cross-referenced
+  - Comprehensive coverage of Docker infrastructure, install script, and deployment procedures
+
+- `docs/admin-manual.md` — Added comprehensive v1.5.0 Deployment section covering:
+  - Pre-built Docker images on GHCR with image naming, versioning, OCI labels
+  - GHCR authentication using GitHub PAT (Personal Access Token)
+  - Production docker-compose.yml usage and differences from development
+  - Production install script automation with all options
+  - Production environment configuration, required/optional variables, secrets management
+  - Volume mounts and data persistence validation with checklist
+  - Deployment health checks for all services with endpoints and timeouts
+  - Rollback procedures and blue-green deployment strategies
+
+**Release Notes Format:**
+
+- Consistent with v1.3.0 structure: summary, detailed changes by category, milestone closure, merged PRs, breaking changes, user-facing improvements, operator improvements, security improvements, upgrade instructions, validation highlights
+- Codename: "Production Deployment & Infrastructure"
+- Date: 2026-03-17
+- Emphasized production readiness, automated deployment, and operator tooling
+
+**Key Learnings:**
+
+- v1.5.0 completes the deployment infrastructure needed to run Aithena in production. Previous releases (v1.0.0–v1.3.0) established the foundation, versioning, and observability; v1.5.0 now provides the operational tooling (GHCR images, install script, smoke tests, deployment guide) operators need.
+- The release spans 12 distinct issues across 4 categories: Infrastructure (images, versioning), Deployment Tooling (install script, compose, environment config), Quality (smoke tests), and Documentation (procedures, auth guide). This breadth reflects the holistic effort required to deliver production-grade deployment infrastructure.
+- Production smoke tests (91 tests) validate not just individual service health but full end-to-end deployment scenarios: service startup, inter-service connectivity, search functionality, and data persistence. This is crucial for catching deployment-specific issues that unit tests cannot detect.
+- The production docker-compose.yml differs significantly from development: no override file, strict health checks, no debug port exposure, GHCR image references instead of local builds. This separation of dev/prod configurations is essential for avoiding accidental debug settings in production.
+- Secrets management requires special handling: environment variables can reference external vaults (e.g., `${JWT_SECRET_FROM_VAULT}`), enabling deployments without hardcoding secrets in .env files. The install script generates default secrets for development; operators must replace with secure values for production.
+- Volume mount validation is critical: Solr indexes, Redis snapshots, RabbitMQ queues, and application config must all persist across container restarts. Smoke tests verify this by restarting containers and confirming data integrity.
+- The GHCR image tagging strategy (semantic version + commit SHA) enables operators to track exact provenance and easily rollback to previous releases. OCI labels provide machine-readable metadata for automation and supply-chain security.
+
+**Branch:** squad/release-docs-v150  
+**PR:** #476
+
+---
+
 ## v0.7.0 Milestone Completion
 
 **2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
