@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.3.0 Release Notes](release-notes-v1.3.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.4.0 Release Notes](release-notes-v1.4.0.md).
 
 ## Getting started
 
@@ -253,6 +253,10 @@ You can see:
 - average pages per book
 - smallest indexed book by page count
 - largest indexed book by page count
+
+### Accurate book count (v1.4.0+)
+
+Starting with v1.4.0, the **total books indexed** count reflects the actual number of books in your library. Earlier versions counted indexed chunks or pages, which could be much higher than the unique book count. Now the count is precise and useful for library metrics.
 
 ### Breakdown tables
 
