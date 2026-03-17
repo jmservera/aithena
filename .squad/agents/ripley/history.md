@@ -27,7 +27,7 @@
 
 **Key Metrics:**
 - **Search performance:** Keyword + semantic hybrid with RRF fusion; similar-books endpoint live
-- **Code quality:** All services have 8-14 unit tests; Python via uv + pytest, Frontend via Vitest
+- **Code quality:** All services have automated test suites; Python via uv + pytest, Frontend via Vitest
 - **Deployment:** Docker Compose with health checks; no cloud dependencies (fully on-premises)
 - **Release cadence:** ~2 week milestones with phase-based decomposition
 
