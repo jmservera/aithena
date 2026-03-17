@@ -331,7 +331,13 @@ def test_solr_escape_handles_special_characters() -> None:
 
 def test_parse_stats_response_extracts_all_fields() -> None:
     payload = {
-        "response": {"numFound": 76, "docs": []},
+        "grouped": {
+            "parent_id_s": {
+                "matches": 76,
+                "ngroups": 3,
+                "groups": [],
+            }
+        },
         "stats": {
             "stats_fields": {
                 "page_count_i": {
@@ -356,7 +362,7 @@ def test_parse_stats_response_extracts_all_fields() -> None:
 
     result = parse_stats_response(payload)
 
-    assert result["total_books"] == 76
+    assert result["total_books"] == 3
     assert result["by_author"] == [{"value": "Joan Amades", "count": 15}, {"value": "Other Author", "count": 5}]
     assert result["by_category"] == [{"value": "Folklore", "count": 40}, {"value": "History", "count": 10}]
     assert result["by_year"] == [{"value": 1950, "count": 3}, {"value": 1960, "count": 10}]
@@ -369,7 +375,7 @@ def test_parse_stats_response_extracts_all_fields() -> None:
 
 def test_parse_stats_response_handles_empty_collection() -> None:
     payload = {
-        "response": {"numFound": 0, "docs": []},
+        "grouped": {"parent_id_s": {"matches": 0, "ngroups": 0, "groups": []}},
         "stats": {"stats_fields": {"page_count_i": None}},
         "facet_counts": {"facet_fields": {}},
     }
@@ -386,7 +392,7 @@ def test_parse_stats_response_handles_empty_collection() -> None:
 
 def test_parse_stats_response_handles_missing_stats_section() -> None:
     payload = {
-        "response": {"numFound": 5, "docs": []},
+        "grouped": {"parent_id_s": {"matches": 5, "ngroups": 2, "groups": []}},
         "facet_counts": {
             "facet_fields": {
                 "author_s": ["Author A", 5],
@@ -399,14 +405,14 @@ def test_parse_stats_response_handles_missing_stats_section() -> None:
 
     result = parse_stats_response(payload)
 
-    assert result["total_books"] == 5
+    assert result["total_books"] == 2
     assert result["by_author"] == [{"value": "Author A", "count": 5}]
     assert result["page_stats"] == {"total": 0, "avg": 0, "min": 0, "max": 0}
 
 
 def test_parse_stats_response_rounds_average() -> None:
     payload = {
-        "response": {"numFound": 3, "docs": []},
+        "grouped": {"parent_id_s": {"matches": 3, "ngroups": 1, "groups": []}},
         "stats": {
             "stats_fields": {
                 "page_count_i": {
