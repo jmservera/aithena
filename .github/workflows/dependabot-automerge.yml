@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     outputs:
       update-type: ${{ steps.metadata.outputs.update-type }}
       dependency-names: ${{ steps.metadata.outputs.dependency-names }}
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     needs: metadata
     strategy:
       matrix:
@@ -41,14 +41,14 @@ jobs:
           - solr-search
           - embeddings-server
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install uv (for uv-managed services)
         if: matrix.service != 'embeddings-server'
@@ -67,7 +67,8 @@ jobs:
         working-directory: src/embeddings-server
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.4 httpx==0.27.2
 
       - name: Run tests
         working-directory: src/${{ matrix.service }}
@@ -75,7 +76,7 @@ jobs:
           if [ -f pyproject.toml ]; then
             uv run pytest -v --tb=short
           else
-            pytest -v --tb=short
+            python -m pytest -v --tb=short
           fi
 
   frontend-tests:
@@ -83,13 +84,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     needs: metadata
     defaults:
       run:
         working-directory: src/aithena-ui
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
@@ -117,10 +118,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     needs: metadata
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
@@ -139,7 +140,7 @@ jobs:
       pull-requests: write
     needs: [metadata, python-tests, frontend-tests, security-checks]
     if: |
-      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
       (needs.metadata.outputs.update-type == 'version-update:semver-patch' ||
        needs.metadata.outputs.update-type == 'version-update:semver-minor')
     steps:
@@ -167,7 +168,7 @@ jobs:
       pull-requests: write
     needs: [metadata, python-tests, frontend-tests, security-checks]
     if: |
-      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
       needs.metadata.outputs.update-type == 'version-update:semver-major'
     steps:
       - name: Add manual review label
