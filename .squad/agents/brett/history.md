@@ -21,37 +21,51 @@
 - **Current infrastructure:** SolrCloud 3-node cluster + ZooKeeper 3-node ensemble, Redis, RabbitMQ, nginx, 9 Python services in Docker
 - **Active initiative:** UV migration across 7 Python services (issues #81-#87), security scanning (#88-#90), CI hardening
 
-## Core Context
+## Core Context — Infrastructure Architect Focus Areas
 
-**SolrCloud Docker Operations (Standardized):**
-- **Cluster topology:** 3-node ZooKeeper ensemble + 3-node Solr cloud cluster, all healthy. ZooKeeper AdminServer 8080 and Solr node 1 port 8080 create host-port collision (namespace works but needs cleanup).
-- **Service startup:** Depends_on uses `service_started` instead of `service_healthy` — services can start before infra is ready. Missing health checks for Solr and ZooKeeper are critical gap.
-- **Volume strategy:** All bind-backed local volumes pointing to `/source/volumes/` + `/home/jmservera/booklibrary`. Solr mounts `/var/solr/data` only (no persistent logs). Backup path configured but not mounted.
+### Key Infrastructure Patterns & Learnings (Reskill Summary)
 
-**CI/CD & Build:**
-- `buildall.sh` runs `uv sync` in all 4 uv-managed Python services (`admin`, `document-indexer`, `document-lister`, `solr-search`), skips `embeddings-server` (no pyproject.toml).
-- GitHub Actions: `ci.yml` runs Python unit tests + ruff linting, `lint-frontend.yml` for React, `release.yml` coordinates releases.
-- All 4 Python services migrated to uv + `pyproject.toml` + `uv.lock`.
+**Docker Compose Hardening (Issue #52) — Complete Specification:**
+- Health checks: 8 new checks with context-specific start_periods (10-60s for model-loading, cluster formation)
+- Resource limits: Memory (128m-2g), CPU reservations, log rotation (10m × 3 files = 30MB per service)
+- Restart policies: `unless-stopped` for critical/stateful, `on-failure` for stateless workers
+- Graceful shutdown: `stop_grace_period` (60s Solr/ZK, 30s RabbitMQ/Redis, 10s others)
+- Dependency fixes: 5 upgrades from `service_started` → `service_healthy`
+- Production guide: `docs/deployment/production.md` (startup order, volume init, health validation, troubleshooting)
 
-**nginx Reverse-Proxy Ingress:**
-- Routes `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, `/admin/redis/` to respective admin UIs (with X-Forwarded-Prefix, WebSocket upgrade support, path rewriting).
-- Routes `/`, `/v1/`, `/documents/` to React app and solr-search API.
-- No HTTPS or auth enforcement in current config (cert setup via ACME but HTTP-only).
+**CI/CD Security Patterns — Zizmor + Checkov:**
+- **Secrets handling:** Use inline `with:` parameters, never step-level `env:` (secrets-outside-env zizmor rule)
+- **Template expansion:** Always `${{ secrets.X }}` syntax in workflows, never shell variable expansion
+- **Bot conditions:** `pull_request_target` event + copilot author detection guards (copilot-approve-runs.yml)
+- **IaC scanning:** Checkov workflow with soft_fail + path filtering, SARIF integration, documented exceptions
+- **GitHub Actions exceptions:** CKV_GHA_7 (workflow_dispatch inputs) — document when input validation protects supply chain
 
-**Known Infrastructure Bugs (Blocking v0.5):**
-1. **#166 — RabbitMQ cold-start failure:** `timeout_waiting_for_khepri_projections` on first `docker compose up`. Second run succeeds. Root: Khepri metadata store projection registration race + stale volume state. Fix: increase health check retries/start_period, pin RabbitMQ version, or clear volume.
-2. **#167 — Document pipeline stall:** New PDFs not detected/indexed. Cascaded from #166 (RabbitMQ unhealthy) + `depends_on: service_started` doesn't wait for health. Fix: add connection retry logic in services, use `service_healthy` conditions.
+**Release Packaging & Versioning (v0.7.0 Complete):**
+- Docs-gate-the-tag pattern: Release docs merged BEFORE tagging (.github/ISSUE_TEMPLATE/release.md checklist)
+- docker-compose.prod.yml: GHCR pull model (no build in production), OCI labels + version endpoints
+- release.yml automation: triggers on `v*.*.*` tags, builds/pushes all 6 services to GHCR
+- Tarball packaging: `.env.prod.example`, installer script, deployment docs as release asset
+- Token scopes: GitHub Data API (refs, trees, commits) requires `workflow` scope for `.github/workflows/` modifications
 
-**Docker Compose Gaps vs Skill (High Priority):**
-- ❌ No health checks for Solr (should be curl to `/admin/info/system`)
-- ❌ No health checks for ZooKeeper (should be 4LW `ruok`)
-- ❌ `depends_on` uses `service_started` instead of `service_healthy`
-- ❌ ZooKeeper has no restart policy (`unless-stopped` needed)
-- ❌ No `stop_grace_period` for Solr/ZooKeeper
-- ❌ No `SOLR_HEAP` or memory limits
-- ❌ No Docker log caps
-- ❌ No backup path mount on Solr nodes
-- ❌ Solr volumes only mount `/var/solr/data`, not full `/var/solr`
+**RabbitMQ & SolrCloud Operations:**
+- **RabbitMQ 3.x → 4.0:** Feature flags must be enabled before upgrade; Mnesia directory isolation critical
+- **Bind-mount volumes:** `docker volume rm` doesn't clear host directory; must `rm -rf` directly
+- **SolrCloud 3-node + ZK ensemble:** Port collision (8080 ZK-admin vs Solr-node1) manageable via networking
+- **Health check binaries:** Add `wget` to Alpine images for health checks; `pgrep -f python` for workers
+- **Cold-start timing:** start_period tuning critical (60s embeddings for model load, 30s ZK/Solr cluster formation)
+
+**Workflow Automation & Copilot Integration:**
+- `pull_request_target` is correct event for bot PRs (avoids approval chicken-and-egg loop)
+- release-docs.yml: Copilot CLI integration with fallback template generation
+- Squad issue assignment: COPILOT_ASSIGN_TOKEN via PAT, requires org/repo token scope
+- Workflow run approval: API endpoint `github.rest.actions.approveWorkflowRun()`, 15s wait needed after PR sync
+
+**Infrastructure Context (SolrCloud 3-node Cluster):**
+- **Cluster topology:** 3-node ZooKeeper ensemble + 3-node Solr cloud (all healthy, namespace routing)
+- **Service startup:** Now uses `service_healthy` conditions (deprecated `service_started`)
+- **Volume strategy:** Bind mounts at `/source/volumes/` + `/home/jmservera/booklibrary` (explicit operator control)
+- **nginx Reverse Proxy:** Routes admin UIs (/admin/solr/, /rabbitmq/, /streamlit/, /redis/), app frontend, API
+- **No HTTPS:** Current config is HTTP-only (ACME cert setup exists but not enforced)
 
 ## Learnings
 
