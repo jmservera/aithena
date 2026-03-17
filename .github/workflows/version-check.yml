@@ -46,20 +46,22 @@ jobs:
       - name: Verify Dockerfiles declare VERSION build arg
         shell: bash
         run: |
-          dockerfiles=(
-            src/admin/Dockerfile
-            src/aithena-ui/Dockerfile
-            src/document-indexer/Dockerfile
-            src/document-lister/Dockerfile
-            src/embeddings-server/Dockerfile
-            src/solr-search/Dockerfile
-          )
+          dockerfiles="$(find . -type f -name Dockerfile -print)"
 
-          for dockerfile in "${dockerfiles[@]}"; do
+          if [[ -z "$dockerfiles" ]]; then
+            echo "No Dockerfiles found. Skipping VERSION build arg validation."
+            exit 0
+          fi
+
+          while IFS= read -r dockerfile; do
+            if [[ -z "$dockerfile" ]]; then
+              continue
+            fi
+
             if ! grep -Eq '^ARG VERSION(=.+)?$' "$dockerfile"; then
               echo "$dockerfile is missing an ARG VERSION declaration." >&2
               exit 1
             fi
-          done
+          done <<< "$dockerfiles"
 
-          echo "All release Dockerfiles declare ARG VERSION."
+          echo "All Dockerfiles declare ARG VERSION."
