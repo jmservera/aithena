@@ -812,6 +812,70 @@ def similar_books(
     return {"results": results}
 
 
+@app.get("/v1/books/", include_in_schema=False, name="books_v1")
+@app.get("/v1/books", include_in_schema=False, name="books_v1_no_slash")
+@app.get("/books")
+def list_books(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number for pagination."),
+    page_size: int = Query(
+        settings.default_page_size, ge=1, le=settings.max_page_size, description="Results per page."
+    ),
+    sort_by: Annotated[SortBy, Query()] = "title",
+    sort_order: Annotated[SortOrder, Query()] = "asc",
+    fq_author: str | None = Query(None, description="Filter by author name."),
+    fq_category: str | None = Query(None, description="Filter by category."),
+    fq_language: str | None = Query(None, description="Filter by language."),
+    fq_year: str | None = Query(None, description="Filter by publication year."),
+) -> dict[str, Any]:
+    """Browse the complete library of indexed books with pagination and filtering.
+
+    Returns all books sorted by title (default) or other fields. Supports the same
+    filter query parameters as the search endpoint (``fq_author``, ``fq_category``,
+    ``fq_language``, ``fq_year``).
+
+    This endpoint uses a wildcard ``*:*`` query to match all documents, making it
+    suitable for library browsing and discovery.
+    """
+    filters = collect_search_filters(
+        author=fq_author,
+        category=fq_category,
+        language=fq_language,
+        year=fq_year,
+    )
+
+    payload = query_solr(
+        build_params_or_400(
+            query="*:*",
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            sort=None,
+            filters=filters,
+            facet_limit=settings.facet_limit,
+        )
+    )
+
+    response = payload.get("response", {})
+    highlighting = payload.get("highlighting", {})
+    results = [
+        normalize_book(
+            document,
+            highlighting,
+            build_document_url(request, document.get("file_path_s")),
+        )
+        for document in response.get("docs", [])
+    ]
+
+    return {
+        "sort": {"by": sort_by, "order": sort_order},
+        **build_pagination(response.get("numFound", 0), page, page_size),
+        "results": results,
+        "facets": parse_facet_counts(payload),
+    }
+
+
 @app.get("/v1/stats/", include_in_schema=False, name="stats_v1")
 @app.get("/v1/stats", include_in_schema=False, name="stats_v1_no_slash")
 @app.get("/stats")
