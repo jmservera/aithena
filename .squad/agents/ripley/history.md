@@ -645,3 +645,28 @@ The React AdminPage and Streamlit admin **are functionally redundant**. Both cal
 **Decision Rationale:** The minimal-change approach is architecturally sound. It solves the immediate problem (stats accuracy) while keeping the door open for future enhancements (full parent/child search deduplication) if needed.
 
 **Outcome:** PR #416 merged to `dev`, closes #404.
+
+---
+
+## 2026-03-17 — PR #416 Review & Approval
+
+**Context:** Issue #404 — Stats showing chunk count instead of book count
+
+**Decision:** Approved Phase 1 quick win using Solr grouping (`group.field=parent_id_s`) to count distinct books.
+
+**Rationale:**
+- Minimal change (48 additions, 12 deletions)
+- Zero migration/reindexing cost
+- Solr grouping is standard, performant for this use case
+- Full parent/child hierarchy can be Phase 2 if needed later
+
+**Verification:**
+- All 193 tests pass; 7 stats tests updated to grouped response format
+- Integration tests verify correct Solr parameters
+- PR #416 merged to `dev`, closes #404
+
+**Team Impact:** Pattern established for counting distinct entities in Solr. Parker/Ash to use grouping when counting distinct books, authors, categories, etc.
+
+**Documentation:** PR #421 created with architecture notes.
+
+**Status:** ✅ COMPLETE
