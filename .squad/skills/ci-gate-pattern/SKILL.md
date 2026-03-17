@@ -21,7 +21,10 @@ Use this pattern when designing CI workflows that must balance automation effici
 **Guards:**
 ```yaml
 on:
-  pull_request_target:
+  pull_request:
+
+jobs:
+  dependabot-auto-merge:
     if: github.actor == 'dependabot[bot]'
 ```
 
