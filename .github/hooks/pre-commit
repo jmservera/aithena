@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-WORKFLOWS=$(git diff --cached --name-only --diff-filter=ACM | grep '^\.github/workflows/.*\.yml$' || true)
+WORKFLOWS=$(git diff --cached --name-only --diff-filter=ACM | grep '^\.github/workflows/.*\.ya\?ml$' || true)
 
 if [ -z "$WORKFLOWS" ]; then
   exit 0
