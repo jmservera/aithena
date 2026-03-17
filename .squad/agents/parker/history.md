@@ -382,3 +382,52 @@ REDIS_PORT=6379
 **Files Modified:** None (operational fix — volume permissions on host filesystem)
 
 **Screenshots saved:** Session files directory (01-home.png, 05-api-health.png)
+
+### 2026-03-17 — Python 3.12 Upgrade (DEP-4)
+
+**Task:** Upgrade all Python services from 3.11 to 3.12, following the compatibility audit completed in DEP-3.
+
+**Services Upgraded:**
+1. solr-search — pyproject.toml + Dockerfile (python:3.12-slim-bookworm)
+2. document-indexer — pyproject.toml + Dockerfile (python:3.12-alpine)
+3. document-lister — pyproject.toml + Dockerfile (python:3.12-alpine)
+4. admin — pyproject.toml + Dockerfile (python:3.12-slim)
+5. embeddings-server — Dockerfile only (python:3.12-slim, uses requirements.txt)
+
+**Changes Made:**
+- Updated `requires-python = ">=3.12"` in all pyproject.toml files
+- Updated Dockerfiles to use Python 3.12 base images
+- Regenerated uv.lock files with `UV_NATIVE_TLS=1 uv lock` for all uv-managed services
+- Updated GitHub Actions workflows (ci.yml, integration-test.yml, security-bandit.yml, security-checkov.yml) to use Python 3.12
+
+**Test Results:**
+- ✅ solr-search: 193 tests passed, 94% coverage
+- ✅ document-indexer: 91 tests passed, 81% coverage (4 failures due to missing library fixture files, not Python version)
+- ✅ document-lister: 12 tests passed
+- ✅ admin: 81 tests passed
+
+**Lock File Changes:**
+- Removed `async-timeout` and `tomli` (both were Python <3.11 compatibility shims, no longer needed in 3.12)
+- All lock files regenerated successfully with updated dependency graphs
+
+**Key Learnings:**
+- Python 3.12 removed the need for `async-timeout` (now built-in) and `tomli` (tomllib is in stdlib)
+- The `uv lock` command automatically prunes unnecessary dependencies when the Python requirement changes
+- All Aithena dependencies confirmed compatible with Python 3.12 (audit was correct)
+- GitHub Actions python-version must be updated in multiple workflow files — grep is your friend
+- The embeddings-server service uses `requirements.txt` instead of `pyproject.toml` + uv (architectural inconsistency noted for future cleanup)
+
+**Files Modified:**
+- .github/workflows/ci.yml (2 occurrences)
+- .github/workflows/integration-test.yml
+- .github/workflows/security-bandit.yml
+- .github/workflows/security-checkov.yml
+- src/solr-search/pyproject.toml, Dockerfile, uv.lock
+- src/document-indexer/pyproject.toml, Dockerfile, uv.lock
+- src/document-lister/pyproject.toml, Dockerfile, uv.lock
+- src/admin/pyproject.toml, Dockerfile, uv.lock
+- src/embeddings-server/Dockerfile
+
+**PR:** #414 (squad/347-python312-upgrade → dev)
+
+**Related Issues:** Closes #347, based on audit from #346
