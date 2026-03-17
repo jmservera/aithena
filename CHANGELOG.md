@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-03-17
+
+### Added
+
+- **Structured JSON logging** for all Python services (solr-search, document-indexer, document-lister, admin) with consistent schema, correlation IDs, and ISO 8601 timestamps (#336)
+- **Admin dashboard authentication** with Streamlit login page, JWT-based sessions, bcrypt password hashing, and protected routes (#337)
+- **pytest-cov configuration** with HTML coverage reports generated in CI/CD, enabling ≥80% test coverage visibility (#338)
+- **URL-based search state management** using React Router's useSearchParams, enabling shareable search links with filters, sort, and pagination (#339)
+- **Circuit breaker pattern** for Redis and Solr connections to enable graceful degradation on service failures (#340)
+- **Correlation ID tracking** across service boundaries (HTTP headers, RabbitMQ messages, logs) for end-to-end request tracing (#341)
+- **Observability runbook** documenting log analysis, request tracing with correlation IDs, and debugging workflows (#342)
+- **Integration tests** for admin authentication flow and URL-based search state persistence (#343)
+
+### Changed
+
+- **Log output format:** All Python services now emit structured JSON logs (machine-parseable) instead of human-readable text
+- **Log level configuration:** Moved to environment variable `LOG_LEVEL` (default: `INFO`) for all Python services
+- **Admin dashboard access:** Now requires authentication; anonymous access to `/admin/streamlit/` redirects to login
+- **Search URL structure:** Filter state preserved in URL query parameters for bookmarkable, shareable searches
+
+### Fixed
+
+- **Redis/Solr resilience:** Services no longer crash on connection timeouts; graceful degradation allows continued operation at reduced capacity
+- **Admin auth security:** Password hashing and JWT session management prevent unauthorized access
+
+### Security
+
+- **Admin dashboard:** Login required; no anonymous access permitted
+- **Session isolation:** JWT tokens stored in browser session state only; no persistent credentials
+- **Correlation ID audit trail:** All requests tagged with UUID v4 correlation IDs for forensic investigation
+
 ## [1.2.0] — 2026-03-17
 
 ### Added

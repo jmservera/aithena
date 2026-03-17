@@ -65,12 +65,12 @@
 - embeddings-server `requirements.txt` missing test deps (`pytest`, `httpx`) — requires manual install
 - Test report written to `docs/test-report-v1.2.0.md`
 
-### 2026-07-14 — Integration tests for auth flow and URL state (#343)
+### 2026-03-17 — Full test suite validation for v1.3.0 release
 
-- **Admin auth tests** (`src/admin/tests/test_auth_integration.py`): 48 new integration tests covering full auth lifecycle, JWT security (none-algorithm attack, tampered payload, missing claims), protected route gating via `check_auth`, and `require_auth` with mocked Streamlit session.
-- **Frontend URL state tests** (`src/aithena-ui/src/__tests__/useSearchState.integration.test.tsx`): 60+ new tests covering URL state restoration, filter/sort/pagination/mode/limit persistence, edge cases (NaN, Infinity, unicode, special chars), multi-step state changes, and comprehensive round-trips.
-- **Total test counts post-merge:** admin 81 (33+48), aithena-ui 180 (120+60)
-- `hmac.compare_digest()` in `authenticate_user` raises `TypeError` for non-ASCII strings — discovered and tested as edge case
-- Past-dated JWT tokens in tests must use `verify_exp: False` when decoding, or use current timestamps — tokens with 2025 `now` values are already expired
-- Same-second JWT generation produces identical tokens (same iat) — sleep or offset needed to test token replacement
-- PR: #397, branch: `squad/343-integration-tests`
+- **All 469 tests pass** across 6 services: aithena-ui (127), solr-search (193), document-indexer (91+4 skipped), document-lister (12), embeddings-server (9), admin (33)
+- Test count grew from 452 (v1.2.0) to 469 (v1.3.0): +17 tests in solr-search and document-indexer
+- Coverage: solr-search 94.60% (was 94.46%), document-indexer 81.50% (was 82.19%) — both above thresholds
+- Frontend lint (ESLint) and build (TypeScript + Vite) both clean
+- embeddings-server existing `.venv` already had deps; used `.venv/bin/pip install pytest httpx` to add test deps
+- 19 `InsecureKeyLengthWarning` warnings in admin tests — test-only HMAC keys, not a production concern
+- Test report written to `docs/test-report-v1.3.0.md`
