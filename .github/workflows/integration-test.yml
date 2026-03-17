@@ -8,14 +8,52 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  integration-and-e2e:
-    name: Docker Compose integration + E2E
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.filter.outputs.build }}
+    steps:
+      - name: Check for build-relevant changes
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NON_BUILD='^(\.squad/|\.github/(ISSUE_TEMPLATE|agents)/|docs/|[^/]*\.md$|LICENSE$|\.gitattributes$|\.gitignore$)'
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if ! CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+              --paginate --jq '.[].filename'); then
+              echo "Failed to fetch changed files — running all checks"
+              echo "build=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BUILD_FILES=$(echo "$CHANGED" | grep -v -E "$NON_BUILD" || true)
+
+          if [ -n "$BUILD_FILES" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Build-relevant changes detected"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ No build-relevant changes — skipping integration tests"
+          fi
+
+  run-integration-tests:
+    name: Run integration & E2E tests
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -262,3 +300,28 @@ jobs:
             --profile production \
             down -v --remove-orphans
           rm -f docker-compose.github-actions.yml
+
+  integration-gate:
+    name: Docker Compose integration + E2E
+    if: always()
+    needs: [changes, run-integration-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          TEST_RESULT: ${{ needs.run-integration-tests.result }}
+        run: |
+          if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
+            echo "❌ Change detection failed"
+            exit 1
+          fi
+          if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
+            echo "❌ Integration tests failed"
+            exit 1
+          fi
+          if [ "$TEST_RESULT" = "skipped" ]; then
+            echo "⏭️ Integration tests skipped — no build-relevant changes"
+          else
+            echo "✅ Integration tests passed"
+          fi
