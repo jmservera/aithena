@@ -3734,8 +3734,8 @@ After merge, before next release:
 
 ## Future Enhancements
 
-- **docker-compose.prod.override.yml:** For cloud-specific volume drivers (e.g., AWS EFS, Azure Files)
-- **Helm chart:** For Kubernetes deployments (separate from Compose-based on-premises deployment)
+- **docker-compose.prod.override.yml:** For optional on-prem volume drivers (e.g., NFS, SMB, local RAID-backed disks; cloud-specific drivers such as AWS EFS or Azure Files are out of scope)
+- **Helm chart:** For Kubernetes deployments on on-premises clusters (separate from Compose-based on-premises deployment)
 - **Smoke test suite:** Include a production smoke test script in the release tarball
 - **Multi-architecture images:** Build ARM64 variants for Apple Silicon / Raspberry Pi deployments
 
