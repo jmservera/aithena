@@ -12,9 +12,9 @@
 |---------|-----------------|-------------|---------------|--------|
 | `solr-search` | `uv` (pyproject.toml) | `pyproject.toml` | pytest-cov | ✅ Setup |
 | `document-indexer` | `uv` (pyproject.toml) | `pyproject.toml` | pytest-cov | ✅ Setup |
-| `document-lister` | `uv` (pyproject.toml) | `pyproject.toml` | pytest-cov | ✅ Setup |
-| `embeddings-server` | `pip` (requirements.txt) | `pytest.ini` | pytest-cov | ✅ Setup |
-| `admin` | `uv` (pyproject.toml) | `pyproject.toml` | pytest-cov | ✅ Setup |
+| `document-lister` | `uv` (pyproject.toml) | `pytest.ini` | — | ⚠️ Not configured |
+| `embeddings-server` | `pip` (requirements.txt) | `pytest.ini` | — | ⚠️ Not configured |
+| `admin` | `uv` (pyproject.toml) | `pyproject.toml` | — | ⚠️ Not configured |
 | `aithena-ui` | `npm` (package.json) | `vitest.config.ts` | vitest coverage | ✅ Setup |
 
 ---
