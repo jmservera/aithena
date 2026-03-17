@@ -431,15 +431,3 @@ REDIS_PORT=6379
 **PR:** #414 (squad/347-python312-upgrade → dev)
 
 **Related Issues:** Closes #347, based on audit from #346
-### Issue #404 — Stats count fix (2026-03-17)
-
-**Context:** Stats endpoint was showing total Solr documents (127) instead of distinct books (3). Each book is split into multiple chunks during indexing.
-
-**Solution:** Implemented Ripley's approved Phase 1 quick win using Solr grouping:
-- Added `group=true&group.field=parent_id_s&group.limit=0` to stats query
-- Changed parser to extract `ngroups` from grouped results instead of `numFound`
-- The `parent_id_s` field already existed in the schema (added by document-indexer)
-
-**Tests:** All 193 tests pass. Updated 7 stats tests and 4 unit tests to use grouped response format.
-
-**Learning:** Solr grouping is ideal for counting distinct parent entities when you have parent/child relationships. The `ngroups` field gives you the unique parent count without needing to retrieve actual groups.
