@@ -304,13 +304,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
+        env:
+          TEST_RESULT: ${{ needs.run-integration-tests.result }}
         run: |
-          result="${{ needs.run-integration-tests.result }}"
-          if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+          if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
             echo "❌ Integration tests failed"
             exit 1
           fi
-          if [ "$result" = "skipped" ]; then
+          if [ "$TEST_RESULT" = "skipped" ]; then
             echo "⏭️ Integration tests skipped — no build-relevant changes"
           else
             echo "✅ Integration tests passed"
