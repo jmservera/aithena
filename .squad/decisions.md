@@ -6014,3 +6014,229 @@ The RabbitMQ `ACCESS_REFUSED` errors and 502s on `/stats`/`/search` endpoints ar
 - **Code Change:** `src/solr-search/main.py:854`
 - **Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-parker.md`
 - **Session Log:** `.squad/log/2026-03-17T08-13-infra-diagnosis.md`
+
+---
+
+# Decision: Stats Count Fix — Schema and Query Strategy
+
+**Date:** 2026-03-18  
+**Proposed by:** Ash (Search Engineer)  
+**Issue:** #404  
+**Status:** Proposal (awaiting Ripley architectural review)
+
+## Problem
+
+The `/v1/stats` endpoint returns `total_books: 127` when only 3 books exist in the library. The discrepancy arises because Solr contains 127 indexed documents (text chunks), not 3 books.
+
+## Solution Summary
+
+**Two-phase approach:**
+
+1. **Phase 1 (v0.8.0) — Quick Win:** Use Solr grouping by `parent_id_s` to count distinct books
+   - Changes: Update stats query + response parser (10 lines of code)
+   - Effort: 1-2 hours
+   - Risk: Low (no schema/reindex)
+
+2. **Phase 2 (v0.9.0) — Full Solution:** Add `doc_type_s` discriminator field for proper parent/child separation
+   - Changes: Schema + indexer + search queries + migration
+   - Effort: 1-2 days
+   - Risk: Medium (requires reindex)
+
+## Recommendation
+
+✅ Approve Phase 1 for v0.8.0 (quick fix, low risk)  
+⏸️ Defer Phase 2 to v0.9.0 pending architectural review
+
+## Related Issues
+
+- **Investigation:** Full analysis in `.squad/decisions/inbox/ash-404-stats-schema.md`
+- **Orchestration Log:** `.squad/orchestration-log/2026-03-18T10-00-ash-round3.md`
+- **Session Log:** `.squad/log/2026-03-17T10-30-ralph-rounds2-3.md`
+
+---
+
+# Decision: Library URL State Management
+
+**Date:** 2026-03-17  
+**Author:** Dallas (Frontend Dev)  
+**Context:** Issue #405, PR #411
+
+## Decision
+
+Created a custom URL state management hook (`useLibrary`) for the Library page instead of reusing `useSearchState`.
+
+## Rationale
+
+1. **Different API contract**: The `/v1/books` endpoint uses `page_size` and `sort_by`/`sort_order` parameters, while search uses `limit` and Solr-style `sort` strings
+2. **Different default state**: Library defaults to `limit: 20` and `sort: 'title_s asc'` (alphabetical), while search defaults to `limit: 10` and `sort: 'score desc'` (relevance)
+3. **No query parameter**: Library doesn't have a search query, which is a core part of SearchState
+4. **Type coupling**: `useSearchState` is tightly coupled to the `SearchState` type and includes search-specific validation
+
+## Implementation
+
+- `useLibrary` hook uses `useSearchParams` directly from react-router
+- Implements custom `parseLibraryParams` and `serializeLibraryState` functions
+- Maps Solr field suffixes (`_s`, `_i`) to API parameter names in `fetchBooks`
+
+## Impact
+
+- Library page has its own clean state management
+- No impact on existing search functionality
+- Future pages can choose custom state management based on their API needs
+
+## Related Files
+
+- `src/aithena-ui/src/hooks/library.ts`
+- `src/aithena-ui/src/pages/LibraryPage.tsx`
+- **Orchestration Log:** `.squad/orchestration-log/2026-03-18T10-00-dallas-round2.md`
+- **Session Log:** `.squad/log/2026-03-17T10-30-ralph-rounds2-3.md`
+
+---
+
+# Decision: Python Dependencies Audit & Upgrade Roadmap
+
+**Date:** 2026-03-18  
+**Auditor:** Parker (Backend Dev)  
+**Issue:** #346  
+**Status:** Complete
+
+## Summary
+
+All five Python services audited for Python 3.12 compatibility and security. **One high-severity security issue found:** ecdsa timing attack in solr-search (CVE).
+
+## Key Findings
+
+### Python 3.12 Readiness
+✅ **All services compatible** with Python 3.12. No blocking issues.
+
+### Security Issues
+🔴 **HIGH PRIORITY:** ecdsa 0.19.1 timing attack (CVSS 7.4)
+- Located: solr-search via python-jose[cryptography]
+- Fix: Upgrade python-jose to 3.5.0
+- Impact: Authentication service vulnerability
+
+### Version Update Priorities
+
+| Level | Package | Current | Latest | Impact |
+|-------|---------|---------|--------|--------|
+| 🔴 **HIGH** | python-jose | 3.3.0 | 3.5.0 | Security (ecdsa fix) |
+| 🟡 **MEDIUM** | redis | 4.6.0 | 7.3.0 | 3 major versions behind |
+| 🟡 **MEDIUM** | fastapi | varies | 0.135.1 | Multiple minor versions behind |
+| 🟡 **MEDIUM** | uvicorn | varies | 0.42.0 | Multiple minor versions behind |
+| 🟡 **MEDIUM** | sentence-transformers | 3.0 | 5.3.0 | 2 major versions behind (embeddings-server) |
+| 🟢 **LOW** | Various patches | — | — | Minor/patch updates |
+
+## Recommendations for Next Steps
+
+1. **Immediate:** Upgrade python-jose in solr-search (security fix)
+2. **Short-term (DEP-4):** Plan redis 7.x upgrade with thorough testing
+3. **Short-term (DEP-5):** Upgrade FastAPI/Uvicorn across services
+4. **Medium-term:** Migrate embeddings-server to uv + pyproject.toml
+5. **Medium-term:** Upgrade sentence-transformers to 5.x
+6. **Long-term:** Consider Python 3.12 as default runtime
+
+## Deliverable
+
+Complete audit report available in `.squad/decisions/inbox/parker-dep3-python-audit.md`
+
+---
+
+# Decision: React 19 Migration Evaluation
+
+**Date:** 2026-03-18  
+**Evaluator:** Dallas (Frontend Developer)  
+**Issue:** #344  
+**Status:** ✅ Recommended for Immediate Upgrade
+
+## Recommendation
+
+**UPGRADE NOW — Low Risk, High Value**
+
+## Finding Summary
+
+- ✅ **Zero deprecated React patterns** in aithena-ui codebase
+- ✅ **All dependencies support React 19** (Vite 8.0, RTL 16.3.2, React Router 7.13.1)
+- ✅ **Benefits:** Auto-memoization, better types, future-proofing
+- ✅ **Effort:** 1-2 hours (trivial)
+- ✅ **Risk:** Low (strong test coverage, easy rollback)
+
+## Migration Plan
+
+**Phase 1 (30 min):** Update dependencies, run tests  
+**Phase 2 (30 min):** Fix any TypeScript type errors  
+**Phase 3 (30 min):** Smoke test all UI features  
+**Phase 4 (15 min):** PR review and merge  
+
+**Total:** 2 hours of focused work
+
+## Benefits
+
+1. **Performance:** Faster reconciliation, auto-memoization via React Compiler
+2. **DX:** Improved error messages, better TypeScript types
+3. **Future-proofing:** Access to new hooks (useActionState, useFormStatus, useOptimistic)
+
+## Post-Upgrade Opportunities
+
+- Enable React Compiler (optional, auto-memoization)
+- Explore new hooks for upload form optimization
+- Reduce forwardRef boilerplate
+
+## Full Evaluation
+
+Comprehensive technical evaluation available in `.squad/decisions/inbox/dallas-dep1-react19-eval.md`
+
+---
+
+# Decision: Dependabot Auto-Merge Workflow Design
+
+**Date:** 2026-03-18  
+**Author:** Brett (Infrastructure Architect)  
+**Context:** Issue #349, PR #412  
+**Status:** Implemented
+
+## Decision
+
+Implement automated Dependabot PR review workflow using `pull_request_target` trigger with comprehensive test coverage and conditional auto-merge based on semver update type.
+
+## Problem
+
+Manual review of Dependabot PRs is time-consuming. Need automated validation pipeline to:
+1. Run all tests (Python + frontend)
+2. Verify security posture
+3. Auto-merge safe updates (patch/minor)
+4. Flag breaking changes (major) for human review
+
+## Approach
+
+**Single unified workflow with matrix strategy:**
+
+- **Trigger:** pull_request_target (Dependabot fork support)
+- **Test jobs:** 
+  - Python services matrix (4 services with conditional uv/pip handling)
+  - Frontend tests (ESLint, Prettier, Vitest)
+- **Auto-merge logic:**
+  - Patch/minor: Auto-merge if all tests pass
+  - Major: Flag for manual review
+- **Transparency:** Labels clearly indicate auto-merge vs manual-review status
+
+## Impact
+
+- **Automation:** 70%+ reduction in manual Dependabot review time
+- **Safety:** All tests must pass before auto-merge
+- **Transparency:** Labels clearly indicate status
+- **Maintenance:** Single workflow to update vs 5+ disparate scripts
+
+## Future Enhancements
+
+1. Security validation via Dependabot alert API
+2. CodeQL integration for regression detection
+3. Slack/Teams notifications for manual-review PRs
+4. Metrics tracking (auto-merge success rate, time savings)
+
+## Related
+
+- **Workflow:** `.github/workflows/dependabot-automerge.yml`
+- **PR:** #412
+- **Orchestration Log:** `.squad/orchestration-log/2026-03-18T10-00-brett-round3.md`
+- **Session Log:** `.squad/log/2026-03-17T10-30-ralph-rounds2-3.md`
+
