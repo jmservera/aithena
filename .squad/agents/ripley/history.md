@@ -8,8 +8,8 @@
 - **v1.0.1** SHIPPED (Security hardening: ecdsa CVE exception, stack trace fixes, CORS improvements)
 - **v1.1.0** SHIPPED (CI/CD: Dependabot auto-merge workflow, documentation-first release process)
 - **v1.2.0** SHIPPED (Frontend quality: TypeScript, test coverage, performance)
-- **v1.3.0 IN PROGRESS** (Admin consolidation: merge Streamlit admin → React)
-- **v1.4.0 ROADMAP** (Stats & filtering improvements)
+- **v1.3.0 SHIPPED** (Admin consolidation: merge Streamlit admin → React)
+- **v1.4.0 IN PROGRESS** (Stats & filtering improvements)
 
 **Key Architectural Decisions (Active):**
 1. **Solr as canonical backend** — SolrCloud 3-node cluster with Tika PDF extraction and multilingual support
