@@ -1,0 +1,42 @@
+[project]
+name = "solr-search"
+version = "0.1.0"
+description = "Solr-backed FastAPI search service for aithena"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[all]>=0.115.0,<1",
+    "uvicorn[standard]>=0.30.0,<1",
+    "requests==2.32.4",
+    "redis==4.6.0",
+    "pika>=1.3.2",
+    "python-multipart>=0.0.7",
+    "argon2-cffi>=23.1.0",
+    "python-jose[cryptography]>=3.3.0",
+    "python-json-logger>=4.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=search_service --cov=main --cov=auth --cov=config --cov=metrics --cov=correlation --cov=logging_config --cov-report=term-missing --cov-report=html -ra"
+
+[tool.coverage.run]
+source = ["search_service", "main", "auth", "config", "metrics", "correlation", "logging_config"]
+omit = ["tests/*", "__pycache__/*"]
+
+[tool.coverage.report]
+fail_under = 88
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

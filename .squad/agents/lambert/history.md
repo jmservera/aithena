@@ -1,3 +1,16 @@
+## v0.7.0 Milestone Completion
+
+**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
+- Versioning infrastructure (#199, #204) ✅
+- Version endpoints (#200, #203) ✅  
+- UI version footer (#201) ✅
+- Admin containers endpoint (#202) ✅
+- Documentation-first release process (#205) ✅
+
+3 decisions recorded. Ready for release to `main`.
+
+---
+
 # Lambert — History
 
 ## Project Context
@@ -41,3 +54,23 @@
 **Known test blockers:**
 - #166: RabbitMQ cold-start prevents document indexing in CI
 - #167: Document pipeline stalled; affects E2E test data population
+
+### 2026-03-17 — Full test suite validation for v1.2.0 release
+
+- **All 452 tests pass** across 6 services: aithena-ui (127), solr-search (176), document-indexer (91+4 skipped), document-lister (12), embeddings-server (9), admin (33)
+- All lint checks pass: ESLint, Ruff (solr-search, document-indexer, document-lister)
+- Frontend build (TypeScript + Vite) clean
+- Coverage: solr-search 94.46%, document-indexer 82.19% — both above thresholds
+- `UV_NATIVE_TLS=1` needed for `uv sync` when default SSL certs cause `UnknownIssuer` errors in codespace
+- embeddings-server `requirements.txt` missing test deps (`pytest`, `httpx`) — requires manual install
+- Test report written to `docs/test-report-v1.2.0.md`
+
+### 2026-03-17 — Full test suite validation for v1.3.0 release
+
+- **All 469 tests pass** across 6 services: aithena-ui (127), solr-search (193), document-indexer (91+4 skipped), document-lister (12), embeddings-server (9), admin (33)
+- Test count grew from 452 (v1.2.0) to 469 (v1.3.0): +17 tests in solr-search and document-indexer
+- Coverage: solr-search 94.60% (was 94.46%), document-indexer 81.50% (was 82.19%) — both above thresholds
+- Frontend lint (ESLint) and build (TypeScript + Vite) both clean
+- embeddings-server existing `.venv` already had deps; used `.venv/bin/pip install pytest httpx` to add test deps
+- 19 `InsecureKeyLengthWarning` warnings in admin tests — test-only HMAC keys, not a production concern
+- Test report written to `docs/test-report-v1.3.0.md`

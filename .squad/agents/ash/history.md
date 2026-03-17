@@ -1,3 +1,16 @@
+## v0.7.0 Milestone Completion
+
+**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
+- Versioning infrastructure (#199, #204) ✅
+- Version endpoints (#200, #203) ✅  
+- UI version footer (#201) ✅
+- Admin containers endpoint (#202) ✅
+- Documentation-first release process (#205) ✅
+
+3 decisions recorded. Ready for release to `main`.
+
+---
+
 # Ash — History
 
 ## Project Context
@@ -54,14 +67,6 @@
 - HNSW indexing during ingestion; kNN queries <100ms per benchmark expectations
 - 3-node cluster with replication factor 3 → distributed kNN across shards
 - No current performance bottlenecks identified; benchmarking deferred to post-v0.5
-
-### 2026-03-14 — README search query syntax documented
-
-- Documented a new `README.md` section, `## Search Query Syntax`, based on `solr-search/main.py`, `solr-search/search_service.py`, `solr/books/managed-schema.xml`, and `solr/books/solrconfig.xml`.
-- Captured that the API forwards `q` to Solr with `defType=edismax` and `_text_` as the default field, while blocking Solr local-parameter syntax like `{!knn ...}` from keyword queries.
-- Added practical query examples for basic terms, phrases, boolean logic, fuzzy matching, proximity, wildcards, boosting, grouping, negation, escaping, and match-all queries.
-- Documented the actual field names users should target for fielded queries (`author_s`, `category_s`, `year_i`, etc.), with practical examples from the real collection such as `Amades`, `Balearics`, `BSAL`, and `Medicina Balear`.
-- Verified live behavior against the running search API and Solr instance: `*`/`*:*` return all books, exact fielded queries like `author_s:Amades` and `category_s:Balearics` work, and string fields need exact/case-correct values.
 
 **Remaining roadmap:**
 - v0.5 completion: #163 (search mode selector UI), #41 (frontend tests), #47 (similar-books UI)

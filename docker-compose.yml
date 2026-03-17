@@ -5,7 +5,15 @@ services:
     # run this in your VM:
     # echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/nextcloud-aio-memory-overcommit.conf
     image: redis
-    command: redis-server --save 20 1 --loglevel warning
+    command: >-
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
+        exec redis-server --save 20 1 --loglevel warning --requirepass "$$REDIS_PASSWORD";
+      else
+        exec redis-server --save 20 1 --loglevel warning;
+      fi'
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDISCLI_AUTH=${REDIS_PASSWORD:-}
     expose:
       - 6379
     healthcheck:
@@ -13,7 +21,19 @@ services:
       interval: 5s
       timeout: 15s
       retries: 1
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       default:
         aliases:
@@ -21,45 +41,88 @@ services:
     volumes:
       - redis-data:/data
   rabbitmq:
-    image: rabbitmq:3.13-management
+    image: rabbitmq:3.12-management
     command: rabbitmq-server
     hostname: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
     expose:
       - 5672
       - 15672
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
-      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-    environment:
-      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000
-      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
+      - ./src/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
       interval: 10s
       timeout: 30s
       retries: 12
       start_period: 30s
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       default:
         aliases:
           - rabbitmq
   embeddings-server:
-    build: ./embeddings-server
-    environment:
-      - PORT=8085
+    build:
+      context: ./src/embeddings-server
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "8080"
-    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       default:
         aliases:
           - embeddings-server
   document-lister:
-    build: ./document-lister
+    build:
+      context: ./src/document-lister
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
       - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - DOCUMENT_WILDCARD=*.pdf
@@ -69,33 +132,76 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: on-failure
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - document-data:/data/documents
     networks:
       - default
   document-indexer:
-    build: ./document-indexer
+    build:
+      context: ./src/document-indexer
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
       - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - SOLR_HOST=solr
       - SOLR_PORT=8983
       - SOLR_COLLECTION=books
       - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8085
+      - EMBEDDINGS_PORT=8080
     restart: on-failure
+    stop_grace_period: 10s
     deploy:
       replicas: 1
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
       embeddings-server:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     volumes:
       - document-data:/data/documents:ro
     networks:
@@ -105,88 +211,240 @@ services:
   solr-search:
     build:
       context: .
-      dockerfile: ./solr-search/Dockerfile
+      dockerfile: ./src/solr-search/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "8080"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
-      - solr
-      - embeddings-server
+      solr:
+        condition: service_healthy
+      embeddings-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - PORT=8080
       - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
       - BASE_PATH=/data/documents
-      - CORS_ORIGINS=http://localhost:5173
-      - EMBEDDINGS_URL=http://embeddings-server:8001/v1/embeddings/
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+      - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
       - DEFAULT_SEARCH_MODE=keyword
+      - UPLOAD_DIR=/data/documents/uploads
+      - MAX_UPLOAD_SIZE_MB=50
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_QUEUE_NAME=shortembeddings
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
+      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
+      - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
     volumes:
-      - document-data:/data/documents:ro
+      - document-data:/data/documents
+      - type: bind
+        source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
+        target: /data/auth
     networks:
       - default
   streamlit-admin:
-    build: ./admin
+    build:
+      context: ./src/admin
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "8501"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from urllib.request import urlopen; urlopen('http://localhost:8501/admin/streamlit/_stcore/health').read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - QUEUE_NAME=shortembeddings
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_MGMT_PORT=15672
       - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - SOLR_SEARCH_URL=http://solr-search:8080
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-change-me-in-production}
+      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
+      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
+      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
     networks:
       - default
   redis-commander:
     image: rediscommander/redis-commander:latest
     expose:
       - "8081"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:8081/admin/redis', (res) => process.exit(res.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
-      - REDIS_HOSTS=local:redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - URL_PREFIX=/admin/redis
     networks:
       - default
   aithena-ui:
-    build: ./aithena-ui
+    build:
+      context: ./src/aithena-ui
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     expose:
       - "80"
-    restart: on-failure
+    restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
-      - solr-search
+      solr-search:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - default
   nginx:
     image: nginx:1.15-alpine
     restart: unless-stopped
+    stop_grace_period: 10s
     depends_on:
       aithena-ui:
-        condition: service_started
+        condition: service_healthy
       solr-search:
-        condition: service_started
+        condition: service_healthy
       streamlit-admin:
-        condition: service_started
+        condition: service_healthy
       redis-commander:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       solr:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./src/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./src/nginx/html:/usr/share/nginx/html:ro
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
@@ -219,6 +477,19 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   zoo2:
     image: zookeeper:3.9
     expose:
@@ -240,6 +511,19 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   zoo3:
     image: zookeeper:3.9
     expose:
@@ -261,12 +545,26 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   solr:
     image: solr:9.7
     # build:
     #   context: .
-    #   dockerfile: ./solr/Dockerfile
+    #   dockerfile: ./src/solr/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     volumes:
       - solr-data:/var/solr/data
       - document-data:/data/documents:ro
@@ -283,6 +581,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # command: solr-precreate -c books
     depends_on:
       zoo1:
@@ -296,8 +606,9 @@ services:
     image: solr:9.7
     # build:
     #   context: .
-    #   dockerfile: ./solr/Dockerfile
+    #   dockerfile: ./src/solr/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     volumes:
       - solr-data2:/var/solr/data
       - document-data:/data/documents:ro
@@ -312,6 +623,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     #command: solr-create -c books
     depends_on:
       zoo1:
@@ -326,8 +649,9 @@ services:
     image: solr:9.7
     # build:
     #   context: .
-    #   dockerfile: ./solr/Dockerfile
+    #   dockerfile: ./src/solr/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     volumes:
       - solr-data3:/var/solr/data
       - document-data:/data/documents:ro
@@ -342,6 +666,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     #command: solr-create -c books
     depends_on:
       zoo1:
@@ -362,8 +698,8 @@ services:
       solr3:
         condition: service_healthy
     volumes:
-      - ./solr/books:/configsets/books:ro
-      - ./solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+      - ./src/solr/books:/configsets/books:ro
+      - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
     entrypoint:
       - /bin/bash
       - -ceu

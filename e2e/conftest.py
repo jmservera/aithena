@@ -2,7 +2,8 @@
 Shared fixtures for the aithena E2E test suite.
 
 Environment variables (with defaults for the local dev stack):
-  SOLR_URL        Solr base URL, e.g. http://localhost:8983/solr/books
+  SOLR_URL          Solr base URL, e.g. http://localhost:8983/solr/books
+  SEARCH_API_URL    solr-search base URL, e.g. http://localhost:8080
   E2E_LIBRARY_PATH  Absolute path used as the test book library root.
                     The document-data volume must be bound to the same path
                     when running the stack with docker-compose.e2e.yml.
@@ -24,6 +25,7 @@ import requests
 # ---------------------------------------------------------------------------
 
 SOLR_URL: str = os.environ.get("SOLR_URL", "http://localhost:8983/solr/books")
+SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
 E2E_LIBRARY_PATH: str = os.environ.get("E2E_LIBRARY_PATH", "/tmp/aithena-e2e-library")
 
 # Relative path inside the library; uses the Author - Title (Year) pattern so
@@ -93,14 +95,42 @@ def solr_url() -> str:
 
 @pytest.fixture(scope="session")
 def solr_available(solr_url: str) -> None:
-    """Fail fast if Solr is not reachable."""
+    """Fail fast if the Solr books collection is not reachable."""
     try:
-        resp = requests.get(f"{solr_url}/admin/ping", timeout=5)
+        resp = requests.get(f"{solr_url}/admin/ping", params={"distrib": "true"}, timeout=5)
         resp.raise_for_status()
     except Exception as exc:
         pytest.skip(
             f"Solr not reachable at {solr_url} — start the stack first (see README.md §E2E Tests). Error: {exc}"
         )
+
+
+@pytest.fixture(scope="session")
+def api_url() -> str:
+    """Resolved base URL for the solr-search API."""
+    return SEARCH_API_URL.rstrip("/")
+
+
+@pytest.fixture(scope="session")
+def auth_headers(api_url: str) -> dict[str, str]:
+    """Log into the live API and return bearer auth headers for protected endpoints."""
+    username = os.environ.get("E2E_USERNAME", os.environ.get("CI_ADMIN_USERNAME", "admin"))
+    password = os.environ.get("E2E_PASSWORD")
+    if not password:
+        password = os.environ.get("CI_ADMIN_PASSWORD")
+    if not password:
+        pytest.skip("E2E_PASSWORD environment variable must be set for authenticated endpoints")
+
+    resp = requests.post(
+        f"{api_url}/v1/auth/login",
+        json={"username": username, "password": password},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    token = resp.json().get("access_token")
+    if not isinstance(token, str) or not token:
+        pytest.fail(f"Login response missing access_token: {resp.text}")
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(scope="session")

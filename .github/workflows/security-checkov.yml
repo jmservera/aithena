@@ -1,0 +1,81 @@
+name: Security - Checkov IaC Scanning
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checkov-scan:
+    name: Checkov IaC Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov on Dockerfiles
+        id: checkov-dockerfiles
+        run: |
+          checkov --framework dockerfile \
+            --directory . \
+            --config-file .checkov.yml \
+            --output cli \
+            --output sarif \
+            --output-file-path . \
+            --soft-fail
+        continue-on-error: true
+
+      - name: Run Checkov on GitHub Actions workflows
+        id: checkov-actions
+        run: |
+          checkov --framework github_actions \
+            --directory .github/workflows \
+            --config-file .checkov.yml \
+            --output cli \
+            --output sarif \
+            --output-file-path . \
+            --soft-fail
+        continue-on-error: true
+
+      - name: Upload Checkov SARIF results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@820e3160e279568db735cee8ed8f8e77a6da7818  # v3.32.6
+        with:
+          sarif_file: results_sarif.sarif
+          category: checkov-iac
+        continue-on-error: true
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Checkov IaC Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Scan completed (non-blocking mode)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed results in the Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** This scan runs with \`soft_fail: true\` and will not block CI/CD pipelines." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,20 @@
+import os
+
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
+RABBITMQ_PORT = int(os.environ.get("RABBITMQ_PORT", 5672))
+RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
+RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD") or None
+QUEUE_NAME = os.environ.get("QUEUE_NAME", "new_documents")
+BASE_PATH = os.environ.get("BASE_PATH", "/data/documents/")
+SOLR_HOST = os.environ.get("SOLR_HOST", "solr")
+SOLR_PORT = int(os.environ.get("SOLR_PORT", 8983))
+SOLR_COLLECTION = os.environ.get("SOLR_COLLECTION", "books")
+VERSION = os.environ.get("VERSION", "dev")
+GIT_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
+EMBEDDINGS_HOST = os.environ.get("EMBEDDINGS_HOST", "embeddings-server")
+EMBEDDINGS_PORT = int(os.environ.get("EMBEDDINGS_PORT", 8085))
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 400))
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 50))

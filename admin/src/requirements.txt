@@ -1,8 +1,0 @@
-# DEPRECATED: This file is no longer maintained.
-# Use `admin/pyproject.toml` with `uv` instead:
-#   cd admin && uv sync
-#   uv run streamlit run src/main.py
-streamlit==1.37.0
-redis==4.6.0
-python-dotenv==1.0.1
-requests>=2.31.0

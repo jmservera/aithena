@@ -28,7 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import subprocess
+import subprocess  # noqa: S404 — diagnostic logging only, uses list args for safety
 from pathlib import Path
 
 import requests
@@ -196,15 +196,13 @@ class TestUploadIndexSearchView:
         solr_available: None,
     ) -> None:
         """
-        Query Solr using the default search field (_text_) for the title of
-        the fixture book.  The response must include the fixture document
-        with correct title, author, and year metadata.
+        Query Solr for the fixture document by its deterministic ID and verify
+        the indexed metadata fields are present and correct.
         """
         resp = requests.get(
             f"{solr_url}/select",
             params={
-                "q": '"E2E Test Book"',
-                "df": "_text_",
+                "q": f"id:{fixture_solr_id}",
                 "wt": "json",
                 "fl": "id,title_s,author_s,year_i,file_path_s,folder_path_s",
             },

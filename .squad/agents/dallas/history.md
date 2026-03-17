@@ -1,3 +1,16 @@
+## v0.7.0 Milestone Completion
+
+**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
+- Versioning infrastructure (#199, #204) ✅
+- Version endpoints (#200, #203) ✅  
+- UI version footer (#201) ✅
+- Admin containers endpoint (#202) ✅
+- Documentation-first release process (#205) ✅
+
+3 decisions recorded. Ready for release to `main`.
+
+---
+
 # Dallas — History
 
 ## Project Context
@@ -11,15 +24,40 @@
 
 <!-- Append learnings below -->
 
-### 2026-03-14T16:20 — Advanced Search Builder UI
+### 2026-03-16T12:27Z — Validated local builds after src/ restructure (#223) [COMPLETE]
 
-- Added an opt-in advanced search composer to `aithena-ui` while keeping the default simple text search intact.
-- Created `src/Pages/SearchPage.tsx` so the page shell can evolve independently from `App.tsx`.
-- Implemented `src/Components/AdvancedSearch/` with row-based query building, year/language filters, disabled future semantic/hybrid tabs, and a live Solr preview.
-- Added `buildQuery()` plus Vitest coverage for fuzzy terms, phrase queries, boolean composition, range filters, language filters, and invalid year sanitization.
-- Imported Bootstrap CSS globally and layered dark-theme overrides in `App.css` so the new controls follow Bootstrap patterns without breaking the existing layout.
-- `useSearch()` now tracks a `mode` field and submits it to the backend, preparing the UI for future semantic/hybrid enablement.
-- Validation: `npm run test` ✅, targeted eslint on changed files ✅, `npm run build` ✅. Full `npm run lint` still fails on pre-existing chat/config files outside this feature.
+- ✅ Issue #223 closed. All builds pass post-restructure.
+- Confirmed restructured frontend path `src/aithena-ui`; all build commands pass: `npm run lint`, `npm run build`, `npx vitest run` (12 test files, 83 tests).
+- Backend validation: `src/solr-search` 144 tests pass, `src/document-indexer` 91 tests pass (with `UV_NATIVE_TLS=1` env var for sandbox CA trust).
+- Root-level validation all pass: Docker Compose syntax, buildall.sh shell syntax, ruff checks.
+- Searched all active scripts/workflows/README commands — already using `src/...` paths; only historical test reports reference old paths (acceptable legacy).
+- Recorded decision: environment TLS issue isolated, not restructure regression. Document `UV_NATIVE_TLS=1` workaround for future sandbox validation if needed.
+- Ready for dev branch; no blockers for Brett's CI/CD validation.
+
+### 2026-03-16T12:27Z — Validated local builds after src/ restructure (#223)
+
+- Confirmed the restructured frontend path is `src/aithena-ui`; `npm run lint`, `npm run build`, and `npx vitest run` all pass there with 12 test files / 83 tests. Existing Upload/useUpload tests still emit the known React `act(...)` warnings but do not fail.
+- Confirmed backend validation commands pass from the new service roots: `src/solr-search` completed `uv run pytest -v --tb=short` with 144 passing tests, and `src/document-indexer` completed with 91 passing tests plus 4 maintainer-only skips.
+- In this sandbox, `document-indexer` needed `UV_NATIVE_TLS=1` so `uv` would trust the system CA store while downloading `pdfminer-six`; the plain command failed on certificate validation before tests started, so the issue was environmental rather than caused by the src/ move.
+- Verified root-level validation still matches the restructure: `docker compose -f docker-compose.yml config --quiet`, `bash -n buildall.sh`, and `ruff check src/solr-search/main.py src/embeddings-server/main.py --select S104` all pass.
+- Searched active scripts, workflows, and README commands and found they already use `src/...` paths; the only remaining old-path references are historical test reports in `docs/test-report-v0.4.0.md` and `docs/test-report-v0.5.0.md`.
+### 2026-03-16T13:45Z — Audited and updated documentation for src/ restructure (#225)
+
+- Conducted comprehensive audit of all documentation files in `docs/`, `README.md`, and `.github/copilot-instructions.md` to identify references to the pre-v1.0 service directory structure (flat root).
+- **Finding:** Parker's PR #287 (refactor: move all microservices into src/ directory) was comprehensive — nearly all documentation had already been updated to use `src/` paths, including README.md test commands, `.github/copilot-instructions.md` service architecture table, docker-compose.yml build contexts, and newer feature guides/test reports.
+- **Identified gaps:** Only the two oldest historical test reports (v0.4.0 and v0.5.0) retained pre-src/ command examples (e.g., `cd /home/jmservera/source/aithena/solr-search` instead of `cd /home/jmservera/source/aithena/src/solr-search`).
+- **Updated:** Two files with 8 total line changes to test-report-v0.4.0.md and test-report-v0.5.0.md, adding `src/` to all `cd` commands to match current directory structure.
+- **Verified:** All remaining references to service names (e.g., `docker compose logs solr-search`) and URL paths (e.g., `/admin/streamlit/`, `/v1/admin/containers`) are correct and unchanged — they refer to Docker service names and HTTP routes, not filesystem paths.
+- **Key learning:** Documentation audit methodology: distinguish between filesystem paths (need updating), service names in docker-compose (remain static), and HTTP routes (remain static).
+- PR #225 is ready for merge to `dev`.
+
+### 2026-03-15T16:31 — Added build-time version footer to main UI (#201)
+
+- Wired the frontend build version through `vite.config.ts` with `define.__APP_VERSION__ = JSON.stringify(process.env.VERSION || 'dev')`, matching Brett's Dockerfile `VERSION` env setup from #199.
+- Extended `src/vite-env.d.ts` with a global declaration so React components and Vitest can reference `__APP_VERSION__` without local imports.
+- Added `src/Components/Footer.tsx` + `Footer.css` as a fixed, non-intrusive bottom-right badge showing `Aithena v{__APP_VERSION__}` across all routes by rendering it once in `App.tsx`.
+- Added `src/__tests__/Footer.test.tsx` to assert the footer and version string render correctly.
+- Verified the UI with `npm run lint`, `npm run build`, and `npx vitest run` (all passing; existing Upload/useUpload tests still emit known React act() warnings).
 
 ### 2026-03-13T20:58 — Phase 2–4 GitHub Issues Assigned
 
@@ -154,4 +192,62 @@
 - Integrated the panel into `SearchPage.tsx` so selecting a book for PDF viewing also loads similar titles; clicking a similar book swaps the selected PDF and refreshes recommendations.
 - Added dark-theme styles in `App.css` for `.similar-books-panel`, `.similar-book-card`, and `.similarity-score`.
 - Added Vitest coverage for the new panel and SearchPage interaction; verified `npm run lint`, `npm run build`, and `npm test` all pass.
+
+### 2026-07-24T14:30 — Reviewed v0.6.0 Upload UI Spec for #50
+
+- Reviewed Ripley's v0.6.0 release plan focusing on Group 4 (PDF upload flow).
+- Examined existing UI codebase: tab navigation pattern (TabNav.tsx), page structure (SearchPage, StatsPage, etc.), hook patterns (useSearch, useStats with AbortController), and component conventions (BookCard, FacetPanel, etc.).
+- Identified architectural patterns: tab-based navigation with react-router-dom, hooks for API integration with buildApiUrl helper, dark theme styling (#282c34 background, #7ec8e3 accents), Vitest + React Testing Library for tests.
+- **Design decision:** Upload should be a dedicated tab (not modal/embedded in search) to maintain navigation consistency and avoid cluttering the search page.
+- **Technical decision:** Use XMLHttpRequest instead of fetch for upload to support deterministic progress tracking (xhr.upload.onprogress), matching user expectations for file uploads.
+- **Component structure:** UploadPage container with sub-components (FileDropZone, FileSelector, UploadProgress, UploadResult) following existing component granularity pattern.
+- **Hook pattern:** Created useUpload hook spec following existing hook conventions (AbortController cleanup, error normalization, state management).
+- Wrote comprehensive design brief to `.squad/decisions/inbox/dallas-upload-ui-spec.md` with 14 sections covering component hierarchy, UI flow, API integration, styling, testing requirements (≥12 tests), and acceptance criteria.
+- **Key concerns raised for Parker (#49):** Need clarity on upload ID usage, status polling requirements, rate limiting, and file name sanitization before implementation.
+- **Out of scope for v0.6.0:** Multi-file upload, upload history, status polling, drag-to-search-results — deferred to v0.7.0+.
+- Approved spec for @copilot implementation pending Parker's backend spec review.
+
+### 2026-03-15 — v0.6.0 Release Planning Complete
+
+**Summary:** Upload UI spec (#50) finalized and approved. Recorded in decisions.md. Ready for @copilot implementation after #49 backend endpoint is merged.
+
+**Key Design Decisions Confirmed:**
+- Navigation: New "Upload" tab (consistent with existing pattern)
+- UI Flow: 5-state progression (idle → selecting → uploading → success/error)
+- Components: UploadPage, FileDropZone, FileSelector, UploadProgress, UploadResult (5 total)
+- Hook: useUpload with XMLHttpRequest for progress tracking (no new dependencies)
+- File Validation: MIME type + 50MB size limit (client-side)
+- Styling: Dark theme, BEM CSS, matches existing search UI
+- Testing: ≥12 tests (8 UploadPage + 4 useUpload)
+
+**Code Changes:** Modify App.tsx, TabNav.tsx, App.css (3 files); create 6 components + 1 hook + 2 tests
+
+**Next:** Awaiting Juanma approval of release plan → #49 implementation → Issue #50 created + assigned → Implementation
+
+### 2026-03-15T13:38 — Built PDF Upload UI (#50, PR #198)
+
+- Implemented complete PDF upload flow for issue #50 with drag-and-drop support, progress tracking, and comprehensive error handling.
+- Created **UploadPage** component with 5 UI states: idle, selecting, uploading, success, error — follows existing component patterns (BEM CSS, dark theme).
+- Created **useUpload** hook with XMLHttpRequest for deterministic upload progress tracking (progress bar shows percentage and file sizes).
+- Added **Upload** tab to main navigation (TabNav.tsx) between Library and Status.
+- **Client-side validation**: Rejects non-PDF files and files >50MB with immediate error messages.
+- **Backend integration**: POSTs to `/v1/upload` (from Parker's PR #197), handles all documented errors (400, 413, 429, 500, 502) with user-friendly messages.
+- **UI features**: Drag-and-drop zone with visual feedback, file picker button, retry after error, upload another after success, "Back to Search" link.
+- **Testing**: Added 11 UploadPage tests + 12 useUpload hook tests (all 53 tests passing) — used manual file input mocking (dispatchEvent) to bypass accept attribute in validation test.
+- **Code quality**: TypeScript strict types, ESLint clean, build succeeding, follows existing patterns (buildApiUrl helper, AbortController cleanup in other hooks).
+- **Dark theme CSS**: 250+ lines in App.css for upload-*, including pulse animation for progress spinner, gradient progress bar, hover states.
+- **Key technical decisions**:
+  - XMLHttpRequest over fetch for progress events (xhr.upload.onprogress)
+  - Tab-based navigation (not modal) for consistency with existing UI
+  - Validation before XHR creation (fast failure, no network overhead)
+  - State-driven UI (uploading/progress/result/error) for clear flow
+- **PR #198** created targeting `dev`, references issue #50, ready for review after Parker's backend merge.
+- **Learnings**: userEvent.upload respects `accept` attribute in tests — use manual dispatchEvent for non-accepted file types; waitFor must wrap XHR handler calls to ensure they execute after XHR creation; state updates in hooks are async, always wrap assertions in waitFor.
+
+### 2026-03-16T16:40Z — Added route-aware Error Boundaries to aithena-ui (#328)
+
+- Moved `BrowserRouter` to `main.tsx` so the new top-level `RouteErrorBoundary` can key off `useLocation()` and automatically reset the app shell when navigation changes.
+- Added a reusable class-based `ErrorBoundary` component with dev-only technical details, console logging in development, and reload/reset callbacks; nested boundaries now isolate the search-results area and upload panel instead of crashing the full UI.
+- Added `ErrorBoundary.test.tsx` covering normal rendering, fallback rendering, reload behavior, and route-change resets with React Router memory navigation.
+- Verified the frontend with `npx vitest run`, `npm run lint`, and `npm run build`; the suite now passes with 13 test files / 87 tests.
 

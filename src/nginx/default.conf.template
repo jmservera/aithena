@@ -1,0 +1,201 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 80;
+    server_name _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    location = /admin {
+        return 301 /admin/;
+    }
+
+    location = /admin/ {
+        root /usr/share/nginx/html;
+        try_files /admin/index.html =404;
+    }
+
+    location = /admin/solr {
+        return 301 /admin/solr/;
+    }
+
+    location /admin/solr/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /admin/solr;
+        proxy_set_header Accept-Encoding "";
+        proxy_pass http://solr:8983/solr/;
+        proxy_redirect /solr/ /admin/solr/;
+        sub_filter_once off;
+        sub_filter_types text/css application/javascript;
+        sub_filter '"/solr/' '"/admin/solr/';
+        sub_filter "'/solr/" "'/admin/solr/";
+        sub_filter 'href="/solr/' 'href="/admin/solr/';
+        sub_filter 'src="/solr/' 'src="/admin/solr/';
+    }
+
+    location /solr/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr:8983;
+    }
+
+    location = /admin/rabbitmq {
+        return 301 /admin/rabbitmq/;
+    }
+
+    location /admin/rabbitmq/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /admin/rabbitmq;
+        proxy_pass http://rabbitmq:15672;
+    }
+
+    location = /admin/streamlit {
+        return 301 /admin/streamlit/;
+    }
+
+    location /admin/streamlit/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /admin/streamlit;
+        proxy_pass http://streamlit-admin:8501;
+        proxy_buffering off;
+        proxy_read_timeout 86400;
+    }
+
+    location = /admin/redis {
+        return 301 /admin/redis/;
+    }
+
+    location /admin/redis/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /admin/redis;
+        proxy_pass http://redis-commander:8081;
+    }
+
+    location = /_auth {
+        internal;
+        proxy_pass http://solr-search:8080/v1/auth/validate;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Authorization $http_authorization;
+    }
+
+    location @auth_error {
+        default_type application/json;
+        return 401 '{"detail":"Not authenticated"}';
+    }
+
+    location @auth_redirect {
+        return 302 /?redirect=$request_uri;
+    }
+
+    location = /v1/auth/login {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/auth/login;
+    }
+
+    location = /v1/auth/validate {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/auth/validate;
+    }
+
+    location = /v1/health {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/health;
+    }
+
+    location = /v1/info {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/info;
+    }
+
+    location = /v1/version {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/version;
+    }
+
+    location /v1/ {
+        auth_request /_auth;
+        error_page 401 = @auth_error;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/;
+    }
+
+    location /documents/ {
+        auth_request /_auth;
+        error_page 401 = @auth_error;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/documents/;
+    }
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://aithena-ui:80;
+    }
+}

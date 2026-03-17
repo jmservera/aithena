@@ -1,0 +1,62 @@
+name: Version Check
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version-check:
+    name: Validate version metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Validate VERSION file
+        shell: bash
+        run: |
+          if [[ ! -f VERSION ]]; then
+            echo "VERSION file is missing." >&2
+            exit 1
+          fi
+
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must contain a stable semver (X.Y.Z). Found: $version" >&2
+            exit 1
+          fi
+
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "Validated VERSION=$version"
+
+      - name: Verify Dockerfiles declare VERSION build arg
+        shell: bash
+        run: |
+          dockerfiles=(
+            src/admin/Dockerfile
+            src/aithena-ui/Dockerfile
+            src/document-indexer/Dockerfile
+            src/document-lister/Dockerfile
+            src/embeddings-server/Dockerfile
+            src/solr-search/Dockerfile
+          )
+
+          for dockerfile in "${dockerfiles[@]}"; do
+            if ! grep -Eq '^ARG VERSION(=.+)?$' "$dockerfile"; then
+              echo "$dockerfile is missing an ARG VERSION declaration." >&2
+              exit 1
+            fi
+          done
+
+          echo "All release Dockerfiles declare ARG VERSION."
