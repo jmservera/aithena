@@ -27,8 +27,8 @@ test('navigates across the Search, Library, Status, and Stats tabs', async ({ pa
     },
     {
       path: '/library',
-      heading: '📖 Library',
-      subtitle: 'Browse the full book collection.',
+      selector: '.page-title',
+      text: '📖 Library',
     },
     {
       path: '/status',
