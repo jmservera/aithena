@@ -95,7 +95,6 @@ All **test suites passed** across 6 services. Full regression test suite on upgr
 | Frontend lint (ESLint v9) | ✅ Clean — 0 warnings |
 | Frontend build (TypeScript + Vite) | ✅ Clean — built in 200ms |
 | Python linting (ruff) | ✅ Clean — 0 violations |
-| Type checking (mypy if used) | ✅ Pass |
 | Docker image builds | ✅ Success — Python 3.12 and Node 22 images built |
 | Docker Compose validation | ✅ Config valid (docker compose config --quiet) |
 

@@ -86,11 +86,11 @@ The following milestone issues are complete in **v1.4.0**:
 **Stats endpoint response schema:**
 
 - `/v1/stats/` now returns distinct book count instead of total indexed document count
-- Old response format (chunk count) is no longer available; clients expecting per-chunk stats must query `/_solr/v1/` API directly
+- Old response format (chunk count) is no longer available; clients expecting per-chunk stats must query the `/v1/stats` API directly
 
 **Library endpoint behavior:**
 
-- `/v1/library/` now properly authenticates and authorizes all requests
+- `/v1/books` now properly authenticates and authorizes all requests
 - Requests without valid authentication token will return 401 Unauthorized
 - Ensure token is passed in request headers before accessing library
 
@@ -144,12 +144,14 @@ For users and operators moving to **v1.4.0**:
 
 4. **Reinstall dependencies:**
    ```bash
-   # For Python services (all use uv):
+   # For Python services (uv-managed):
    cd src/solr-search && uv sync --frozen
    cd src/document-indexer && uv sync --frozen
    cd src/document-lister && uv sync --frozen
    cd src/admin && uv sync --frozen
-   cd src/embeddings-server && uv sync --frozen
+   
+   # For embeddings-server (pip-managed, not uv):
+   cd src/embeddings-server && pip install -r requirements.txt
    
    # For frontend:
    cd src/aithena-ui && npm install
@@ -220,7 +222,7 @@ If issues occur after upgrading to v1.4.0:
 
 ## Validation highlights
 
-- **All 6 test suites pass:** 197+ Python tests (solr-search, document-indexer, document-lister, embeddings-server, admin) + 127 frontend (aithena-ui) tests all green.
+- **All 6 test suites pass:** 386 Python tests (solr-search, document-indexer, document-lister, embeddings-server, admin) + 189 frontend (aithena-ui) tests all green — 575 total.
 - **Python 3.12 compatibility:** All dependencies verified compatible; no deprecation warnings.
 - **Node 22 compatibility:** Vite, React, React Router, Vitest, React Testing Library all verified compatible.
 - **React 19 migration:** All breaking changes addressed; component types updated to modern patterns; DevTools instrumentation enabled.

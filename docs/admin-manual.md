@@ -1045,7 +1045,7 @@ v1.4.0 introduces major infrastructure upgrades: Python 3.12, Node 22 LTS, React
    cd src/document-indexer && uv sync --frozen
    cd src/document-lister && uv sync --frozen
    cd src/admin && uv sync --frozen
-   cd src/embeddings-server && uv sync --frozen
+   cd src/embeddings-server && pip install -r requirements.txt  # pip-managed, not uv
    ```
 
 4. **Test the upgraded services:**
@@ -1065,7 +1065,7 @@ v1.4.0 introduces major infrastructure upgrades: Python 3.12, Node 22 LTS, React
 **What changed:**
 
 - aithena-ui Dockerfile updated to use `node:22-alpine`
-- CI workflows updated to use `actions/setup-node@v4 with node-version: 22`
+- CI workflows updated to use `actions/setup-node@v4 with node-version: 20`
 - Node 22 is LTS with support through 2026
 - Vite, React, and all frontend dependencies verified compatible
 
@@ -1090,7 +1090,7 @@ v1.4.0 introduces major infrastructure upgrades: Python 3.12, Node 22 LTS, React
    ```bash
    npm run lint  # All checks pass with ESLint v9
    npm run build  # TypeScript + Vite build succeeds
-   npm test  # All 127 tests pass
+   npm test  # All 189 tests pass
    ```
 
 5. **Performance verification:**
@@ -1129,7 +1129,7 @@ v1.4.0 introduces major infrastructure upgrades: Python 3.12, Node 22 LTS, React
 
 3. **All tests pass:**
    ```bash
-   npm test  # All 127 Vitest tests pass
+   npm test  # All 189 Vitest tests pass
    ```
 
 4. **Manual testing:**
@@ -1240,7 +1240,7 @@ v1.4.0 introduces automated Dependabot PR review workflow that:
 
 Workflow file: `.github/workflows/dependabot-automerge.yml`
 
-- Triggers on Dependabot PRs (`pull_request_target` event)
+- Triggers on Dependabot PRs (`pull_request` event)
 - Auto-merge enabled for: dependencies, npm, pip (patch/minor only)
 - Manual review required for: major version bumps
 
@@ -1257,8 +1257,8 @@ v1.4.0 includes comprehensive regression testing on the upgraded stack:
 
 **Test results:**
 
-- ✅ All 465 Python tests pass (193 solr-search + 91 document-indexer + others)
-- ✅ All 127 frontend tests pass (Vitest + React Testing Library)
+- ✅ All 386 Python tests pass (193 solr-search + 91 document-indexer + 81 admin + 12 document-lister + 9 embeddings-server)
+- ✅ All 189 frontend tests pass (Vitest + React Testing Library)
 - ✅ All integration tests pass (e2e test suite)
 - ✅ Performance improvements: 15% faster backend, 8% faster frontend
 - ✅ No regressions detected
