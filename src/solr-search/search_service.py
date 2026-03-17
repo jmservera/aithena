@@ -361,14 +361,17 @@ def parse_stats_response(payload: dict[str, Any]) -> dict[str, Any]:
     """Extract collection statistics from a Solr stats + facets response.
 
     Args:
-        payload: Raw Solr JSON response containing ``response``, ``stats``, and
-                 ``facet_counts`` sections.
+        payload: Raw Solr JSON response containing ``grouped``, ``stats``, and
+                 ``facet_counts`` sections. Uses Solr grouping to count distinct
+                 books by parent_id_s (Phase 1 quick win for issue #404).
 
     Returns:
         A dict with ``total_books``, ``by_language``, ``by_author``,
         ``by_year``, ``by_category``, and ``page_stats`` keys.
     """
-    total_books: int = payload.get("response", {}).get("numFound", 0)
+    grouped = payload.get("grouped", {})
+    parent_id_groups = grouped.get("parent_id_s", {})
+    total_books: int = parent_id_groups.get("ngroups", 0)
 
     facet_fields: dict[str, list[Any]] = payload.get("facet_counts", {}).get("facet_fields", {})
 

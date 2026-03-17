@@ -436,3 +436,74 @@
 3. Optional: Document zizmor findings as acceptable risk in `.squad/decisions/inbox/kane-zizmor-secrets-outside-env.md`
 
 **Outcome:** All 10 findings triaged and resolved. v1.0.1 release gate cleared.
+
+---
+
+### 2026-03-17 — PR #419 CI Failure Investigation: Dependabot Auto-Merge Workflow
+
+**Summary:** Investigated 2 failing CI checks on PR #419 ("feat: add Dependabot auto-merge workflow"). Both failures are **REAL, BLOCKING security issues**, not false positives.
+
+**Context:**
+- PR adds new workflow: `.github/workflows/dependabot-automerge.yml`
+- Workflow auto-merges Dependabot patch/minor updates, flags major updates for manual review
+- 2/16 checks failing: zizmor, Checkov (reported as "CodeQL" in PR UI)
+- 14 checks passing: all Python/frontend tests, bandit, integration tests, etc.
+
+**Findings:**
+
+**Finding #1: zizmor — secrets-outside-env**
+- **Issue:** Workflow uses `${{ github.token }}` in `auto-merge` and `manual-review` jobs WITHOUT a GitHub Deployment Environment
+- **Risk:** Zizmor flags this as violating defense-in-depth: deployment environments add approval gates before secrets are used
+- **Pattern:** The repo's `.zizmor.yml` has an ignore list for acceptable exceptions, but this workflow is NOT listed, indicating the author expected it to pass
+- **Verdict:** LEGITIMATE SECURITY FINDING. Requires fix: move secrets to a named deployment environment
+
+**Finding #2: Checkov (CKV2_GHA_1) — Overly Broad Permissions**
+- **Issue:** Workflow declares `permissions: { contents: write, pull-requests: write, checks: read }`, which violates least-privilege
+- **Risk:** `contents: write` grants write access to entire repo (not scoped to specific branches/paths)
+- **Verdict:** LEGITIMATE SECURITY FINDING. Requires fix: scope permissions to only what's needed (likely: `contents: read`, `pull-requests: write`, `issues: write`, `checks: read`)
+
+**Not a False Positive:**
+- Both issues align with existing team security policy (`.zizmor.yml`, `.checkov.yml`, `.ruff.toml`)
+- The workflow author did not request exceptions, implying the findings should be fixed
+- All other checks (Python/frontend tests, bandit, integration tests) pass, confirming no functional issues
+
+**Blocking Status:** YES — Do NOT merge until fixed
+
+**Recommended Fixes:**
+1. Create GitHub Deployment Environment named `dependabot-auto-merge` in repo settings
+2. Add `environment: dependabot-auto-merge` to both `auto-merge` and `manual-review` jobs
+3. Scope workflow permissions: `contents: read`, `pull-requests: write`, `issues: write`, `checks: read`
+
+**Next Steps:** PR author (jmservera) must apply fixes before merge.
+
+**Learnings:**
+- Zizmor's "secrets-outside-env" rule is about defense-in-depth; doesn't mean step-level env is insecure, just that deployment environments add additional controls
+- Checkov's least-privilege checks apply even to read-only workflows; broad `contents: write` is always a finding
+- Security CI checks correctly identify legitimate issues; team policies are consistently enforced
+
+
+---
+
+## 2026-03-17 — PR #419 Security CI Investigation
+
+**Context:** Dependabot auto-merge workflow (PR #419) blocked by CI failures
+
+**Findings:** 2 legitimate security issues identified (NOT false positives)
+
+**Issue #1: Zizmor — secrets-outside-env**
+- `${{ github.token }}` used outside deployment environment (auto-merge, manual-review jobs)
+- Risk: 🟡 MEDIUM — Approval gates bypassed
+- Fix: Create `dependabot-auto-merge` environment, add `environment:` field to jobs
+
+**Issue #2: Checkov CKV2_GHA_1 — Least-privilege permissions**
+- Workflow declares `contents: write` (entire repo access)
+- Risk: 🟡 MEDIUM — Full repo write if workflow compromised
+- Fix: Change to `contents: read`, add scoped `issues: write`
+
+**Status:** ⚠️ BLOCKING — PR #419 cannot merge until both fixes applied
+
+**Action Required:** jmservera must apply fixes; Ripley to review before merge
+
+**Team Impact:** Template added to blocking security checklist for future GitHub Actions workflows
+
+**Status:** ✅ INVESTIGATION COMPLETE; AWAITING AUTHOR FIXES
