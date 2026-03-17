@@ -885,7 +885,7 @@ def stats() -> dict[str, Any]:
     Queries Solr with the stats component and facets to produce an overview of
     the indexed book collection including totals, breakdowns by language,
     author, year, and category, and page-count statistics.
-    
+
     Uses Solr grouping by parent_id_s to count distinct books instead of total
     chunks (Phase 1 quick win for issue #404).
     """
