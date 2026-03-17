@@ -317,13 +317,14 @@ jobs:
           ADMIN_RESULT: ${{ needs.admin-tests.result }}
           LISTER_RESULT: ${{ needs.document-lister-tests.result }}
           EMBEDDINGS_RESULT: ${{ needs.embeddings-server-tests.result }}
+          LINT_RESULT: ${{ needs.python-lint.result }}
           BUILD_NEEDED: ${{ needs.changes.outputs.build }}
         run: |
           if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
             echo "❌ Change detection failed"
             exit 1
           fi
-          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$ADMIN_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT"; do
+          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$ADMIN_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "❌ One or more required jobs failed"
               exit 1
