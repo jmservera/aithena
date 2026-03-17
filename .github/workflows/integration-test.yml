@@ -29,8 +29,12 @@ jobs:
           NON_BUILD='^(\.squad/|\.github/(ISSUE_TEMPLATE|agents)/|docs/|[^/]*\.md$|LICENSE$|\.gitattributes$|\.gitignore$)'
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-              --paginate --jq '.[].filename')
+            if ! CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+              --paginate --jq '.[].filename'); then
+              echo "Failed to fetch changed files from GitHub; defaulting to build=true"
+              echo "build=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           else
             echo "build=true" >> "$GITHUB_OUTPUT"
             exit 0
