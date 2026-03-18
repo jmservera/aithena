@@ -21,8 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **Nginx upgraded to 1.27 LTS** with default credentials removed — Base image updated to latest stable LTS; hardcoded default username/password eliminated from configuration. **Breaking:** `.env` credentials are now required for deployment (#518)
-- **Admin API key authentication** — All solr-search admin endpoints (`/admin/*`) now require a valid `ADMIN_API_KEY` header. **Breaking:** `ADMIN_API_KEY` environment variable must be set (#519)
+- **Nginx upgraded to 1.27 LTS** — Base image updated from EOL 1.15 to current stable LTS in both dev and production compose files (#518)
+- **Default credentials removed** — RabbitMQ and Redis no longer fall back to `guest/guest` or empty passwords. Compose files use `${VAR:?error}` syntax to require explicit credentials. **Breaking:** `.env` must define `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD` (#518)
+- **Admin API key authentication** — All solr-search admin endpoints (`/v1/admin/*`) now require a valid `ADMIN_API_KEY` via `X-API-Key` header. **Breaking:** `ADMIN_API_KEY` environment variable must be set (#519)
 - **Content-Security-Policy header** added to nginx — Restricts resource loading origins to mitigate XSS and data injection attacks (#520)
 
 ## [1.7.0] — 2026-03-18
