@@ -122,7 +122,9 @@ export function useLibrary() {
     }
   }, []);
 
+  // Fetch books when library state changes - legitimate effect for data fetching
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBooks(libraryState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

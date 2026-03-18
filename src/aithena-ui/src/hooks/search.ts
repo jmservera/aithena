@@ -126,7 +126,9 @@ export function useSearch() {
     }
   }, []);
 
+  // Run search when search state changes - legitimate effect for data fetching
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     runSearch(searchState);
   }, [searchState, runSearch]);
 
