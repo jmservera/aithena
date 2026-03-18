@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useIntl } from 'react-intl';
 
 import { FacetGroups, SearchFilters, SearchMode } from '../hooks/search';
 
@@ -9,11 +10,11 @@ interface FacetPanelProps {
   mode?: SearchMode;
 }
 
-const FACET_LABELS: Record<keyof FacetGroups, string> = {
-  author: 'Author',
-  category: 'Category',
-  language: 'Language',
-  year: 'Year',
+const FACET_LABEL_KEYS: Record<keyof FacetGroups, string> = {
+  author: 'filters.author',
+  category: 'filters.category',
+  language: 'filters.language',
+  year: 'filters.year',
 };
 
 const FACET_KEYS = ['author', 'category', 'language', 'year'] as const;
@@ -24,11 +25,13 @@ const FacetPanel = memo(function FacetPanel({
   onFilterChange,
   mode,
 }: FacetPanelProps) {
+  const intl = useIntl();
+
   return (
     <div className="facet-panel">
       {mode === 'semantic' && (
         <p className="facet-unavailable" role="note" aria-live="polite">
-          Facets are only available in keyword mode
+          {intl.formatMessage({ id: 'filters.semanticUnavailable' })}
         </p>
       )}
       {mode !== 'semantic' &&
@@ -39,7 +42,9 @@ const FacetPanel = memo(function FacetPanel({
 
           return (
             <div key={key} className="facet-group">
-              <h3 className="facet-group-title">{FACET_LABELS[key]}</h3>
+              <h3 className="facet-group-title">
+                {intl.formatMessage({ id: FACET_LABEL_KEYS[key] })}
+              </h3>
               <ul className="facet-list">
                 {values.map(({ value, count }) => (
                   <li key={value} className="facet-item">

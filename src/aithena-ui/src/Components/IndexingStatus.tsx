@@ -1,3 +1,5 @@
+import { useIntl } from 'react-intl';
+
 import { useStatus } from '../hooks/status';
 
 function ServiceDot({ serviceStatus }: { serviceStatus: string }) {
@@ -12,12 +14,13 @@ function ServiceDot({ serviceStatus }: { serviceStatus: string }) {
 }
 
 function IndexingStatus() {
+  const intl = useIntl();
   const { data, loading, error, lastUpdated } = useStatus();
 
   if (loading && !data) {
     return (
       <main className="status-main">
-        <p className="status-loading">Loading status…</p>
+        <p className="status-loading">{intl.formatMessage({ id: 'indexing.loading' })}</p>
       </main>
     );
   }
@@ -25,7 +28,9 @@ function IndexingStatus() {
   if (error && !data) {
     return (
       <main className="status-main">
-        <p className="status-error">⚠ {error}</p>
+        <p className="status-error">
+          {intl.formatMessage({ id: 'error.prefix' })} {error}
+        </p>
       </main>
     );
   }
@@ -37,55 +42,71 @@ function IndexingStatus() {
   return (
     <main className="status-main">
       <header className="status-header">
-        <h2 className="status-title">🟢 System Status</h2>
+        <h2 className="status-title">🟢 {intl.formatMessage({ id: 'indexing.title' })}</h2>
         {lastUpdated && (
-          <span className="status-updated">Updated {lastUpdated.toLocaleTimeString()}</span>
+          <span className="status-updated">
+            {intl.formatMessage(
+              { id: 'indexing.updated' },
+              { time: lastUpdated.toLocaleTimeString() }
+            )}
+          </span>
         )}
-        {error && <span className="status-error-inline">⚠ {error}</span>}
+        {error && (
+          <span className="status-error-inline">
+            {intl.formatMessage({ id: 'error.prefix' })} {error}
+          </span>
+        )}
       </header>
 
       <section className="status-section">
-        <h3 className="status-section-title">Indexing Progress</h3>
+        <h3 className="status-section-title">{intl.formatMessage({ id: 'indexing.progress' })}</h3>
         <div className="indexing-grid">
           <div className="indexing-card">
             <span className="indexing-value">{indexing?.total_discovered ?? '—'}</span>
-            <span className="indexing-label">Discovered</span>
+            <span className="indexing-label">
+              {intl.formatMessage({ id: 'indexing.discovered' })}
+            </span>
           </div>
           <div className="indexing-card indexing-card--ok">
             <span className="indexing-value">{indexing?.indexed ?? '—'}</span>
-            <span className="indexing-label">Indexed</span>
+            <span className="indexing-label">{intl.formatMessage({ id: 'indexing.indexed' })}</span>
           </div>
           <div className="indexing-card indexing-card--error">
             <span className="indexing-value">{indexing?.failed ?? '—'}</span>
-            <span className="indexing-label">Failed</span>
+            <span className="indexing-label">{intl.formatMessage({ id: 'indexing.failed' })}</span>
           </div>
           <div className="indexing-card indexing-card--pending">
             <span className="indexing-value">{indexing?.pending ?? '—'}</span>
-            <span className="indexing-label">Pending</span>
+            <span className="indexing-label">{intl.formatMessage({ id: 'indexing.pending' })}</span>
           </div>
         </div>
       </section>
 
       <section className="status-section">
-        <h3 className="status-section-title">Service Health</h3>
+        <h3 className="status-section-title">
+          {intl.formatMessage({ id: 'indexing.serviceHealth' })}
+        </h3>
         <ul className="service-list">
           <li className="service-item">
             <ServiceDot serviceStatus={services?.solr ?? 'unknown'} />
-            <span className="service-name">Solr</span>
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.solr' })}</span>
             <span className="service-detail">
               {solr
-                ? `${solr.status} · ${solr.nodes} node${solr.nodes !== 1 ? 's' : ''} · ${solr.docs_indexed} docs`
+                ? intl.formatMessage(
+                    { id: 'indexing.solrDetail' },
+                    { status: solr.status, nodes: solr.nodes, docs: solr.docs_indexed }
+                  )
                 : (services?.solr ?? '—')}
             </span>
           </li>
           <li className="service-item">
             <ServiceDot serviceStatus={services?.redis ?? 'unknown'} />
-            <span className="service-name">Redis</span>
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.redis' })}</span>
             <span className="service-detail">{services?.redis ?? '—'}</span>
           </li>
           <li className="service-item">
             <ServiceDot serviceStatus={services?.rabbitmq ?? 'unknown'} />
-            <span className="service-name">RabbitMQ</span>
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.rabbitmq' })}</span>
             <span className="service-detail">{services?.rabbitmq ?? '—'}</span>
           </li>
         </ul>

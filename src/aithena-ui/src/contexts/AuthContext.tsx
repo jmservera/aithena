@@ -25,6 +25,7 @@ export interface AuthContextValue {
   clearError: () => void;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 async function getErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -59,9 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => registerAuthFailureHandler(clearAuthState), [clearAuthState]);
 
+  // Initialize auth state from stored token on mount
   useEffect(() => {
     const storedToken = getStoredToken();
     if (!storedToken) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoading(false);
       return;
     }

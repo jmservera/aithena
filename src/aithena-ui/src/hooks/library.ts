@@ -38,10 +38,10 @@ function parseLibraryParams(params: URLSearchParams): LibraryState {
   const sort = params.get('sort') || DEFAULTS.sort;
 
   const filters: SearchFilters = {};
-  const author = params.get('fq_author');
-  const category = params.get('fq_category');
-  const language = params.get('fq_language');
-  const year = params.get('fq_year');
+  const author = params.get('filter_author');
+  const category = params.get('filter_category');
+  const language = params.get('filter_language');
+  const year = params.get('filter_year');
 
   if (author) filters.author = author;
   if (category) filters.category = category;
@@ -66,10 +66,10 @@ function serializeLibraryState(state: LibraryState): URLSearchParams {
     params.set('sort', state.sort);
   }
 
-  if (state.filters.author) params.set('fq_author', state.filters.author);
-  if (state.filters.category) params.set('fq_category', state.filters.category);
-  if (state.filters.language) params.set('fq_language', state.filters.language);
-  if (state.filters.year) params.set('fq_year', state.filters.year);
+  if (state.filters.author) params.set('filter_author', state.filters.author);
+  if (state.filters.category) params.set('filter_category', state.filters.category);
+  if (state.filters.language) params.set('filter_language', state.filters.language);
+  if (state.filters.year) params.set('filter_year', state.filters.year);
 
   return params;
 }
@@ -122,7 +122,9 @@ export function useLibrary() {
     }
   }, []);
 
+  // Fetch books when library state changes - legitimate effect for data fetching
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBooks(libraryState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

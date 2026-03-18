@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { useIntl } from 'react-intl';
+
 import { resolveDocumentUrl } from '../api';
 import { BookResult } from '../hooks/search';
 
@@ -11,12 +13,16 @@ const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), iframe, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
+  const intl = useIntl();
   const [loadError, setLoadError] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
 
+  // Reset load error when document URL changes - this is a legitimate
+  // sync-with-props pattern for resetting error state on navigation
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadError(false);
   }, [result.document_url]);
 
@@ -93,8 +99,14 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
               📄
             </span>
             <div>
-              <strong id={titleId}>{result.title || 'Document'}</strong>
-              {result.author && <span className="pdf-viewer-author"> — {result.author}</span>}
+              <strong id={titleId}>
+                {result.title || intl.formatMessage({ id: 'pdf.document' })}
+              </strong>
+              {result.author && (
+                <span className="pdf-viewer-author">
+                  {intl.formatMessage({ id: 'pdf.authorSeparator' }, { author: result.author })}
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -102,7 +114,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
             type="button"
             className="pdf-viewer-close"
             onClick={onClose}
-            aria-label="Close PDF viewer"
+            aria-label={intl.formatMessage({ id: 'pdf.closeViewer' })}
           >
             ✕
           </button>
@@ -111,9 +123,12 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
         <div className="pdf-viewer-body">
           {loadError ? (
             <div className="pdf-viewer-error" role="alert">
-              <p>⚠️ Could not load the PDF document.</p>
+              <p>
+                {intl.formatMessage({ id: 'error.prefix' })}{' '}
+                {intl.formatMessage({ id: 'pdf.loadError' })}
+              </p>
               <p className="pdf-viewer-error-detail">
-                The file may be unavailable or the URL is invalid.
+                {intl.formatMessage({ id: 'pdf.loadErrorDetail' })}
               </p>
               {pdfUrlWithPage && (
                 <a
@@ -122,7 +137,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
                   rel="noopener noreferrer"
                   className="pdf-viewer-fallback-link"
                 >
-                  Try opening in a new tab
+                  {intl.formatMessage({ id: 'pdf.openInNewTab' })}
                 </a>
               )}
             </div>
@@ -130,12 +145,15 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
             <iframe
               className="pdf-viewer-frame"
               src={pdfUrlWithPage}
-              title={result.title || 'PDF document'}
+              title={result.title || intl.formatMessage({ id: 'pdf.pdfDocument' })}
               onError={() => setLoadError(true)}
             />
           ) : (
             <div className="pdf-viewer-error" role="alert">
-              <p>⚠️ No document URL available for this result.</p>
+              <p>
+                {intl.formatMessage({ id: 'error.prefix' })}{' '}
+                {intl.formatMessage({ id: 'pdf.noDocumentUrl' })}
+              </p>
             </div>
           )}
         </div>
