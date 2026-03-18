@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.4.0 Release Notes](release-notes-v1.4.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.5.0 Release Notes](release-notes-v1.5.0.md).
 
 ## System architecture overview
 
@@ -1014,6 +1014,349 @@ Parameters:
 
 This is backward-compatible; old search URLs without parameters still work (but do not preserve filter state).
 
+---
+
+## Deployment Updates for v1.5.0 (Production Deployment & Infrastructure)
+
+v1.5.0 is the production deployment release, establishing complete infrastructure for deploying Aithena in production environments. This section covers production-specific deployment procedures, pre-built Docker images, install script automation, and data persistence validation.
+
+### Pre-built Docker images on GHCR
+
+v1.5.0 publishes production-ready Docker images to GitHub Container Registry (GHCR), enabling deployments without source code.
+
+**Image naming and versioning:**
+
+All images follow semantic versioning tags:
+- `ghcr.io/jmservera/aithena-{service}:v1.5.0` — Latest production release
+- `ghcr.io/jmservera/aithena-{service}:latest` — Most recent build
+- `ghcr.io/jmservera/aithena-{service}:v1.5.0-{short-sha}` — Exact commit
+
+Services published to GHCR:
+- `aithena-ui` — React frontend with nginx
+- `solr-search` — FastAPI search API
+- `embeddings-server` — Embedding service
+- `document-indexer` — PDF indexing consumer
+- `document-lister` — Library scanner
+- `admin` — Streamlit admin dashboard
+- `nginx` — Reverse proxy
+
+**OCI image labels:**
+
+All images include OCI metadata:
+```
+org.opencontainers.image.version=1.5.0
+org.opencontainers.image.revision=a1b2c3d4...
+org.opencontainers.image.created=2026-03-17T...
+org.opencontainers.image.source=https://github.com/jmservera/aithena
+```
+
+**Verifying image provenance:**
+
+```bash
+# Inspect image labels
+docker inspect ghcr.io/jmservera/aithena-solr-search:v1.5.0 | jq '.[].Config.Labels'
+
+# Expected output:
+# {
+#   "org.opencontainers.image.version": "1.5.0",
+#   "org.opencontainers.image.revision": "a1b2c3d4...",
+#   ...
+# }
+```
+
+### GHCR authentication
+
+Private image repositories require authentication to pull images.
+
+**Authenticating with GitHub Personal Access Token (PAT):**
+
+1. Create a GitHub PAT with `read:packages` scope: https://github.com/settings/tokens
+2. Authenticate Docker with GHCR:
+   ```bash
+   echo "$GITHUB_TOKEN" | docker login ghcr.io -u {username} --password-stdin
+   ```
+3. Docker Compose automatically uses your credentials when pulling images
+
+**For automated deployments (CI/CD, Kubernetes):**
+
+Create a `ghcr-auth.json` file:
+
+```json
+{
+  "auths": {
+    "ghcr.io": {
+      "auth": "BASE64(username:token)"
+    }
+  }
+}
+```
+
+Then reference it in Docker Compose:
+
+```bash
+docker compose --config=ghcr-auth.json up -d
+```
+
+**Troubleshooting authentication:**
+
+```bash
+# Test connection to GHCR
+docker pull ghcr.io/jmservera/aithena-solr-search:v1.5.0
+
+# If authentication fails:
+# Error response from daemon: unauthorized
+# → Check PAT has read:packages scope
+# → Verify credentials: docker logout ghcr.io && docker login ghcr.io
+```
+
+### Production docker-compose.yml
+
+v1.5.0 provides a production-ready `docker-compose.yml` that uses pre-built GHCR images instead of building from source.
+
+**Key differences from development:**
+
+| Feature | Dev | Production |
+|---------|-----|-----------|
+| Image source | Local build | GHCR pre-built |
+| Override file | docker-compose.override.yml | None |
+| Debug ports | Published (5173, 8080, 8085, 8501) | Not published |
+| Health checks | Simple, permissive | Strict, production timeouts |
+| Volume mounts | Simple paths | Validated, backed up |
+| Logging | Human-readable | JSON structured |
+
+**Starting production stack:**
+
+```bash
+# Authenticate with GHCR
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u {username} --password-stdin
+
+# Start stack (no override file)
+docker compose -f docker-compose.yml up -d
+
+# Verify services
+docker compose ps
+```
+
+**Production environment:**
+
+Set environment variables in `.env` or via `docker-compose.yml`:
+
+```bash
+# .env
+VERSION=1.5.0
+BOOKS_PATH=/data/library
+ADMIN_USER=admin
+ADMIN_PASSWORD=secure-password
+LOG_LEVEL=INFO
+AUTH_JWT_TTL=24h
+ORIGIN=https://aithena.example.com
+```
+
+### Production install script
+
+v1.5.0 includes an automated install script that configures the production environment, generates secrets, and sets up persistent storage.
+
+**Basic installation:**
+
+```bash
+python3 installer/setup.py \
+  --library-path /absolute/path/to/books \
+  --admin-user admin \
+  --admin-password 'secure-password' \
+  --origin https://aithena.example.com
+```
+
+**Installation steps:**
+
+1. Validates paths and creates directories if needed
+2. Generates `.env` with all required variables
+3. Creates JWT secret in `AUTH_DB_DIR`
+4. Seeds admin user credentials
+5. Configures persistent volume mounts
+6. Sets up logging configuration
+
+**Script options:**
+
+```
+--library-path PATH      Absolute path to book library (required)
+--admin-user NAME        Initial admin username (default: admin)
+--admin-password PASS    Initial admin password (required)
+--origin ORIGIN          Public origin URL, e.g., https://aithena.example.com (required)
+--log-level LEVEL        Default log level: INFO, DEBUG, WARNING, ERROR (default: INFO)
+--auth-ttl TTL           JWT session timeout, e.g., 24h, 7d (default: 24h)
+--reset                  Reset all credentials and auth storage
+--dry-run                Show changes without writing files
+```
+
+**Re-running the script:**
+
+Re-run anytime to update credentials, change log level, or reset authentication:
+
+```bash
+# Update admin password
+python3 installer/setup.py --reset --admin-password 'new-password'
+
+# Change log level for all services
+python3 installer/setup.py --log-level DEBUG
+
+# Verify configuration without making changes
+python3 installer/setup.py --dry-run
+```
+
+### Production environment configuration
+
+v1.5.0 standardizes environment variable configuration for production deployments.
+
+**Required environment variables:**
+
+| Variable | Purpose | Example |
+|---|---|---|
+| `BOOKS_PATH` | Host path to book library | `/mnt/storage/books` |
+| `ORIGIN` | Public origin URL | `https://aithena.example.com` |
+| `LOG_LEVEL` | Default log level | `INFO` |
+| `AUTH_JWT_SECRET` | JWT signing secret (generated) | `{random-secret}` |
+| `AUTH_JWT_TTL` | Session timeout | `24h` |
+
+**Optional environment variables:**
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `AUTH_COOKIE_NAME` | Browser session cookie | `aithena_auth` |
+| `REDIS_TIMEOUT` | Redis connection timeout | `2s` |
+| `SOLR_TIMEOUT` | Solr connection timeout | `10s` |
+| `RABBITMQ_PREFETCH` | Message prefetch count | `10` |
+
+**Secrets management:**
+
+For production deployments, avoid hardcoding secrets in `.env`. Instead, use environment variable references:
+
+```bash
+# .env (development)
+AUTH_JWT_SECRET=dev-secret-only
+
+# Production .env
+AUTH_JWT_SECRET=${JWT_SECRET_FROM_VAULT}
+```
+
+Then set the secret before starting:
+
+```bash
+export JWT_SECRET_FROM_VAULT=$(aws secretsmanager get-secret-value --secret-id aithena/jwt-secret)
+docker compose up -d
+```
+
+### Volume mounts and data persistence
+
+v1.5.0 validates that all persistent data survives container restarts.
+
+**Persistent volumes:**
+
+| Volume | Mount Point | Host Path | Purpose |
+|--------|-------------|-----------|---------|
+| `solr-data` | `/var/solr/data` | `/var/lib/aithena/solr` | Solr indexes |
+| `redis-data` | `/data` | `/var/lib/aithena/redis` | Redis snapshots |
+| `rabbitmq-data` | `/var/lib/rabbitmq` | `/var/lib/aithena/rabbitmq` | Queue messages |
+| `document-data` | `/data/documents` | `${BOOKS_PATH}` | Book library |
+| `auth-data` | `/app/auth` | `${AUTH_DB_DIR}` | Auth credentials |
+
+**Validating volume mounts:**
+
+1. Before starting production stack, verify host paths exist:
+   ```bash
+   ls -la /var/lib/aithena/solr /var/lib/aithena/redis /var/lib/aithena/rabbitmq
+   ```
+
+2. Start the stack:
+   ```bash
+   docker compose up -d
+   ```
+
+3. Run smoke tests to verify data persistence:
+   ```bash
+   docker compose -f docker-compose.smoke.yml up --abort-on-container-exit
+   ```
+
+4. The smoke test suite validates:
+   - All volumes mounted correctly
+   - Data persists across container restarts
+   - Search indexes not lost after restart
+   - Redis snapshots restored on restart
+   - RabbitMQ queue messages preserved
+
+**Data persistence checklist:**
+
+- [ ] `/var/lib/aithena/solr` owned by UID 8983 (Solr user)
+- [ ] `/var/lib/aithena/redis` owned by UID 999 (Redis user)
+- [ ] `/var/lib/aithena/rabbitmq` owned by UID 999 (RabbitMQ user)
+- [ ] All volumes have at least 50 GB free space for production library
+- [ ] Volumes backed up regularly via snapshot (daily recommended)
+- [ ] Smoke test suite passes all persistence validation tests
+
+### Deployment health checks
+
+v1.5.0 includes strict health checks for production deployments.
+
+**Service health endpoints:**
+
+| Service | Endpoint | Check | Timeout |
+|---------|----------|-------|---------|
+| nginx | `/` | HTTP 200 | 10s |
+| aithena-ui | `/` | HTTP 200 + React app loads | 15s |
+| solr-search | `/v1/health/` | JSON `{"status": "ok"}` | 10s |
+| Solr | `/solr/admin/ping` | HTTP 200 | 10s |
+| Redis | Redis PING | PONG | 2s |
+| RabbitMQ | `/api/healthchecks/node` | HTTP 200 | 10s |
+| document-indexer | `/health/` | HTTP 200 | 5s |
+
+**Checking health after deployment:**
+
+```bash
+# All services ready?
+docker compose ps
+
+# Check each service individually
+curl http://localhost:8080/v1/health/
+curl http://localhost:8983/solr/admin/ping
+curl http://localhost:6379 -c 'PING'  # via redis-cli
+docker compose exec rabbitmq curl -s http://localhost:15672/api/healthchecks/node
+```
+
+**Production health check procedure:**
+
+1. Start stack: `docker compose -f docker-compose.yml up -d`
+2. Wait 30 seconds for Solr init to complete
+3. Check all services: `docker compose ps` (all should show `healthy`)
+4. Access UI: `https://aithena.example.com/` and log in
+5. Run smoke tests: `docker compose -f docker-compose.smoke.yml up --abort-on-container-exit`
+6. Verify search works: Execute a known search query
+7. Check admin dashboard: Access `/admin/streamlit/` after login
+
+### Rollback procedures
+
+If a deployment fails or requires rollback to a previous version:
+
+**Rollback steps:**
+
+1. Stop current stack:
+   ```bash
+   docker compose down
+   ```
+
+2. Update `docker-compose.yml` or `.env` to previous version:
+   ```bash
+   # Change image version in docker-compose.yml or .env
+   VERSION=1.4.0
+   ```
+
+3. Restart stack with previous images:
+   ```bash
+   docker compose -f docker-compose.yml up -d
+   ```
+
+4. Run health checks to verify previous version is operational
+
+5. Monitor logs for any issues:
+
 ## Deployment Updates for v1.4.0 (Dependency Upgrades & Infrastructure)
 
 v1.4.0 introduces major infrastructure upgrades: Python 3.12, Node 22 LTS, React 19, ESLint v9, and comprehensive dependency updates. This section covers deployment considerations and breaking changes.
@@ -1323,6 +1666,24 @@ If issues occur after upgrading to v1.4.0:
    ```bash
    docker compose logs -f
    ```
+
+**Data recovery:**
+
+All persistent data (Solr indexes, Redis snapshots, RabbitMQ queues) are stored in volumes. Rolling back to a previous version does not affect data — indexes, cached results, and queue messages remain intact.
+
+**Zero-downtime blue-green deployment:**
+
+For critical production systems, deploy v1.5.0 alongside v1.4.0:
+
+1. Start v1.5.0 stack on different host or network interface
+2. Run full smoke test suite on v1.5.0
+3. Switch nginx/load balancer to point to v1.5.0
+4. Keep v1.4.0 running for 1 hour (quick rollback if needed)
+5. After validation period, stop v1.4.0 stack
+
+This requires separate docker-compose instances and load balancer configuration.
+
+---
 
 **Note:** Rollback is safe; no database migrations were required for v1.4.0, so all data is preserved.
 
