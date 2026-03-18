@@ -300,6 +300,10 @@ select:focus-visible,
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
 }
 
 .search-btn:hover:not(:disabled) {
@@ -309,6 +313,19 @@ select:focus-visible,
 .search-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Search controls bar ───────────────────────────────────────── */

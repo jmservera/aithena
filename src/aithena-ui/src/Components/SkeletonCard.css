@@ -1,0 +1,83 @@
+/* ── Skeleton Card Styles ──────────────────────────────────────
+ * Loading placeholder for BookCard with shimmer animation.
+ * Uses design tokens for spacing, colors, and radii.
+ * ────────────────────────────────────────────────────────────── */
+
+.skeleton-card {
+  pointer-events: none;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-surface) 0%,
+    var(--color-bg-elevated) 50%,
+    var(--color-bg-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton--title {
+  height: 1.4em;
+  width: 75%;
+  margin-bottom: var(--space-3);
+}
+
+.skeleton-meta {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.skeleton--meta {
+  height: 0.85em;
+  width: 120px;
+}
+
+.skeleton-highlights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.skeleton--highlight {
+  height: 1em;
+  width: 100%;
+}
+
+.skeleton--highlight:last-child {
+  width: 80%;
+}
+
+.skeleton-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.skeleton--filepath {
+  height: 0.75em;
+  width: 200px;
+  flex-shrink: 1;
+}
+
+.skeleton--button {
+  height: 2.5em;
+  width: 120px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+}
