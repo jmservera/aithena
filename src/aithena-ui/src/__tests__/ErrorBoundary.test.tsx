@@ -120,13 +120,9 @@ describe('ErrorBoundary', () => {
     const alert = await screen.findByRole('alert');
 
     expect(alert).toHaveAttribute('aria-live', 'assertive');
-    expect(
-      screen.getByRole('heading', { name: /aithena ran into a problem/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/try reloading the page to restore search, uploads, and navigation/i)
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reload aithena/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /something went wrong/i })).toBeInTheDocument();
+    expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reload page/i })).toBeInTheDocument();
   });
 
   it('displays the captured error message in a custom fallback and recovers on retry', async () => {
@@ -188,7 +184,7 @@ describe('ErrorBoundary', () => {
       </IntlWrapper>
     );
 
-    await user.click(screen.getByRole('button', { name: /reload aithena/i }));
+    await user.click(screen.getByRole('button', { name: /reload page/i }));
 
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
@@ -208,9 +204,7 @@ describe('ErrorBoundary', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByRole('heading', { name: /aithena ran into a problem/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /something went wrong/i })).toBeInTheDocument();
   });
 
   it('invokes componentDidCatch with the thrown error and component stack', async () => {
@@ -258,7 +252,7 @@ describe('ErrorBoundary', () => {
     );
 
     expect(
-      await screen.findByRole('heading', { name: /aithena ran into a problem/i })
+      await screen.findByRole('heading', { name: /something went wrong/i })
     ).toBeInTheDocument();
 
     await act(async () => {

@@ -123,7 +123,10 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
         <div className="pdf-viewer-body">
           {loadError ? (
             <div className="pdf-viewer-error" role="alert">
-              <p>⚠️ {intl.formatMessage({ id: 'pdf.loadError' })}</p>
+              <p>
+                {intl.formatMessage({ id: 'error.prefix' })}{' '}
+                {intl.formatMessage({ id: 'pdf.loadError' })}
+              </p>
               <p className="pdf-viewer-error-detail">
                 {intl.formatMessage({ id: 'pdf.loadErrorDetail' })}
               </p>
@@ -147,7 +150,10 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
             />
           ) : (
             <div className="pdf-viewer-error" role="alert">
-              <p>⚠️ {intl.formatMessage({ id: 'pdf.noDocumentUrl' })}</p>
+              <p>
+                {intl.formatMessage({ id: 'error.prefix' })}{' '}
+                {intl.formatMessage({ id: 'pdf.noDocumentUrl' })}
+              </p>
             </div>
           )}
         </div>

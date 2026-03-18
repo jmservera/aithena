@@ -28,7 +28,9 @@ function IndexingStatus() {
   if (error && !data) {
     return (
       <main className="status-main">
-        <p className="status-error">⚠ {error}</p>
+        <p className="status-error">
+          {intl.formatMessage({ id: 'error.prefix' })} {error}
+        </p>
       </main>
     );
   }
@@ -49,7 +51,11 @@ function IndexingStatus() {
             )}
           </span>
         )}
-        {error && <span className="status-error-inline">⚠ {error}</span>}
+        {error && (
+          <span className="status-error-inline">
+            {intl.formatMessage({ id: 'error.prefix' })} {error}
+          </span>
+        )}
       </header>
 
       <section className="status-section">
@@ -83,7 +89,7 @@ function IndexingStatus() {
         <ul className="service-list">
           <li className="service-item">
             <ServiceDot serviceStatus={services?.solr ?? 'unknown'} />
-            <span className="service-name">Solr</span>
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.solr' })}</span>
             <span className="service-detail">
               {solr
                 ? intl.formatMessage(
@@ -95,12 +101,12 @@ function IndexingStatus() {
           </li>
           <li className="service-item">
             <ServiceDot serviceStatus={services?.redis ?? 'unknown'} />
-            <span className="service-name">Redis</span>
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.redis' })}</span>
             <span className="service-detail">{services?.redis ?? '—'}</span>
           </li>
           <li className="service-item">
             <ServiceDot serviceStatus={services?.rabbitmq ?? 'unknown'} />
-            <span className="service-name">RabbitMQ</span>
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.rabbitmq' })}</span>
             <span className="service-detail">{services?.rabbitmq ?? '—'}</span>
           </li>
         </ul>
