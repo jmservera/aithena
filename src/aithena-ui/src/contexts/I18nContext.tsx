@@ -16,7 +16,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
 const SUPPORTED_LOCALES: Locale[] = ['en', 'es', 'ca', 'fr'];
 const DEFAULT_LOCALE: Locale = 'en';
-const LOCALE_STORAGE_KEY = 'aithena-locale';
+const LOCALE_STORAGE_KEY = 'aithena.locale';
+const LEGACY_LOCALE_STORAGE_KEY = 'aithena-locale';
 
 interface I18nContextValue {
   locale: Locale;
@@ -45,6 +46,14 @@ function detectLocale(): Locale {
   const storedLocale = localStorage.getItem(LOCALE_STORAGE_KEY);
   if (storedLocale && SUPPORTED_LOCALES.includes(storedLocale as Locale)) {
     return storedLocale as Locale;
+  }
+
+  // Migrate from legacy key (aithena-locale → aithena.locale)
+  const legacyLocale = localStorage.getItem(LEGACY_LOCALE_STORAGE_KEY);
+  if (legacyLocale && SUPPORTED_LOCALES.includes(legacyLocale as Locale)) {
+    localStorage.setItem(LOCALE_STORAGE_KEY, legacyLocale);
+    localStorage.removeItem(LEGACY_LOCALE_STORAGE_KEY);
+    return legacyLocale as Locale;
   }
 
   // Check browser locale

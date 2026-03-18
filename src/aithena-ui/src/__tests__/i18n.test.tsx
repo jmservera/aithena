@@ -20,7 +20,8 @@ const LOCALE_FILES: Record<string, Record<string, string>> = {
   fr: frMessages,
 };
 
-const LOCALE_STORAGE_KEY = 'aithena-locale';
+const LOCALE_STORAGE_KEY = 'aithena.locale';
+const LEGACY_LOCALE_STORAGE_KEY = 'aithena-locale';
 
 /** Simple component that displays a translated message so we can assert text. */
 function TranslatedLabel() {
@@ -275,6 +276,20 @@ describe('localStorage persistence', () => {
     );
 
     expect(screen.getByTestId('current-locale')).toHaveTextContent('en');
+  });
+
+  it('migrates from legacy key (aithena-locale) to new key (aithena.locale)', () => {
+    localStorage.setItem(LEGACY_LOCALE_STORAGE_KEY, 'es');
+
+    render(
+      <I18nProvider>
+        <LocaleDisplay />
+      </I18nProvider>
+    );
+
+    expect(screen.getByTestId('current-locale')).toHaveTextContent('es');
+    expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('es');
+    expect(localStorage.getItem(LEGACY_LOCALE_STORAGE_KEY)).toBeNull();
   });
 });
 
