@@ -2,7 +2,20 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-FROM python:3.12-alpine
+# ---------- build stage ----------
+FROM python:3.12-alpine AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --native-tls
+
+COPY . .
+
+# ---------- runtime stage ----------
+FROM python:3.12-alpine AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
@@ -18,17 +31,15 @@ ENV VERSION=${VERSION} \
     BUILD_DATE=${BUILD_DATE} \
     PYTHONUNBUFFERED=1
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-
 WORKDIR /app
 
 RUN apk add --no-cache procps
 
-COPY pyproject.toml uv.lock ./
-
-RUN uv sync --frozen --no-dev --no-install-project
-
-COPY . .
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/document_indexer /app/document_indexer
+COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+COPY --from=builder /app/uv.lock /app/uv.lock
 
 ENV RABBITMQ_HOST="localhost"
 ENV RABBITMQ_PORT=5672

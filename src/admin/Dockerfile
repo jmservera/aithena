@@ -2,7 +2,20 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-FROM python:3.12-slim
+# ---------- build stage ----------
+FROM python:3.12-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --native-tls
+
+COPY src ./src
+
+# ---------- runtime stage ----------
+FROM python:3.12-slim AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
@@ -21,15 +34,15 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv
+RUN groupadd --system app && useradd --system --gid app --create-home app
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
-
-COPY src ./src
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
 EXPOSE 8501
+
+USER app
 
 CMD ["streamlit", "run", "src/main.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.baseUrlPath=/admin/streamlit", "--server.headless=true", "--browser.gatherUsageStats=false"]

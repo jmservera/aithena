@@ -2,7 +2,10 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
+# ---------- build stage ----------
 FROM node:22-alpine AS build
+
+ARG VERSION
 
 WORKDIR /app
 
@@ -10,9 +13,10 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN VERSION=${VERSION} npm run build
 
-FROM nginx:1.27-alpine
+# ---------- runtime stage ----------
+FROM nginx:1.27-alpine AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
