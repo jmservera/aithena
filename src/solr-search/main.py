@@ -167,11 +167,109 @@ upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 
+class RedisRateLimiter:
+    """Redis-backed sliding window rate limiter."""
+
+    def __init__(self, requests_per_minute: int = 100):
+        self.requests_per_minute = requests_per_minute
+        self.window_seconds = 60
+
+    def _get_client_ip(self, request: Request) -> str:
+        """Extract client IP, checking X-Forwarded-For then X-Real-IP."""
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip.strip()
+        if request.client:
+            return request.client.host
+        return "unknown"
+
+    def check_rate_limit(self, request: Request) -> tuple[bool, int]:
+        """Check if request is within rate limit.
+
+        Returns:
+            tuple[bool, int]: (is_allowed, retry_after_seconds)
+        """
+        client_ip = self._get_client_ip(request)
+        key = f"ratelimit:search:{client_ip}"
+        now = time.time()
+        window_start = now - self.window_seconds
+
+        try:
+            pool = _get_redis_pool()
+            client = redis_lib.Redis(connection_pool=pool)
+
+            # Clean old entries and count current requests
+            pipe = client.pipeline()
+            pipe.zremrangebyscore(key, "-inf", window_start)
+            pipe.zcard(key)
+            results = pipe.execute()
+
+            request_count = results[1]  # zcard result
+
+            if request_count >= self.requests_per_minute:
+                oldest = client.zrange(key, 0, 0, withscores=True)
+                if oldest:
+                    oldest_timestamp = oldest[0][1]
+                    retry_after = int(oldest_timestamp + self.window_seconds - now) + 1
+                    return False, max(retry_after, 1)
+                return False, self.window_seconds
+
+            # Only record request after confirming it's allowed
+            member = f"{now}:{id(request)}"
+            pipe2 = client.pipeline()
+            pipe2.zadd(key, {member: now})
+            pipe2.expire(key, self.window_seconds)
+            pipe2.execute()
+
+            return True, 0
+
+        except (redis_lib.RedisError, OSError, ConnectionError) as exc:
+            logger.warning(
+                "rate_limit_redis_error",
+                extra={
+                    "error": str(exc),
+                    "client_ip": client_ip,
+                },
+            )
+            # Fail open: allow request if Redis is unavailable
+            return True, 0
+
+
+search_rate_limiter = RedisRateLimiter(requests_per_minute=settings.rate_limit_requests_per_minute)
+
+
 def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
     try:
         return build_solr_params(**kwargs)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def check_search_rate_limit(request: Request) -> None:
+    """FastAPI dependency to check rate limit for search endpoint.
+
+    Raises:
+        HTTPException: 429 Too Many Requests if rate limit exceeded
+    """
+    allowed, retry_after = search_rate_limiter.check_rate_limit(request)
+    if not allowed:
+        logger.warning(
+            "rate_limit_exceeded",
+            extra={
+                "client_ip": search_rate_limiter._get_client_ip(request),
+                "path": request.url.path,
+                "retry_after": retry_after,
+            },
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
 
 
 if settings.cors_origins:
@@ -426,7 +524,25 @@ def auth_me(request: Request) -> dict[str, Any]:
 
 @app.get("/v1/search/", include_in_schema=False, name="search_v1")
 @app.get("/v1/search", include_in_schema=False, name="search_v1_no_slash")
-@app.get("/search")
+@app.get(
+    "/search",
+    responses={
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Rate limit exceeded. Please try again later."}
+                }
+            },
+            "headers": {
+                "Retry-After": {
+                    "description": "Number of seconds to wait before retrying",
+                    "schema": {"type": "integer"},
+                }
+            },
+        }
+    },
+)
 def search(
     request: Request,
     q: str = Query("", description="Keyword search. Empty values return all indexed books."),
@@ -445,6 +561,7 @@ def search(
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
         enum=list(VALID_SEARCH_MODES),
     ),
+    _rate_limit: None = Depends(check_search_rate_limit),
 ) -> dict[str, Any]:
     """Search for books.
 
@@ -454,6 +571,8 @@ def search(
 
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
+
+    **Rate Limit:** Configurable via ``RATE_LIMIT_REQUESTS_PER_MINUTE`` (default: 100).
     """
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(

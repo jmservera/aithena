@@ -60,6 +60,7 @@ class Settings:
     cb_solr_failure_threshold: int
     cb_solr_recovery_timeout: float
     admin_api_key: str | None
+    rate_limit_requests_per_minute: int
 
     @property
     def select_url(self) -> str:
@@ -115,4 +116,5 @@ settings = Settings(
     cb_solr_failure_threshold=int(os.environ.get("CB_SOLR_FAILURE_THRESHOLD", "5")),
     cb_solr_recovery_timeout=float(os.environ.get("CB_SOLR_RECOVERY_TIMEOUT", "30")),
     admin_api_key=os.environ.get("ADMIN_API_KEY") or None,
+    rate_limit_requests_per_minute=int(os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE", "100")),
 )
