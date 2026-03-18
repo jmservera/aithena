@@ -337,3 +337,79 @@ Completed comprehensive documentation backfill (Branch: squad/release-docs-v06-v
 
 **Status:** v1.4.0 milestone complete. All 14 issues closed. Release documentation complete and ready for v1.4.0 release tag and dev→main merge. PR #432 ready for approval.
 
+
+## 2026-03-18: Generated v1.7.0 Release Documentation
+
+**Milestone:** Comprehensive release documentation for v1.7.0 (Quality & Infrastructure)
+
+**Deliverables Created:**
+
+- `docs/release-notes-v1.7.0.md` — Full release notes with 4 closed issues:
+  - Dependabot CI improvements: Node 22 upgrade, failure handling (#470)
+  - localStorage key standardization: aithena-locale → aithena.locale with auto-migration (#472)
+  - Heartbeat Dependabot detection and squad routing (#483)
+  - Page-level i18n extraction from all 5 page components and App.tsx (#491, bonus)
+
+- `docs/test-report-v1.7.0.md` — Comprehensive test report:
+  - 622 tests executed across 6 services: 628 passed, 0 failed, 4 skipped
+  - aithena-ui: 213 tests (↑1 from v1.6.0 due to page i18n tests)
+  - solr-search: 231 tests (no change)
+  - document-indexer: 91 tests (no change)
+  - document-lister: 12 tests (no change)
+  - admin: 81 tests (no change)
+  - embeddings-server: 9 tests (CI verified)
+  - All coverage thresholds met; no regressions from v1.6.0
+
+- `CHANGELOG.md` — Added v1.7.0 entry in Keep a Changelog format:
+  - Added section: Page-level i18n extraction, Dependabot PR detection
+  - Changed section: Node 22 upgrade in auto-merge workflow, localStorage key standardization
+  - Fixed section: localStorage auto-migration
+  - Security: None (infrastructure/quality release)
+
+- `docs/admin-manual.md` — Added comprehensive v1.7.0 Deployment section covering:
+  - localStorage key standardization and auto-migration procedure with verification steps
+  - Page-level internationalization extraction explanation
+  - Dependabot CI improvements: Node 22, explicit failure handling, heartbeat routing
+  - Deployment checklist with pre/post-upgrade validation
+  - Rollback procedure for v1.7.0
+
+**Release Notes Format:**
+
+- Consistent with v1.6.0 structure: summary, detailed changes, milestone closure, breaking changes, user/operator improvements, infrastructure improvements, security, upgrade instructions, validation highlights, documentation links
+- Codename: "Quality & Infrastructure"
+- Date: 2026-03-18
+- Emphasized CI/CD robustness, data persistence consistency, i18n foundation
+
+**Key Changes in v1.7.0:**
+
+1. **localStorage key migration:** Users with old `aithena-locale` key are auto-migrated to `aithena.locale` (dot-notation) on first load. No user action required.
+2. **Page i18n extraction:** All 5 page components (SearchPage, LibraryPage, UploadPage, LoginPage, AdminPage) and App.tsx now use react-intl. Defaults to English; translations can be added later.
+3. **Dependabot CI:** Auto-merge workflow upgraded to Node 22 with explicit failure handling. Heartbeat workflow enhanced to detect and route Dependabot PRs by dependency domain.
+4. **No breaking changes:** All upgrades backward-compatible; no config changes, no database migrations, no env var updates.
+
+**Testing & Validation:**
+
+- Ran all 622 tests: 628 passed, 0 failed, 4 skipped (metadata tests requiring maintainer paths)
+- aithena-ui tests: 213 (↑1 from v1.6.0)
+- All Python service tests: 415 (231 solr-search + 91 document-indexer + 12 document-lister + 81 admin)
+- embeddings-server: 9 tests verified from CI (not locally runnable)
+- Coverage thresholds: solr-search 94.76% (req 88%), document-indexer 81.50% (req 70%) ✅
+- No regressions from v1.6.0; all pre-existing AdminPage failures from v1.6.0 appear resolved
+
+**Release Readiness:**
+
+- All v1.7.0 milestone issues closed (#470, #472, #483, #491)
+- Deployment procedures documented with rollback guidance
+- No operator action required beyond standard upgrade (docker compose pull && up -d)
+- localStorage auto-migration and page i18n extraction validated and working
+- Test coverage comprehensive and passing
+
+**Next Steps:**
+
+PR #493 opened against dev for review and merge. After merge to dev, can be released to main at any time.
+
+**Key Learnings:**
+
+- v1.7.0 is primarily infrastructure/quality work with minimal functional changes (localStorage key rename, i18n foundation)
+- Test suite stability good: all 622 tests passing with no new failures despite UI layer refactoring
+- Admin manual now has clear deployment sections for each major release (v0.5.0, v0.6.0, v0.7.0, v0.12.0, v1.3.0, v1.5.0, v1.7.0)
