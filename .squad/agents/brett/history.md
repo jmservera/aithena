@@ -672,3 +672,26 @@
 **Next:** WI-4 post-merge validation by Lambert; then WI-5 (separate PR #460 for integration-test.yml trigger changes)
 
 **Pre-flight:** All 4 test suites verified passing (Lambert, WI-3).
+
+### 2026-07-24 — Issues #470, #483: Dependabot CI hardening + heartbeat integration
+
+**Issue #470 — Dependabot CI improvements (PR #485):**
+- Updated `dependabot-automerge.yml` Node.js version from 20 → 22 (was last holdout; all other workflows already on 22)
+- Removed `continue-on-error: true` from auto-merge step — workflow now fails visibly when merge errors occur
+- Added explicit failure handling: on merge failure, labels PR `dependabot:manual-review` and posts explanatory comment
+- `dependabot:auto-merge` label now only applied on actual success (conditional `if: success()`)
+
+**Issue #483 — Heartbeat Dependabot detection (PR #486):**
+- Extended squad heartbeat (Ralph) with Dependabot PR detection and domain-based routing
+- Detection: `dependabot:manual-review` label, CI check failures (via Checks API), stale PRs (7+ days)
+- Routing: 5-rule table (Kane=auth/crypto, Brett=infra/Docker, Parker=Python deps, Dallas=JS/frontend, Lambert=test+CI failures)
+- Classification uses PR title/branch for dep name matching, then falls back to changed file paths
+- Added `checks: read` permission for CI status inspection
+- Triage comment follows existing `🔄 Ralph — Dependabot Triage` pattern
+- Existing squad issue/PR detection and Copilot auto-assign completely untouched
+
+**Key patterns:**
+- Dependabot PR titles follow "Bump X from A to B" format — reliable for dep name extraction
+- PR branch names use `dependabot/{ecosystem}/{dep}` format — secondary signal for routing
+- `issues.addLabels()` and `issues.createComment()` work on PRs via the issues API (`issues: write` permission sufficient)
+- Already-triaged PRs (with `squad:*` label) are excluded from re-processing
