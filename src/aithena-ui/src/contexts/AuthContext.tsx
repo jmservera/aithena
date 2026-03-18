@@ -25,6 +25,7 @@ export interface AuthContextValue {
   clearError: () => void;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 async function getErrorMessage(response: Response, fallback: string): Promise<string> {

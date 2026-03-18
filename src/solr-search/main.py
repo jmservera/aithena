@@ -895,6 +895,7 @@ def stats() -> dict[str, Any]:
         "wt": "json",
         "group": "true",
         "group.field": "parent_id_s",
+        "group.ngroups": "true",
         "group.limit": 0,
         "stats": "true",
         "stats.field": "page_count_i",
