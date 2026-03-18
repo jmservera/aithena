@@ -2,7 +2,7 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-FROM python:3.11-alpine
+FROM python:3.12-alpine
 
 ARG VERSION
 ARG GIT_COMMIT

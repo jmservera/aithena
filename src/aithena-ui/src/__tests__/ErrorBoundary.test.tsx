@@ -14,15 +14,15 @@ function HealthyChild() {
   return <div>Healthy child content</div>;
 }
 
-function BrokenChild({ message = 'Kaboom' }: { message?: string }): JSX.Element {
+function BrokenChild({ message = 'Kaboom' }: { message?: string }): never {
   throw new Error(message);
 }
 
-function StringBrokenChild(): JSX.Element {
+function StringBrokenChild(): never {
   throw 'String crash';
 }
 
-function ObjectBrokenChild(): JSX.Element {
+function ObjectBrokenChild(): never {
   throw { reason: 'Unknown crash' };
 }
 

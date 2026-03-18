@@ -21,41 +21,77 @@
 - **Current infrastructure:** SolrCloud 3-node cluster + ZooKeeper 3-node ensemble, Redis, RabbitMQ, nginx, 9 Python services in Docker
 - **Active initiative:** UV migration across 7 Python services (issues #81-#87), security scanning (#88-#90), CI hardening
 
-## Core Context
+## Core Context — Infrastructure Architect Focus Areas
 
-**SolrCloud Docker Operations (Standardized):**
-- **Cluster topology:** 3-node ZooKeeper ensemble + 3-node Solr cloud cluster, all healthy. ZooKeeper AdminServer 8080 and Solr node 1 port 8080 create host-port collision (namespace works but needs cleanup).
-- **Service startup:** Depends_on uses `service_started` instead of `service_healthy` — services can start before infra is ready. Missing health checks for Solr and ZooKeeper are critical gap.
-- **Volume strategy:** All bind-backed local volumes pointing to `/source/volumes/` + `/home/jmservera/booklibrary`. Solr mounts `/var/solr/data` only (no persistent logs). Backup path configured but not mounted.
+### Key Infrastructure Patterns & Learnings (Reskill Summary)
 
-**CI/CD & Build:**
-- `buildall.sh` runs `uv sync` in all 4 uv-managed Python services (`admin`, `document-indexer`, `document-lister`, `solr-search`), skips `embeddings-server` (no pyproject.toml).
-- GitHub Actions: `ci.yml` runs Python unit tests + ruff linting, `lint-frontend.yml` for React, `release.yml` coordinates releases.
-- All 4 Python services migrated to uv + `pyproject.toml` + `uv.lock`.
+**Docker Compose Hardening (Issue #52) — Complete Specification:**
+- Health checks: 8 new checks with context-specific start_periods (10-60s for model-loading, cluster formation)
+- Resource limits: Memory (128m-2g), CPU reservations, log rotation (10m × 3 files = 30MB per service)
+- Restart policies: `unless-stopped` for critical/stateful, `on-failure` for stateless workers
+- Graceful shutdown: `stop_grace_period` (60s Solr/ZK, 30s RabbitMQ/Redis, 10s others)
+- Dependency fixes: 5 upgrades from `service_started` → `service_healthy`
+- Production guide: `docs/deployment/production.md` (startup order, volume init, health validation, troubleshooting)
 
-**nginx Reverse-Proxy Ingress:**
-- Routes `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, `/admin/redis/` to respective admin UIs (with X-Forwarded-Prefix, WebSocket upgrade support, path rewriting).
-- Routes `/`, `/v1/`, `/documents/` to React app and solr-search API.
-- No HTTPS or auth enforcement in current config (cert setup via ACME but HTTP-only).
+**CI/CD Security Patterns — Zizmor + Checkov:**
+- **Secrets handling:** Use inline `with:` parameters, never step-level `env:` (secrets-outside-env zizmor rule)
+- **Template expansion:** Always `${{ secrets.X }}` syntax in workflows, never shell variable expansion
+- **Bot conditions:** `pull_request_target` event + copilot author detection guards (copilot-approve-runs.yml)
+- **IaC scanning:** Checkov workflow with soft_fail + path filtering, SARIF integration, documented exceptions
+- **GitHub Actions exceptions:** CKV_GHA_7 (workflow_dispatch inputs) — document when input validation protects supply chain
 
-**Known Infrastructure Bugs (Blocking v0.5):**
-1. **#166 — RabbitMQ cold-start failure:** `timeout_waiting_for_khepri_projections` on first `docker compose up`. Second run succeeds. Root: Khepri metadata store projection registration race + stale volume state. Fix: increase health check retries/start_period, pin RabbitMQ version, or clear volume.
-2. **#167 — Document pipeline stall:** New PDFs not detected/indexed. Cascaded from #166 (RabbitMQ unhealthy) + `depends_on: service_started` doesn't wait for health. Fix: add connection retry logic in services, use `service_healthy` conditions.
+**Release Packaging & Versioning (v0.7.0 Complete):**
+- Docs-gate-the-tag pattern: Release docs merged BEFORE tagging (.github/ISSUE_TEMPLATE/release.md checklist)
+- docker-compose.prod.yml: GHCR pull model (no build in production), OCI labels + version endpoints
+- release.yml automation: triggers on `v*.*.*` tags, builds/pushes all 6 services to GHCR
+- Tarball packaging: `.env.prod.example`, installer script, deployment docs as release asset
+- Token scopes: GitHub Data API (refs, trees, commits) requires `workflow` scope for `.github/workflows/` modifications
 
-**Docker Compose Gaps vs Skill (High Priority):**
-- ❌ No health checks for Solr (should be curl to `/admin/info/system`)
-- ❌ No health checks for ZooKeeper (should be 4LW `ruok`)
-- ❌ `depends_on` uses `service_started` instead of `service_healthy`
-- ❌ ZooKeeper has no restart policy (`unless-stopped` needed)
-- ❌ No `stop_grace_period` for Solr/ZooKeeper
-- ❌ No `SOLR_HEAP` or memory limits
-- ❌ No Docker log caps
-- ❌ No backup path mount on Solr nodes
-- ❌ Solr volumes only mount `/var/solr/data`, not full `/var/solr`
+**RabbitMQ & SolrCloud Operations:**
+- **RabbitMQ 3.x → 4.0:** Feature flags must be enabled before upgrade; Mnesia directory isolation critical
+- **Bind-mount volumes:** `docker volume rm` doesn't clear host directory; must `rm -rf` directly
+- **SolrCloud 3-node + ZK ensemble:** Port collision (8080 ZK-admin vs Solr-node1) manageable via networking
+- **Health check binaries:** Add `wget` to Alpine images for health checks; `pgrep -f python` for workers
+- **Cold-start timing:** start_period tuning critical (60s embeddings for model load, 30s ZK/Solr cluster formation)
+
+**Workflow Automation & Copilot Integration:**
+- `pull_request_target` is correct event for bot PRs (avoids approval chicken-and-egg loop)
+- release-docs.yml: Copilot CLI integration with fallback template generation
+- Squad issue assignment: COPILOT_ASSIGN_TOKEN via PAT, requires org/repo token scope
+- Workflow run approval: API endpoint `github.rest.actions.approveWorkflowRun()`, 15s wait needed after PR sync
+
+**Infrastructure Context (SolrCloud 3-node Cluster):**
+- **Cluster topology:** 3-node ZooKeeper ensemble + 3-node Solr cloud (all healthy, namespace routing)
+- **Service startup:** Now uses `service_healthy` conditions (deprecated `service_started`)
+- **Volume strategy:** Bind mounts at `/source/volumes/` + `/home/jmservera/booklibrary` (explicit operator control)
+- **nginx Reverse Proxy:** Routes admin UIs (/admin/solr/, /rabbitmq/, /streamlit/, /redis/), app frontend, API
+- **No HTTPS:** Current config is HTTP-only (ACME cert setup exists but not enforced)
 
 ## Learnings
 
 <!-- Append learnings below -->
+
+### 2026-03-17T13:42Z — Issue #363: Release Packaging Strategy (PR #427)
+
+**Task:** Create a production-ready release tarball with docker-compose.prod.yml, .env.prod.example, installer script, and deployment documentation.
+
+**Execution:**
+1. Designed release packaging strategy with GHCR pull model (no build step in production)
+2. Created `docker-compose.prod.yml` (image pulls instead of builds for all custom services)
+3. Created `.env.prod.example` with all variables documented inline
+4. Created `docs/quickstart.md` with deployment quick-start instructions
+5. Extended `.github/workflows/release.yml` with `package-release` job (creates tarball, uploads as release asset)
+6. SHA-pinned all GitHub Actions (upload-artifact, download-artifact)
+7. Validated YAML, volume mount paths, resource limits preservation
+
+**Key decisions documented in decisions.md:**
+- Image distribution via GHCR (pull model, lightweight, enables version pinning)
+- Volume convention: preserve `/source/volumes/` bind mounts (explicit control for operators)
+- Configuration via .env + installer (no cloud secret managers—fully on-premises)
+- Package scope: deployment bundle only (~100 KB, no source code)
+- Workflow integration: attach tarball to GitHub Release as asset
+
+**Outcome:** PR #427 merged; users now have complete production deployment package.
 
 ### Release checklist and docs-gate-the-tag pattern
 
@@ -497,3 +533,142 @@
 
 **Branch:** squad/296-fix-ckv-gha7-release-docs → dev
 **Status:** PR #316 open (https://github.com/jmservera/aithena/pull/316)
+
+### 2026-03-17 — Cascading Docker Compose failure diagnosis
+
+**Symptoms:** RabbitMQ auth failure, ZK broken pipe errors, missing books collection, 502s from nginx.
+
+**Root causes identified:**
+1. **RabbitMQ stale volume** — `/source/volumes/rabbitmq-data` contained Mnesia DB from prior run with different credentials. `RABBITMQ_DEFAULT_USER/PASS` only works on first init. Fix: clear the volume data.
+2. **ZK health check noise** — `mntr` 4LW command output piped to `grep -Eq` caused SIGPIPE when grep exits after matching. Server-side "broken pipe" log messages are cosmetic; health check still passes. Simplified to `ruok`-only check.
+3. **Books collection timing** — `solr-init` one-shot container creates the collection after full ZK+Solr startup chain. document-indexer had no compose-level `solr` dependency, so it started polling before Solr was running.
+
+**Code changes:**
+- Simplified zoo1/zoo2/zoo3 health checks from `ruok + mntr leader/follower grep` → `ruok` only
+- Added `solr: condition: service_healthy` to document-indexer's `depends_on`
+- Decision doc written to `.squad/decisions/inbox/brett-infra-diagnosis.md`
+
+**Key learnings:**
+- RabbitMQ `RABBITMQ_DEFAULT_USER/PASS` env vars are **first-init only** — changing them requires clearing the volume
+- ZK `ruok` is sufficient for compose health gating; Solr's ZK client handles quorum detection
+- The `solr-init` container (`restart: "no"`) creates the books collection with configset upload + collection CREATE + add-conf-overlay.sh
+- document-indexer's `wait_for_solr_collection()` polls 60×5s (300s) and also verifies `/update/extract` handler exists
+- document-indexer's RabbitMQ retry is **infinite** (no `tries` param on `@retry` decorator) — will never give up on auth failure
+
+### 2026-03-17 — Infrastructure diagnosis coordinated with Parker
+
+**Status:** Orchestrated background agent diagnosis of cascading Docker Compose failures + Redis auth wiring.
+
+**Outcomes:**
+- ZooKeeper health checks simplified (ruok-only) — removed SIGPIPE noise
+- document-indexer now depends on Solr (condition: service_healthy) — prevents premature polling
+- RabbitMQ stale volume issue identified and documented (operational fix)
+
+**Files Modified:** docker-compose.yml
+
+**Decisions:** 2 merged to decisions.md
+- `.squad/decisions.md#Infrastructure-Cascading-Failures`
+- `.squad/decisions.md#solr-search-Redis-ConnectionPool-Authentication`
+
+**Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-brett.md`
+
+**Cross-Coordination:** Parker diagnosed Redis auth issue independently; both root causes merged into single decision set for holistic system view.
+
+### 2026-03-17T08:40Z — RabbitMQ 4.0 upgrade + credential fix (PR #403)
+
+**Problem:** Two issues: (1) RabbitMQ 3.12 is EOL — log warned "end of life and is no longer supported". (2) Credential mismatch — user 'aithena' couldn't authenticate because the Mnesia data volume was initialized with old credentials.
+
+**Root cause for credentials:** `RABBITMQ_DEFAULT_USER`/`RABBITMQ_DEFAULT_PASS` are only applied on first initialization. The bind-mount volume at `/source/volumes/rabbitmq-data` retained stale Mnesia data even after the Docker named volume was deleted, because the local driver with `type: none, o: bind` means the host directory IS the volume.
+
+**Fix applied:**
+1. Upgraded `rabbitmq:3.12-management` → `rabbitmq:4.0-management` (RabbitMQ 4.0.9, current LTS)
+2. Cleared stale Mnesia data from `/source/volumes/rabbitmq-data/mnesia` and `.erlang.cookie`
+3. `rabbitmq.conf` (management.path_prefix, vm_memory_high_watermark, consumer_timeout) is fully compatible with 4.0
+
+**Key learning — RabbitMQ 3.x → 4.0 upgrade path:**
+- RabbitMQ 4.0 requires all feature flags from 3.x to be enabled before upgrade. If upgrading in-place, run `rabbitmqctl enable_feature_flag all` on 3.x first.
+- For a clean install (no data to preserve), just wipe the Mnesia directory.
+- The `stream_filtering` feature flag is the specific blocker for 3.12 → 4.0.
+- Bind-mount volumes: `docker volume rm` does NOT clear host data. Must `rm -rf` the host directory contents.
+
+**Also included in PR:**
+- Parker's Redis auth fix: added `password=settings.redis_password` to solr-search ConnectionPool
+- ZK health checks simplified to ruok-only (eliminated mntr broken pipe noise)
+- document-indexer depends_on solr (service_healthy) for startup ordering
+
+**Observation:** solr-init collection creation is failing independently (400 error on CREATE collection). This is a pre-existing Solr configset issue, not related to this fix.
+
+### 2026-03-17T14:30Z — Fixed redis-commander health check (PR #424)
+
+**Problem:** E2E tests failing in CI with "dependency failed to start: container aithena-redis-commander-1 is unhealthy". Blocked PRs #418, #419, #411.
+
+**Root cause:** The redis-commander health check had multiple issues:
+1. Used `CMD` instead of `CMD-SHELL` — the Node.js one-liner wasn't executing properly in the array format
+2. No timeout handling on the HTTP request — health checks could hang indefinitely
+3. `start_period: 10s` was too short — redis-commander needs more initialization time in CI environments
+4. Only 3 retries — insufficient for services that need warmup in constrained CI runners
+
+**Fix applied:**
+- Changed health check from `CMD` to `CMD-SHELL` for proper shell execution of Node.js inline script
+- Added explicit timeout handling (5000ms) to the HTTP GET request with proper cleanup
+- Increased `start_period` from 10s to 30s — allows redis-commander to fully initialize before health checks begin
+- Increased retries from 3 to 5 — better resilience for CI cold-start scenarios
+- Accept any 2xx-4xx status code (not 5xx) — handles redirects and partial initialization states
+
+**Key learning — Docker health check best practices:**
+- `CMD` requires each argument as separate array element (no shell expansion)
+- `CMD-SHELL` passes entire string to `/bin/sh -c` — allows complex one-liners
+- For Node.js containers without `curl`/`wget`, use Node's built-in `http` module
+- Always set explicit timeouts on network calls in health checks to prevent hanging
+- `start_period` should account for worst-case initialization (database migrations, service discovery, etc.)
+- In CI, services start slower than on dev machines — pad `start_period` by 2-3x
+
+**File modified:** `docker-compose.yml` (redis-commander service)
+
+**Branch:** `squad/fix-redis-commander-e2e`
+
+**PR:** #424 (targeting `dev`)
+
+### 2026-03-17T19:50Z — Proposed CI/CD Test Strategy Restructuring
+
+**Context:** Juanma reported that integration-test.yml (60 min) blocks dev PR iteration. Team analyzed test coverage and proposed restructuring.
+
+**Proposal:** Split test workflows by branch:
+- **Dev PRs:** Fast lightweight checks (~5 min) — compose validation, Dockerfile linting, build validation, health check syntax, Python imports
+- **Release PRs (main/release/*):** Full integration tests (~60 min) — Docker Compose + E2E
+
+**Rationale:**
+- Most issues caught by static checks; full E2E only needed before releases
+- Developers test locally before pushing
+- Main branch protected with full E2E
+- CI cost reduced ~80% for typical feature development
+
+**Implementation (3 phases):**
+1. Add 5 lightweight jobs to ci.yml (1–2 hours)
+2. Move integration-test.yml trigger from `dev` to `main` (15 min)
+3. Update GitHub branch protection config (10 min, manual)
+
+**Related decisions:** ripley-test-tiers.md, lambert-fast-tests.md (both merged to decisions.md)
+
+**Status:** Decision recorded in `.squad/decisions.md`. Implementation pending team approval.
+
+## 2026-03-17 — CI Chores Implementation (WI-1 + WI-2)
+
+**Session:** CI chores orchestration — #457 & #458
+**Date:** 2026-03-17T20:10Z
+**Status:** ✅ Implemented
+
+**Work:** Added 4 missing service test jobs to CI pipeline + updated gate.
+- **aithena-ui-tests:** React + Vite tests (127 tests)
+- **admin-tests:** Streamlit Python tests (71 tests)
+- **document-lister-tests:** Python consumer tests (12 tests)
+- **embeddings-server-tests:** Python embeddings tests (9 tests)
+
+**Files Modified:**
+- `.github/workflows/ci.yml` — Added 4 job definitions + updated `all-tests-passed` gate
+
+**PR:** #459 (targeting `dev`, WI-1 + WI-2 combined)
+
+**Next:** WI-4 post-merge validation by Lambert; then WI-5 (separate PR #460 for integration-test.yml trigger changes)
+
+**Pre-flight:** All 4 test suites verified passing (Lambert, WI-3).

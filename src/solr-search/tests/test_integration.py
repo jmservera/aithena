@@ -838,7 +838,13 @@ def test_v1_document_alias_is_registered() -> None:
 # ---------------------------------------------------------------------------
 
 _STATS_SOLR_PAYLOAD = {
-    "response": {"numFound": 76, "docs": []},
+    "grouped": {
+        "parent_id_s": {
+            "matches": 76,
+            "ngroups": 3,
+            "groups": [],
+        }
+    },
     "stats": {
         "stats_fields": {
             "page_count_i": {
@@ -875,7 +881,7 @@ def test_stats_returns_200_with_correct_shape(mock_solr_get: MagicMock) -> None:
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total_books"] == 76
+    assert data["total_books"] == 3
     assert data["by_language"] == [{"value": "ca", "count": 40}, {"value": "es", "count": 20}]
     assert data["by_author"] == [{"value": "Joan Amades", "count": 15}, {"value": "Other Author", "count": 5}]
     assert data["by_year"] == [{"value": 1950, "count": 3}, {"value": 1960, "count": 10}]
@@ -926,6 +932,9 @@ def test_stats_sends_correct_solr_params(mock_solr_get: MagicMock) -> None:
     params = mock_solr_get.call_args[1]["params"]
     assert params["q"] == "*:*"
     assert params["rows"] == 0
+    assert params["group"] == "true"
+    assert params["group.field"] == "parent_id_s"
+    assert params["group.limit"] == 0
     assert params["stats"] == "true"
     assert params["stats.field"] == "page_count_i"
     assert params["facet"] == "true"
@@ -940,7 +949,7 @@ def test_stats_handles_empty_collection(mock_solr_get: MagicMock) -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "response": {"numFound": 0, "docs": []},
+        "grouped": {"parent_id_s": {"matches": 0, "ngroups": 0, "groups": []}},
         "stats": {"stats_fields": {"page_count_i": None}},
         "facet_counts": {"facet_fields": {}},
     }

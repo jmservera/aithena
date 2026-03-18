@@ -300,3 +300,134 @@ REDIS_PORT=6379
 - No behavior changes, only logging output format
 
 **Decision:** Standard practice for production error logging should be `logger.error()` for user-facing messages and `logger.debug()` with `exc_info=True` for full stack traces. Reserved `logger.exception()` for unexpected internal errors where stack traces are always needed.
+
+### 2026-03-16 — Redis Password Bug in solr-search (ConnectionPool)
+
+**Task:** Investigated credential handling across all Python services after user reported Redis connection failures, RabbitMQ auth refused, 502s on /stats and /search.
+
+**Root Cause Found:**
+- `src/solr-search/main.py` line 854: `redis_lib.ConnectionPool()` was missing the `password=settings.redis_password` parameter. The config correctly reads `REDIS_PASSWORD` from env, but it was never passed to the pool constructor. This means solr-search cannot authenticate to Redis when a password is set, causing all Redis-dependent features (status tracking, caching) to fail.
+
+**Fix Applied:**
+- Added `password=settings.redis_password,` to the `ConnectionPool` constructor in `_get_redis_pool()`.
+
+**Other Services Verified (no bugs found):**
+- `src/admin/src/` — Redis: password passed correctly. RabbitMQ: uses Management HTTP API with Basic Auth, credentials from env correctly.
+- `src/document-lister/` — RabbitMQ: `pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)` correct. Redis: password passed correctly.
+- `src/document-indexer/` — RabbitMQ: same pattern as lister, correct. Redis: password passed correctly.
+- All env var names (`RABBITMQ_USER`, `RABBITMQ_PASS`, `REDIS_PASSWORD`) match between docker-compose.yml and Python code.
+
+**502 Root Causes:**
+- `/stats` 502: depends on Solr `query_solr()`. If books collection doesn't exist → Solr error → 503/502 through nginx.
+- `/search` 502: same Solr dependency. Semantic/hybrid modes also need embeddings-server.
+- RabbitMQ `ACCESS_REFUSED`: likely stale Docker volume with old guest credentials. Code-level credential names are correct.
+
+**Key File Paths:**
+- `src/solr-search/main.py:854` — Redis ConnectionPool (fixed)
+- `src/solr-search/config.py:98` — redis_password from env
+- `src/document-lister/__init__.py:5-8` — RabbitMQ env vars
+- `src/document-indexer/__init__.py:3-6` — RabbitMQ env vars
+- `src/admin/src/pages/shared/config.py:8-17` — All admin env vars
+
+### 2026-03-17 — Redis auth wiring audit coordinated with Brett
+
+**Status:** Orchestrated background agent diagnosis of service authentication wiring + systematic audit of credential propagation.
+
+**Outcomes:**
+- Found and fixed missing Redis password in solr-search ConnectionPool (main.py:854)
+- Audited all other services — admin, document-lister, document-indexer all correct
+- All 193 solr-search tests pass after fix
+- RabbitMQ and Solr failures confirmed as non-code issues (documented in Brett's infrastructure diagnosis)
+
+**Files Modified:** src/solr-search/main.py
+
+**Decisions:** 2 merged to decisions.md
+- `.squad/decisions.md#solr-search-Redis-ConnectionPool-Authentication`
+- `.squad/decisions.md#Infrastructure-Cascading-Failures`
+
+**Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-parker.md`
+
+**Cross-Coordination:** Brett diagnosed infrastructure issues independently; merged into single coordinated decision set showing full system health.
+
+### 2026-03-17 — Service Rebuild, Solr Collection Fix, Full Stack Verification
+
+**Task:** Rebuild stale containers after code changes, fix solr-init collection creation, verify full stack health.
+
+**Issues Found & Fixed:**
+
+1. **solr-search Redis circuit breaker cycling (stale container):** The running solr-search container was ~20 min old, still using pre-fix code without Redis password in ConnectionPool. Rebuilt the image with `docker compose build solr-search` and restarted. After restart, Redis circuit breaker immediately went to CLOSED with 0 failures — confirming the password fix from the earlier session works.
+
+2. **streamlit-admin stale container:** Rebuilt and restarted admin service. Came up healthy.
+
+3. **nginx stale upstream IPs:** Restarted nginx to pick up new container IPs after RabbitMQ volume reset.
+
+4. **solr-init 400 error — ROOT CAUSE: host volume permissions:** The books collection creation was failing with "Couldn't persist core properties to /var/solr/data/books_shard1_replica_n4/core.properties". The host bind-mounted volumes at `/source/volumes/solr-data*` were owned by `root:root` (mode 755), but Solr runs as UID 8983. Fixed with `sudo chown -R 8983:8983 /source/volumes/solr-data*`. After fixing permissions and re-running solr-init, the books collection was created successfully with 3 replicas across all 3 Solr nodes.
+
+5. **document-indexer timed out waiting for books collection:** Restarted after collection was created. Immediately found the books collection and began processing. 127 documents indexed successfully.
+
+**Verification Results:**
+- All 17 services healthy
+- Redis circuit breaker: CLOSED, 0 failures
+- Solr circuit breaker: CLOSED, 0 failures
+- Books collection: created with 3 replicas, 127 documents indexed
+- UI: login page renders correctly with Aithena branding
+- API health endpoint: fully operational
+- Document pipeline: lister → RabbitMQ → indexer → Solr working end-to-end
+
+**Key Learnings:**
+- Host-mounted Solr data volumes must be owned by UID 8983 (the solr user). When volumes are created by the host OS or by root, Solr can't write core properties and collection creation fails with a cryptic 400 error.
+- The Solr error message "Underlying core creation failed" doesn't say *why* — you need to check individual Solr node logs (solr2, solr3) to find the "Couldn't persist core properties" root cause.
+- Always rebuild containers after code changes. Restarting an existing container does NOT pick up code changes — it reuses the same image.
+
+**Files Modified:** None (operational fix — volume permissions on host filesystem)
+
+**Screenshots saved:** Session files directory (01-home.png, 05-api-health.png)
+
+### 2026-03-17 — Python 3.12 Upgrade (DEP-4)
+
+**Task:** Upgrade all Python services from 3.11 to 3.12, following the compatibility audit completed in DEP-3.
+
+**Services Upgraded:**
+1. solr-search — pyproject.toml + Dockerfile (python:3.12-slim-bookworm)
+2. document-indexer — pyproject.toml + Dockerfile (python:3.12-alpine)
+3. document-lister — pyproject.toml + Dockerfile (python:3.12-alpine)
+4. admin — pyproject.toml + Dockerfile (python:3.12-slim)
+5. embeddings-server — Dockerfile only (python:3.12-slim, uses requirements.txt)
+
+**Changes Made:**
+- Updated `requires-python = ">=3.12"` in all pyproject.toml files
+- Updated Dockerfiles to use Python 3.12 base images
+- Regenerated uv.lock files with `UV_NATIVE_TLS=1 uv lock` for all uv-managed services
+- Updated GitHub Actions workflows (ci.yml, integration-test.yml, security-bandit.yml, security-checkov.yml) to use Python 3.12
+
+**Test Results:**
+- ✅ solr-search: 193 tests passed, 94% coverage
+- ✅ document-indexer: 91 tests passed, 81% coverage (4 failures due to missing library fixture files, not Python version)
+- ✅ document-lister: 12 tests passed
+- ✅ admin: 81 tests passed
+
+**Lock File Changes:**
+- Removed `async-timeout` and `tomli` (both were Python <3.11 compatibility shims, no longer needed in 3.12)
+- All lock files regenerated successfully with updated dependency graphs
+
+**Key Learnings:**
+- Python 3.12 removed the need for `async-timeout` (now built-in) and `tomli` (tomllib is in stdlib)
+- The `uv lock` command automatically prunes unnecessary dependencies when the Python requirement changes
+- All Aithena dependencies confirmed compatible with Python 3.12 (audit was correct)
+- GitHub Actions python-version must be updated in multiple workflow files — grep is your friend
+- The embeddings-server service uses `requirements.txt` instead of `pyproject.toml` + uv (architectural inconsistency noted for future cleanup)
+
+**Files Modified:**
+- .github/workflows/ci.yml (2 occurrences)
+- .github/workflows/integration-test.yml
+- .github/workflows/security-bandit.yml
+- .github/workflows/security-checkov.yml
+- src/solr-search/pyproject.toml, Dockerfile, uv.lock
+- src/document-indexer/pyproject.toml, Dockerfile, uv.lock
+- src/document-lister/pyproject.toml, Dockerfile, uv.lock
+- src/admin/pyproject.toml, Dockerfile, uv.lock
+- src/embeddings-server/Dockerfile
+
+**PR:** #414 (squad/347-python312-upgrade → dev)
+
+**Related Issues:** Closes #347, based on audit from #346
