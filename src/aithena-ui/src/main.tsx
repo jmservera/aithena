@@ -5,6 +5,7 @@ import App from './App.tsx';
 import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { I18nProvider } from './contexts/I18nContext';
+import './design-tokens.css';
 import './normal.css';
 
 async function bootstrap() {
