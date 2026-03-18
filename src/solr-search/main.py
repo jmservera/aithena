@@ -185,7 +185,7 @@ class RedisRateLimiter:
 
     def check_rate_limit(self, request: Request) -> tuple[bool, int]:
         """Check if request is within rate limit.
-        
+
         Returns:
             tuple[bool, int]: (is_allowed, retry_after_seconds)
         """
@@ -247,7 +247,7 @@ def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
 
 def check_search_rate_limit(request: Request) -> None:
     """FastAPI dependency to check rate limit for search endpoint.
-    
+
     Raises:
         HTTPException: 429 Too Many Requests if rate limit exceeded
     """
@@ -568,7 +568,7 @@ def search(
 
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
-    
+
     **Rate Limit:** 100 requests per minute per IP address.
     """
     if mode not in VALID_SEARCH_MODES:
