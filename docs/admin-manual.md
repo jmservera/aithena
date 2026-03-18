@@ -1933,4 +1933,4 @@ To roll back to v1.6.0:
    docker compose pull
    docker compose up -d
    ```
-3. No data migration rollback needed — v1.7.0 makes no schema or volume changes. The app will detect the `aithena.locale` key and continue using it (no migration back to `aithena-locale` occurs).
+3. No data migration rollback needed — v1.7.0 makes no schema or volume changes. Note: v1.6.0 code reads only the old `aithena-locale` key, so after rollback it will not find the migrated `aithena.locale` key. Users who switched languages during v1.7.0 will revert to browser locale detection on their next visit. This is a cosmetic reset, not data loss.

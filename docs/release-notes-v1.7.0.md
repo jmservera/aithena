@@ -82,7 +82,7 @@ For operators moving to **v1.7.0**:
 - **Page i18n extraction:** All 5 page components and App.tsx now use `react-intl` for string rendering. English is the default language (no translation required).
 - **Dependabot routing:** Heartbeat workflow correctly identifies Dependabot PRs and routes them to squad members based on dependency domain.
 - **CI workflow upgrades:** Dependabot auto-merge workflow passes with Node 22, explicit failure handling working correctly.
-- **All tests passing:** 622 tests across 6 services with no regressions from v1.6.0.
+- **All tests passing:** 632 tests executed (628 passed, 4 skipped) across 5 services, plus 9 CI-verified embeddings-server tests (641 total). No regressions from v1.6.0.
 
 ## Documentation updated for this release
 

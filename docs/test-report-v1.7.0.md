@@ -11,7 +11,7 @@
 
 ## Summary
 
-All **622 tests** executed across 5 services (embeddings-server excluded from automated run due to torch/CUDA dependency — see notes). No regressions from v1.6.0. All services pass with full test coverage thresholds met.
+All **632 tests** executed across 5 services (628 passed, 4 skipped; embeddings-server's 9 tests excluded from automated run due to torch/CUDA dependency — see notes). 641 total including not-run. No regressions from v1.6.0. All services pass with full test coverage thresholds met.
 
 ---
 
