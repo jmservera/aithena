@@ -2,7 +2,34 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-FROM python:3.12-slim
+# ---------- build stage ----------
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2 \
+    HF_HOME=/models/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+RUN mkdir -p /models
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --native-tls
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# Pre-download the model so it is baked into the image
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
+
+COPY main.py ./
+COPY config ./config
+
+# ---------- runtime stage ----------
+FROM python:3.12-slim AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
@@ -23,25 +50,23 @@ ENV VERSION=${VERSION} \
     HF_HOME=/models/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /models
+RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
-COPY pyproject.toml uv.lock ./
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /models /models
+COPY --from=builder /app/main.py /app/main.py
+COPY --from=builder /app/config /app/config
 
-RUN uv sync --frozen --no-dev --no-install-project
+RUN chown -R app:app /app /models
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
-
-COPY main.py ./
-COPY config ./config
-
 EXPOSE 8080
+
+USER app
 
 CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
