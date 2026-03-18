@@ -1,0 +1,478 @@
+# GitHub Action: Automated Release Documentation
+#
+# Triggers on:
+# - Tag push matching v*.*.* (e.g., v1.8.0)
+# - Manual workflow_dispatch with version input
+#
+# What it does:
+# 1. Collects release context (PRs, issues, CHANGELOG, test results)
+# 2. Uses GitHub Copilot CLI to generate release documentation
+# 3. Creates docs/releases/v{version}-release-notes.md
+# 4. Opens a PR for human review
+#
+# This workflow automates the release documentation process, replacing
+# the manual "Release documentation for vX.Y.Z" issue pattern.
+
+name: Release Documentation
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.8.0 or v1.8.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate-docs:
+    name: Generate release documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      # ─────────────────────────────────────────────────────────────
+      # Step 1: Checkout repository and setup
+      # ─────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0  # Full history for git log comparison
+          ref: dev        # Always work from dev branch
+          persist-credentials: false
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 2: Determine version and milestone
+      # ─────────────────────────────────────────────────────────────
+      - name: Parse version from tag or input
+        id: version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # Determine version from tag or manual input
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${TAG_NAME#v}"
+          else
+            VERSION="${INPUT_VERSION#v}"
+          fi
+          
+          # Validate version format (X.Y.Z)
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format: $VERSION (expected X.Y.Z)"
+            exit 1
+          fi
+          
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "milestone=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=automation/release-docs-v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "✅ Version: $VERSION"
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 3: Find previous release tag for comparison
+      # ─────────────────────────────────────────────────────────────
+      - name: Determine previous release tag
+        id: prev-tag
+        env:
+          CURRENT_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git fetch --tags --force
+          
+          # Find all tags matching vX.Y.Z, sort by version, get the one before current
+          PREV_TAG=$(git tag -l 'v*.*.*' | \
+            grep -v "^${CURRENT_TAG}$" | \
+            sort -V | tail -n1)
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "⚠️ No previous tag found — using initial commit"
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          
+          echo "previous=$PREV_TAG" >> "$GITHUB_OUTPUT"
+          echo "✅ Previous release: $PREV_TAG"
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 4: Collect release context
+      # ─────────────────────────────────────────────────────────────
+      - name: Collect merged PRs
+        id: prs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MILESTONE: ${{ steps.version.outputs.milestone }}
+          PREV_TAG: ${{ steps.prev-tag.outputs.previous }}
+          CURRENT_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          mkdir -p /tmp/release-context
+          
+          # Query PRs merged to dev branch in the milestone
+          gh pr list \
+            --repo "${{ github.repository }}" \
+            --state merged \
+            --base dev \
+            --json number,title,body,mergedAt,author,labels \
+            --jq "[.[] | select(.labels[].name == \"$MILESTONE\")]" \
+            > /tmp/release-context/prs.json
+          
+          PR_COUNT=$(jq 'length' /tmp/release-context/prs.json)
+          echo "count=$PR_COUNT" >> "$GITHUB_OUTPUT"
+          echo "✅ Collected $PR_COUNT merged PRs"
+
+      - name: Collect closed issues
+        id: issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MILESTONE: ${{ steps.version.outputs.milestone }}
+        run: |
+          # Query issues closed in the milestone
+          gh issue list \
+            --repo "${{ github.repository }}" \
+            --state closed \
+            --milestone "$MILESTONE" \
+            --json number,title,body,closedAt,labels \
+            --limit 200 \
+            > /tmp/release-context/issues.json
+          
+          ISSUE_COUNT=$(jq 'length' /tmp/release-context/issues.json)
+          echo "count=$ISSUE_COUNT" >> "$GITHUB_OUTPUT"
+          echo "✅ Collected $ISSUE_COUNT closed issues"
+
+      - name: Extract CHANGELOG section
+        id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ ! -f CHANGELOG.md ]; then
+            echo "⚠️ CHANGELOG.md not found"
+            echo "## No CHANGELOG.md found" > /tmp/release-context/changelog.md
+            exit 0
+          fi
+          
+          # Extract the section for this version from CHANGELOG.md
+          # Format: ## [X.Y.Z] — YYYY-MM-DD
+          awk "/^## \[$VERSION\]/,/^## \[/ { if (/^## \[/ && !/\[$VERSION\]/) exit; print }" \
+            CHANGELOG.md > /tmp/release-context/changelog.md
+          
+          if [ -s /tmp/release-context/changelog.md ]; then
+            echo "✅ Extracted CHANGELOG section for v$VERSION"
+          else
+            echo "⚠️ No CHANGELOG section found for v$VERSION"
+            echo "## No CHANGELOG entry for v$VERSION" > /tmp/release-context/changelog.md
+          fi
+
+      - name: Collect recent CI test results
+        id: ci-tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # Find the commit SHA for the tag
+          TAG_SHA=$(git rev-parse "$CURRENT_TAG" 2>/dev/null || echo "")
+          
+          if [ -z "$TAG_SHA" ]; then
+            echo "⚠️ Tag $CURRENT_TAG not found locally — using latest dev commit"
+            TAG_SHA=$(git rev-parse dev)
+          fi
+          
+          # Get the latest CI workflow run for this commit
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow ci.yml \
+            --commit "$TAG_SHA" \
+            --limit 1 \
+            --json conclusion,databaseId,status,url \
+            > /tmp/release-context/ci-run.json
+          
+          if [ -s /tmp/release-context/ci-run.json ] && [ "$(jq 'length' /tmp/release-context/ci-run.json)" -gt 0 ]; then
+            CONCLUSION=$(jq -r '.[0].conclusion' /tmp/release-context/ci-run.json)
+            echo "✅ CI test result: $CONCLUSION"
+          else
+            echo "⚠️ No CI run found for commit $TAG_SHA"
+            echo '[]' > /tmp/release-context/ci-run.json
+          fi
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 5: Generate release documentation with Copilot CLI
+      # ─────────────────────────────────────────────────────────────
+      - name: Generate release notes with Copilot CLI
+        id: copilot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          MILESTONE: ${{ steps.version.outputs.milestone }}
+          PREV_TAG: ${{ steps.prev-tag.outputs.previous }}
+          CURRENT_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -e
+          
+          # Create output directory
+          mkdir -p docs/releases
+          OUTPUT_FILE="docs/releases/v${VERSION}-release-notes.md"
+          
+          # Build the prompt for Copilot CLI
+          cat > /tmp/copilot-prompt.txt <<'EOF'
+          Generate comprehensive release documentation for Aithena v${VERSION}.
+          
+          ## Context Available
+          - Merged PRs: /tmp/release-context/prs.json
+          - Closed Issues: /tmp/release-context/issues.json
+          - CHANGELOG section: /tmp/release-context/changelog.md
+          - CI test results: /tmp/release-context/ci-run.json
+          - Git commit range: ${PREV_TAG}..${CURRENT_TAG}
+          - Milestone: ${MILESTONE}
+          
+          ## Task
+          Create a release notes document at: ${OUTPUT_FILE}
+          
+          The document should include:
+          1. **Summary**: High-level overview of this release (2-3 sentences)
+          2. **What's New**: Key features and improvements from merged PRs
+          3. **Bug Fixes**: Issues resolved in this release
+          4. **Breaking Changes**: Any backwards-incompatible changes (if any)
+          5. **Testing**: Summary of CI test results and quality metrics
+          6. **Upgrade Instructions**: How to upgrade from previous version (if needed)
+          7. **Full Changelog**: Reference to CHANGELOG.md
+          
+          ## Style Guidelines
+          - Use clear, concise language
+          - Group related changes together
+          - Use emoji sparingly (✨ new, 🐛 fix, ⚠️ breaking, 🔒 security)
+          - Include PR/issue numbers as links
+          - Write for end-users, not developers
+          - If the CHANGELOG has content, incorporate it
+          - If any PRs mention "breaking" or "BREAKING", highlight those
+          
+          ## Output Format
+          Create the file as Markdown with front matter:
+          ---
+          version: ${VERSION}
+          date: $(date -u +%Y-%m-%d)
+          milestone: ${MILESTONE}
+          ---
+          
+          Read the context files, analyze the changes, and generate comprehensive release notes.
+          EOF
+          
+          # Expand variables in the prompt
+          envsubst < /tmp/copilot-prompt.txt > /tmp/copilot-prompt-expanded.txt
+          
+          # Run Copilot CLI (may not be available in all environments)
+          if command -v gh copilot >/dev/null 2>&1; then
+            echo "✅ Copilot CLI available — generating docs"
+            gh copilot --autopilot -p "$(cat /tmp/copilot-prompt-expanded.txt)" || {
+              echo "⚠️ Copilot CLI failed — will use fallback template"
+              echo "fallback=true" >> "$GITHUB_OUTPUT"
+            }
+          else
+            echo "⚠️ Copilot CLI not available — will use fallback template"
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
+          fi
+          
+          # Check if output file was created
+          if [ ! -f "$OUTPUT_FILE" ]; then
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "fallback=false" >> "$GITHUB_OUTPUT"
+            echo "✅ Release notes generated at $OUTPUT_FILE"
+          fi
+
+      - name: Generate fallback template
+        if: steps.copilot.outputs.fallback == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MILESTONE: ${{ steps.version.outputs.milestone }}
+          PR_COUNT: ${{ steps.prs.outputs.count }}
+          ISSUE_COUNT: ${{ steps.issues.outputs.count }}
+        run: |
+          OUTPUT_FILE="docs/releases/v${VERSION}-release-notes.md"
+          
+          cat > "$OUTPUT_FILE" <<EOF
+          ---
+          version: ${VERSION}
+          date: $(date -u +%Y-%m-%d)
+          milestone: ${MILESTONE}
+          generated: fallback-template
+          ---
+          
+          # Aithena v${VERSION} Release Notes
+          
+          > ⚠️ **Note**: This is a template document. Copilot CLI was not available during generation.
+          > Please review and complete the sections below before releasing.
+          
+          ## Summary
+          
+          <!-- Add a 2-3 sentence overview of this release -->
+          
+          Aithena v${VERSION} includes:
+          - ${PR_COUNT} merged pull requests
+          - ${ISSUE_COUNT} closed issues from milestone ${MILESTONE}
+          
+          ## What's New
+          
+          <!-- List key features and improvements -->
+          
+          $(cat /tmp/release-context/prs.json | jq -r '.[] | "- **#\(.number)**: \(.title)"')
+          
+          ## Bug Fixes
+          
+          <!-- List bug fixes from closed issues -->
+          
+          $(cat /tmp/release-context/issues.json | jq -r '.[] | select(.labels[].name == "bug") | "- **#\(.number)**: \(.title)"')
+          
+          ## Breaking Changes
+          
+          <!-- List any breaking changes - check PRs/issues for "breaking" label -->
+          
+          None identified (review required).
+          
+          ## Testing
+          
+          <!-- Add CI test summary -->
+          
+          CI Status: $(cat /tmp/release-context/ci-run.json | jq -r '.[0].conclusion // "Unknown"')
+          
+          ## Upgrade Instructions
+          
+          <!-- Add upgrade instructions if needed -->
+          
+          Standard upgrade process:
+          1. Pull the latest changes: \`git pull origin main\`
+          2. Update dependencies: \`./buildall.sh\`
+          3. Restart services: \`docker compose down && docker compose up -d\`
+          
+          ## Full Changelog
+          
+          See [CHANGELOG.md](../../CHANGELOG.md#${VERSION//.}) for the complete list of changes.
+          
+          ---
+          
+          **Released**: $(date -u +%Y-%m-%d)  
+          **Milestone**: ${MILESTONE}
+          EOF
+          
+          echo "✅ Fallback template created at $OUTPUT_FILE"
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 6: Create PR with generated documentation
+      # ─────────────────────────────────────────────────────────────
+      - name: Create release documentation branch
+        env:
+          BRANCH: ${{ steps.version.outputs.branch }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git checkout -b "$BRANCH"
+          git add docs/releases/
+          
+          git commit -m "docs: add release notes for v${VERSION}
+
+          Auto-generated by release-docs workflow.
+          
+          - Release notes: docs/releases/v${VERSION}-release-notes.md
+          - Milestone: ${{ steps.version.outputs.milestone }}
+          - PRs merged: ${{ steps.prs.outputs.count }}
+          - Issues closed: ${{ steps.issues.outputs.count }}
+          
+          Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+
+      - name: Push branch and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.version.outputs.branch }}
+          VERSION: ${{ steps.version.outputs.version }}
+          MILESTONE: ${{ steps.version.outputs.milestone }}
+        run: |
+          git push origin "$BRANCH"
+          
+          # Create PR body
+          cat > /tmp/pr-body.md <<EOF
+          ## Release Documentation for v${VERSION}
+          
+          This PR contains auto-generated release documentation for milestone **${MILESTONE}**.
+          
+          ### Generated Files
+          - \`docs/releases/v${VERSION}-release-notes.md\`
+          
+          ### Context
+          - **PRs merged**: ${{ steps.prs.outputs.count }}
+          - **Issues closed**: ${{ steps.issues.outputs.count }}
+          - **Previous release**: ${{ steps.prev-tag.outputs.previous }}
+          - **CI status**: $(cat /tmp/release-context/ci-run.json | jq -r '.[0].conclusion // "Unknown"')
+          
+          ### Review Checklist
+          - [ ] Release notes are accurate and complete
+          - [ ] Breaking changes are clearly highlighted
+          - [ ] Upgrade instructions are correct
+          - [ ] All milestone issues are documented
+          - [ ] Screenshots or demos added (if applicable)
+          
+          ### Next Steps
+          1. Review and edit the generated documentation
+          2. Add any missing context or details
+          3. Merge this PR to \`dev\`
+          4. Proceed with release process
+          
+          ---
+          
+          🤖 Generated by [release-docs.yml](.github/workflows/release-docs.yml)
+          EOF
+          
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base dev \
+            --head "$BRANCH" \
+            --title "docs: release documentation for v${VERSION}" \
+            --body-file /tmp/pr-body.md \
+            --label "documentation" \
+            --label "${MILESTONE}"
+          
+          echo "✅ PR created for review"
+
+      # ─────────────────────────────────────────────────────────────
+      # Step 7: Summary
+      # ─────────────────────────────────────────────────────────────
+      - name: Workflow summary
+        if: always()
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          ## Release Documentation Generated
+          
+          **Version**: v${VERSION}  
+          **Milestone**: ${{ steps.version.outputs.milestone }}  
+          **Branch**: ${{ steps.version.outputs.branch }}
+          
+          ### Context Collected
+          - ✅ Merged PRs: ${{ steps.prs.outputs.count }}
+          - ✅ Closed Issues: ${{ steps.issues.outputs.count }}
+          - ✅ CHANGELOG extracted
+          - ✅ CI test results collected
+          
+          ### Generated Files
+          - \`docs/releases/v${VERSION}-release-notes.md\`
+          
+          ### Next Steps
+          1. Review the PR created by this workflow
+          2. Edit the documentation as needed
+          3. Merge to \`dev\` when ready
+          4. Proceed with release tagging
+          
+          ---
+          
+          📝 [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          EOF
