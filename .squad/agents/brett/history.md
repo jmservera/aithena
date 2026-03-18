@@ -1,13 +1,6 @@
 ## v0.7.0 Milestone Completion
 
-**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
-- Versioning infrastructure (#199, #204) ✅
-- Version endpoints (#200, #203) ✅  
-- UI version footer (#201) ✅
-- Admin containers endpoint (#202) ✅
-- Documentation-first release process (#205) ✅
-
-3 decisions recorded. Ready for release to `main`.
+**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. Released v1.0.0–v1.7.0 over 4 cycles.
 
 ---
 
@@ -19,679 +12,205 @@
 - **Stack:** Python (backend services), TypeScript/React + Vite (UI), Docker Compose, Apache Solr (search), multilingual embeddings
 - **Joined:** 2026-03-14 as Infrastructure Architect (Docker, Compose, SolrCloud)
 - **Current infrastructure:** SolrCloud 3-node cluster + ZooKeeper 3-node ensemble, Redis, RabbitMQ, nginx, 9 Python services in Docker
-- **Active initiative:** UV migration across 7 Python services (issues #81-#87), security scanning (#88-#90), CI hardening
-
-## Core Context — Infrastructure Architect Focus Areas
-
-### Key Infrastructure Patterns & Learnings (Reskill Summary)
-
-**Docker Compose Hardening (Issue #52) — Complete Specification:**
-- Health checks: 8 new checks with context-specific start_periods (10-60s for model-loading, cluster formation)
-- Resource limits: Memory (128m-2g), CPU reservations, log rotation (10m × 3 files = 30MB per service)
-- Restart policies: `unless-stopped` for critical/stateful, `on-failure` for stateless workers
-- Graceful shutdown: `stop_grace_period` (60s Solr/ZK, 30s RabbitMQ/Redis, 10s others)
-- Dependency fixes: 5 upgrades from `service_started` → `service_healthy`
-- Production guide: `docs/deployment/production.md` (startup order, volume init, health validation, troubleshooting)
-
-**CI/CD Security Patterns — Zizmor + Checkov:**
-- **Secrets handling:** Use inline `with:` parameters, never step-level `env:` (secrets-outside-env zizmor rule)
-- **Template expansion:** Always `${{ secrets.X }}` syntax in workflows, never shell variable expansion
-- **Bot conditions:** `pull_request_target` event + copilot author detection guards (copilot-approve-runs.yml)
-- **IaC scanning:** Checkov workflow with soft_fail + path filtering, SARIF integration, documented exceptions
-- **GitHub Actions exceptions:** CKV_GHA_7 (workflow_dispatch inputs) — document when input validation protects supply chain
-
-**Release Packaging & Versioning (v0.7.0 Complete):**
-- Docs-gate-the-tag pattern: Release docs merged BEFORE tagging (.github/ISSUE_TEMPLATE/release.md checklist)
-- docker-compose.prod.yml: GHCR pull model (no build in production), OCI labels + version endpoints
-- release.yml automation: triggers on `v*.*.*` tags, builds/pushes all 6 services to GHCR
-- Tarball packaging: `.env.prod.example`, installer script, deployment docs as release asset
-- Token scopes: GitHub Data API (refs, trees, commits) requires `workflow` scope for `.github/workflows/` modifications
+- **Releases:** v1.4.0–v1.7.0 shipped (dependency upgrades, deployment hardening, internationalization, quality infrastructure)
 
-**RabbitMQ & SolrCloud Operations:**
-- **RabbitMQ 3.x → 4.0:** Feature flags must be enabled before upgrade; Mnesia directory isolation critical
-- **Bind-mount volumes:** `docker volume rm` doesn't clear host directory; must `rm -rf` directly
-- **SolrCloud 3-node + ZK ensemble:** Port collision (8080 ZK-admin vs Solr-node1) manageable via networking
-- **Health check binaries:** Add `wget` to Alpine images for health checks; `pgrep -f python` for workers
-- **Cold-start timing:** start_period tuning critical (60s embeddings for model load, 30s ZK/Solr cluster formation)
+## Core Context — Infrastructure Patterns (Reskill)
 
-**Workflow Automation & Copilot Integration:**
-- `pull_request_target` is correct event for bot PRs (avoids approval chicken-and-egg loop)
-- release-docs.yml: Copilot CLI integration with fallback template generation
-- Squad issue assignment: COPILOT_ASSIGN_TOKEN via PAT, requires org/repo token scope
-- Workflow run approval: API endpoint `github.rest.actions.approveWorkflowRun()`, 15s wait needed after PR sync
+### Docker Compose Hardening & Production Operations
 
-**Infrastructure Context (SolrCloud 3-node Cluster):**
-- **Cluster topology:** 3-node ZooKeeper ensemble + 3-node Solr cloud (all healthy, namespace routing)
-- **Service startup:** Now uses `service_healthy` conditions (deprecated `service_started`)
-- **Volume strategy:** Bind mounts at `/source/volumes/` + `/home/jmservera/booklibrary` (explicit operator control)
-- **nginx Reverse Proxy:** Routes admin UIs (/admin/solr/, /rabbitmq/, /streamlit/, /redis/), app frontend, API
-- **No HTTPS:** Current config is HTTP-only (ACME cert setup exists but not enforced)
-
-## Learnings
-
-<!-- Append learnings below -->
+**Complete Specification (Issue #52):**
+- **Health checks:** 8 new checks with context-specific start_periods (10-60s for model loading, cluster formation). Pattern: `GET /health` endpoints (wget for Debian, pgrep for workers)
+- **Resource limits:** Memory (128m-2g), CPU reservations (0.5-1.0 core), log rotation (json-file, 10m × 3 files = 30MB per service)
+- **Restart policies:** `unless-stopped` for critical/stateful services; `on-failure` for stateless workers
+- **Graceful shutdown:** `stop_grace_period` (60s Solr/ZooKeeper, 30s RabbitMQ/Redis, 10s others) prevents truncated operations
+- **Dependency ordering:** 5 upgrades from `service_started` → `service_healthy` ensures startup sequence respects readiness
+- **Production guide:** `docs/deployment/production.md` covers startup order, volume initialization, health validation, monitoring, troubleshooting, backup/restore
 
-### 2026-03-17T13:42Z — Issue #363: Release Packaging Strategy (PR #427)
-
-**Task:** Create a production-ready release tarball with docker-compose.prod.yml, .env.prod.example, installer script, and deployment documentation.
-
-**Execution:**
-1. Designed release packaging strategy with GHCR pull model (no build step in production)
-2. Created `docker-compose.prod.yml` (image pulls instead of builds for all custom services)
-3. Created `.env.prod.example` with all variables documented inline
-4. Created `docs/quickstart.md` with deployment quick-start instructions
-5. Extended `.github/workflows/release.yml` with `package-release` job (creates tarball, uploads as release asset)
-6. SHA-pinned all GitHub Actions (upload-artifact, download-artifact)
-7. Validated YAML, volume mount paths, resource limits preservation
-
-**Key decisions documented in decisions.md:**
-- Image distribution via GHCR (pull model, lightweight, enables version pinning)
-- Volume convention: preserve `/source/volumes/` bind mounts (explicit control for operators)
-- Configuration via .env + installer (no cloud secret managers—fully on-premises)
-- Package scope: deployment bundle only (~100 KB, no source code)
-- Workflow integration: attach tarball to GitHub Release as asset
-
-**Outcome:** PR #427 merged; users now have complete production deployment package.
-
-### Release checklist and docs-gate-the-tag pattern
-
-**Decision:** Release docs must be generated and merged BEFORE tagging (Option B: docs gate the tag). This is formalized in `.github/ISSUE_TEMPLATE/release.md` with an ordered checklist.
-
-**Key paths:**
-- `.github/ISSUE_TEMPLATE/release.md` — release checklist issue template
-- `.github/workflows/release-docs.yml` — generates release notes, test reports, and reviews admin/user manuals
-- `.github/workflows/release.yml` — triggers on `v*.*.*` tags to build Docker images
-
-**Token scope lesson:** GitHub blocks ALL Git Data API operations (trees, commits, refs) that touch `.github/workflows/` paths without the `workflow` scope. This includes the low-level Git Data API, not just the Contents API. When automating workflow file changes, ensure the token has `workflow` scope or use a GitHub App token with that permission.
-
-**Manuals:** Both `docs/admin-manual.md` and `docs/user-manual.md` exist and are now included in the release-docs workflow Copilot CLI prompt for review each release.
-
-### 2026-03-16T23:20Z — Retro Action: Clean up stale remote branches
-
-**Task:** Address retro finding: 66 stale remote branches (38 from merged PRs + ~28 abandoned).
-
-**Execution:**
-1. Fetched and pruned remote branches (2 already removed by prior cleanup)
-2. Identified 44 branches with merged PRs across `copilot/*` and `squad/*` patterns
-3. Deleted all 44 in 9 batches of 5 branches each (smooth, no rate limiting)
-4. Verified 21 remaining branches all have active PRs (not abandoned)
-5. Protected branches kept: `main`, `dev`, `oldmain`, `squad/retro-migration-checkpoint`
-6. Enabled GitHub repository setting `delete_branch_on_merge=true` — future merged PRs will auto-delete
-
-**Outcome:**
-- 44 branches deleted (44/66 identified in retro)
-- Repository cleanup enables continuous head-branch housekeeping going forward
-- Reduced cognitive load on branch navigation; retro concern resolved
-
-**Branch breakdown:**
-- `copilot/*`: 12 merged deletions + 6 active PRs remain
-- `squad/*`: 32 merged deletions + 15 active PRs remain
-- Active PR branches are features in flight; no deletion risk
-
-### 2026-03-16T16:10Z — Issue #356: solr-search E2E health check timing
-
-- The `solr-search` FastAPI container exposes a lightweight `/health` endpoint, but the app still runs auth DB initialization in its startup lifespan before that route is reachable.
-- In CI, the original `start_period: 10s` for the Compose health check was too aggressive; increasing it to `30s` gives the container enough time to finish startup on slower runners without changing application code.
-- The `solr-search` image already includes `wget`, so the E2E failure was a readiness-timing problem, not a missing health check binary.
-
-### 2026-03-16T15:25Z — Issue #304: release-docs workflow validation
-
-- Fixed a broken `gh run list | python3 - <<'PY'` pattern in `.github/workflows/release-docs.yml`; the heredoc consumed stdin, so integration-test run IDs were never parsed for artifact download.
-- Added a release-context fallback so milestone-based PR queries can drop back to recent merged PRs on `dev` when no PRs are tagged with the selected milestone.
-- Removed the stale `Closes #270` footer from generated release-doc PR bodies so future automation runs do not reference the original bootstrap issue.
-
-### 2026-03-16T13:00Z — Issue #303: release-docs Copilot CLI refresh
-
-- Updated `.github/workflows/release-docs.yml` to install only the official `@github/copilot` package and rely on the documentation template fallback when CLI installation or generation fails.
-- Switched the workflow invocation to `copilot --agent squad --autopilot --allow-all-tools` and rewrote the prompt to address Newt explicitly as the release-doc author.
-- Preserved the existing fallback template generation path so release-note and test-report drafts still land in `docs/` when Copilot CLI is unavailable.
-
-
-### 2026-03-16T12:27Z — Validated CI/CD pipelines post-restructure (#224) [COMPLETE]
-
-- ✅ Issue #224 closed. All workflows validated.
-- Verified all workflow files for path correctness: ci.yml, lint-frontend.yml, version-check.yml, integration-test.yml.
-- All working-directory and cache-dependency paths updated correctly.
-- docker-compose.yml syntax valid; all service context paths and volume mounts reflect `src/...` structure.
-- buildall.sh syntax check passes; Python service directory list updated to `src/admin`, `src/document-indexer`, etc.
-- No broken working-directory or cache-dependency paths; git history preserved (git mv operations).
-- Docker build contexts intentionally remain rooted at repo root (per Parker's design decision).
-- CI/CD pipelines ready for merged PR on dev; downstream testing complete (Dallas #223 passed).
-- Future improvement noted: consider adding Solr/ZooKeeper health checks in docker-compose.yml (separate issue).
-
-### 2026-03-15 — Issue #204: GitHub Actions versioned release automation
-
-- Replaced the old tag-only release workflow with a semver-validated GHCR publish pipeline for all six source-built services: `admin`, `aithena-ui`, `document-indexer`, `document-lister`, `embeddings-server`, and `solr-search`.
-- The new `.github/workflows/release.yml` builds each image with `VERSION`, `GIT_COMMIT`, and `BUILD_DATE`, then publishes four release tags per image via `docker/metadata-action`: full (`X.Y.Z`), minor (`X.Y`), major (`X`), and `latest`.
-- Kept GitHub Release publication in the workflow so the tag ceremony still produces release notes after all image pushes succeed.
-- Added `.github/workflows/version-check.yml` to gate PRs into `dev` and `main` on a valid root `VERSION` file plus `ARG VERSION` declarations in the six release Dockerfiles.
-- No `ci.yml` change was required because the existing CI workflow only runs on `dev` branch pushes/PRs, so it does not conflict with tag-triggered release publishing.
-
-### 2026-03-14 — Reskill session: current infrastructure snapshot
-
-**9 services operational:**
-- Source-built: `aithena-ui`, `admin` (Streamlit), `document-lister`, `document-indexer`, `solr-search`, `embeddings-server`, `redis-commander`
-- SolrCloud 3-node: `solr`, `solr2`, `solr3` (8983, 8984, 8985), all healthy
-- ZooKeeper 3-node: `zoo1` (2181 + AdminServer 8080), `zoo2` (2182), `zoo3` (2183)
-- Infrastructure: Redis 6379 (healthy ✓), RabbitMQ 5672/15672 (health check ✓ but cold-start fails #166)
-
-**nginx reverse-proxy:**
-- Admin ingress: `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, `/admin/redis/` (with X-Forwarded-Prefix, WebSocket support, path rewriting)
-- API ingress: `/v1/` and `/documents/` → solr-search, `/` → React app
-- No HTTPS/auth in current config (cert setup ready but HTTP-only)
-
-**Recommended priority fixes for v0.5:**
-1. Fix #166 (RabbitMQ cold-start): increase health check retries, pin RabbitMQ version to 3.13 or 4.0
-2. Add Solr + ZooKeeper health checks, switch `depends_on` to `service_healthy`
-3. Fix #167 (document pipeline): add service connection retry logic
-4. Harden ZooKeeper: add `unless-stopped` restart, consider autopurge
-5. Move ZooKeeper AdminServer from 8080 to 18080 (collision with solr-search)
-6. Mount Solr `/backup` path for persistent backups
-7. Add resource limits: `SOLR_HEAP=1g`, memory limits, log caps
-8. Add graceful shutdown: `stop_grace_period: 60s` for Solr/ZooKeeper
-9. Expand Solr volume mount: `/var/solr` instead of just `/var/solr/data`
-
-### 2026-03-14 — Production vs development port publishing split
-
-- `docker-compose.yml` now leaves host publishing to `nginx` only (`80`/`443`); Redis, RabbitMQ, ZooKeeper, Solr nodes, solr-search, and embeddings stay network-internal via `expose:`.
-- `docker-compose.override.yml` restores the local debug surfaces: Redis `6379`, RabbitMQ `5672`/`15672`, solr-search `8080`, Streamlit `8501`, Redis Commander `8081`, ZooKeeper `18080`/`2181`-`2183`, Solr `8983`-`8985`, embeddings `8085`.
-- nginx already covers the UI and operator surfaces that production needs: `/`, `/v1/`, `/documents/`, `/admin/solr/`, `/admin/rabbitmq/`, `/admin/streamlit/`, `/admin/redis/`.
-- This closes the earlier hardening gap about over-published Compose ports without breaking the local debugging workflow.
-
-### 2026-07-24 — v0.6.0 Group 6: Docker Compose hardening spec for #52
-
-**Task:** Review Ripley's v0.6.0 release plan and create production hardening specification for #52 (Phase 4 hardening).
-
-**Current state assessment (20+ services analyzed):**
-- ✅ **Already hardened:** Redis, RabbitMQ, ZooKeeper (zoo1-3), Solr (solr, solr2, solr3) have health checks and correct restart policies
-- ✅ **Port security correct:** Prod/dev split already implemented (nginx-only publishing in base compose, debug ports in override)
-- ❌ **Missing health checks (8 services):** embeddings-server, solr-search, document-lister, document-indexer, aithena-ui, streamlit-admin, redis-commander, nginx
-- ❌ **Restart policy gaps:** redis/rabbitmq use `on-failure` (should be `unless-stopped`); ZooKeeper nodes missing restart policy entirely
-- ❌ **No resource limits:** Zero services have memory/CPU limits or log rotation configured
-- ❌ **No graceful shutdown:** Solr/ZooKeeper/RabbitMQ/Redis need `stop_grace_period` (60s/60s/30s/30s respectively)
-- ❌ **depends_on gaps:** 5 services use `service_started` instead of `service_healthy` (embeddings in document-indexer, solr-search dependencies, nginx upstreams)
-- 🔴 **CRITICAL BUG:** embeddings-server has port conflict (`expose: 8080` but `PORT=8085` env var) — health checks will fail until fixed
-
-**Hardening spec deliverables (.squad/decisions/inbox/brett-hardening-spec.md):**
-1. **Service-by-service health checks:** 8 new health checks with specific intervals/timeouts/retries/start_periods
-2. **Restart policies:** 8 upgrades to `unless-stopped`, 3 new policies (ZooKeeper nodes)
-3. **Resource limits:** Memory limits for all services (128m-2g), CPU reservations for Solr/embeddings (1.0 core), log rotation (10m × 3 files)
-4. **Graceful shutdown:** `stop_grace_period` for Solr (60s), ZooKeeper (60s), RabbitMQ (30s), Redis (30s)
-5. **Dependency fixes:** 5 changes from `service_started` → `service_healthy`
-6. **Code changes:** Health endpoints for nginx (`/health`), solr-search (`/health`), embeddings-server (`/health`); fix embeddings port conflict
-7. **Documentation:** New `docs/deployment/production.md` with startup order, resource requirements, volume initialization, health validation, backup/restore, troubleshooting
-
-**Key architectural decisions:**
-- **Tiered service classification:** Tier 1 (core infra: high availability), Tier 2 (stateless apps), Tier 3 (one-shot init)
-- **Resource limit philosophy:** 2-2.5x observed usage headroom; CPU reservations (not hard limits) to avoid throttling; log rotation to prevent disk exhaustion
-- **Health check timing:** Conservative `start_period` values (embeddings 60s for model loading, ZooKeeper/Solr 30s for cluster formation)
-- **Dependency graph validation:** nginx is LAST to start (waits for all upstreams healthy) — ensures zero-downtime production startup
-- **Dev workflow preservation:** No changes to docker-compose.override.yml; all hardening in base compose
-
-**Changes to Ripley's plan:**
-1. Expand #52 acceptance criteria to include resource limits + graceful shutdown + production guide
-2. Group 6 can start in parallel with Groups 1-4 (no code dependencies except embeddings port fix)
-3. Change issue label from `squad:parker` to `squad:brett` (hardening is infra domain, not backend)
-
-**Implementation strategy for @copilot:**
-- Order: Fix embeddings port conflict → add health endpoints → add health checks → update restart/limits/grace/deps → log rotation → documentation
-- Validation: Cold start test, failure recovery test, graceful shutdown timing, resource limit check, log rotation verification
-- PR checklist: 7 validation commands for Brett review gate
-
-**Risk mitigations:**
-- Embeddings port conflict (HIGH): Remove `PORT=8085` env var, standardize on 8080 internal
-- False positive health checks (MEDIUM): All checks have appropriate `start_period` (10-60s)
-- Resource limits too tight (HIGH): Conservative 2-2.5x headroom based on observed usage
-- Graceful shutdown too short (MEDIUM): 60s grace = compromise between safety and operator patience
-
-### 2026-03-15 — v0.6.0 Release Planning Complete
-
-**Summary:** Docker hardening spec (#52) finalized and approved. Recorded in decisions.md. Ready for @copilot implementation after Groups 1-5 complete.
-
-**Key Infrastructure Decisions Confirmed:**
-- Health Checks: 8 new checks + 5 depends_on fixes (service_started → service_healthy)
-- Restart Policies: `unless-stopped` for critical/stateful services
-- Resource Limits: Memory (256m-2g) + CPU reservations + log rotation (10m × 3 files)
-- Graceful Shutdown: 60s Solr/ZooKeeper, 30s RabbitMQ/Redis
-- Critical Fix: embeddings-server port conflict (remove PORT=8085, standardize on 8080)
-- Documentation: docs/deployment/production.md with startup order, requirements, troubleshooting
-
-**Implementation Order:** Port fix → health endpoints → health checks → restart/limits/grace → depends_on fixes → log rotation → documentation
-
-**Next:** Awaiting Juanma approval of release plan → Groups 1-5 execution → Issue #52 created + assigned → Implementation
-
-### 2026-03-15 — SEC-2 Implementation: Checkov IaC Scanning
-
-**Summary:** Implemented issue #89 (SEC-2) to add automated IaC security scanning to CI pipeline using checkov.
-
-**Deliverables (PR #191):**
-- `.github/workflows/security-checkov.yml`: GitHub Actions workflow for checkov scanning
-  - Scans all Dockerfiles (admin, aithena-ui, document-indexer, document-lister, embeddings-server, solr-search)
-  - Scans GitHub Actions workflow files (.github/workflows/*.yml)
-  - Runs in `soft_fail` mode (non-blocking, per SEC-2 spec)
-  - Outputs SARIF results and uploads to GitHub Code Scanning
-  - Path-filtered triggers: only runs when Dockerfiles, workflows, or docker-compose files change
-- `.checkov.yml`: Configuration with documented skip exceptions
-  - `CKV_DOCKER_2` (HEALTHCHECK): Health checks managed centrally in docker-compose.yml
-  - `CKV_DOCKER_3` (USER): Official base images run as non-root by default
-
-**Key Design Decisions:**
-- **Non-blocking enforcement:** `soft_fail: true` + `continue-on-error: true` ensures scans never block CI/CD
-- **Path filtering:** Workflow only triggers on relevant file changes (Dockerfiles, .github/workflows/*, docker-compose*.yml) to avoid wasting CI minutes
-- **SARIF integration:** Results uploaded to GitHub Security tab for centralized vulnerability tracking
-- **Documented exceptions:** All skip rules include detailed justifications in .checkov.yml comments
-
-**Validation:**
-- Workflow syntax validated (GitHub Actions YAML structure correct)
-- Configuration follows checkov best practices (framework specification, skip-check array format)
-- PR targets `dev` branch per squad branching strategy
-
-**Branch:** squad/89-sec2-checkov-scanning → dev
-**Status:** PR #191 open, awaiting review
-
-### 2026-03-15 — Issue #52 Implementation: Production Docker Hardening
-
-**Summary:** Implemented complete production hardening specification for docker-compose.yml per Phase 4 requirements.
-
-**Deliverables (PR #196):**
-
-**1. Port Conflict Fix (Critical Bug)**
-- Removed `PORT=8085` env var from embeddings-server in docker-compose.yml
-- Updated embeddings-server config default from 8086 to 8080
-- Fixed EMBEDDINGS_PORT in document-indexer (8085 → 8080)
-- Fixed EMBEDDINGS_URL in solr-search (8001 → 8080)
-- Resolves mismatch between `expose: 8080` and env vars
-
-**2. Health Endpoints**
-- Added `/health` endpoint to embeddings-server (returns status, model, embedding_dim)
-- Added `/health` location to nginx (200 "healthy", access_log off)
-- Verified solr-search already has `/health` endpoint
-
-**3. Health Checks (8 new services)**
-- embeddings-server: `wget http://localhost:8080/health` (60s start_period for model loading)
-- solr-search: `wget http://localhost:8080/health`
-- document-lister: `pgrep -f python`
-- document-indexer: `pgrep -f python`
-- aithena-ui: `wget http://localhost:80/`
-- streamlit-admin: `wget /_stcore/health`
-- redis-commander: `wget http://localhost:8081/`
-- nginx: `wget http://localhost:80/health`
-
-**4. Restart Policies**
-- `unless-stopped` (14 services): redis, rabbitmq, zoo1-3, solr1-3, embeddings-server, solr-search, streamlit-admin, redis-commander, aithena-ui, nginx
-- `on-failure` (2 services): document-lister, document-indexer (stateless workers)
-
-**5. Resource Limits (all 20+ services)**
-- Memory limits: 128m-2g range (2-2.5x observed usage headroom)
-- Memory reservations: Conservative allocations prevent OOM cascade
-- CPU reservations: Solr nodes 1.0 core each, embeddings 1.0, solr-search 0.5
-- Log rotation: json-file driver, 10m × 3 files per service (30MB max)
-
-**6. Graceful Shutdown (stop_grace_period)**
-- 60s: Solr (solr, solr2, solr3), ZooKeeper (zoo1, zoo2, zoo3)
-- 30s: Redis, RabbitMQ
-- 10s: All other services
-
-**7. Dependency Fixes (5 changes service_started → service_healthy)**
-- document-indexer: embeddings-server condition upgraded
-- solr-search: Added `condition: service_healthy` for solr and embeddings-server
-- aithena-ui: Added `condition: service_healthy` for solr-search
-- nginx: All upstreams now wait for `service_healthy` (aithena-ui, solr-search, streamlit-admin, redis-commander, solr)
-
-**8. Production Deployment Guide**
-- Created `docs/deployment/production.md` (509 lines)
-- Sections: prerequisites, resource requirements (16GB RAM, 8+ cores), startup order (5 tiers, 3-5min cold start), volume initialization, health validation, graceful shutdown, monitoring/logging, troubleshooting, backup/restore
-- Includes production hardening checklist (SSL, auth, firewall, monitoring)
-
-**Key Architectural Decisions:**
-- Tiered service classification: Tier 1 (core infra, high availability) → Tier 5 (nginx ingress, starts last)
-- Resource limit philosophy: 2-2.5x observed usage headroom; CPU reservations (not hard limits) to avoid throttling
-- Health check timing: Conservative start_period (60s embeddings, 30s ZK/Solr) prevents false positives
-- Dependency graph validation: nginx waits for all upstreams healthy → zero-downtime production startup
-- Dev workflow preservation: All hardening in base compose, no changes to docker-compose.override.yml
-
-**Total System Requirements:**
-- Memory: ~15GB limits, ~8GB reserved
-- CPU: 8+ cores recommended (3 cores Solr + 1 embeddings + 0.5 search + overhead)
-- Disk: 100GB+ for infrastructure volumes + library size
-
-**Validation:**
-- YAML syntax validated with Python yaml.safe_load()
-- All service health checks have appropriate start_period and retries
-- Dependency graph ensures correct startup order (verified via spec review)
-
-**Branch:** squad/52-docker-hardening → dev
-**Status:** PR #196 open, awaiting review
-**Implementation Time:** ~2 hours (spec reading, implementation, validation, documentation)
-
-**Learnings:**
-- Health check start_period is critical for model-loading services (embeddings 60s) and cluster formation (ZK/Solr 30s)
-- Log rotation prevents disk exhaustion in long-running production deployments (30MB per service × 20 services = 600MB max)
-- depends_on service_healthy creates implicit startup ordering that matches tier-based dependency graph
-- Resource reservations guarantee minimum allocation but allow bursting; limits prevent OOM cascade
-- nginx should start LAST to ensure zero 502 errors during cold start (all upstreams must be healthy first)
-
-### 2026-03-15 — Issue #199: container version metadata baseline
-
-- Added a root `VERSION` file (`0.7.0`) as the repo fallback for container image versioning.
-- Standardized all six source-built Dockerfiles to accept `VERSION`, `GIT_COMMIT`, and `BUILD_DATE`, publish OCI labels, and expose the same metadata at runtime via environment variables.
-- Updated `docker-compose.yml` so every source-built service passes the version metadata as build args, preserving existing health checks, restart policies, and resource limits.
-- `buildall.sh` now resolves the image version from an exact git tag first (stripping a leading `v`), then falls back to `VERSION`, and exports `VERSION`, `GIT_COMMIT`, and `BUILD_DATE` before `docker compose up --build -d`.
-- Added `.env.example` entries for the version metadata so local builds and CI have a documented override surface.
-
-### 2026-03-15 — Copilot Workflow Run Auto-Approval
-
-**Summary:** Created `.github/workflows/copilot-approve-runs.yml` to automatically approve pending workflow runs on @copilot PRs.
-
-**Problem:** When @copilot pushes to PR branches, GitHub Actions requires manual approval before running workflows (security feature for bot-authored changes). Team members keep forgetting to approve these runs, which blocks the entire review cycle. Instructions haven't worked — automation is needed.
-
-**Solution:** New workflow that:
-- Triggers on `pull_request_target` (opens, synchronize) — runs in trusted base-branch context, no approval required
-- Guards on copilot author detection: `contains(fromJson('["copilot-swe-agent[bot]","app/copilot-swe-agent","copilot-swe-agent"]'), github.event.pull_request.user.login)`
-- Waits 15 seconds for workflow runs to be created
-- Lists runs for PR head SHA in `action_required` status
-- Approves each via `github.rest.actions.approveWorkflowRun`
-- Handles errors gracefully (GITHUB_TOKEN permission edge cases)
-
-**Security:** pull_request_target runs trusted base-branch code. Never checks out PR code — API-only operations. Only approves runs from verified @copilot PRs.
-
-**Learnings:**
-- `pull_request_target` is the correct event for trusted automation on bot PRs (avoids approval chicken-and-egg)
-- `actions: write` permission needed for `approveWorkflowRun` API
-- The approve API endpoint: `github.rest.actions.approveWorkflowRun({ owner, repo, run_id })`
-- Workflow runs aren't instant — 15s wait needed before querying
-- `status === 'action_required'` is the filter for runs needing approval
-
-**Branch:** squad/copilot-approve-runs → dev
-**Decision:** Recorded in `.squad/decisions/inbox/brett-copilot-approve-runs.md`
-
-### 2025-01-20 — Issue #224: CI/CD Pipeline Validation after src/ Restructure
-
-**Summary:** Validated all CI/CD pipelines after PR #287 moved 9 service directories into src/. **Status: ALL VALIDATIONS PASSED** ✓
-
-**Scope:** Comprehensive validation of 13 GitHub Actions workflows covering:
-- document-indexer, solr-search (Python services)
-- aithena-ui (Node.js frontend)
-- admin, document-lister, embeddings-server (Docker services)
-
-**Validation Results:**
-1. **YAML Syntax:** All 13 workflows validated with Python yaml.safe_load() → ✓ PASS
-2. **Service Paths:** 
-   - ci.yml: working-directory refs → src/document-indexer ✓, src/solr-search ✓
-   - lint-frontend.yml: working-directory & cache-dependency-path → src/aithena-ui ✓
-   - integration-test.yml: e2e/ path refs ✓, src/solr-search for installer ✓
-   - No old service path references found → ✓ PASS
-3. **Dockerfile Validation:**
-   - All 6 Dockerfiles exist in src/: admin, aithena-ui, document-indexer, document-lister, embeddings-server, solr-search
-   - All declare ARG VERSION for release tagging → ✓ PASS
-4. **Release Pipeline (release.yml):**
-   - Build contexts: ./src/{admin,aithena-ui,document-indexer,document-lister,embeddings-server} ✓
-   - solr-search: context=. with dockerfile=./src/solr-search/Dockerfile ✓ (requires root build context for COPY src/solr-search/)
-   - version-check.yml: Dockerfile list updated for all 6 services ✓
-5. **Docker Compose Configuration:**
-   - Validated docker-compose.yml with AUTH env vars → ✓ PASS
-   - Build contexts resolve correctly for all services
-   - Cache build args propagate VERSION, GIT_COMMIT, BUILD_DATE ✓
-6. **Squad Workflows:**
-   - squad-heartbeat.yml, squad-issue-assign.yml: No service paths (team management) → ✓ PASS
-
-**Key Findings:**
-- PR #287 correctly updated all workflow paths to src/
-- No remaining stale references to old service directory locations
-- solr-search has special build context (root) but COPY paths are correct for that context
-- Docker Compose validation passes with required environment variables
-
-**Learnings:**
-- The solr-search pattern (context=. + dockerfile=src/solr-search/Dockerfile + COPY src/solr-search/) is valid and intentional to satisfy multi-service COPY needs
-- Integration tests correctly use `uv run --project src/solr-search` to execute installer from the right service context
-- version-check.yml arrays must be manually updated when adding new Dockerfiles — no automation opportunity
-
-**Time:** ~30 minutes (systematic validation of all 10 checklist items)
-**Result:** Issue #224 closed — all CI/CD pipelines validated and correct ✓
-
-### 2026-03-16 — Issue #294: Fix secrets-outside-env in squad-issue-assign.yml (#94) [PR #313]
-
-**Summary:** Fixed security alert #94 by removing step-level `env:` block exposing `COPILOT_ASSIGN_TOKEN` in `.github/workflows/squad-issue-assign.yml`.
-
-**Changes:**
-- Removed `env: COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}` block from step
-- Passed secret directly as inline parameter: `github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN }}`
-- This prevents the secret from being exposed as an environment variable in the step execution context
-
-**Security rationale:**
-- Secrets passed via `with:` parameters to actions are handled securely by the action runtime
-- Exposing secrets in `env:` blocks makes them available to all commands in the step, increasing attack surface
-- Direct parameter passing limits secret exposure to only the specific action that needs it
-
-**Validation:**
-- ✅ YAML syntax validated with `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/squad-issue-assign.yml'))"`
-- ✅ No functional change — PAT still used to assign copilot-swe-agent bot
-- ✅ Follows GitHub security best practices for workflow secrets handling
-
-**Lessons learned:**
-1. **Prefer inline secret parameters over env blocks:** When an action accepts a token parameter (like `github-token`), pass secrets directly via `with:` rather than through `env:`
-2. **Zizmor secrets-outside-env rule intent:** The rule flags secrets that could be accessed by unintended commands or scripts in the step
-3. **Step-level vs inline secrets:** Step-level `env:` makes secrets available to all bash commands; inline `with:` parameters restrict access to the action itself
-
-### 2026-03-16 — Issue #305: Add release milestone labels for v1.x milestones [PR #315]
-
-**Summary:** Added five new release milestone labels (v1.0.1 through v1.4.0) to the sync-squad-labels workflow automation.
-
-**Changes:**
-- Extended `RELEASE_LABELS` array in `.github/workflows/sync-squad-labels.yml` with:
-  - `release:v1.0.1`, `release:v1.1.0`, `release:v1.2.0`, `release:v1.3.0`, `release:v1.4.0`
-- Used blue color theme (`0075ca`) for v1.x labels to visually distinguish them from v0.x labels (which use `6B8EB5` and `8B7DB5`)
-- Labels were already created manually by jmservera — this change brings them under automation control
-
-**Rationale:**
-- Issue #305 was assigned to v1.1.0 milestone, which triggered the need for milestone labels
-- Labels need to exist in the workflow file so they're automatically synced, updated, and maintained
-- Consistent color scheme helps users quickly identify the release series (v0.x vs v1.x)
-
-**Technical notes:**
-- The workflow uses GitHub's `issues.createLabel` and `issues.updateLabel` REST APIs
-- Labels are synced on push to `.squad/team.md` or via manual `workflow_dispatch`
-- Adding labels to the array ensures they won't be deleted by automation and their metadata (color, description) stays consistent
-
-**Validation:**
-- ✅ YAML syntax validated with `python3 -c "import yaml; yaml.safe_load(...)"`
-- ✅ Branch created following squad convention: `squad/305-add-milestone-labels`
-- ✅ PR #315 created targeting `dev` branch
-
-**Lessons learned:**
-1. **Label automation is declarative:** The workflow treats the `RELEASE_LABELS` array as the source of truth and syncs the repo to match
-2. **Color coding conventions:** Use consistent color themes within label families (all v1.x labels share `0075ca`, v0.x labels use purples/blues)
-3. **Manual labels need workflow updates:** When labels are created manually, they must be added to the workflow file to prevent drift
-### 2026-03-16 — Issue #296: CKV_GHA_7 Exception for release-docs.yml
-
-**Summary:** Fixed Checkov alert #103 (CKV_GHA_7) by adding documented exception to `.checkov.yml` for release-docs.yml workflow.
-
-**Problem:** CKV_GHA_7 policy requires empty `workflow_dispatch` inputs per SLSA guidelines (build outputs must not be affected by user parameters). The release-docs.yml workflow triggered alert #103 because it defines `version` and `milestone` inputs.
-
-**Solution:** Added CKV_GHA_7 to skip-check list in `.checkov.yml` with comprehensive justification:
-- The release-docs.yml workflow is an internal documentation automation tool (not a build/release pipeline)
-- Requires version and milestone parameters to function (generates release notes and test reports)
-- Version input is validated with regex in workflow steps (lines 46-50)
-- Protected by maintainer-only access and branch protection requirements
-- Does not affect build artifacts or supply chain integrity
-
-**Learnings:**
-- CKV_GHA_7 enforces SLSA supply chain security by requiring empty workflow_dispatch inputs
-- The policy aims to prevent arbitrary user parameters from affecting build behavior
-- Documented exceptions are appropriate when:
-  1. Workflow is not part of build/release pipeline for artifacts
-  2. Inputs are validated and protected by access controls
-  3. Risk is assessed and accepted with clear justification
-- `.checkov.yml` skip-check pattern requires detailed comments explaining rationale
-- Follows existing exception pattern (CKV_DOCKER_2, CKV_DOCKER_3)
-
-**Deliverables:**
-- PR #316: squad/296-fix-ckv-gha7-release-docs → dev
-- Added 10 lines to `.checkov.yml` documenting CKV_GHA_7 exception
-- YAML validation passed for both `.checkov.yml` and `release-docs.yml`
-- Resolves alert #103, closes issue #296
-
-**Branch:** squad/296-fix-ckv-gha7-release-docs → dev
-**Status:** PR #316 open (https://github.com/jmservera/aithena/pull/316)
-
-### 2026-03-17 — Cascading Docker Compose failure diagnosis
-
-**Symptoms:** RabbitMQ auth failure, ZK broken pipe errors, missing books collection, 502s from nginx.
-
-**Root causes identified:**
-1. **RabbitMQ stale volume** — `/source/volumes/rabbitmq-data` contained Mnesia DB from prior run with different credentials. `RABBITMQ_DEFAULT_USER/PASS` only works on first init. Fix: clear the volume data.
-2. **ZK health check noise** — `mntr` 4LW command output piped to `grep -Eq` caused SIGPIPE when grep exits after matching. Server-side "broken pipe" log messages are cosmetic; health check still passes. Simplified to `ruok`-only check.
-3. **Books collection timing** — `solr-init` one-shot container creates the collection after full ZK+Solr startup chain. document-indexer had no compose-level `solr` dependency, so it started polling before Solr was running.
-
-**Code changes:**
-- Simplified zoo1/zoo2/zoo3 health checks from `ruok + mntr leader/follower grep` → `ruok` only
-- Added `solr: condition: service_healthy` to document-indexer's `depends_on`
-- Decision doc written to `.squad/decisions/inbox/brett-infra-diagnosis.md`
-
-**Key learnings:**
-- RabbitMQ `RABBITMQ_DEFAULT_USER/PASS` env vars are **first-init only** — changing them requires clearing the volume
-- ZK `ruok` is sufficient for compose health gating; Solr's ZK client handles quorum detection
-- The `solr-init` container (`restart: "no"`) creates the books collection with configset upload + collection CREATE + add-conf-overlay.sh
-- document-indexer's `wait_for_solr_collection()` polls 60×5s (300s) and also verifies `/update/extract` handler exists
-- document-indexer's RabbitMQ retry is **infinite** (no `tries` param on `@retry` decorator) — will never give up on auth failure
-
-### 2026-03-17 — Infrastructure diagnosis coordinated with Parker
-
-**Status:** Orchestrated background agent diagnosis of cascading Docker Compose failures + Redis auth wiring.
-
-**Outcomes:**
-- ZooKeeper health checks simplified (ruok-only) — removed SIGPIPE noise
-- document-indexer now depends on Solr (condition: service_healthy) — prevents premature polling
-- RabbitMQ stale volume issue identified and documented (operational fix)
-
-**Files Modified:** docker-compose.yml
-
-**Decisions:** 2 merged to decisions.md
-- `.squad/decisions.md#Infrastructure-Cascading-Failures`
-- `.squad/decisions.md#solr-search-Redis-ConnectionPool-Authentication`
-
-**Orchestration Log:** `.squad/orchestration-log/2026-03-17T08-13-brett.md`
-
-**Cross-Coordination:** Parker diagnosed Redis auth issue independently; both root causes merged into single decision set for holistic system view.
-
-### 2026-03-17T08:40Z — RabbitMQ 4.0 upgrade + credential fix (PR #403)
-
-**Problem:** Two issues: (1) RabbitMQ 3.12 is EOL — log warned "end of life and is no longer supported". (2) Credential mismatch — user 'aithena' couldn't authenticate because the Mnesia data volume was initialized with old credentials.
-
-**Root cause for credentials:** `RABBITMQ_DEFAULT_USER`/`RABBITMQ_DEFAULT_PASS` are only applied on first initialization. The bind-mount volume at `/source/volumes/rabbitmq-data` retained stale Mnesia data even after the Docker named volume was deleted, because the local driver with `type: none, o: bind` means the host directory IS the volume.
-
-**Fix applied:**
-1. Upgraded `rabbitmq:3.12-management` → `rabbitmq:4.0-management` (RabbitMQ 4.0.9, current LTS)
-2. Cleared stale Mnesia data from `/source/volumes/rabbitmq-data/mnesia` and `.erlang.cookie`
-3. `rabbitmq.conf` (management.path_prefix, vm_memory_high_watermark, consumer_timeout) is fully compatible with 4.0
-
-**Key learning — RabbitMQ 3.x → 4.0 upgrade path:**
-- RabbitMQ 4.0 requires all feature flags from 3.x to be enabled before upgrade. If upgrading in-place, run `rabbitmqctl enable_feature_flag all` on 3.x first.
-- For a clean install (no data to preserve), just wipe the Mnesia directory.
-- The `stream_filtering` feature flag is the specific blocker for 3.12 → 4.0.
-- Bind-mount volumes: `docker volume rm` does NOT clear host data. Must `rm -rf` the host directory contents.
-
-**Also included in PR:**
-- Parker's Redis auth fix: added `password=settings.redis_password` to solr-search ConnectionPool
-- ZK health checks simplified to ruok-only (eliminated mntr broken pipe noise)
-- document-indexer depends_on solr (service_healthy) for startup ordering
-
-**Observation:** solr-init collection creation is failing independently (400 error on CREATE collection). This is a pre-existing Solr configset issue, not related to this fix.
-
-### 2026-03-17T14:30Z — Fixed redis-commander health check (PR #424)
-
-**Problem:** E2E tests failing in CI with "dependency failed to start: container aithena-redis-commander-1 is unhealthy". Blocked PRs #418, #419, #411.
-
-**Root cause:** The redis-commander health check had multiple issues:
-1. Used `CMD` instead of `CMD-SHELL` — the Node.js one-liner wasn't executing properly in the array format
-2. No timeout handling on the HTTP request — health checks could hang indefinitely
-3. `start_period: 10s` was too short — redis-commander needs more initialization time in CI environments
-4. Only 3 retries — insufficient for services that need warmup in constrained CI runners
-
-**Fix applied:**
-- Changed health check from `CMD` to `CMD-SHELL` for proper shell execution of Node.js inline script
-- Added explicit timeout handling (5000ms) to the HTTP GET request with proper cleanup
-- Increased `start_period` from 10s to 30s — allows redis-commander to fully initialize before health checks begin
-- Increased retries from 3 to 5 — better resilience for CI cold-start scenarios
-- Accept any 2xx-4xx status code (not 5xx) — handles redirects and partial initialization states
-
-**Key learning — Docker health check best practices:**
-- `CMD` requires each argument as separate array element (no shell expansion)
-- `CMD-SHELL` passes entire string to `/bin/sh -c` — allows complex one-liners
-- For Node.js containers without `curl`/`wget`, use Node's built-in `http` module
-- Always set explicit timeouts on network calls in health checks to prevent hanging
-- `start_period` should account for worst-case initialization (database migrations, service discovery, etc.)
-- In CI, services start slower than on dev machines — pad `start_period` by 2-3x
-
-**File modified:** `docker-compose.yml` (redis-commander service)
-
-**Branch:** `squad/fix-redis-commander-e2e`
-
-**PR:** #424 (targeting `dev`)
-
-### 2026-03-17T19:50Z — Proposed CI/CD Test Strategy Restructuring
-
-**Context:** Juanma reported that integration-test.yml (60 min) blocks dev PR iteration. Team analyzed test coverage and proposed restructuring.
-
-**Proposal:** Split test workflows by branch:
-- **Dev PRs:** Fast lightweight checks (~5 min) — compose validation, Dockerfile linting, build validation, health check syntax, Python imports
-- **Release PRs (main/release/*):** Full integration tests (~60 min) — Docker Compose + E2E
-
-**Rationale:**
-- Most issues caught by static checks; full E2E only needed before releases
-- Developers test locally before pushing
-- Main branch protected with full E2E
-- CI cost reduced ~80% for typical feature development
-
-**Implementation (3 phases):**
-1. Add 5 lightweight jobs to ci.yml (1–2 hours)
-2. Move integration-test.yml trigger from `dev` to `main` (15 min)
-3. Update GitHub branch protection config (10 min, manual)
-
-**Related decisions:** ripley-test-tiers.md, lambert-fast-tests.md (both merged to decisions.md)
-
-**Status:** Decision recorded in `.squad/decisions.md`. Implementation pending team approval.
-
-## 2026-03-17 — CI Chores Implementation (WI-1 + WI-2)
-
-**Session:** CI chores orchestration — #457 & #458
-**Date:** 2026-03-17T20:10Z
-**Status:** ✅ Implemented
-
-**Work:** Added 4 missing service test jobs to CI pipeline + updated gate.
-- **aithena-ui-tests:** React + Vite tests (127 tests)
-- **admin-tests:** Streamlit Python tests (71 tests)
-- **document-lister-tests:** Python consumer tests (12 tests)
-- **embeddings-server-tests:** Python embeddings tests (9 tests)
-
-**Files Modified:**
-- `.github/workflows/ci.yml` — Added 4 job definitions + updated `all-tests-passed` gate
-
-**PR:** #459 (targeting `dev`, WI-1 + WI-2 combined)
-
-**Next:** WI-4 post-merge validation by Lambert; then WI-5 (separate PR #460 for integration-test.yml trigger changes)
-
-**Pre-flight:** All 4 test suites verified passing (Lambert, WI-3).
-
-### 2026-07-24 — Issues #470, #483: Dependabot CI hardening + heartbeat integration
-
-**Issue #470 — Dependabot CI improvements (PR #485):**
-- Updated `dependabot-automerge.yml` Node.js version from 20 → 22 (was last holdout; all other workflows already on 22)
-- Removed `continue-on-error: true` from auto-merge step — workflow now fails visibly when merge errors occur
-- Added explicit failure handling: on merge failure, labels PR `dependabot:manual-review` and posts explanatory comment
-- `dependabot:auto-merge` label now only applied on actual success (conditional `if: success()`)
-
-**Issue #483 — Heartbeat Dependabot detection (PR #486):**
-- Extended squad heartbeat (Ralph) with Dependabot PR detection and domain-based routing
-- Detection: `dependabot:manual-review` label, CI check failures (via Checks API), stale PRs (7+ days)
-- Routing: 5-rule table (Kane=auth/crypto, Brett=infra/Docker, Parker=Python deps, Dallas=JS/frontend, Lambert=test+CI failures)
-- Classification uses PR title/branch for dep name matching, then falls back to changed file paths
-- Added `checks: read` permission for CI status inspection
-- Triage comment follows existing `🔄 Ralph — Auto-Triage` pattern
-- Existing squad issue/PR detection and Copilot auto-assign completely untouched
+**RabbitMQ & Volume Management:**
+- **Credentials lifecycle:** `RABBITMQ_DEFAULT_USER`/`PASS` only applied on first init (Mnesia DB creation). Stale volumes retain old credentials.
+- **Bind-mount behavior:** `docker volume rm` clears named volumes but NOT bind-mounted directories; must `rm -rf /source/volumes/` directly
+- **RabbitMQ 3.x → 4.0:** Feature flags must be enabled before upgrade. Mnesia directory isolation critical.
+
+**SolrCloud 3-Node + ZooKeeper Ensemble:**
+- **Cluster topology:** All healthy, namespace routing functional. Port collision (8080 ZK-admin vs Solr-node1) managed via networking.
+- **Service startup:** `service_healthy` conditions guarantee cluster formation (30s start_period) before dependent services start
+- **Collection creation:** solr-init one-shot container must run AFTER full ZK+Solr chain is healthy; consumers poll with exponential backoff
+
+**nginx Reverse Proxy & Port Publishing:**
+- **Port strategy:** Only nginx publishes host ports (80/443); all other services internal via `expose:` (no host port binding)
+- **Health endpoint:** nginx includes `GET /health` (returns 200 "healthy", access_log off) for Docker health checks
+- **Upstream routing:** Routes admin UIs (/admin/solr/, /rabbitmq/, /streamlit/, /redis/), app frontend (5173), API (8080)
+- **Zero-downtime startup:** nginx starts LAST (depends_on all upstreams healthy) to avoid 502 errors during cold start
+
+### Release Process & Versioning
+
+**Release Packaging (v0.7.0+):**
+- **Docs-gate-the-tag pattern:** Release docs merged to `dev` BEFORE version tag created (enforced in `.github/ISSUE_TEMPLATE/release.md` checklist)
+- **Version metadata:** `VERSION` file (repo root) is source of truth; `buildall.sh` exports `VERSION`, `GIT_COMMIT`, `BUILD_DATE` as Docker build args
+- **GHCR distribution:** `docker-compose.prod.yml` uses GHCR image pulls (no build step in production), with OCI labels + `/version` endpoints
+- **Release automation:** `release.yml` triggers on `v*.*.*` tags, builds/pushes all 6 services to GHCR, creates tarball asset (`.env.prod.example`, installer, deployment docs)
+- **Token scope insight:** GitHub Data API (refs, trees, commits) requires `workflow` scope for modifications to `.github/workflows/` paths
+
+### CI/CD Security Hardening
+
+**Secrets & Workflow Best Practices:**
+- **Secrets handling:** Use inline `with:` parameters, never step-level `env:` (violates secrets-outside-env rule). Secrets in `with:` restricted to specific actions.
+- **Template expansion:** Always `${{ secrets.X }}` syntax in workflows; never shell variable expansion (prevents injection attacks)
+- **Bot automation guards:** `pull_request_target` event + copilot author detection (guards on github actor) for auto-approval workflows
+- **Exception documentation:** All Checkov skip rules require detailed justification (CKV_GHA_7, CKV_DOCKER_2/3, etc.)
+
+**IaC Scanning (Checkov):**
+- **Configuration:** `.checkov.yml` with soft_fail + path filtering (Dockerfiles, workflows, compose files)
+- **SARIF integration:** Results uploaded to GitHub Code Scanning dashboard; non-blocking enforcement
+- **Workflow exceptions:** CKV_GHA_7 (workflow_dispatch inputs) documented for internal automation (not supply-chain artifacts)
+
+**Workflow Automation Patterns:**
+- **Copilot PR approval:** `pull_request_target` event (trusted context), wait 15s after PR sync for runs to appear, approve via `github.rest.actions.approveWorkflowRun()`
+- **Squad issue assignment:** COPILOT_ASSIGN_TOKEN via PAT, requires org/repo scope; use `issues.create`, `issues.addAssignees` APIs
+- **Dependabot CI hardening:** Auto-merge low-risk updates (patch/minor) with CI gate; manual review for failures (label `dependabot:manual-review`, route via Ralph heartbeat)
+- **Heartbeat triage:** Detect stale PRs (7+ days), CI failures (Checks API), dependabot issues; route by dep type (auth/crypto→Kane, infra→Brett, Python→Parker, JS→Dallas, CI→Lambert)
+
+### Release Label & Milestone Automation
+
+**Label Synchronization:**
+- `sync-squad-labels.yml` treats `RELEASE_LABELS` array as source of truth; syncs repo labels on push to `.squad/team.md`
+- **Color scheme:** v1.x labels use `0075ca` (blue), v0.x use purples/blues for visual distinction
+- **Automation:** `issues.createLabel`, `issues.updateLabel` REST APIs ensure consistency across releases
+
+### Learnings (High-Signal Entries)
+
+#### 2026-03-17T13:42Z — Issue #363: Release Packaging Strategy (PR #427)
+
+**Task:** Create production-ready release tarball with docker-compose.prod.yml, .env.prod.example, installer script.
+
+**Execution:** Designed GHCR pull model (no build in production), created docker-compose.prod.yml, .env.prod.example, deployment quick-start, extended release.yml to package tarball as release asset.
+
+**Outcome:** Production deployment bundle ready; users deploy via GHCR pulls + local compose configuration.
+
+#### Release Checklist & Docs-Gate-The-Tag Pattern
+
+**Formalized in `.github/ISSUE_TEMPLATE/release.md`:** Release docs must generate and merge BEFORE version tag. Verified implemented for v1.4.0–v1.7.0 releases.
+
+**Key paths:** `.github/workflows/release-docs.yml` (Copilot CLI generation), `.github/workflows/release.yml` (tag-triggered build/push), `docs/` (manuals included in release-docs workflow prompt).
+
+#### 2026-03-16T23:20Z — Retro Action: Clean Up Stale Remote Branches
+
+**Task:** Address retro finding: 66 stale remote branches (38 merged, ~28 abandoned).
+
+**Execution:** Deleted 44 branches in 9 batches; verified 21 remaining all have active PRs. Enabled GitHub `delete_branch_on_merge=true` for continuous housekeeping.
+
+**Outcome:** 44 branches cleaned; future merged PRs auto-delete. Reduces cognitive load.
+
+#### 2026-03-16T16:10Z — Issue #356: solr-search E2E Health Check Timing
+
+**Problem:** solr-search container failed E2E health check in CI despite /health endpoint present.
+
+**Root cause:** App startup includes auth DB initialization before /health route reachable. Original `start_period: 10s` too aggressive.
+
+**Fix:** Increased `start_period: 30s` (no code changes). Service includes wget, so no binary dependency issue.
+
+**Learning:** Docker Compose health check start_period must account for worst-case app startup (DB init, service discovery, cluster formation). In CI, pad by 2-3x dev machine timing.
+
+#### 2026-03-16T15:25Z — Issue #304: release-docs Workflow Heredoc Bug
+
+**Problem:** `gh run list | python3 - <<'PY'` heredoc consumed stdin; integration-test run IDs never parsed.
+
+**Fix:** Rewrote to pipe output to python subprocess (no heredoc). Added fallback: if no PRs tagged with milestone, query recent merged PRs on `dev`.
+
+**Learning:** Heredoc pattern consumes stdin across the entire session; subprocess approach safer for pipeline context.
+
+#### 2026-03-16T13:00Z — Issue #303: release-docs Copilot CLI Integration
+
+**Task:** Integrate Copilot CLI into release-docs workflow with fallback template generation.
+
+**Execution:** `copilot --agent squad --autopilot`, updated prompt for Newt (release doc author), fallback template generation when CLI unavailable.
+
+**Outcome:** Release notes + test reports generated automatically; maintainers review + customize.
+
+#### 2026-03-17T08:40Z — RabbitMQ 4.0 Upgrade + Credential Fix (PR #403)
+
+**Problem:** RabbitMQ auth failure after upgrade from 3.x to 4.0. Also, ZooKeeper health checks generating broken pipe errors.
+
+**Root causes:**
+1. Stale Mnesia DB in `/source/volumes/rabbitmq-data/mnesia` retained old credentials
+2. ZooKeeper health check using `ruok + mntr` with grep; mntr output piped to grep causes SIGPIPE when grep exits after match
+
+**Fixes:**
+- Cleared `/source/volumes/rabbitmq-data/` completely; credential init now works on fresh start
+- Simplified zoo1/zoo2/zoo3 health checks to `ruok` only (sufficient for readiness; eliminates broken pipe noise)
+
+**Learning:** RabbitMQ credentials are only applied on first Mnesia DB creation. Stale volumes bypass credential init. Feature flags must be enabled before upgrade (e.g., `--enable-feature=all`).
+
+#### 2026-03-17T14:30Z — Fixed redis-commander Health Check (PR #424)
+
+**Problem:** E2E tests failing "aithena-redis-commander-1 is unhealthy". Blocked PRs #418, #419, #411.
+
+**Root causes:**
+- Health check used `CMD` (array) instead of `CMD-SHELL` (shell string); Node.js one-liner didn't execute
+- No timeout on HTTP request; health checks could hang indefinitely
+- `start_period: 10s` too short; `retries: 3` insufficient for CI cold-start
+
+**Fixes:**
+- Changed to `CMD-SHELL` for shell execution of Node.js inline script
+- Added explicit timeout (5000ms) with cleanup
+- Increased `start_period: 30s`, `retries: 5`
+- Accept 2xx-4xx (not 5xx) for partial initialization states
+
+**Key learning — Docker Health Check Best Practices:**
+- `CMD` = array format, no shell expansion. Each arg separate array element.
+- `CMD-SHELL` = string passed to `/bin/sh -c`. Allows complex one-liners.
+- For Node.js containers without curl/wget, use built-in `http` module
+- Always set explicit timeouts on network calls
+- `start_period` should account for worst-case initialization; pad by 2-3x in CI
+
+#### 2026-03-17T19:50Z — Proposed CI/CD Test Strategy Restructuring
+
+**Context:** integration-test.yml (60 min) blocks dev PR iteration. Team analyzed and proposed branch-based split.
+
+**Proposal:** Fast (~5 min) checks on dev PRs, full E2E (60 min) on release PRs (main/release branches).
+
+**Implemented (WI-1, WI-2):** Added 4 service test jobs to ci.yml (aithena-ui, admin, document-lister, embeddings-server) + updated gate. Lambda validates, then WI-5 moves integration-test trigger to main branch.
+
+**Rationale:** Most issues caught by static checks. Full E2E only needed before releases. Dev velocity improved, CI cost reduced ~80%.
+
+#### 2026-07-24 — Issues #470, #483: Dependabot CI Hardening + Heartbeat Integration
+
+**Issue #470 — Dependabot Auto-Merge Improvements (PR #485):**
+- Updated Node.js version 20 → 22 (last holdout)
+- Removed `continue-on-error: true` from merge step; workflow now fails visibly
+- Added failure handling: label PR `dependabot:manual-review`, post explanatory comment
+- `dependabot:auto-merge` label now conditional on success
+
+**Issue #483 — Squad Heartbeat Dependabot Detection (PR #486):**
+- Extended Ralph with Dependabot PR detection: `dependabot:manual-review` label, CI failures (Checks API), stale PRs (7+ days)
+- Routing: 5-rule table (Kane=auth/crypto, Brett=infra/Docker, Parker=Python, Dallas=JS, Lambert=test+CI)
+- Classification via PR title pattern ("Bump X from A to B"), branch name fallback, changed files
+- Already-triaged PRs (with `squad:*` label) excluded from re-processing
 
 **Key patterns:**
-- Dependabot PR titles follow "Bump X from A to B" format — reliable for dep name extraction
-- PR branch names use `dependabot/{ecosystem}/{dep}` format — secondary signal for routing
-- `issues.addLabels()` and `issues.createComment()` work on PRs via the issues API (`issues: write` permission sufficient)
-- Already-triaged PRs (with `squad:*` label) are excluded from re-processing
+- Dependabot PR titles reliable: "Bump X from A to B" format
+- Branch names: `dependabot/{ecosystem}/{dep}` secondary signal
+- Issues API works on PRs (use `issues: write` permission)
+- PR title + branch + files = high-confidence classification
+
+---
+
+## Decisions (Summary for Continuity)
+
+See `.squad/decisions.md` for full details. Key baseline exceptions:
+
+- **CVE-2024-23342 (ecdsa):** Accepted as baseline exception. Runtime uses cryptography backend (safe). Planned PyJWT migration in v1.1.0.
+- **Exception chaining:** Removed `from exc` from user-facing errors (defense-in-depth against stack trace exposure)
+- **Stack trace logging:** Two-tier pattern (CRITICAL/ERROR = safe, DEBUG = stack trace with exc_info=True)
+
+---
+
+## Skills Extracted for Reuse
+
+See `.squad/skills/` for implementation:
+- `docker-health-checks.md` — Health check patterns, start_period tuning, binary availability
+- `docker-compose-hardening.md` — Resource limits, restart policies, graceful shutdown
+- `dependabot-routing.md` — Detection + classification rules, heartbeat integration
+- `release-packaging.md` — Docs-gate-the-tag, GHCR distribution, tarball assets
+- `workflow-secrets-patterns.md` — Inline parameters vs env blocks, zizmor compliance
+
