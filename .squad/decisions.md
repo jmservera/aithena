@@ -6555,3 +6555,83 @@ Add screenshot locations to Copilot CLI prompt so Newt knows they exist
 
 ---
 
+# Screenshot Pipeline Implementation Issues
+
+**Date:** 2026-03-18  
+**Authority:** Ripley (Project Lead)  
+**Status:** DECISION — Implementation plan created  
+
+## Decision
+
+Created GitHub issues (#530–#534) in milestone v1.8.0 to implement the screenshot pipeline per Newt's strategy and Brett's architecture decision. Issues are fully ordered with explicit dependencies to prevent parallel execution conflicts.
+
+## Issues Created
+
+| # | Title | Assigned | Status | Dependency |
+|---|-------|----------|--------|-----------|
+| **#530** | Expand Playwright screenshot spec to cover all documented pages | Lambert | Open | None |
+| **#531** | Add release-screenshots artifact to integration-test workflow | Brett | Open | #530 |
+| **#532** | Create update-screenshots.yml workflow | Brett | Open | #531 |
+| **#533** | Update user and admin manuals to reference screenshots | Newt | Open | #532 |
+| **#534** | Enable "Allow GitHub Actions to create PRs" repo setting | Juanma | Open | None (parallel) |
+
+## Dependency Chain
+
+```
+#530 (Lambert)     → Test expansion
+  ↓
+#531 (Brett)       → Artifact upload  
+  ↓
+#532 (Brett)       → Workflow creation
+  ↓
+#533 (Newt)        → Documentation updates
+  │
+  +─ #534 (Juanma) → Repo setting (parallel, non-blocking)
+```
+
+**Rationale:**
+- #530 must complete before #531 (artifact step needs expanded test outputs)
+- #531 must complete before #532 (workflow needs artifact to exist)
+- #532 must complete before #533 (screenshots must be in repo before manuals reference them)
+- #534 is independent and can be done anytime (but should be done before #532 runs in CI)
+
+## Traceability
+
+References from planning session (2026-03-18):
+- **Newt's screenshot strategy:** 3-tier inventory (Tier 1 required, Tier 2 recommended, Tier 3 operations)
+- **Brett's pipeline architecture:** Option B (`workflow_run`-triggered workflow)
+- **Existing infrastructure:** release-docs.yml working end-to-end; automation/release-docs-v1.8.0 branch pending repo setting
+
+## Success Criteria
+
+All 5 issues must be closed and merged to dev before v1.8.0 release:
+- [ ] #530 closed (all new screenshots in screenshots.spec.ts)
+- [ ] #531 closed (artifact step working in integration-test.yml)
+- [ ] #532 closed (update-screenshots.yml workflow deployed)
+- [ ] #533 closed (user/admin manuals updated with inline screenshots)
+- [ ] #534 closed (repo setting enabled)
+
+Once complete:
+- Integration test captures 11 pages (4 original + 7 new)
+- Screenshots auto-commit to docs/screenshots/ on dev
+- Release-docs.yml can reference them in release notes
+- User/admin manuals include inline screenshot references
+- v1.8.0 release is fully documented with live screenshots
+
+## Implementation Notes
+
+- **Phase 1:** #530 (test expansion)
+- **Phase 2:** #531–#532 (pipeline automation)
+- **Phase 3:** #533 (documentation integration)
+- **Parallel:** #534 (repo setting, as early as possible)
+
+The 4-issue sequential dependency prevents conflicts (all Brett's work sequential, not parallel) while allowing Newt's work to start once #532 completes.
+
+## Team Context
+
+- **Lambert** (Tester): E2E test expansion
+- **Brett** (Infra): GitHub Actions workflows
+- **Newt** (Product Manager): Documentation updates
+- **Juanma** (Product Owner): Repo settings (human action)
+
+This unblocks release-docs.yml and establishes the automated screenshot pipeline for all future releases.

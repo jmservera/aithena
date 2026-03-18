@@ -452,7 +452,7 @@ jobs:
           PREV_TAG: ${{ steps.prev-tag.outputs.previous }}
           REPO: ${{ github.repository }}
         run: |
-          git push --force-with-lease origin "$BRANCH"
+          git push origin "$BRANCH"
           
           # Build list of generated files
           GENERATED_FILES="- \`docs/release-notes-v${VERSION}.md\`"
