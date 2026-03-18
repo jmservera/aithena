@@ -1,21 +1,24 @@
 import { NavLink } from 'react-router-dom';
+import { useIntl } from 'react-intl';
+
 import { useAuth } from '../contexts/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
 
 const TABS = [
-  { to: '/search', label: '🔍 Search' },
-  { to: '/library', label: '📖 Library' },
-  { to: '/upload', label: '📤 Upload' },
-  { to: '/status', label: '🟢 Status' },
-  { to: '/stats', label: '📊 Stats' },
-  { to: '/admin', label: '🛠️ Admin' },
+  { to: '/search', labelId: 'nav.search', emoji: '🔍' },
+  { to: '/library', labelId: 'nav.library', emoji: '📖' },
+  { to: '/upload', labelId: 'nav.upload', emoji: '📤' },
+  { to: '/status', labelId: 'nav.status', emoji: '🟢' },
+  { to: '/stats', labelId: 'nav.stats', emoji: '📊' },
+  { to: '/admin', labelId: 'nav.admin', emoji: '🛠️' },
 ];
 
 function TabNav() {
+  const intl = useIntl();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
 
   return (
-    <nav className="tab-nav" aria-label="Main navigation">
+    <nav className="tab-nav" aria-label={intl.formatMessage({ id: 'nav.mainNavigation' })}>
       {isAuthenticated ? (
         <>
           {TABS.map((tab) => (
@@ -26,12 +29,14 @@ function TabNav() {
                 'tab-nav-link' + (isActive ? ' tab-nav-link--active' : '')
               }
             >
-              {tab.label}
+              {tab.emoji} {intl.formatMessage({ id: tab.labelId })}
             </NavLink>
           ))}
           <div className="tab-nav-actions">
             <LanguageSwitcher />
-            <span className="tab-nav-user">👤 {user?.username ?? 'Signed in'}</span>
+            <span className="tab-nav-user">
+              👤 {user?.username ?? intl.formatMessage({ id: 'nav.signedIn' })}
+            </span>
             <button
               type="button"
               className="tab-nav-button"
@@ -40,7 +45,7 @@ function TabNav() {
               }}
               disabled={isLoading}
             >
-              Sign out
+              {intl.formatMessage({ id: 'nav.signOut' })}
             </button>
           </div>
         </>
@@ -49,7 +54,7 @@ function TabNav() {
           to="/login"
           className={({ isActive }) => 'tab-nav-link' + (isActive ? ' tab-nav-link--active' : '')}
         >
-          🔐 Login
+          🔐 {intl.formatMessage({ id: 'nav.login' })}
         </NavLink>
       )}
     </nav>

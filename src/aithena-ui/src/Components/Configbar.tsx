@@ -1,4 +1,6 @@
 import React from 'react';
+import { useIntl } from 'react-intl';
+
 import { ChatMessageProps, defaultChatMessageProps } from './ChatMessage';
 
 import {
@@ -14,6 +16,8 @@ const Configbar = ({
   props: ChatMessageProps;
   setProps: React.Dispatch<React.SetStateAction<ChatMessageProps>>;
 }) => {
+  const intl = useIntl();
+
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     setProps((prevProps) => ({ ...prevProps, [name]: value }));
@@ -64,13 +68,13 @@ const Configbar = ({
 
   return (
     <div>
-      <h1>Config</h1>
+      <h1>{intl.formatMessage({ id: 'config.title' })}</h1>
       <label key="limit-label" htmlFor="limit">
-        limit:
+        {intl.formatMessage({ id: 'config.limit' })}
       </label>
       <input
         key="limit-input"
-        title="The maximum number of results to generate."
+        title={intl.formatMessage({ id: 'config.limitDescription' })}
         type="range"
         id="limit"
         name="limit"
@@ -83,7 +87,7 @@ const Configbar = ({
       <br key="limit-br" />
       {CreateCompletionRequestDef.map((value, index) => renderPropertyEditor(value, index))}
       <button key="side-key" type="button" className="side-menu-button" onClick={handleResetClick}>
-        <span aria-hidden="true">🧹</span> Reset
+        <span aria-hidden="true">🧹</span> {intl.formatMessage({ id: 'config.reset' })}
       </button>
     </div>
   );

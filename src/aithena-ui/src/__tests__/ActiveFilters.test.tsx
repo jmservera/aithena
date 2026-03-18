@@ -3,15 +3,18 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import ActiveFilters from '../Components/ActiveFilters';
+import { IntlWrapper } from './test-intl-wrapper';
 
 describe('ActiveFilters', () => {
   it('renders active filter chips', () => {
     render(
-      <ActiveFilters
-        filters={{ author: 'Jane Doe', year: '2021' }}
-        onRemove={vi.fn()}
-        onClearAll={vi.fn()}
-      />
+      <IntlWrapper>
+        <ActiveFilters
+          filters={{ author: 'Jane Doe', year: '2021' }}
+          onRemove={vi.fn()}
+          onClearAll={vi.fn()}
+        />
+      </IntlWrapper>
     );
 
     expect(screen.getByText('Active filters:')).toBeInTheDocument();
@@ -25,7 +28,9 @@ describe('ActiveFilters', () => {
     const user = userEvent.setup();
 
     render(
-      <ActiveFilters filters={{ author: 'Jane Doe' }} onRemove={onRemove} onClearAll={vi.fn()} />
+      <IntlWrapper>
+        <ActiveFilters filters={{ author: 'Jane Doe' }} onRemove={onRemove} onClearAll={vi.fn()} />
+      </IntlWrapper>
     );
 
     await user.click(screen.getByRole('button', { name: /remove author filter/i }));
@@ -38,11 +43,13 @@ describe('ActiveFilters', () => {
     const user = userEvent.setup();
 
     render(
-      <ActiveFilters
-        filters={{ author: 'Jane Doe', category: 'Programming' }}
-        onRemove={vi.fn()}
-        onClearAll={onClearAll}
-      />
+      <IntlWrapper>
+        <ActiveFilters
+          filters={{ author: 'Jane Doe', category: 'Programming' }}
+          onRemove={vi.fn()}
+          onClearAll={onClearAll}
+        />
+      </IntlWrapper>
     );
 
     await user.click(screen.getByRole('button', { name: /clear all/i }));

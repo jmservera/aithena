@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
 import SearchPage from '../pages/SearchPage';
 import { SearchResponse } from '../hooks/search';
+import { IntlWrapper } from './test-intl-wrapper';
 
 const mockSearchResponse: SearchResponse = {
   query: 'react',
@@ -65,9 +66,11 @@ const similarBooksResponse = {
 
 function renderSearchPage() {
   return render(
-    <MemoryRouter>
-      <SearchPage />
-    </MemoryRouter>
+    <IntlWrapper>
+      <MemoryRouter>
+        <SearchPage />
+      </MemoryRouter>
+    </IntlWrapper>
   );
 }
 
