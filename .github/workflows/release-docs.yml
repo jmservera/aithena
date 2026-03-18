@@ -67,9 +67,10 @@ jobs:
         env:
           TAG_NAME: ${{ github.ref_name }}
           INPUT_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           # Determine version from tag or manual input
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "$EVENT_NAME" = "push" ]; then
             VERSION="${TAG_NAME#v}"
           else
             VERSION="${INPUT_VERSION#v}"
@@ -126,12 +127,13 @@ jobs:
           MILESTONE: ${{ steps.version.outputs.milestone }}
           PREV_TAG: ${{ steps.prev-tag.outputs.previous }}
           CURRENT_TAG: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           mkdir -p /tmp/release-context
           
           # Query PRs merged to dev branch in the milestone
           gh pr list \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --state merged \
             --base dev \
             --search "milestone:\"$MILESTONE\"" \
@@ -148,8 +150,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MILESTONE: ${{ steps.version.outputs.milestone }}
+          REPO: ${{ github.repository }}
         run: |
-          REPO="${{ github.repository }}"
           
           # Ensure the release-context directory exists
           mkdir -p /tmp/release-context
@@ -212,6 +214,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CURRENT_TAG: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           # Find the commit SHA for the tag
           TAG_SHA=$(git rev-parse "$CURRENT_TAG" 2>/dev/null || echo "")
@@ -223,7 +226,7 @@ jobs:
           
           # Get the latest CI workflow run for this commit
           gh run list \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --workflow ci.yml \
             --commit "$TAG_SHA" \
             --limit 1 \
@@ -244,7 +247,7 @@ jobs:
       # Requires: COPILOT_TOKEN secret (fine-grained PAT with "Copilot Requests" permission)
       # ─────────────────────────────────────────────────────────────
       - name: Set up Node.js
-        uses: actions/setup-node@49933e  # v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
 
       - name: Install Copilot CLI
         run: npm install -g @github/copilot
@@ -410,6 +413,9 @@ jobs:
         env:
           BRANCH: ${{ steps.version.outputs.branch }}
           VERSION: ${{ steps.version.outputs.version }}
+          MILESTONE: ${{ steps.version.outputs.milestone }}
+          PR_COUNT: ${{ steps.prs.outputs.count }}
+          ISSUE_COUNT: ${{ steps.issues.outputs.count }}
         run: |
           git checkout -B "$BRANCH"
 
@@ -429,9 +435,9 @@ jobs:
           - Release notes: docs/release-notes-v${VERSION}.md
           - Test report: docs/test-report-v${VERSION}.md (if generated)
           - Updated: user-manual.md, admin-manual.md
-          - Milestone: ${{ steps.version.outputs.milestone }}
-          - PRs merged: ${{ steps.prs.outputs.count }}
-          - Issues closed: ${{ steps.issues.outputs.count }}
+          - Milestone: ${MILESTONE}
+          - PRs merged: ${PR_COUNT}
+          - Issues closed: ${ISSUE_COUNT}
 
           Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 
@@ -441,6 +447,10 @@ jobs:
           BRANCH: ${{ steps.version.outputs.branch }}
           VERSION: ${{ steps.version.outputs.version }}
           MILESTONE: ${{ steps.version.outputs.milestone }}
+          PR_COUNT: ${{ steps.prs.outputs.count }}
+          ISSUE_COUNT: ${{ steps.issues.outputs.count }}
+          PREV_TAG: ${{ steps.prev-tag.outputs.previous }}
+          REPO: ${{ github.repository }}
         run: |
           git push --force-with-lease origin "$BRANCH"
           
@@ -468,9 +478,9 @@ jobs:
           ${GENERATED_FILES}
           
           ### Context
-          - **PRs merged**: ${{ steps.prs.outputs.count }}
-          - **Issues closed**: ${{ steps.issues.outputs.count }}
-          - **Previous release**: ${{ steps.prev-tag.outputs.previous }}
+          - **PRs merged**: ${PR_COUNT}
+          - **Issues closed**: ${ISSUE_COUNT}
+          - **Previous release**: ${PREV_TAG}
           - **CI status**: $(cat /tmp/release-context/ci-run.json | jq -r '.[0].conclusion // "Unknown"')
           
           ### Review Checklist
@@ -498,12 +508,12 @@ jobs:
 
           # Ensure the milestone label exists (create if needed)
           gh label create "${MILESTONE}" \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --description "Release ${MILESTONE}" \
             --color "0E8A16" 2>/dev/null || true
 
           gh pr create \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --base dev \
             --head "$BRANCH" \
             --title "docs: release documentation for v${VERSION}" \
@@ -520,17 +530,23 @@ jobs:
         if: always()
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          MILESTONE: ${{ steps.version.outputs.milestone }}
+          BRANCH: ${{ steps.version.outputs.branch }}
+          PR_COUNT: ${{ steps.prs.outputs.count }}
+          ISSUE_COUNT: ${{ steps.issues.outputs.count }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           cat >> $GITHUB_STEP_SUMMARY <<EOF
           ## Release Documentation Generated
           
           **Version**: v${VERSION}  
-          **Milestone**: ${{ steps.version.outputs.milestone }}  
-          **Branch**: ${{ steps.version.outputs.branch }}
+          **Milestone**: ${MILESTONE}  
+          **Branch**: ${BRANCH}
           
           ### Context Collected
-          - ✅ Merged PRs: ${{ steps.prs.outputs.count }}
-          - ✅ Closed Issues: ${{ steps.issues.outputs.count }}
+          - ✅ Merged PRs: ${PR_COUNT}
+          - ✅ Closed Issues: ${ISSUE_COUNT}
           - ✅ CHANGELOG extracted
           - ✅ CI test results collected
           
@@ -548,5 +564,5 @@ jobs:
           
           ---
           
-          📝 [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          📝 [View workflow run](https://github.com/${REPO}/actions/runs/${RUN_ID})
           EOF
