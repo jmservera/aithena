@@ -6134,3 +6134,223 @@ Type: Process
 
 **Report Completed:** 2026-03-18T21:00Z  
 **Ripley (Lead)**
+
+---
+
+# Decision: v1.7.1 & v1.8.0 Milestone Planning
+
+**Date:** 2026-03-18  
+**Decided by:** Ripley (Lead)  
+**Requested by:** Juanma (jmservera)  
+**Status:** Pending approval (plan ready for review)
+
+## Decision
+
+Propose two consecutive milestones to follow v1.7.0:
+
+1. **v1.7.1 (Patch Release):** Stability & Technical Debt (2-3 weeks)
+2. **v1.8.0 (Minor Release):** UI/UX Improvements (4-5 weeks)
+
+**Total Timeline:** 6-8 weeks from approval
+
+## v1.7.1 Issues (5 total)
+
+| # | Title | Owner | Priority | Effort | Acceptance Criteria |
+|---|-------|-------|----------|--------|---------------------|
+| 1 | embeddings-server uv migration | Parker | P0 | 2d | Create pyproject.toml, generate uv.lock, update Dockerfile, run tests (9 pass), delete requirements.txt |
+| 2 | Docker multi-stage builds | Brett | P1 | 4d | Implement for all 6 services; validate 15%+ image size reduction; all tests pass |
+| 3 | Uniform ruff linting | Parker | P1 | 2d | Ensure all services pass ruff check; add CI gate if missing |
+| 4 | Post-v1.7.0 threat assessment | Kane | P2 | 4h | 6 critical security fixes; document threat model |
+| 5 | v1.7.1 release docs | Newt | P2 | 1d | CHANGELOG, release notes, test report |
+
+## v1.8.0 Issues (5 total)
+
+| # | Title | Owner | Priority | Effort | Acceptance Criteria |
+|---|-------|-------|----------|--------|---------------------|
+| 1 | Icon system: Adopt Lucide React | Dallas | P0 | 4d | Add lucide-react; replace text labels with icons; ARIA labels; <50KB additional |
+| 2 | Design tokens: CSS variables | Dallas | P0 | 3d | Create src/styles/tokens.css; replace hardcoded colors/spacing |
+| 3 | UX patterns: Consistent components | Dallas | P1 | 5d | Buttons, inputs, forms, empty states, loading, errors |
+| 4 | Accessibility validation | Lambert | P1 | 3d | axe-core 0 violations; WCAG 2.1 AA compliance |
+| 5 | Design system documentation | Newt | P2 | 2d | Color palette, typography, patterns documented |
+
+## Key Design Decisions
+
+### 1. v1.7.1 as Patch Release (not v1.7.2)
+Semver PATCH appropriate: infrastructure improvements + bug fixes, no breaking changes.
+
+### 2. v1.8.0 for UI/UX (not v1.7.1)
+Semver MINOR appropriate: coordinated feature set (icons + tokens + patterns).
+
+### 3. Icon Library: Lucide React
+Selected for tree-shaking efficiency (~5–8 KB per project), accessibility, and consistency.
+
+### 4. Design Tokens: CSS Variables (not Sass/LESS)
+No build step required; enables runtime customization (future dark mode).
+
+### 5. Multi-Stage Docker Builds for All 6 Services
+Image size reduction 15%+ expected; consistent optimization across Python + Node.
+
+### 6. Continuous Security Monitoring
+6 critical fixes required for v1.7.1 release gate; 10 hardening issues queued for v1.8.0.
+
+## Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| embeddings-server uv migration breaks model loading | Low | Medium | Full test suite (9 tests) validation |
+| Docker multi-stage build fails on CI | Low | Medium | Local testing; validate logs; rollback |
+| Icon library aesthetic mismatch | Medium | Medium | 2-3 library evaluation; feedback loop |
+| v1.8.0 scope creep (dark mode, animations) | High | High | Strict MVP (5 issues); defer to v1.9.0+ |
+| WCAG compliance audit reveals major issues | Medium | High | Early testing; allocate buffer time |
+
+## Next Steps (Upon Approval)
+
+1. Create GitHub milestone `v1.7.1` (due: 2-3 weeks)
+2. Create GitHub milestone `v1.8.0` (due: 6-8 weeks)
+3. Create 10 GitHub issues (5 per milestone)
+4. Apply `squad:{member}` labels per assignments
+5. Schedule v1.7.1 kickoff meeting
+
+**Status:** ✏️ PENDING APPROVAL — Awaiting Juanma review and authorization
+
+---
+
+# Decision: Technical Debt Prioritization for v1.7.1
+
+**Date:** 2026-03-18  
+**Author:** Parker (Backend Developer)  
+**Context:** Technical debt inventory analysis for v1.7.1 release  
+**Status:** Proposed (part of v1.7.1 planning)
+
+## Decision
+
+Prioritize the following technical debt items for v1.7.1:
+
+### MUST FIX (P0–P1):
+1. **Document-indexer test collection error (P0)** — Tests won't run; blocks QA
+2. **Embeddings-server uv migration (P1)** — Last Python service on pip; unify backend
+3. **Bare exceptions in solr-search (P1)** — 3+ instances without logging; operational risk
+4. **Document-lister test coverage (P1)** — 15% coverage, 6 failures; core logic untested
+
+### SHOULD FIX (P2):
+5. Configuration pattern standardization
+6. Logging configuration consistency
+7. Dependency version pinning
+
+### CAN DEFER (P3):
+8. Base image standardization
+9. Solr-search code complexity audit
+10. Configuration validation enhancement
+
+## Rationale
+
+P0–P1 items directly impact quality assurance, backend consistency, and operational visibility. P2 items improve maintainability but can run in parallel. P3 items defer to v1.8.0+ without blocking release.
+
+---
+
+# Decision: Docker Build Optimization for v1.7.1
+
+**Date:** 2026-03-18  
+**Author:** Brett (Infrastructure Architect)  
+**Context:** Docker build optimization specification for v1.7.1  
+**Status:** Proposed (part of v1.7.1 planning)
+
+## Decision
+
+Implement multi-stage Docker builds + non-root users + lazy model loading for all services:
+
+1. **Multi-Stage Build Pattern:** Separate builder (compile deps) from runtime (minimal)
+2. **Non-Root User Hardening:** All services run as `appuser` (CIS Docker Benchmark)
+3. **embeddings-server Lazy Loading:** Download model at first startup; use Docker volume cache
+
+## Expected Outcomes
+
+- solr-search: 650 MB → 350 MB (-46%)
+- embeddings-server: 850 MB → 400 MB (-53%)
+- document-indexer/lister: 200 MB → 170 MB (-15%)
+- admin: 400 MB → 350 MB (-12%)
+- **Total:** 2.3 GB → 1.44 GB (-38%)
+
+## Scope & Sequencing
+
+**Phase 1 (High-Impact):** solr-search, embeddings-server  
+**Phase 2 (Consistency):** document-indexer, document-lister, admin, buildall.sh  
+**Phase 3 (CI/Polish):** BuildKit + GitHub Actions cache
+
+---
+
+# Decision: Icon Library & Design System for v1.8.0
+
+**Date:** 2026-03-18  
+**Author:** Dallas (Frontend Developer)  
+**Context:** UI/UX design decision for v1.8.0  
+**Status:** Proposed (part of v1.8.0 planning)
+
+## Decision
+
+1. **Icon Library: Lucide React** (500+ icons, tree-shaking, accessibility, ~5–8 KB per project)
+2. **Design System: CSS Variables** (centralized tokens, runtime customization, no build step)
+3. **Mobile-First Responsive Design** (breakpoints at 768px/1024px; no Bootstrap CSS coupling)
+
+## Execution Plan (v1.8.0, 6 weeks)
+
+**Phase 1 (Weeks 1–2):** Lucide + design tokens + mobile layout  
+**Phase 2 (Weeks 3–4):** Skeleton loaders, empty states, forms  
+**Phase 3 (Weeks 5–6):** WCAG 2.1 AA audit, consistency, documentation  
+
+## Impact
+
+✅ Professional look, improved accessibility, centralized design foundation, future dark mode support
+
+---
+
+# Decision: Security Threat Assessment & Roadmap for v1.7.1+ v1.8.0
+
+**Date:** 2026-03-18  
+**Author:** Kane (Security Engineer)  
+**Context:** STRIDE threat assessment for aithena ecosystem  
+**Status:** Pending squad review
+
+## Decision
+
+**v1.7.1 Release Blockers (6 Critical/High Fixes, ~8 hours):**
+1. Auth guards on admin endpoints (`/v1/admin/*`)
+2. nginx 1.15 → 1.27 upgrade (EOL fixes)
+3. RabbitMQ guest/guest disabled; credentials required
+4. Redis password required (default: disabled)
+5. CSP header on React UI (XSS prevention)
+6. CORS restriction to frontend domain only
+
+**v1.8.0 Hardening (10 Issues, ~25–30 hours):**
+1. RBAC on admin endpoints (role-based access)
+2. Rate limiting on search endpoint (100 req/min)
+3. Authentication on embeddings-server `/embed`
+4. RabbitMQ audit logging enabled
+5. Solr regex query safeguards
+6. Security headers (nginx: remove Server, add X-Content-Type, X-Frame-Options)
+7. Rate limiting on nginx (/admin, /)
+8. User audit logging on admin mutations
+9. Optional MFA on admin dashboard
+10. Redis ACL (disable dangerous commands)
+
+**Deferred to v1.9.0+ (Defense-in-Depth):**
+- Network segmentation
+- RabbitMQ/Redis TLS
+- ZooKeeper authentication
+- Solr audit logging
+- Frontend analytics
+- CSRF tokens
+
+## Risk Mitigation
+
+- CSP nonce integration: Vite supports out-of-box
+- nginx upgrade: Test with e2e suite; validate routes
+- RabbitMQ/Redis credentials: Document in MIGRATION.md
+- RBAC break: v1.7.1 pre-release; few external consumers
+
+## Success Criteria
+
+- [ ] All 6 critical fixes implemented for v1.7.1
+- [ ] 628 tests passing (zero regressions)
+- [ ] Security scanning (bandit, checkov, zizmor) passes
+- [ ] Zero open critical GitHub code scanning alerts

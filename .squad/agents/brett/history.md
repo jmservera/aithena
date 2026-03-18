@@ -193,6 +193,34 @@
 - Issues API works on PRs (use `issues: write` permission)
 - PR title + branch + files = high-confidence classification
 
+#### 2026-07-24 — Docker Build Optimization Specification for v1.7.1
+
+**Task:** Create comprehensive Docker build optimization spec for v1.7.1 (Juanma request).
+
+**Audit Results:**
+- **aithena-ui:** ✅ Multi-stage (Node → nginx); missing explicit USER declaration
+- **Python services (5/6):** ❌ All single-stage; mix of uv/pip; no non-root users
+- **embeddings-server:** ❌ Largest (850 MB); pre-downloads model, uses pip (not uv)
+- **buildall.sh:** ✅ Solid workflow; sequential uv sync not parallelized
+
+**Specification Delivered:**
+- **Part 1:** Current Dockerfile audit (6 services analyzed)
+- **Part 2:** Multi-stage build patterns with expected 30-50% size reductions
+- **Part 3:** buildall.sh optimization + BuildKit leverage
+- **Part 4:** Security hardening (non-root users, minimal attack surface)
+- **Part 5:** 8 issue-ready improvement items (P0-P3, S/M effort)
+- **Part 6:** Implementation roadmap (3 phases over 3 sprints)
+- **Part 7-10:** Validation strategy, risk mitigation, success criteria
+
+**Key Findings:**
+- **Total image bloat:** 2.3 GB → 1.44 GB possible (-38%)
+- **Build speedup:** 2-4x with parallelization + BuildKit cache
+- **solr-search:** 650 MB → 350 MB (-46% from multi-stage)
+- **embeddings-server:** 850 MB → 400 MB (-53% from lazy model loading + uv)
+- **Security gap:** Zero non-root users across all services
+
+**Deliverable:** `/tmp/brett-docker-optimization.md` — production-ready specification with 8 issue templates, roadmap, and validation strategy.
+
 ---
 
 ## Decisions (Summary for Continuity)
