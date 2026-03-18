@@ -4535,6 +4535,153 @@ Phase 4 (after #458 PR merges):
 - **Pin action SHAs.** Brett must use the same pinned action versions already in ci.yml (listed in the job specs above).
 - **embeddings-server uses pip**, not uv — it has `requirements.txt` only, no `pyproject.toml`/`uv.lock`.
 - **CI budget:** All 4 new jobs run in parallel. Expected wall-clock addition is ~1-2 min (Node install + Vitest is the long pole). Total CI should stay well under 5 min.
+
+---
+
+# Decision: PR #432 Review Triage — v1.4.0 Release Blocking Issues
+
+**Date:** 2026-03-18  
+**Reviewer:** Ripley (Lead)  
+**Context:** Copilot PR review findings on v1.4.0 dev→main merge PR  
+**Status:** 6 issues created (#467-#472), 2 flagged as release-blocking
+
+## Summary
+
+Automated PR review found 15 findings. Categorized as:
+- **2 release-blocking** for v1.4.0 (smoke tests, stats endpoint)
+- **4 post-release** for v1.6.0+ (code quality, CI improvements)
+- **1 post-i18n** for v1.7.0 (localStorage naming)
+
+**Recommendation:** Do NOT merge PR #432 until issues #467 (smoke tests) and #468 (stats endpoint) are resolved.
+
+## Release-Blocking Issues
+
+### Issue #467: Smoke Test Suite Failures
+- **Files:** `tests/smoke/production-smoke-test.sh`
+- **Problems:**
+  1. Tests hit `/api/*` but Nginx proxies under `/v1/*` → 404s
+  2. Unquoted `$extra_args` causes shell word-splitting in auth headers
+  3. Protected endpoints need `Authorization: Bearer <token>` headers
+- **Impact:** v1.4.0 smoke tests will fail on first production run
+- **Assignee:** Brett (Infra owner)
+
+### Issue #468: Stats Endpoint Shows 0 Books
+- **Files:** `src/solr-search/main.py:898`, `search_service.py:374`
+- **Problem:** Code reads `ngroups` from Solr but query doesn't set `group.ngroups=true`
+- **Impact:** Stats page always shows "0 books in library" despite books existing
+- **Assignee:** Parker (Backend owner)
+
+## Post-Release Issues (v1.6.0+)
+
+### Issue #469: Frontend Code Quality (Dallas)
+- TypeScript strictness for `useRef<HTMLElement | null>(null)`
+- URL param naming consistency (`fq_*` vs `filter_*`)
+
+### Issue #470: Dependabot CI Improvements (Brett)
+- Node version mismatch (v20 in CI, v22 in project)
+- `continue-on-error` masking auto-merge failures
+
+### Issue #471: Test Coverage (Lambert)
+- Add tests for new `/v1/books` endpoint
+
+### Issue #472: localStorage Key Naming (Dallas, v1.7.0)
+- Standardize to dot-namespaced keys (post-i18n)
+
+## Manual Actions
+
+✅ Deleted duplicate decision files from inbox:
+- parker-rebuild-verify.md (duplicated in archive)
+- brett-rabbitmq-upgrade.md (duplicated in archive)
+
+✅ Created v1.7.0 milestone (#20)
+
+---
+
+# Dependabot Security Review — 16 PRs Assessment
+
+**Reviewer:** Kane (Security Engineer)  
+**Date:** 2026-03-18  
+**Scope:** All 16 open Dependabot PRs  
+**Status:** 5 approved, 6 need testing, 5 need code changes
+
+## Executive Summary
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| ✅ **Safe to merge** | 5 | requests 2.32.5, bootstrap 5.3.8 |
+| ⚠️ **Needs testing** | 6 | Node actions (checkout, artifact), ESLint v10 |
+| ❌ **Code changes required** | 5 | 4× redis 7.3.0, 1× eslint-plugin-react-hooks v7 |
+
+## Critical Findings
+
+### Python Redis Crisis (4 PRs)
+**#445, #441, #437, #436:** redis 4.6.0 → 7.3.0 (skips v5.x, v6.x)
+
+**Breaking changes:**
+- Connection pool behavior differs significantly
+- API strictness tightened
+- Deprecated patterns: `KEYS *` → `scan_iter()`, per-key `get()` → `mget()`
+
+**Per-service impact:**
+- **admin:** Verify config cache ops (PR #445)
+- **document-indexer:** Verify RabbitMQ consumer redis ops (PR #441)
+- **solr-search:** Test connection pool singleton, caching (PR #437) ← most critical
+- **document-lister:** Verify message processing state mgmt (PR #436)
+
+**Verdict:** All 4 NEED CODE CHANGES + TESTING
+
+### Critical: eslint-plugin-react-hooks v7 (PR #434)
+
+**Breaking change:** Config preset `recommended` now flat-config only.
+
+**aithena-ui eslint.config.js must update:**
+```js
+// OLD (breaks with v7):
+"react-hooks": reactHooks
+
+// NEW (v7):
+"react-hooks": reactHooks.configs.recommended
+```
+
+**Verdict:** NEEDS CODE CHANGES + npm run lint testing
+
+### CI/CD Manual Review PRs
+
+| PR | Package | Change | Verdict |
+|----|---------|--------|---------|
+| #449 | actions/checkout | 4.3.1 → 6.0.2 | ⚠️ Test credential handling |
+| #448 | actions/upload-artifact | 4.6.2 → 7.0.0 | ⚠️ Test ESM migration |
+| #447 | docker/setup-buildx-action | 3.12.0 → 4.0.0 | ⚠️ Test buildall.sh |
+
+All require Actions Runner ≥ 2.327.1+. **Needs testing in isolated branch.**
+
+### ESLint Environment (PR #438)
+**globals 15→17:** Breaking change splits `audioWorklet` from `browser`.
+
+**Verdict:** ⚠️ Needs testing — run `npm run lint` in aithena-ui
+
+## Approved PRs (merge immediately, no action)
+
+- ✅ #444: requests 2.32.5 (patch, SSLContext fix)
+- ✅ #439: requests 2.32.5 (patch, same)
+- ✅ #440: bootstrap 5.3.8 (patch, maintenance)
+- ✅ #443: eslint-plugin-react-refresh 0.5.2 (minor, v10 support)
+- ✅ #442: python-dotenv 1.2.2 (minor, symlink behavior)
+
+## Recommendations
+
+**Batch 1 (merge now):** #444, #439, #440, #443, #442 — 5 approved PRs, no code changes
+
+**Batch 2 (test first):** #449, #448, #447, #446, #438, #435 — 6 PRs need testing, no code changes
+
+**Batch 3 (code changes + test):** #434 (react-hooks), #445/#441/#437/#436 (redis × 4)
+
+## Security Notes
+
+- **No CVE fixes** in these PRs (all are maintenance/feature bumps)
+- **redis 7.x has no reported CVEs** blocking adoption; major jump is safe architecturally
+- **requests 2.32.5 is BUGFIX** (reverts SSLContext caching regression) — safe
+- **eslint 10 includes ajv 6.14.0** (safe)
 # Decision: Repository Branch Housekeeping & Auto-Delete
 
 **Date:** 2026-03-16T23:20Z  
