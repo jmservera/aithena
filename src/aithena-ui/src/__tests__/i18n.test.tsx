@@ -24,7 +24,11 @@ const LOCALE_STORAGE_KEY = 'aithena-locale';
 
 /** Simple component that displays a translated message so we can assert text. */
 function TranslatedLabel() {
-  return <span data-testid="label"><FormattedMessage id="app.subtitle" /></span>;
+  return (
+    <span data-testid="label">
+      <FormattedMessage id="app.subtitle" />
+    </span>
+  );
 }
 
 /** Exposes the current locale from the I18n context for assertions. */
@@ -70,12 +74,15 @@ describe('Translation completeness', () => {
 // ---------------------------------------------------------------------------
 
 describe('No empty translations', () => {
-  it.each(Object.entries(LOCALE_FILES))('%s locale has no empty string values', (_locale, messages) => {
-    const emptyKeys = Object.entries(messages)
-      .filter(([, value]) => value.trim() === '')
-      .map(([key]) => key);
-    expect(emptyKeys).toEqual([]);
-  });
+  it.each(Object.entries(LOCALE_FILES))(
+    '%s locale has no empty string values',
+    (_locale, messages) => {
+      const emptyKeys = Object.entries(messages)
+        .filter(([, value]) => value.trim() === '')
+        .map(([key]) => key);
+      expect(emptyKeys).toEqual([]);
+    }
+  );
 });
 
 // ---------------------------------------------------------------------------
