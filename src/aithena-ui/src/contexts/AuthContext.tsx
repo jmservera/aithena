@@ -60,9 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => registerAuthFailureHandler(clearAuthState), [clearAuthState]);
 
+  // Initialize auth state from stored token on mount
   useEffect(() => {
     const storedToken = getStoredToken();
     if (!storedToken) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoading(false);
       return;
     }

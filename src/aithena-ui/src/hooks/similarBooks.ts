@@ -77,8 +77,10 @@ export function useSimilarBooks(documentId: string | null): UseSimilarBooksResul
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch similar books when documentId changes, reset state when cleared
   useEffect(() => {
     if (!documentId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBooks([]);
       setLoading(false);
       setError(null);

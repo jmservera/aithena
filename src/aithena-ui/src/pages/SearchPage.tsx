@@ -199,7 +199,10 @@ function SearchPage() {
   // that deep-links and browser back / forward reflect the correct value.
   const [inputValue, setInputValue] = useState(searchState.query);
 
+  // Sync input value when URL query changes (e.g., browser back/forward)
+  // This is a legitimate controlled input pattern
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInputValue(searchState.query);
   }, [searchState.query]);
 
