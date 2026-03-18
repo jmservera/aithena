@@ -142,7 +142,7 @@ for (const pr of prs) {
   // 4. Post triage comment
   await github.rest.issues.createComment({
     owner, repo, issue_number: pr.number,
-    body: `🔄 Ralph — Auto-Triage\n\nClassified as ${depType} (routed to squad:${owner})\n\n${reviewGuidance}`
+    body: `Ralph — Auto-Triage\n\nClassified as ${depType} (routed to squad:${owner})\n\n${reviewGuidance}`
   });
 }
 ```

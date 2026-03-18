@@ -365,3 +365,22 @@ Key active decisions managed in .squad/decisions.md:
 5. Set sprint dates for each milestone
 
 **Next Session:** Create GitHub milestones + issues; assign squad members; document in decisions.md
+
+## Session: Screenshot Pipeline Issue Creation (2026-03-18)
+
+**Context:** v1.8.0 release planning requires automated screenshot pipeline per Newt's strategy (3-tier inventory) and Brett's architecture (workflow_run-triggered approach).
+
+**Action:** Created GitHub issues #530–#534 in v1.8.0 milestone with explicit dependencies and team assignments.
+
+**Issues:**
+- #530: Expand Playwright spec (Lambert, Tester)
+- #531: Add release-screenshots artifact (Brett, Infra)
+- #532: Create update-screenshots.yml workflow (Brett, Infra)
+- #533: Update user/admin manuals (Newt, PM)
+- #534: Enable repo setting (Juanma, PO, parallel)
+
+**Dependency Chain:** #530 → #531 → #532 → #533, with #534 independent
+
+**Decision Filed:** `.squad/decisions.md` (merged from inbox)
+
+**Outcome:** Screenshot pipeline unblocked for v1.8.0; all 5 issues must close before release; automation ready for future releases.

@@ -6354,3 +6354,284 @@ Implement multi-stage Docker builds + non-root users + lazy model loading for al
 - [ ] 628 tests passing (zero regressions)
 - [ ] Security scanning (bandit, checkov, zizmor) passes
 - [ ] Zero open critical GitHub code scanning alerts
+
+---
+
+# Decision: Screenshot Strategy for Release Documentation
+
+**Date:** 2026-03-18  
+**Status:** DECISION — Proposed approach for comprehensive screenshot coverage  
+**Decision Authority:** Newt (Product Manager)
+
+## Problem Statement
+
+Juanma has repeatedly asked about screenshots for release documentation. Currently:
+1. **Integration test** (`e2e/playwright/tests/screenshots.spec.ts`) captures 4 screenshots: login, search results, admin dashboard, upload page
+2. **Release-docs workflow** generates release notes but **cannot take screenshots** (no running app)
+3. **User/admin manuals** have 7 existing screenshot files but are not comprehensive
+4. **Disconnect:** Screenshots stored in `docs/images/`, referenced from manuals, but release docs workflow doesn't integrate them
+
+This leaves critical workflows fragmented:
+- Screenshots taken only during integration tests (CI/CD)
+- No automated flow into release documentation
+- Manual screenshots missing for new features
+- No systematic approach to what screenshots are "release-ready"
+
+## Proposed Screenshot Inventory
+
+### Tier 1: REQUIRED FOR EVERY RELEASE (4 pages)
+1. **Login Page** (`login-page.png`)
+2. **Search Results Page** (`search-results-page.png`)
+3. **Admin Dashboard** (`admin-dashboard.png`)
+4. **Upload Page** (`upload-page.png`)
+
+### Tier 2: RECOMMENDED FOR SPECIFIC FEATURES (6+ pages)
+5. **Status Tab** (`status-tab.png`)
+6. **Stats Tab** (`stats-tab.png`)
+7. **Filtered Search Results** (`search-results-filtered.png`)
+8. **PDF Viewer + Similar Books** (`pdf-viewer-with-recommendations.png`)
+9. **Search Error State** (`search-error-no-results.png`)
+10. **Responsive Mobile Layout** (`search-page-mobile.png`)
+
+### Tier 3: ADMIN/OPERATIONAL DOCUMENTATION (4+ pages)
+11. **Healthy Solr Admin UI** (`admin-solr-healthy.png`)
+12. **RabbitMQ Management UI** (`admin-rabbitmq-queues.png`)
+13. **Redis Commander** (`admin-redis-inspector.png`)
+14. **System Health Check (Status API)** (`admin-health-api-response.png`)
+
+## Implementation Strategy
+
+### Phase 1: Formalize Tier 1 Canonical Set (v1.8.0)
+**Owner:** Lambert (testing)
+1. Organize screenshots in `docs/screenshots/tier-1/`, `tier-2/`, `admin/`
+2. Update screenshot spec for consistency
+3. Move existing 7 images to `tier-2/`
+
+### Phase 2: Integrate into Release-Docs (v1.8.0+)
+**Owner:** Newt (PM) + Automation
+1. Enhance release-docs.yml to download integration test artifacts
+2. Extract Tier 1 screenshots and validate
+3. Create release-notes template with screenshot sections
+4. Update manual templates
+
+### Phase 3: Expand Tier 2 & Tier 3 (v1.8.0–v1.10.0)
+**Owner:** Lambert (testing) + Newt (PM)
+- Capture screenshots on-demand as features ship
+
+### Phase 4: Before/After Comparisons (v1.9.0+)
+**Owner:** Newt (PM)
+- Add side-by-side comparisons for major feature releases
+
+## Decision: APPROVED APPROACH
+
+✅ **Implement Phase 1 & 2 for v1.8.0** — Formalize Tier 1, integrate into release docs  
+✅ **Plan Phase 3** — Tier 2/3 expansion ongoing  
+⏸️ **Defer mobile screenshots to v1.9.0** — Not critical for v1.8.0
+
+## Success Metrics
+
+- ✅ Every release (v1.8.0+) includes 4 Tier 1 screenshots
+- ✅ User/admin manual screenshots always match current UI
+- ✅ Admin manual includes Monitoring & Troubleshooting sections
+- ✅ Zero manual screenshot extraction steps in release workflow
+- ✅ Release PR includes screenshot commit with release docs commit
+
+---
+
+# Decision: Screenshot Pipeline — Integration Tests → Release Documentation
+
+**Date:** 2026-03-18  
+**Decided by:** Brett (Infrastructure Architect)  
+**Context:** Screenshots captured during integration tests need persistent repo storage for release documentation  
+**Status:** Approved
+
+## Problem
+
+Playwright screenshots (login, search, admin, upload at 1440×1024) are captured during integration tests and uploaded as CI artifact with 30-day retention. They **are not** committed to the repo, so:
+- Release-docs workflow cannot reference them
+- User/admin manuals cannot embed them
+- They expire and disappear after 30 days
+
+## Current State
+
+- **Integration Test:** Captures 4 pages, uploads `playwright-e2e-results` artifact (30 days, ~50–200 MB with reports/traces)
+- **Release-Docs:** Cannot access screenshots (no Docker daemon to re-run tests)
+- **Gap:** No automated flow from test artifact → repo → documentation
+
+## Options Evaluated
+
+### Option A: Integration test commits directly
+- **Rejected.** Requires write access (security risk), creates commit noise on every scheduled run
+
+### Option B: `workflow_run`-triggered workflow ✅ SELECTED
+- New lightweight workflow triggered when Integration Test completes successfully
+- Downloads screenshot artifact, commits to `docs/screenshots/` on `dev`
+- **PRO:** Clean separation, integration test stays read-only, lightweight (~2 min)
+
+### Option C: Release-docs builds from scratch
+- **Rejected.** Duplicates 60-minute Docker build cycle, violates DRY
+
+### Option D: Cross-workflow artifact API
+- **Rejected.** Fragile (artifact expiry >30 days), Option B superior
+
+## Selected: Option B — `workflow_run` Screenshot Commit Workflow
+
+### Architecture
+
+```
+Integration Test (existing)
+  └── Uploads artifact: release-screenshots (NEW)
+        │
+        ▼  (workflow_run trigger, on success)
+Update Screenshots (NEW workflow)
+  ├── Downloads release-screenshots artifact
+  ├── Commits to docs/screenshots/ on dev
+  └── Done (~2 min)
+        │
+        ▼  (already in repo when release happens)
+Release-Docs (existing)
+  └── References docs/screenshots/ in release notes
+```
+
+### Implementation Details
+
+#### 1. Changes to `integration-test.yml`
+Add step after existing artifact upload:
+- Extract 4 PNG files (login-page.png, search-results-page.png, admin-dashboard.png, upload-page.png)
+- Upload separate `release-screenshots` artifact (~500 KB, 90 days retention)
+- Runtime impact: +10 seconds
+
+#### 2. New workflow: `.github/workflows/update-screenshots.yml`
+```yaml
+on:
+  workflow_run:
+    workflows: ["Integration Test"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  commit-screenshots:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    steps:
+      - checkout dev branch
+      - download release-screenshots artifact
+      - commit & push if changed
+```
+
+**Key design choices:**
+- **Branch filter:** Only commits when integration test ran against `main` (release PRs)
+- **Target branch:** Commits to `dev` (release-docs operates from `dev`)
+- **Idempotent:** Avoids empty commits when screenshots unchanged
+
+#### 3. Repo setup
+- Create `docs/screenshots/.gitkeep`
+- Add `docs/screenshots/README.md` documenting auto-generation
+
+#### 4. Optional: Update `release-docs.yml`
+Add screenshot locations to Copilot CLI prompt so Newt knows they exist
+
+## Cost/Performance Analysis
+
+- **Integration test:** +10 seconds (negligible)
+- **New workflow:** ~2 minutes total (ultra-lightweight)
+- **Release-docs:** No additional runtime (screenshots already in repo)
+- **Storage:** ~500 KB screenshots in repo (updated infrequently), ~500 KB artifact in Actions
+
+## Security Considerations
+
+- **Integration test stays read-only** — No permissions change
+- **New workflow has `contents: write`** — Required for git push, scoped to `workflow_run` event (safe from fork attacks)
+- **Direct push to `dev`** — Auto-generated PNGs only (no code execution)
+
+## Implementation Order
+
+1. Create `docs/screenshots/` directory with README
+2. Add screenshot extraction + upload step to `integration-test.yml`
+3. Create `update-screenshots.yml` workflow
+4. (Optional) Update Copilot CLI prompt in `release-docs.yml`
+5. Verify end-to-end by triggering integration test manually
+
+---
+
+# Screenshot Pipeline Implementation Issues
+
+**Date:** 2026-03-18  
+**Authority:** Ripley (Project Lead)  
+**Status:** DECISION — Implementation plan created  
+
+## Decision
+
+Created GitHub issues (#530–#534) in milestone v1.8.0 to implement the screenshot pipeline per Newt's strategy and Brett's architecture decision. Issues are fully ordered with explicit dependencies to prevent parallel execution conflicts.
+
+## Issues Created
+
+| # | Title | Assigned | Status | Dependency |
+|---|-------|----------|--------|-----------|
+| **#530** | Expand Playwright screenshot spec to cover all documented pages | Lambert | Open | None |
+| **#531** | Add release-screenshots artifact to integration-test workflow | Brett | Open | #530 |
+| **#532** | Create update-screenshots.yml workflow | Brett | Open | #531 |
+| **#533** | Update user and admin manuals to reference screenshots | Newt | Open | #532 |
+| **#534** | Enable "Allow GitHub Actions to create PRs" repo setting | Juanma | Open | None (parallel) |
+
+## Dependency Chain
+
+```
+#530 (Lambert)     → Test expansion
+  ↓
+#531 (Brett)       → Artifact upload  
+  ↓
+#532 (Brett)       → Workflow creation
+  ↓
+#533 (Newt)        → Documentation updates
+  │
+  +─ #534 (Juanma) → Repo setting (parallel, non-blocking)
+```
+
+**Rationale:**
+- #530 must complete before #531 (artifact step needs expanded test outputs)
+- #531 must complete before #532 (workflow needs artifact to exist)
+- #532 must complete before #533 (screenshots must be in repo before manuals reference them)
+- #534 is independent and can be done anytime (but should be done before #532 runs in CI)
+
+## Traceability
+
+References from planning session (2026-03-18):
+- **Newt's screenshot strategy:** 3-tier inventory (Tier 1 required, Tier 2 recommended, Tier 3 operations)
+- **Brett's pipeline architecture:** Option B (`workflow_run`-triggered workflow)
+- **Existing infrastructure:** release-docs.yml working end-to-end; automation/release-docs-v1.8.0 branch pending repo setting
+
+## Success Criteria
+
+All 5 issues must be closed and merged to dev before v1.8.0 release:
+- [ ] #530 closed (all new screenshots in screenshots.spec.ts)
+- [ ] #531 closed (artifact step working in integration-test.yml)
+- [ ] #532 closed (update-screenshots.yml workflow deployed)
+- [ ] #533 closed (user/admin manuals updated with inline screenshots)
+- [ ] #534 closed (repo setting enabled)
+
+Once complete:
+- Integration test captures 11 pages (4 original + 7 new)
+- Screenshots auto-commit to docs/screenshots/ on dev
+- Release-docs.yml can reference them in release notes
+- User/admin manuals include inline screenshot references
+- v1.8.0 release is fully documented with live screenshots
+
+## Implementation Notes
+
+- **Phase 1:** #530 (test expansion)
+- **Phase 2:** #531–#532 (pipeline automation)
+- **Phase 3:** #533 (documentation integration)
+- **Parallel:** #534 (repo setting, as early as possible)
+
+The 4-issue sequential dependency prevents conflicts (all Brett's work sequential, not parallel) while allowing Newt's work to start once #532 completes.
+
+## Team Context
+
+- **Lambert** (Tester): E2E test expansion
+- **Brett** (Infra): GitHub Actions workflows
+- **Newt** (Product Manager): Documentation updates
+- **Juanma** (Product Owner): Repo settings (human action)
+
+This unblocks release-docs.yml and establishes the automated screenshot pipeline for all future releases.
