@@ -49,7 +49,7 @@ jobs:
         with:
           fetch-depth: 0  # Full history for git log comparison
           ref: dev        # Always work from dev branch
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Configure Git
         run: |
@@ -220,7 +220,7 @@ jobs:
       - name: Generate release notes with Copilot CLI
         id: copilot
         env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
           MILESTONE: ${{ steps.version.outputs.milestone }}
@@ -234,41 +234,25 @@ jobs:
           mkdir -p docs/releases
           OUTPUT_FILE="docs/releases/v${VERSION}-release-notes.md"
 
-          # Collect context into prompt
-          PRS_TEXT=$(jq -r '.[] | "- PR #\(.number): \(.title)"' /tmp/release-context/prs.json 2>/dev/null || echo "No PRs found")
-          ISSUES_TEXT=$(jq -r '.[] | "- Issue #\(.number): \(.title)"' /tmp/release-context/issues.json 2>/dev/null || echo "No issues found")
-          CHANGELOG_TEXT=$(cat /tmp/release-context/changelog.md 2>/dev/null || echo "No changelog section found")
-          CI_STATUS=$(jq -r '.[0].conclusion // "Unknown"' /tmp/release-context/ci-run.json 2>/dev/null || echo "Unknown")
+          PROMPT="Newt, generate the release documentation for Aithena v${VERSION}.
 
-          PROMPT="Generate release notes for Aithena v${VERSION} (a book library search engine with Solr, React, and Python microservices).
+          The release context files are at /tmp/release-context/:
+          - prs.json: merged PRs
+          - issues.json: closed issues for milestone ${MILESTONE}
+          - changelog.md: CHANGELOG section
+          - ci-run.json: CI test results
 
-          Merged PRs:
-          ${PRS_TEXT}
+          Previous release tag: ${PREV_TAG}
+          Current tag: ${CURRENT_TAG}
+          PRs merged: ${PR_COUNT}
+          Issues closed: ${ISSUE_COUNT}
 
-          Closed issues in milestone ${MILESTONE}:
-          ${ISSUES_TEXT}
+          Write the release notes to ${OUTPUT_FILE} following the project conventions."
 
-          CHANGELOG section:
-          ${CHANGELOG_TEXT}
-
-          CI status: ${CI_STATUS}
-
-          Write a markdown file at ${OUTPUT_FILE} with YAML front matter (version, date, milestone),
-          then sections: Summary (2-3 sentences), What's New (from PRs grouped by theme),
-          Bug Fixes (from issues labeled bug), Breaking Changes (if any), Testing summary,
-          and Upgrade Instructions. Use emoji sparingly (✨ new, 🐛 fix, ⚠️ breaking, 🔒 security).
-          Include PR/issue numbers as GitHub links to github.com/jmservera/aithena."
-
-          # Run Copilot CLI non-interactively
-          # --allow-tool=write: let Copilot write the release notes file
-          # --allow-tool='shell(git:*)': let Copilot read git history for context
-          # --allow-tool='shell(gh:*)': let Copilot use gh CLI for GitHub context
-          # --no-ask-user: don't prompt for input (CI environment)
+          # Run Copilot CLI with squad agent
           if copilot -p "$PROMPT" \
-            --allow-tool=write \
-            --allow-tool='shell(git:*)' \
-            --allow-tool='shell(gh:*)' \
-            --allow-tool=read \
+            --agent squad \
+            --allow-all-tools \
             --no-ask-user ; then
             echo "✅ Copilot CLI completed"
           else
