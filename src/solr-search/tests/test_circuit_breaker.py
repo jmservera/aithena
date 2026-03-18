@@ -329,7 +329,10 @@ class TestRedisGracefulDegradation:
         main.redis_circuit.reset()
         _trip_breaker(main.redis_circuit, _raise_redis_error)
         try:
-            resp = _get_test_client().get("/v1/admin/documents")
+            client = _get_test_client()
+            client.headers["X-API-Key"] = "circuit-breaker-test-key"
+            with patch("admin_auth._get_admin_api_key", return_value="circuit-breaker-test-key"):
+                resp = client.get("/v1/admin/documents")
             assert resp.status_code == 503
             assert "circuit breaker" in resp.json()["detail"].lower()
         finally:

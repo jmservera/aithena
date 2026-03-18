@@ -59,6 +59,7 @@ class Settings:
     cb_redis_recovery_timeout: float
     cb_solr_failure_threshold: int
     cb_solr_recovery_timeout: float
+    admin_api_key: str | None
 
     @property
     def select_url(self) -> str:
@@ -113,4 +114,5 @@ settings = Settings(
     cb_redis_recovery_timeout=float(os.environ.get("CB_REDIS_RECOVERY_TIMEOUT", "30")),
     cb_solr_failure_threshold=int(os.environ.get("CB_SOLR_FAILURE_THRESHOLD", "5")),
     cb_solr_recovery_timeout=float(os.environ.get("CB_SOLR_RECOVERY_TIMEOUT", "30")),
+    admin_api_key=os.environ.get("ADMIN_API_KEY") or None,
 )

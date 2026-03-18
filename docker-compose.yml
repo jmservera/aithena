@@ -271,6 +271,7 @@ services:
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
     volumes:
       - document-data:/data/documents
       - type: bind
