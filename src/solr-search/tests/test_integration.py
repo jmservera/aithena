@@ -1171,8 +1171,9 @@ def _container_by_name(containers: list[dict[str, str]], name: str) -> dict[str,
 
 @patch("main._tcp_check", return_value=True)
 @patch("main.requests.get")
-@patch("admin_auth.ADMIN_API_KEY", "integration-test-admin-key")
+@patch("admin_auth._get_admin_api_key", return_value="integration-test-admin-key")
 def test_admin_containers_endpoint_happy_path(
+    _mock_admin_key: MagicMock,
     mock_requests_get: MagicMock,
     _mock_tcp: MagicMock,
 ) -> None:
@@ -1277,8 +1278,11 @@ def test_admin_containers_endpoint_happy_path(
 
 
 @patch("main.requests.get")
-@patch("admin_auth.ADMIN_API_KEY", "integration-test-admin-key")
-def test_admin_containers_endpoint_degraded_path(mock_requests_get: MagicMock) -> None:
+@patch("admin_auth._get_admin_api_key", return_value="integration-test-admin-key")
+def test_admin_containers_endpoint_degraded_path(
+    _mock_admin_key: MagicMock,
+    mock_requests_get: MagicMock,
+) -> None:
     """GET /v1/admin/containers marks failed checks down while workers remain unknown."""
 
     def requests_side_effect(url: str, *args: object, **kwargs: object) -> MagicMock:

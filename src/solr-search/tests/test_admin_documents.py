@@ -34,7 +34,7 @@ def get_client() -> TestClient:
 @pytest.fixture(autouse=True)
 def _enable_admin_api_key():
     """Patch ADMIN_API_KEY so admin endpoints are accessible in these tests."""
-    with patch("admin_auth.ADMIN_API_KEY", _TEST_ADMIN_KEY):
+    with patch("admin_auth._get_admin_api_key", return_value=_TEST_ADMIN_KEY):
         yield
 
 

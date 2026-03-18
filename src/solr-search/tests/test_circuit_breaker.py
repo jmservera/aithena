@@ -331,7 +331,7 @@ class TestRedisGracefulDegradation:
         try:
             client = _get_test_client()
             client.headers["X-API-Key"] = "circuit-breaker-test-key"
-            with patch("admin_auth.ADMIN_API_KEY", "circuit-breaker-test-key"):
+            with patch("admin_auth._get_admin_api_key", return_value="circuit-breaker-test-key"):
                 resp = client.get("/v1/admin/documents")
             assert resp.status_code == 503
             assert "circuit breaker" in resp.json()["detail"].lower()

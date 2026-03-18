@@ -44,7 +44,7 @@ def _client_with_admin_key(api_key: str | None, *, header: str = "x-api-key") ->
 
 def test_admin_returns_403_when_api_key_not_configured() -> None:
     """When ADMIN_API_KEY is unset, admin endpoints respond with 403."""
-    with patch("admin_auth.ADMIN_API_KEY", None):
+    with patch("admin_auth._get_admin_api_key", return_value=None):
         client = create_authenticated_client()
         response = client.get(ADMIN_ENDPOINT)
     assert response.status_code == 403
@@ -53,7 +53,7 @@ def test_admin_returns_403_when_api_key_not_configured() -> None:
 
 def test_admin_returns_403_even_with_key_header_when_not_configured() -> None:
     """Sending an X-API-Key when ADMIN_API_KEY is unset still returns 403."""
-    with patch("admin_auth.ADMIN_API_KEY", None):
+    with patch("admin_auth._get_admin_api_key", return_value=None):
         client = _client_with_admin_key("some-key")
         response = client.get(ADMIN_ENDPOINT)
     assert response.status_code == 403
@@ -68,7 +68,7 @@ TEST_KEY = "test-admin-secret-key-12345"
 
 def test_admin_returns_401_when_key_missing() -> None:
     """When ADMIN_API_KEY is set but request has no matching key header -> 401."""
-    with patch("admin_auth.ADMIN_API_KEY", TEST_KEY):
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
         client = create_authenticated_client()
         response = client.get(ADMIN_ENDPOINT)
     assert response.status_code == 401
@@ -76,7 +76,7 @@ def test_admin_returns_401_when_key_missing() -> None:
 
 def test_admin_returns_401_when_wrong_key() -> None:
     """When request sends a wrong API key -> 401."""
-    with patch("admin_auth.ADMIN_API_KEY", TEST_KEY):
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
         client = _client_with_admin_key("wrong-key")
         response = client.get(ADMIN_ENDPOINT)
     assert response.status_code == 401
@@ -93,7 +93,7 @@ def test_admin_succeeds_with_correct_x_api_key(mock_pool) -> None:
     """Correct X-API-Key allows the admin request through."""
     redis_mock = MagicMock()
     redis_mock.scan_iter.return_value = iter([])
-    with patch("admin_auth.ADMIN_API_KEY", TEST_KEY), patch(
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY), patch(
         "main._get_admin_redis_client", return_value=redis_mock
     ):
         client = _client_with_admin_key(TEST_KEY)
@@ -102,16 +102,13 @@ def test_admin_succeeds_with_correct_x_api_key(mock_pool) -> None:
 
 
 @patch("main._get_redis_pool")
-def test_admin_succeeds_with_correct_bearer_key(mock_pool) -> None:
-    """Correct key via X-API-Key header works (recommended approach)."""
-    redis_mock = MagicMock()
-    redis_mock.scan_iter.return_value = iter([])
-    with patch("admin_auth.ADMIN_API_KEY", TEST_KEY), patch(
-        "main._get_admin_redis_client", return_value=redis_mock
-    ):
-        client = _client_with_admin_key(TEST_KEY, header="x-api-key")
+def test_admin_rejects_key_in_wrong_header(mock_pool) -> None:
+    """Key sent via Authorization header instead of X-API-Key is rejected."""
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
+        client = create_authenticated_client()
+        # Authorization header is used for JWT, not admin API key
         response = client.get(ADMIN_ENDPOINT)
-    assert response.status_code == 200
+    assert response.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +127,7 @@ ADMIN_ENDPOINTS = [
 @pytest.mark.parametrize("method,path", ADMIN_ENDPOINTS, ids=[p for _, p in ADMIN_ENDPOINTS])
 def test_all_admin_endpoints_require_api_key(method: str, path: str) -> None:
     """Every /v1/admin/* endpoint returns 401 when key is set but not provided."""
-    with patch("admin_auth.ADMIN_API_KEY", TEST_KEY):
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
         client = create_authenticated_client()
         response = client.request(method, path)
     assert response.status_code == 401, f"{method} {path} should require API key"
@@ -139,7 +136,7 @@ def test_all_admin_endpoints_require_api_key(method: str, path: str) -> None:
 @pytest.mark.parametrize("method,path", ADMIN_ENDPOINTS, ids=[p for _, p in ADMIN_ENDPOINTS])
 def test_all_admin_endpoints_disabled_without_config(method: str, path: str) -> None:
     """Every /v1/admin/* endpoint returns 403 when ADMIN_API_KEY is not set."""
-    with patch("admin_auth.ADMIN_API_KEY", None):
+    with patch("admin_auth._get_admin_api_key", return_value=None):
         client = create_authenticated_client()
         response = client.request(method, path)
     assert response.status_code == 403, f"{method} {path} should be disabled"
