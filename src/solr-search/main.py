@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 import pika
 import redis as redis_lib
 import requests
+from admin_auth import require_admin_auth
 from auth import (
     AuthenticatedUser,
     AuthenticationError,
@@ -33,7 +34,7 @@ from auth import (
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from config import settings
 from correlation import CorrelationIdMiddleware, get_correlation_id
-from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from logging_config import setup_logging
@@ -1192,8 +1193,13 @@ def _get_solr_container_status() -> dict[str, str]:
     return _build_container_entry("solr", status, "infrastructure")
 
 
-@app.get("/v1/admin/containers/", include_in_schema=False, name="admin_containers_v1_slash")
-@app.get("/v1/admin/containers", name="admin_containers_v1")
+@app.get(
+    "/v1/admin/containers/",
+    include_in_schema=False,
+    name="admin_containers_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get("/v1/admin/containers", name="admin_containers_v1", dependencies=[Depends(require_admin_auth)])
 def admin_containers() -> dict[str, Any]:
     """Return a combined version/health snapshot for app and infrastructure containers."""
     checks = [
@@ -1373,8 +1379,13 @@ def _delete_admin_key(redis_key: str) -> bool:
         raise HTTPException(status_code=503, detail="Cannot connect to Redis") from exc
 
 
-@app.get("/v1/admin/documents/", include_in_schema=False, name="admin_documents_v1_slash")
-@app.get("/v1/admin/documents", name="admin_documents_v1")
+@app.get(
+    "/v1/admin/documents/",
+    include_in_schema=False,
+    name="admin_documents_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get("/v1/admin/documents", name="admin_documents_v1", dependencies=[Depends(require_admin_auth)])
 def admin_list_documents(
     status: Annotated[
         DocumentStatus | None,
@@ -1394,7 +1405,11 @@ def admin_list_documents(
     return _load_admin_documents(status_filter=status)
 
 
-@app.post("/v1/admin/documents/requeue-failed", name="admin_requeue_failed_v1")
+@app.post(
+    "/v1/admin/documents/requeue-failed",
+    name="admin_requeue_failed_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
 def admin_requeue_failed() -> dict[str, Any]:
     """Requeue all failed documents by deleting their Redis tracking entries.
 
@@ -1412,7 +1427,11 @@ def admin_requeue_failed() -> dict[str, Any]:
     return {"requeued": len(requeued_ids), "ids": requeued_ids}
 
 
-@app.delete("/v1/admin/documents/processed", name="admin_clear_processed_v1")
+@app.delete(
+    "/v1/admin/documents/processed",
+    name="admin_clear_processed_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
 def admin_clear_processed() -> dict[str, Any]:
     """Clear all processed document entries from Redis.
 
@@ -1430,7 +1449,11 @@ def admin_clear_processed() -> dict[str, Any]:
     return {"cleared": cleared}
 
 
-@app.post("/v1/admin/documents/{doc_id}/requeue", name="admin_requeue_document_v1")
+@app.post(
+    "/v1/admin/documents/{doc_id}/requeue",
+    name="admin_requeue_document_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
 def admin_requeue_document(doc_id: str) -> dict[str, Any]:
     """Requeue a single document identified by its opaque ``doc_id`` token.
 

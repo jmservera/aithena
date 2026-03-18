@@ -15,15 +15,27 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+import pytest  # noqa: E402
 from config import settings  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from main import _decode_admin_key, _encode_admin_key  # noqa: E402
 
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
+_TEST_ADMIN_KEY = "test-admin-documents-key"
+
 
 def get_client() -> TestClient:
-    return create_authenticated_client()
+    client = create_authenticated_client()
+    client.headers["X-API-Key"] = _TEST_ADMIN_KEY
+    return client
+
+
+@pytest.fixture(autouse=True)
+def _enable_admin_api_key():
+    """Patch ADMIN_API_KEY so admin endpoints are accessible in these tests."""
+    with patch("admin_auth.ADMIN_API_KEY", _TEST_ADMIN_KEY):
+        yield
 
 
 # ---------------------------------------------------------------------------
