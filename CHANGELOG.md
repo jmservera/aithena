@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] — 2026-03-18
+
+### Changed
+
+- **Embeddings-server migrated to uv** — Replaced bare `requirements.txt` with `pyproject.toml` + `uv.lock` for consistent, reproducible dependency management aligned with all other Python services (#517)
+- **Docker multi-stage builds** for all services — Separates build and runtime stages, reducing final image sizes and eliminating build-time tooling from production images (#521)
+
+### Fixed
+
+- **document-indexer test collection error** resolved — Tests now pass cleanly (#497)
+- **document-lister failing tests** resolved — Tests now pass cleanly (#498)
+
+### Security
+
+- **Nginx upgraded to 1.27 LTS** with default credentials removed — Base image updated to latest stable LTS; hardcoded default username/password eliminated from configuration. **Breaking:** `.env` credentials are now required for deployment (#518)
+- **Admin API key authentication** — All solr-search admin endpoints (`/admin/*`) now require a valid `ADMIN_API_KEY` header. **Breaking:** `ADMIN_API_KEY` environment variable must be set (#519)
+- **Content-Security-Policy header** added to nginx — Restricts resource loading origins to mitigate XSS and data injection attacks (#520)
+
 ## [1.7.0] — 2026-03-18
 
 ### Added
