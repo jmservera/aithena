@@ -5,7 +5,7 @@
 **Role:** Project Lead — Architecture, Roadmap, Release Planning, Team Coordination
 
 **Current Release Status (as of 2026-03-18):**
-- **v1.0.1 – v1.3.0** SHIPPED (Security, CI/CD, Frontend quality, Admin consolidation)
+- **v1.0.1 – v1.3.0** SHIPPED (Security, CI/CD, Frontend quality, Admin dashboard improvements)
 - **v1.4.0** SHIPPED (Stats & filtering improvements)
 - **v1.5.0** SHIPPED (Production infrastructure & deployment readiness)
 - **v1.6.0** SHIPPED (Internationalization & quality)

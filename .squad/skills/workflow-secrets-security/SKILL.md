@@ -35,6 +35,11 @@ This skill captures patterns from aithena's workflow security hardening (zizmor 
     # An attacker can inject: echo $COPILOT_ASSIGN_TOKEN > /tmp/steal.txt
 ```
 
+> **Note:** Step-level `env:` is not always insecure — if the step has no untrusted shell
+> eval and has a documented `.zizmor.yml` exception (e.g., internal workflows like
+> `squad-heartbeat.yml`), it can be acceptable. Prefer `with:` when possible; if `env:`
+> must be used, minimize scope and document the exception.
+
 **✅ SECURE — Inline with parameter:**
 
 ```yaml
@@ -49,7 +54,7 @@ Or use action input mapping:
 
 ```yaml
 - name: Assign issue to copilot
-  uses: actions/github-script@v6
+  uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
   with:
     github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
     script: |
@@ -134,7 +139,7 @@ env:
 
 ```yaml
 - name: Approve workflow
-  uses: actions/github-script@v6
+  uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     script: |
@@ -212,7 +217,7 @@ jobs:
 
 ```yaml
 - name: Sync labels
-  uses: actions/github-script@v6
+  uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
   with:
     github-token: ${{ secrets.LABEL_SYNC_PAT }}
     script: |
@@ -251,11 +256,14 @@ jobs:
 ```yaml
 name: Approve Workflow
 on:
-  pull_request_target:  # Trusted context, not PR code
+  pull_request:  # Use pull_request, NOT pull_request_target (secrets not exposed to fork code)
     types: [opened, synchronize]
 
 permissions:
   actions: write  # Explicit, minimal scope
+
+# ⚠️ WARNING: If pull_request_target is required (e.g., label-based workflows needing write access),
+# NEVER checkout PR HEAD, never run PR code, use strict permissions, and document justification.
 
 jobs:
   approve:
@@ -271,7 +279,7 @@ jobs:
       
       - name: Approve workflow
         if: steps.check.outputs.is_copilot == 'true'
-        uses: actions/github-script@v6
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -297,7 +305,7 @@ jobs:
 
 ```yaml
 - name: Assign issue to squad
-  uses: actions/github-script@v6
+  uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
   with:
     github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
     script: |
@@ -331,7 +339,7 @@ jobs:
 
 ```yaml
 - name: Auto-merge dependabot PR
-  uses: actions/github-script@v6
+  uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     script: |

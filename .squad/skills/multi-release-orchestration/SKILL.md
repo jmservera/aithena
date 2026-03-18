@@ -282,7 +282,7 @@ Example from Aithena:
 - Zero deployment rollbacks
 
 **Quality Gates:**
-- 100% test coverage (6 services, 350+ tests per release)
+- All 6 service test suites passing (solr-search ~95%, document-indexer ~81% coverage; 350+ tests per release)
 - Security scanning: CodeQL, Bandit, Checkov, zizmor all passed
 - Release artifacts staged before tagging
 

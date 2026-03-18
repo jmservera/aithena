@@ -235,7 +235,7 @@ python -c "import package; print(package.__version__)"
 ls -la /app/
 
 # Check network
-curl http://redis:6379/  # check hostname resolution
+nc -z redis 6379 && echo "Redis reachable" || echo "Redis unreachable"  # TCP check (Redis is not HTTP)
 ```
 
 ### 11. **Docker Compose Validation**

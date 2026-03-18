@@ -1,5 +1,5 @@
 ---
-name: "release-docs-gate-pattern"
+name: "release-tagging-process"
 description: "Docs-gate-the-tag pattern: Generate and merge release docs BEFORE creating version tags"
 domain: "release, documentation, automation"
 confidence: "high"
@@ -113,7 +113,7 @@ copilot \
   $(gh pr list --base dev --milestone 'v1.4.0' --state closed --json number,title,labels,author)
   
   Categorize by: Features, Fixes, Infrastructure, Docs
-  Format as markdown for docs/releases/v1.4.0/RELEASE_NOTES.md
+  Format as markdown for docs/release-notes-v1.4.0.md
   "
 ```
 
@@ -164,7 +164,7 @@ report = {
 }
 
 print(json.dumps(report, indent=2))
-" > docs/releases/v1.4.0/TEST_REPORT.json
+" > docs/test-report-v1.4.0.md
 ```
 
 ### Step 5: Create Release PR
