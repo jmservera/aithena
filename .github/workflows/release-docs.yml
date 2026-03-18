@@ -30,10 +30,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: read
+  issues: write
+  actions: read
 
 concurrency:
-  group: release-docs-${{ github.ref }}
+  group: release-docs-${{ github.ref }}-${{ github.event.inputs.version || 'auto' }}
   cancel-in-progress: false
 
 jobs:
@@ -96,10 +97,16 @@ jobs:
         run: |
           git fetch --tags --force
           
-          # Find all tags matching vX.Y.Z, sort by version, get the one before current
-          PREV_TAG=$(git tag -l 'v*.*.*' | \
-            grep -v "^${CURRENT_TAG}$" | \
-            sort -V | tail -n1)
+          # Find the highest tag lower than CURRENT_TAG.
+          # We sort all tags by version and walk them in order,
+          # keeping track of the last tag seen before CURRENT_TAG.
+          PREV_TAG=""
+          for tag in $(git tag -l 'v*.*.*' | sort -V); do
+            if [ "$tag" = "$CURRENT_TAG" ]; then
+              break
+            fi
+            PREV_TAG="$tag"
+          done
           
           if [ -z "$PREV_TAG" ]; then
             echo "⚠️ No previous tag found — using initial commit"
@@ -127,8 +134,9 @@ jobs:
             --repo "${{ github.repository }}" \
             --state merged \
             --base dev \
-            --json number,title,body,mergedAt,author,labels \
-            --jq "[.[] | select(.labels[].name == \"$MILESTONE\")]" \
+            --search "milestone:\"$MILESTONE\"" \
+            --json number,title,body,mergedAt,author,labels,milestone \
+            --limit 200 \
             > /tmp/release-context/prs.json
           
           PR_COUNT=$(jq 'length' /tmp/release-context/prs.json)
@@ -141,14 +149,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MILESTONE: ${{ steps.version.outputs.milestone }}
         run: |
-          # Query issues closed in the milestone
-          gh issue list \
-            --repo "${{ github.repository }}" \
-            --state closed \
-            --milestone "$MILESTONE" \
-            --json number,title,body,closedAt,labels \
-            --limit 200 \
-            > /tmp/release-context/issues.json
+          REPO="${{ github.repository }}"
+          
+          # Ensure the release-context directory exists
+          mkdir -p /tmp/release-context
+          
+          # Try to find a milestone matching the given title.
+          # If no such milestone exists, fall back to recent closed issues
+          # instead of failing the step.
+          MILESTONE_EXISTS=$(gh api "repos/$REPO/milestones" \
+            --paginate \
+            --jq ".[] | select(.title == \"$MILESTONE\") | .number" 2>/dev/null | head -n 1 || true)
+          
+          if [ -n "$MILESTONE_EXISTS" ]; then
+            echo "ℹ️ Using milestone '$MILESTONE' to collect closed issues"
+            gh issue list \
+              --repo "$REPO" \
+              --state closed \
+              --milestone "$MILESTONE" \
+              --json number,title,body,closedAt,labels \
+              --limit 200 \
+              > /tmp/release-context/issues.json
+          else
+            echo "⚠️ Milestone '$MILESTONE' not found; falling back to recent closed issues"
+            gh issue list \
+              --repo "$REPO" \
+              --state closed \
+              --json number,title,body,closedAt,labels \
+              --limit 200 \
+              > /tmp/release-context/issues.json || echo "[]" > /tmp/release-context/issues.json
+          fi
           
           ISSUE_COUNT=$(jq 'length' /tmp/release-context/issues.json)
           echo "count=$ISSUE_COUNT" >> "$GITHUB_OUTPUT"
@@ -214,7 +244,7 @@ jobs:
       # Requires: COPILOT_TOKEN secret (fine-grained PAT with "Copilot Requests" permission)
       # ─────────────────────────────────────────────────────────────
       - name: Set up Node.js
-        uses: actions/setup-node@v4  # pin to SHA in production
+        uses: actions/setup-node@49933e  # v4.4.0
 
       - name: Install Copilot CLI
         run: npm install -g @github/copilot
@@ -358,7 +388,7 @@ jobs:
           <!-- Add upgrade instructions if needed -->
 
           Standard upgrade process:
-          1. Pull the latest changes: \`git pull origin main\`
+          1. Pull the latest changes: \`git pull origin dev\`
           2. Update dependencies: \`./buildall.sh\`
           3. Restart services: \`docker compose down && docker compose up -d\`
 
@@ -381,7 +411,7 @@ jobs:
           BRANCH: ${{ steps.version.outputs.branch }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          git checkout -b "$BRANCH"
+          git checkout -B "$BRANCH"
 
           # Stage all docs changes (release notes, test report, manuals)
           git add docs/
@@ -412,7 +442,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           MILESTONE: ${{ steps.version.outputs.milestone }}
         run: |
-          git push origin "$BRANCH"
+          git push --force-with-lease origin "$BRANCH"
           
           # Build list of generated files
           GENERATED_FILES="- \`docs/release-notes-v${VERSION}.md\`"
