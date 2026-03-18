@@ -36,7 +36,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/*.py /app/
@@ -47,6 +47,8 @@ ENV SOLR_URL="http://solr:8983/solr"
 ENV SOLR_COLLECTION="books"
 ENV BASE_PATH="/data/documents"
 ENV CORS_ORIGINS="http://localhost:5173"
+
+RUN mkdir -p /data/documents/uploads /data/auth && chown -R app:app /data
 
 USER app
 

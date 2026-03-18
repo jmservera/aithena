@@ -34,7 +34,7 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src

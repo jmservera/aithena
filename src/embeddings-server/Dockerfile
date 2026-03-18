@@ -54,7 +54,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /models /models
