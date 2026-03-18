@@ -285,3 +285,43 @@ PR #493 opened against dev for review and merge. After merge to dev, can be rele
 - v1.7.0 is primarily infrastructure/quality work with minimal functional changes (localStorage key rename, i18n foundation)
 - Test suite stability good: all 622 tests passing with no new failures despite UI layer refactoring
 - Admin manual now has clear deployment sections for each major release (v0.5.0, v0.6.0, v0.7.0, v0.12.0, v1.3.0, v1.5.0, v1.7.0)
+
+---
+
+## v1.8.0 Release Planning — Screenshots & Documentation (2026-03-18)
+
+**Decision Filed:** Screenshot strategy & pipeline for release documentation
+
+### Screenshot Strategy (Newt)
+
+Comprehensive 3-tier approach covering 14+ pages across user, admin, and operational documentation:
+
+**Tier 1 (Required for every release):**
+- Login page, Search results, Admin dashboard, Upload page (already captured by integration test)
+
+**Tier 2 (Feature-specific):**
+- Status/Stats tabs, Filtered search, PDF+recommendations, Error states, Mobile layouts
+
+**Tier 3 (Admin/Ops):**
+- Solr admin UI, RabbitMQ, Redis inspector, Health API response
+
+**4-Phase Rollout:**
+1. Phase 1 (v1.8.0): Formalize Tier 1 in `docs/screenshots/`
+2. Phase 2 (v1.8.0+): Integrate artifact download into release-docs workflow
+3. Phase 3 (v1.8.0–v1.10.0): Expand Tier 2/3 as features ship
+4. Phase 4 (v1.9.0+): Before/after comparisons for major releases
+
+**Key Decision:** Approved Phase 1 & 2 for v1.8.0; defer mobile screenshots to v1.9.0.
+
+### Responsibilities
+
+- Newt (PM): Screenshot strategy, ensure release docs include them, verify manuals reference them
+- Lambert (Testing): Maintain screenshot spec, capture Tier 2/3 as needed
+- Ripley (Architect): Review directory structure
+- Brett (Infra): Implement screenshot pipeline
+- All contributors: Update Tier 2/3 screenshots when features ship
+
+**Success Metrics:**
+- Every release (v1.8.0+) includes 4 Tier 1 screenshots
+- Zero manual screenshot extraction in release workflow
+- Release PR includes screenshot commit with release docs commit

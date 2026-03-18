@@ -233,12 +233,99 @@ See `.squad/decisions.md` for full details. Key baseline exceptions:
 
 ---
 
-## Skills Extracted for Reuse
+---
 
-See `.squad/skills/` for implementation:
-- `docker-health-checks.md` — Health check patterns, start_period tuning, binary availability
-- `docker-compose-hardening.md` — Resource limits, restart policies, graceful shutdown
-- `dependabot-routing.md` — Detection + classification rules, heartbeat integration
-- `release-packaging.md` — Docs-gate-the-tag, GHCR distribution, tarball assets
-- `workflow-secrets-patterns.md` — Inline parameters vs env blocks, zizmor compliance
+## v1.8.0 Screenshot Pipeline Infrastructure (2026-03-18)
+
+**Decision Filed:** Screenshot pipeline architecture for release documentation integration
+
+### Technical Architecture
+
+**Problem:** Playwright screenshots captured during integration tests expire after 30 days in GitHub Actions artifacts and are not committed to the repo, preventing automated inclusion in release documentation.
+
+**Solution:** `workflow_run`-triggered screenshot commit workflow
+
+**Flow:**
+1. Integration test captures 4 screenshots (login, search, admin, upload at 1440×1024)
+2. Uploads separate `release-screenshots` artifact (~500 KB, 90 days)
+3. New `update-screenshots.yml` workflow triggered on integration test success
+4. Downloads artifact, commits PNGs to `docs/screenshots/` on `dev` branch
+5. Screenshots available in repo when release-docs workflow runs
+
+### Why Option B (workflow_run)?
+
+**Evaluated Options:**
+- **Option A (integration test commits):** ❌ Rejected — Widens attack surface, creates commit noise
+- **Option B (workflow_run):** ✅ Selected — Clean separation, read-only integration test, lightweight
+- **Option C (release-docs from scratch):** ❌ Rejected — Duplicates 60-min Docker build cycle
+- **Option D (Cross-workflow API):** ❌ Rejected — Fragile (artifact expiry), Option B superior
+
+**Key Design Choices:**
+- **Branch filter:** Only commits when integration test ran against `main` (release PRs, not scheduled builds)
+- **Target branch:** Commits to `dev` (where release-docs operates)
+- **Idempotent:** `git diff --staged --quiet` check avoids empty commits
+- **Security:** Integration test stays read-only; new workflow scoped to safe `workflow_run` event
+
+### Implementation Details
+
+#### 1. Changes to `integration-test.yml`
+- Add step to extract 4 PNGs from test results
+- Upload separate `release-screenshots` artifact
+- Runtime impact: +10 seconds (negligible)
+
+#### 2. New Workflow: `.github/workflows/update-screenshots.yml`
+```yaml
+on:
+  workflow_run:
+    workflows: ["Integration Test"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  commit-screenshots:
+    if: success && head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - checkout dev branch
+      - configure git
+      - download release-screenshots artifact
+      - commit & push if changed
+```
+
+#### 3. Repo Setup
+- Create `docs/screenshots/.gitkeep` + `README.md`
+- Document auto-generation in README
+
+#### 4. Optional: Update `release-docs.yml`
+- Add screenshot locations to Copilot CLI prompt
+- Newt can reference them when generating release notes
+
+### Performance & Cost
+
+- Integration test: +10 sec (screenshot extraction + upload)
+- New workflow: ~2 min (ultra-lightweight)
+- Release-docs: No impact (screenshots already in repo)
+- Storage: ~500 KB screenshots in git, ~500 KB artifact in Actions (both negligible)
+
+### Security Considerations
+
+- **Integration test:** Remains read-only (no permissions change)
+- **New workflow:** Has `contents: write`, scoped to `workflow_run` event (safe from fork attacks)
+- **Direct push to `dev`:** Auto-generated PNGs only (no code execution risk)
+
+### Implementation Order
+
+1. Create `docs/screenshots/` directory with README
+2. Add screenshot extraction + upload step to `integration-test.yml`
+3. Create `update-screenshots.yml` workflow
+4. (Optional) Update `release-docs.yml` prompt
+5. Verify end-to-end via manual integration test trigger
+
+### Related Decisions
+
+- **Newt's screenshot strategy** (separate decision): 3-tier inventory (Tier 1 required, Tier 2/3 feature-specific)
+- **Phase 2 of strategy:** Integrate artifact download into release-docs (relies on this pipeline)
 
