@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo } from 'react';
 import { useIntl } from 'react-intl';
+import { FileText } from 'lucide-react';
 
 import { BookResult } from '../hooks/search';
 
@@ -108,7 +109,7 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
             aria-haspopup="dialog"
             aria-expanded={isSelected}
           >
-            📄 {intl.formatMessage({ id: 'book.openPdf' })}
+            <FileText size={20} aria-hidden="true" /> {intl.formatMessage({ id: 'book.openPdf' })}
           </button>
         )}
       </div>

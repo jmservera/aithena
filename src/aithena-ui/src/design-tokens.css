@@ -1,0 +1,88 @@
+/* ── Design Tokens ─────────────────────────────────────────────
+ * Centralized CSS custom properties for Aithena UI.
+ * Imported in main.tsx before App component to ensure variables load before App.css.
+ * ────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Colors ──────────────────────────────────────────────────── */
+
+  /* Primary palette */
+  --color-primary: #7ec8e3;
+  --color-primary-light: #9ed9ec;
+  --color-primary-soft: #d9f4ff;
+
+  /* Backgrounds (dark theme) */
+  --color-bg: #282c34;
+  --color-bg-dark: #202123;
+  --color-bg-surface: #40414f;
+  --color-bg-surface-alt: #343541;
+  --color-bg-elevated: #464859;
+  --color-bg-deep: #30313d;
+  --color-bg-deeper: #1e1f2e;
+  --color-bg-deepest: #1a1a2e;
+  --color-bg-abyss: #16172a;
+
+  /* Text */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #e8e8f0;
+  --color-text-on-primary: #1a1a2e;
+  --color-text-muted: #f8fafc;
+
+  /* Semantic colors */
+  --color-error: #ff6b6b;
+  --color-error-light: #ff9999;
+  --color-error-soft: #fca5a5;
+  --color-error-muted: #ffd6d6;
+  --color-error-dark: #ff6464;
+  --color-error-pale: #ffb3b3;
+  --color-success: #50c878;
+  --color-warning: #ffd97d;
+  --color-info: #2563eb;
+
+  /* ── Spacing (8px grid) ──────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* ── Typography ──────────────────────────────────────────────── */
+
+  /* Font family */
+  --font-family: system-ui, sans-serif;
+
+  /* Font sizes */
+  --font-size-xs: 0.75em;
+  --font-size-sm: 0.85em;
+  --font-size-base: 1em;
+  --font-size-lg: 1.2rem;
+  --font-size-xl: 1.4em;
+
+  /* Font weights */
+  --font-weight-normal: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line heights */
+  --line-height-tight: 1;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.6;
+
+  /* ── Borders ─────────────────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+
+  /* ── Shadows ─────────────────────────────────────────────────── */
+  --shadow-focus: 0 0 0 3px rgba(126, 200, 227, 0.24);
+  --shadow-modal: 0 18px 48px rgba(0, 0, 0, 0.28);
+
+  /* ── Transitions ─────────────────────────────────────────────── */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease-out;
+}

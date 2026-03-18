@@ -1,4 +1,5 @@
 import { useIntl } from 'react-intl';
+import { BarChart3, AlertTriangle } from 'lucide-react';
 
 import { useStats, FacetEntry } from '../hooks/stats';
 
@@ -60,7 +61,7 @@ function CollectionStats() {
     return (
       <main className="stats-main">
         <div className="search-error" role="alert">
-          ⚠️ {error}
+          <AlertTriangle size={20} aria-hidden="true" /> {error}
         </div>
       </main>
     );
@@ -75,7 +76,9 @@ function CollectionStats() {
   return (
     <main className="stats-main">
       <header className="stats-header">
-        <h2 className="stats-page-title">📊 {intl.formatMessage({ id: 'stats.title' })}</h2>
+        <h2 className="stats-page-title">
+          <BarChart3 size={20} aria-hidden="true" /> {intl.formatMessage({ id: 'stats.title' })}
+        </h2>
       </header>
 
       <section className="stats-summary-row">
