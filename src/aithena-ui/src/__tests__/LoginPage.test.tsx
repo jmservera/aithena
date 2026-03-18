@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AUTH_TOKEN_STORAGE_KEY } from '../api';
 import LoginPage from '../pages/LoginPage';
 import { AuthContext, AuthContextValue, AuthProvider } from '../contexts/AuthContext';
+import { IntlWrapper } from './test-intl-wrapper';
 
 function createAuthValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
@@ -45,15 +46,17 @@ function renderLoginPage(
   initialEntries: Parameters<typeof MemoryRouter>[0]['initialEntries'] = ['/login']
 ) {
   return render(
-    <AuthContext.Provider value={authValue}>
-      <MemoryRouter initialEntries={initialEntries}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/search" element={<div>Search page</div>} />
-          <Route path="/admin" element={<div>Admin page</div>} />
-        </Routes>
-      </MemoryRouter>
-    </AuthContext.Provider>
+    <IntlWrapper>
+      <AuthContext.Provider value={authValue}>
+        <MemoryRouter initialEntries={initialEntries}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/search" element={<div>Search page</div>} />
+            <Route path="/admin" element={<div>Admin page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </IntlWrapper>
   );
 }
 
@@ -61,15 +64,17 @@ function renderLoginPageWithProvider(
   initialEntries: Parameters<typeof MemoryRouter>[0]['initialEntries'] = ['/login']
 ) {
   return render(
-    <AuthProvider>
-      <MemoryRouter initialEntries={initialEntries}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/search" element={<div>Search page</div>} />
-          <Route path="/admin" element={<div>Admin page</div>} />
-        </Routes>
-      </MemoryRouter>
-    </AuthProvider>
+    <IntlWrapper>
+      <AuthProvider>
+        <MemoryRouter initialEntries={initialEntries}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/search" element={<div>Search page</div>} />
+            <Route path="/admin" element={<div>Admin page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </IntlWrapper>
   );
 }
 
@@ -109,14 +114,16 @@ describe('LoginPage', () => {
       });
 
       return (
-        <AuthContext.Provider value={authValue}>
-          <MemoryRouter initialEntries={['/login']}>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/search" element={<div>Search page</div>} />
-            </Routes>
-          </MemoryRouter>
-        </AuthContext.Provider>
+        <IntlWrapper>
+          <AuthContext.Provider value={authValue}>
+            <MemoryRouter initialEntries={['/login']}>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/search" element={<div>Search page</div>} />
+              </Routes>
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </IntlWrapper>
       );
     }
 

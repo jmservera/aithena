@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { useIntl } from 'react-intl';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LoginLocationState {
@@ -9,6 +10,7 @@ interface LoginLocationState {
 }
 
 function LoginPage() {
+  const intl = useIntl();
   const location = useLocation();
   const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
   const [username, setUsername] = useState('');
@@ -43,16 +45,14 @@ function LoginPage() {
       <section className="login-card" aria-labelledby="login-title">
         <div className="login-card-header">
           <h2 id="login-title" className="login-title">
-            Sign in to Aithena
+            {intl.formatMessage({ id: 'login.title' })}
           </h2>
-          <p className="login-description">
-            Use your account to access search, upload, and admin tools.
-          </p>
+          <p className="login-description">{intl.formatMessage({ id: 'login.description' })}</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-label" htmlFor="username">
-            Username
+            {intl.formatMessage({ id: 'login.username' })}
           </label>
           <input
             id="username"
@@ -65,7 +65,7 @@ function LoginPage() {
           />
 
           <label className="login-label" htmlFor="password">
-            Password
+            {intl.formatMessage({ id: 'login.password' })}
           </label>
           <input
             id="password"
@@ -88,7 +88,9 @@ function LoginPage() {
             type="submit"
             disabled={isLoading || !username.trim() || !password}
           >
-            {isLoading ? 'Signing in…' : 'Sign in'}
+            {isLoading
+              ? intl.formatMessage({ id: 'login.signingIn' })
+              : intl.formatMessage({ id: 'login.signIn' })}
           </button>
         </form>
       </section>

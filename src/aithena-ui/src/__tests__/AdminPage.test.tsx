@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, afterEach } from 'vitest';
 import AdminPage from '../pages/AdminPage';
+import { IntlWrapper } from './test-intl-wrapper';
 
 // Matches the GET /v1/admin/documents response shape from the admin operations API
 const emptyQueueResponse = {
@@ -60,13 +61,13 @@ describe('AdminPage', () => {
       'fetch',
       vi.fn().mockReturnValue(new Promise(() => {})) // never resolves
     );
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
     expect(screen.getByText(/loading queue state/i)).toBeInTheDocument();
   });
 
   it('renders metrics and tabs when queue data loads', async () => {
     vi.stubGlobal('fetch', mockFetch(emptyQueueResponse));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByText('🏛️ Admin Dashboard')).toBeInTheDocument();
@@ -81,7 +82,7 @@ describe('AdminPage', () => {
 
   it('shows empty state for queued tab when no documents', async () => {
     vi.stubGlobal('fetch', mockFetch(emptyQueueResponse));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByText(/no documents currently queued/i)).toBeInTheDocument();
@@ -90,7 +91,7 @@ describe('AdminPage', () => {
 
   it('renders queued documents in the queued tab', async () => {
     vi.stubGlobal('fetch', mockFetch(populatedQueueResponse));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByText('/data/documents/pending_book.pdf')).toBeInTheDocument();
@@ -99,7 +100,7 @@ describe('AdminPage', () => {
 
   it('switches to the processed tab and shows processed documents', async () => {
     vi.stubGlobal('fetch', mockFetch(populatedQueueResponse));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /processed/i })).toBeInTheDocument();
@@ -113,7 +114,7 @@ describe('AdminPage', () => {
 
   it('switches to the failed tab and shows failed documents with requeue button', async () => {
     vi.stubGlobal('fetch', mockFetch(populatedQueueResponse));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /failed/i })).toBeInTheDocument();
@@ -127,7 +128,7 @@ describe('AdminPage', () => {
 
   it('shows error banner when API call fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
@@ -137,7 +138,7 @@ describe('AdminPage', () => {
 
   it('shows failed empty state when no failed documents', async () => {
     vi.stubGlobal('fetch', mockFetch(emptyQueueResponse));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /failed/i })).toBeInTheDocument();
@@ -149,7 +150,7 @@ describe('AdminPage', () => {
 
   it('renders a Refresh button', async () => {
     vi.stubGlobal('fetch', mockFetch(emptyQueueResponse));
-    render(<AdminPage />);
+    render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument();
@@ -158,7 +159,7 @@ describe('AdminPage', () => {
 
   it('does not render an iframe', async () => {
     vi.stubGlobal('fetch', mockFetch(emptyQueueResponse));
-    const { container } = render(<AdminPage />);
+    const { container } = render(<AdminPage />, { wrapper: IntlWrapper });
 
     await waitFor(() => {
       expect(screen.getByText('🏛️ Admin Dashboard')).toBeInTheDocument();
