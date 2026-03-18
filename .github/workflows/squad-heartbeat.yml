@@ -19,6 +19,7 @@ permissions:
   issues: write
   contents: read
   pull-requests: read
+  checks: read
 
 jobs:
   heartbeat:
@@ -145,6 +146,58 @@ jobs:
               pr.labels.some(l => l.name.startsWith('squad'))
             );
 
+            // 6. Detect Dependabot PRs needing manual attention
+            const dependabotPRs = openPRs.filter(pr =>
+              pr.user.login === 'dependabot[bot]' &&
+              !pr.labels.some(l => l.name.startsWith('squad:'))
+            );
+
+            const dependabotNeedsAttention = [];
+            const STALE_DAYS = 7;
+
+            for (const pr of dependabotPRs) {
+              const labels = pr.labels.map(l => l.name);
+              let reason = '';
+
+              // Major version update (labeled dependabot:manual-review)
+              if (labels.includes('dependabot:manual-review')) {
+                reason = 'Major version update flagged for manual review';
+              }
+
+              // CI check failures
+              if (!reason) {
+                try {
+                  const { data: checks } = await github.rest.checks.listForRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: pr.head.sha,
+                    per_page: 50
+                  });
+                  const failed = checks.check_runs.filter(c =>
+                    c.conclusion === 'failure' || c.conclusion === 'cancelled'
+                  );
+                  if (failed.length > 0) {
+                    reason = `CI failed: ${failed.map(c => c.name).join(', ')}`;
+                  }
+                } catch (e) {
+                  core.info(`Could not fetch checks for PR #${pr.number}: ${e.message}`);
+                }
+              }
+
+              // Stale (no activity for N days)
+              if (!reason) {
+                const updatedAt = new Date(pr.updated_at);
+                const daysSinceUpdate = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+                if (daysSinceUpdate > STALE_DAYS) {
+                  reason = `Stale: no activity for ${Math.floor(daysSinceUpdate)} days`;
+                }
+              }
+
+              if (reason) {
+                dependabotNeedsAttention.push({ pr, reason });
+              }
+            }
+
             // Build status summary
             const summary = [];
             if (untriaged.length > 0) {
@@ -167,6 +220,9 @@ jobs:
               const ready = squadPRs.length - drafts;
               if (drafts > 0) summary.push(`🟡 **${drafts} draft PR(s)** in progress`);
               if (ready > 0) summary.push(`🟢 **${ready} PR(s)** open for review/merge`);
+            }
+            if (dependabotNeedsAttention.length > 0) {
+              summary.push(`🤖 **${dependabotNeedsAttention.length} Dependabot PR(s)** need manual attention`);
             }
 
             if (summary.length === 0) {
@@ -245,6 +301,101 @@ jobs:
                 });
 
                 core.info(`Auto-triaged #${issue.number} → ${assignedMember.name}`);
+              }
+            }
+
+            // Auto-triage Dependabot PRs by dependency domain
+            const depRouting = [
+              { member: 'kane', deps: ['python-jose', 'cryptography', 'ecdsa', 'pyjwt', 'bcrypt', 'passlib', 'jwt'] },
+              { member: 'brett', deps: [], paths: ['.github/workflows/', 'Dockerfile', 'docker-compose', 'actions/'] },
+              { member: 'parker', deps: [], paths: ['requirements.txt', 'pyproject.toml', 'uv.lock'] },
+              { member: 'dallas', deps: [], paths: ['package.json', 'package-lock.json'] },
+              { member: 'lambert', deps: ['pytest', 'vitest', 'jest', 'testing-library'], ciFailure: true }
+            ];
+
+            for (const { pr, reason } of dependabotNeedsAttention) {
+              const title = pr.title.toLowerCase();
+              const branch = (pr.head.ref || '').toLowerCase();
+              let routeTo = null;
+              let routeReason = '';
+
+              // CI failures → Lambert (test/QA specialist)
+              if (reason.startsWith('CI failed')) {
+                const rule = depRouting.find(r => r.ciFailure);
+                if (rule) {
+                  routeTo = rule.member;
+                  routeReason = 'CI failure detected — routing to test/QA specialist';
+                }
+              }
+
+              // Match by dependency name in title/branch
+              if (!routeTo) {
+                for (const rule of depRouting) {
+                  if (rule.deps && rule.deps.some(d => title.includes(d) || branch.includes(d))) {
+                    routeTo = rule.member;
+                    routeReason = `Dependency matches ${rule.member}'s domain`;
+                    break;
+                  }
+                }
+              }
+
+              // Match by changed file paths
+              if (!routeTo) {
+                try {
+                  const { data: files } = await github.rest.pulls.listFiles({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    per_page: 10
+                  });
+                  const filePaths = files.map(f => f.filename);
+                  for (const rule of depRouting) {
+                    if (rule.paths && rule.paths.some(p => filePaths.some(f => f.includes(p)))) {
+                      routeTo = rule.member;
+                      routeReason = `Changed files match ${rule.member}'s domain`;
+                      break;
+                    }
+                  }
+                } catch (e) {
+                  core.info(`Could not fetch files for PR #${pr.number}: ${e.message}`);
+                }
+              }
+
+              // Fallback: route to Infrastructure
+              if (!routeTo) {
+                routeTo = 'brett';
+                routeReason = 'Unclassified Dependabot PR — routed to Infrastructure';
+              }
+
+              const label = `squad:${routeTo}`;
+              const memberInfo = members.find(m => m.label === label);
+
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: [label]
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  body: [
+                    `### 🔄 Ralph — Dependabot Triage`,
+                    '',
+                    `**Routed to:** ${memberInfo ? `${memberInfo.name} (${memberInfo.role})` : routeTo}`,
+                    `**Detection:** ${reason}`,
+                    `**Routing reason:** ${routeReason}`,
+                    '',
+                    `> Ralph detected this Dependabot PR needs manual attention via the squad heartbeat. To reassign, swap the \`squad:*\` label.`
+                  ].join('\n')
+                });
+
+                core.info(`Triaged Dependabot PR #${pr.number} → ${routeTo} (${reason})`);
+              } catch (e) {
+                core.warning(`Failed to triage Dependabot PR #${pr.number}: ${e.message}`);
               }
             }
 
