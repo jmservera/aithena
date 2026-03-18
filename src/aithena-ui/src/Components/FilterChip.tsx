@@ -1,4 +1,5 @@
 import { memo, useCallback } from 'react';
+import { useIntl } from 'react-intl';
 
 import { SearchFilters } from '../hooks/search';
 
@@ -15,6 +16,7 @@ const FilterChip = memo(function FilterChip({
   value,
   onRemove,
 }: FilterChipProps) {
+  const intl = useIntl();
   const handleRemove = useCallback(() => {
     onRemove(filterKey);
   }, [filterKey, onRemove]);
@@ -26,7 +28,7 @@ const FilterChip = memo(function FilterChip({
       <button
         className="filter-chip-remove"
         onClick={handleRemove}
-        aria-label={`Remove ${label} filter`}
+        aria-label={intl.formatMessage({ id: 'filters.removeFilter' }, { label })}
       >
         ×
       </button>

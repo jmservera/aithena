@@ -1,10 +1,12 @@
 import { KeyboardEvent, useState } from 'react';
+import { useIntl } from 'react-intl';
 
 interface Props {
   list: string[];
 }
 
 function List({ list }: Props) {
+  const intl = useIntl();
   const [selectedItem, setSelectedItem] = useState(-1);
 
   const activateItem = (index: number) => {
@@ -20,8 +22,12 @@ function List({ list }: Props) {
 
   return (
     <div>
-      <h2>Title</h2>
-      <ul className="list-group" role="listbox" aria-label="Items">
+      <h2>{intl.formatMessage({ id: 'common.title' })}</h2>
+      <ul
+        className="list-group"
+        role="listbox"
+        aria-label={intl.formatMessage({ id: 'common.items' })}
+      >
         {list.map((item, index) => {
           const isSelected = selectedItem === index;
           const isFocusable = isSelected || (selectedItem === -1 && index === 0);
