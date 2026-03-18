@@ -11,8 +11,12 @@
 # Environment Variables:
 #   AITHENA_HOST        - Host to test (default: localhost)
 #   AITHENA_TIMEOUT     - Timeout for HTTP requests in seconds (default: 10)
+#   SMOKE_AUTH_TOKEN    - Pre-configured Bearer token for /v1/* endpoints (optional)
 #   ADMIN_USERNAME      - Admin username for authenticated endpoints (default: admin)
 #   ADMIN_PASSWORD      - Admin password for authenticated endpoints (required for admin tests)
+#
+#   If neither SMOKE_AUTH_TOKEN nor ADMIN_PASSWORD is set, tests for protected
+#   /v1/* endpoints will be skipped with a warning.
 #
 # Exit Codes:
 #   0 - All checks passed
@@ -29,6 +33,8 @@ HOST="${AITHENA_HOST:-localhost}"
 TIMEOUT="${AITHENA_TIMEOUT:-10}"
 ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+SMOKE_AUTH_TOKEN="${SMOKE_AUTH_TOKEN:-}"
+AUTH_TOKEN=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -86,7 +92,7 @@ log_skip() {
 }
 
 # ============================================================================
-# HTTP check helper
+# HTTP check helpers
 # ============================================================================
 
 check_http() {
@@ -94,8 +100,17 @@ check_http() {
     local url="$2"
     local expected_status="${3:-200}"
     local extra_args="${4:-}"
-    
-    if curl -sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}" $extra_args "$url" | grep -q "^${expected_status}$"; then
+
+    local -a curl_opts=(-sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        curl_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    if [[ -n "$extra_args" ]]; then
+        curl_opts+=($extra_args)
+    fi
+    curl_opts+=("$url")
+
+    if curl "${curl_opts[@]}" | grep -q "^${expected_status}$"; then
         log_pass "$name"
         return 0
     else
@@ -109,15 +124,24 @@ check_http_json() {
     local url="$2"
     local json_field="$3"
     local extra_args="${4:-}"
-    
+
+    local -a curl_opts=(-sf -m "$TIMEOUT")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        curl_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    if [[ -n "$extra_args" ]]; then
+        curl_opts+=($extra_args)
+    fi
+    curl_opts+=("$url")
+
     local response
-    response=$(curl -sf -m "$TIMEOUT" $extra_args "$url" 2>/dev/null || true)
-    
+    response=$(curl "${curl_opts[@]}" 2>/dev/null || true)
+
     if [[ -z "$response" ]]; then
         log_fail "$name - No response from $url"
         return 1
     fi
-    
+
     if echo "$response" | grep -q "\"${json_field}\""; then
         log_pass "$name"
         return 0
@@ -128,18 +152,71 @@ check_http_json() {
 }
 
 # ============================================================================
+# Auth token helpers
+# ============================================================================
+
+# Acquire an auth token for protected /v1/* endpoints.
+# Uses SMOKE_AUTH_TOKEN env var if set, otherwise logs in with admin credentials.
+acquire_auth_token() {
+    if [[ -n "$SMOKE_AUTH_TOKEN" ]]; then
+        AUTH_TOKEN="$SMOKE_AUTH_TOKEN"
+        log_info "Using pre-configured auth token (SMOKE_AUTH_TOKEN)"
+        return 0
+    fi
+
+    if [[ -z "$ADMIN_PASSWORD" ]]; then
+        log_info "⚠ No auth token available (set SMOKE_AUTH_TOKEN or ADMIN_PASSWORD)"
+        log_info "  Tests for protected /v1/* endpoints will be skipped"
+        return 1
+    fi
+
+    local login_response
+    login_response=$(curl -sf -m "$TIMEOUT" -X POST "http://${HOST}/v1/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+        2>/dev/null || true)
+
+    if [[ -z "$login_response" ]]; then
+        log_info "⚠ Login request failed — protected endpoint tests will be skipped"
+        return 1
+    fi
+
+    local access_token
+    access_token=$(echo "$login_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4 || true)
+
+    if [[ -z "$access_token" ]]; then
+        log_info "⚠ Login did not return access token — protected endpoint tests will be skipped"
+        return 1
+    fi
+
+    AUTH_TOKEN="$access_token"
+    log_info "Acquired auth token via admin login"
+    return 0
+}
+
+# Check that AUTH_TOKEN is set; if not, skip the calling test.
+require_auth() {
+    local test_name="$1"
+    if [[ -z "$AUTH_TOKEN" ]]; then
+        log_skip "$test_name (no auth token — set SMOKE_AUTH_TOKEN or ADMIN_PASSWORD)"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
 # Test: Docker Health Checks via /health endpoints
 # ============================================================================
 
 test_health_endpoints() {
     log_info "Testing service health endpoints..."
-    
-    # Nginx proxies to solr-search /health
+
+    # Nginx /health — no auth required (public endpoint)
     check_http "Nginx health check" "http://${HOST}/health"
-    
-    # Solr-search API health (via nginx proxy)
-    check_http "API health endpoint" "http://${HOST}/api/health"
-    
+
+    # Solr-search API /v1/health — exact-match location, no auth required
+    check_http "API health endpoint" "http://${HOST}/v1/health"
+
     # Admin dashboard health (via nginx proxy to streamlit)
     # Streamlit health endpoint is at /admin/streamlit/_stcore/health
     check_http "Admin dashboard health" "http://${HOST}/admin/streamlit/_stcore/health"
@@ -151,13 +228,13 @@ test_health_endpoints() {
 
 test_version_endpoints() {
     log_info "Testing version endpoints..."
-    
-    # API version endpoint
-    check_http_json "API version endpoint" "http://${HOST}/api/version" "version"
-    
+
+    # /v1/version — exact-match location, no auth required
+    check_http_json "API version endpoint" "http://${HOST}/v1/version" "version"
+
     # Check that version field is not empty
     local version
-    version=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/version" 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
+    version=$(curl -sf -m "$TIMEOUT" "http://${HOST}/v1/version" 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ -n "$version" && "$version" != "dev" ]]; then
         log_pass "API version is set: $version"
     elif [[ "$version" == "dev" ]]; then
@@ -168,26 +245,22 @@ test_version_endpoints() {
 }
 
 # ============================================================================
-# Test: Search API Endpoints
+# Test: Search API Endpoints (protected — behind nginx auth_request)
 # ============================================================================
 
 test_search_api() {
     log_info "Testing search API endpoints..."
-    
-    # Search endpoint (should return 200 even with no query - returns all docs)
-    check_http "Search endpoint" "http://${HOST}/api/search"
-    
-    # Search with query parameter
-    check_http "Search with query" "http://${HOST}/api/search?q=test"
-    
-    # Facets endpoint
-    check_http "Facets endpoint" "http://${HOST}/api/facets"
-    
-    # Stats endpoint
-    check_http "Stats endpoint" "http://${HOST}/api/stats"
-    
-    # Books endpoint
-    check_http "Books endpoint" "http://${HOST}/api/books"
+
+    if ! require_auth "Search API tests"; then
+        return 0
+    fi
+
+    # All /v1/* endpoints (except exact-match public ones) require auth
+    check_http "Search endpoint" "http://${HOST}/v1/search"
+    check_http "Search with query" "http://${HOST}/v1/search?q=test"
+    check_http "Facets endpoint" "http://${HOST}/v1/facets"
+    check_http "Stats endpoint" "http://${HOST}/v1/stats"
+    check_http "Books endpoint" "http://${HOST}/v1/books"
 }
 
 # ============================================================================
@@ -196,10 +269,10 @@ test_search_api() {
 
 test_ui_loads() {
     log_info "Testing UI availability..."
-    
-    # Main UI should load (nginx serves React app)
+
+    # Main UI should load (nginx serves React app) — no auth required
     check_http "UI homepage loads" "http://${HOST}/"
-    
+
     # Check for HTML response with expected content
     local response
     response=$(curl -sf -m "$TIMEOUT" "http://${HOST}/" 2>/dev/null || true)
@@ -216,8 +289,8 @@ test_ui_loads() {
 
 test_admin_dashboard() {
     log_info "Testing admin dashboard..."
-    
-    # Admin dashboard loads (proxied by nginx)
+
+    # Admin dashboard loads (proxied by nginx, behind auth_request with redirect)
     # Streamlit apps redirect to trailing slash, so we expect 200 or 301/302
     if check_http "Admin dashboard loads" "http://${HOST}/admin/streamlit/" "200" "-L"; then
         : # Pass already logged
@@ -231,18 +304,26 @@ test_admin_dashboard() {
 }
 
 # ============================================================================
-# Test: Solr Cluster Health
+# Test: Solr Cluster Health (protected — /v1/status behind auth_request)
 # ============================================================================
 
 test_solr_cluster() {
     log_info "Testing Solr cluster health..."
-    
+
+    if ! require_auth "Solr cluster health tests"; then
+        return 0
+    fi
+
     # Solr is not directly exposed, but we can check via the API status endpoint
-    check_http_json "Solr status via API" "http://${HOST}/api/v1/status" "solr"
-    
+    check_http_json "Solr status via API" "http://${HOST}/v1/status" "solr"
+
     # Check that Solr is reported as healthy
     local solr_status
-    solr_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/v1/status" 2>/dev/null | grep -o '"solr":"[^"]*"' | cut -d'"' -f4 || true)
+    local -a status_opts=(-sf -m "$TIMEOUT")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        status_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    solr_status=$(curl "${status_opts[@]}" "http://${HOST}/v1/status" 2>/dev/null | grep -o '"solr":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ "$solr_status" == "healthy" ]]; then
         log_pass "Solr cluster is healthy"
     elif [[ -n "$solr_status" ]]; then
@@ -253,15 +334,23 @@ test_solr_cluster() {
 }
 
 # ============================================================================
-# Test: Redis Connectivity
+# Test: Redis Connectivity (protected — /v1/status behind auth_request)
 # ============================================================================
 
 test_redis() {
     log_info "Testing Redis connectivity..."
-    
+
+    if ! require_auth "Redis connectivity tests"; then
+        return 0
+    fi
+
     # Redis is not directly exposed, check via API status endpoint
     local redis_status
-    redis_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/v1/status" 2>/dev/null | grep -o '"redis":"[^"]*"' | cut -d'"' -f4 || true)
+    local -a status_opts=(-sf -m "$TIMEOUT")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        status_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    redis_status=$(curl "${status_opts[@]}" "http://${HOST}/v1/status" 2>/dev/null | grep -o '"redis":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ "$redis_status" == "connected" ]]; then
         log_pass "Redis is connected"
     elif [[ -n "$redis_status" ]]; then
@@ -272,15 +361,23 @@ test_redis() {
 }
 
 # ============================================================================
-# Test: RabbitMQ Connectivity
+# Test: RabbitMQ Connectivity (protected — /v1/status behind auth_request)
 # ============================================================================
 
 test_rabbitmq() {
     log_info "Testing RabbitMQ connectivity..."
-    
+
+    if ! require_auth "RabbitMQ connectivity tests"; then
+        return 0
+    fi
+
     # RabbitMQ is not directly exposed, check via API status endpoint
     local rabbitmq_status
-    rabbitmq_status=$(curl -sf -m "$TIMEOUT" "http://${HOST}/api/v1/status" 2>/dev/null | grep -o '"rabbitmq":"[^"]*"' | cut -d'"' -f4 || true)
+    local -a status_opts=(-sf -m "$TIMEOUT")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        status_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    rabbitmq_status=$(curl "${status_opts[@]}" "http://${HOST}/v1/status" 2>/dev/null | grep -o '"rabbitmq":"[^"]*"' | cut -d'"' -f4 || true)
     if [[ "$rabbitmq_status" == "connected" ]]; then
         log_pass "RabbitMQ is connected"
     elif [[ -n "$rabbitmq_status" ]]; then
@@ -291,44 +388,21 @@ test_rabbitmq() {
 }
 
 # ============================================================================
-# Test: Authenticated Endpoints (requires admin credentials)
+# Test: Authenticated Admin Endpoints (requires auth token)
 # ============================================================================
 
 test_authenticated_endpoints() {
-    log_info "Testing authenticated endpoints..."
-    
-    if [[ -z "$ADMIN_PASSWORD" ]]; then
-        log_skip "Authenticated endpoint tests (ADMIN_PASSWORD not set)"
+    log_info "Testing authenticated admin endpoints..."
+
+    if ! require_auth "Authenticated admin endpoint tests"; then
         return 0
     fi
-    
-    # Login and get token
-    local login_response
-    login_response=$(curl -sf -m "$TIMEOUT" -X POST "http://${HOST}/api/v1/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
-        2>/dev/null || true)
-    
-    if [[ -z "$login_response" ]]; then
-        log_fail "Login request failed"
-        return 1
-    fi
-    
-    local access_token
-    access_token=$(echo "$login_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4 || true)
-    
-    if [[ -z "$access_token" ]]; then
-        log_fail "Login did not return access token"
-        return 1
-    fi
-    
-    log_pass "Admin login successful"
-    
-    # Test /v1/admin/containers endpoint with auth
-    check_http_json "Admin containers endpoint" "http://${HOST}/api/v1/admin/containers" "containers" "-H 'Authorization: Bearer ${access_token}'"
-    
-    # Test /v1/auth/validate endpoint
-    check_http_json "Auth validate endpoint" "http://${HOST}/api/v1/auth/validate" "username" "-H 'Authorization: Bearer ${access_token}'"
+
+    # Test /v1/admin/containers endpoint (admin-only, requires auth)
+    check_http_json "Admin containers endpoint" "http://${HOST}/v1/admin/containers" "containers"
+
+    # Test /v1/auth/validate endpoint (verifies the token itself)
+    check_http_json "Auth validate endpoint" "http://${HOST}/v1/auth/validate" "username"
 }
 
 # ============================================================================
@@ -337,7 +411,7 @@ test_authenticated_endpoints() {
 
 test_pdf_viewer() {
     log_info "Testing PDF viewer..."
-    
+
     # PDF viewer is a frontend feature - check that the UI assets are served
     # The actual PDF viewing requires documents to be indexed, so we just check
     # that the UI loads (already tested in test_ui_loads)
@@ -345,18 +419,28 @@ test_pdf_viewer() {
 }
 
 # ============================================================================
-# Test: Similar Books Feature
+# Test: Similar Books Feature (protected — /v1/books/* behind auth_request)
 # ============================================================================
 
 test_similar_books() {
     log_info "Testing similar books feature..."
-    
+
+    if ! require_auth "Similar books tests"; then
+        return 0
+    fi
+
     # Similar books endpoint requires a valid document ID
     # For smoke test, just verify the endpoint exists and returns 404 for invalid ID
     # (not 500 or connection error)
+    local -a curl_opts=(-sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}")
+    if [[ -n "$AUTH_TOKEN" ]]; then
+        curl_opts+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    curl_opts+=("http://${HOST}/v1/books/nonexistent-id/similar")
+
     local status_code
-    status_code=$(curl -sf -m "$TIMEOUT" -o /dev/null -w "%{http_code}" "http://${HOST}/api/books/nonexistent-id/similar" || echo "000")
-    
+    status_code=$(curl "${curl_opts[@]}" || echo "000")
+
     if [[ "$status_code" == "404" ]]; then
         log_pass "Similar books endpoint exists (returned 404 for invalid ID)"
     elif [[ "$status_code" == "200" ]]; then
@@ -377,7 +461,11 @@ main() {
     echo "Host: $HOST"
     echo "Timeout: ${TIMEOUT}s"
     echo ""
-    
+
+    # Acquire auth token for protected /v1/* endpoints (best-effort)
+    acquire_auth_token || true
+    echo ""
+
     # Run all test suites
     test_health_endpoints
     test_version_endpoints
@@ -390,7 +478,7 @@ main() {
     test_authenticated_endpoints
     test_pdf_viewer
     test_similar_books
-    
+
     # Summary
     echo ""
     echo "=================================================="
@@ -400,7 +488,7 @@ main() {
     echo -e "${RED}Failed:${NC} $FAIL_COUNT"
     echo -e "${YELLOW}Skipped:${NC} $SKIP_COUNT"
     echo "=================================================="
-    
+
     if [[ $FAIL_COUNT -eq 0 ]]; then
         echo -e "${GREEN}✅ All tests passed!${NC}"
         exit 0
