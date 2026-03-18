@@ -1,3 +1,5 @@
+# CI compatibility — canonical deps are in pyproject.toml.
+# This file will be removed once the CI workflow is updated to use uv.
 sentence-transformers>=3.4,<6
 fastapi>=0.135,<1
 uvicorn[standard]>=0.42,<1
