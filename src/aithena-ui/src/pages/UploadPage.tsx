@@ -1,6 +1,7 @@
 import { ChangeEvent, DragEvent, Profiler, RefObject, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useIntl, FormattedMessage } from 'react-intl';
+import { FileText, XCircle, CircleCheck, Loader } from 'lucide-react';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import { useUpload, UploadProgress, UploadResult } from '../hooks/upload';
 import { onRenderCallback } from '../utils/profiler';
@@ -102,7 +103,7 @@ function UploadContent({
           {!uploading && (
             <div className="upload-dropzone-content">
               <div className="upload-icon" aria-hidden="true">
-                📄
+                <FileText size={20} />
               </div>
               <p className="upload-prompt">
                 {intl.formatMessage({ id: 'upload.dragPrompt' })}{' '}
@@ -130,7 +131,7 @@ function UploadContent({
               aria-atomic="true"
             >
               <div className="upload-progress-spinner" aria-hidden="true">
-                ⏳
+                <Loader size={20} />
               </div>
               <p className="upload-progress-text">
                 {intl.formatMessage({ id: 'upload.uploading' })}
@@ -160,7 +161,7 @@ function UploadContent({
       {error && (
         <div className="upload-result upload-result--error" role="alert">
           <div className="upload-result-icon" aria-hidden="true">
-            ❌
+            <XCircle size={20} />
           </div>
           <h3 className="upload-result-title">
             {intl.formatMessage({ id: 'upload.failedTitle' })}
@@ -175,7 +176,7 @@ function UploadContent({
       {result && (
         <div className="upload-result upload-result--success" role="status" aria-live="polite">
           <div className="upload-result-icon" aria-hidden="true">
-            ✅
+            <CircleCheck size={20} />
           </div>
           <h3 className="upload-result-title">
             {intl.formatMessage({ id: 'upload.successTitle' })}

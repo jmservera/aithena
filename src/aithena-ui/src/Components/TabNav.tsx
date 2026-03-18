@@ -1,16 +1,29 @@
 import { NavLink } from 'react-router-dom';
 import { useIntl } from 'react-intl';
+import {
+  Search,
+  BookOpen,
+  Upload,
+  CheckCircle,
+  BarChart3,
+  Wrench,
+  User,
+  Lock,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
 
-const TABS = [
-  { to: '/search', labelId: 'nav.search', emoji: '🔍' },
-  { to: '/library', labelId: 'nav.library', emoji: '📖' },
-  { to: '/upload', labelId: 'nav.upload', emoji: '📤' },
-  { to: '/status', labelId: 'nav.status', emoji: '🟢' },
-  { to: '/stats', labelId: 'nav.stats', emoji: '📊' },
-  { to: '/admin', labelId: 'nav.admin', emoji: '🛠️' },
+const ICON_SIZE = 20;
+
+const TABS: { to: string; labelId: string; icon: LucideIcon }[] = [
+  { to: '/search', labelId: 'nav.search', icon: Search },
+  { to: '/library', labelId: 'nav.library', icon: BookOpen },
+  { to: '/upload', labelId: 'nav.upload', icon: Upload },
+  { to: '/status', labelId: 'nav.status', icon: CheckCircle },
+  { to: '/stats', labelId: 'nav.stats', icon: BarChart3 },
+  { to: '/admin', labelId: 'nav.admin', icon: Wrench },
 ];
 
 function TabNav() {
@@ -29,13 +42,15 @@ function TabNav() {
                 'tab-nav-link' + (isActive ? ' tab-nav-link--active' : '')
               }
             >
-              {tab.emoji} {intl.formatMessage({ id: tab.labelId })}
+              <tab.icon size={ICON_SIZE} aria-hidden="true" />{' '}
+              {intl.formatMessage({ id: tab.labelId })}
             </NavLink>
           ))}
           <div className="tab-nav-actions">
             <LanguageSwitcher />
             <span className="tab-nav-user">
-              👤 {user?.username ?? intl.formatMessage({ id: 'nav.signedIn' })}
+              <User size={ICON_SIZE} aria-hidden="true" />{' '}
+              {user?.username ?? intl.formatMessage({ id: 'nav.signedIn' })}
             </span>
             <button
               type="button"
@@ -54,7 +69,7 @@ function TabNav() {
           to="/login"
           className={({ isActive }) => 'tab-nav-link' + (isActive ? ' tab-nav-link--active' : '')}
         >
-          🔐 {intl.formatMessage({ id: 'nav.login' })}
+          <Lock size={ICON_SIZE} aria-hidden="true" /> {intl.formatMessage({ id: 'nav.login' })}
         </NavLink>
       )}
     </nav>

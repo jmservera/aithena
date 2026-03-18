@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { useIntl, FormattedMessage } from 'react-intl';
+import { AlertTriangle } from 'lucide-react';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
@@ -125,7 +126,7 @@ function SearchResultsSection({
 
         {error && (
           <div className="search-error" role="alert">
-            ⚠️ {error}
+            <AlertTriangle size={20} aria-hidden="true" /> {error}
           </div>
         )}
 

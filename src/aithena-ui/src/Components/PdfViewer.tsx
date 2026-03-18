@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
+import { FileText } from 'lucide-react';
 
 import { resolveDocumentUrl } from '../api';
 import { BookResult } from '../hooks/search';
@@ -96,7 +97,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
         <div className="pdf-viewer-header">
           <div className="pdf-viewer-title">
             <span className="pdf-viewer-icon" aria-hidden="true">
-              📄
+              <FileText size={20} />
             </span>
             <div>
               <strong id={titleId}>
