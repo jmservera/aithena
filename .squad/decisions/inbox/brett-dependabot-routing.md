@@ -28,4 +28,4 @@ Unclassified PRs default to Brett (Infrastructure).
 ## Impact
 
 - All squad members may receive Dependabot PR assignments
-- Routing rules live in `squad-heartbeat.yml` — update the `depRouting` array to adjust
+- Routing rules live in `squad-heartbeat.yml` — update the detection logic in the heartbeat job to adjust routing

@@ -687,7 +687,7 @@
 - Routing: 5-rule table (Kane=auth/crypto, Brett=infra/Docker, Parker=Python deps, Dallas=JS/frontend, Lambert=test+CI failures)
 - Classification uses PR title/branch for dep name matching, then falls back to changed file paths
 - Added `checks: read` permission for CI status inspection
-- Triage comment follows existing `🔄 Ralph — Dependabot Triage` pattern
+- Triage comment follows existing `🔄 Ralph — Auto-Triage` pattern
 - Existing squad issue/PR detection and Copilot auto-assign completely untouched
 
 **Key patterns:**
