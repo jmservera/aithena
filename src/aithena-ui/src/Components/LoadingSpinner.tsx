@@ -1,3 +1,5 @@
+import { useIntl } from 'react-intl';
+
 import styles from './LoadingSpinner.module.css';
 
 interface LoadingSpinnerProps {
@@ -5,16 +7,17 @@ interface LoadingSpinnerProps {
   message?: string;
 }
 
-function LoadingSpinner({
-  title = 'Loading page…',
-  message = 'Please wait while Aithena prepares this view.',
-}: LoadingSpinnerProps) {
+function LoadingSpinner({ title, message }: LoadingSpinnerProps) {
+  const intl = useIntl();
+  const displayTitle = title ?? intl.formatMessage({ id: 'common.loadingPage' });
+  const displayMessage = message ?? intl.formatMessage({ id: 'common.loadingMessage' });
+
   return (
     <div className={styles.loadingSpinner} role="status" aria-live="polite">
       <div className={styles.loadingSpinnerIndicator} aria-hidden="true" />
       <div className={styles.loadingSpinnerContent}>
-        <h2 className={styles.loadingSpinnerTitle}>{title}</h2>
-        <p className={styles.loadingSpinnerMessage}>{message}</p>
+        <h2 className={styles.loadingSpinnerTitle}>{displayTitle}</h2>
+        <p className={styles.loadingSpinnerMessage}>{displayMessage}</p>
       </div>
     </div>
   );

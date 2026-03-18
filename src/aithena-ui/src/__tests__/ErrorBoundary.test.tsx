@@ -7,6 +7,7 @@ import ErrorBoundary, {
   RouteErrorBoundary,
   type ErrorBoundaryFallbackProps,
 } from '../Components/ErrorBoundary';
+import { IntlWrapper } from './test-intl-wrapper';
 
 const originalLocation = window.location;
 
@@ -96,9 +97,11 @@ describe('ErrorBoundary', () => {
 
   it('renders children when no error is thrown', () => {
     render(
-      <ErrorBoundary>
-        <HealthyChild />
-      </ErrorBoundary>
+      <IntlWrapper>
+        <ErrorBoundary>
+          <HealthyChild />
+        </ErrorBoundary>
+      </IntlWrapper>
     );
 
     expect(screen.getByText('Healthy child content')).toBeInTheDocument();
@@ -107,27 +110,29 @@ describe('ErrorBoundary', () => {
 
   it('shows the fallback UI when a child throws', async () => {
     render(
-      <ErrorBoundary>
-        <BrokenChild message="Boundary crash" />
-      </ErrorBoundary>
+      <IntlWrapper>
+        <ErrorBoundary>
+          <BrokenChild message="Boundary crash" />
+        </ErrorBoundary>
+      </IntlWrapper>
     );
 
     const alert = await screen.findByRole('alert');
 
     expect(alert).toHaveAttribute('aria-live', 'assertive');
-    expect(
-      screen.getByRole('heading', { name: /aithena ran into a problem/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/try reloading the page to restore search, uploads, and navigation/i)
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reload aithena/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /something went wrong/i })).toBeInTheDocument();
+    expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reload page/i })).toBeInTheDocument();
   });
 
   it('displays the captured error message in a custom fallback and recovers on retry', async () => {
     const user = userEvent.setup();
 
-    render(<RetryableBoundary />);
+    render(
+      <IntlWrapper>
+        <RetryableBoundary />
+      </IntlWrapper>
+    );
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Captured error: Retryable crash');
 
@@ -142,22 +147,24 @@ describe('ErrorBoundary', () => {
 
   it('normalizes non-Error throw values before passing them to a custom fallback', async () => {
     render(
-      <>
-        <ErrorBoundary
-          fallback={({ error }: ErrorBoundaryFallbackProps) => (
-            <div role="alert">{error?.message}</div>
-          )}
-        >
-          <StringBrokenChild />
-        </ErrorBoundary>
-        <ErrorBoundary
-          fallback={({ error }: ErrorBoundaryFallbackProps) => (
-            <div role="alert">{error?.message}</div>
-          )}
-        >
-          <ObjectBrokenChild />
-        </ErrorBoundary>
-      </>
+      <IntlWrapper>
+        <>
+          <ErrorBoundary
+            fallback={({ error }: ErrorBoundaryFallbackProps) => (
+              <div role="alert">{error?.message}</div>
+            )}
+          >
+            <StringBrokenChild />
+          </ErrorBoundary>
+          <ErrorBoundary
+            fallback={({ error }: ErrorBoundaryFallbackProps) => (
+              <div role="alert">{error?.message}</div>
+            )}
+          >
+            <ObjectBrokenChild />
+          </ErrorBoundary>
+        </>
+      </IntlWrapper>
     );
 
     const alerts = await screen.findAllByRole('alert');
@@ -170,21 +177,25 @@ describe('ErrorBoundary', () => {
     const user = userEvent.setup();
 
     render(
-      <ErrorBoundary>
-        <BrokenChild />
-      </ErrorBoundary>
+      <IntlWrapper>
+        <ErrorBoundary>
+          <BrokenChild />
+        </ErrorBoundary>
+      </IntlWrapper>
     );
 
-    await user.click(screen.getByRole('button', { name: /reload aithena/i }));
+    await user.click(screen.getByRole('button', { name: /reload page/i }));
 
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
   it('renders fallback UI for an async crash triggered after mount', async () => {
     render(
-      <ErrorBoundary>
-        <AsyncBrokenChild />
-      </ErrorBoundary>
+      <IntlWrapper>
+        <ErrorBoundary>
+          <AsyncBrokenChild />
+        </ErrorBoundary>
+      </IntlWrapper>
     );
 
     expect(screen.getByText('Waiting for async crash')).toBeInTheDocument();
@@ -193,18 +204,18 @@ describe('ErrorBoundary', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByRole('heading', { name: /aithena ran into a problem/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /something went wrong/i })).toBeInTheDocument();
   });
 
   it('invokes componentDidCatch with the thrown error and component stack', async () => {
     const componentDidCatchSpy = vi.spyOn(ErrorBoundary.prototype, 'componentDidCatch');
 
     render(
-      <ErrorBoundary>
-        <BrokenChild message="Lifecycle crash" />
-      </ErrorBoundary>
+      <IntlWrapper>
+        <ErrorBoundary>
+          <BrokenChild message="Lifecycle crash" />
+        </ErrorBoundary>
+      </IntlWrapper>
     );
 
     await screen.findByRole('alert');
@@ -234,10 +245,14 @@ describe('ErrorBoundary', () => {
       { initialEntries: ['/broken'] }
     );
 
-    render(<RouterProvider router={router} />);
+    render(
+      <IntlWrapper>
+        <RouterProvider router={router} />
+      </IntlWrapper>
+    );
 
     expect(
-      await screen.findByRole('heading', { name: /aithena ran into a problem/i })
+      await screen.findByRole('heading', { name: /something went wrong/i })
     ).toBeInTheDocument();
 
     await act(async () => {

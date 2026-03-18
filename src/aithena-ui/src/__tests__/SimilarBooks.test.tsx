@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
 import SimilarBooks from '../Components/SimilarBooks';
+import { IntlWrapper } from './test-intl-wrapper';
 
 const similarBooksResponse = {
   results: [
@@ -32,7 +33,11 @@ describe('SimilarBooks', () => {
       json: async () => similarBooksResponse,
     } as Response);
 
-    render(<SimilarBooks documentId="book-1" onSelectBook={vi.fn()} />);
+    render(
+      <IntlWrapper>
+        <SimilarBooks documentId="book-1" onSelectBook={vi.fn()} />
+      </IntlWrapper>
+    );
 
     expect(screen.getByRole('status')).toHaveTextContent(/loading similar books/i);
 
@@ -54,7 +59,11 @@ describe('SimilarBooks', () => {
       json: async () => ({ results: [] }),
     } as Response);
 
-    render(<SimilarBooks documentId="book-1" onSelectBook={vi.fn()} />);
+    render(
+      <IntlWrapper>
+        <SimilarBooks documentId="book-1" onSelectBook={vi.fn()} />
+      </IntlWrapper>
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/no similar books found/i)).toBeInTheDocument();
@@ -69,7 +78,11 @@ describe('SimilarBooks', () => {
 
     const onSelectBook = vi.fn();
     const user = userEvent.setup();
-    render(<SimilarBooks documentId="book-1" onSelectBook={onSelectBook} />);
+    render(
+      <IntlWrapper>
+        <SimilarBooks documentId="book-1" onSelectBook={onSelectBook} />
+      </IntlWrapper>
+    );
 
     const card = await screen.findByRole('button', {
       name: /open similar book distributed systems handbook/i,
@@ -85,7 +98,11 @@ describe('SimilarBooks', () => {
       status: 500,
     } as Response);
 
-    render(<SimilarBooks documentId="book-1" onSelectBook={vi.fn()} />);
+    render(
+      <IntlWrapper>
+        <SimilarBooks documentId="book-1" onSelectBook={vi.fn()} />
+      </IntlWrapper>
+    );
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t load similar books/i);

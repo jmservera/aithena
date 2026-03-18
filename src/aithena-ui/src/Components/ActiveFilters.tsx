@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { useIntl } from 'react-intl';
 
 import { SearchFilters } from '../hooks/search';
 import FilterChip from './FilterChip';
@@ -9,11 +10,11 @@ interface ActiveFiltersProps {
   onClearAll: () => void;
 }
 
-const FILTER_LABELS: Record<keyof SearchFilters, string> = {
-  author: 'Author',
-  category: 'Category',
-  language: 'Language',
-  year: 'Year',
+const FILTER_LABEL_KEYS: Record<keyof SearchFilters, string> = {
+  author: 'filters.author',
+  category: 'filters.category',
+  language: 'filters.language',
+  year: 'filters.year',
 };
 
 const ActiveFilters = memo(function ActiveFilters({
@@ -21,6 +22,7 @@ const ActiveFilters = memo(function ActiveFilters({
   onRemove,
   onClearAll,
 }: ActiveFiltersProps) {
+  const intl = useIntl();
   const activeEntries = useMemo(
     () =>
       (Object.entries(filters) as [keyof SearchFilters, string | undefined][]).filter(
@@ -36,19 +38,21 @@ const ActiveFilters = memo(function ActiveFilters({
 
   return (
     <div className="active-filters">
-      <span className="active-filters-label">Active filters:</span>
+      <span className="active-filters-label">
+        {intl.formatMessage({ id: 'filters.activeFilters' })}
+      </span>
       {activeEntries.map(([key, value]) => (
         <FilterChip
           key={key}
           filterKey={key}
-          label={FILTER_LABELS[key]}
+          label={intl.formatMessage({ id: FILTER_LABEL_KEYS[key] })}
           value={value}
           onRemove={onRemove}
         />
       ))}
       {activeEntries.length > 1 && (
         <button className="clear-all-filters" onClick={onClearAll}>
-          Clear all
+          {intl.formatMessage({ id: 'filters.clearAll' })}
         </button>
       )}
     </div>

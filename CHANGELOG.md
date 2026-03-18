@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-03-17
+
+### Added
+
+- **Full internationalization (i18n) support** with 4 languages: English (baseline), Spanish, Catalan, and French — 153+ locale keys extracted from all React components (#375, #376, #377, #378)
+- **LanguageSwitcher UI component** in the application header with browser locale detection, localStorage persistence, and instant language switching without page reload (#379)
+- **Vitest tests for i18n** validating locale switching, translation completeness across all 4 languages, localStorage persistence, and fallback behavior (#380)
+- **i18n contributor guide** (`docs/i18n-guide.md`) documenting locale file structure, key naming conventions, testing requirements, and PR checklist for adding new languages (#381)
+- **38 new `/v1/books` endpoint tests** covering pagination, filtering, sorting, error handling, and edge cases — solr-search now at 231 tests with 95% coverage (#471)
+
+### Changed
+
+- **Redis client upgrade:** redis-py upgraded from 4.x to 7.3.0 across all Python services (solr-search, document-indexer, document-lister, admin) with validated connection pooling and scan operations (#479)
+- **ESLint 10 upgrade:** Major frontend linting toolchain upgrade with react-hooks 7 for stricter hook dependency checking
+- **Frontend code quality:** Fixed `useRef` strictNullChecks issues and standardized URL search parameter handling across components (#469)
+- **Dependency updates:** Merged Dependabot PRs for redis 7.3.0, sentence-transformers, ESLint 10, react-hooks 7, and additional security patches
+
+### Fixed
+
+- **useRef null reference warnings** in multiple React components when running with TypeScript strict mode (#469)
+- **URL parameter inconsistencies** across search and navigation components (#469)
+
+### Security
+
+- **Redis 7.3.0:** Includes security fixes from redis-py 5.x and 6.x release lines
+- **Dependency updates:** All Dependabot security patches merged for frontend and backend dependencies
+
 ## [1.5.0] — 2026-03-17
 
 ### Added
