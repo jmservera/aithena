@@ -208,87 +208,80 @@ jobs:
 
       # ─────────────────────────────────────────────────────────────
       # Step 5: Generate release documentation with Copilot CLI
+      # See: https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/automate-with-actions
+      # Requires: COPILOT_TOKEN secret (fine-grained PAT with "Copilot Requests" permission)
       # ─────────────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4  # pin to SHA in production
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
       - name: Generate release notes with Copilot CLI
         id: copilot
         env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
           MILESTONE: ${{ steps.version.outputs.milestone }}
           PREV_TAG: ${{ steps.prev-tag.outputs.previous }}
           CURRENT_TAG: ${{ steps.version.outputs.tag }}
+          PR_COUNT: ${{ steps.prs.outputs.count }}
+          ISSUE_COUNT: ${{ steps.issues.outputs.count }}
         run: |
           set -e
-          
-          # Create output directory
+
           mkdir -p docs/releases
           OUTPUT_FILE="docs/releases/v${VERSION}-release-notes.md"
-          
-          # Build the prompt for Copilot CLI
-          cat > /tmp/copilot-prompt.txt <<'EOF'
-          Generate comprehensive release documentation for Aithena v${VERSION}.
-          
-          ## Context Available
-          - Merged PRs: /tmp/release-context/prs.json
-          - Closed Issues: /tmp/release-context/issues.json
-          - CHANGELOG section: /tmp/release-context/changelog.md
-          - CI test results: /tmp/release-context/ci-run.json
-          - Git commit range: ${PREV_TAG}..${CURRENT_TAG}
-          - Milestone: ${MILESTONE}
-          
-          ## Task
-          Create a release notes document at: ${OUTPUT_FILE}
-          
-          The document should include:
-          1. **Summary**: High-level overview of this release (2-3 sentences)
-          2. **What's New**: Key features and improvements from merged PRs
-          3. **Bug Fixes**: Issues resolved in this release
-          4. **Breaking Changes**: Any backwards-incompatible changes (if any)
-          5. **Testing**: Summary of CI test results and quality metrics
-          6. **Upgrade Instructions**: How to upgrade from previous version (if needed)
-          7. **Full Changelog**: Reference to CHANGELOG.md
-          
-          ## Style Guidelines
-          - Use clear, concise language
-          - Group related changes together
-          - Use emoji sparingly (✨ new, 🐛 fix, ⚠️ breaking, 🔒 security)
-          - Include PR/issue numbers as links
-          - Write for end-users, not developers
-          - If the CHANGELOG has content, incorporate it
-          - If any PRs mention "breaking" or "BREAKING", highlight those
-          
-          ## Output Format
-          Create the file as Markdown with front matter:
-          ---
-          version: ${VERSION}
-          date: $(date -u +%Y-%m-%d)
-          milestone: ${MILESTONE}
-          ---
-          
-          Read the context files, analyze the changes, and generate comprehensive release notes.
-          EOF
-          
-          # Expand variables in the prompt
-          envsubst < /tmp/copilot-prompt.txt > /tmp/copilot-prompt-expanded.txt
-          
-          # Run Copilot CLI (may not be available in all environments)
-          if command -v gh copilot >/dev/null 2>&1; then
-            echo "✅ Copilot CLI available — generating docs"
-            gh copilot --autopilot -p "$(cat /tmp/copilot-prompt-expanded.txt)" || {
-              echo "⚠️ Copilot CLI failed — will use fallback template"
-              echo "fallback=true" >> "$GITHUB_OUTPUT"
-            }
+
+          # Collect context into prompt
+          PRS_TEXT=$(jq -r '.[] | "- PR #\(.number): \(.title)"' /tmp/release-context/prs.json 2>/dev/null || echo "No PRs found")
+          ISSUES_TEXT=$(jq -r '.[] | "- Issue #\(.number): \(.title)"' /tmp/release-context/issues.json 2>/dev/null || echo "No issues found")
+          CHANGELOG_TEXT=$(cat /tmp/release-context/changelog.md 2>/dev/null || echo "No changelog section found")
+          CI_STATUS=$(jq -r '.[0].conclusion // "Unknown"' /tmp/release-context/ci-run.json 2>/dev/null || echo "Unknown")
+
+          PROMPT="Generate release notes for Aithena v${VERSION} (a book library search engine with Solr, React, and Python microservices).
+
+          Merged PRs:
+          ${PRS_TEXT}
+
+          Closed issues in milestone ${MILESTONE}:
+          ${ISSUES_TEXT}
+
+          CHANGELOG section:
+          ${CHANGELOG_TEXT}
+
+          CI status: ${CI_STATUS}
+
+          Write a markdown file at ${OUTPUT_FILE} with YAML front matter (version, date, milestone),
+          then sections: Summary (2-3 sentences), What's New (from PRs grouped by theme),
+          Bug Fixes (from issues labeled bug), Breaking Changes (if any), Testing summary,
+          and Upgrade Instructions. Use emoji sparingly (✨ new, 🐛 fix, ⚠️ breaking, 🔒 security).
+          Include PR/issue numbers as GitHub links to github.com/jmservera/aithena."
+
+          # Run Copilot CLI non-interactively
+          # --allow-tool=write: let Copilot write the release notes file
+          # --allow-tool='shell(git:*)': let Copilot read git history for context
+          # --allow-tool='shell(gh:*)': let Copilot use gh CLI for GitHub context
+          # --no-ask-user: don't prompt for input (CI environment)
+          if copilot -p "$PROMPT" \
+            --allow-tool=write \
+            --allow-tool='shell(git:*)' \
+            --allow-tool='shell(gh:*)' \
+            --allow-tool=read \
+            --no-ask-user ; then
+            echo "✅ Copilot CLI completed"
           else
-            echo "⚠️ Copilot CLI not available — will use fallback template"
-            echo "fallback=true" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Copilot CLI failed (exit $?) — will use fallback template"
           fi
-          
+
           # Check if output file was created
-          if [ ! -f "$OUTPUT_FILE" ]; then
-            echo "fallback=true" >> "$GITHUB_OUTPUT"
-          else
+          if [ -f "$OUTPUT_FILE" ] && [ -s "$OUTPUT_FILE" ]; then
             echo "fallback=false" >> "$GITHUB_OUTPUT"
             echo "✅ Release notes generated at $OUTPUT_FILE"
+          else
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Output file not created — falling back to template"
           fi
 
       - name: Generate fallback template
@@ -299,72 +292,85 @@ jobs:
           PR_COUNT: ${{ steps.prs.outputs.count }}
           ISSUE_COUNT: ${{ steps.issues.outputs.count }}
         run: |
+          mkdir -p docs/releases
           OUTPUT_FILE="docs/releases/v${VERSION}-release-notes.md"
-          
-          cat > "$OUTPUT_FILE" <<EOF
+
+          # Generate PR list
+          PR_LIST=$(cat /tmp/release-context/prs.json | jq -r '.[] | "- **#\(.number)**: \(.title)"' 2>/dev/null || echo "- No PRs found")
+
+          # Generate bug fix list
+          BUG_LIST=$(cat /tmp/release-context/issues.json | jq -r '.[] | select(.labels[]?.name == "bug") | "- **#\(.number)**: \(.title)"' 2>/dev/null || echo "None identified.")
+
+          # Get CI status
+          CI_STATUS=$(cat /tmp/release-context/ci-run.json | jq -r '.[0].conclusion // "Unknown"' 2>/dev/null || echo "Unknown")
+
+          cat > "$OUTPUT_FILE" << TEMPLATE_EOF
           ---
           version: ${VERSION}
           date: $(date -u +%Y-%m-%d)
           milestone: ${MILESTONE}
           generated: fallback-template
           ---
-          
+
           # Aithena v${VERSION} Release Notes
-          
+
           > ⚠️ **Note**: This is a template document. Copilot CLI was not available during generation.
           > Please review and complete the sections below before releasing.
-          
+
           ## Summary
-          
+
           <!-- Add a 2-3 sentence overview of this release -->
-          
+
           Aithena v${VERSION} includes:
           - ${PR_COUNT} merged pull requests
           - ${ISSUE_COUNT} closed issues from milestone ${MILESTONE}
-          
+
           ## What's New
-          
+
           <!-- List key features and improvements -->
-          
-          $(cat /tmp/release-context/prs.json | jq -r '.[] | "- **#\(.number)**: \(.title)"')
-          
+
+          ${PR_LIST}
+
           ## Bug Fixes
-          
+
           <!-- List bug fixes from closed issues -->
-          
-          $(cat /tmp/release-context/issues.json | jq -r '.[] | select(.labels[].name == "bug") | "- **#\(.number)**: \(.title)"')
-          
+
+          ${BUG_LIST}
+
           ## Breaking Changes
-          
+
           <!-- List any breaking changes - check PRs/issues for "breaking" label -->
-          
+
           None identified (review required).
-          
+
           ## Testing
-          
+
           <!-- Add CI test summary -->
-          
-          CI Status: $(cat /tmp/release-context/ci-run.json | jq -r '.[0].conclusion // "Unknown"')
-          
+
+          CI Status: ${CI_STATUS}
+
           ## Upgrade Instructions
-          
+
           <!-- Add upgrade instructions if needed -->
-          
+
           Standard upgrade process:
           1. Pull the latest changes: \`git pull origin main\`
           2. Update dependencies: \`./buildall.sh\`
           3. Restart services: \`docker compose down && docker compose up -d\`
-          
+
           ## Full Changelog
-          
-          See [CHANGELOG.md](../../CHANGELOG.md#${VERSION//.}) for the complete list of changes.
-          
+
+          See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.
+
           ---
-          
-          **Released**: $(date -u +%Y-%m-%d)  
+
+          **Released**: $(date -u +%Y-%m-%d)
           **Milestone**: ${MILESTONE}
-          EOF
-          
+          TEMPLATE_EOF
+
+          # Strip leading whitespace from heredoc (caused by YAML indentation)
+          sed -i 's/^          //' "$OUTPUT_FILE"
+
           echo "✅ Fallback template created at $OUTPUT_FILE"
 
       # ─────────────────────────────────────────────────────────────

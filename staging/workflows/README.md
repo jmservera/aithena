@@ -32,7 +32,7 @@ git push origin main
 ```
 
 **Configuration required**:
-- No additional secrets needed (uses `GITHUB_TOKEN`)
+- Requires `COPILOT_TOKEN` repository secret (fine-grained PAT with "Copilot Requests" permission)
 - Milestone names must match version format: `v1.8.0`, `v1.9.0`, etc.
 - PRs should be labeled with milestone labels for accurate collection
 
