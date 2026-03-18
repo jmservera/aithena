@@ -5,6 +5,9 @@ on:
     branches:
       - dev
       - main
+    paths:
+      - 'VERSION'
+      - '**/Dockerfile'
 
 permissions:
   contents: read
@@ -19,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
@@ -43,20 +46,22 @@ jobs:
       - name: Verify Dockerfiles declare VERSION build arg
         shell: bash
         run: |
-          dockerfiles=(
-            src/admin/Dockerfile
-            src/aithena-ui/Dockerfile
-            src/document-indexer/Dockerfile
-            src/document-lister/Dockerfile
-            src/embeddings-server/Dockerfile
-            src/solr-search/Dockerfile
-          )
+          dockerfiles="$(find . -type f -name Dockerfile -print)"
 
-          for dockerfile in "${dockerfiles[@]}"; do
+          if [[ -z "$dockerfiles" ]]; then
+            echo "No Dockerfiles found. Skipping VERSION build arg validation."
+            exit 0
+          fi
+
+          while IFS= read -r dockerfile; do
+            if [[ -z "$dockerfile" ]]; then
+              continue
+            fi
+
             if ! grep -Eq '^ARG VERSION(=.+)?$' "$dockerfile"; then
               echo "$dockerfile is missing an ARG VERSION declaration." >&2
               exit 1
             fi
-          done
+          done <<< "$dockerfiles"
 
-          echo "All release Dockerfiles declare ARG VERSION."
+          echo "All Dockerfiles declare ARG VERSION."

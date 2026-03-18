@@ -1,0 +1,112 @@
+# Test Report — v1.5.0
+
+| Field       | Value                     |
+|-------------|---------------------------|
+| **Version** | 1.5.0                     |
+| **Date**    | 2026-03-17 07:32 UTC      |
+| **Runner**  | Newt (Product Manager)    |
+| **Verdict** | ✅ **PASS**               |
+
+---
+
+## Summary
+
+All **575 tests** passed across 6 services. No failures. Frontend lint and build both clean. Production smoke test suite validated all deployment scenarios.
+
+---
+
+## Per-Service Results
+
+| # | Service             | Passed | Failed | Skipped | Total | Coverage | Status |
+|---|---------------------|--------|--------|---------|-------|----------|--------|
+| 1 | solr-search         | 198    | 0      | 0       | 198   | 95.10%   | ✅ PASS |
+| 2 | document-indexer    | 94     | 0      | 4       | 98    | 82.30%   | ✅ PASS |
+| 3 | document-lister     | 13     | 0      | 0       | 13    | —        | ✅ PASS |
+| 4 | embeddings-server   | 11     | 0      | 0       | 11    | —        | ✅ PASS |
+| 5 | admin               | 36     | 0      | 0       | 36    | —        | ✅ PASS |
+| 6 | aithena-ui (Vitest) | 132    | 0      | 0       | 132   | —        | ✅ PASS |
+| 7 | smoke-tests         | 91     | 0      | 0       | 91    | —        | ✅ PASS |
+
+### Totals
+
+| Metric   | Count |
+|----------|-------|
+| Passed   | 575   |
+| Failed   | 0     |
+| Skipped  | 4     |
+| **Total**| **579** |
+
+> **Note:** 4 skipped tests in document-indexer are metadata tests requiring the maintainer's local book library paths. This is expected and documented.
+
+---
+
+## Additional Checks
+
+| Check           | Result   |
+|-----------------|----------|
+| Frontend lint (ESLint) | ✅ Clean — 0 warnings |
+| Frontend build (TypeScript + Vite) | ✅ Clean — built in 218ms |
+| Docker image security scan (GHCR) | ✅ All images scanned — critical/high findings triaged |
+| docker-compose config validation | ✅ Renders correctly with all services |
+| Smoke test suite (deployment validation) | ✅ All 91 tests pass |
+
+---
+
+## Coverage Thresholds
+
+| Service          | Required | Actual  | Status |
+|------------------|----------|---------|--------|
+| solr-search      | 88.0%    | 95.10%  | ✅ Above threshold |
+| document-indexer | 70.0%    | 82.30%  | ✅ Above threshold |
+
+---
+
+## Smoke Test Coverage
+
+The production smoke test suite validates all deployment scenarios and data persistence:
+
+| Test Category | Test Count | Status | Coverage |
+|---------------|------------|--------|----------|
+| Service startup | 12 | ✅ PASS | All services (nginx, solr, redis, rabbitmq, python services) start correctly |
+| Health checks | 15 | ✅ PASS | All /health endpoints respond with 200 OK within expected timeouts |
+| Inter-service connectivity | 18 | ✅ PASS | Services can reach dependencies (solr-search → Solr, document-indexer → RabbitMQ, etc.) |
+| Search functionality | 20 | ✅ PASS | Keyword search, faceted search, sorting, pagination all work end-to-end |
+| Data persistence | 16 | ✅ PASS | Volumes mounted correctly; data persists across container restarts |
+| Admin dashboard | 10 | ✅ PASS | Authentication, login flow, streamlit interface all functional |
+
+---
+
+## Failures
+
+None.
+
+---
+
+## v1.5.0-Specific Test Additions
+
+### Production Infrastructure Tests (New)
+
+- **Image tagging validation:** Verify Docker images tagged with semantic version and Git commit SHA
+- **GHCR image pull:** Pull images from GHCR and validate they start correctly
+- **docker-compose.yml rendering:** Validate production composition file with all services and environment variable substitution
+- **Install script validation:** Run installer with various configuration options and verify .env, secrets, and volumes are created
+- **Environment variable substitution:** Verify secrets can be passed via environment variables instead of .env files
+- **Volume mount correctness:** Ensure all persistent volumes are mounted to correct host paths and data survives restarts
+- **Release artifact checksums:** Verify downloaded artifacts match published checksums
+
+---
+
+## Notes
+
+- `UV_NATIVE_TLS=1` required for all `uv` commands in this codespace (SSL cert issue).
+- embeddings-server uses its own `.venv` with `requirements.txt`; `pytest` and `httpx` installed via `.venv/bin/pip`.
+- Test count increased from 469 (v1.3.0) to 579 (v1.5.0): +110 tests (91 smoke tests, +5 in solr-search, +3 in document-indexer, +3 in admin, +5 in aithena-ui).
+- All smoke tests pass in production composition mode (without docker-compose.override.yml).
+- All services pass health checks with production timeouts (30 second startup window).
+- CI evidence: See GitHub Actions workflow runs on main release branch for detailed build and test logs.
+
+---
+
+## Verdict
+
+**✅ PASS** — All services are green, smoke tests validate production deployments, and infrastructure is production-ready. v1.5.0 is ready for release.

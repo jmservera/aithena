@@ -16,9 +16,7 @@ on:
     types:
       - completed
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.inputs.version || github.event.workflow_run.head_sha || github.run_id }}
@@ -26,16 +24,21 @@ concurrency:
 
 jobs:
   generate-release-docs:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: |
+      github.repository == 'jmservera/aithena' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     name: Generate release documentation
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
     env:
       INPUT_VERSION: ${{ github.event.inputs.version || github.event.workflow_run.head_branch }}
       INPUT_MILESTONE: ${{ github.event.inputs.milestone }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
           fetch-depth: 0
