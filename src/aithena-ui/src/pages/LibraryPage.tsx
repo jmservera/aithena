@@ -34,7 +34,7 @@ function LibraryPage() {
   } = useLibrary();
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
-  const resultsRegionRef = useRef<HTMLElement>(null);
+  const resultsRegionRef = useRef<HTMLElement | null>(null);
   const lastLoadingStateRef = useRef(false);
   const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
   const resultsRegionId = useId();
