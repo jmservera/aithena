@@ -7,7 +7,7 @@
 # What it does:
 # 1. Collects release context (PRs, issues, CHANGELOG, test results)
 # 2. Uses GitHub Copilot CLI to generate release documentation
-# 3. Creates docs/releases/v{version}-release-notes.md
+# 3. Creates docs/release-notes-v{version}.md
 # 4. Opens a PR for human review
 #
 # This workflow automates the release documentation process, replacing
@@ -29,6 +29,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: read
+  actions: read
 
 concurrency:
   group: release-docs-${{ github.ref }}
@@ -44,11 +46,19 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # Step 1: Checkout repository and setup
       # ─────────────────────────────────────────────────────────────
-      - name: Checkout repository
+      - name: Checkout repository (tag push)
+        if: ${{ github.event_name == 'push' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0  # Full history for git log comparison
-          ref: dev        # Always work from dev branch
+          persist-credentials: false
+
+      - name: Checkout repository (manual dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0  # Full history for git log comparison
+          ref: dev        # Always work from dev branch on manual runs
           persist-credentials: false
 
       - name: Configure Git
@@ -94,10 +104,16 @@ jobs:
         run: |
           git fetch --tags --force
           
-          # Find all tags matching vX.Y.Z, sort by version, get the one before current
-          PREV_TAG=$(git tag -l 'v*.*.*' | \
-            grep -v "^${CURRENT_TAG}$" | \
-            sort -V | tail -n1)
+          # Build ordered tag list including CURRENT_TAG and pick the immediate predecessor
+          ALL_TAGS=$(printf '%s\n' "$(git tag -l 'v*.*.*')" "$CURRENT_TAG" | sort -V | uniq)
+          
+          PREV_TAG=""
+          for tag in $ALL_TAGS; do
+            if [ "$tag" = "$CURRENT_TAG" ]; then
+              break
+            fi
+            PREV_TAG="$tag"
+          done
           
           if [ -z "$PREV_TAG" ]; then
             echo "⚠️ No previous tag found — using initial commit"
@@ -120,16 +136,31 @@ jobs:
         run: |
           mkdir -p /tmp/release-context
           
-          # Query PRs merged to dev branch in the milestone
+          # Query PRs merged to dev branch in the milestone (primary: milestone, fallback: label)
           gh pr list \
             --repo "${{ github.repository }}" \
             --state merged \
             --base dev \
+            --search "milestone:\"$MILESTONE\"" \
             --json number,title,body,mergedAt,author,labels \
-            --jq "[.[] | select(.labels[].name == \"$MILESTONE\")]" \
             > /tmp/release-context/prs.json
           
           PR_COUNT=$(jq 'length' /tmp/release-context/prs.json)
+          
+          # Fallback: if no PRs found by milestone search, fall back to label-based filtering
+          if [ "$PR_COUNT" -eq 0 ] && [ -n "$MILESTONE" ]; then
+            echo "ℹ️ No PRs found via milestone search, falling back to label matching for milestone '$MILESTONE'"
+            gh pr list \
+              --repo "${{ github.repository }}" \
+              --state merged \
+              --base dev \
+              --json number,title,body,mergedAt,author,labels \
+              | jq '[.[] | select(.labels[]?.name == "'"$MILESTONE"'")]' \
+              > /tmp/release-context/prs.json
+            
+            PR_COUNT=$(jq 'length' /tmp/release-context/prs.json)
+          fi
+          
           echo "count=$PR_COUNT" >> "$GITHUB_OUTPUT"
           echo "✅ Collected $PR_COUNT merged PRs"
 
@@ -221,8 +252,8 @@ jobs:
           set -e
           
           # Create output directory
-          mkdir -p docs/releases
-          OUTPUT_FILE="docs/releases/v${VERSION}-release-notes.md"
+          mkdir -p docs
+          OUTPUT_FILE="docs/release-notes-v${VERSION}.md"
           
           # Build the prompt for Copilot CLI
           cat > /tmp/copilot-prompt.txt <<'EOF'
@@ -272,7 +303,7 @@ jobs:
           envsubst < /tmp/copilot-prompt.txt > /tmp/copilot-prompt-expanded.txt
           
           # Run Copilot CLI (may not be available in all environments)
-          if command -v gh copilot >/dev/null 2>&1; then
+          if command -v gh >/dev/null 2>&1 && gh help copilot >/dev/null 2>&1; then
             echo "✅ Copilot CLI available — generating docs"
             gh copilot --autopilot -p "$(cat /tmp/copilot-prompt-expanded.txt)" || {
               echo "⚠️ Copilot CLI failed — will use fallback template"
@@ -351,13 +382,13 @@ jobs:
           <!-- Add upgrade instructions if needed -->
           
           Standard upgrade process:
-          1. Pull the latest changes: \`git pull origin main\`
+          1. Pull the latest changes: \`git pull origin dev\`
           2. Update dependencies: \`./buildall.sh\`
           3. Restart services: \`docker compose down && docker compose up -d\`
           
           ## Full Changelog
           
-          See [CHANGELOG.md](../../CHANGELOG.md#${VERSION//.}) for the complete list of changes.
+          See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.
           
           ---
           
@@ -395,8 +426,9 @@ jobs:
           BRANCH: ${{ steps.version.outputs.branch }}
           VERSION: ${{ steps.version.outputs.version }}
           MILESTONE: ${{ steps.version.outputs.milestone }}
+          REPO: ${{ github.repository }}
         run: |
-          git push origin "$BRANCH"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$BRANCH"
           
           # Create PR body
           cat > /tmp/pr-body.md <<EOF
