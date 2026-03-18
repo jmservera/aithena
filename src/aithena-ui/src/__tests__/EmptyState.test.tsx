@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { ReactElement } from 'react';
 import { render, screen } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
 import { SearchX } from 'lucide-react';
 import EmptyState from '../Components/EmptyState';
 import enMessages from '../locales/en.json';
 
-function renderWithIntl(component: React.ReactElement) {
+function renderWithIntl(component: ReactElement) {
   return render(
     <IntlProvider locale="en" messages={enMessages}>
       {component}

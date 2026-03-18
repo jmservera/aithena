@@ -274,7 +274,7 @@
   "search.emptyDescription": "Usa palabras clave, nombres de autores o temas para encontrar libros en la biblioteca.",
   "search.emptyTitle": "Comienza tu búsqueda",
   "search.noResultsDescription": "Prueba diferentes palabras clave, verifica errores ortográficos o explora la biblioteca para descubrir libros.",
-  "search.noResultsFilteredDescription": "Intenta eliminar algunos filtres o ajustar tus términos de búsqueda.",
+  "search.noResultsFilteredDescription": "Intenta eliminar algunos filtros o ajustar tus términos de búsqueda.",
   "search.noResultsFilteredTitle": "No hay libros coincidentes",
   "search.noResultsTitle": "No hay libros coincidentes",
   "search.loadingResults": "Loading results…"
