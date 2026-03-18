@@ -12,8 +12,8 @@ services:
         exec redis-server --save 20 1 --loglevel warning;
       fi'
     environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - REDISCLI_AUTH=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
     expose:
       - 6379
     healthcheck:
@@ -45,8 +45,8 @@ services:
     command: rabbitmq-server
     hostname: rabbitmq
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}
     expose:
       - 5672
       - 15672
@@ -406,7 +406,7 @@ services:
     networks:
       - default
   nginx:
-    image: nginx:1.15-alpine
+    image: nginx:1.27-alpine
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
