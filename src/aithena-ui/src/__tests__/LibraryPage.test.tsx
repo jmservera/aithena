@@ -95,7 +95,7 @@ describe('LibraryPage', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     renderLibraryPage();
-    expect(screen.getByText('📖 Library')).toBeInTheDocument();
+    expect(screen.getByText('Library')).toBeInTheDocument();
   });
 
   it('fetches and displays books on mount', async () => {

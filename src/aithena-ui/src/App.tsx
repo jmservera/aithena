@@ -1,5 +1,6 @@
 import { Suspense, lazy, type ReactNode } from 'react';
 import { useIntl } from 'react-intl';
+import { Library } from 'lucide-react';
 import './App.css';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Footer from './Components/Footer';
@@ -48,7 +49,9 @@ function App() {
     <div className="App">
       <div className="app-header">
         <div className="app-branding">
-          <h1 className="sidebar-title">📚 {intl.formatMessage({ id: 'app.title' })}</h1>
+          <h1 className="sidebar-title">
+            <Library size={20} aria-hidden="true" /> {intl.formatMessage({ id: 'app.title' })}
+          </h1>
           <p className="sidebar-subtitle">{intl.formatMessage({ id: 'app.subtitle' })}</p>
         </div>
         <TabNav />
