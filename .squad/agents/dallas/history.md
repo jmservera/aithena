@@ -532,17 +532,53 @@ src/aithena-ui/src/
 
 ---
 
+## 2025-03-18 — v1.8.0 Planning: UX/UI Improvement Roadmap
+
+**Work:** Comprehensive analysis of frontend UI/UX for v1.8.0, including icon system audit, accessibility review, responsive design assessment, and design system recommendations.
+
+**Findings:**
+- **Icon System:** App relies entirely on emoji (🔍 📚 📖 etc.) for UI affordances; inconsistent rendering + poor a11y. Recommended: Lucide React (60 KB full lib, ~5–8 KB tree-shaken; MIT, accessible, consistent).
+- **Responsive Design:** **Zero media queries in App.css (2,050 lines)**; layout uses absolute positioning + no mobile breakpoints → unusable on phones/tablets.
+- **Styling Approach:** Global CSS with BEM naming; Bootstrap 5.3.8 dependency unused; no design tokens (colors hardcoded 20+ times).
+- **Accessibility:** Good baseline (ARIA attrs, semantic HTML, error boundaries, focus styles); gaps: no dark/light toggle, emoji reliance, no skip link, potential contrast issues on secondary text.
+- **Typography:** Limited hierarchy; spacing ad-hoc (no 8px grid); colors inconsistent (#282c34, #202123, #343541, #40414f — four bg shades).
+- **Testing:** Solid (87+ test files, jsdom + React Testing Library); accessibility tested with @axe-core/react dev dep.
+- **i18n:** 4 locales (en, es, fr, ca) with ~260 keys; well-structured.
+
+**Recommendations for v1.8.0 (6-week execution):**
+1. **P0:** Lucide icon library adoption + mobile responsive layout (3–4 days each)
+2. **P0:** Loading states & skeleton screens (2–3 days)
+3. **P1:** Design tokens (CSS custom properties) + form validation + error states (2 days each)
+4. **P1:** Accessibility audit (WCAG AA) + fixes (1 day)
+5. **P2:** Component consistency (Button/Input components) + dark/light mode + tablet breakpoint (2–3 days each)
+6. **P3:** Animations + keyboard nav polish (1–2 days)
+
+**13 GitHub-ready issues generated** (Issue #1–#13) with descriptions, acceptance criteria, priority (P0–P3), effort (S/M/L), and dependencies.
+
+**Full roadmap saved:** `/tmp/dallas-ux-roadmap.md` (13,000+ words)
+
+**Key Learnings:**
+- Mobile-first approach is mandatory for Aithena; current layout entirely unusable on small screens
+- Icon library adoption unblocks consistent visual language across 6 pages + 10+ components
+- Design tokens (CSS custom properties) enable future dark mode, theming, and brand evolution without refactoring
+- Bootstrap 5 dependency should be removed (unused); reduces bundle size
+- Emoji lack proper fallback and screen reader support; not viable for production UI
+
+**Team Relevance:**
+- This roadmap is Dallas-scoped but affects overall product polish for v1.8.0
+- Decisions about icon library (Lucide vs. Heroicons) and design system approach should align with broader squad design philosophy
+- Accessibility improvements (P1) benefit all users but especially enable compliance requirements
+
+---
+
 ## Next Steps / Recommendations for v1.8.0+
 
-1. **Remove Bootstrap 5 dependency** — Not used; reduces bundle size
-2. **Add API response type strictness** — TypeScript interfaces for all API responses
-3. **Locale file versioning** — Schema versioning for future migration scenarios
-4. **Keyboard navigation** — WCAG 2.1 AA compliance for all components
-5. **Storybook integration** — Component documentation + visual regression testing
-6. **Performance profiling** — React Profiler to catch render performance issues
-7. **Analytics integration** — Track user language preferences, feature usage
+1. **Phase 1 (Weeks 1–2):** Lucide + design tokens + mobile layout (unblocks other work)
+2. **Phase 2 (Weeks 3–4):** Loading states, error UX, form validation
+3. **Phase 3 (Weeks 5–6):** Accessibility, component consistency, theme support
+4. **Phase 4 (v1.9.0):** Advanced features (tooltips, analytics, Storybook)
 
 ---
 
 **End of History — Dallas Frontend Developer**  
-**v1.7.0 Release Complete | Team: 628 tests passing | Status: Ready for v1.8.0 planning**
+**v1.8.0 Roadmap Complete | 13 issues prepared | Team: Ready for planning meeting**

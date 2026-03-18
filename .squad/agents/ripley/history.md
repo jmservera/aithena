@@ -292,3 +292,76 @@ Key active decisions managed in .squad/decisions.md:
 **Status:** ✅ **EPIC COMPLETE** — All 4 releases shipped, dev branch ready for v1.8.0 planning
 
 **Reflection:** This session demonstrated the value of phase-gated execution, pragmatic incrementalism, and consolidated team decision-making. The 4-release delivery with zero rework validates the release infrastructure built in v1.0.1–v1.3.0. The team has matured to execute complex, parallel initiatives safely. Key next step: v1.8.0 roadmap planning with prioritized feature backlog.
+
+---
+
+## 2026-03-18 — v1.7.1 & v1.8.0 Milestone Planning
+
+**Context:** Juanma requested planning for next two milestones. Aithena has shipped v1.7.0 (Quality & Infrastructure) with 628 passing tests, Dependabot automation, and unified CI. Team is in stable state, ready for next strategic initiatives.
+
+**Task:** Plan v1.7.1 (patch/stability/debt) and v1.8.0 (minor/UI-UX), considering:
+- v1.7.1: embeddings-server uv migration, Docker multi-stage builds, code quality
+- v1.8.0: Professional icon system, UX patterns, visual consistency, accessibility
+- Security: Ongoing threat assessment + monitoring
+
+**Analysis Process:**
+1. Reviewed current project state (v1.7.0 shipped, no open GitHub milestones/issues, team ready)
+2. Inventory: 6 services, 64 UI components, 628 tests, Docker images (single-stage), embeddings-server on requirements.txt (only service not on uv)
+3. Assessed debt: embeddings-server inconsistency with uv ecosystem, Docker optimization opportunity, UI/UX polish gaps
+4. Structured two releases with clear themes, exit criteria, risk assessments, dependencies
+
+**Outcomes:**
+
+### v1.7.1 Milestone Plan (2-3 weeks, 10d effort)
+- **Theme:** Stability & Technical Debt
+- **Key initiatives:**
+  1. embeddings-server uv migration (Parker, 2d) — unify all 6 services on uv + pyproject.toml
+  2. Docker multi-stage builds (Brett, 4d) — reduce image sizes 15%+, separate builder/runtime
+  3. Uniform ruff linting (Parker, 2d) — enforce code quality gate across services
+  4. Security audit (Kane, 4h) — post-v1.7.0 threat assessment session
+  5. Release docs (Newt, 1d) — changelog + notes
+- **Exit Criteria:** All 628 tests passing, VERSION bumped to 1.7.1, release tagged
+- **Risk:** Low (mostly infrastructure; embeddings-server model loading risk mitigated by full test run)
+
+### v1.8.0 Milestone Plan (4-5 weeks, 20d effort)
+- **Theme:** UI/UX Improvements
+- **Key initiatives:**
+  1. Icon system (Dallas, 4d) — adopt Lucide React, replace text labels with icons + ARIA labels
+  2. Design tokens (Dallas, 3d) — CSS variables for colors, spacing, typography
+  3. UX patterns (Dallas, 5d) — standardize buttons, inputs, forms, empty states, loading, errors
+  4. Accessibility validation (Lambert, 3d) — WCAG 2.1 AA compliance (axe-core + screen reader)
+  5. Design system docs (Newt, 2d) — contributor guide + visual showcase
+- **Exit Criteria:** WCAG AA compliance, all patterns documented, 628+ tests passing, VERSION bumped to 1.8.0, release tagged
+- **Risk:** Medium (scope creep risk for v1.8.0; dark mode, animations could exceed budget; mitigation: strict MVP definition, defer stretch goals)
+
+**Key Decisions Made:**
+1. **v1.7.1 as patch release** — Not v1.7.1 as minor feature release, because scope is pure technical debt + stability (no user-facing features)
+2. **v1.8.0 for UI/UX** — Icon system + design tokens + UX patterns deferred from v1.7.0, appropriate scope for minor release
+3. **Icon library selection: Lucide React** — Lightweight, tree-shakeable, 500+ icons, good ARIA support; recommended for aithena's scale
+4. **Design tokens: CSS variables, not preprocessor** — No build step complexity; pure CSS allows runtime theme switching (future dark mode)
+5. **Multi-stage Docker builds for all 6 services** — Consistent optimization across Python + Node services
+6. **Continuous security monitoring** — Threat assessment session scheduled as post-v1.7.0 activity (not tied to specific release version)
+
+**Dependencies & Sequencing:**
+- v1.7.1 → v1.8.0: v1.8.0 starts after v1.7.1 ships (approx. week 4)
+- Within v1.7.1: embeddings-server migration → Docker build changes; linting parallel
+- Within v1.8.0: Icon system + Design tokens → UX patterns → Accessibility validation → Docs
+
+**Total Timeline:** 6-8 weeks (v1.7.1: 2-3w, v1.8.0: 4-5w)
+
+**Documentation:** Full plan written to `/tmp/ripley-v171-plan.md` with:
+- Executive summary
+- Detailed issue breakdown for each milestone (priority, owner, effort, acceptance criteria, dependencies, risks)
+- Release exit criteria (version bumps, test requirements, documentation, tags)
+- Issue creation roadmap (5 issues each for v1.7.1 and v1.8.0)
+- Success metrics
+- Risk mitigation strategies
+
+**Recommendation to Juanma:**
+1. Approve or revise milestone themes (v1.7.1 debt/stability, v1.8.0 UI/UX)
+2. Review icon library choice (Lucide React vs. alternatives)
+3. Approve timeline (2-3w v1.7.1, then 4-5w v1.8.0)
+4. Authorize issue creation (10 issues total)
+5. Set sprint dates for each milestone
+
+**Next Session:** Create GitHub milestones + issues; assign squad members; document in decisions.md

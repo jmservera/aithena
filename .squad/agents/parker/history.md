@@ -78,6 +78,66 @@
 
 <!-- Append learnings below this line -->
 
+### 2026-03-18 — Technical Debt Inventory for v1.7.1
+
+**Task:** Analyze and document technical debt across Python backend services for v1.7.1 release. Focus on embeddings-server uv migration, code quality, and dependency health.
+
+**Key Findings:**
+
+1. **Embeddings-server uv Migration (BLOCKER for consistency):**
+   - Last Python service still on pip + requirements.txt (minimal deps: sentence-transformers, fastapi, uvicorn)
+   - All other services use uv + pyproject.toml + uv.lock
+   - No blockers identified; torch/ML deps are pip-compatible with uv
+   - Estimated effort: Medium (Dockerfile + pyproject.toml + testing)
+   - Recommendation: Complete by end of v1.7.1 sprint
+
+2. **Exception Handling Patterns:**
+   - solr-search: 3+ bare `except Exception:` clauses without logging → risk of silent failures in critical API
+   - embeddings-server: Broad exception handling in model loading (no specific exception types)
+   - document-indexer: Good pattern using retry decorators with specific exception types
+   - Recommendation: Standardize to specific exception types with logging across all services
+
+3. **Configuration Management:**
+   - solr-search: Frozen dataclass with type safety ✓
+   - embeddings-server, document-indexer, document-lister: Flat module vars with no validation
+   - Risk: Version misconfigurations, missing bounds checks on timeouts/ports
+   - Recommendation: Extract reusable configuration base class
+
+4. **Logging Inconsistency:**
+   - solr-search, document-indexer: JSON-formatted logging with python-json-logger
+   - embeddings-server: basicConfig only (no JSON, no structured format)
+   - Impact: Breaks centralized log aggregation
+   - Recommendation: Add logging_config.py to embeddings-server
+
+5. **Test Coverage Gaps:**
+   - document-indexer: Collection error (tests won't run) — **CRITICAL BLOCKER**
+   - document-lister: 15% coverage, 6 test failures, core logic not exercised
+   - Both suggest missing fixtures or mocking issues
+   - Recommendation: Fix collection error in document-indexer first, then increase coverage to 70%+ in both
+
+6. **Dependency Version Management:**
+   - Shared deps (redis, pika) pinned consistently ✓
+   - admin: loose `requests>=2.31.0`, others pin to `==2.32.5`
+   - Minor inconsistency but acceptable for non-critical package
+
+7. **Code Metrics:**
+   - solr-search: 2873 LOC, 72 functions (dense but not critically large)
+   - document-indexer: 900 LOC, 16 functions (healthy ratio)
+   - embeddings-server: 101 LOC, 4 functions (minimal, after uv migration will be ~150 LOC)
+
+**Complete Report:** `/tmp/parker-techdebt.md` (12 issues identified, prioritized P0–P3)
+
+**Priorities for v1.7.1:**
+- P0: Fix document-indexer test collection error
+- P1: Complete embeddings-server uv migration
+- P1: Address bare exceptions in solr-search
+- P1: Expand test coverage in document-lister
+
+**Deferred to v1.8.0+:**
+- Configuration standardization (architectural refactoring)
+- Function complexity reduction in solr-search (optimization)
+- Base image standardization (infrastructure)
+
 ### 2026-03-17 — Python 3.12 Upgrade (DEP-4) — v1.4.0 Release Blocker
 
 **Task:** Upgrade all Python services from 3.11 to 3.12, following successful compatibility audit (DEP-3).
