@@ -103,7 +103,7 @@ function UploadContent({
           {!uploading && (
             <div className="upload-dropzone-content">
               <div className="upload-icon" aria-hidden="true">
-                <FileText size={20} />
+                <FileText size={64} />
               </div>
               <p className="upload-prompt">
                 {intl.formatMessage({ id: 'upload.dragPrompt' })}{' '}
@@ -131,7 +131,7 @@ function UploadContent({
               aria-atomic="true"
             >
               <div className="upload-progress-spinner" aria-hidden="true">
-                <Loader size={20} />
+                <Loader size={48} className="upload-spinner-icon" />
               </div>
               <p className="upload-progress-text">
                 {intl.formatMessage({ id: 'upload.uploading' })}
@@ -161,7 +161,7 @@ function UploadContent({
       {error && (
         <div className="upload-result upload-result--error" role="alert">
           <div className="upload-result-icon" aria-hidden="true">
-            <XCircle size={20} />
+            <XCircle size={64} />
           </div>
           <h3 className="upload-result-title">
             {intl.formatMessage({ id: 'upload.failedTitle' })}
@@ -176,7 +176,7 @@ function UploadContent({
       {result && (
         <div className="upload-result upload-result--success" role="status" aria-live="polite">
           <div className="upload-result-icon" aria-hidden="true">
-            <CircleCheck size={20} />
+            <CircleCheck size={64} />
           </div>
           <h3 className="upload-result-title">
             {intl.formatMessage({ id: 'upload.successTitle' })}
