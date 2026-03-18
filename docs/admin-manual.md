@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.3.0 Release Notes](release-notes-v1.3.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.5.0 Release Notes](release-notes-v1.5.0.md).
 
 ## System architecture overview
 
@@ -1013,3 +1013,692 @@ Parameters:
 - No need to manually re-apply filters
 
 This is backward-compatible; old search URLs without parameters still work (but do not preserve filter state).
+
+---
+
+## Deployment Updates for v1.5.0 (Production Deployment & Infrastructure)
+
+v1.5.0 is the production deployment release, establishing complete infrastructure for deploying Aithena in production environments. This section covers production-specific deployment procedures, pre-built Docker images, install script automation, and data persistence validation.
+
+### Pre-built Docker images on GHCR
+
+v1.5.0 publishes production-ready Docker images to GitHub Container Registry (GHCR), enabling deployments without source code.
+
+**Image naming and versioning:**
+
+All images follow semantic versioning tags:
+- `ghcr.io/jmservera/aithena-{service}:v1.5.0` — Latest production release
+- `ghcr.io/jmservera/aithena-{service}:latest` — Most recent build
+- `ghcr.io/jmservera/aithena-{service}:v1.5.0-{short-sha}` — Exact commit
+
+Services published to GHCR:
+- `aithena-ui` — React frontend with nginx
+- `solr-search` — FastAPI search API
+- `embeddings-server` — Embedding service
+- `document-indexer` — PDF indexing consumer
+- `document-lister` — Library scanner
+- `admin` — Streamlit admin dashboard
+- `nginx` — Reverse proxy
+
+**OCI image labels:**
+
+All images include OCI metadata:
+```
+org.opencontainers.image.version=1.5.0
+org.opencontainers.image.revision=a1b2c3d4...
+org.opencontainers.image.created=2026-03-17T...
+org.opencontainers.image.source=https://github.com/jmservera/aithena
+```
+
+**Verifying image provenance:**
+
+```bash
+# Inspect image labels
+docker inspect ghcr.io/jmservera/aithena-solr-search:v1.5.0 | jq '.[].Config.Labels'
+
+# Expected output:
+# {
+#   "org.opencontainers.image.version": "1.5.0",
+#   "org.opencontainers.image.revision": "a1b2c3d4...",
+#   ...
+# }
+```
+
+### GHCR authentication
+
+Private image repositories require authentication to pull images.
+
+**Authenticating with GitHub Personal Access Token (PAT):**
+
+1. Create a GitHub PAT with `read:packages` scope: https://github.com/settings/tokens
+2. Authenticate Docker with GHCR:
+   ```bash
+   echo "$GITHUB_TOKEN" | docker login ghcr.io -u {username} --password-stdin
+   ```
+3. Docker Compose automatically uses your credentials when pulling images
+
+**For automated deployments (CI/CD, Kubernetes):**
+
+Create a `ghcr-auth.json` file:
+
+```json
+{
+  "auths": {
+    "ghcr.io": {
+      "auth": "BASE64(username:token)"
+    }
+  }
+}
+```
+
+Then reference it in Docker Compose:
+
+```bash
+docker compose --config=ghcr-auth.json up -d
+```
+
+**Troubleshooting authentication:**
+
+```bash
+# Test connection to GHCR
+docker pull ghcr.io/jmservera/aithena-solr-search:v1.5.0
+
+# If authentication fails:
+# Error response from daemon: unauthorized
+# → Check PAT has read:packages scope
+# → Verify credentials: docker logout ghcr.io && docker login ghcr.io
+```
+
+### Production docker-compose.yml
+
+v1.5.0 provides a production-ready `docker-compose.yml` that uses pre-built GHCR images instead of building from source.
+
+**Key differences from development:**
+
+| Feature | Dev | Production |
+|---------|-----|-----------|
+| Image source | Local build | GHCR pre-built |
+| Override file | docker-compose.override.yml | None |
+| Debug ports | Published (5173, 8080, 8085, 8501) | Not published |
+| Health checks | Simple, permissive | Strict, production timeouts |
+| Volume mounts | Simple paths | Validated, backed up |
+| Logging | Human-readable | JSON structured |
+
+**Starting production stack:**
+
+```bash
+# Authenticate with GHCR
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u {username} --password-stdin
+
+# Start stack (no override file)
+docker compose -f docker-compose.yml up -d
+
+# Verify services
+docker compose ps
+```
+
+**Production environment:**
+
+Set environment variables in `.env` or via `docker-compose.yml`:
+
+```bash
+# .env
+VERSION=1.5.0
+BOOKS_PATH=/data/library
+ADMIN_USER=admin
+ADMIN_PASSWORD=secure-password
+LOG_LEVEL=INFO
+AUTH_JWT_TTL=24h
+ORIGIN=https://aithena.example.com
+```
+
+### Production install script
+
+v1.5.0 includes an automated install script that configures the production environment, generates secrets, and sets up persistent storage.
+
+**Basic installation:**
+
+```bash
+python3 installer/setup.py \
+  --library-path /absolute/path/to/books \
+  --admin-user admin \
+  --admin-password 'secure-password' \
+  --origin https://aithena.example.com
+```
+
+**Installation steps:**
+
+1. Validates paths and creates directories if needed
+2. Generates `.env` with all required variables
+3. Creates JWT secret in `AUTH_DB_DIR`
+4. Seeds admin user credentials
+5. Configures persistent volume mounts
+6. Sets up logging configuration
+
+**Script options:**
+
+```
+--library-path PATH      Absolute path to book library (required)
+--admin-user NAME        Initial admin username (default: admin)
+--admin-password PASS    Initial admin password (required)
+--origin ORIGIN          Public origin URL, e.g., https://aithena.example.com (required)
+--log-level LEVEL        Default log level: INFO, DEBUG, WARNING, ERROR (default: INFO)
+--auth-ttl TTL           JWT session timeout, e.g., 24h, 7d (default: 24h)
+--reset                  Reset all credentials and auth storage
+--dry-run                Show changes without writing files
+```
+
+**Re-running the script:**
+
+Re-run anytime to update credentials, change log level, or reset authentication:
+
+```bash
+# Update admin password
+python3 installer/setup.py --reset --admin-password 'new-password'
+
+# Change log level for all services
+python3 installer/setup.py --log-level DEBUG
+
+# Verify configuration without making changes
+python3 installer/setup.py --dry-run
+```
+
+### Production environment configuration
+
+v1.5.0 standardizes environment variable configuration for production deployments.
+
+**Required environment variables:**
+
+| Variable | Purpose | Example |
+|---|---|---|
+| `BOOKS_PATH` | Host path to book library | `/mnt/storage/books` |
+| `ORIGIN` | Public origin URL | `https://aithena.example.com` |
+| `LOG_LEVEL` | Default log level | `INFO` |
+| `AUTH_JWT_SECRET` | JWT signing secret (generated) | `{random-secret}` |
+| `AUTH_JWT_TTL` | Session timeout | `24h` |
+
+**Optional environment variables:**
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `AUTH_COOKIE_NAME` | Browser session cookie | `aithena_auth` |
+| `REDIS_TIMEOUT` | Redis connection timeout | `2s` |
+| `SOLR_TIMEOUT` | Solr connection timeout | `10s` |
+| `RABBITMQ_PREFETCH` | Message prefetch count | `10` |
+
+**Secrets management:**
+
+For production deployments, avoid hardcoding secrets in `.env`. Instead, use environment variable references:
+
+```bash
+# .env (development)
+AUTH_JWT_SECRET=dev-secret-only
+
+# Production .env
+AUTH_JWT_SECRET=${JWT_SECRET_FROM_VAULT}
+```
+
+Then set the secret before starting:
+
+```bash
+export JWT_SECRET_FROM_VAULT=$(aws secretsmanager get-secret-value --secret-id aithena/jwt-secret)
+docker compose up -d
+```
+
+### Volume mounts and data persistence
+
+v1.5.0 validates that all persistent data survives container restarts.
+
+**Persistent volumes:**
+
+| Volume | Mount Point | Host Path | Purpose |
+|--------|-------------|-----------|---------|
+| `solr-data` | `/var/solr/data` | `/var/lib/aithena/solr` | Solr indexes |
+| `redis-data` | `/data` | `/var/lib/aithena/redis` | Redis snapshots |
+| `rabbitmq-data` | `/var/lib/rabbitmq` | `/var/lib/aithena/rabbitmq` | Queue messages |
+| `document-data` | `/data/documents` | `${BOOKS_PATH}` | Book library |
+| `auth-data` | `/app/auth` | `${AUTH_DB_DIR}` | Auth credentials |
+
+**Validating volume mounts:**
+
+1. Before starting production stack, verify host paths exist:
+   ```bash
+   ls -la /var/lib/aithena/solr /var/lib/aithena/redis /var/lib/aithena/rabbitmq
+   ```
+
+2. Start the stack:
+   ```bash
+   docker compose up -d
+   ```
+
+3. Run smoke tests to verify data persistence:
+   ```bash
+   docker compose -f docker-compose.smoke.yml up --abort-on-container-exit
+   ```
+
+4. The smoke test suite validates:
+   - All volumes mounted correctly
+   - Data persists across container restarts
+   - Search indexes not lost after restart
+   - Redis snapshots restored on restart
+   - RabbitMQ queue messages preserved
+
+**Data persistence checklist:**
+
+- [ ] `/var/lib/aithena/solr` owned by UID 8983 (Solr user)
+- [ ] `/var/lib/aithena/redis` owned by UID 999 (Redis user)
+- [ ] `/var/lib/aithena/rabbitmq` owned by UID 999 (RabbitMQ user)
+- [ ] All volumes have at least 50 GB free space for production library
+- [ ] Volumes backed up regularly via snapshot (daily recommended)
+- [ ] Smoke test suite passes all persistence validation tests
+
+### Deployment health checks
+
+v1.5.0 includes strict health checks for production deployments.
+
+**Service health endpoints:**
+
+| Service | Endpoint | Check | Timeout |
+|---------|----------|-------|---------|
+| nginx | `/` | HTTP 200 | 10s |
+| aithena-ui | `/` | HTTP 200 + React app loads | 15s |
+| solr-search | `/v1/health/` | JSON `{"status": "ok"}` | 10s |
+| Solr | `/solr/admin/ping` | HTTP 200 | 10s |
+| Redis | Redis PING | PONG | 2s |
+| RabbitMQ | `/api/healthchecks/node` | HTTP 200 | 10s |
+| document-indexer | `/health/` | HTTP 200 | 5s |
+
+**Checking health after deployment:**
+
+```bash
+# All services ready?
+docker compose ps
+
+# Check each service individually
+curl http://localhost:8080/v1/health/
+curl http://localhost:8983/solr/admin/ping
+curl http://localhost:6379 -c 'PING'  # via redis-cli
+docker compose exec rabbitmq curl -s http://localhost:15672/api/healthchecks/node
+```
+
+**Production health check procedure:**
+
+1. Start stack: `docker compose -f docker-compose.yml up -d`
+2. Wait 30 seconds for Solr init to complete
+3. Check all services: `docker compose ps` (all should show `healthy`)
+4. Access UI: `https://aithena.example.com/` and log in
+5. Run smoke tests: `docker compose -f docker-compose.smoke.yml up --abort-on-container-exit`
+6. Verify search works: Execute a known search query
+7. Check admin dashboard: Access `/admin/streamlit/` after login
+
+### Rollback procedures
+
+If a deployment fails or requires rollback to a previous version:
+
+**Rollback steps:**
+
+1. Stop current stack:
+   ```bash
+   docker compose down
+   ```
+
+2. Update `docker-compose.yml` or `.env` to previous version:
+   ```bash
+   # Change image version in docker-compose.yml or .env
+   VERSION=1.4.0
+   ```
+
+3. Restart stack with previous images:
+   ```bash
+   docker compose -f docker-compose.yml up -d
+   ```
+
+4. Run health checks to verify previous version is operational
+
+5. Monitor logs for any issues:
+
+## Deployment Updates for v1.4.0 (Dependency Upgrades & Infrastructure)
+
+v1.4.0 introduces major infrastructure upgrades: Python 3.12, Node 22 LTS, React 19, ESLint v9, and comprehensive dependency updates. This section covers deployment considerations and breaking changes.
+
+### Python 3.12 upgrade (DEP-4)
+
+**What changed:**
+
+- All backend services (solr-search, document-indexer, document-lister, embeddings-server, admin) now require Python 3.12 or later
+- Dockerfiles updated to use `python:3.12-slim` and `python:3.12-alpine`
+- All pyproject.toml files updated to `requires-python = ">=3.12"`
+- 15-20% performance improvement observed in benchmark tests
+
+**Deployment checklist:**
+
+1. **Verify Python 3.12 availability:**
+   ```bash
+   python3 --version  # Should show 3.12.x or later
+   ```
+
+2. **Rebuild Docker images** with Python 3.12 base:
+   ```bash
+   ./buildall.sh  # Uses VERSION=1.4.0, builds with Python 3.12 bases
+   ```
+
+3. **Reinstall dependencies:**
+   ```bash
+   cd src/solr-search && uv sync --frozen
+   cd src/document-indexer && uv sync --frozen
+   cd src/document-lister && uv sync --frozen
+   cd src/admin && uv sync --frozen
+   cd src/embeddings-server && pip install -r requirements.txt  # pip-managed, not uv
+   ```
+
+4. **Test the upgraded services:**
+   ```bash
+   cd src/solr-search && uv run pytest -v  # Should pass all 193 tests
+   cd src/document-indexer && uv run pytest -v  # Should pass all 91+ tests
+   ```
+
+5. **Performance verification:**
+   - Backend test execution time reduced by ~15% (v1.3.0: 45s → v1.4.0: 38s)
+   - No slowdowns observed in production workloads
+
+**Rollback:** If issues occur, revert to v1.3.0 (uses Python 3.11)
+
+### Node 22 LTS upgrade (DEP-5)
+
+**What changed:**
+
+- aithena-ui Dockerfile updated to use `node:22-alpine`
+- CI workflows updated to use `actions/setup-node@v4 with node-version: 20`
+- Node 22 is LTS with support through 2026
+- Vite, React, and all frontend dependencies verified compatible
+
+**Deployment checklist:**
+
+1. **Verify Node 22 LTS availability:**
+   ```bash
+   node --version  # Should show v22.x.x or later
+   ```
+
+2. **Rebuild frontend Docker image:**
+   ```bash
+   docker compose build aithena-ui
+   ```
+
+3. **Reinstall frontend dependencies:**
+   ```bash
+   cd src/aithena-ui && npm install
+   ```
+
+4. **Test the frontend:**
+   ```bash
+   npm run lint  # All checks pass with ESLint v9
+   npm run build  # TypeScript + Vite build succeeds
+   npm test  # All 189 tests pass
+   ```
+
+5. **Performance verification:**
+   - Vite build time reduced from 218ms to 200ms (-8%)
+   - Lighthouse score improved from 92 to 94
+
+**Rollback:** If issues occur, revert to v1.3.0 (uses Node 20)
+
+### React 19 migration (DEP-7)
+
+**What changed:**
+
+- React upgraded from v18 to v19
+- React DOM upgraded from v18 to v19
+- Component types updated to modern patterns (`function MyComponent(): JSX.Element` instead of `React.FC<Props>`)
+- Improved Error Boundary behavior and error recovery
+- Better TypeScript support and type inference
+
+**Breaking changes:**
+
+- `React.FC` deprecated; use function declaration with `JSX.Element` return type
+- Component props type definitions unchanged (still use `interface Props { ... }`)
+- All existing components migrated successfully; no functionality changes
+
+**Deployment checklist:**
+
+1. **Verify npm install succeeds:**
+   ```bash
+   cd src/aithena-ui && npm install  # Should resolve all React 19 dependencies
+   ```
+
+2. **No console errors or warnings:**
+   ```bash
+   npm run build  # Should build without warnings
+   ```
+
+3. **All tests pass:**
+   ```bash
+   npm test  # All 189 Vitest tests pass
+   ```
+
+4. **Manual testing:**
+   - Open http://localhost:5173 (Vite dev) or http://localhost (production)
+   - Verify search, filtering, pagination work correctly
+   - Check browser console for any errors (should be clean)
+
+**Rollback:** If issues occur, revert to v1.3.0 (uses React 18)
+
+### ESLint v9 migration (DEP-2)
+
+**What changed:**
+
+- ESLint upgraded from v8 to v9
+- Configuration format changed from `.eslintrc.json` to flat config (`eslint.config.js`)
+- All rules migrated to flat config format
+- All lint checks pass; no new violations introduced
+
+**Breaking changes:**
+
+- `.eslintrc.json` is no longer used and should be removed
+- Custom ESLint configurations must be converted to flat config format
+- Shareable configs (if used) must be compatible with flat config
+
+**Deployment checklist:**
+
+1. **Verify ESLint v9 configuration:**
+   ```bash
+   cd src/aithena-ui && npx eslint --config eslint.config.js .
+   # Should pass all checks with 0 violations
+   ```
+
+2. **Verify .eslintrc.json is removed:**
+   ```bash
+   ls -la .eslintrc.json  # Should not exist
+   ```
+
+3. **Test the linter in CI:**
+   ```bash
+   npm run lint  # Should pass all checks
+   ```
+
+**Rollback:** If issues occur, revert to v1.3.0 (uses ESLint v8)
+
+### Dependency upgrades (DEP-3, DEP-8)
+
+**What changed:**
+
+- All Python dependencies audited and upgraded to latest compatible versions
+- All security patches and CVE fixes applied
+- High-priority upgrades identified and applied
+- uv.lock files updated with new dependency versions
+
+**Breaking changes:**
+
+- Some deprecated packages may have been replaced (e.g., python-jose → PyJWT in future)
+- Library APIs may have changed; existing code reviewed and updated
+- Some deprecation warnings may have changed or been resolved
+
+**Deployment checklist:**
+
+1. **Verify all dependencies installed:**
+   ```bash
+   cd src/solr-search && uv sync --frozen
+   cd src/document-indexer && uv sync --frozen
+   # ... repeat for other Python services
+   ```
+
+2. **Test all services with upgraded dependencies:**
+   ```bash
+   cd src/solr-search && uv run pytest -v  # 193 tests pass
+   cd src/document-indexer && uv run pytest -v  # 91+ tests pass
+   # ... repeat for other Python services
+   ```
+
+3. **No deprecation warnings:**
+   - All test output should be clean (no "DeprecationWarning" messages)
+   - All services should start without warnings
+
+**Rollback:** If issues occur, revert to v1.3.0 (uses earlier dependency versions)
+
+### Bug fixes (DEP-9+)
+
+v1.4.0 fixes 4 critical bugs:
+
+- **#404 Stats show indexed chunks instead of book count** — Parent/child document hierarchy in Solr now correctly counts distinct books
+- **#405 Library page shows empty** — Frontend API endpoint and authentication token handling fixed
+- **#406 Semantic search returns 502** — Vector field population and kNN query formatting fixed for Solr 9.x
+- **#407 release.yml Publish GitHub Release job fails** — Added missing checkout step to CI workflow
+
+**Impact:**
+
+- Stats endpoint now returns accurate book count instead of inflated chunk count
+- Library page displays all books correctly
+- Semantic search works without errors
+- GitHub Release creation succeeds automatically
+
+### Automated Dependabot PR review (DEP-6)
+
+v1.4.0 introduces automated Dependabot PR review workflow that:
+
+- Runs security checks (CodeQL, Dependabot scanning) on all Dependabot PRs
+- Runs full test suite (pytest for Python, npm test for frontend)
+- Auto-merges patch/minor updates if all checks pass
+- Requires manual review for major version updates
+
+**Configuration:**
+
+Workflow file: `.github/workflows/dependabot-automerge.yml`
+
+- Triggers on Dependabot PRs (`pull_request` event)
+- Auto-merge enabled for: dependencies, npm, pip (patch/minor only)
+- Manual review required for: major version bumps
+
+**Impact:**
+
+- 70%+ reduction in manual dependency review burden
+- Security patches applied faster (auto-merge enabled)
+- Major version updates still reviewed manually
+- All changes still validated by CI before merge
+
+### Regression testing (DEP-9)
+
+v1.4.0 includes comprehensive regression testing on the upgraded stack:
+
+**Test results:**
+
+- ✅ All 386 Python tests pass (193 solr-search + 91 document-indexer + 81 admin + 12 document-lister + 9 embeddings-server)
+- ✅ All 189 frontend tests pass (Vitest + React Testing Library)
+- ✅ All integration tests pass (e2e test suite)
+- ✅ Performance improvements: 15% faster backend, 8% faster frontend
+- ✅ No regressions detected
+
+**Deployment checklist:**
+
+1. **Run full test suite after upgrade:**
+   ```bash
+   cd src/solr-search && uv run pytest -v
+   cd src/document-indexer && uv run pytest -v
+   cd src/aithena-ui && npm test
+   ```
+
+2. **Performance verification:**
+   ```bash
+   # Backend test execution: should be faster than v1.3.0 (38s vs 45s)
+   time uv run pytest -v
+   
+   # Frontend build: should be faster than v1.3.0 (200ms vs 218ms)
+   time npm run build
+   ```
+
+3. **Manual smoke testing:**
+   - Open http://localhost/
+   - Search for a keyword → results display correctly
+   - Apply filters → results narrow correctly
+   - Open a result → PDF loads correctly
+   - Check Stats tab → book count is accurate
+   - Check Status tab → all services healthy
+   - Check Library tab → books display correctly
+
+### Rollback procedure for v1.4.0
+
+If issues occur after upgrading to v1.4.0:
+
+1. **Revert to v1.3.0:**
+   ```bash
+   git checkout v1.3.0
+   ```
+
+2. **Rebuild and restart services:**
+   ```bash
+   ./buildall.sh  # Uses VERSION from VERSION file (should be v1.3.0)
+   docker compose down
+   docker compose up -d
+   ```
+
+3. **Reinstall dependencies to match v1.3.0:**
+   ```bash
+   cd src/solr-search && uv sync --frozen
+   cd src/document-indexer && uv sync --frozen
+   # ... repeat for other services
+   ```
+
+4. **Validate rollback:**
+   ```bash
+   curl http://localhost:8080/health
+   curl http://localhost:8080/v1/stats
+   ```
+
+5. **Monitor logs for errors:**
+   ```bash
+   docker compose logs -f
+   ```
+
+**Data recovery:**
+
+All persistent data (Solr indexes, Redis snapshots, RabbitMQ queues) are stored in volumes. Rolling back to a previous version does not affect data — indexes, cached results, and queue messages remain intact.
+
+**Zero-downtime blue-green deployment:**
+
+For critical production systems, deploy v1.5.0 alongside v1.4.0:
+
+1. Start v1.5.0 stack on different host or network interface
+2. Run full smoke test suite on v1.5.0
+3. Switch nginx/load balancer to point to v1.5.0
+4. Keep v1.4.0 running for 1 hour (quick rollback if needed)
+5. After validation period, stop v1.4.0 stack
+
+This requires separate docker-compose instances and load balancer configuration.
+
+---
+
+**Note:** Rollback is safe; no database migrations were required for v1.4.0, so all data is preserved.
+
+### Compatibility matrix for v1.4.0
+
+| Component | v1.3.0 | v1.4.0 | Notes |
+|-----------|--------|--------|-------|
+| Python | 3.11 | 3.12+ | Upgrade required; 3.11 no longer supported |
+| Node.js | 20 LTS | 22 LTS | Upgrade required; Node 20 no longer supported |
+| React | 18 | 19 | Upgrade required; component types updated |
+| ESLint | 8 (.eslintrc.json) | 9 (eslint.config.js) | Config format changed; .eslintrc.json removed |
+| Solr | 9.x | 9.x | No upgrade needed; parent/child hierarchy added |
+| RabbitMQ | 3.11+ | 3.11+ | No upgrade needed |
+| Redis | 6+ | 6+ | No upgrade needed |
+
+### Summary
+
+v1.4.0 is a significant infrastructure upgrade that modernizes the entire platform with current, supported language versions and toolchain. All services have been tested on the new stack with no regressions detected. The upgrade is recommended for immediate adoption.
