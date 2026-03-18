@@ -50,6 +50,7 @@ jobs:
           fetch-depth: 0  # Full history for git log comparison
           ref: dev        # Always work from dev branch
           persist-credentials: true
+          persist-credentials: true
 
       - name: Configure Git
         run: |
