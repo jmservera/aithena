@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
 import UploadPage from '../pages/UploadPage';
+import { IntlWrapper } from './test-intl-wrapper';
 
 const createMockFile = (name: string, size: number, type: string): File => {
   const blob = new Blob(['a'.repeat(size)], { type });
@@ -68,9 +69,11 @@ describe('UploadPage', () => {
 
   it('renders upload dropzone', () => {
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     expect(screen.getByText('Upload PDF')).toBeInTheDocument();
@@ -82,9 +85,11 @@ describe('UploadPage', () => {
   it('allows file selection via file input', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const browseButton = screen.getByRole('button', { name: /browse/i });
@@ -97,9 +102,11 @@ describe('UploadPage', () => {
   it('uploads file successfully and shows success message', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.pdf', 1024, 'application/pdf');
@@ -131,9 +138,11 @@ describe('UploadPage', () => {
 
   it('shows error for non-PDF files', async () => {
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.txt', 1024, 'text/plain');
@@ -157,9 +166,11 @@ describe('UploadPage', () => {
   it('shows error for files exceeding size limit', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('large.pdf', 51 * 1024 * 1024, 'application/pdf');
@@ -176,9 +187,11 @@ describe('UploadPage', () => {
   it('handles server error response', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.pdf', 1024, 'application/pdf');
@@ -204,9 +217,11 @@ describe('UploadPage', () => {
   it('handles rate limit error (429)', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.pdf', 1024, 'application/pdf');
@@ -232,9 +247,11 @@ describe('UploadPage', () => {
   it('handles network error', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.pdf', 1024, 'application/pdf');
@@ -256,9 +273,11 @@ describe('UploadPage', () => {
   it('allows retry after error', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.pdf', 1024, 'application/pdf');
@@ -287,9 +306,11 @@ describe('UploadPage', () => {
   it('allows uploading another file after success', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.pdf', 1024, 'application/pdf');
@@ -324,9 +345,11 @@ describe('UploadPage', () => {
   it('provides link back to search after success', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <UploadPage />
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter>
+          <UploadPage />
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     const file = createMockFile('test.pdf', 1024, 'application/pdf');
