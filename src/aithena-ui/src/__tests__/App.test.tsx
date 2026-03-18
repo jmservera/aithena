@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
+import { IntlWrapper } from './test-intl-wrapper';
 
 vi.mock('../pages/LoginPage', async () => {
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -17,11 +18,13 @@ describe('App', () => {
     const { default: App } = await import('../App');
 
     render(
-      <MemoryRouter initialEntries={['/login']}>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </MemoryRouter>
+      <IntlWrapper>
+        <MemoryRouter initialEntries={['/login']}>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </MemoryRouter>
+      </IntlWrapper>
     );
 
     expect(screen.getByRole('status')).toHaveTextContent(/loading sign in/i);

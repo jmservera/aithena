@@ -1,5 +1,6 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
+import { useIntl } from 'react-intl';
 import { useLocation } from 'react-router-dom';
 
 const isDevelopment = import.meta.env.DEV;
@@ -41,21 +42,21 @@ function reportError(error: Error, errorInfo: ErrorInfo): void {
 }
 
 function DefaultFallback({ error, reload }: ErrorBoundaryFallbackProps) {
+  const intl = useIntl();
+
   return (
     <main className="error-boundary error-boundary--page" role="alert" aria-live="assertive">
-      <span className="error-boundary__eyebrow">Unexpected app error</span>
-      <h1 className="error-boundary__title">Aithena ran into a problem.</h1>
-      <p className="error-boundary__message">
-        Try reloading the page to restore search, uploads, and navigation.
-      </p>
+      <span className="error-boundary__eyebrow">{intl.formatMessage({ id: 'error.eyebrow' })}</span>
+      <h1 className="error-boundary__title">{intl.formatMessage({ id: 'error.title' })}</h1>
+      <p className="error-boundary__message">{intl.formatMessage({ id: 'error.message' })}</p>
       <div className="error-boundary__actions">
         <button type="button" className="error-boundary__button" onClick={reload}>
-          Reload Aithena
+          {intl.formatMessage({ id: 'error.reloadButton' })}
         </button>
       </div>
       {isDevelopment && error && (
         <details className="error-boundary__details">
-          <summary>Technical details</summary>
+          <summary>{intl.formatMessage({ id: 'error.technicalDetails' })}</summary>
           <pre className="error-boundary__stack">{error.stack ?? error.message}</pre>
         </details>
       )}

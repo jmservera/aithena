@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
 import LibraryPage from '../pages/LibraryPage';
 import { LibraryResponse } from '../hooks/library';
+import { IntlWrapper } from './test-intl-wrapper';
 
 const mockLibraryResponse: LibraryResponse = {
   total: 3,
@@ -67,9 +68,11 @@ const emptyLibraryResponse: LibraryResponse = {
 
 function renderLibraryPage() {
   return render(
-    <MemoryRouter>
-      <LibraryPage />
-    </MemoryRouter>
+    <IntlWrapper>
+      <MemoryRouter>
+        <LibraryPage />
+      </MemoryRouter>
+    </IntlWrapper>
   );
 }
 

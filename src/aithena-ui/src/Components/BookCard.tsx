@@ -1,4 +1,5 @@
 import { memo, useCallback, useMemo } from 'react';
+import { useIntl } from 'react-intl';
 
 import { BookResult } from '../hooks/search';
 
@@ -17,18 +18,18 @@ function sanitizeHighlight(raw: string): string {
     .replace(/&lt;\/em&gt;/g, '</em>');
 }
 
-function formatFoundPages(pageStart: number, pageEnd: number): string {
-  if (pageEnd !== pageStart) {
-    return `Found on pages ${pageStart}–${pageEnd}`;
-  }
-  return `Found on page ${pageStart}`;
-}
-
 const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
-  const foundPagesLabel = useMemo(
-    () => (book.pages ? formatFoundPages(book.pages[0], book.pages[1]) : null),
-    [book.pages]
-  );
+  const intl = useIntl();
+
+  const foundPagesLabel = useMemo(() => {
+    if (!book.pages) return null;
+    const [pageStart, pageEnd] = book.pages;
+    if (pageEnd !== pageStart) {
+      return intl.formatMessage({ id: 'book.foundOnPages' }, { pageStart, pageEnd });
+    }
+    return intl.formatMessage({ id: 'book.foundOnPage' }, { pageStart });
+  }, [book.pages, intl]);
+
   const highlightMarkup = useMemo(
     () =>
       book.highlights?.map((snippet, index) => ({
@@ -47,27 +48,36 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
       <div className="book-meta">
         {book.author && (
           <span className="book-meta-item">
-            <span className="book-meta-label">Author:</span> {book.author}
+            <span className="book-meta-label">{intl.formatMessage({ id: 'book.metaAuthor' })}</span>{' '}
+            {book.author}
           </span>
         )}
         {book.year && (
           <span className="book-meta-item">
-            <span className="book-meta-label">Year:</span> {book.year}
+            <span className="book-meta-label">{intl.formatMessage({ id: 'book.metaYear' })}</span>{' '}
+            {book.year}
           </span>
         )}
         {book.category && (
           <span className="book-meta-item">
-            <span className="book-meta-label">Category:</span> {book.category}
+            <span className="book-meta-label">
+              {intl.formatMessage({ id: 'book.metaCategory' })}
+            </span>{' '}
+            {book.category}
           </span>
         )}
         {book.language && (
           <span className="book-meta-item">
-            <span className="book-meta-label">Language:</span> {book.language}
+            <span className="book-meta-label">
+              {intl.formatMessage({ id: 'book.metaLanguage' })}
+            </span>{' '}
+            {book.language}
           </span>
         )}
         {book.page_count !== undefined && (
           <span className="book-meta-item">
-            <span className="book-meta-label">Pages:</span> {book.page_count}
+            <span className="book-meta-label">{intl.formatMessage({ id: 'book.metaPages' })}</span>{' '}
+            {book.page_count}
           </span>
         )}
         {foundPagesLabel && (
@@ -94,11 +104,11 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
             type="button"
             className="open-pdf-btn"
             onClick={handleOpenPdf}
-            aria-label={`Open PDF for ${book.title}`}
+            aria-label={intl.formatMessage({ id: 'book.openPdfFor' }, { title: book.title })}
             aria-haspopup="dialog"
             aria-expanded={isSelected}
           >
-            📄 Open PDF
+            📄 {intl.formatMessage({ id: 'book.openPdf' })}
           </button>
         )}
       </div>

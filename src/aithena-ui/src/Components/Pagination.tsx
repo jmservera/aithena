@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { useIntl } from 'react-intl';
 
 interface PaginationProps {
   page: number;
@@ -15,6 +16,7 @@ const Pagination = memo(function Pagination({
   onPageChange,
   controlsId,
 }: PaginationProps) {
+  const intl = useIntl();
   const totalPages = useMemo(() => Math.ceil(total / limit), [total, limit]);
   const pages = useMemo<(number | '…')[]>(() => {
     if (totalPages <= 1) {
@@ -51,13 +53,13 @@ const Pagination = memo(function Pagination({
   if (totalPages <= 1) return null;
 
   return (
-    <nav className="pagination" aria-label="Search results pagination">
+    <nav className="pagination" aria-label={intl.formatMessage({ id: 'pagination.ariaLabel' })}>
       <button
         type="button"
         className="pagination-btn"
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
-        aria-label="Previous page"
+        aria-label={intl.formatMessage({ id: 'pagination.previousPage' })}
         aria-controls={controlsId}
       >
         ‹
@@ -85,7 +87,7 @@ const Pagination = memo(function Pagination({
         className="pagination-btn"
         disabled={page >= totalPages}
         onClick={() => onPageChange(page + 1)}
-        aria-label="Next page"
+        aria-label={intl.formatMessage({ id: 'pagination.nextPage' })}
         aria-controls={controlsId}
       >
         ›
