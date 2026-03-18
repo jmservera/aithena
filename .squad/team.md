@@ -12,18 +12,18 @@
 
 | Name | Role | Charter | Status |
 |------|------|---------|--------|
-| 🏗️ Ripley | Lead | `.squad/agents/ripley/charter.md` | ✅ Active |
-| 🔧 Parker | Backend Dev | `.squad/agents/parker/charter.md` | ✅ Active |
-| ⚛️ Dallas | Frontend Dev | `.squad/agents/dallas/charter.md` | ✅ Active |
-| 📊 Ash | Search Engineer | `.squad/agents/ash/charter.md` | ✅ Active |
-| 🧪 Lambert | Tester | `.squad/agents/lambert/charter.md` | ✅ Active |
-| 📋 Scribe | Session Logger | `.squad/agents/scribe/charter.md` | ✅ Active |
-| 🔄 Ralph | Work Monitor | — | 🔄 Monitor |
-| ⚙️ Brett | Infra Architect | `.squad/agents/brett/charter.md` | ✅ Active |
-| 🔒 Kane | Security Engineer | `.squad/agents/kane/charter.md` | ✅ Active |
-| 👤 Juanma | Product Owner | — | ✅ Human |
-| 🤖 Copilot | Coding Agent | `.squad/agents/copilot/charter.md` | ✅ Active |
-| 📝 Newt | Product Manager | `.squad/agents/newt/charter.md` | ✅ Active |
+| Ripley | Lead | `.squad/agents/ripley/charter.md` | Active |
+| Parker | Backend Dev | `.squad/agents/parker/charter.md` | Active |
+| Dallas | Frontend Dev | `.squad/agents/dallas/charter.md` | Active |
+| Ash | Search Engineer | `.squad/agents/ash/charter.md` | Active |
+| Lambert | Tester | `.squad/agents/lambert/charter.md` | Active |
+| Scribe | Session Logger | `.squad/agents/scribe/charter.md` | Active |
+| Ralph | Work Monitor | — | Monitor |
+| Brett | Infra Architect | `.squad/agents/brett/charter.md` | Active |
+| Kane | Security Engineer | `.squad/agents/kane/charter.md` | Active |
+| Juanma | Product Owner | — | Human |
+| Copilot | Coding Agent | `.squad/agents/copilot/charter.md` | Active |
+| Newt | Product Manager | `.squad/agents/newt/charter.md` | Active |
 
 <!-- copilot-auto-assign: true -->
 
