@@ -260,5 +260,6 @@
   "upload.title": "Upload PDF",
   "upload.tryAgain": "Try Again",
   "upload.uploadAnother": "Upload Another",
-  "upload.uploading": "Uploading…"
+  "upload.uploading": "Uploading…",
+  "search.loadingResults": "Loading results…"
 }
