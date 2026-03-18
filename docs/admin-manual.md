@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.5.0 Release Notes](release-notes-v1.5.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.6.0 Release Notes](release-notes-v1.6.0.md).
 
 ## System architecture overview
 
@@ -1702,3 +1702,116 @@ This requires separate docker-compose instances and load balancer configuration.
 ### Summary
 
 v1.4.0 is a significant infrastructure upgrade that modernizes the entire platform with current, supported language versions and toolchain. All services have been tested on the new stack with no regressions detected. The upgrade is recommended for immediate adoption.
+
+## Deployment Updates for v1.6.0 (Internationalization & Quality)
+
+v1.6.0 introduces full internationalization (i18n) support, Redis client upgrades, ESLint 10, and backend test coverage improvements. This section covers deployment considerations for operators.
+
+### Internationalization (i18n) — no operator action required
+
+The i18n feature is fully client-side and requires **no server-side configuration or environment variables**.
+
+**How it works:**
+
+- All UI strings are stored in JSON locale files bundled into the frontend build.
+- Four languages are supported: English (`en`), Spanish (`es`), Catalan (`ca`), and French (`fr`).
+- The LanguageSwitcher dropdown appears in the application header.
+- On first visit, the browser's preferred language is auto-detected via `navigator.language`.
+- The user's selection is persisted in `localStorage` and restored on subsequent visits.
+
+**Impact on existing deployments:**
+
+- Existing deployments will continue to show English by default.
+- No database schema changes, no new environment variables, no configuration file updates.
+- The UI build includes all 4 locale files (~20 KB total); no additional assets to serve.
+
+**Adding new languages (for contributors):**
+
+See `docs/i18n-guide.md` for the complete process: creating locale files, key naming conventions, testing requirements, and PR submission guidelines.
+
+### Redis 7.3.0 client upgrade
+
+All four Python services (solr-search, document-indexer, document-lister, admin) now use **redis-py 7.3.0** (upgraded from 4.x).
+
+**Server compatibility:**
+
+| Redis server version | Compatible with redis-py 7.3.0 | Notes |
+|---------------------|-------------------------------|-------|
+| Redis 6.x           | ✅ Yes                         | Fully compatible; recommended minimum |
+| Redis 7.x           | ✅ Yes                         | Full feature support; recommended for new deployments |
+| Redis 5.x or older  | ⚠️ Untested                   | May work but not validated |
+
+**Operator actions:**
+
+- No Redis server upgrade is mandatory. redis-py 7.3.0 is backward-compatible with Redis 6+ servers.
+- For new deployments, Redis 7.x server is recommended to match the client version.
+- Connection pool configuration remains unchanged (`ConnectionPool` singleton with double-checked locking).
+- `scan_iter()`, `mget()`, and pipeline operations continue to work identically.
+
+**Verifying Redis compatibility after upgrade:**
+
+```bash
+# Check Redis server version
+docker compose exec redis redis-cli INFO server | grep redis_version
+
+# Verify service health after deploying v1.6.0
+curl -s http://localhost:8080/health | jq .
+```
+
+### ESLint 10 and react-hooks 7
+
+ESLint has been upgraded from v9 to v10 with the react-hooks plugin upgraded to v7.
+
+**Impact on operators:** None. This is a development-only toolchain change with no runtime impact.
+
+**Impact on contributors:**
+
+- ESLint 10 uses flat config format (`eslint.config.js`), continuing from the v9 migration in v1.4.0.
+- react-hooks v7 enforces stricter hook dependency rules. Contributors should run `npm run lint` before submitting PRs.
+
+### Frontend code quality fixes
+
+- `useRef` usage corrected across components to pass TypeScript strictNullChecks.
+- URL search parameters standardized for consistent behavior with the URL-based search state introduced in v1.2.0.
+
+**Impact on operators:** None. These are internal code quality improvements with no configuration or behavioral changes.
+
+### Test coverage improvements
+
+- **solr-search:** 231 tests (up from 198 in v1.5.0), 94.76% coverage. 38 new tests cover the `/v1/books` endpoint comprehensively.
+- **aithena-ui:** 212 tests (up from 132 in v1.5.0), including new i18n tests for locale switching and translation completeness.
+- **Total across all services:** 640 tests (up from 579 in v1.5.0).
+
+### Upgrade procedure for v1.6.0
+
+1. Pull the latest images:
+   ```bash
+   docker compose pull
+   ```
+2. Restart the stack:
+   ```bash
+   docker compose up -d
+   ```
+3. Verify services are healthy:
+   ```bash
+   curl -s http://localhost:8080/health | jq .
+   ```
+4. Open the UI and verify the language switcher appears in the header.
+5. No database migrations, no configuration changes, no Redis server upgrade required.
+
+### Rollback procedure for v1.6.0
+
+To roll back to v1.5.0:
+
+1. Stop the current stack:
+   ```bash
+   docker compose down
+   ```
+2. Switch to v1.5.0 images:
+   ```bash
+   # Update image tags in docker-compose.yml to v1.5.0, or:
+   git checkout v1.5.0 -- docker-compose.yml
+   docker compose pull
+   docker compose up -d
+   ```
+3. No data migration rollback needed — v1.6.0 makes no schema changes.
