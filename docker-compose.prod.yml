@@ -8,8 +8,8 @@ services:
         exec redis-server --save 20 1 --loglevel warning;
       fi'
     environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - REDISCLI_AUTH=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      - REDISCLI_AUTH=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     expose:
       - 6379
     healthcheck:
@@ -41,8 +41,8 @@ services:
     command: rabbitmq-server
     hostname: rabbitmq
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
     expose:
       - 5672
       - 15672
@@ -105,10 +105,10 @@ services:
     image: ghcr.io/jmservera/aithena-document-lister:${VERSION:-latest}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - DOCUMENT_WILDCARD=*.pdf
@@ -145,10 +145,10 @@ services:
     image: ghcr.io/jmservera/aithena-document-indexer:${VERSION:-latest}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - SOLR_HOST=solr
@@ -234,12 +234,12 @@ services:
       - MAX_UPLOAD_SIZE_MB=50
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
       - RABBITMQ_QUEUE_NAME=shortembeddings
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
@@ -288,13 +288,13 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_MGMT_PORT=15672
       - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
       - SOLR_SEARCH_URL=http://solr-search:8080
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-change-me-in-production}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
@@ -338,7 +338,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - URL_PREFIX=/admin/redis
     networks:
       - default
@@ -371,7 +371,7 @@ services:
     networks:
       - default
   nginx:
-    image: nginx:1.15-alpine
+    image: nginx:1.27-alpine
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
