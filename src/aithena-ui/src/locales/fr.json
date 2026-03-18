@@ -260,5 +260,21 @@
   "upload.title": "Upload PDF",
   "upload.tryAgain": "Try Again",
   "upload.uploadAnother": "Upload Another",
-  "upload.uploading": "Uploading…"
+  "upload.uploading": "Uploading…",
+  "error.genericDescription": "Une erreur inattendue s'est produite. Veuillez réessayer ou recharger la page.",
+  "error.genericTitle": "Une erreur s'est produite",
+  "error.networkDescription": "Impossible de se connecter au serveur. Vérifiez votre connexion réseau et réessayez.",
+  "error.networkTitle": "Erreur de connexion",
+  "error.retryButton": "Réessayer",
+  "error.serverDescription": "Le serveur a rencontré une erreur. Veuillez réessayer dans quelques instants.",
+  "error.serverTitle": "Erreur du serveur",
+  "error.timeoutDescription": "La demande a pris trop de temps. Veuillez réessayer.",
+  "error.timeoutTitle": "Délai d'attente dépassé",
+  "search.browseLibrary": "Parcourir la Bibliothèque",
+  "search.emptyDescription": "Utilisez des mots-clés, des noms d'auteurs ou des sujets pour trouver des livres dans la bibliothèque.",
+  "search.emptyTitle": "Commencez votre recherche",
+  "search.noResultsDescription": "Essayez différents mots-clés, vérifiez les fautes de frappe ou parcourez la bibliothèque pour découvrir des livres.",
+  "search.noResultsFilteredDescription": "Essayez de supprimer certains filtres ou d'ajuster vos termes de recherche.",
+  "search.noResultsFilteredTitle": "Aucun livre correspondant",
+  "search.noResultsTitle": "Aucun livre correspondant"
 }
