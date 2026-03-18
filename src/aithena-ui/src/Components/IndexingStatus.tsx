@@ -1,4 +1,5 @@
 import { useIntl } from 'react-intl';
+import { CheckCircle } from 'lucide-react';
 
 import { useStatus } from '../hooks/status';
 
@@ -42,7 +43,10 @@ function IndexingStatus() {
   return (
     <main className="status-main">
       <header className="status-header">
-        <h2 className="status-title">🟢 {intl.formatMessage({ id: 'indexing.title' })}</h2>
+        <h2 className="status-title">
+          <CheckCircle size={20} aria-hidden="true" />{' '}
+          {intl.formatMessage({ id: 'indexing.title' })}
+        </h2>
         {lastUpdated && (
           <span className="status-updated">
             {intl.formatMessage(
