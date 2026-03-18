@@ -1,16 +1,17 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { useAdmin, AdminDocument } from '../hooks/admin';
 
 type TabKey = 'queued' | 'processed' | 'failed';
 
-const ADMIN_TABS: { key: TabKey; getLabel: (counts: Record<TabKey, number>) => string }[] = [
-  { key: 'queued', getLabel: (counts) => `⏳ Queued (${counts.queued})` },
-  { key: 'processed', getLabel: (counts) => `✅ Processed (${counts.processed})` },
-  { key: 'failed', getLabel: (counts) => `❌ Failed (${counts.failed})` },
+const ADMIN_TABS: { key: TabKey; labelId: string }[] = [
+  { key: 'queued', labelId: 'admin.tab.queued' },
+  { key: 'processed', labelId: 'admin.tab.processed' },
+  { key: 'failed', labelId: 'admin.tab.failed' },
 ];
 
 function formatTimestamp(ts?: string): string {
-  if (!ts) return '—';
+  if (!ts) return '\u2014';
   try {
     return new Date(ts).toLocaleString();
   } catch {
@@ -19,7 +20,7 @@ function formatTimestamp(ts?: string): string {
 }
 
 function DocPath({ path }: { path?: string }) {
-  return <span className="admin-doc-path">{path ?? '—'}</span>;
+  return <span className="admin-doc-path">{path ?? '\u2014'}</span>;
 }
 
 interface QueuedTableProps {
@@ -27,8 +28,9 @@ interface QueuedTableProps {
 }
 
 function QueuedTable({ docs }: QueuedTableProps) {
+  const intl = useIntl();
   if (docs.length === 0) {
-    return <p className="admin-empty">No documents currently queued. ✓</p>;
+    return <p className="admin-empty">{intl.formatMessage({ id: 'admin.queued.empty' })}</p>;
   }
 
   return (
@@ -36,8 +38,8 @@ function QueuedTable({ docs }: QueuedTableProps) {
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Path</th>
-            <th>Queued at</th>
+            <th>{intl.formatMessage({ id: 'admin.queued.headerPath' })}</th>
+            <th>{intl.formatMessage({ id: 'admin.queued.headerQueuedAt' })}</th>
           </tr>
         </thead>
         <tbody>
@@ -62,10 +64,11 @@ interface ProcessedTableProps {
 }
 
 function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
+  const intl = useIntl();
   const [confirmClear, setConfirmClear] = useState(false);
 
   if (docs.length === 0) {
-    return <p className="admin-empty">No processed documents yet.</p>;
+    return <p className="admin-empty">{intl.formatMessage({ id: 'admin.processed.empty' })}</p>;
   }
 
   return (
@@ -75,7 +78,7 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
         {confirmClear ? (
           <>
             <span style={{ fontSize: '0.85em', color: '#fca5a5' }}>
-              Clear {docs.length} processed document(s)?
+              {intl.formatMessage({ id: 'admin.processed.clearConfirm' }, { count: docs.length })}
             </span>
             <button
               type="button"
@@ -86,7 +89,7 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
               }}
               disabled={busy}
             >
-              ✅ Confirm
+              {intl.formatMessage({ id: 'admin.processed.confirm' })}
             </button>
             <button
               type="button"
@@ -94,7 +97,7 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
               onClick={() => setConfirmClear(false)}
               disabled={busy}
             >
-              Cancel
+              {intl.formatMessage({ id: 'admin.processed.cancel' })}
             </button>
           </>
         ) : (
@@ -104,7 +107,7 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
             onClick={() => setConfirmClear(true)}
             disabled={busy}
           >
-            🗑️ Clear All
+            {intl.formatMessage({ id: 'admin.processed.clearAll' })}
           </button>
         )}
       </div>
@@ -112,11 +115,11 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Path</th>
-              <th>Title</th>
-              <th>Author</th>
-              <th>Year</th>
-              <th>Indexed at</th>
+              <th>{intl.formatMessage({ id: 'admin.processed.headerPath' })}</th>
+              <th>{intl.formatMessage({ id: 'admin.processed.headerTitle' })}</th>
+              <th>{intl.formatMessage({ id: 'admin.processed.headerAuthor' })}</th>
+              <th>{intl.formatMessage({ id: 'admin.processed.headerYear' })}</th>
+              <th>{intl.formatMessage({ id: 'admin.processed.headerIndexedAt' })}</th>
             </tr>
           </thead>
           <tbody>
@@ -125,9 +128,9 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
                 <td>
                   <DocPath path={doc.path} />
                 </td>
-                <td>{doc.title ?? '—'}</td>
-                <td>{doc.author ?? '—'}</td>
-                <td>{doc.year ?? '—'}</td>
+                <td>{doc.title ?? '\u2014'}</td>
+                <td>{doc.author ?? '\u2014'}</td>
+                <td>{doc.year ?? '\u2014'}</td>
                 <td>{formatTimestamp(doc.timestamp)}</td>
               </tr>
             ))}
@@ -146,8 +149,9 @@ interface FailedTableProps {
 }
 
 function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) {
+  const intl = useIntl();
   if (docs.length === 0) {
-    return <p className="admin-empty">No failed documents. 🎉</p>;
+    return <p className="admin-empty">{intl.formatMessage({ id: 'admin.failed.empty' })}</p>;
   }
 
   return (
@@ -160,17 +164,17 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
           onClick={onRequeueAll}
           disabled={busy}
         >
-          🔄 Requeue All ({docs.length})
+          {intl.formatMessage({ id: 'admin.failed.requeueAll' }, { count: docs.length })}
         </button>
       </div>
       <div className="admin-table-wrapper">
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Path</th>
-              <th>Error</th>
-              <th>Failed at</th>
-              <th>Action</th>
+              <th>{intl.formatMessage({ id: 'admin.failed.headerPath' })}</th>
+              <th>{intl.formatMessage({ id: 'admin.failed.headerError' })}</th>
+              <th>{intl.formatMessage({ id: 'admin.failed.headerFailedAt' })}</th>
+              <th>{intl.formatMessage({ id: 'admin.failed.headerAction' })}</th>
             </tr>
           </thead>
           <tbody>
@@ -181,7 +185,7 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
                 </td>
                 <td>
                   <span className="admin-doc-error">
-                    {doc.error ?? 'No error details recorded.'}
+                    {doc.error ?? intl.formatMessage({ id: 'admin.failed.noError' })}
                   </span>
                 </td>
                 <td>{formatTimestamp(doc.timestamp)}</td>
@@ -192,7 +196,7 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
                     onClick={() => onRequeue(doc.id)}
                     disabled={busy}
                   >
-                    🔄 Requeue
+                    {intl.formatMessage({ id: 'admin.failed.requeue' })}
                   </button>
                 </td>
               </tr>
@@ -205,6 +209,7 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
 }
 
 function AdminPage() {
+  const intl = useIntl();
   const { data, loading, error, refresh, requeueDocument, requeueAllFailed, clearProcessed } =
     useAdmin();
   const [activeTab, setActiveTab] = useState<TabKey>('queued');
@@ -226,7 +231,9 @@ function AdminPage() {
     try {
       await action();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Action failed');
+      setActionError(
+        err instanceof Error ? err.message : intl.formatMessage({ id: 'admin.actionFailed' })
+      );
     } finally {
       setBusy(false);
     }
@@ -283,7 +290,7 @@ function AdminPage() {
   return (
     <main className="admin-page">
       <header className="admin-header">
-        <h2 className="admin-title">🏛️ Admin Dashboard</h2>
+        <h2 className="admin-title">{intl.formatMessage({ id: 'admin.title' })}</h2>
         <div className="admin-actions">
           <button
             type="button"
@@ -291,50 +298,61 @@ function AdminPage() {
             onClick={() => runAction(refresh)}
             disabled={loading || busy}
           >
-            🔄 Refresh
+            {intl.formatMessage({ id: 'admin.refresh' })}
           </button>
         </div>
       </header>
 
-      {isLoading && <p className="admin-loading">Loading queue state…</p>}
+      {isLoading && <p className="admin-loading">{intl.formatMessage({ id: 'admin.loading' })}</p>}
 
       {error && !data && (
         <div className="admin-error-banner" role="alert">
-          ⚠ {error}
+          {intl.formatMessage({ id: 'admin.errorPrefix' })} {error}
         </div>
       )}
 
       {actionError && (
         <div className="admin-error-banner" role="alert">
-          ⚠ {actionError}
+          {intl.formatMessage({ id: 'admin.errorPrefix' })} {actionError}
         </div>
       )}
 
       {data && (
         <>
-          <section className="admin-metrics" aria-label="Queue metrics">
+          <section
+            className="admin-metrics"
+            aria-label={intl.formatMessage({ id: 'admin.metricsAria' })}
+          >
             <div className="admin-metric-card">
               <span className="admin-metric-value">{data.total}</span>
-              <span className="admin-metric-label">Total</span>
+              <span className="admin-metric-label">
+                {intl.formatMessage({ id: 'admin.metricTotal' })}
+              </span>
             </div>
             <div className="admin-metric-card admin-metric-card--queued">
               <span className="admin-metric-value">{data.queued}</span>
-              <span className="admin-metric-label">Queued</span>
+              <span className="admin-metric-label">
+                {intl.formatMessage({ id: 'admin.metricQueued' })}
+              </span>
             </div>
             <div className="admin-metric-card admin-metric-card--processed">
               <span className="admin-metric-value">{data.processed}</span>
-              <span className="admin-metric-label">Processed</span>
+              <span className="admin-metric-label">
+                {intl.formatMessage({ id: 'admin.metricProcessed' })}
+              </span>
             </div>
             <div className="admin-metric-card admin-metric-card--failed">
               <span className="admin-metric-value">{data.failed}</span>
-              <span className="admin-metric-label">Failed</span>
+              <span className="admin-metric-label">
+                {intl.formatMessage({ id: 'admin.metricFailed' })}
+              </span>
             </div>
           </section>
 
           <div
             className="admin-tabs"
             role="tablist"
-            aria-label="Document status tabs"
+            aria-label={intl.formatMessage({ id: 'admin.tabsAria' })}
             aria-orientation="horizontal"
           >
             {ADMIN_TABS.map((tab, index) => {
@@ -358,7 +376,7 @@ function AdminPage() {
                   onClick={() => setActiveTab(tab.key)}
                   onKeyDown={(event) => handleTabKeyDown(event, index)}
                 >
-                  {tab.getLabel(counts)}
+                  {intl.formatMessage({ id: tab.labelId }, { count: counts[tab.key] })}
                 </button>
               );
             })}

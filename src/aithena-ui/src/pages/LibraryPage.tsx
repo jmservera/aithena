@@ -1,4 +1,5 @@
 import { useCallback, useId, useRef, useState, useEffect } from 'react';
+import { useIntl } from 'react-intl';
 import { useLibrary } from '../hooks/library';
 import { BookResult, SearchFilters } from '../hooks/search';
 import FacetPanel from '../Components/FacetPanel';
@@ -10,15 +11,16 @@ import SimilarBooks from '../Components/SimilarBooks';
 import { getCachedSimilarBook } from '../hooks/similarBooks';
 
 const SORT_OPTIONS = [
-  { value: 'title_s asc', label: 'Title (A–Z)' },
-  { value: 'title_s desc', label: 'Title (Z–A)' },
-  { value: 'author_s asc', label: 'Author (A–Z)' },
-  { value: 'author_s desc', label: 'Author (Z–A)' },
-  { value: 'year_i desc', label: 'Year (newest)' },
-  { value: 'year_i asc', label: 'Year (oldest)' },
+  { value: 'title_s asc', labelId: 'library.sortTitleAZ' },
+  { value: 'title_s desc', labelId: 'library.sortTitleZA' },
+  { value: 'author_s asc', labelId: 'library.sortAuthorAZ' },
+  { value: 'author_s desc', labelId: 'library.sortAuthorZA' },
+  { value: 'year_i desc', labelId: 'library.sortYearNewest' },
+  { value: 'year_i asc', labelId: 'library.sortYearOldest' },
 ];
 
 function LibraryPage() {
+  const intl = useIntl();
   const {
     libraryState,
     results,
@@ -107,16 +109,14 @@ function LibraryPage() {
               aria-atomic="true"
             >
               {loading ? (
-                'Loading…'
+                intl.formatMessage({ id: 'library.loading' })
               ) : (
-                <>
-                  {total.toLocaleString()} book{total !== 1 ? 's' : ''} in collection
-                </>
+                <>{intl.formatMessage({ id: 'library.bookCount' }, { total })}</>
               )}
             </p>
             <div className="search-sort-limit">
               <label htmlFor="sort-select" className="control-label">
-                Sort:
+                {intl.formatMessage({ id: 'library.sortLabel' })}
               </label>
               <select
                 id="sort-select"
@@ -126,13 +126,13 @@ function LibraryPage() {
               >
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {intl.formatMessage({ id: option.labelId })}
                   </option>
                 ))}
               </select>
 
               <label htmlFor="limit-select" className="control-label">
-                Per page:
+                {intl.formatMessage({ id: 'library.perPageLabel' })}
               </label>
               <select
                 id="limit-select"
@@ -169,7 +169,7 @@ function LibraryPage() {
           tabIndex={-1}
         >
           <h2 id={resultsHeadingId} className="visually-hidden">
-            Library books
+            {intl.formatMessage({ id: 'library.booksHeading' })}
           </h2>
 
           {error && (
@@ -180,8 +180,9 @@ function LibraryPage() {
 
           {!loading && !error && results.length === 0 && (
             <div className="search-empty">
-              No books found
-              {hasActiveFilters && ' with the selected filters'}.
+              {hasActiveFilters
+                ? intl.formatMessage({ id: 'library.noBooksFoundFiltered' })
+                : intl.formatMessage({ id: 'library.noBooksFound' })}
             </div>
           )}
 
@@ -214,7 +215,10 @@ function LibraryPage() {
               controlsId={resultsRegionId}
             />
             <p className="pagination-info">
-              Page {libraryState.page} of {totalPages}
+              {intl.formatMessage(
+                { id: 'library.pageInfo' },
+                { page: libraryState.page, totalPages }
+              )}
             </p>
           </footer>
         )}

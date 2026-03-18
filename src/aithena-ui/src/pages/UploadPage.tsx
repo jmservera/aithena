@@ -1,5 +1,6 @@
 import { ChangeEvent, DragEvent, Profiler, RefObject, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useIntl, FormattedMessage } from 'react-intl';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import { useUpload, UploadProgress, UploadResult } from '../hooks/upload';
 import { onRenderCallback } from '../utils/profiler';
@@ -33,22 +34,21 @@ function renderUploadFallback({ reset, reload }: ErrorBoundaryFallbackProps) {
   return (
     <section className="error-boundary error-boundary--section" role="alert" aria-live="assertive">
       <h2 className="error-boundary__title error-boundary__title--section">
-        The upload panel hit an unexpected problem.
+        <FormattedMessage id="upload.errorTitle" />
       </h2>
       <p className="error-boundary__message">
-        Try reloading this section first. If the issue keeps happening, reload the app and retry the
-        file.
+        <FormattedMessage id="upload.errorMessage" />
       </p>
       <div className="error-boundary__actions">
         <button type="button" className="error-boundary__button" onClick={reset}>
-          Try again
+          <FormattedMessage id="upload.errorRetry" />
         </button>
         <button
           type="button"
           className="error-boundary__button error-boundary__button--secondary"
           onClick={reload}
         >
-          Reload app
+          <FormattedMessage id="upload.errorReload" />
         </button>
       </div>
     </section>
@@ -73,6 +73,7 @@ function UploadContent({
   onFileInputChange,
   onReset,
 }: UploadContentProps) {
+  const intl = useIntl();
   return (
     <>
       {!result && !error && (
@@ -85,7 +86,7 @@ function UploadContent({
           aria-busy={uploading}
         >
           <label className="visually-hidden" htmlFor={fileInputId}>
-            Choose a PDF file to upload
+            {intl.formatMessage({ id: 'upload.fileInputLabel' })}
           </label>
           <input
             id={fileInputId}
@@ -104,18 +105,18 @@ function UploadContent({
                 📄
               </div>
               <p className="upload-prompt">
-                Drag and drop a PDF file here, or{' '}
+                {intl.formatMessage({ id: 'upload.dragPrompt' })}{' '}
                 <button
                   type="button"
                   className="upload-browse-button"
                   onClick={onBrowseClick}
                   aria-describedby={uploadHintId}
                 >
-                  browse
+                  {intl.formatMessage({ id: 'upload.browse' })}
                 </button>
               </p>
               <p id={uploadHintId} className="upload-hint">
-                Maximum file size: 50MB
+                {intl.formatMessage({ id: 'upload.maxFileSize' })}
               </p>
             </div>
           )}
@@ -131,11 +132,13 @@ function UploadContent({
               <div className="upload-progress-spinner" aria-hidden="true">
                 ⏳
               </div>
-              <p className="upload-progress-text">Uploading…</p>
+              <p className="upload-progress-text">
+                {intl.formatMessage({ id: 'upload.uploading' })}
+              </p>
               <div
                 className="upload-progress-bar"
                 role="progressbar"
-                aria-label="Upload progress"
+                aria-label={intl.formatMessage({ id: 'upload.progressLabel' })}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(progress.percentage)}
@@ -159,7 +162,9 @@ function UploadContent({
           <div className="upload-result-icon" aria-hidden="true">
             ❌
           </div>
-          <h3 className="upload-result-title">Upload Failed</h3>
+          <h3 className="upload-result-title">
+            {intl.formatMessage({ id: 'upload.failedTitle' })}
+          </h3>
           <p className="upload-result-message">{error}</p>
           <button type="button" className="upload-result-button" onClick={onReset}>
             Try Again
@@ -172,17 +177,21 @@ function UploadContent({
           <div className="upload-result-icon" aria-hidden="true">
             ✅
           </div>
-          <h3 className="upload-result-title">Upload Successful</h3>
+          <h3 className="upload-result-title">
+            {intl.formatMessage({ id: 'upload.successTitle' })}
+          </h3>
           <p className="upload-result-message">{result.message}</p>
           <div className="upload-result-details">
             <p>
-              <strong>Filename:</strong> {result.filename}
+              <strong>{intl.formatMessage({ id: 'upload.filenameLabel' })}</strong>{' '}
+              {result.filename}
             </p>
             <p>
-              <strong>Size:</strong> {formatFileSize(result.size)}
+              <strong>{intl.formatMessage({ id: 'upload.sizeLabel' })}</strong>{' '}
+              {formatFileSize(result.size)}
             </p>
             <p>
-              <strong>Status:</strong> {result.status}
+              <strong>{intl.formatMessage({ id: 'upload.statusLabel' })}</strong> {result.status}
             </p>
           </div>
           <div className="upload-result-actions">
@@ -200,6 +209,7 @@ function UploadContent({
 }
 
 function UploadPage() {
+  const intl = useIntl();
   const { uploading, progress, result, error, uploadFile, reset } = useUpload();
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -262,10 +272,8 @@ function UploadPage() {
   return (
     <div className="upload-page">
       <div className="upload-container">
-        <h2 className="upload-title">Upload PDF</h2>
-        <p className="upload-description">
-          Add a new book to the library by uploading a PDF file (max 50MB)
-        </p>
+        <h2 className="upload-title">{intl.formatMessage({ id: 'upload.title' })}</h2>
+        <p className="upload-description">{intl.formatMessage({ id: 'upload.description' })}</p>
 
         <ErrorBoundary fallback={renderUploadFallback}>
           <Profiler id="UploadForm" onRender={onRenderCallback}>

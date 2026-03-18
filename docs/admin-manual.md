@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.6.0 Release Notes](release-notes-v1.6.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.7.0 Release Notes](release-notes-v1.7.0.md).
 
 ## System architecture overview
 
@@ -1815,3 +1815,122 @@ To roll back to v1.5.0:
    docker compose up -d
    ```
 3. No data migration rollback needed — v1.6.0 makes no schema changes.
+
+## Deployment Updates for v1.7.0 (Quality & Infrastructure)
+
+v1.7.0 is a quality and infrastructure release focusing on CI/CD robustness, data persistence consistency, and internationalization foundation. This section covers operator-relevant changes and deployment validation.
+
+### localStorage key standardization and auto-migration
+
+v1.7.0 renames the language preference storage key from `aithena-locale` to `aithena.locale` for consistency.
+
+**What changed:**
+
+- UI now reads and writes language preference to `aithena.locale` (dot-notation) instead of `aithena-locale` (hyphen-notation).
+- Auto-migration logic: on first load after v1.7.0 upgrade, the application checks for the old `aithena-locale` key and migrates it to `aithena.locale` automatically.
+- Existing users retain their language preference without any action.
+
+**Impact on operators:**
+
+- No environment variables, configuration files, or database changes needed.
+- No user action required — the migration is silent and happens on first app load.
+- The `aithena.locale` key is the new standard; new deployments use it from startup.
+
+**Verifying migration after upgrade:**
+
+```bash
+# Open the app in a browser and check the developer console (F12 → Application → Storage → Local Storage)
+# Look for the new key 'aithena.locale' after the app loads
+# The old 'aithena-locale' key should be gone if auto-migration succeeded
+```
+
+**New deployments:**
+
+Fresh v1.7.0 deployments use `aithena.locale` from first startup. No old key exists, so no migration occurs.
+
+### Page-level internationalization extraction
+
+v1.7.0 extends i18n to all page components and the application shell.
+
+**What changed:**
+
+- All UI strings in `SearchPage`, `LibraryPage`, `UploadPage`, `LoginPage`, `AdminPage`, and `App.tsx` are now extracted and use `react-intl` for rendering.
+- New strings are registered in the locale files (en, es, ca, fr) but default to English.
+- The application is now fully i18n-ready at the component and page layer.
+
+**Impact on operators:**
+
+- No configuration changes, no new environment variables.
+- No visible behavior change — the UI renders identically in English (default language).
+- If operators have deployed locale files or custom translations, all new page strings will appear in English until translated.
+
+**Impact on contributors:**
+
+Contributors can now add translations for page-level strings by editing the locale files in `src/aithena-ui/src/locales/`.
+
+**Verifying page i18n after upgrade:**
+
+```bash
+# Switch language using the LanguageSwitcher (top-right corner)
+# Verify that page text updates correctly for all 4 languages (en, es, ca, fr)
+# Check browser console for any missing translation warnings
+```
+
+### Dependabot CI improvements
+
+v1.7.0 upgrades the Dependabot auto-merge workflow to Node 22 and adds explicit failure handling.
+
+**What changed:**
+
+- `dependabot-automerge.yml` now runs on Node 22 instead of Node 20 (the last holdout).
+- Removed `continue-on-error: true` from the auto-merge step; failures now trigger explicit labeling and comments for visibility.
+- Enhanced heartbeat workflow (`squad-heartbeat.yml`) detects Dependabot PRs and routes them to the appropriate squad member by dependency domain.
+
+**Impact on operators:**
+
+- No direct operator impact — these are CI/CD changes internal to GitHub Actions.
+- The heartbeat workflow may route more Dependabot PRs to maintainers with clearer signals about which domain (Node, Python, Docker) owns the dependency.
+
+**Verifying CI after upgrade:**
+
+- Dependabot auto-merge will continue to work for qualifying PRs (automerge label, passing CI, no conflicts).
+- If auto-merge fails, the PR is now labeled and commented with clear failure reasons instead of silent skips.
+
+### Deployment checklist for v1.7.0
+
+1. **Pre-upgrade:**
+   - Verify all services are healthy: `curl -s http://localhost/health`
+   - Note any active Dependabot PRs for manual review post-upgrade
+
+2. **Upgrade:**
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
+
+3. **Post-upgrade validation:**
+   - Check that the app loads and displays in your preferred language
+   - Switch languages using the LanguageSwitcher to verify all page text updates
+   - Verify the new `aithena.locale` key appears in browser localStorage after the first page load
+   - Confirm no console warnings about missing translations
+   - Check `docker compose ps` to ensure all services are running
+
+4. **No rollback-specific actions needed:**
+   - All v1.7.0 changes are additive (new key name, new extracted strings, CI improvements).
+   - If you roll back to v1.6.0, the app will recreate the old `aithena-locale` key on first load.
+
+### Rollback procedure for v1.7.0
+
+To roll back to v1.6.0:
+
+1. Stop the current stack:
+   ```bash
+   docker compose down
+   ```
+2. Switch to v1.6.0 images:
+   ```bash
+   git checkout v1.6.0 -- docker-compose.yml
+   docker compose pull
+   docker compose up -d
+   ```
+3. No data migration rollback needed — v1.7.0 makes no schema or volume changes. Note: v1.6.0 code reads only the old `aithena-locale` key, so after rollback it will not find the migrated `aithena.locale` key. Users who switched languages during v1.7.0 will revert to browser locale detection on their next visit. This is a cosmetic reset, not data loss.

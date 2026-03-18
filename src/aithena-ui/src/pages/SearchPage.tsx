@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useIntl, FormattedMessage } from 'react-intl';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
@@ -21,17 +22,17 @@ import { useSearch, BookResult, SearchMode } from '../hooks/search';
 import { onRenderCallback } from '../utils/profiler';
 
 const SORT_OPTIONS = [
-  { value: 'score desc', label: 'Relevance' },
-  { value: 'year_i desc', label: 'Year (newest)' },
-  { value: 'year_i asc', label: 'Year (oldest)' },
-  { value: 'title_s asc', label: 'Title (A–Z)' },
-  { value: 'author_s asc', label: 'Author (A–Z)' },
+  { value: 'score desc', labelId: 'search.sortRelevance' },
+  { value: 'year_i desc', labelId: 'search.sortYearNewest' },
+  { value: 'year_i asc', labelId: 'search.sortYearOldest' },
+  { value: 'title_s asc', labelId: 'search.sortTitleAZ' },
+  { value: 'author_s asc', labelId: 'search.sortAuthorAZ' },
 ];
 
-const MODE_OPTIONS: { value: SearchMode; label: string; title: string }[] = [
-  { value: 'keyword', label: 'Keyword', title: 'Traditional keyword search' },
-  { value: 'semantic', label: 'Semantic', title: 'Vector-based semantic search' },
-  { value: 'hybrid', label: 'Hybrid', title: 'Combined keyword + semantic search' },
+const MODE_OPTIONS: { value: SearchMode; labelId: string; titleId: string }[] = [
+  { value: 'keyword', labelId: 'search.modeKeyword', titleId: 'search.modeKeywordTitle' },
+  { value: 'semantic', labelId: 'search.modeSemantic', titleId: 'search.modeSemanticTitle' },
+  { value: 'hybrid', labelId: 'search.modeHybrid', titleId: 'search.modeHybridTitle' },
 ];
 
 const MODE_BADGE_CLASS: Record<SearchMode, string> = {
@@ -63,22 +64,21 @@ function renderSearchResultsFallback({ reset, reload }: ErrorBoundaryFallbackPro
   return (
     <section className="error-boundary error-boundary--section" role="alert" aria-live="assertive">
       <h2 className="error-boundary__title error-boundary__title--section">
-        Search results are temporarily unavailable.
+        <FormattedMessage id="search.errorTitle" />
       </h2>
       <p className="error-boundary__message">
-        Your current search settings are still here. Try loading the results again or reload the
-        app.
+        <FormattedMessage id="search.errorMessage" />
       </p>
       <div className="error-boundary__actions">
         <button type="button" className="error-boundary__button" onClick={reset}>
-          Try again
+          <FormattedMessage id="search.errorRetry" />
         </button>
         <button
           type="button"
           className="error-boundary__button error-boundary__button--secondary"
           onClick={reload}
         >
-          Reload app
+          <FormattedMessage id="search.errorReload" />
         </button>
       </div>
     </section>
@@ -103,6 +103,7 @@ function SearchResultsSection({
   onPdfClose,
   onSelectSimilarBook,
 }: SearchResultsSectionProps) {
+  const intl = useIntl();
   const totalPages = Math.ceil(total / limit);
   const resultsHeadingId = `${resultsRegionId}-heading`;
 
@@ -119,7 +120,7 @@ function SearchResultsSection({
         tabIndex={-1}
       >
         <h2 id={resultsHeadingId} className="visually-hidden">
-          Search results
+          {intl.formatMessage({ id: 'search.resultsHeading' })}
         </h2>
 
         {error && (
@@ -129,13 +130,14 @@ function SearchResultsSection({
         )}
 
         {!loading && !error && !query && (
-          <div className="search-empty">Enter a search term above to find books.</div>
+          <div className="search-empty">{intl.formatMessage({ id: 'search.emptyPrompt' })}</div>
         )}
 
         {!loading && !error && query && results.length === 0 && (
           <div className="search-empty">
-            No results found for &ldquo;{query}&rdquo;
-            {hasActiveFilters && ' with the selected filters'}.
+            {hasActiveFilters
+              ? intl.formatMessage({ id: 'search.noResultsFiltered' }, { query })
+              : intl.formatMessage({ id: 'search.noResults' }, { query })}
           </div>
         )}
 
@@ -168,7 +170,7 @@ function SearchResultsSection({
             controlsId={resultsRegionId}
           />
           <p className="pagination-info">
-            Page {page} of {totalPages}
+            {intl.formatMessage({ id: 'search.pageInfo' }, { page, totalPages })}
           </p>
         </footer>
       )}
@@ -179,6 +181,7 @@ function SearchResultsSection({
 }
 
 function SearchPage() {
+  const intl = useIntl();
   const {
     searchState,
     results,
@@ -283,37 +286,41 @@ function SearchPage() {
           <form
             className="search-form"
             role="search"
-            aria-label="Search the library"
+            aria-label={intl.formatMessage({ id: 'search.formLabel' })}
             onSubmit={handleSubmit}
           >
             <label className="visually-hidden" htmlFor={searchInputId}>
-              Search books by title, author, or content
+              {intl.formatMessage({ id: 'search.inputLabel' })}
             </label>
             <input
               id={searchInputId}
               className="search-input"
               type="search"
               value={inputValue}
-              placeholder="Search books by title, author, or content…"
+              placeholder={intl.formatMessage({ id: 'search.placeholder' })}
               onChange={(event) => setInputValue(event.target.value)}
-              aria-label="Search query"
+              aria-label={intl.formatMessage({ id: 'search.inputAriaLabel' })}
             />
             <button className="search-btn" type="submit" disabled={loading}>
-              {loading ? '…' : 'Search'}
+              {loading ? '…' : intl.formatMessage({ id: 'search.button' })}
             </button>
           </form>
 
-          <div className="mode-selector" role="group" aria-label="Search mode">
+          <div
+            className="mode-selector"
+            role="group"
+            aria-label={intl.formatMessage({ id: 'search.modeGroupLabel' })}
+          >
             {MODE_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 className={`mode-btn${searchState.mode === option.value ? ' mode-btn--active' : ''}`}
                 onClick={() => setMode(option.value)}
-                title={option.title}
+                title={intl.formatMessage({ id: option.titleId })}
                 aria-pressed={searchState.mode === option.value}
               >
-                {option.label}
+                {intl.formatMessage({ id: option.labelId })}
               </button>
             ))}
           </div>
@@ -328,15 +335,23 @@ function SearchPage() {
                 aria-atomic="true"
               >
                 {loading ? (
-                  'Searching…'
+                  intl.formatMessage({ id: 'search.searching' })
                 ) : (
                   <>
-                    {total.toLocaleString()} result{total !== 1 ? 's' : ''} for &ldquo;
-                    {searchState.query}&rdquo;
+                    {intl.formatMessage(
+                      { id: 'search.resultCount' },
+                      { total, query: searchState.query }
+                    )}
                     <span
                       className={`mode-badge ${MODE_BADGE_CLASS[searchState.mode]}`}
-                      title={`Search mode: ${searchState.mode}`}
-                      aria-label={`Search mode: ${searchState.mode}`}
+                      title={intl.formatMessage(
+                        { id: 'search.modeLabel' },
+                        { mode: searchState.mode }
+                      )}
+                      aria-label={intl.formatMessage(
+                        { id: 'search.modeLabel' },
+                        { mode: searchState.mode }
+                      )}
                     >
                       {searchState.mode}
                     </span>
@@ -345,7 +360,7 @@ function SearchPage() {
               </p>
               <div className="search-sort-limit">
                 <label htmlFor="sort-select" className="control-label">
-                  Sort:
+                  {intl.formatMessage({ id: 'search.sortLabel' })}
                 </label>
                 <select
                   id="sort-select"
@@ -355,13 +370,13 @@ function SearchPage() {
                 >
                   {SORT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {intl.formatMessage({ id: option.labelId })}
                     </option>
                   ))}
                 </select>
 
                 <label htmlFor="limit-select" className="control-label">
-                  Per page:
+                  {intl.formatMessage({ id: 'search.perPageLabel' })}
                 </label>
                 <select
                   id="limit-select"

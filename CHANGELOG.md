@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-03-18
+
+### Added
+
+- **Page-level internationalization** — Extracted hardcoded UI strings from all 5 page components (SearchPage, LibraryPage, UploadPage, LoginPage, AdminPage) and App.tsx to use `react-intl` for consistent multilingual rendering across all application layers (#491)
+- **Dependabot PR detection in squad heartbeat** — Extended `squad-heartbeat.yml` to detect Dependabot PRs with manual-review labels, CI failures, or staleness, and route them to appropriate squad members by dependency domain (Node/frontend, Python/backend, Docker/infrastructure) (#483)
+
+### Changed
+
+- **Dependabot auto-merge Node 22 upgrade** — Updated `dependabot-automerge.yml` to use Node 22 (was the last Node version holdout) and replaced continue-on-error with explicit failure handling using labels and comments for transparency (#470)
+- **localStorage key naming standardization** — Renamed storage key from `aithena-locale` to `aithena.locale` using dot-notation for consistency with future keys. Auto-migration logic reads the old key on first load and migrates existing users without disruption (#472)
+
+### Fixed
+
+- **localStorage auto-migration** — Existing users with the old `aithena-locale` key are seamlessly migrated to `aithena.locale` on first app load, preserving their language preference (#472)
+
+### Security
+
+- None (infrastructure and quality release)
+
 ## [1.6.0] — 2026-03-17
 
 ### Added
