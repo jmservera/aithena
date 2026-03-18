@@ -1,6 +1,6 @@
 /* ── Design Tokens ─────────────────────────────────────────────
  * Centralized CSS custom properties for Aithena UI.
- * Import this file BEFORE App.css to ensure variables are available.
+ * Imported in main.tsx before App component to ensure variables load before App.css.
  * ────────────────────────────────────────────────────────────── */
 
 :root {
