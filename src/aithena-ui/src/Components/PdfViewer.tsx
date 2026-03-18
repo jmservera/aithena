@@ -16,7 +16,10 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
 
+  // Reset load error when document URL changes - this is a legitimate
+  // sync-with-props pattern for resetting error state on navigation
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadError(false);
   }, [result.document_url]);
 
