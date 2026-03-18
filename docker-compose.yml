@@ -272,6 +272,7 @@ services:
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
       - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-100}
     volumes:
       - document-data:/data/documents
       - type: bind

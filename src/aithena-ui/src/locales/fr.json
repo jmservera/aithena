@@ -276,5 +276,6 @@
   "search.noResultsDescription": "Essayez différents mots-clés, vérifiez les fautes de frappe ou parcourez la bibliothèque pour découvrir des livres.",
   "search.noResultsFilteredDescription": "Essayez de supprimer certains filtres ou d'ajuster vos termes de recherche.",
   "search.noResultsFilteredTitle": "Aucun livre correspondant",
-  "search.noResultsTitle": "Aucun livre correspondant"
+  "search.noResultsTitle": "Aucun livre correspondant",
+  "search.loadingResults": "Loading results…"
 }

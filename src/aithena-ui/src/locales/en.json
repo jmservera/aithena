@@ -276,5 +276,6 @@
   "search.noResultsDescription": "Try different keywords, check for typos, or browse the library to discover books.",
   "search.noResultsFilteredDescription": "Try removing some filters or adjusting your search terms.",
   "search.noResultsFilteredTitle": "No matching books",
-  "search.noResultsTitle": "No matching books"
+  "search.noResultsTitle": "No matching books",
+  "search.loadingResults": "Loading results…"
 }

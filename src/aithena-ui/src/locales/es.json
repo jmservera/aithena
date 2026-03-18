@@ -276,5 +276,6 @@
   "search.noResultsDescription": "Prueba diferentes palabras clave, verifica errores ortográficos o explora la biblioteca para descubrir libros.",
   "search.noResultsFilteredDescription": "Intenta eliminar algunos filtres o ajustar tus términos de búsqueda.",
   "search.noResultsFilteredTitle": "No hay libros coincidentes",
-  "search.noResultsTitle": "No hay libros coincidentes"
+  "search.noResultsTitle": "No hay libros coincidentes",
+  "search.loadingResults": "Loading results…"
 }

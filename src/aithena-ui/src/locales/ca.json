@@ -276,5 +276,6 @@
   "search.noResultsDescription": "Prova diferents paraules clau, comprova errors ortogràfics o explora la biblioteca per descobrir llibres.",
   "search.noResultsFilteredDescription": "Intenta eliminar alguns filtres o ajustar els teus termes de cerca.",
   "search.noResultsFilteredTitle": "No hi ha llibres coincidents",
-  "search.noResultsTitle": "No hi ha llibres coincidents"
+  "search.noResultsTitle": "No hi ha llibres coincidents",
+  "search.loadingResults": "Loading results…"
 }
