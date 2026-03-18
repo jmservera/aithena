@@ -175,10 +175,13 @@ class RedisRateLimiter:
         self.window_seconds = 60
 
     def _get_client_ip(self, request: Request) -> str:
-        """Extract client IP from request, checking X-Forwarded-For header."""
+        """Extract client IP, checking X-Forwarded-For then X-Real-IP."""
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             return forwarded.split(",")[0].strip()
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip.strip()
         if request.client:
             return request.client.host
         return "unknown"
@@ -198,28 +201,28 @@ class RedisRateLimiter:
             pool = _get_redis_pool()
             client = redis_lib.Redis(connection_pool=pool)
 
-            # Use Redis pipeline for atomic operations
+            # Clean old entries and count current requests
             pipe = client.pipeline()
-            # Remove requests outside the current window
             pipe.zremrangebyscore(key, "-inf", window_start)
-            # Count requests in current window
             pipe.zcard(key)
-            # Add current request
-            pipe.zadd(key, {str(now): now})
-            # Set expiration to window size
-            pipe.expire(key, self.window_seconds)
             results = pipe.execute()
 
             request_count = results[1]  # zcard result
 
             if request_count >= self.requests_per_minute:
-                # Calculate retry-after based on oldest request in window
                 oldest = client.zrange(key, 0, 0, withscores=True)
                 if oldest:
                     oldest_timestamp = oldest[0][1]
                     retry_after = int(oldest_timestamp + self.window_seconds - now) + 1
                     return False, max(retry_after, 1)
                 return False, self.window_seconds
+
+            # Only record request after confirming it's allowed
+            member = f"{now}:{id(request)}"
+            pipe2 = client.pipeline()
+            pipe2.zadd(key, {member: now})
+            pipe2.expire(key, self.window_seconds)
+            pipe2.execute()
 
             return True, 0
 
@@ -569,7 +572,7 @@ def search(
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
 
-    **Rate Limit:** 100 requests per minute per IP address.
+    **Rate Limit:** Configurable via ``RATE_LIMIT_REQUESTS_PER_MINUTE`` (default: 100).
     """
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
