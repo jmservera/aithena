@@ -72,3 +72,51 @@ npm install -g @github/copilot
 	&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
 	&& sudo apt update \
 	&& sudo apt install gh -y
+
+# ============================================================
+# Development environment setup (tools + project dependencies)
+# ============================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# === System utilities ===
+echo "==> Installing system utilities (jq, xdg-utils)..."
+sudo apt-get install -y jq xdg-utils
+
+# === Python dev tools ===
+echo "==> Installing ruff (Python linter) via uv..."
+# Ensure uv is on PATH (installed above via astral.sh)
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install ruff
+
+# === Project dependencies: Frontend ===
+echo "==> Installing aithena-ui (frontend) npm dependencies..."
+# Ensure nvm/node are available
+\. "$HOME/.nvm/nvm.sh"
+(cd "$REPO_ROOT/src/aithena-ui" && npm install)
+
+# === Project dependencies: Playwright E2E ===
+echo "==> Installing Playwright E2E npm dependencies..."
+(cd "$REPO_ROOT/e2e/playwright" && npm install)
+
+# === Project dependencies: Python services ===
+echo "==> Syncing Python service virtualenvs..."
+
+for svc in solr-search document-indexer document-lister admin; do
+  echo "    → $svc (uv sync --frozen)"
+  (cd "$REPO_ROOT/src/$svc" && uv sync --frozen)
+done
+
+echo "    → embeddings-server (uv venv + pip install)"
+(cd "$REPO_ROOT/src/embeddings-server" && uv venv && uv pip install -r requirements.txt)
+
+# === Playwright browser install ===
+echo "==> Installing Playwright Chromium browser + system deps..."
+\. "$HOME/.nvm/nvm.sh"
+(cd "$REPO_ROOT/e2e/playwright" && npx playwright install --with-deps chromium)
+
+echo ""
+echo "==> Dev environment setup complete!"
+echo "    Verify: npx playwright --version"
+echo "    Verify: cd src/aithena-ui && npx vitest run --reporter=dot"
