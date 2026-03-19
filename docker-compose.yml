@@ -334,6 +334,7 @@ services:
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
       - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
+      - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
     networks:
       - default
