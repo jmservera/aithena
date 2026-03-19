@@ -325,3 +325,66 @@ Comprehensive 3-tier approach covering 14+ pages across user, admin, and operati
 - Every release (v1.8.0+) includes 4 Tier 1 screenshots
 - Zero manual screenshot extraction in release workflow
 - Release PR includes screenshot commit with release docs commit
+
+## 2026-03-18: Issue #533 — Manual Screenshot References
+
+**Task:** Update user and admin manuals to include inline screenshot references pointing to the new `docs/screenshots/` directory.
+
+**Deliverables:**
+- PR #538 (squad/533-manual-screenshot-refs branch)
+- docs/user-manual.md updated with 10 screenshot references:
+  - Login page, empty search, search results, filtered search, PDF viewer, similar books, admin dashboard, upload page, status page, stats page
+- docs/admin-manual.md updated with 3 screenshot references:
+  - Admin dashboard, system status page, collection statistics
+
+**Process:**
+1. Reviewed existing manuals and screenshot spec (screenshots.spec.ts)
+2. Identified logical insertion points near relevant sections
+3. Added relative path references (screenshots/filename.png) with descriptive alt text
+4. Committed with reference to #533
+5. Created PR against dev branch
+
+**Screenshot References Added:**
+- `login-page.png` — User login/authentication flow
+- `search-empty.png` — Empty search page before querying
+- `search-results-page.png` — Search results with book cards
+- `search-faceted.png` — Filtered/faceted search results
+- `pdf-viewer.png` — PDF viewer with document open
+- `similar-books.png` — Similar Books recommendations panel
+- `admin-dashboard.png` — Streamlit admin dashboard (counters, Document Manager)
+- `upload-page.png` — PDF drag-and-drop upload interface
+- `status-page.png` — System health status tab
+- `stats-page.png` — Collection statistics tab
+
+**Key Decision:** All screenshots are referenced via relative paths from `docs/` directory. Screenshots will be populated by the release automation pipeline (GitHub Action) before release. Manuals are now "screenshot-ready" — when the pipeline runs and generates `docs/screenshots/`, all references will be live.
+
+**Release Impact:**
+- v1.8.0+ releases will include these screenshots automatically
+- Zero additional PM work needed once pipeline is operational
+- Manuals now guide operators and users through visual context
+
+**PR Status:** #538 created and ready for review/merge to dev.
+
+**Key Learnings:**
+- Screenshot strategy from .squad/decisions.md (2026-03-18) is now operationalized in actual documentation
+- Relative path strategy (`screenshots/filename.png`) makes manuals portable across deployment contexts
+- Alt text quality matters for accessibility — each image has descriptive context
+- Integration with release pipeline means PM work is gated by infrastructure completion (screenshot artifact upload)
+
+---
+
+## Sprint: Release Screenshots Automation (2026-03-19)
+
+**Spawn Manifest:** Newt (Product Manager) spawned with 1 background task (blocked until Brett #532 completes)
+
+### Queued Tasks
+
+1. **#533 — Update manuals with screenshot refs**
+   - Mode: background
+   - Add 10 refs to user-manual.md, 3 refs to admin-manual.md
+   - Relative paths to docs/screenshots/
+   - Outcome: PR #538
+   - Depends on: Brett #532 (screenshots must exist)
+
+**Status:** BLOCKED — Awaiting Brett's artifact pipeline (#531–#532) before proceeding with manual updates.
+
