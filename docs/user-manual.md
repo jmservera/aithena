@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.4.0 Release Notes](release-notes/v1.4.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.8.1 Release Notes](release-notes/v1.8.1.md).
 
 ## Getting started
 
@@ -74,6 +74,8 @@ The tool generates a secure 32-character random password if `--password` is omit
 ## Searching for books
 
 The **Search** tab is the main place to work.
+
+*New in v1.8.1:* All text on this page, including labels, buttons, and placeholders, is now fully translated. The page automatically displays in your selected language.
 
 ![Search page before querying](images/search-page.png)
 
@@ -195,6 +197,8 @@ You can filter by:
 
 When a result includes an attached document link, you can open the PDF directly from the result card.
 
+*New in v1.8.1:* All text on this page, including labels and buttons, is now fully translated to your selected language.
+
 ### Open a PDF
 
 1. Run a search.
@@ -265,8 +269,12 @@ This section shows:
 This section shows whether key services are reachable:
 
 - **Solr** — search engine health, node count, and indexed document count
-- **Redis** — indexing state store
+- **ZooKeeper** — coordination service for search nodes
 - **RabbitMQ** — queue service used by the ingestion pipeline
+- **Redis** — indexing state store
+- **embeddings-server** — semantic search backend
+
+*New in v1.8.1:* The Status tab now reports all critical services, including previously missing services like ZooKeeper and embeddings-server.
 
 ### Auto-refresh
 
@@ -326,6 +334,8 @@ The embedded Streamlit dashboard currently includes:
 - The admin dashboard now requires an authenticated session; if your session expires, Aithena redirects you back to `/login`.
 - If the dashboard cannot load after you sign in, contact your administrator to confirm the admin services are running and your account has been provisioned correctly.
 
+*New in v1.8.1:* The admin dashboard login issue has been fixed. You should now be able to access it without being stuck in a login loop.
+
 ![Admin dashboard](images/admin-dashboard.png)
 
 <!-- TODO: capture screenshot -->
@@ -346,13 +356,14 @@ The **Upload** tab lets authenticated users add PDFs to the library without dire
 
 <!-- TODO: capture screenshot -->
 
-
 ### What happens after upload
 
 - Your PDF is placed in the library staging area.
 - The indexer picks it up on the next scan cycle (usually within seconds to minutes depending on queue size).
 - Once indexed, the document appears in search results.
 - If indexing fails, check the Admin tab to see failed documents.
+
+*New in v1.8.1:* The Upload page now displays all instructions and status messages in your selected language. No more English-only UI text.
 
 ### Upload limits
 
@@ -375,11 +386,13 @@ The Aithena version appears in the footer of the web app as a small version badg
 
 ### What the version means
 
-The version (e.g., **v0.7.0**) tells you which release you are running. This is useful when:
+The version (e.g., **v1.8.1**) tells you which release you are running. This is useful when:
 
 - **Troubleshooting:** Knowing the version helps you search documentation for known issues.
-- **Feature confirmation:** New features appear only in version 0.6.0 and later (e.g., PDF upload).
+- **Feature confirmation:** New features appear only in specific versions (e.g., PDF upload in v0.6.0 and later).
 - **Support:** When contacting support, mention your version and the commit hash shown in the tooltip.
+
+*New in v1.8.1:* The version now always matches the shipped release value, even after updates. Earlier versions sometimes showed stale version numbers.
 
 ### How to find the version
 
