@@ -1089,6 +1089,42 @@ def _tcp_check(host: str, port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def _rabbitmq_management_check(
+    host: str,
+    management_port: int,
+    user: str,
+    password: str,
+    path_prefix: str = "/admin/rabbitmq",
+    timeout: float = 2.0,
+) -> bool:
+    """Check RabbitMQ via management HTTP API, falling back to AMQP TCP check."""
+    url = f"http://{host}:{management_port}{path_prefix}/api/health/checks/alarms"
+    try:
+        resp = requests.get(url, auth=(user, password), timeout=timeout)
+        return resp.status_code == 200
+    except (requests.RequestException, OSError) as exc:
+        logger.warning("RabbitMQ management check failed (%s), falling back to TCP probe", exc)
+        return _tcp_check(host, settings.rabbitmq_port)
+
+
+def _zookeeper_check(hosts_csv: str, timeout: float = 2.0) -> bool:
+    """Return True if at least one ZooKeeper node is reachable."""
+    for entry in hosts_csv.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.rsplit(":", 1)
+        host = parts[0]
+        try:
+            port = int(parts[1]) if len(parts) > 1 else 2181
+        except ValueError:
+            logger.warning("Skipping malformed ZooKeeper entry %r: invalid port", entry)
+            continue
+        if _tcp_check(host, port, timeout=timeout):
+            return True
+    return False
+
+
 def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
     """Query Solr CLUSTERSTATUS and return aggregated node/doc information."""
     cluster_url = f"{solr_url}/admin/collections"
@@ -1185,7 +1221,8 @@ def service_status() -> dict[str, Any]:
     Aggregates:
     - Solr CLUSTERSTATUS (node health + doc count)
     - Redis ``doc:*`` key scan (indexing state breakdown)
-    - TCP reachability checks for Solr, Redis, and RabbitMQ
+    - TCP reachability checks for Solr, Redis, and ZooKeeper
+    - RabbitMQ management HTTP API health check
     - Embeddings `/version` probe for semantic-search readiness
     """
     parsed = urlparse(settings.solr_url)
@@ -1197,7 +1234,13 @@ def service_status() -> dict[str, Any]:
 
     solr_up = _tcp_check(solr_host, solr_port)
     redis_up = _tcp_check(settings.redis_host, settings.redis_port)
-    rabbitmq_up = _tcp_check(settings.rabbitmq_host, settings.rabbitmq_port)
+    rabbitmq_up = _rabbitmq_management_check(
+        settings.rabbitmq_host,
+        settings.rabbitmq_management_port,
+        settings.rabbitmq_user,
+        settings.rabbitmq_pass,
+    )
+    zookeeper_up = _zookeeper_check(settings.zookeeper_hosts)
     embeddings_available = _embeddings_available(timeout=CONTAINER_VERSION_TIMEOUT)
 
     return {
@@ -1208,6 +1251,7 @@ def service_status() -> dict[str, Any]:
             "solr": "up" if solr_up else "down",
             "redis": "up" if redis_up else "down",
             "rabbitmq": "up" if rabbitmq_up else "down",
+            "zookeeper": "up" if zookeeper_up else "down",
             "embeddings": "up" if embeddings_available else "down",
         },
     }

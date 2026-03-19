@@ -104,6 +104,11 @@ function IndexingStatus() {
             </span>
           </li>
           <li className="service-item">
+            <ServiceDot serviceStatus={services?.zookeeper ?? 'unknown'} />
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.zookeeper' })}</span>
+            <span className="service-detail">{services?.zookeeper ?? '—'}</span>
+          </li>
+          <li className="service-item">
             <ServiceDot serviceStatus={services?.redis ?? 'unknown'} />
             <span className="service-name">{intl.formatMessage({ id: 'indexing.redis' })}</span>
             <span className="service-detail">{services?.redis ?? '—'}</span>
@@ -112,6 +117,13 @@ function IndexingStatus() {
             <ServiceDot serviceStatus={services?.rabbitmq ?? 'unknown'} />
             <span className="service-name">{intl.formatMessage({ id: 'indexing.rabbitmq' })}</span>
             <span className="service-detail">{services?.rabbitmq ?? '—'}</span>
+          </li>
+          <li className="service-item">
+            <ServiceDot serviceStatus={services?.embeddings ?? 'unknown'} />
+            <span className="service-name">
+              {intl.formatMessage({ id: 'indexing.embeddings' })}
+            </span>
+            <span className="service-detail">{services?.embeddings ?? '—'}</span>
           </li>
         </ul>
       </section>
