@@ -1,5 +1,88 @@
 # Squad Decisions
 
+# Decision: Screenshot Spec Expansion to 11 Pages
+
+**Author:** Lambert (Tester)  
+**Date:** 2026-03-19  
+**Status:** IMPLEMENTED  
+**PR:** #535 (Closes #530)
+
+## Context
+
+The screenshot spec (`e2e/playwright/tests/screenshots.spec.ts`) captured only 4 pages (login, search results, admin dashboard, upload). The user and admin manuals document 11 distinct pages. Release documentation was incomplete.
+
+## Decision
+
+Expanded the spec to capture all 11 documented pages in a single test run. Data-dependent screenshots (faceted search, PDF viewer, similar books) use `discoverCatalogScenario` for dynamic discovery and skip gracefully when data is unavailable.
+
+## Ordering
+
+- Search empty state is captured **before** any query runs (first after login).
+- PDF viewer and similar books are captured **sequentially** (similar books depends on an open PDF).
+- Static pages (status, stats, library) are captured last.
+
+## Impact
+
+- All team members: release documentation now gets 11 screenshots automatically.
+- CI: the spec remains resilient — missing data or unavailable pages produce annotations, not failures.
+
+---
+
+# Decision: Release Screenshots Artifact in Integration-Test Workflow
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-19  
+**PR:** #536 (Closes #531)  
+**Status:** IMPLEMENTED  
+
+## Context
+
+The screenshot pipeline decision specifies a separate `release-screenshots` artifact uploaded from the integration-test workflow. This is step 2 of 5 in the implementation order.
+
+## Decision
+
+Added two new steps to `integration-test.yml` (after the existing Playwright artifact upload):
+
+1. **Extract release screenshots** — copies all `.png` from `test-results/` to `/tmp/release-screenshots/`
+2. **Upload release screenshots** — uploads as `release-screenshots` artifact, 90-day retention
+
+Both steps run with `if: always()`. No `${{ }}` in `run:` blocks (zizmor compliant).
+
+## Impact
+
+- **Downstream consumers:** `update-screenshots.yml` (step 3, not yet created) will use `workflow_run` trigger to download this artifact and commit PNGs to `docs/screenshots/` on `dev`
+- **Existing artifacts:** `playwright-e2e-results` unchanged (still 30-day retention, still contains full test-results + report)
+- **Storage cost:** ~500 KB additional artifact per integration test run
+- **Runtime cost:** ~10 seconds (find + copy + upload)
+
+## Team members affected
+
+- **Newt** (release docs): Screenshots will be available in-repo once step 3 ships
+- **Lambert** (CI/testing): Workflow change — review appreciated
+
+---
+
+# Decision: Cross-Workflow Artifact Download Pattern
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-19  
+**Context:** Issue #532 / PR #537  
+**Status:** IMPLEMENTED  
+
+## Decision
+
+For `workflow_run`-triggered workflows that need artifacts from the triggering run, use `actions/github-script` with the GitHub REST API (`actions.listWorkflowRunArtifacts` + `actions.downloadArtifact`) instead of `actions/download-artifact`.
+
+## Rationale
+
+`actions/download-artifact` only works for artifacts uploaded within the same workflow run. When a workflow is triggered by `workflow_run`, it runs in a separate context and cannot access the parent run's artifacts directly. The REST API approach is the supported pattern for cross-workflow artifact consumption.
+
+## Impact
+
+Any future workflows using `workflow_run` triggers that need artifacts should follow the pattern in `update-screenshots.yml`.
+
+---
+
 # User Directive: Ralph Auto-spawn on Resolved Blockers
 
 **Date:** 2026-03-19T07:11Z  
