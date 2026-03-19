@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import {
@@ -12,6 +12,9 @@ import {
   Lock,
   Menu,
   X,
+  ChevronDown,
+  KeyRound,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -32,7 +35,10 @@ const TABS: { to: string; labelId: string; icon: LucideIcon }[] = [
 function TabNav() {
   const intl = useIntl();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const menuId = useId();
+  const profileMenuId = useId();
+  const profileRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated, isLoading, logout, user } = useAuth();
   const menuLabel = intl.formatMessage({ id: 'nav.menuToggle' });
 
@@ -42,6 +48,17 @@ function TabNav() {
 
   const handleClose = () => {
     setIsMenuOpen(false);
+    setIsProfileOpen(false);
+  };
+
+  const handleProfileToggle = () => {
+    setIsProfileOpen((open) => !open);
+  };
+
+  const handleProfileBlur = (e: React.FocusEvent) => {
+    if (profileRef.current && !profileRef.current.contains(e.relatedTarget as Node)) {
+      setIsProfileOpen(false);
+    }
   };
 
   return (
@@ -80,21 +97,69 @@ function TabNav() {
             ))}
             <div className="tab-nav-actions">
               <LanguageSwitcher />
-              <span className="tab-nav-user">
-                <User size={ICON_SIZE} aria-hidden="true" />{' '}
-                {user?.username ?? intl.formatMessage({ id: 'nav.signedIn' })}
-              </span>
-              <button
-                type="button"
-                className="tab-nav-button"
-                onClick={() => {
-                  handleClose();
-                  void logout();
-                }}
-                disabled={isLoading}
-              >
-                {intl.formatMessage({ id: 'nav.signOut' })}
-              </button>
+              <div className="profile-dropdown" ref={profileRef} onBlur={handleProfileBlur}>
+                <button
+                  type="button"
+                  className="profile-dropdown-toggle"
+                  aria-controls={profileMenuId}
+                  aria-expanded={isProfileOpen}
+                  onClick={handleProfileToggle}
+                >
+                  <User size={ICON_SIZE} aria-hidden="true" />{' '}
+                  {user?.username ?? intl.formatMessage({ id: 'nav.signedIn' })}
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className={`profile-dropdown-chevron${isProfileOpen ? ' profile-dropdown-chevron--open' : ''}`}
+                  />
+                </button>
+                {isProfileOpen && (
+                  <div className="profile-dropdown-menu" id={profileMenuId} role="menu">
+                    <NavLink
+                      to="/profile"
+                      className="profile-dropdown-item"
+                      role="menuitem"
+                      onClick={handleClose}
+                    >
+                      <User size={16} aria-hidden="true" />
+                      {intl.formatMessage({ id: 'nav.profile' })}
+                    </NavLink>
+                    <NavLink
+                      to="/profile/change-password"
+                      className="profile-dropdown-item"
+                      role="menuitem"
+                      onClick={handleClose}
+                    >
+                      <KeyRound size={16} aria-hidden="true" />
+                      {intl.formatMessage({ id: 'nav.changePassword' })}
+                    </NavLink>
+                    {user?.role === 'admin' && (
+                      <NavLink
+                        to="/admin/users"
+                        className="profile-dropdown-item"
+                        role="menuitem"
+                        onClick={handleClose}
+                      >
+                        <Users size={16} aria-hidden="true" />
+                        {intl.formatMessage({ id: 'nav.manageUsers' })}
+                      </NavLink>
+                    )}
+                    <div className="profile-dropdown-divider" />
+                    <button
+                      type="button"
+                      className="profile-dropdown-item profile-dropdown-item--logout"
+                      role="menuitem"
+                      onClick={() => {
+                        handleClose();
+                        void logout();
+                      }}
+                      disabled={isLoading}
+                    >
+                      {intl.formatMessage({ id: 'nav.signOut' })}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </>
         ) : (
