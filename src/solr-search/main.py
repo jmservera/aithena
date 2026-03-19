@@ -23,13 +23,20 @@ from admin_auth import require_admin_auth
 from auth import (
     AuthenticatedUser,
     AuthenticationError,
+    PasswordPolicyError,
+    UserExistsError,
     authenticate_user,
     clear_auth_cookie,
     create_access_token,
+    create_user,
     decode_access_token,
+    delete_user,
     get_token_from_sources,
+    get_user_by_id,
     init_auth_db,
+    list_users,
     set_auth_cookie,
+    update_user,
 )
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from config import settings
@@ -133,6 +140,29 @@ PUBLIC_PATH_PREFIXES = ("/docs", "/redoc", "/openapi.json")
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+
+class UpdateUserRequest(BaseModel):
+    username: str | None = None
+    role: str | None = None
+
+
+def require_role(*allowed_roles: str) -> Any:
+    """FastAPI dependency that enforces role-based access control."""
+
+    def _dependency(request: Request) -> AuthenticatedUser:
+        user = _get_current_user(request)
+        if user.role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+
+    return Depends(_dependency)
 
 
 class RateLimiter:
@@ -520,6 +550,80 @@ def auth_logout(request: Request, response: Response) -> dict[str, str]:
 @app.get("/v1/auth/me", name="auth_me_v1")
 def auth_me(request: Request) -> dict[str, Any]:
     return _get_current_user(request).to_dict()
+
+
+# ---------------------------------------------------------------------------
+# User CRUD endpoints (v1.9.0)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/v1/auth/register/", include_in_schema=False, name="auth_register_v1_slash")
+@app.post("/v1/auth/register", include_in_schema=False, name="auth_register_v1")
+def auth_register(
+    body: RegisterRequest,
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> dict[str, Any]:
+    try:
+        return create_user(settings.auth_db_path, body.username, body.password, body.role)
+    except UserExistsError as exc:
+        raise HTTPException(status_code=409, detail="Username already exists") from exc
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/v1/auth/users/", include_in_schema=False, name="auth_list_users_v1_slash")
+@app.get("/v1/auth/users", include_in_schema=False, name="auth_list_users_v1")
+def auth_list_users(
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> list[dict[str, Any]]:
+    return list_users(settings.auth_db_path)
+
+
+@app.put("/v1/auth/users/{user_id}/", include_in_schema=False, name="auth_update_user_v1_slash")
+@app.put("/v1/auth/users/{user_id}", include_in_schema=False, name="auth_update_user_v1")
+def auth_update_user(
+    user_id: int,
+    body: UpdateUserRequest,
+    request: Request,
+) -> dict[str, Any]:
+    current_user = _get_current_user(request)
+    is_admin = current_user.role == "admin"
+
+    if not is_admin and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    if not is_admin and body.role is not None:
+        raise HTTPException(status_code=403, detail="Only admins can change roles")
+
+    target = get_user_by_id(settings.auth_db_path, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        updated = update_user(settings.auth_db_path, user_id, username=body.username, role=body.role)
+    except UserExistsError as exc:
+        raise HTTPException(status_code=409, detail="Username already taken") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="User not found")  # pragma: no cover
+    return updated
+
+
+@app.delete("/v1/auth/users/{user_id}/", include_in_schema=False, name="auth_delete_user_v1_slash")
+@app.delete("/v1/auth/users/{user_id}", include_in_schema=False, name="auth_delete_user_v1")
+def auth_delete_user(
+    user_id: int,
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> dict[str, str]:
+    if admin_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    if not delete_user(settings.auth_db_path, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "deleted"}
 
 
 @app.get("/v1/search/", include_in_schema=False, name="search_v1")
@@ -1089,6 +1193,42 @@ def _tcp_check(host: str, port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def _rabbitmq_management_check(
+    host: str,
+    management_port: int,
+    user: str,
+    password: str,
+    path_prefix: str = "/admin/rabbitmq",
+    timeout: float = 2.0,
+) -> bool:
+    """Check RabbitMQ via management HTTP API, falling back to AMQP TCP check."""
+    url = f"http://{host}:{management_port}{path_prefix}/api/health/checks/alarms"
+    try:
+        resp = requests.get(url, auth=(user, password), timeout=timeout)
+        return resp.status_code == 200
+    except (requests.RequestException, OSError) as exc:
+        logger.warning("RabbitMQ management check failed (%s), falling back to TCP probe", exc)
+        return _tcp_check(host, settings.rabbitmq_port)
+
+
+def _zookeeper_check(hosts_csv: str, timeout: float = 2.0) -> bool:
+    """Return True if at least one ZooKeeper node is reachable."""
+    for entry in hosts_csv.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.rsplit(":", 1)
+        host = parts[0]
+        try:
+            port = int(parts[1]) if len(parts) > 1 else 2181
+        except ValueError:
+            logger.warning("Skipping malformed ZooKeeper entry %r: invalid port", entry)
+            continue
+        if _tcp_check(host, port, timeout=timeout):
+            return True
+    return False
+
+
 def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
     """Query Solr CLUSTERSTATUS and return aggregated node/doc information."""
     cluster_url = f"{solr_url}/admin/collections"
@@ -1185,7 +1325,8 @@ def service_status() -> dict[str, Any]:
     Aggregates:
     - Solr CLUSTERSTATUS (node health + doc count)
     - Redis ``doc:*`` key scan (indexing state breakdown)
-    - TCP reachability checks for Solr, Redis, and RabbitMQ
+    - TCP reachability checks for Solr, Redis, and ZooKeeper
+    - RabbitMQ management HTTP API health check
     - Embeddings `/version` probe for semantic-search readiness
     """
     parsed = urlparse(settings.solr_url)
@@ -1197,7 +1338,13 @@ def service_status() -> dict[str, Any]:
 
     solr_up = _tcp_check(solr_host, solr_port)
     redis_up = _tcp_check(settings.redis_host, settings.redis_port)
-    rabbitmq_up = _tcp_check(settings.rabbitmq_host, settings.rabbitmq_port)
+    rabbitmq_up = _rabbitmq_management_check(
+        settings.rabbitmq_host,
+        settings.rabbitmq_management_port,
+        settings.rabbitmq_user,
+        settings.rabbitmq_pass,
+    )
+    zookeeper_up = _zookeeper_check(settings.zookeeper_hosts)
     embeddings_available = _embeddings_available(timeout=CONTAINER_VERSION_TIMEOUT)
 
     return {
@@ -1208,6 +1355,7 @@ def service_status() -> dict[str, Any]:
             "solr": "up" if solr_up else "down",
             "redis": "up" if redis_up else "down",
             "rabbitmq": "up" if rabbitmq_up else "down",
+            "zookeeper": "up" if zookeeper_up else "down",
             "embeddings": "up" if embeddings_available else "down",
         },
     }

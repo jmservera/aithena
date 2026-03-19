@@ -142,6 +142,8 @@
   "indexing.progress": "Progrés d'indexació",
   "indexing.rabbitmq": "RabbitMQ",
   "indexing.redis": "Redis",
+  "indexing.embeddings": "Servidor d'embeddings",
+  "indexing.zookeeper": "ZooKeeper",
   "indexing.serviceHealth": "Salut del servei",
   "indexing.solr": "Solr",
   "indexing.solrDetail": "{status} · {nodes, plural, one {# node} other {# nodes}} · {docs} documents",

@@ -85,6 +85,12 @@
 - The `AUTH_COOKIE_NAME` env var is shared between solr-search and admin (default: `aithena_auth`). Both services must use the same `AUTH_JWT_SECRET` for SSO to work.
 - PR #570, branch `squad/561-fix-admin-login-loop`.
 
+### User CRUD API (Issue #549, PR #572)
+- **require_role() pattern**: Created a reusable `require_role(*allowed_roles)` FastAPI dependency that returns `Depends(inner)`. Uses `_get_current_user(request)` internally — works with forward references since the inner function is only called at request time, not module-load time.
+- **Password policy**: Enforced 8-128 char limits in `validate_password()` before hashing — important to check max length before Argon2 to prevent DoS via oversized inputs.
+- **Exception chaining**: Ruff B904 requires `raise HTTPException(...) from exc` in except blocks. All FastAPI endpoint exception handlers must chain.
+- **Branch hygiene**: Always verify `git branch` before making edits — the working directory can be on a different branch than expected if switching between tasks.
+- **Coverage**: auth.py CRUD functions at 95% coverage. The `update_user` SQL builder uses `noqa: S608` for the dynamic query — S608 (SQL injection) is suppressed because params are always parameterized.
 ### 2026-03-18 — Technical Debt Inventory for v1.7.1
 
 **Task:** Analyze and document technical debt across Python backend services for v1.7.1 release. Focus on embeddings-server uv migration, code quality, and dependency health.
