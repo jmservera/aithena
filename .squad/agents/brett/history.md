@@ -396,3 +396,13 @@ jobs:
 2. **Periodic audit** in `squad-heartbeat.yml`: Heartbeat's member-issue scan now checks each issue for the parent label and adds it if missing.
 
 **Learning:** Label hierarchies in GitHub aren't enforced automatically. When workflows depend on a parent label for discovery (e.g., `squad`), any path that applies a child label (`squad:*`) must also ensure the parent exists. Event-driven fixes are primary; periodic audits are belt-and-suspenders.
+
+#### 2026-03-19 — Docker Compose Diagnostic: solr-search Auth DB Permission Failure
+
+**Problem:** `docker compose up -d` fails — solr-search crashes with `sqlite3.OperationalError: unable to open database file`, blocking nginx and aithena-ui from starting (dependency chain).
+
+**Root cause:** The bind-mounted auth directory (`AUTH_DB_DIR=/home/jmservera/.local/share/aithena/auth`) is owned by `root:root` on the host. The container's `app` user (UID 1000) cannot write to it. Bind mounts override Dockerfile `chown` operations.
+
+**Learning:** Bind-mount ownership is always the host's. Dockerfile `RUN chown` only applies to the image layer, not bind-mounted paths. Any installer or setup script that creates bind-mount directories must set ownership to match the container user's UID (1000 for app). Named volumes don't have this problem because Docker initializes them from the image layer. This is a repeat of the Solr UID 8983 pattern documented in the docker-compose-operations skill.
+
+**Diagnostic written to:** `.squad/decisions/inbox/brett-docker-diagnosis.md`
