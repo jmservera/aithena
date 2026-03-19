@@ -289,31 +289,31 @@ def get_user_by_id(db_path: Path, user_id: int) -> dict | None:
 
 
 def update_user(db_path: Path, user_id: int, *, username: str | None = None, role: str | None = None) -> dict | None:
-    normalized: str | None = None
+    normalized_username: str | None = None
     validated_role: str | None = None
 
     if username is not None:
-        normalized = username.strip()
-        if not normalized:
+        normalized_username = username.strip()
+        if not normalized_username:
             raise ValueError("Username must not be empty")
 
     if role is not None:
         validated_role = validate_role(role)
 
-    if normalized is None and validated_role is None:
+    if normalized_username is None and validated_role is None:
         return get_user_by_id(db_path, user_id)
 
     with _connect(db_path) as connection:
         try:
-            if normalized is not None and validated_role is not None:
+            if normalized_username is not None and validated_role is not None:
                 connection.execute(
                     "UPDATE users SET username = ?, role = ? WHERE id = ?",
-                    (normalized, validated_role, user_id),
+                    (normalized_username, validated_role, user_id),
                 )
-            elif normalized is not None:
+            elif normalized_username is not None:
                 connection.execute(
                     "UPDATE users SET username = ? WHERE id = ?",
-                    (normalized, user_id),
+                    (normalized_username, user_id),
                 )
             else:
                 connection.execute(

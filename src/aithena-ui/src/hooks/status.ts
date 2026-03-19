@@ -25,7 +25,7 @@ export interface StatusResponse {
     solr: string;
     redis: string;
     rabbitmq: string;
-    zookeeper: string;
+    zookeeper?: string;
     embeddings: string;
   };
 }

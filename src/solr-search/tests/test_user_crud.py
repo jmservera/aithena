@@ -23,7 +23,7 @@ from main import app  # noqa: E402
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(auth_db: Path) -> TestClient:  # noqa: ARG001 — ensures auth_db is initialized before app lifespan
     return TestClient(app)
 
 
