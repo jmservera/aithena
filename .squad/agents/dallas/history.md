@@ -580,5 +580,10 @@ src/aithena-ui/src/
 
 ---
 
+## Learnings
+
+- Responsive work is most maintainable when the base layout is desktop-first and media queries explicitly step down to tablet (2-column grid) and mobile (1-column grid).
+- Mobile navigation needs a dedicated hamburger toggle plus i18n-backed labels to keep accessibility intact.
+
 **End of History — Dallas Frontend Developer**  
 **v1.8.0 Roadmap Complete | 13 issues prepared | Team: Ready for planning meeting**
