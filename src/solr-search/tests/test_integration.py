@@ -1080,6 +1080,8 @@ def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -
 
 
 @patch("main._embeddings_available")
+@patch("main._zookeeper_check")
+@patch("main._rabbitmq_management_check")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1087,6 +1089,8 @@ def test_status_endpoint_returns_expected_shape(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_rabbitmq: MagicMock,
+    mock_zk: MagicMock,
     mock_embeddings_available: MagicMock,
 ) -> None:
     """GET /v1/status/ must return solr, indexing, and services keys."""
@@ -1098,6 +1102,8 @@ def test_status_endpoint_returns_expected_shape(
         "pending": 91,
     }
     mock_tcp.return_value = True
+    mock_rabbitmq.return_value = True
+    mock_zk.return_value = True
     mock_embeddings_available.return_value = True
 
     client = get_client()
@@ -1114,10 +1120,18 @@ def test_status_endpoint_returns_expected_shape(
         "pending": 91,
     }
     assert data["embeddings_available"] is True
-    assert data["services"] == {"solr": "up", "redis": "up", "rabbitmq": "up", "embeddings": "up"}
+    assert data["services"] == {
+        "solr": "up",
+        "redis": "up",
+        "rabbitmq": "up",
+        "zookeeper": "up",
+        "embeddings": "up",
+    }
 
 
 @patch("main._embeddings_available")
+@patch("main._zookeeper_check")
+@patch("main._rabbitmq_management_check")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1125,6 +1139,8 @@ def test_status_endpoint_slash_alias(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_rabbitmq: MagicMock,
+    mock_zk: MagicMock,
     mock_embeddings_available: MagicMock,
 ) -> None:
     """/v1/status/ (with trailing slash) must also return 200."""
@@ -1136,6 +1152,8 @@ def test_status_endpoint_slash_alias(
         "pending": 0,
     }
     mock_tcp.return_value = True
+    mock_rabbitmq.return_value = True
+    mock_zk.return_value = True
     mock_embeddings_available.return_value = True
 
     client = get_client()
@@ -1145,6 +1163,8 @@ def test_status_endpoint_slash_alias(
 
 
 @patch("main._embeddings_available")
+@patch("main._zookeeper_check")
+@patch("main._rabbitmq_management_check")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1152,9 +1172,11 @@ def test_status_services_down_when_tcp_fails(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_rabbitmq: MagicMock,
+    mock_zk: MagicMock,
     mock_embeddings_available: MagicMock,
 ) -> None:
-    """Services must report 'down' when TCP check fails."""
+    """Services must report 'down' when health checks fail."""
     mock_solr_status.return_value = {"status": "error", "nodes": 0, "docs_indexed": 0}
     mock_indexing.return_value = {
         "total_discovered": 0,
@@ -1163,6 +1185,8 @@ def test_status_services_down_when_tcp_fails(
         "pending": 0,
     }
     mock_tcp.return_value = False
+    mock_rabbitmq.return_value = False
+    mock_zk.return_value = False
     mock_embeddings_available.return_value = False
 
     client = get_client()
@@ -1174,6 +1198,7 @@ def test_status_services_down_when_tcp_fails(
     assert data["services"]["solr"] == "down"
     assert data["services"]["redis"] == "down"
     assert data["services"]["rabbitmq"] == "down"
+    assert data["services"]["zookeeper"] == "down"
     assert data["services"]["embeddings"] == "down"
 
 
