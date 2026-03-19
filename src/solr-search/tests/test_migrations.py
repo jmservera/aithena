@@ -41,7 +41,7 @@ def test_init_auth_db_is_idempotent(tmp_path: Path) -> None:
     assert rows == 1
 
 
-def test_get_schema_version_returns_zero_for_missing_db(tmp_path: Path) -> None:
+def test_get_schema_version_returns_zero_for_unversioned_db(tmp_path: Path) -> None:
     db_path = tmp_path / "does_not_exist.db"
     with sqlite3.connect(db_path) as conn:
         conn.execute("CREATE TABLE dummy (id INTEGER)")

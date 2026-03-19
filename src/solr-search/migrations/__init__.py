@@ -68,6 +68,7 @@ def apply_pending_migrations(db_path: Path) -> int:
                 (migration.VERSION, description),
             )
             connection.commit()
+            current_version = migration.VERSION
             applied += 1
             logger.info("Migration %d applied successfully", migration.VERSION)
 
