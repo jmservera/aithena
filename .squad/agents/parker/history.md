@@ -78,6 +78,13 @@
 
 <!-- Append learnings below this line -->
 
+### #561 — Admin Streamlit infinite login loop (2025-07)
+- The admin Streamlit app had dual auth: nginx `auth_request` (validates `aithena_auth` cookie) AND Streamlit's own `require_auth()` (checks `st.session_state`). These were completely independent, causing users to log in twice.
+- Fix: `check_auth()` now reads the `aithena_auth` HTTP cookie via `st.context.cookies` (available in Streamlit ≥1.37.0) and validates the JWT. This provides SSO — if the user logged in via the main React app, the cookie is forwarded by nginx and Streamlit auto-authenticates.
+- Solr-search JWTs include a `user_id` claim that admin JWTs don't have, but admin's `decode_access_token()` only requires `["exp", "sub", "role"]`, so cross-service JWT decoding works fine.
+- The `AUTH_COOKIE_NAME` env var is shared between solr-search and admin (default: `aithena_auth`). Both services must use the same `AUTH_JWT_SECRET` for SSO to work.
+- PR #570, branch `squad/561-fix-admin-login-loop`.
+
 ### 2026-03-18 — Technical Debt Inventory for v1.7.1
 
 **Task:** Analyze and document technical debt across Python backend services for v1.7.1 release. Focus on embeddings-server uv migration, code quality, and dependency health.

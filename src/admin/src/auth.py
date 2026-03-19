@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import jwt
 import streamlit as st
 
 JWT_ALGORITHM = "HS256"
+AUTH_COOKIE_NAME_DEFAULT = "aithena_auth"
 _TTL_PATTERN = re.compile(r"^(?P<value>\d+)(?P<unit>[smhd]?)$")
 _TTL_MULTIPLIERS = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,7 @@ class AuthSettings:
     jwt_ttl_seconds: int
     admin_username: str
     admin_password: str
+    auth_cookie_name: str = field(default=AUTH_COOKIE_NAME_DEFAULT)
 
     @classmethod
     def from_env(cls) -> AuthSettings:
@@ -35,11 +39,13 @@ class AuthSettings:
         admin_password = os.environ.get("AUTH_ADMIN_PASSWORD", "")
         if not admin_password:
             raise ValueError("AUTH_ADMIN_PASSWORD environment variable is required.")
+        auth_cookie_name = os.environ.get("AUTH_COOKIE_NAME", AUTH_COOKIE_NAME_DEFAULT)
         return cls(
             jwt_secret=jwt_secret,
             jwt_ttl_seconds=ttl_seconds,
             admin_username=admin_username,
             admin_password=admin_password,
+            auth_cookie_name=auth_cookie_name,
         )
 
 
@@ -101,15 +107,47 @@ def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
 
 
 def check_auth(settings: AuthSettings) -> AuthenticatedUser | None:
-    """Check if the current Streamlit session is authenticated."""
+    """Check if the current Streamlit session is authenticated.
+
+    Tries session state first (fastest), then falls back to the HTTP auth
+    cookie set by the main application login flow (SSO).
+    """
     token = st.session_state.get("auth_token")
+    if token:
+        try:
+            return decode_access_token(token, settings.jwt_secret)
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, ValueError):
+            st.session_state.pop("auth_token", None)
+            st.session_state.pop("auth_user", None)
+
+    # Fallback: check for the auth cookie forwarded by the reverse proxy.
+    return _check_cookie_auth(settings)
+
+
+def _check_cookie_auth(settings: AuthSettings) -> AuthenticatedUser | None:
+    """Try to authenticate via the HTTP auth cookie (SSO with main app)."""
+    try:
+        cookies = st.context.cookies
+    except AttributeError:
+        return None
+
+    token = cookies.get(settings.auth_cookie_name)
     if not token:
         return None
+
     try:
-        return decode_access_token(token, settings.jwt_secret)
+        user = decode_access_token(token, settings.jwt_secret)
+        # Only admin users may access the admin dashboard via cookie SSO.
+        if user.role != "admin":
+            _logger.warning("Cookie SSO rejected: user %r has role %r, admin required", user.username, user.role)
+            return None
+        # Persist in session state so subsequent reruns skip the cookie lookup.
+        st.session_state["auth_token"] = token
+        st.session_state["auth_user"] = user.username
+        _logger.info("Authenticated via auth cookie (SSO)")
+        return user
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, ValueError):
-        st.session_state.pop("auth_token", None)
-        st.session_state.pop("auth_user", None)
+        _logger.debug("Auth cookie present but invalid or expired")
         return None
 
 
