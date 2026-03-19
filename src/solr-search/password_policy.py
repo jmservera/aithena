@@ -21,7 +21,9 @@ MIN_COMPLEXITY_CATEGORIES = 3
 _UPPER = re.compile(r"[A-Z]")
 _LOWER = re.compile(r"[a-z]")
 _DIGIT = re.compile(r"[0-9]")
-_SPECIAL = re.compile(r"[^A-Za-z0-9]")
+# ASCII punctuation only — excludes whitespace and non-ASCII characters to avoid
+# ambiguous "special" matches (e.g. Unicode letters like ñ or 密码).
+_SPECIAL = re.compile(r"[!@#$%^&*()\-_=+\[\]{}|;:'\",.<>?/~`\\]")
 
 
 def validate_password(password: str, username: str) -> list[str]:
@@ -34,13 +36,14 @@ def validate_password(password: str, username: str) -> list[str]:
     Returns:
         A list of violation messages. An empty list means the password is valid.
     """
+    # Early return on max-length: avoids regex searches and allocations on oversized input (DoS guard).
+    if len(password) > MAX_LENGTH:
+        return [f"Password must be at most {MAX_LENGTH} characters"]
+
     violations: list[str] = []
 
     if len(password) < MIN_LENGTH:
         violations.append(f"Password must be at least {MIN_LENGTH} characters")
-
-    if len(password) > MAX_LENGTH:
-        violations.append(f"Password must be at most {MAX_LENGTH} characters")
 
     categories = sum([
         bool(_UPPER.search(password)),
@@ -54,7 +57,7 @@ def validate_password(password: str, username: str) -> list[str]:
             "uppercase, lowercase, digit, special character"
         )
 
-    if username and username.lower() in password.lower():
+    if username and username.casefold() in password.casefold():
         violations.append("Password must not contain the username")
 
     return violations
