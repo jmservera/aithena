@@ -174,6 +174,117 @@ def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
     return AuthenticatedUser(id=user_id, username=username, role=role)
 
 
+MAX_PASSWORD_LENGTH = 128
+MIN_PASSWORD_LENGTH = 8
+VALID_ROLES = frozenset({"admin", "user", "viewer"})
+
+
+class UserExistsError(ValueError):
+    """Raised when a user with the given username already exists."""
+
+
+class PasswordPolicyError(ValueError):
+    """Raised when a password fails validation checks."""
+
+
+def validate_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise PasswordPolicyError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    if len(password) > MAX_PASSWORD_LENGTH:
+        raise PasswordPolicyError(f"Password must be at most {MAX_PASSWORD_LENGTH} characters")
+
+
+def validate_role(role: str) -> str:
+    normalized = role.strip().lower()
+    if normalized not in VALID_ROLES:
+        raise ValueError(f"Invalid role: {role!r}. Must be one of: {', '.join(sorted(VALID_ROLES))}")
+    return normalized
+
+
+def create_user(db_path: Path, username: str, password: str, role: str) -> dict:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("Username must not be empty")
+    validated_role = validate_role(role)
+    validate_password(password)
+
+    password_hash = hash_password(password)
+    created_at = datetime.now(UTC).isoformat()
+    with _connect(db_path) as connection:
+        try:
+            cursor = connection.execute(
+                "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
+                (normalized_username, password_hash, validated_role, created_at),
+            )
+            connection.commit()
+        except sqlite3.IntegrityError as exc:
+            raise UserExistsError(f"User {normalized_username!r} already exists") from exc
+        return {
+            "id": cursor.lastrowid,
+            "username": normalized_username,
+            "role": validated_role,
+            "created_at": created_at,
+        }
+
+
+def list_users(db_path: Path) -> list[dict]:
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT id, username, role, created_at FROM users ORDER BY id"
+        ).fetchall()
+    return [
+        {"id": row["id"], "username": row["username"], "role": row["role"], "created_at": row["created_at"]}
+        for row in rows
+    ]
+
+
+def get_user_by_id(db_path: Path, user_id: int) -> dict | None:
+    with _connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT id, username, role, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"id": row["id"], "username": row["username"], "role": row["role"], "created_at": row["created_at"]}
+
+
+def update_user(db_path: Path, user_id: int, *, username: str | None = None, role: str | None = None) -> dict | None:
+    updates: list[str] = []
+    params: list[str | int] = []
+
+    if username is not None:
+        normalized = username.strip()
+        if not normalized:
+            raise ValueError("Username must not be empty")
+        updates.append("username = ?")
+        params.append(normalized)
+
+    if role is not None:
+        validated_role = validate_role(role)
+        updates.append("role = ?")
+        params.append(validated_role)
+
+    if not updates:
+        return get_user_by_id(db_path, user_id)
+
+    params.append(user_id)
+    with _connect(db_path) as connection:
+        try:
+            connection.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)  # noqa: S608
+            connection.commit()
+        except sqlite3.IntegrityError as exc:
+            raise UserExistsError("Username already taken") from exc
+    return get_user_by_id(db_path, user_id)
+
+
+def delete_user(db_path: Path, user_id: int) -> bool:
+    with _connect(db_path) as connection:
+        cursor = connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        connection.commit()
+        return cursor.rowcount > 0
+
+
 def get_token_from_sources(authorization_header: str | None, cookie_token: str | None) -> str | None:
     if authorization_header:
         scheme, _, token = authorization_header.partition(" ")
