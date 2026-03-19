@@ -42,6 +42,32 @@ With the v0.11.0 auth flow enabled, visiting protected pages redirects you to `/
 
 <!-- TODO: capture screenshot -->
 
+### Reset your password
+
+If you forget your password, an administrator can reset it using the CLI tool:
+
+```bash
+# From the project root — generates a new random password and prints it
+cd src/solr-search
+uv run python reset_password.py --db-path /data/auth/users.db
+
+# Or set a specific password
+uv run python reset_password.py --db-path /data/auth/users.db --password "your-new-password"
+
+# Reset a specific user (default is "admin")
+uv run python reset_password.py --db-path /data/auth/users.db --username myuser --password "new-pass"
+```
+
+On a local dev machine, the database is typically at `~/.local/share/aithena/auth/users.db`. In Docker, it's at `/data/auth/users.db` inside the `solr-search` container.
+
+To reset the password inside a running container:
+
+```bash
+docker compose exec solr-search python reset_password.py
+```
+
+The tool generates a secure 32-character random password if `--password` is omitted, and prints it to stdout.
+
 
 ![Aithena tab navigation](images/tab-navigation.png)
 

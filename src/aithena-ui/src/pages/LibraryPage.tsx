@@ -100,7 +100,7 @@ function LibraryPage() {
       <main className="search-main">
         <header className="search-header">
           <h1 className="page-title">
-            <BookOpen size={20} aria-hidden="true" /> Library
+            <BookOpen size={20} aria-hidden="true" /> {intl.formatMessage({ id: 'library.title' })}
           </h1>
 
           <div className="search-controls">

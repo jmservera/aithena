@@ -168,7 +168,7 @@ function UploadContent({
           </h3>
           <p className="upload-result-message">{error}</p>
           <button type="button" className="upload-result-button" onClick={onReset}>
-            Try Again
+            {intl.formatMessage({ id: 'upload.tryAgain' })}
           </button>
         </div>
       )}
@@ -197,10 +197,10 @@ function UploadContent({
           </div>
           <div className="upload-result-actions">
             <Link to="/search" className="upload-result-button upload-result-button--primary">
-              Back to Search
+              {intl.formatMessage({ id: 'upload.backToSearch' })}
             </Link>
             <button type="button" className="upload-result-button" onClick={onReset}>
-              Upload Another
+              {intl.formatMessage({ id: 'upload.uploadAnother' })}
             </button>
           </div>
         </div>
