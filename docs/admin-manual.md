@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.8.1 Release Notes](release-notes/v1.8.1.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.9.0 Release Notes](release-notes/v1.9.0.md).
 
 ## System architecture overview
 
@@ -2206,3 +2206,188 @@ The auth database directory (`/data/auth/`) is bind-mounted from the host. Key p
 - The `entrypoint.sh` script ensures correct ownership (`app:app`, UID 1000) on startup.
 - **Always back up before upgrading** — while migrations are forward-only and additive, a backup lets you roll back if needed.
 - Named Docker volumes vs. bind mounts: bind mounts are recommended for the auth DB because they make backup and restore trivial from the host filesystem.
+
+---
+
+## Deployment Updates for v1.9.0 (User Management & Security)
+
+v1.9.0 is a major release introducing full user management (CRUD API + UI), role-based access control (RBAC), strong password policies, and multiple security fixes. This section covers operator-relevant changes and deployment validation.
+
+### User Management System
+
+v1.9.0 adds complete user lifecycle management with role-based access control.
+
+#### New Features
+
+- **User Management API** — `/v1/auth/` endpoints for user CRUD (register, list, update, delete)
+- **User Management UI** — `/admin/users` page for admin operations, `/profile` page for user self-service
+- **Three-role RBAC** — `admin` (full access), `user` (search/upload), `viewer` (read-only search)
+- **Default admin seeding** — `admin` user automatically created on first startup if no users exist
+- **Password policy** — Enforced minimum 10 characters, 3+ complexity categories, no username in password
+
+#### Deployment checklist for v1.9.0
+
+1. **Backup existing auth database:**
+   ```bash
+   docker compose exec solr-search /app/scripts/backup_auth_db.sh
+   ```
+
+2. **Start the v1.9.0 stack:**
+   ```bash
+   git fetch origin
+   git checkout v1.9.0
+   docker compose pull
+   docker compose up -d
+   ```
+
+3. **Verify default admin user created:**
+   ```bash
+   docker compose logs solr-search | grep -i "default admin"
+   ```
+
+4. **Test admin access:**
+   - Open http://localhost/ and log in with `admin` / (password from installer or generated)
+   - Navigate to `/admin/users` — should display user list
+   - Create a new user with strong password (10+ characters, at least 3 of 4 categories: uppercase, lowercase, digits, special chars)
+
+5. **Test role-based access:**
+   ```bash
+   # As admin: full access to /admin/users
+   # As user: access to search/upload, not admin features
+   # As viewer: access to search only, no upload
+   ```
+
+6. **Verify PDF viewer:**
+   - Search for a document and click to open
+   - PDF should render in iframe without X-Frame-Options errors
+
+7. **Test login rate limiting:**
+   - Send 6 failed login attempts within 60 seconds
+   - Confirm 429 Too Many Requests response on the 6th attempt
+
+8. **Check embeddings server offline mode:**
+   ```bash
+   docker compose logs embeddings-server | grep -E "(offline|HF_HUB_OFFLINE)"
+   ```
+
+### Password Policy Changes
+
+**Breaking change:** Minimum password length increased from 8 to 10 characters.
+
+Existing users with passwords created under the old 8-character policy may be unable to change their password until an administrator resets it if their current password does not meet the new strong policy (10+ characters, 3+ complexity categories). Use the CLI tool:
+
+```bash
+docker compose exec solr-search python reset_password.py --username <username>
+```
+
+The tool generates a secure 32-character random password if `--password` is omitted.
+
+**Complexity categories:**
+- Uppercase letters (A–Z)
+- Lowercase letters (a–z)
+- Digits (0–9)
+- Special characters (!@#$%^&*)
+
+Passwords must contain at least 3 of these 4 categories. Examples:
+- ✅ `MyPassword123` (uppercase, lowercase, digits)
+- ✅ `Password12` (uppercase, lowercase, digits)
+- ✅ `pass!word123` (lowercase, special, digits)
+- ✅ `MyP@ssw0rd` (uppercase, lowercase, special, digits)
+- ❌ `password` (lowercase only)
+
+### Rate Limiting Improvements
+
+The login rate limiter now correctly identifies client IP addresses via the `X-Forwarded-For` header set by nginx. Previously, all users behind the proxy appeared as a single IP (`172.x.x.x`), making rate limits ineffective.
+
+**Configuration:** Rate limits are built-in; no changes required:
+- Limit: 5 failed login attempts per 60 seconds per IP
+- Response: `429 Too Many Requests`
+- Auto-reset: 60-second window slides
+
+### Security Fixes
+
+v1.9.0 includes four critical security improvements:
+
+1. **PDF viewer iframe fix** — Added `X-Frame-Options SAMEORIGIN` to `/documents/` location, allowing same-origin iframe embedding for PDF viewer
+2. **Embeddings offline mode** — Enforced `HF_HUB_OFFLINE=1` to prevent outbound HuggingFace Hub requests
+3. **Rate limiter IP spoofing** — Fixed to read real client IP from nginx `X-Forwarded-For` header
+4. **Password policy consistency** — Integrated strong policy validation into CLI password reset tool
+
+### Data Migration
+
+v1.9.0 automatically applies schema migrations on startup. The auth database tracks its own version:
+
+```bash
+# Check current schema version
+docker compose exec solr-search sqlite3 /data/auth/users.db "SELECT * FROM schema_version ORDER BY version DESC LIMIT 1;"
+```
+
+Migrations are forward-only and safe for production. If you roll back to v1.8.x, the schema is backwards-compatible.
+
+### Troubleshooting v1.9.0 Deployment
+
+**Issue:** Admin user not created on startup
+- **Cause:** Existing auth database from v1.8.x
+- **Solution:** The admin seeding only happens if no users exist. This is intentional — your existing admin user is preserved. Log in with your existing credentials.
+
+**Issue:** Login returns 401 even with correct credentials
+- **Cause:** Invalid credentials or authentication service misconfiguration
+- **Solution:** Verify credentials and check service logs: `docker compose logs solr-search | grep -i auth`
+
+**Issue:** PDF viewer shows blank iframe
+- **Cause:** Old nginx cache with wrong X-Frame-Options header
+- **Solution:** Clear browser cache or restart nginx: `docker compose restart nginx`
+
+**Issue:** Users can access admin features they shouldn't
+- **Cause:** User role not enforced correctly
+- **Solution:** Restart solr-search and verify RBAC test results in logs: `docker compose logs solr-search | grep -i rbac`
+
+### Upgrade procedure for v1.9.0
+
+**From v1.8.x:**
+
+```bash
+# 1. Backup
+docker compose exec solr-search /app/scripts/backup_auth_db.sh
+
+# 2. Pull new version
+git fetch origin
+git checkout v1.9.0
+
+# 3. Start the stack
+docker compose pull
+docker compose up -d
+
+# 4. Verify migrations completed
+docker compose logs solr-search | grep -i "migration\|successfully"
+
+# 5. Test admin and user creation
+curl -X GET http://localhost:8080/v1/auth/users \
+  -H "Authorization: Bearer <token>" | jq .
+
+# 6. Reset weak passwords
+docker compose exec solr-search python reset_password.py --username <username>
+```
+
+### Rollback procedure for v1.9.0
+
+To roll back to v1.8.1:
+
+```bash
+# 1. Stop the current stack
+docker compose down
+
+# 2. Restore from backup (if you have one)
+docker compose exec solr-search sqlite3 /data/auth/users.db ".restore /path/to/backup.db"
+
+# 3. Checkout v1.8.1
+git checkout v1.8.1
+
+# 4. Restart
+docker compose pull
+docker compose up -d
+```
+
+**Data integrity:** v1.9.0 schema is backwards-compatible with v1.8.x. Existing user accounts, passwords, and roles are preserved. If you restore an older backup, you lose any user accounts created after that backup was taken.
+
+---

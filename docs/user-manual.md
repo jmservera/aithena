@@ -2,6 +2,8 @@
 
 This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.9.1 Release Notes](release-notes/v1.9.1.md).
 
+**v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -68,8 +70,62 @@ docker compose exec solr-search python reset_password.py
 
 The tool generates a secure 32-character random password if `--password` is omitted, and prints it to stdout.
 
-
 ![Aithena tab navigation](images/tab-navigation.png)
+
+## Your Account & Permissions
+
+*New in v1.9.0:* Users can now manage their own accounts with self-service password changes and profile viewing. Access to library features depends on your role.
+
+### Manage your password (v1.9.0+)
+
+You can change your password at any time:
+
+1. Open the **Profile** page by clicking your username in the top navigation profile menu or navigating to `/profile`
+2. Enter your current password to verify your identity
+3. Enter a new password that meets the **strong password policy**:
+   - **At least 10 characters** (increased from 8 in earlier versions)
+   - **At least 3 of the 4 complexity categories:**
+     - Uppercase letters (A–Z)
+     - Lowercase letters (a–z)
+     - Digits (0–9)
+     - Special characters (!@#$%^&* etc.)
+   - **Cannot contain your username**
+4. Confirm the new password by re-entering it
+5. Click **Update Password** to save
+
+Verify your password meets the policy requirements after entry.
+
+### View your profile (v1.9.0+)
+
+1. Click your username in the top navigation profile menu or navigate to `/profile`
+2. View your account details:
+   - **Username** — your login name
+   - **Role** — your access level in the system (see table below)
+   - **Created** — when your account was created
+3. Use the **Change Password** form to update your password (see above)
+
+### Understanding roles and permissions (v1.9.0+)
+
+Aithena uses three roles to control what you can do:
+
+| Role | Can Search | Can Upload | Can View Profile | Can Manage Users | Library Limits |
+|------|-----------|-----------|------------------|-----------------|----------------|
+| **admin** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes (full CRUD) | None |
+| **user** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No | None |
+| **viewer** | ✅ Yes (read-only) | ❌ No | ✅ Yes | ❌ No | Search only |
+
+**What this means:**
+- **Admin** users can create, edit, and delete other user accounts, in addition to full search and upload capabilities
+- **User** (standard) role is suitable for day-to-day library access — search, upload PDFs, and manage your own password
+- **Viewer** role is for read-only access — you can search the library but cannot upload documents or manage users
+
+If your role is more restrictive than you expect, contact your administrator to request role changes.
+
+### Login rate limiting
+
+If you enter your password incorrectly **5 or more times within 60 seconds**, the system will reject further login attempts from your IP address for that window. If you exceed the limit, wait a moment and try again.
+
+If you suspect your account has been compromised, contact your administrator to reset your password.
 
 ## Searching for books
 
