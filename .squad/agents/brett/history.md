@@ -239,6 +239,26 @@
 
 ---
 
+## Learnings
+
+#### 2026-07-25 — Issue #532: Update Screenshots Workflow (PR #537)
+
+**Task:** Create `update-screenshots.yml` — a `workflow_run`-triggered workflow that downloads the `release-screenshots` artifact from a successful integration test on `main` and commits screenshots to `docs/screenshots/` on `dev`.
+
+**Execution:** Used `actions/github-script` (SHA-pinned) to call the GitHub API for cross-workflow artifact download, since `actions/download-artifact` only works within the same workflow. Artifact is downloaded as a zip, extracted into `docs/screenshots/`. Idempotent via `git diff --staged --quiet`.
+
+**Key design choices:**
+- `actions/github-script` for artifact download (REST API `listWorkflowRunArtifacts` + `downloadArtifact`)
+- All `${{ }}` expressions in `env:` blocks, not in `run:` blocks (zizmor compliance)
+- `workflow_run` event scoped to `main` branch success only
+- Commits to `dev` branch where `release-docs.yml` operates
+
+**Outcome:** Screenshot pipeline step 3 complete. Integration test → artifact → commit → release-docs chain is now fully wired.
+
+**Learning:** `actions/download-artifact` cannot download artifacts from a different workflow run. For `workflow_run` triggers, use `actions/github-script` with the REST API (`actions.listWorkflowRunArtifacts` + `actions.downloadArtifact`) to fetch cross-workflow artifacts.
+
+---
+
 ## Decisions (Summary for Continuity)
 
 See `.squad/decisions.md` for full details. Key baseline exceptions:
