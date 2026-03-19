@@ -406,3 +406,24 @@ jobs:
 **Learning:** Bind-mount ownership is always the host's. Dockerfile `RUN chown` only applies to the image layer, not bind-mounted paths. Any installer or setup script that creates bind-mount directories must set ownership to match the container user's UID (1000 for app). Named volumes don't have this problem because Docker initializes them from the image layer. This is a repeat of the Solr UID 8983 pattern documented in the docker-compose-operations skill.
 
 **Diagnostic written to:** `.squad/decisions/inbox/brett-docker-diagnosis.md`
+
+---
+
+#### 2026-07-25 — Issue #542: Pre-release Validation Workflow (PR #544)
+
+**Task:** Implement pre-release Docker Compose integration test process per Ripley's design proposal. Two artifacts: a POSIX-compatible log analyzer script and a GitHub Actions workflow_dispatch workflow.
+
+**Execution:**
+- Created `e2e/pre-release-check.sh`: scans compose logs for 9 categories (crash, deprecation, version mismatch, slow startup, connection retries, security, memory, config, dependency). Outputs JSON findings array. Exit codes: 0=clean, 1=errors, 2=warnings.
+- Created `.github/workflows/pre-release-validation.yml`: builds full stack, runs E2E tests, gathers logs, runs analyzer, creates GitHub issues routed to squad members by category.
+- Reused Docker build/start/health patterns from `integration-test.yml`.
+- All actions SHA-pinned. Script validated with `sh -n`, YAML with Python parser, tested with synthetic logs.
+
+**Key design choices:**
+- POSIX `#!/bin/sh` for maximum portability (no bash-specific features)
+- Connection retries ignore first 60 lines (startup window heuristic)
+- Workflow has two jobs: `build-and-test` (heavy lifting) and `create-issues` (conditional on findings)
+- On errors: single aggregate issue. On warnings only: one issue per category routed to squad member
+- Category→squad routing: crash/security→kane, connection→parker, all infra→brett
+
+**Learning:** POSIX shell pattern matching via `case` statements is sufficient for log scanning without needing grep/awk. The `tr '[:upper:]' '[:lower:]'` approach for case-insensitive matching is portable across all sh implementations. Separating the issue-creation job from the test job avoids needing to handle both artifact upload and GitHub API calls in the same step.
