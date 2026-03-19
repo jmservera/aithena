@@ -24,6 +24,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Password reset instructions** added to user and admin manuals
 
+## [1.8.2] — 2026-03-19
+
+### Fixed
+
+- **File upload failing with size error** — added `client_max_body_size 64m` to nginx config so uploads up to 50MB (backend limit) are no longer rejected by the reverse proxy (#596)
+- **Dependabot automerge CI** — fixed workflow test detection for embeddings-server which uses pip, not uv (#598)
+
+### Removed
+
+- **Streamlit admin service** — removed `streamlit-admin` from Docker Compose, nginx, and backend container health checks; React admin page now provides full feature parity (#587)
+
+### Added
+
+- **Infrastructure UI links** — Solr Admin and RabbitMQ Management cards on the React admin page with i18n support (#588)
+
 ## [1.8.1] — 2026-03-19
 
 ### Fixed
