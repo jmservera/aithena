@@ -386,3 +386,13 @@ jobs:
 
 **Status:** Awaiting execution. See orchestration-log/ for full task descriptions.
 
+
+#### 2026-03-18 — Fix Parent Squad Label Sync (PR #539)
+
+**Problem:** Issues labeled `squad:{member}` without the parent `squad` label were invisible to Ralph's heartbeat, which queries `label:squad`. Issues #509, #514, #515 were discovered missing.
+
+**Fix:** Two-pronged approach:
+1. **Event-driven** in `squad-issue-assign.yml`: New step adds parent `squad` label immediately when any `squad:{member}` label is applied.
+2. **Periodic audit** in `squad-heartbeat.yml`: Heartbeat's member-issue scan now checks each issue for the parent label and adds it if missing.
+
+**Learning:** Label hierarchies in GitHub aren't enforced automatically. When workflows depend on a parent label for discovery (e.g., `squad`), any path that applies a child label (`squad:*`) must also ensure the parent exists. Event-driven fixes are primary; periodic audits are belt-and-suspenders.
