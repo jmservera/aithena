@@ -603,3 +603,21 @@ src/aithena-ui/src/
 - Removed emoji from `library.title` key since the component uses a Lucide `BookOpen` icon
 
 **Key takeaway:** When adding i18n keys, always verify the non-English locale files actually contain translations, not just copies of the English values. The existing locale completeness test only checks that keys exist across all files — it doesn't detect values left in English. Consider adding a test that flags identical values across locales (excluding brand names and technical terms).
+
+### 2026 — Issue #514: WCAG 2.1 AA Accessibility Audit and Fixes (PR #597)
+
+**Problem:** The React frontend lacked several WCAG 2.1 AA compliance features: no skip-to-content link, no focus management on route changes, low color contrast on muted text (rgba 0.3–0.45), no prefers-reduced-motion/prefers-contrast support, missing aria-modal on UserManagement dialogs, missing scope on table headers, and no static a11y linting.
+
+**Fix:**
+- Added skip-to-content link (App.tsx) with CSS that shows on focus + i18n in 4 locales
+- Added useEffect-based focus management on route changes via useLocation + mainRef
+- Raised all low-opacity text colors from 0.3–0.45 to 0.65–0.70 for WCAG AA 4.5:1 contrast ratio
+- Added @media (prefers-reduced-motion: reduce) to disable all animations/transitions
+- Added @media (prefers-contrast: more) with pure black backgrounds and enhanced text opacity
+- Added aria-modal="true" to all 3 UserManagement modal dialogs
+- Added role="img" to ServiceDot health indicator spans
+- Added scope="col" to all <th> cells in AdminPage (3 tables) and UserManagementPage (1 table)
+- Removed redundant role="region" on <section> elements (SearchPage, LibraryPage)
+- Installed eslint-plugin-jsx-a11y and integrated into ESLint flat config
+
+**Key takeaway:** Static analysis with eslint-plugin-jsx-a11y catches many issues (redundant roles, missing keyboard handlers) but cannot detect color contrast or focus management problems. A headless audit covers ~70% of WCAG issues; the remaining 30% (keyboard flow, screen reader announcements, visual contrast) requires a running browser with axe DevTools.
