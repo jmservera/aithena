@@ -1080,7 +1080,8 @@ def _rabbitmq_management_check(
     try:
         resp = requests.get(url, auth=(user, password), timeout=timeout)
         return resp.status_code == 200
-    except Exception:
+    except (requests.RequestException, OSError) as exc:
+        logger.warning("RabbitMQ management check failed (%s), falling back to TCP probe", exc)
         return _tcp_check(host, settings.rabbitmq_port)
 
 
@@ -1092,7 +1093,11 @@ def _zookeeper_check(hosts_csv: str, timeout: float = 2.0) -> bool:
             continue
         parts = entry.rsplit(":", 1)
         host = parts[0]
-        port = int(parts[1]) if len(parts) > 1 else 2181
+        try:
+            port = int(parts[1]) if len(parts) > 1 else 2181
+        except ValueError:
+            logger.warning("Skipping malformed ZooKeeper entry %r: invalid port", entry)
+            continue
         if _tcp_check(host, port, timeout=timeout):
             return True
     return False
