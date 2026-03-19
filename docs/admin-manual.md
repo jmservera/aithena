@@ -1939,3 +1939,83 @@ To roll back to v1.6.0:
    docker compose up -d
    ```
 3. No data migration rollback needed — v1.7.0 makes no schema or volume changes. Note: v1.6.0 code reads only the old `aithena-locale` key, so after rollback it will not find the migrated `aithena.locale` key. Users who switched languages during v1.7.0 will revert to browser locale detection on their next visit. This is a cosmetic reset, not data loss.
+
+## Auth Database Management
+
+### Schema versioning
+
+The authentication database (`AUTH_DB_PATH`, default `/data/auth/users.db`) tracks its own version in a `schema_version` table. Every time `solr-search` starts it checks the current version and applies any pending migrations automatically — no manual intervention required.
+
+You can inspect the current schema version at any time:
+
+```bash
+docker compose exec solr-search sqlite3 /data/auth/users.db "SELECT * FROM schema_version ORDER BY version;"
+```
+
+### Migration framework
+
+Forward-only migrations live in `src/solr-search/migrations/` as Python modules named `mNNNN_<description>.py`. Each module exposes:
+
+| Attribute | Type | Purpose |
+|---|---|---|
+| `VERSION` | `int` | Target schema version (must be > all previous) |
+| `DESCRIPTION` | `str` | Human-readable summary |
+| `upgrade(conn)` | function | DDL/DML using the provided `sqlite3.Connection` |
+
+Migrations run inside a transaction — do **not** call `conn.commit()`. The framework handles commit and records the version after success.
+
+To add a new migration, copy `migrations/template.py` to a new file:
+
+```bash
+cp src/solr-search/migrations/template.py src/solr-search/migrations/m0002_add_email.py
+```
+
+Edit the file to set `VERSION`, `DESCRIPTION`, and implement `upgrade()`. On next startup the migration will apply automatically.
+
+### Backup
+
+The auth database is a single SQLite file. Use the included backup script for a safe, non-locking snapshot:
+
+```bash
+# Inside the container (recommended)
+docker compose exec solr-search /app/scripts/backup_auth_db.sh
+
+# Custom backup directory
+docker compose exec solr-search /app/scripts/backup_auth_db.sh /data/auth/my-backups
+
+# From the host (if the volume is bind-mounted)
+sqlite3 /path/to/auth/users.db ".backup '/path/to/backup/users_backup.db'"
+```
+
+The script uses SQLite's `.backup` command, which creates a consistent snapshot without locking the database. Backups are written to `/data/auth/backups/` by default with UTC timestamps.
+
+**Scheduled backups:** Add a cron entry on the Docker host:
+
+```cron
+0 2 * * * docker compose -f /path/to/docker-compose.yml exec -T solr-search /app/scripts/backup_auth_db.sh
+```
+
+### Restore
+
+To restore from a backup:
+
+```bash
+# 1. Stop the service
+docker compose stop solr-search
+
+# 2. Replace the database file
+cp /data/auth/backups/users_20250115T020000Z.db /data/auth/users.db
+
+# 3. Restart — migrations will re-apply if the backup is from an older version
+docker compose start solr-search
+```
+
+> **Note:** Restoring an older backup may lose user accounts created after that backup. The migration framework will automatically apply any missing migrations on startup.
+
+### Docker volume considerations
+
+The auth database directory (`/data/auth/`) is bind-mounted from the host. Key points:
+
+- The `entrypoint.sh` script ensures correct ownership (`app:app`, UID 1000) on startup.
+- **Always back up before upgrading** — while migrations are forward-only and additive, a backup lets you roll back if needed.
+- Named Docker volumes vs. bind mounts: bind mounts are recommended for the auth DB because they make backup and restore trivial from the host filesystem.
