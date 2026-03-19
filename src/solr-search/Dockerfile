@@ -34,12 +34,14 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends wget gosu && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends wget gosu sqlite3 && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/*.py /app/
+COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /app/scripts /app/scripts
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
