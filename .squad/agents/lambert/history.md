@@ -60,6 +60,16 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-19 — Auth API integration tests (#558 → PR #575)
+
+- **54 integration tests** added for User CRUD API endpoints (POST register, GET users, PUT users/{id}, DELETE users/{id}).
+- Based branch on `squad/549-user-crud-api` (PR #572) since CRUD endpoints don't exist on `dev` yet — tests need the endpoints to run.
+- Cross-endpoint flows are the highest-value integration tests: register→login, delete→login-fails, update→list-reflects, role-promotion→login-role-changes.
+- **Rate limiter interference:** Login rate limiter (`login_rate_limiter`) accumulates across tests when using TestClient against the shared FastAPI app. Fixed with an `autouse` fixture that clears `login_rate_limiter.requests` before/after each test.
+- `object.__setattr__(settings, "auth_db_path", db_path)` is the pattern for patching frozen dataclass settings in fixtures.
+- RBAC: `require_role()` is a FastAPI `Depends()` factory — returns 403 when user role not in allowed set, 401 when unauthenticated (caught by auth middleware first).
+- Username uniqueness is case-insensitive (`COLLATE NOCASE` on the `username` column).
+
 ### 2026-03-19 — Expanded Playwright screenshot spec to 11 pages (#530 → PR #535)
 
 - Screenshot spec now covers 11 pages (was 4): login, search empty, search results, search faceted, PDF viewer, similar books, admin dashboard, upload, status, stats, library.
