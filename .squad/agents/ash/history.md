@@ -44,6 +44,14 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-19 — Fix #562: Empty query + 502 in vector/hybrid search
+
+**Issue A (empty query):** `_search_semantic` and `_search_hybrid` raised HTTP 400 on blank queries. Fixed to return empty result sets (mode, empty results, empty facets) — consistent with keyword mode which normalizes blank to `*:*`.
+
+**Issue B (502 Bad Gateway):** Root cause was nginx `/v1/` location using default `proxy_read_timeout` of 60s while `EMBEDDINGS_TIMEOUT` is 120s. Embedding generation for long queries could exceed 60s, causing nginx to kill the upstream connection. Fixed by adding `proxy_read_timeout 180s` (1.5× the embeddings timeout) and `proxy_connect_timeout 10s` to the `/v1/` location block.
+
+**Key insight:** Any nginx proxy location that routes to services with long timeouts (embeddings, Solr bulk ops) must have `proxy_read_timeout` set to at least match the upstream timeout. The Streamlit location already had `proxy_read_timeout 86400` — the API location was missing it.
+
 ### 2026-03-14 — Reskill: Solr configuration snapshot + vector search readiness
 
 **Managed-schema.xml structure:**

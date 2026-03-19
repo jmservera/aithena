@@ -667,7 +667,15 @@ def _search_semantic(
     produce Solr facet counts or highlight snippets.
     """
     if not q.strip():
-        raise HTTPException(status_code=400, detail="Query must not be empty for semantic search")
+        return {
+            "query": q,
+            "mode": "semantic",
+            "sort": {"by": "score", "order": "desc"},
+            "degraded": False,
+            **build_pagination(0, 1, top_k),
+            "results": [],
+            "facets": {"author": [], "category": [], "year": [], "language": []},
+        }
 
     try:
         vector = _fetch_embedding(q)
@@ -729,7 +737,15 @@ def _search_hybrid(
     (default 60, per the original RRF paper).
     """
     if not q.strip():
-        raise HTTPException(status_code=400, detail="Query must not be empty for hybrid search")
+        return {
+            "query": q,
+            "mode": "hybrid",
+            "sort": {"by": "score", "order": "desc"},
+            "degraded": False,
+            **build_pagination(0, 1, page_size),
+            "results": [],
+            "facets": {"author": [], "category": [], "year": [], "language": []},
+        }
 
     candidate_limit = max(page_size * 2, 20)
 
