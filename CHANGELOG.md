@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **User CRUD API endpoints** — register, list, update, and delete users via `/v1/auth/` (#572)
+- **Password policy enforcement** — configurable password strength requirements (#574)
+- **Auth DB migration framework and backup tooling** — versioned schema migrations with backup/restore (#571)
+- **User management UI** — admin-only user management page, user profile page, and change password form (#554, #555, #556, #579)
+- **Password reset CLI tool** for solr-search admin operations (#547)
+- **Auth API integration tests** for full authentication flow validation (#575)
+
+### Fixed
+
+- **Incomplete i18n translations** on Search, Library, and Upload pages (#567)
+- **Stats UI service status display** incorrectly showing RabbitMQ as down (#573)
+- **Vector/hybrid search errors** on empty query and 502 responses (#568)
+- **Admin page infinite login loop** preventing admin access (#570)
+- **Version display** corrected to show actual VERSION file value in UI (#569)
+
+### Documentation
+
+- **Password reset instructions** added to user and admin manuals
+
 ## [1.8.0] — 2026-03-19
 
 ### Added
