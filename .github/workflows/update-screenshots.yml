@@ -15,9 +15,11 @@ on:
   workflow_run:
     workflows: ["Integration Test"]
     types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   commit-screenshots:
