@@ -582,3 +582,11 @@ POST /v1/upload (multipart/form-data)
 - Replaced `USER app` directive with runtime privilege drop via gosu — more robust for bind mounts
 - gosu added to apt-get install in Dockerfile (standard Docker pattern from postgres/redis images)
 - All 256 solr-search tests pass — no application code changes needed
+### Password Reset Tool (PR #547)
+- Built `src/solr-search/reset_password.py` — standalone CLI for resetting admin passwords
+- Auth system uses **argon2** (not bcrypt) via `argon2-cffi` — `PasswordHasher()` in `auth.py`
+- Default auth DB path: `/data/auth/users.db` (env `AUTH_DB_PATH`)
+- Users table schema: `id, username, password_hash, role, created_at`
+- `hash_password()` from `auth.py` is the single source of truth for hashing
+- ruff is not installed in the venv; use `uv run --with ruff ruff check ...` to lint
+- Coverage config in `pyproject.toml` needs module added to both `addopts` and `[tool.coverage.run]`
