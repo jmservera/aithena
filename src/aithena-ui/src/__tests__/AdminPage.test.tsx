@@ -80,6 +80,23 @@ describe('AdminPage', () => {
     expect(screen.getByText('Failed')).toBeInTheDocument();
   });
 
+  it('renders infrastructure links section with Solr and RabbitMQ', async () => {
+    vi.stubGlobal('fetch', mockFetch(emptyQueueResponse));
+    render(<AdminPage />, { wrapper: IntlWrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText('Infrastructure')).toBeInTheDocument();
+    });
+
+    const solrLink = screen.getByRole('link', { name: /solr admin/i });
+    expect(solrLink).toHaveAttribute('href', '/admin/solr/');
+    expect(solrLink).toHaveAttribute('target', '_blank');
+
+    const rabbitmqLink = screen.getByRole('link', { name: /rabbitmq management/i });
+    expect(rabbitmqLink).toHaveAttribute('href', '/admin/rabbitmq/');
+    expect(rabbitmqLink).toHaveAttribute('target', '_blank');
+  });
+
   it('shows empty state for queued tab when no documents', async () => {
     vi.stubGlobal('fetch', mockFetch(emptyQueueResponse));
     render(<AdminPage />, { wrapper: IntlWrapper });
