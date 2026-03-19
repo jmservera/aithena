@@ -6751,3 +6751,140 @@ The 4-issue sequential dependency prevents conflicts (all Brett's work sequentia
 - **Juanma** (Product Owner): Repo settings (human action)
 
 This unblocks release-docs.yml and establishes the automated screenshot pipeline for all future releases.
+
+---
+
+# Decision: Enforce Parent `squad` Label on `squad:{member}` Assignment
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-18  
+**PR:** #539  
+
+## Context
+
+Ralph discovers work by querying `gh issue list --label "squad"`. Issues with only a `squad:{member}` label (no parent `squad` label) are invisible. Three issues (#509, #514, #515) were missed because of this gap.
+
+## Decision
+
+Any workflow path that applies a `squad:{member}` label MUST also ensure the parent `squad` label is present. This is enforced in two places:
+
+1. **`squad-issue-assign.yml`** — event-driven, adds `squad` immediately when `squad:*` fires
+2. **`squad-heartbeat.yml`** — periodic audit during the member-issue scan loop
+
+## Impact on Team
+
+- **Ralph:** No longer misses assigned issues. Discovery query `label:squad` is now comprehensive.
+- **All members:** If you apply a `squad:{member}` label manually, the parent label will be added automatically. No action needed.
+- **Future workflows:** Any new workflow that applies `squad:{member}` labels should follow this pattern — always include the parent `squad` label.
+
+---
+
+# Decision: Docs Folder Restructure Executed
+
+**Author:** Newt (Product Manager)  
+**Date:** 2026-03-19  
+**Status:** IMPLEMENTED  
+**PR:** #541
+
+## Context
+
+Ripley's approved docs folder restructure proposal reorganizes versioned release and test documentation into subdirectories for better maintainability and clarity. The proposal specified 31 file moves, 3 link updates, image reference fixes, and workflow updates.
+
+## Decision
+
+Executed the full restructure per Ripley's approved proposal:
+
+### Folder Reorganization
+- **Release Notes (12 files):** `docs/release-notes-vX.Y.Z.md` → `docs/release-notes/vX.Y.Z.md`
+- **Test Reports (14 files):** `docs/test-report-vX.Y.Z.md` → `docs/test-reports/vX.Y.Z.md`
+- **Guides (5 files):** frontend-performance-best-practices.md, i18n-guide.md, monitoring.md, observability-runbook.md, v1-readiness-checklist.md → `docs/guides/`
+
+### Link Updates (3 internal links in manuals)
+| File | Old Link | New Link |
+|------|----------|----------|
+| user-manual.md | `release-notes-v1.4.0.md` | `release-notes/v1.4.0.md` |
+| admin-manual.md | `release-notes-v1.7.0.md` | `release-notes/v1.7.0.md` |
+| admin-manual.md | `monitoring.md` | `guides/monitoring.md` |
+
+### Image References (10 total)
+- **Mapped 6 existing images** from `screenshots/` to `images/`:
+  - search-empty.png → search-page.png
+  - search-results-page.png → search-results.png
+  - pdf-viewer.png → pdf-viewer.png
+  - stats-page.png → stats-tab.png
+  - status-page.png → status-tab.png
+  - search-faceted.png → facet-panel.png
+- **Added TODO comments for 4 missing images** (pending screenshot pipeline):
+  - login-page.png
+  - similar-books.png
+  - admin-dashboard.png
+  - upload-page.png
+
+### Cross-References (15 total)
+- Updated 7 release notes (v1.0.0, v1.2.0, v1.3.0, v1.4.0, v1.5.0, v1.6.0, v1.7.0) with correct paths
+- Updated v1-readiness-checklist.md table with new paths for 8 entries
+
+### Workflow Updates
+- `.github/workflows/release-docs.yml` updated with 7 path references:
+  - Output file paths updated for release notes and test reports
+  - Format reference paths in prompts
+  - Generated files list in commit messages
+
+## Implementation Details
+
+**Branch:** `squad/docs-restructure`  
+**Base:** `dev`  
+**Commit:** a86fc3c (with Co-authored-by trailer)
+
+All 31 file moves used `git mv` to preserve commit history. No manual file operations that would lose attribution.
+
+## Impact
+
+- **Release automation:** v1.8.0+ releases will automatically output to new paths
+- **Documentation maintainability:** Cleaner organization by document purpose
+- **Contributor experience:** More intuitive folder structure for finding and adding documentation
+- **Link integrity:** Cross-reference updates ensure no broken links within documentation
+- **Workflow robustness:** release-docs.yml will not silently fail on next release
+
+## Dependencies
+
+- **Depends on:** None (independent restructure)
+- **Enables:** v1.8.0 release automation to use new structure automatically
+- **Blocks:** None
+
+## Related Issues/PRs
+
+- **Proposal:** Ripley's docs restructure in `.squad/decisions.md` (lines 6805+)
+- **Implementation:** PR #541 (squad/docs-restructure)
+- **Screenshot pipeline:** Issues #530–#534 (Brett's artifact automation)
+
+## Success Criteria
+
+✅ All 31 files moved with git history preserved  
+✅ 3 internal manual links updated  
+✅ 6 image references mapped to existing images  
+✅ 4 TODO comments added for missing images  
+✅ 15 cross-references within moved files updated  
+✅ Workflow paths updated for next release  
+✅ PR created and ready for merge  
+
+## Key Learnings
+
+1. **git mv preserves history** — Essential for maintenance. Commit blame and annotations remain valuable for future contributors.
+2. **Cross-references are easy to miss** — Found 15 references within moved files themselves. Comprehensive grep search before finalizing is necessary.
+3. **Workflow integration is critical** — 7 hardcoded paths in release-docs.yml would have caused silent failures without update.
+4. **Link validation in CI could prevent decay** — Without automated checks, restructures gradually break over time as new docs are added to old paths.
+5. **Image mappings create clarity** — Explicit mapping of screenshot sources (`search-empty.png` → `search-page.png`) documents intent and prevents confusion.
+
+## Rollout Plan
+
+1. **Immediate:** PR #541 ready for team review and merge to dev
+2. **Before v1.8.0 release:** Ensure screenshot pipeline (Brett #531–#534) populates missing 4 images
+3. **Post-merge:** No additional action needed; release-docs.yml will use new structure automatically
+4. **Optional:** Add link validation to CI for future proofing
+
+## Sign-Off
+
+Executed per Ripley's approved proposal. All acceptance criteria met. Ready for merge.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

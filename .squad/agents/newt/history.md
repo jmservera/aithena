@@ -388,3 +388,87 @@ Comprehensive 3-tier approach covering 14+ pages across user, admin, and operati
 
 **Status:** BLOCKED — Awaiting Brett's artifact pipeline (#531–#532) before proceeding with manual updates.
 
+
+---
+
+## 2026-03-19: Docs Folder Restructure (PR #541)
+
+**Task:** Execute Ripley's approved docs folder restructure per .squad/decisions.md proposal.
+
+**Deliverables:**
+- PR #541 (squad/docs-restructure branch)
+- Reorganized docs/ folder with 3 subdirectories:
+  - `docs/release-notes/` — 12 versioned release notes (v0.10.0–v1.7.0)
+  - `docs/test-reports/` — 14 versioned test reports (v0.4.0–v1.7.0)
+  - `docs/guides/` — 5 feature/operational guides (frontend-performance, i18n, monitoring, observability, v1-readiness-checklist)
+
+**Changes Made:**
+
+1. **File Moves (31 files via git mv)**
+   - Release notes: `docs/release-notes-vX.Y.Z.md` → `docs/release-notes/vX.Y.Z.md`
+   - Test reports: `docs/test-report-vX.Y.Z.md` → `docs/test-reports/vX.Y.Z.md`
+   - Guides: 5 files moved to `docs/guides/`
+
+2. **Link Updates**
+   - user-manual.md line 3: `release-notes-v1.4.0.md` → `release-notes/v1.4.0.md`
+   - admin-manual.md line 3: `release-notes-v1.7.0.md` → `release-notes/v1.7.0.md`
+   - admin-manual.md line 499: `monitoring.md` → `guides/monitoring.md`
+
+3. **Image References**
+   - Mapped 6 existing images: `screenshots/X.png` → `images/X.png`
+     - search-empty → search-page.png
+     - search-results-page → search-results.png
+     - pdf-viewer → pdf-viewer.png
+     - stats-page → stats-tab.png
+     - status-page → status-tab.png
+     - search-faceted → facet-panel.png
+   - Added TODO comments for 4 missing screenshots (login-page, similar-books, admin-dashboard, upload-page)
+
+4. **Cross-References**
+   - Updated 7 release notes (v1.0.0, v1.2.0, v1.3.0, v1.4.0, v1.5.0, v1.6.0, v1.7.0) with correct paths
+   - Updated v1-readiness-checklist.md table with new paths for 8 entries
+
+5. **Workflow Updates**
+   - .github/workflows/release-docs.yml updated with new output paths:
+     - `docs/release-notes/v${VERSION}.md` instead of `docs/release-notes-v${VERSION}.md`
+     - `docs/test-reports/v${VERSION}.md` instead of `docs/test-report-v${VERSION}.md`
+     - Updated 8 references in the workflow
+
+**Process:**
+1. Checked out dev, created squad/docs-restructure branch
+2. Created target directories (mkdir -p)
+3. Used git mv for all 31 files to preserve history
+4. Updated 3 manual links
+5. Updated 10 image references (6 mapped, 4 TODO)
+6. Fixed 7 release notes with correct internal paths
+7. Fixed v1-readiness-checklist paths (8 entries)
+8. Updated release-docs.yml workflow (7 references)
+9. Committed all changes with descriptive message including Co-authored-by
+10. Pushed and created PR #541 against dev
+
+**Key Learnings:**
+
+1. **git mv is essential for doc restructures** — Preserves full commit history vs. manual moves. Makes attribution and blame clear for future maintainers.
+
+2. **Cross-references within moved files are easy to miss** — Found 15 references to old paths within the moved files themselves (release notes linking to each other, checklist referencing versions). Need comprehensive search before declaring moves complete.
+
+3. **Workflow integration points are critical** — The release-docs.yml workflow had 7 hardcoded path references. These would have silently failed in the next release without update. Always trace automation paths when restructuring.
+
+4. **Image references need mapping clarity** — 6 images existed with different names (search-page.png in docs/images/ but referenced as search-empty.png in markdown). Mapping file creates documentation for future maintainers. The 4 TODO comments signal the screenshots.spec.ts artifact pipeline as the next dependency.
+
+5. **Manual-only restructures are fragile** — Without automated enforcement (linting or CI checks for broken links), restructures gradually decay over time. Consider adding link validation to CI once paths stabilize.
+
+**Release Impact:**
+- v1.8.0+ release-docs automation will use new paths automatically
+- Manuals and guides are now organized by purpose
+- Cleaner docs/ directory structure for contributors
+- Historical releases (v0.x, v1.0–v1.3) fully preserved and searchable
+
+**PR Status:** #541 created and ready for review/merge to dev.
+
+**Next Steps:**
+- Review and merge PR #541 to dev
+- Once merged, update any external documentation/wiki that references the old paths
+- Screenshot pipeline (Brett's #531–#534) will populate missing 4 images
+- Release-docs.yml will use new structure automatically on next release
+
