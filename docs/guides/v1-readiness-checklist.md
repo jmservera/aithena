@@ -26,13 +26,13 @@ These milestone issues define the final release gate and must be referenced in t
 | Release window | Scope to verify for v1.0 | Evidence in repo |
 | --- | --- | --- |
 | **v0.1-v0.3 foundations** | Prototype-to-platform build-out: document ingestion, metadata extraction, queue-backed indexing, Solr-centered search architecture, and the move toward the current FastAPI/React stack | `README.md` architecture + project phases, `docs/admin-manual.md`, git tag `v0.3.0`, `.squad/log/2026-03-13T18-44-phase1-implementation.md` |
-| **v0.4.0** | Search-first reading experience: keyword search, facet filters, PDF viewer, Status tab, Stats tab | `docs/features/v0.4.0.md`, `docs/test-report-v0.4.0.md` |
-| **v0.5.0** | Semantic and hybrid search, Similar Books, embedded admin dashboard, language detection fix, startup ordering hardening | `docs/features/v0.5.0.md`, `docs/test-report-v0.5.0.md` |
-| **v0.6.0** | PDF upload flow, upload validation/rate limits, Bandit/Checkov/Zizmor security scans, container health/resource hardening | `docs/features/v0.6.0.md`, `docs/security/baseline-v0.6.0.md`, `docs/test-report-v0.6.0.md` |
-| **v0.7.0** | Versioning infrastructure, `/version` endpoints, admin observability, release automation | `docs/features/v0.7.0.md`, `docs/test-report-v0.7.0.md` |
+| **v0.4.0** | Search-first reading experience: keyword search, facet filters, PDF viewer, Status tab, Stats tab | `docs/features/v0.4.0.md`, `docs/test-reports/v0.4.0.md` |
+| **v0.5.0** | Semantic and hybrid search, Similar Books, embedded admin dashboard, language detection fix, startup ordering hardening | `docs/features/v0.5.0.md`, `docs/test-reports/v0.5.0.md` |
+| **v0.6.0** | PDF upload flow, upload validation/rate limits, Bandit/Checkov/Zizmor security scans, container health/resource hardening | `docs/features/v0.6.0.md`, `docs/security/baseline-v0.6.0.md`, `docs/test-reports/v0.6.0.md` |
+| **v0.7.0** | Versioning infrastructure, `/version` endpoints, admin observability, release automation | `docs/features/v0.7.0.md`, `docs/test-reports/v0.7.0.md` |
 | **v0.8-v0.9 hardening** | Admin/release-confidence and Python dependency security re-baselining remain represented in the current repo, but retained release artifacts are incomplete | git tag `v0.8.0`, `docs/security/baseline-v0.9.0.md`, current workflow + dependency manifests |
-| **v0.10.0** | GitHub Actions supply-chain hardening: SHA pinning, least-privilege permissions, fixed Bandit config, `persist-credentials: false` | `docs/release-notes-v0.10.0.md`, `docs/test-report-v0.10.0.md` |
-| **v0.11.0** | Local auth, JWT sessions, protected routes, nginx auth gate, installer-driven first run setup | `docs/features/v0.11.0.md`, `docs/release-notes-v0.11.0.md`, `docs/test-report-v0.11.0.md` |
+| **v0.10.0** | GitHub Actions supply-chain hardening: SHA pinning, least-privilege permissions, fixed Bandit config, `persist-credentials: false` | `docs/release-notes/v0.10.0.md`, `docs/test-reports/v0.10.0.md` |
+| **v0.11.0** | Local auth, JWT sessions, protected routes, nginx auth gate, installer-driven first run setup | `docs/features/v0.11.0.md`, `docs/release-notes/v0.11.0.md`, `docs/test-reports/v0.11.0.md` |
 | **v0.12.0** | Metrics endpoint, credential rotation, degraded-mode search, failover runbook/drill, sizing guide/benchmark, integration-test workflow, release-docs workflow, and final GitHub Actions hardening cleanup | `docs/monitoring.md`, `docs/deployment/production.md`, `docs/deployment/failover-runbook.md`, `docs/deployment/sizing-guide.md`, `.github/workflows/integration-test.yml`, `.github/workflows/release-docs.yml`, `.github/workflows/security-zizmor.yml` |
 
 ### Feature coverage checklist

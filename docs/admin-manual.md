@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.7.0 Release Notes](release-notes-v1.7.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.7.0 Release Notes](release-notes/v1.7.0.md).
 
 ## System architecture overview
 
@@ -404,9 +404,7 @@ v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
    - **Resources** — CPU and memory usage graphs
    - **Logs** — recent system events and state changes
 
-![System status page](screenshots/status-page.png)
-
-**Auto-refresh behavior:**
+![System status page](images/status-tab.png)
 
 - Polls `/version` and `/admin/containers` every 30 seconds
 - Changes highlighted in green (improvement) or red (degradation)
@@ -496,7 +494,7 @@ Current metrics cover:
 - embeddings availability
 - Solr live-node count
 
-For a ready-to-use scrape example and starter alert thresholds, see the dedicated [Monitoring guide](monitoring.md).
+For a ready-to-use scrape example and starter alert thresholds, see the dedicated [Monitoring guide](guides/monitoring.md).
 
 ### Credential rotation procedure
 
@@ -556,7 +554,7 @@ Treat the published numbers as planning guidance until you have benchmark data f
 
 The UI **Status** tab is the fastest operator-friendly health check.
 
-![System status page](screenshots/status-page.png)
+![System status page](images/status-tab.png)
 
 It shows:
 
@@ -567,7 +565,7 @@ It shows:
 
 Important: this dashboard is focused on the search and ingestion path. It does **not** report health for every container in the stack.
 
-![Collection statistics](screenshots/stats-page.png)
+![Collection statistics](images/stats-tab.png)
 
 ### Use the API directly
 
@@ -892,7 +890,10 @@ v1.3.0 requires authentication for the embedded Streamlit admin dashboard. Users
 - Sessions expire after 24 hours (configurable via `AUTH_JWT_TTL`)
 - Logging out clears the browser session
 
-![Admin dashboard](screenshots/admin-dashboard.png)
+![Admin dashboard](images/admin-dashboard.png)
+
+<!-- TODO: capture screenshot -->
+
 
 **Environment variables:**
 
