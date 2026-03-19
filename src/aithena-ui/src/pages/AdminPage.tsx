@@ -38,8 +38,8 @@ function QueuedTable({ docs }: QueuedTableProps) {
       <table className="admin-table">
         <thead>
           <tr>
-            <th>{intl.formatMessage({ id: 'admin.queued.headerPath' })}</th>
-            <th>{intl.formatMessage({ id: 'admin.queued.headerQueuedAt' })}</th>
+            <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerPath' })}</th>
+            <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerQueuedAt' })}</th>
           </tr>
         </thead>
         <tbody>
@@ -115,11 +115,11 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerPath' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerTitle' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerAuthor' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerYear' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerIndexedAt' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerPath' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerTitle' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerAuthor' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerYear' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerIndexedAt' })}</th>
             </tr>
           </thead>
           <tbody>
@@ -171,10 +171,10 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
         <table className="admin-table">
           <thead>
             <tr>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerPath' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerError' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerFailedAt' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerAction' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerPath' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerError' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerFailedAt' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerAction' })}</th>
             </tr>
           </thead>
           <tbody>

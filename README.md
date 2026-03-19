@@ -2,9 +2,9 @@
 
 A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
-**Current Release:** v1.0.0 ✅ — Production-ready with authentication, PDF upload, admin dashboard, and security hardening.  
-**Development:** v1.x milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
-**[View v1.x Milestones](https://github.com/jmservera/aithena/milestones)** | **[v1.0.0 Release Notes](docs/release-notes-v1.0.0.md)**
+**Current Release:** v1.7.1 — Stability, Docker multi-stage builds, and security hardening.  
+**Development:** v1.8.0+ milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
+**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v1.7.0.md)**
 
 ## What It Does
 
@@ -88,26 +88,60 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 ## Documentation
 
-- [v1.0.0 Release Notes](docs/release-notes-v1.0.0.md)
-- [v1.0.0 Test Report](docs/test-report-v1.0.0.md)
+### Guides
+
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
-- [Deployment sizing guide](docs/deployment/sizing-guide.md)
-- [v0.12.0 Release Notes](docs/release-notes-v0.12.0.md)
-- [v0.12.0 Test Report](docs/test-report-v0.12.0.md)
+- [Deployment Sizing Guide](docs/deployment/sizing-guide.md)
+- [i18n Contributor Guide](docs/i18n-guide.md)
+- [Security Baseline](docs/security/baseline-v0.6.0.md)
+
+### Release Notes (newest first)
+
+- [v1.7.0 Release Notes](docs/release-notes/v1.7.0.md)
+- [v1.6.0 Release Notes](docs/release-notes/v1.6.0.md)
+- [v1.5.0 Release Notes](docs/release-notes/v1.5.0.md)
+- [v1.4.0 Release Notes](docs/release-notes/v1.4.0.md)
+- [v1.3.0 Release Notes](docs/release-notes/v1.3.0.md)
+- [v1.2.0 Release Notes](docs/release-notes/v1.2.0.md)
+- [v1.1.0 Release Notes](docs/release-notes/v1.1.0.md)
+- [v1.0.1 Release Notes](docs/release-notes/v1.0.1.md)
+- [v1.0.0 Release Notes](docs/release-notes/v1.0.0.md)
+- [v0.12.0 Release Notes](docs/release-notes/v0.12.0.md)
+- [v0.11.0 Release Notes](docs/release-notes/v0.11.0.md)
+- [v0.10.0 Release Notes](docs/release-notes/v0.10.0.md)
+
+### Test Reports (newest first)
+
+- [v1.7.0 Test Report](docs/test-reports/v1.7.0.md)
+- [v1.6.0 Test Report](docs/test-reports/v1.6.0.md)
+- [v1.5.0 Test Report](docs/test-reports/v1.5.0.md)
+- [v1.4.0 Test Report](docs/test-reports/v1.4.0.md)
+- [v1.3.0 Test Report](docs/test-reports/v1.3.0.md)
+- [v1.2.0 Test Report](docs/test-reports/v1.2.0.md)
+- [v1.0.0 Test Report](docs/test-reports/v1.0.0.md)
+- [v0.12.0 Test Report](docs/test-reports/v0.12.0.md)
+- [v0.11.0 Test Report](docs/test-reports/v0.11.0.md)
+- [v0.10.0 Test Report](docs/test-reports/v0.10.0.md)
+
+### Feature Guides
+
 - [v0.11.0 Feature Guide](docs/features/v0.11.0.md)
-- [v0.11.0 Release Notes](docs/release-notes-v0.11.0.md)
-- [v0.11.0 Test Report](docs/test-report-v0.11.0.md)
-- [v0.10.0 Release Notes](docs/release-notes-v0.10.0.md)
-- [v0.10.0 Test Report](docs/test-report-v0.10.0.md)
 - [v0.7.0 Feature Guide](docs/features/v0.7.0.md)
 - [v0.6.0 Feature Guide](docs/features/v0.6.0.md)
 - [v0.5.0 Feature Guide](docs/features/v0.5.0.md)
 - [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
-- [Security Baseline](docs/security/baseline-v0.6.0.md)
-- [v0.7.0 Test Report](docs/test-report-v0.7.0.md)
-- [v0.6.0 Test Report](docs/test-report-v0.6.0.md)
-- [v0.5.0 Test Report](docs/test-report-v0.5.0.md)
+
+## Roadmap
+
+| Milestone | Theme | Status |
+|-----------|-------|--------|
+| [v1.8.0](https://github.com/jmservera/aithena/milestone/22) | UI/UX improvements, design system | In Progress |
+| [v1.8.1](https://github.com/jmservera/aithena/milestone/24) | Bug fixes (search, stats, i18n, admin) | Complete |
+| [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Streamlit retirement, infra UI links | Planned |
+| [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | In Progress |
+| [v1.10.0](https://github.com/jmservera/aithena/milestone/26) | User collections, metadata editing | Planned |
+| [v1.10.1](https://github.com/jmservera/aithena/milestone/27) | BCDR backup/restore | Planned |
 
 ## Architecture
 

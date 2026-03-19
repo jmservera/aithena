@@ -58,6 +58,7 @@
   "admin.thTitle": "Title",
   "admin.thYear": "Year",
   "admin.title": "🏛️ Tableau de bord d'administration",
+  "app.skipToContent": "Aller au contenu principal",
   "app.subtitle": "Recherche de Bibliothèque de Livres",
   "app.title": "Aithena",
   "book.foundOnPage": "Trouvé à la page {pageStart}",

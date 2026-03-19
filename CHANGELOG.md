@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **User CRUD API endpoints** — register, list, update, and delete users via `/v1/auth/` (#572)
+- **Password policy enforcement** — configurable password strength requirements (#574)
+- **Auth DB migration framework and backup tooling** — versioned schema migrations with backup/restore (#571)
+- **User management UI** — admin-only user management page, user profile page, and change password form (#554, #555, #556, #579)
+- **Password reset CLI tool** for solr-search admin operations (#547)
+- **Auth API integration tests** for full authentication flow validation (#575)
+
+### Fixed
+
+- **Incomplete i18n translations** on Search, Library, and Upload pages (#567)
+- **Stats UI service status display** incorrectly showing RabbitMQ as down (#573)
+- **Vector/hybrid search errors** on empty query and 502 responses (#568)
+- **Admin page infinite login loop** preventing admin access (#570)
+- **Version display** corrected to show actual VERSION file value in UI (#569)
+
+### Documentation
+
+- **Password reset instructions** added to user and admin manuals
+
+## [1.8.0] — 2026-03-19
+
+### Added
+
+- **Design tokens (CSS custom properties)** — Centralized design system for colors, typography, spacing, and shadows (#510)
+- **Lucide React icon library** — Professional SVG icons replacing emoji, improving visual consistency and accessibility (#511)
+- **Loading states and skeleton screens** — Intelligent loading indicators for data-fetching operations (#508)
+- **Mobile-responsive design** — Responsive layout with breakpoints for phones, tablets, and desktops (#509)
+- **Search rate limiting** — Redis-based rate limiting on `/v1/search` endpoint (50 requests per 15 minutes per IP) to prevent abuse (#516)
+- **Improved empty and error states** — Enhanced messaging and visual design for empty searches, failed requests, and errors (#513)
+- **Pre-release integration test process** — Docker Compose integration testing framework for multi-service validation (#542)
+- **Screenshot automation** — Playwright-based screenshot capture and GitHub Actions workflow for UI documentation (#530, #531, #532)
+- **Release documentation automation** — GitHub Actions integration with Copilot CLI for automated release notes (#523)
+
+### Fixed
+
+- **UI version display** — Fixed header to correctly display the running application version (#545)
+- **solr-search auth directory permissions** — Corrected permissions issue on host bind mounts (#543)
+
+### Changed
+
+- **Repository settings** — Enabled GitHub Actions to create PRs for automated workflows (#534)
+
+### Documentation
+
+- **Updated user and admin manuals** to reference screenshots and new features (#533)
+
 ## [1.7.1] — 2026-03-18
 
 ### Changed
