@@ -7175,3 +7175,89 @@ This development machine has both:
 
 Track environment capabilities per machine. Some future codespaces may be Tier 2 or Tier 3. Always verify available tools before assigning work.
 
+# Decision: Pre-release Validation Workflow
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-07-25
+**Status:** IMPLEMENTED
+**PR:** #544 (Closes #542)
+
+## Context
+
+The team needed an automated pre-release check that builds the full Docker Compose stack, runs E2E tests, and scans container logs for issues before tagging a release. Ripley's design proposal outlined 9 finding categories and a two-job workflow pattern.
+
+## Decision
+
+Implemented two artifacts:
+
+1. **`e2e/pre-release-check.sh`** — POSIX-compatible log analyzer that scans Docker Compose logs for 9 categories: crash/fatal, deprecation, version mismatch, slow startup, connection retries, security, memory pressure, configuration, and dependency issues. Outputs a JSON array of findings. Exit code 0=clean, 1=errors, 2=warnings.
+
+2. **`.github/workflows/pre-release-validation.yml`** — `workflow_dispatch` workflow with `milestone` input. Two jobs: `build-and-test` (build stack, run E2E, gather logs, run analyzer) and `create-issues` (create GitHub issues based on findings). On errors: single issue. On warnings: one issue per category routed to the responsible squad member.
+
+## Category → Squad Routing
+
+| Category | Squad Member | Rationale |
+|---|---|---|
+| crash, security | squad:kane | Security domain |
+| deprecation, dependency, slow_startup, memory, config, version | squad:brett | Infrastructure domain |
+| connection | squad:parker | Backend domain |
+
+## Impact
+
+- **Release process:** Trigger this workflow before tagging any release to catch container-level issues
+- **All team members:** May receive auto-created issues from findings
+- **CI:** Adds ~30-60 min workflow run (full stack build + E2E + analysis)
+- **Existing workflows:** No changes to `integration-test.yml`; patterns reused but not modified
+
+---
+
+
+---
+
+# Decision: Certbot container is optional via docker-compose.ssl.yml
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2025-07-18
+**Status:** Implemented
+
+## Context
+
+The certbot service and its Let's Encrypt volumes were always started by
+`docker compose up`, even for deployments that run behind a reverse proxy or
+on local networks without TLS. This forced operators to create
+`/source/volumes/certbot-data/{conf,www}` directories even when they had no
+use for them.
+
+## Decision
+
+All certbot/SSL configuration has been moved to `docker-compose.ssl.yml`:
+
+- **HTTP-only (default):** `docker compose up -d`
+- **With SSL:** `docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d`
+
+The overlay adds port 443, certbot volume mounts on nginx, the periodic nginx
+reload command, and the certbot sidecar container.
+
+## Rationale
+
+Docker Compose profiles (`profiles: ["ssl"]`) can disable services but cannot
+conditionally add volume mounts or ports to other services. Since nginx needed
+certbot's bind-mount volumes, profiles alone would still require the host
+directories to exist. A compose overlay file cleanly isolates all SSL config.
+
+## Impact
+
+- **New HTTP deployments:** No change needed — `docker compose up` works.
+- **Existing SSL deployments:** Add `-f docker-compose.ssl.yml` to all
+  `docker compose` commands.
+- Docs updated: production.md, quickstart.md, admin-manual.md,
+  failover-runbook.md.
+
+---
+
+# User Directive: Certbot Optional
+
+**Date:** 2026-03-19T13:10Z
+**By:** jmservera (via Copilot)
+**What:** Make the certbot container optional in docker-compose. Most deployments run behind a general reverse proxy or on local networks and don't need Let's Encrypt certificate management.
+**Why:** User request — simplifies default deployment, reduces unnecessary container overhead.
