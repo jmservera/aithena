@@ -113,6 +113,13 @@ solr_circuit = CircuitBreaker(
     expected_exceptions=(requests.RequestException, ValueError),
 )
 
+embeddings_circuit = CircuitBreaker(
+    name="embeddings",
+    failure_threshold=settings.cb_embeddings_failure_threshold,
+    recovery_timeout=settings.cb_embeddings_recovery_timeout,
+    expected_exceptions=(requests.RequestException, ValueError, KeyError, TypeError, IndexError),
+)
+
 PUBLIC_PATHS: frozenset[str] = frozenset(
     {
         "/health",
@@ -370,19 +377,28 @@ def query_solr(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_embedding(text: str) -> list[float]:
-    """Call the embeddings server; wrap errors as HTTP 502."""
+    """Call the embeddings server through the circuit breaker; wrap errors as HTTP 502/503/504."""
     try:
-        return get_query_embedding(settings.embeddings_url, text, settings.embeddings_timeout)
+        return embeddings_circuit.call(
+            get_query_embedding, settings.embeddings_url, text, settings.embeddings_timeout
+        )
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503, detail="Embeddings service temporarily unavailable — circuit breaker is open"
+        ) from exc
     except requests.Timeout as exc:
         raise HTTPException(status_code=504, detail="Timed out waiting for embeddings server") from exc
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail="Embeddings server request failed") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        raise HTTPException(status_code=502, detail=f"Embeddings server returned invalid response: {exc}") from exc
+    except Exception as exc:
+        logger.exception("Unexpected error fetching embedding")
+        raise HTTPException(status_code=502, detail="Unexpected error from embeddings server") from exc
 
 
 def _should_degrade_to_keyword(exc: HTTPException) -> bool:
-    return exc.status_code in {502, 504}
+    return exc.status_code in {502, 503, 504}
 
 
 def build_document_url(request: Request, file_path: str | None) -> str | None:
@@ -473,10 +489,11 @@ async def require_authentication(request: Request, call_next):
 def health() -> dict[str, Any]:
     redis_cb = redis_circuit.get_status()
     solr_cb = solr_circuit.get_status()
+    embeddings_cb = embeddings_circuit.get_status()
 
     if solr_cb["state"] == CircuitState.OPEN.value:
         overall = "unavailable"
-    elif redis_cb["state"] == CircuitState.OPEN.value:
+    elif redis_cb["state"] == CircuitState.OPEN.value or embeddings_cb["state"] == CircuitState.OPEN.value:
         overall = "degraded"
     else:
         overall = "ok"
@@ -488,6 +505,7 @@ def health() -> dict[str, Any]:
         "circuit_breakers": {
             "redis": redis_cb,
             "solr": solr_cb,
+            "embeddings": embeddings_cb,
         },
     }
 
