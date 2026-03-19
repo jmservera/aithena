@@ -221,6 +221,22 @@
 
 **Deliverable:** `/tmp/brett-docker-optimization.md` — production-ready specification with 8 issue templates, roadmap, and validation strategy.
 
+#### 2026-07-25 — Issue #531: Release Screenshots Artifact (PR #536)
+
+**Task:** Add a `release-screenshots` artifact to the integration-test workflow so downstream workflows can consume curated UI screenshots for release documentation.
+
+**Execution:** Added two steps after the existing Playwright artifact upload:
+1. **Extract release screenshots:** Finds all `.png` files from `e2e/playwright/test-results/` and copies to `/tmp/release-screenshots/`
+2. **Upload release screenshots:** Uploads staging directory as `release-screenshots` artifact (90-day retention)
+
+**Design choices:**
+- Both steps use `if: always()` — screenshots captured before failures are preserved
+- `env:` block for staging path (no inline `${{ }}` in `run:` — zizmor safe)
+- Same SHA-pinned `upload-artifact@v7.0.0` as existing steps
+- Existing `playwright-e2e-results` artifact untouched
+
+**Outcome:** Screenshot pipeline step 2 (of the decision in `.squad/decisions.md`) is now in place. Next: `update-screenshots.yml` workflow to consume this artifact.
+
 ---
 
 ## Decisions (Summary for Continuity)
