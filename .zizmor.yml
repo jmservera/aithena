@@ -34,10 +34,10 @@ rules:
       # accepting secure step-level secret handling in non-production workflows.
       # Deployment environments remain deferred until production deployment
       # workflows exist as part of the planned v1.5.0 release work.
-      - release-docs.yml:94
-      - release-docs.yml:194
-      - release-docs.yml:275
-      - squad-issue-assign.yml:123
-      - squad-heartbeat.yml:256
-      - squad-heartbeat.yml:257
+      - release-docs.yml:260
+      - release-docs.yml:261
+      - release-docs.yml:448
+      - squad-issue-assign.yml:141
+      - squad-heartbeat.yml:418
+      - squad-heartbeat.yml:419
       - release.yml:83
