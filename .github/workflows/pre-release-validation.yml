@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: pre-release-validation
@@ -325,10 +324,12 @@ jobs:
       - name: Create failure issue
         if: needs.build-and-test.result == 'failure' || needs.build-and-test.outputs.has_errors == 'true'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          MILESTONE: ${{ inputs.milestone }}
         with:
           script: |
             const fs = require('fs');
-            const milestone = '${{ inputs.milestone }}';
+            const milestone = process.env.MILESTONE;
 
             let findingsText = 'No findings file available.';
             const findingsPath = '${{ runner.temp }}/validation/findings.json';
@@ -399,10 +400,12 @@ jobs:
       - name: Create warning issues by category
         if: needs.build-and-test.outputs.has_errors != 'true' && needs.build-and-test.outputs.has_warnings == 'true'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          MILESTONE: ${{ inputs.milestone }}
         with:
           script: |
             const fs = require('fs');
-            const milestone = '${{ inputs.milestone }}';
+            const milestone = process.env.MILESTONE;
 
             const findingsPath = '${{ runner.temp }}/validation/findings.json';
             let findings;
