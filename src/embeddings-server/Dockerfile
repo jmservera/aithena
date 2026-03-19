@@ -48,7 +48,9 @@ ENV VERSION=${VERSION} \
     PORT=8080 \
     MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2 \
     HF_HOME=/models/huggingface \
-    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
+    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
 
 WORKDIR /app
 
