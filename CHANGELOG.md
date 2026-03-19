@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-03-19
+
+### Added
+
+- **Design tokens (CSS custom properties)** — Centralized design system for colors, typography, spacing, and shadows (#510)
+- **Lucide React icon library** — Professional SVG icons replacing emoji, improving visual consistency and accessibility (#511)
+- **Loading states and skeleton screens** — Intelligent loading indicators for data-fetching operations (#508)
+- **Mobile-responsive design** — Responsive layout with breakpoints for phones, tablets, and desktops (#509)
+- **Search rate limiting** — Redis-based rate limiting on `/v1/search` endpoint (50 requests per 15 minutes per IP) to prevent abuse (#516)
+- **Improved empty and error states** — Enhanced messaging and visual design for empty searches, failed requests, and errors (#513)
+- **Pre-release integration test process** — Docker Compose integration testing framework for multi-service validation (#542)
+- **Screenshot automation** — Playwright-based screenshot capture and GitHub Actions workflow for UI documentation (#530, #531, #532)
+- **Release documentation automation** — GitHub Actions integration with Copilot CLI for automated release notes (#523)
+
+### Fixed
+
+- **UI version display** — Fixed header to correctly display the running application version (#545)
+- **solr-search auth directory permissions** — Corrected permissions issue on host bind mounts (#543)
+
+### Changed
+
+- **Repository settings** — Enabled GitHub Actions to create PRs for automated workflows (#534)
+
+### Documentation
+
+- **Updated user and admin manuals** to reference screenshots and new features (#533)
+
 ## [1.7.1] — 2026-03-18
 
 ### Changed
