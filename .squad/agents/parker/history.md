@@ -603,3 +603,22 @@ POST /v1/upload (multipart/form-data)
 - `hash_password()` from `auth.py` is the single source of truth for hashing
 - ruff is not installed in the venv; use `uv run --with ruff ruff check ...` to lint
 - Coverage config in `pyproject.toml` needs module added to both `addopts` and `[tool.coverage.run]`
+
+### 2026-03-19 — Auth Features: Admin Seeding, Change Password, RBAC (#550, #551, #553)
+
+**PR:** #576
+
+**Changes:**
+- `_seed_default_admin()` in auth.py: seeds admin user on empty DB if `AUTH_DEFAULT_ADMIN_PASSWORD` is set
+- `change_password()` in auth.py: verifies current password, validates new, rejects same-password
+- Enhanced `validate_password()`: now requires uppercase, lowercase, and digit (not just length)
+- `PUT /v1/auth/change-password` endpoint in main.py
+- RBAC on `/v1/upload` via `require_role("admin", "user")` — viewers get 403
+- Admin endpoints keep X-API-Key for backward compat (Phase 1)
+
+**Key Patterns:**
+- `require_role()` returns `Depends(...)` so use it directly in `dependencies=[...]` list, not `Depends(require_role(...))`
+- Password policy changes break existing tests — must update all test passwords to comply
+- `_seed_default_admin` uses lazy import of `config.settings` to avoid circular import
+- `init_auth_db()` now calls `_seed_default_admin()` — all callers (including test fixtures) trigger it
+- Config env vars: `AUTH_DEFAULT_ADMIN_USERNAME` (default: "admin"), `AUTH_DEFAULT_ADMIN_PASSWORD` (no default)

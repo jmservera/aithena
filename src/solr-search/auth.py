@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
+
+logger = logging.getLogger(__name__)
 
 JWT_ALGORITHM = "HS256"
 _PASSWORD_HASHER = PasswordHasher()
@@ -109,6 +112,7 @@ def init_auth_db(db_path: Path) -> None:
     from migrations import apply_pending_migrations
 
     apply_pending_migrations(db_path)
+    _seed_default_admin(db_path)
 
 
 def hash_password(password: str) -> str:
@@ -225,10 +229,20 @@ class PasswordPolicyError(ValueError):
 
 
 def validate_password(password: str) -> None:
+    """Validate password against policy: length, uppercase, lowercase, digit."""
+    errors: list[str] = []
     if len(password) < MIN_PASSWORD_LENGTH:
-        raise PasswordPolicyError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+        errors.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     if len(password) > MAX_PASSWORD_LENGTH:
-        raise PasswordPolicyError(f"Password must be at most {MAX_PASSWORD_LENGTH} characters")
+        errors.append(f"Password must be at most {MAX_PASSWORD_LENGTH} characters")
+    if not re.search(r"[A-Z]", password):
+        errors.append("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", password):
+        errors.append("Password must contain at least one lowercase letter")
+    if not re.search(r"\d", password):
+        errors.append("Password must contain at least one digit")
+    if errors:
+        raise PasswordPolicyError("; ".join(errors))
 
 
 def validate_role(role: str) -> str:
@@ -320,6 +334,73 @@ def delete_user(db_path: Path, user_id: int) -> bool:
         cursor = connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
         connection.commit()
         return cursor.rowcount > 0
+
+
+def _seed_default_admin(db_path: Path) -> None:
+    """Seed a default admin user if the users table is empty and AUTH_DEFAULT_ADMIN_PASSWORD is set."""
+    from config import settings
+
+    with _connect(db_path) as connection:
+        row = connection.execute("SELECT COUNT(*) FROM users").fetchone()
+        user_count = row[0] if row else 0
+
+    if user_count > 0:
+        return
+
+    password = settings.auth_default_admin_password
+    if not password:
+        logger.warning(
+            "No users in the database and AUTH_DEFAULT_ADMIN_PASSWORD is not set. "
+            "No default admin user created. Use reset_password.py or set the env var to bootstrap."
+        )
+        return
+
+    username = settings.auth_default_admin_username
+    password_hash = hash_password(password)
+    created_at = datetime.now(UTC).isoformat()
+
+    with _connect(db_path) as connection:
+        connection.execute(
+            "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
+            (username, password_hash, "admin", created_at),
+        )
+        connection.commit()
+
+    logger.info("Default admin user '%s' created on first startup", username)
+
+
+def change_password(db_path: Path, user_id: int, current_password: str, new_password: str) -> None:
+    """Change a user's password after verifying the current one.
+
+    Raises:
+        ValueError: current password wrong, or same password.
+        PasswordPolicyError: new password doesn't meet policy.
+    """
+    with _connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT password_hash FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+
+    if row is None:
+        raise ValueError("User not found")
+
+    stored_hash = str(row["password_hash"])
+
+    if not _verify_password(stored_hash, current_password):
+        raise ValueError("Current password is incorrect")
+
+    if _verify_password(stored_hash, new_password):
+        raise ValueError("New password must be different from the current password")
+
+    validate_password(new_password)
+
+    new_hash = hash_password(new_password)
+    with _connect(db_path) as connection:
+        connection.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (new_hash, user_id),
+        )
+        connection.commit()
 
 
 def get_token_from_sources(authorization_header: str | None, cookie_token: str | None) -> str | None:
