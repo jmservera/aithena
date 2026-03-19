@@ -26,6 +26,7 @@ from auth import (
     PasswordPolicyError,
     UserExistsError,
     authenticate_user,
+    change_password,
     clear_auth_cookie,
     create_access_token,
     create_user,
@@ -140,6 +141,11 @@ PUBLIC_PATH_PREFIXES = ("/docs", "/redoc", "/openapi.json")
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 class RegisterRequest(BaseModel):
@@ -550,6 +556,23 @@ def auth_logout(request: Request, response: Response) -> dict[str, str]:
 @app.get("/v1/auth/me", name="auth_me_v1")
 def auth_me(request: Request) -> dict[str, Any]:
     return _get_current_user(request).to_dict()
+
+
+@app.put("/v1/auth/change-password/", include_in_schema=False, name="auth_change_password_v1_slash")
+@app.put("/v1/auth/change-password", name="auth_change_password_v1")
+def auth_change_password(body: ChangePasswordRequest, request: Request) -> dict[str, str]:
+    """Change the current user's password."""
+    user = _get_current_user(request)
+
+    try:
+        change_password(settings.auth_db_path, user.id, body.current_password, body.new_password)
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        status = 404 if "User not found" in str(exc) else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+    return {"status": "password_changed"}
 
 
 # ---------------------------------------------------------------------------
@@ -1818,7 +1841,7 @@ def _publish_to_queue(file_path: Path) -> None:
         raise HTTPException(status_code=502, detail="Failed to enqueue document for indexing") from exc
 
 
-@app.post("/v1/upload", name="upload_pdf")
+@app.post("/v1/upload", name="upload_pdf", dependencies=[require_role("admin", "user")])
 async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
     """Upload a PDF document for indexing.
 
