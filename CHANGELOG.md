@@ -7,18 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-03-19
+
 ### Added
 
-- **User CRUD API endpoints** — register, list, update, and delete users via `/v1/auth/` (#572)
-- **Password policy enforcement** — configurable password strength requirements (#574)
-- **Auth DB migration framework and backup tooling** — versioned schema migrations with backup/restore (#571)
-- **User management UI** — admin-only user management page, user profile page, and change password form (#554, #555, #556, #579)
+- **User CRUD API endpoints** — register, list, update, and delete users via `/v1/auth/` (#549, #572)
+- **Password policy enforcement** — configurable password strength requirements with 3+ complexity categories (#552, #574, #584)
+- **Auth DB migration framework and backup tooling** — versioned schema migrations with backup/restore (#557, #571)
+- **User management UI** — admin-only user management page, user profile page, and change password form (#554, #555, #556, #579, #589)
 - **Password reset CLI tool** for solr-search admin operations (#547)
-- **Auth API integration tests** for full authentication flow validation (#575)
+- **Auth API integration tests** for full authentication flow validation (#558, #575)
+- **Role-based access control (RBAC)** — middleware and comprehensive parametrized test suite (#553, #559)
+- **Default admin user seeding** on first startup (#550)
+- **Change password endpoint** — `PUT /v1/auth/change-password` (#551)
+- **Stress testing PRD** — product requirements document for load testing and hardware profiling (#590)
 
 ### Fixed
 
 - **Vector/hybrid search errors** on empty query and 502 responses (#568)
+- **PDF viewer** — allow same-origin iframe embedding for document preview (#577)
+- **Embeddings server** — enforce offline mode to prevent HuggingFace requests at startup (#578)
+- **Login rate limiter** — use real client IP behind reverse proxy to prevent brute-force attacks (#583)
+- **Password policy enforcement** — wire up strong policy (min 10 chars, 3+ complexity categories) in all code paths including CLI (#584)
+
+### Security
+
+- **Security review** of user management module (#560)
 
 ### Documentation
 

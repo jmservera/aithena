@@ -139,7 +139,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 | [v1.8.0](https://github.com/jmservera/aithena/milestone/22) | UI/UX improvements, design system | Complete |
 | [v1.8.1](https://github.com/jmservera/aithena/milestone/24) | Bug fixes (search, stats, i18n, admin) | Complete |
 | [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Streamlit retirement, infra UI links | Complete |
-| [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | In Progress |
+| [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | Complete |
 | [v1.10.0](https://github.com/jmservera/aithena/milestone/26) | User collections, metadata editing | Planned |
 | [v1.10.1](https://github.com/jmservera/aithena/milestone/27) | BCDR backup/restore | Planned |
 
