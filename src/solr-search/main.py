@@ -213,15 +213,14 @@ login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 def get_client_ip(request: Request) -> str:
     """Extract the real client IP from a proxied request.
 
-    Checks X-Forwarded-For first (first IP only, set by our trusted nginx proxy),
-    then X-Real-IP, then falls back to the direct connection IP.
+    Reads X-Forwarded-For set by nginx (configured as $remote_addr to prevent
+    spoofing). Falls back to the direct connection IP.
     """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
+        ip = forwarded.split(",")[0].strip()
+        if ip:
+            return ip
     if request.client:
         return request.client.host
     return "unknown"

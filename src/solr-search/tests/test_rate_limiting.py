@@ -58,7 +58,7 @@ def _mock_solr_ok(mock_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_request(forwarded_for: str | None = None, real_ip: str | None = None,
+def _make_request(forwarded_for: str | None = None,
                   client_host: str | None = "192.168.1.1") -> MagicMock:
     """Create a mock Request with configurable proxy headers."""
     mock_request = MagicMock(spec=Request)
@@ -67,8 +67,6 @@ def _make_request(forwarded_for: str | None = None, real_ip: str | None = None,
         headers = {}
         if forwarded_for is not None:
             headers["X-Forwarded-For"] = forwarded_for
-        if real_ip is not None:
-            headers["X-Real-IP"] = real_ip
         return headers.get(name, default)
 
     mock_request.headers.get = _header_get
@@ -91,18 +89,6 @@ def test_get_client_ip_single_forwarded_for() -> None:
     assert get_client_ip(req) == "203.0.113.5"
 
 
-def test_get_client_ip_uses_x_real_ip_when_no_forwarded_for() -> None:
-    """Should fall back to X-Real-IP when X-Forwarded-For is absent."""
-    req = _make_request(real_ip="10.0.0.5")
-    assert get_client_ip(req) == "10.0.0.5"
-
-
-def test_get_client_ip_prefers_forwarded_for_over_real_ip() -> None:
-    """X-Forwarded-For should take precedence over X-Real-IP."""
-    req = _make_request(forwarded_for="203.0.113.5", real_ip="10.0.0.5")
-    assert get_client_ip(req) == "203.0.113.5"
-
-
 def test_get_client_ip_falls_back_to_client_host() -> None:
     """Should use request.client.host when no proxy headers are present."""
     req = _make_request(client_host="192.168.1.1")
@@ -113,6 +99,12 @@ def test_get_client_ip_returns_unknown_when_no_client() -> None:
     """Should return 'unknown' when request.client is None and no proxy headers."""
     req = _make_request(client_host=None)
     assert get_client_ip(req) == "unknown"
+
+
+def test_get_client_ip_handles_empty_forwarded_for() -> None:
+    """Should fall back to client host when X-Forwarded-For is empty or malformed."""
+    req = _make_request(forwarded_for=", ", client_host="10.0.0.1")
+    assert get_client_ip(req) == "10.0.0.1"
 
 
 def test_get_client_ip_strips_whitespace() -> None:
