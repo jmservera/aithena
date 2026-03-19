@@ -63,6 +63,8 @@ class Settings:
     rate_limit_requests_per_minute: int
     rabbitmq_management_port: int
     zookeeper_hosts: str
+    auth_default_admin_username: str
+    auth_default_admin_password: str | None
 
     @property
     def select_url(self) -> str:
@@ -121,4 +123,6 @@ settings = Settings(
     rate_limit_requests_per_minute=int(os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE", "100")),
     rabbitmq_management_port=int(os.environ.get("RABBITMQ_MANAGEMENT_PORT", "15672")),
     zookeeper_hosts=os.environ.get("ZOOKEEPER_HOSTS", "zoo1:2181"),
+    auth_default_admin_username=os.environ.get("AUTH_DEFAULT_ADMIN_USERNAME", "admin").strip() or "admin",
+    auth_default_admin_password=os.environ.get("AUTH_DEFAULT_ADMIN_PASSWORD") or None,
 )

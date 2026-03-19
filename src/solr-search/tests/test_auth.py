@@ -39,7 +39,7 @@ def auth_db(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def seeded_user(auth_db: Path) -> AuthenticatedUser:
-    password_hash = hash_password("correct-horse-battery-staple")
+    password_hash = hash_password("CorrectHorse1")
     created_at = datetime.now(UTC).isoformat()
     with sqlite3.connect(auth_db) as connection:
         connection.execute(
@@ -54,7 +54,7 @@ def seeded_user(auth_db: Path) -> AuthenticatedUser:
 def test_login_returns_jwt_and_sets_cookie(client: TestClient, seeded_user: AuthenticatedUser) -> None:
     response = client.post(
         "/v1/auth/login",
-        json={"username": seeded_user.username, "password": "correct-horse-battery-staple"},
+        json={"username": seeded_user.username, "password": "CorrectHorse1"},
     )
 
     assert response.status_code == 200
