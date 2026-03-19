@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.7.0 Release Notes](release-notes/v1.7.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.8.2 Release Notes](release-notes/v1.8.2.md).
 
 ## System architecture overview
 
@@ -335,8 +335,8 @@ echo "Current tag: v$(cat VERSION)"
 # Version endpoint on solr-search
 curl -s http://localhost:8080/version | jq '.version'
 
-# In Streamlit admin dashboard
-# Navigate to System Status > Versions tab
+# Via the admin dashboard
+# Navigate to the System Status card in the Admin tab
 ```
 
 ### Version Endpoints (GET /version)
@@ -352,8 +352,8 @@ curl -s http://localhost:8080/version | jq '.'
 ```json
 {
   "service": "solr-search",
-  "version": "0.7.0",
-  "build_time": "2026-03-15T14:30:00Z",
+  "version": "1.8.2",
+  "build_time": "2026-03-19T14:30:00Z",
   "git_commit": "a1b2c3d4",
   "git_branch": "main",
   "python_version": "3.11.7"
@@ -376,18 +376,17 @@ export EXPOSE_CONTAINER_STATS=true
 docker-compose up
 ```
 
-### System Status Admin Page
+### System Status in Admin Dashboard
 
-v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
+v0.7.0 adds system monitoring to the admin dashboard, and v1.8.2+ provides the React admin interface with full feature parity:
 
 **Navigation:**
 
-1. Open the **Admin** tab in Aithena
-2. Navigate to **System Status** (if not visible, ensure v0.7.0 is deployed)
-3. Tabs available:
-   - **Versions** — version matrix and update history for all services
-   - **Health** — health check statuses and history
-   - **Resources** — CPU and memory usage graphs
+1. Open the **Admin** tab (`/admin/`) in Aithena
+2. View **System Status** card showing:
+   - Service health (Solr, RabbitMQ, Redis, embeddings-server)
+   - Container metrics (CPU, memory usage)
+   - Queue statistics
    - **Logs** — recent system events and state changes
 
 ![System status page](images/status-tab.png)
@@ -1088,8 +1087,9 @@ Services published to GHCR:
 - `embeddings-server` — Embedding service
 - `document-indexer` — PDF indexing consumer
 - `document-lister` — Library scanner
-- `admin` — Streamlit admin dashboard
 - `nginx` — Reverse proxy
+
+> **Note (v1.8.2):** The `admin` (Streamlit) service has been removed. The React admin dashboard (`aithena-ui`) provides full feature parity for document management, queue monitoring, and system status.
 
 **OCI image labels:**
 

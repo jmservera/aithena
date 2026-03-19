@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.4.0 Release Notes](release-notes/v1.4.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.8.2 Release Notes](release-notes/v1.8.2.md).
 
 ## Getting started
 
@@ -313,11 +313,12 @@ The **🛠️ Admin** tab opens an embedded operator dashboard inside the Aithen
 
 ### What it shows
 
-The embedded Streamlit dashboard currently includes:
+The admin dashboard (v1.8.2+) includes:
 
 - **Total Documents**, **Queued**, **Processed**, and **Failed** counters
 - **RabbitMQ Queue** metrics for ready, unacknowledged, and total messages
-- sidebar access to **Document Manager**, where operators can inspect queued, processed, and failed documents and trigger requeue or clear actions
+- **Document Manager** section for inspecting queued, processed, and failed documents with actions to requeue or clear
+- **Infrastructure** section with quick links to Solr Admin UI and RabbitMQ Management (for advanced monitoring)
 
 ### What to expect
 
