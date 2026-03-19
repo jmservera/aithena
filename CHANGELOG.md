@@ -18,15 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Incomplete i18n translations** on Search, Library, and Upload pages (#567)
-- **Stats UI service status display** incorrectly showing RabbitMQ as down (#573)
 - **Vector/hybrid search errors** on empty query and 502 responses (#568)
-- **Admin page infinite login loop** preventing admin access (#570)
-- **Version display** corrected to show actual VERSION file value in UI (#569)
 
 ### Documentation
 
 - **Password reset instructions** added to user and admin manuals
+
+## [1.8.1] — 2026-03-19
+
+### Fixed
+
+- **Incomplete i18n translations** on Search, Library, and Upload pages (#564)
+- **Stats UI service status display** incorrectly showing RabbitMQ as down and missing other service statuses (#563)
+- **Admin page infinite login loop** preventing admin access (#561)
+- **Version display** corrected to show actual VERSION file value in UI (#569)
 
 ## [1.8.0] — 2026-03-19
 
