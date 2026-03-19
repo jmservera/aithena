@@ -166,3 +166,11 @@ def test_cli_password_actually_works(auth_db: Path) -> None:
     user = authenticate_user(auth_db, "admin", "RoundTrip99!")
     assert user is not None
     assert user.username == "admin"
+
+
+def test_reset_password_rejects_weak_password(auth_db: Path) -> None:
+    """reset_password should reject passwords that violate the policy."""
+    from auth import PasswordPolicyError
+
+    with pytest.raises(PasswordPolicyError):
+        reset_password(auth_db, "admin", "short")
