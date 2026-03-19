@@ -38,13 +38,15 @@ With the v0.11.0 auth flow enabled, visiting protected pages redirects you to `/
 3. Submit the login form.
 4. After login, Aithena keeps your browser session active and automatically attaches auth to protected requests until you log out or the session expires.
 
+![Aithena login page](screenshots/login-page.png)
+
 ![Aithena tab navigation](images/tab-navigation.png)
 
 ## Searching for books
 
 The **Search** tab is the main place to work.
 
-![Search page](images/search-page.png)
+![Search page before querying](screenshots/search-empty.png)
 
 ### Run a search
 
@@ -131,7 +133,7 @@ The URL encodes:
 - current page number
 - results per page (10, 20, or 50)
 
-
+![Search results with book cards](screenshots/search-results-page.png)
 
 Facet filters appear in the left sidebar.
 
@@ -158,9 +160,7 @@ You can filter by:
 - Changing a filter refreshes the results immediately.
 - When you change a filter, the result list returns to page 1.
 
-![Search results](images/search-results.png)
-
-![Facet panel](images/facet-panel.png)
+![Filtered search results](screenshots/search-faceted.png)
 
 ## Viewing PDFs
 
@@ -174,7 +174,7 @@ When a result includes an attached document link, you can open the PDF directly 
 
 The document opens in an overlay viewer without leaving the search page.
 
-![PDF viewer](images/pdf-viewer.png)
+![PDF viewer with document open](screenshots/pdf-viewer.png)
 
 ### Page navigation from search results
 
@@ -213,6 +213,8 @@ The **Similar Books** panel appears after you open a book from the search result
 
 Click any similar-book card to replace the currently selected PDF with that recommendation. This makes it easy to explore related titles without starting a new search from scratch.
 
+![Similar Books recommendations](screenshots/similar-books.png)
+
 ## Understanding the Status tab
 
 The **Status** tab is a quick health dashboard.
@@ -238,7 +240,7 @@ This section shows whether key services are reachable:
 
 The Status tab refreshes automatically every **10 seconds**, so it is the best place to watch the system during imports or after operational changes.
 
-![Status tab](images/status-tab.png)
+![System status page](screenshots/status-page.png)
 
 ## Understanding the Stats tab
 
@@ -271,7 +273,7 @@ The page also shows counts grouped by:
 
 The Stats tab loads when you open it. If new books have been indexed since the page was opened, refresh the browser page to load the latest totals.
 
-![Stats tab](images/stats-tab.png)
+![Collection statistics](screenshots/stats-page.png)
 
 ## Using the Admin tab
 
@@ -292,6 +294,8 @@ The embedded Streamlit dashboard currently includes:
 - The admin dashboard now requires an authenticated session; if your session expires, Aithena redirects you back to `/login`.
 - If the dashboard cannot load after you sign in, contact your administrator to confirm the admin services are running and your account has been provisioned correctly.
 
+![Admin dashboard](screenshots/admin-dashboard.png)
+
 ## Uploading PDFs (v0.6.0+)
 
 The **Upload** tab lets authenticated users add PDFs to the library without direct server access.
@@ -302,6 +306,8 @@ The **Upload** tab lets authenticated users add PDFs to the library without dire
 2. Either drag-and-drop a PDF onto the zone, or click to browse and select a file.
 3. Watch the real-time progress bar as the file transfers.
 4. When the upload completes, you'll see a success message.
+
+![PDF upload page](screenshots/upload-page.png)
 
 ### What happens after upload
 

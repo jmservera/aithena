@@ -365,3 +365,24 @@ jobs:
 - **Newt's screenshot strategy** (separate decision): 3-tier inventory (Tier 1 required, Tier 2/3 feature-specific)
 - **Phase 2 of strategy:** Integrate artifact download into release-docs (relies on this pipeline)
 
+---
+
+## Sprint: Release Screenshots Automation (2026-03-19)
+
+**Spawn Manifest:** Brett (Infra) spawned with 2 background tasks for screenshot pipeline
+
+### Queued Tasks
+
+1. **#531 — Add release-screenshots artifact**
+   - Mode: background
+   - Extract PNGs from integration test artifacts, compress, upload with 90-day retention
+   - Outcome: PR #536
+
+2. **#532 — Create update-screenshots.yml**
+   - Mode: background
+   - Triggered on artifact completion, downloads PNGs, commits to docs/screenshots/ on dev
+   - Outcome: PR #537
+   - Unblocks: Newt #533 (manual updates require live screenshots in repo)
+
+**Status:** Awaiting execution. See orchestration-log/ for full task descriptions.
+

@@ -404,6 +404,8 @@ v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
    - **Resources** — CPU and memory usage graphs
    - **Logs** — recent system events and state changes
 
+![System status page](screenshots/status-page.png)
+
 **Auto-refresh behavior:**
 
 - Polls `/version` and `/admin/containers` every 30 seconds
@@ -554,7 +556,7 @@ Treat the published numbers as planning guidance until you have benchmark data f
 
 The UI **Status** tab is the fastest operator-friendly health check.
 
-![Status tab](images/status-tab.png)
+![System status page](screenshots/status-page.png)
 
 It shows:
 
@@ -565,7 +567,7 @@ It shows:
 
 Important: this dashboard is focused on the search and ingestion path. It does **not** report health for every container in the stack.
 
-![Stats tab](images/stats-tab.png)
+![Collection statistics](screenshots/stats-page.png)
 
 ### Use the API directly
 
@@ -889,6 +891,8 @@ v1.3.0 requires authentication for the embedded Streamlit admin dashboard. Users
 - After successful login, users can access the admin dashboard via the **Admin** tab in the UI
 - Sessions expire after 24 hours (configurable via `AUTH_JWT_TTL`)
 - Logging out clears the browser session
+
+![Admin dashboard](screenshots/admin-dashboard.png)
 
 **Environment variables:**
 
