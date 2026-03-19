@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.7.0 Release Notes](release-notes/v1.7.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.8.1 Release Notes](release-notes/v1.8.1.md).
 
 ## System architecture overview
 
@@ -1999,6 +1999,147 @@ To roll back to v1.6.0:
    docker compose up -d
    ```
 3. No data migration rollback needed — v1.7.0 makes no schema or volume changes. Note: v1.6.0 code reads only the old `aithena-locale` key, so after rollback it will not find the migrated `aithena.locale` key. Users who switched languages during v1.7.0 will revert to browser locale detection on their next visit. This is a cosmetic reset, not data loss.
+
+## Deployment Updates for v1.8.1 (Bug Fixes & Stability)
+
+v1.8.1 is a patch release addressing four critical bugs discovered after v1.8.0: incomplete i18n translations, admin login loop, incorrect service status reporting, and version display errors. This section covers operator-relevant changes and deployment validation.
+
+### Incomplete i18n translations (#564)
+
+v1.8.1 completes internationalization coverage for all user-facing pages.
+
+**What changed:**
+
+- Search, Library, and Upload pages now have all UI strings extracted and integrated into the i18n translation system.
+- All hardcoded English strings on these pages have been replaced with `react-intl` message keys.
+- Full multilingual support (en, es, ca, fr) is now available on all pages.
+
+**Impact on operators:**
+
+- No environment variables, configuration files, or database changes needed.
+- Users switching languages will see all UI text in their selected language, including page headers, labels, button text, and placeholder strings.
+- No migration or special deployment steps required.
+
+**Verifying i18n after upgrade:**
+
+```bash
+# Open the app and switch language using the LanguageSwitcher
+# Visit each page (Search, Library, Upload) and confirm all text is translated
+# Check that no English hardcoded strings remain on these pages
+# Verify browser console shows no missing translation warnings
+```
+
+### Admin page login loop fix (#561)
+
+v1.8.1 fixes the authentication flow preventing admin dashboard access.
+
+**What changed:**
+
+- Admin (Streamlit) page authentication flow now works correctly without login redirects.
+- Session state persists across admin page navigation.
+
+**Impact on operators:**
+
+- No configuration changes, no new environment variables.
+- Administrators can now access the admin dashboard without being stuck in a login loop.
+- Session authentication is now reliable.
+
+**Verifying admin access after upgrade:**
+
+```bash
+# Navigate to the Admin tab in the application
+# Log in if prompted
+# Verify that login succeeds and the admin dashboard displays
+# Verify that you can navigate within the admin dashboard without being redirected to login
+# Reload the page and confirm the session persists
+```
+
+### Service status reporting improvements (#563)
+
+v1.8.1 enhances the status endpoint to report all critical services accurately.
+
+**What changed:**
+
+- The status endpoint now reports health for Solr (all 3 nodes), ZooKeeper (all 3 nodes), RabbitMQ, embeddings-server, and Redis.
+- The Stats page UI now displays accurate real-time status for all services.
+- RabbitMQ is no longer incorrectly reported as down when it is actually healthy.
+
+**Impact on operators:**
+
+- No configuration changes needed.
+- Monitoring and troubleshooting become more accurate — operators see true service status instead of false negatives.
+- The status endpoint can be used for health monitoring and alerting.
+
+**Verifying status reporting after upgrade:**
+
+```bash
+# Open the Status tab in the application
+# Verify that all services (Solr, ZooKeeper, RabbitMQ, embeddings-server, Redis) are listed
+# Confirm that healthy services show a healthy indicator (not "down")
+# If any service is actually down, verify it shows as down (not false healthy indicator)
+# Test by stopping a service and confirming the status updates correctly
+```
+
+### Version display correction (#569)
+
+v1.8.1 fixes version reporting in the application.
+
+**What changed:**
+
+- The application version display now shows the actual deployed release value.
+- Version information is updated and consistent across the application.
+
+**Impact on operators:**
+
+- No configuration changes needed.
+- Version reporting is now accurate for monitoring and troubleshooting.
+
+**Verifying version display after upgrade:**
+
+```bash
+# Check the application version display — it should show v1.8.1
+# Reload the page and confirm the version remains correct
+```
+
+### Deployment checklist for v1.8.1
+
+1. **Pre-upgrade:**
+   - Verify all services are healthy: `curl -s http://localhost/health`
+   - Back up any user accounts or custom admin configurations
+
+2. **Upgrade:**
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
+
+3. **Post-upgrade validation:**
+   - Open the application and verify the footer displays v1.8.1
+   - Test the Status tab — all services should be listed and show accurate status
+   - Navigate to the Admin tab and verify login succeeds without redirects
+   - Switch language and verify all pages display translated text
+   - Check `docker compose ps` to ensure all services are running
+   - Check `docker compose logs` for any errors or warnings
+
+4. **No rollback-specific actions needed:**
+   - All v1.8.1 changes are backward-compatible bug fixes.
+   - If you roll back to v1.8.0, the app will work correctly but with the four bugs re-present.
+
+### Rollback procedure for v1.8.1
+
+To roll back to v1.8.0:
+
+1. Stop the current stack:
+   ```bash
+   docker compose down
+   ```
+2. Switch to v1.8.0 images:
+   ```bash
+   git checkout v1.8.0 -- docker-compose.yml
+   docker compose pull
+   docker compose up -d
+   ```
+3. No data migration rollback needed — v1.8.1 makes no schema or volume changes. The four bugs will reappear (i18n, admin login, status display, version), but data integrity is unchanged.
 
 ## Auth Database Management
 
