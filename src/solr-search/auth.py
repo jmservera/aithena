@@ -209,21 +209,23 @@ def create_user(db_path: Path, username: str, password: str, role: str) -> dict:
     validate_password(password)
 
     password_hash = hash_password(password)
-    created_at = datetime.now(UTC).isoformat()
     with _connect(db_path) as connection:
         try:
             cursor = connection.execute(
-                "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
-                (normalized_username, password_hash, validated_role, created_at),
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                (normalized_username, password_hash, validated_role),
             )
             connection.commit()
         except sqlite3.IntegrityError as exc:
             raise UserExistsError(f"User {normalized_username!r} already exists") from exc
+        row = connection.execute(
+            "SELECT created_at FROM users WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
         return {
             "id": cursor.lastrowid,
             "username": normalized_username,
             "role": validated_role,
-            "created_at": created_at,
+            "created_at": row["created_at"],
         }
 
 
@@ -250,28 +252,37 @@ def get_user_by_id(db_path: Path, user_id: int) -> dict | None:
 
 
 def update_user(db_path: Path, user_id: int, *, username: str | None = None, role: str | None = None) -> dict | None:
-    updates: list[str] = []
-    params: list[str | int] = []
+    normalized: str | None = None
+    validated_role: str | None = None
 
     if username is not None:
         normalized = username.strip()
         if not normalized:
             raise ValueError("Username must not be empty")
-        updates.append("username = ?")
-        params.append(normalized)
 
     if role is not None:
         validated_role = validate_role(role)
-        updates.append("role = ?")
-        params.append(validated_role)
 
-    if not updates:
+    if normalized is None and validated_role is None:
         return get_user_by_id(db_path, user_id)
 
-    params.append(user_id)
     with _connect(db_path) as connection:
         try:
-            connection.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)  # noqa: S608
+            if normalized is not None and validated_role is not None:
+                connection.execute(
+                    "UPDATE users SET username = ?, role = ? WHERE id = ?",
+                    (normalized, validated_role, user_id),
+                )
+            elif normalized is not None:
+                connection.execute(
+                    "UPDATE users SET username = ? WHERE id = ?",
+                    (normalized, user_id),
+                )
+            else:
+                connection.execute(
+                    "UPDATE users SET role = ? WHERE id = ?",
+                    (validated_role, user_id),
+                )
             connection.commit()
         except sqlite3.IntegrityError as exc:
             raise UserExistsError("Username already taken") from exc

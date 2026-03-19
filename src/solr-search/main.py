@@ -153,7 +153,7 @@ class UpdateUserRequest(BaseModel):
     role: str | None = None
 
 
-def require_role(*allowed_roles: str) -> Callable:
+def require_role(*allowed_roles: str) -> Any:
     """FastAPI dependency that enforces role-based access control."""
 
     def _dependency(request: Request) -> AuthenticatedUser:
