@@ -7,6 +7,8 @@ server {
     listen 80;
     server_name _;
 
+    client_max_body_size 64m;
+
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
@@ -74,25 +76,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Prefix /admin/rabbitmq;
         proxy_pass http://rabbitmq:15672;
-    }
-
-    location = /admin/streamlit {
-        return 301 /admin/streamlit/;
-    }
-
-    location /admin/streamlit/ {
-        auth_request /_auth;
-        error_page 401 = @auth_redirect;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Prefix /admin/streamlit;
-        proxy_pass http://streamlit-admin:8501;
-        proxy_buffering off;
-        proxy_read_timeout 86400;
     }
 
     location = /admin/redis {

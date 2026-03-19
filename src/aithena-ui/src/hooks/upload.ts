@@ -98,7 +98,7 @@ export function useUpload(): UseUploadReturn {
             } else if (xhr.status === 401 || xhr.status === 403) {
               errorMessage = 'Your session has expired. Please sign in again.';
             } else if (xhr.status === 413) {
-              errorMessage = 'File is too large. Maximum size is 50MB.';
+              errorMessage = 'File exceeds the server upload limit. Please try a smaller file.';
             } else if (xhr.status === 429) {
               errorMessage = 'Upload rate limit exceeded. Please try again in a minute.';
             } else if (xhr.status === 500) {
