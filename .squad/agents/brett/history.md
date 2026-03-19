@@ -437,3 +437,16 @@ jobs:
 **Why overlay instead of profiles:** Docker Compose profiles can disable services but can't conditionally add volume mounts or port bindings to *other* services (nginx). The certbot bind-mount volumes (`/source/volumes/certbot-data/`) would still need to exist on the host because nginx referenced them. An overlay file cleanly isolates all SSL-related config in one place.
 
 **Learning:** When making a sidecar optional, check whether the *main* service (nginx) has dependencies on the sidecar's infrastructure (shared volumes, ports). Profiles alone can't handle cross-service dependency removal — use a compose overlay file instead.
+
+#### 2026-07-22 — Issue #557: Auth DB Migration Framework (PR #571)
+
+**Task:** Add schema versioning and forward-only migration framework for the auth SQLite database, plus backup tooling and documentation.
+
+**Execution:**
+- Added `schema_version` table to `init_auth_db` with version tracking
+- Built `migrations/` package: auto-discovers `mNNNN_*.py` modules, applies in VERSION order inside transactions
+- Created `scripts/backup_auth_db.sh` using SQLite `.backup` for safe non-locking snapshots
+- Documented backup/restore and migration workflow in admin manual
+- 8 tests covering schema versioning, migration apply/skip/idempotency
+
+**Learning:** SQLite's `.backup` command is the safest way to back up an active database — it creates a consistent snapshot without requiring application downtime. Forward-only migrations with a version table are the right approach for embedded databases; no need for heavy ORM migration tools like Alembic for SQLite.
