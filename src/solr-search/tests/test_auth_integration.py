@@ -33,7 +33,7 @@ REGISTER_URL = "/v1/auth/register"
 USERS_URL = "/v1/auth/users"
 LOGIN_URL = "/v1/auth/login"
 
-VALID_PASSWORD = "secure-password-123"  # noqa: S105
+VALID_PASSWORD = "SecurePass123"  # noqa: S105
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ def auth_db(tmp_path: Path) -> Path:
 
 
 def _seed_user(
-    db_path: Path, username: str = "admin", role: str = "admin", password: str = "correct-horse-battery-staple"
+    db_path: Path, username: str = "admin", role: str = "admin", password: str = "CorrectHorse1"
 ) -> AuthenticatedUser:
     """Insert a user directly into the DB and return an AuthenticatedUser."""
     pw_hash = hash_password(password)
@@ -207,8 +207,8 @@ class TestRegisterIntegration:
     def test_registered_user_can_login(self, client: TestClient, auth_db: Path) -> None:
         """Cross-endpoint: register then login with the new credentials."""
         admin = _seed_user(auth_db)
-        _register(client, _bearer(admin), username="logintest", password="my-secure-pw-99")
-        login_resp = client.post(LOGIN_URL, json={"username": "logintest", "password": "my-secure-pw-99"})
+        _register(client, _bearer(admin), username="logintest", password="MySecurePw99")
+        login_resp = client.post(LOGIN_URL, json={"username": "logintest", "password": "MySecurePw99"})
         assert login_resp.status_code == 200
         assert login_resp.json()["user"]["username"] == "logintest"
         assert login_resp.json()["user"]["role"] == "viewer"
@@ -477,14 +477,14 @@ class TestDeleteUserIntegration:
         """Cross-endpoint: register, delete, then verify login fails."""
         admin = _seed_user(auth_db)
         headers = _bearer(admin)
-        _register(client, headers, username="doomed", password="valid-password-123")
+        _register(client, headers, username="doomed", password="ValidPass123")
         # Find the user's ID
         users_resp = client.get(USERS_URL, headers=headers)
         doomed = next(u for u in users_resp.json() if u["username"] == "doomed")
         # Delete the user
         client.delete(f"{USERS_URL}/{doomed['id']}", headers=headers)
         # Try to login as deleted user
-        login_resp = client.post(LOGIN_URL, json={"username": "doomed", "password": "valid-password-123"})
+        login_resp = client.post(LOGIN_URL, json={"username": "doomed", "password": "ValidPass123"})
         assert login_resp.status_code == 401
 
     def test_double_delete_returns_404(self, client: TestClient, auth_db: Path) -> None:
@@ -541,10 +541,10 @@ class TestUserLifecycleFlows:
     def test_register_login_me_logout_flow(self, client: TestClient, auth_db: Path) -> None:
         """Register → login → /me → logout flow."""
         admin = _seed_user(auth_db)
-        _register(client, _bearer(admin), username="flow-user", password="my-test-pw-123", role="user")
+        _register(client, _bearer(admin), username="flow-user", password="MyTestPw123", role="user")
 
         # Login as new user
-        login_resp = client.post(LOGIN_URL, json={"username": "flow-user", "password": "my-test-pw-123"})
+        login_resp = client.post(LOGIN_URL, json={"username": "flow-user", "password": "MyTestPw123"})
         assert login_resp.status_code == 200
         token = login_resp.json()["access_token"]
 
@@ -564,28 +564,28 @@ class TestUserLifecycleFlows:
         headers = _bearer(admin)
 
         # Register viewer
-        reg_resp = _register(client, headers, username="promotee", password="good-password-99", role="viewer")
+        reg_resp = _register(client, headers, username="promotee", password="GoodPass99", role="viewer")
         user_id = reg_resp.json()["id"]
 
         # Promote to admin
         client.put(f"{USERS_URL}/{user_id}", json={"role": "admin"}, headers=headers)
 
         # Login and check role in token
-        login_resp = client.post(LOGIN_URL, json={"username": "promotee", "password": "good-password-99"})
+        login_resp = client.post(LOGIN_URL, json={"username": "promotee", "password": "GoodPass99"})
         assert login_resp.status_code == 200
         assert login_resp.json()["user"]["role"] == "admin"
 
     def test_role_demotion_restricts_access(self, client: TestClient, auth_db: Path) -> None:
         """Demote an admin to viewer, verify they can't list users with a fresh login."""
         admin = _seed_user(auth_db)
-        target = _seed_user(auth_db, username="demotee", role="admin", password="demotee-pw-123")
+        target = _seed_user(auth_db, username="demotee", role="admin", password="DemoteePw123")
         headers = _bearer(admin)
 
         # Demote to viewer
         client.put(f"{USERS_URL}/{target.id}", json={"role": "viewer"}, headers=headers)
 
         # Login as demoted user to get fresh token with updated role
-        login_resp = client.post(LOGIN_URL, json={"username": "demotee", "password": "demotee-pw-123"})
+        login_resp = client.post(LOGIN_URL, json={"username": "demotee", "password": "DemoteePw123"})
         assert login_resp.status_code == 200
         new_token = login_resp.json()["access_token"]
 
@@ -596,7 +596,7 @@ class TestUserLifecycleFlows:
     def test_self_edit_username_then_login_with_new_name(self, client: TestClient, auth_db: Path) -> None:
         """Non-admin updates own username, then logs in with the new name."""
         _seed_user(auth_db)
-        user = _seed_user(auth_db, username="old-me", role="user", password="user-pw-12345")
+        user = _seed_user(auth_db, username="old-me", role="user", password="UserPw12345")
 
         # Self-update username
         resp = client.put(
@@ -607,12 +607,12 @@ class TestUserLifecycleFlows:
         assert resp.status_code == 200
 
         # Login with new username
-        login_resp = client.post(LOGIN_URL, json={"username": "new-me", "password": "user-pw-12345"})
+        login_resp = client.post(LOGIN_URL, json={"username": "new-me", "password": "UserPw12345"})
         assert login_resp.status_code == 200
         assert login_resp.json()["user"]["username"] == "new-me"
 
         # Old username no longer works
-        old_login = client.post(LOGIN_URL, json={"username": "old-me", "password": "user-pw-12345"})
+        old_login = client.post(LOGIN_URL, json={"username": "old-me", "password": "UserPw12345"})
         assert old_login.status_code == 401
 
     def test_bulk_register_and_list_count(self, client: TestClient, auth_db: Path) -> None:

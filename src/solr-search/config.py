@@ -61,6 +61,8 @@ class Settings:
     cb_solr_recovery_timeout: float
     admin_api_key: str | None
     rate_limit_requests_per_minute: int
+    auth_default_admin_username: str
+    auth_default_admin_password: str | None
 
     @property
     def select_url(self) -> str:
@@ -117,4 +119,6 @@ settings = Settings(
     cb_solr_recovery_timeout=float(os.environ.get("CB_SOLR_RECOVERY_TIMEOUT", "30")),
     admin_api_key=os.environ.get("ADMIN_API_KEY") or None,
     rate_limit_requests_per_minute=int(os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE", "100")),
+    auth_default_admin_username=os.environ.get("AUTH_DEFAULT_ADMIN_USERNAME", "admin"),
+    auth_default_admin_password=os.environ.get("AUTH_DEFAULT_ADMIN_PASSWORD") or None,
 )

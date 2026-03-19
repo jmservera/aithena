@@ -38,7 +38,7 @@ def auth_db(tmp_path: Path) -> Path:
 
 
 def _seed_user(auth_db: Path, username: str = "admin", role: str = "admin") -> AuthenticatedUser:
-    password_hash = hash_password("correct-horse-battery-staple")
+    password_hash = hash_password("CorrectHorse1")
     with sqlite3.connect(auth_db) as conn:
         conn.execute(
             "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
@@ -62,7 +62,7 @@ class TestRegister:
         admin = _seed_user(auth_db)
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "newuser", "password": "secure-password-123", "role": "viewer"},
+            json={"username": "newuser", "password": "SecurePass123", "role": "viewer"},
             headers=_auth_header(admin),
         )
         assert resp.status_code == 200
@@ -76,7 +76,7 @@ class TestRegister:
         admin = _seed_user(auth_db)
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "default-role", "password": "secure-password-123"},
+            json={"username": "default-role", "password": "SecurePass123"},
             headers=_auth_header(admin),
         )
         assert resp.status_code == 200
@@ -86,12 +86,12 @@ class TestRegister:
         admin = _seed_user(auth_db)
         client.post(
             "/v1/auth/register",
-            json={"username": "dupuser", "password": "secure-password-123", "role": "viewer"},
+            json={"username": "dupuser", "password": "SecurePass123", "role": "viewer"},
             headers=_auth_header(admin),
         )
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "dupuser", "password": "another-password1", "role": "user"},
+            json={"username": "dupuser", "password": "AnotherPass1", "role": "user"},
             headers=_auth_header(admin),
         )
         assert resp.status_code == 409
@@ -100,12 +100,12 @@ class TestRegister:
         admin = _seed_user(auth_db)
         client.post(
             "/v1/auth/register",
-            json={"username": "CaseUser", "password": "secure-password-123", "role": "viewer"},
+            json={"username": "CaseUser", "password": "SecurePass123", "role": "viewer"},
             headers=_auth_header(admin),
         )
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "caseuser", "password": "another-password1", "role": "user"},
+            json={"username": "caseuser", "password": "AnotherPass1", "role": "user"},
             headers=_auth_header(admin),
         )
         assert resp.status_code == 409
@@ -134,7 +134,7 @@ class TestRegister:
         admin = _seed_user(auth_db)
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "badrole", "password": "secure-password-123", "role": "superadmin"},
+            json={"username": "badrole", "password": "SecurePass123", "role": "superadmin"},
             headers=_auth_header(admin),
         )
         assert resp.status_code == 422
@@ -143,7 +143,7 @@ class TestRegister:
         admin = _seed_user(auth_db)
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "  ", "password": "secure-password-123", "role": "viewer"},
+            json={"username": "  ", "password": "SecurePass123", "role": "viewer"},
             headers=_auth_header(admin),
         )
         assert resp.status_code == 422
@@ -153,7 +153,7 @@ class TestRegister:
         viewer = _seed_user(auth_db, username="viewer1", role="viewer")
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "hack", "password": "secure-password-123", "role": "admin"},
+            json={"username": "hack", "password": "SecurePass123", "role": "admin"},
             headers=_auth_header(viewer),
         )
         assert resp.status_code == 403
@@ -161,7 +161,7 @@ class TestRegister:
     def test_unauthenticated_register_rejected(self, client: TestClient, auth_db: Path) -> None:
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "anon", "password": "secure-password-123", "role": "viewer"},
+            json={"username": "anon", "password": "SecurePass123", "role": "viewer"},
         )
         assert resp.status_code == 401
 
@@ -169,7 +169,7 @@ class TestRegister:
         admin = _seed_user(auth_db)
         resp = client.post(
             "/v1/auth/register",
-            json={"username": "maxpw", "password": "x" * 128, "role": "viewer"},
+            json={"username": "maxpw", "password": "A1" + "b" * 126, "role": "viewer"},
             headers=_auth_header(admin),
         )
         assert resp.status_code == 200
@@ -363,7 +363,7 @@ class TestAuthCrudFunctions:
     def test_create_user(self, auth_db: Path) -> None:
         from auth import create_user
 
-        result = create_user(auth_db, "funcuser", "good-password-123", "user")
+        result = create_user(auth_db, "funcuser", "GoodPass123", "user")
         assert result["username"] == "funcuser"
         assert result["role"] == "user"
         assert "id" in result
@@ -371,9 +371,9 @@ class TestAuthCrudFunctions:
     def test_create_user_duplicate_raises(self, auth_db: Path) -> None:
         from auth import UserExistsError, create_user
 
-        create_user(auth_db, "dup", "good-password-123", "user")
+        create_user(auth_db, "dup", "GoodPass123", "user")
         with pytest.raises(UserExistsError):
-            create_user(auth_db, "dup", "other-password-12", "viewer")
+            create_user(auth_db, "dup", "OtherPass12", "viewer")
 
     def test_list_users_empty(self, auth_db: Path) -> None:
         from auth import list_users
@@ -388,14 +388,14 @@ class TestAuthCrudFunctions:
     def test_update_user_username(self, auth_db: Path) -> None:
         from auth import create_user, update_user
 
-        user = create_user(auth_db, "original", "good-password-123", "user")
+        user = create_user(auth_db, "original", "GoodPass123", "user")
         updated = update_user(auth_db, user["id"], username="renamed")
         assert updated["username"] == "renamed"
 
     def test_update_user_role(self, auth_db: Path) -> None:
         from auth import create_user, update_user
 
-        user = create_user(auth_db, "rolechange", "good-password-123", "viewer")
+        user = create_user(auth_db, "rolechange", "GoodPass123", "viewer")
         updated = update_user(auth_db, user["id"], role="admin")
         assert updated["role"] == "admin"
 
@@ -407,7 +407,7 @@ class TestAuthCrudFunctions:
     def test_delete_user_returns_true(self, auth_db: Path) -> None:
         from auth import create_user, delete_user
 
-        user = create_user(auth_db, "todelete", "good-password-123", "viewer")
+        user = create_user(auth_db, "todelete", "GoodPass123", "viewer")
         assert delete_user(auth_db, user["id"]) is True
 
     def test_delete_nonexistent_returns_false(self, auth_db: Path) -> None:
@@ -422,8 +422,8 @@ class TestAuthCrudFunctions:
             validate_password("short")
         with pytest.raises(PasswordPolicyError):
             validate_password("x" * 129)
-        validate_password("x" * 8)
-        validate_password("x" * 128)
+        validate_password("Abcdef1x")  # exactly 8 chars, meets all rules
+        validate_password("A1" + "b" * 126)  # exactly 128 chars, meets all rules
 
     def test_validate_role(self) -> None:
         from auth import validate_role
@@ -437,8 +437,8 @@ class TestAuthCrudFunctions:
     def test_update_user_duplicate_username_raises(self, auth_db: Path) -> None:
         from auth import UserExistsError, create_user, update_user
 
-        create_user(auth_db, "first", "good-password-123", "user")
-        second = create_user(auth_db, "second", "good-password-123", "user")
+        create_user(auth_db, "first", "GoodPass123", "user")
+        second = create_user(auth_db, "second", "GoodPass123", "user")
         with pytest.raises(UserExistsError):
             update_user(auth_db, second["id"], username="first")
 
@@ -446,18 +446,18 @@ class TestAuthCrudFunctions:
         from auth import create_user
 
         with pytest.raises(ValueError, match="empty"):
-            create_user(auth_db, "  ", "good-password-123", "user")
+            create_user(auth_db, "  ", "GoodPass123", "user")
 
     def test_update_user_empty_username_raises(self, auth_db: Path) -> None:
         from auth import create_user, update_user
 
-        user = create_user(auth_db, "notempty", "good-password-123", "user")
+        user = create_user(auth_db, "notempty", "GoodPass123", "user")
         with pytest.raises(ValueError, match="empty"):
             update_user(auth_db, user["id"], username="  ")
 
     def test_update_no_changes_returns_current(self, auth_db: Path) -> None:
         from auth import create_user, update_user
 
-        user = create_user(auth_db, "unchanged", "good-password-123", "user")
+        user = create_user(auth_db, "unchanged", "GoodPass123", "user")
         result = update_user(auth_db, user["id"])
         assert result["username"] == "unchanged"
