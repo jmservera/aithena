@@ -45,6 +45,7 @@ class TestFullAuthFlow:
     @patch("auth.st")
     def test_login_check_logout_cycle(self, mock_st: MagicMock) -> None:
         mock_st.session_state = {}
+        mock_st.context.cookies = {}
 
         # login
         user = login("admin", "s3cret!", SETTINGS)
@@ -209,6 +210,7 @@ class TestProtectedRoutes:
         user = AuthenticatedUser(username="admin", role="admin")
         token = create_access_token(user, SECRET, 1, now=datetime(2020, 1, 1, tzinfo=UTC))
         mock_st.session_state = {"auth_token": token, "auth_user": "admin"}
+        mock_st.context.cookies = {}
         assert check_auth(SETTINGS) is None
         assert "auth_token" not in mock_st.session_state
         assert "auth_user" not in mock_st.session_state
@@ -216,17 +218,20 @@ class TestProtectedRoutes:
     @patch("auth.st")
     def test_malformed_token_clears_session(self, mock_st: MagicMock) -> None:
         mock_st.session_state = {"auth_token": "not-valid-jwt", "auth_user": "admin"}
+        mock_st.context.cookies = {}
         assert check_auth(SETTINGS) is None
         assert "auth_token" not in mock_st.session_state
 
     @patch("auth.st")
     def test_missing_token_returns_none(self, mock_st: MagicMock) -> None:
         mock_st.session_state = {}
+        mock_st.context.cookies = {}
         assert check_auth(SETTINGS) is None
 
     @patch("auth.st")
     def test_empty_string_token_returns_none(self, mock_st: MagicMock) -> None:
         mock_st.session_state = {"auth_token": ""}
+        mock_st.context.cookies = {}
         assert check_auth(SETTINGS) is None
 
     @patch("auth.st")
@@ -234,6 +239,7 @@ class TestProtectedRoutes:
         user = AuthenticatedUser(username="admin", role="admin")
         token = create_access_token(user, "other-secret", 3600)
         mock_st.session_state = {"auth_token": token, "auth_user": "admin"}
+        mock_st.context.cookies = {}
         assert check_auth(SETTINGS) is None
         assert "auth_token" not in mock_st.session_state
 
@@ -246,6 +252,7 @@ class TestProtectedRoutes:
         parts[1] = parts[1][::-1]  # reverse the payload
         tampered = ".".join(parts)
         mock_st.session_state = {"auth_token": tampered, "auth_user": "admin"}
+        mock_st.context.cookies = {}
         assert check_auth(SETTINGS) is None
 
 
@@ -267,6 +274,7 @@ class TestRequireAuth:
     @patch("auth.st")
     def test_unauthenticated_renders_login_and_stops(self, mock_st: MagicMock, mock_render: MagicMock) -> None:
         mock_st.session_state = {}
+        mock_st.context.cookies = {}
         mock_st.stop.side_effect = SystemExit
 
         with pytest.raises(SystemExit):
