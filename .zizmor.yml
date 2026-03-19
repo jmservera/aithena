@@ -6,6 +6,12 @@ rules:
       # checkout ref (dev), and job-level permissions. The workflow legitimately
       # needs write access to create release doc branches and PRs.
       - release-docs.yml
+      # Brett-approved: workflow_run trigger is hardened with (1) branch restriction
+      # (branches: [main]), (2) repository guard (validates head_repository matches),
+      # (3) conclusion check (only success), (4) restricted head_branch (main only),
+      # and (5) pinned checkout ref (dev). Workflow needs contents:write to commit
+      # screenshots from integration tests to dev branch. No fork risk due to validation.
+      - update-screenshots.yml
   bot-conditions:
     ignore:
       # Kane-approved baseline exception: github.actor == 'dependabot[bot]' is
