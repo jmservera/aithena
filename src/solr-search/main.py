@@ -23,13 +23,20 @@ from admin_auth import require_admin_auth
 from auth import (
     AuthenticatedUser,
     AuthenticationError,
+    PasswordPolicyError,
+    UserExistsError,
     authenticate_user,
     clear_auth_cookie,
     create_access_token,
+    create_user,
     decode_access_token,
+    delete_user,
     get_token_from_sources,
+    get_user_by_id,
     init_auth_db,
+    list_users,
     set_auth_cookie,
+    update_user,
 )
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from config import settings
@@ -133,6 +140,29 @@ PUBLIC_PATH_PREFIXES = ("/docs", "/redoc", "/openapi.json")
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+
+class UpdateUserRequest(BaseModel):
+    username: str | None = None
+    role: str | None = None
+
+
+def require_role(*allowed_roles: str) -> Any:
+    """FastAPI dependency that enforces role-based access control."""
+
+    def _dependency(request: Request) -> AuthenticatedUser:
+        user = _get_current_user(request)
+        if user.role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+
+    return Depends(_dependency)
 
 
 class RateLimiter:
@@ -520,6 +550,80 @@ def auth_logout(request: Request, response: Response) -> dict[str, str]:
 @app.get("/v1/auth/me", name="auth_me_v1")
 def auth_me(request: Request) -> dict[str, Any]:
     return _get_current_user(request).to_dict()
+
+
+# ---------------------------------------------------------------------------
+# User CRUD endpoints (v1.9.0)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/v1/auth/register/", include_in_schema=False, name="auth_register_v1_slash")
+@app.post("/v1/auth/register", include_in_schema=False, name="auth_register_v1")
+def auth_register(
+    body: RegisterRequest,
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> dict[str, Any]:
+    try:
+        return create_user(settings.auth_db_path, body.username, body.password, body.role)
+    except UserExistsError as exc:
+        raise HTTPException(status_code=409, detail="Username already exists") from exc
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/v1/auth/users/", include_in_schema=False, name="auth_list_users_v1_slash")
+@app.get("/v1/auth/users", include_in_schema=False, name="auth_list_users_v1")
+def auth_list_users(
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> list[dict[str, Any]]:
+    return list_users(settings.auth_db_path)
+
+
+@app.put("/v1/auth/users/{user_id}/", include_in_schema=False, name="auth_update_user_v1_slash")
+@app.put("/v1/auth/users/{user_id}", include_in_schema=False, name="auth_update_user_v1")
+def auth_update_user(
+    user_id: int,
+    body: UpdateUserRequest,
+    request: Request,
+) -> dict[str, Any]:
+    current_user = _get_current_user(request)
+    is_admin = current_user.role == "admin"
+
+    if not is_admin and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    if not is_admin and body.role is not None:
+        raise HTTPException(status_code=403, detail="Only admins can change roles")
+
+    target = get_user_by_id(settings.auth_db_path, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        updated = update_user(settings.auth_db_path, user_id, username=body.username, role=body.role)
+    except UserExistsError as exc:
+        raise HTTPException(status_code=409, detail="Username already taken") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="User not found")  # pragma: no cover
+    return updated
+
+
+@app.delete("/v1/auth/users/{user_id}/", include_in_schema=False, name="auth_delete_user_v1_slash")
+@app.delete("/v1/auth/users/{user_id}", include_in_schema=False, name="auth_delete_user_v1")
+def auth_delete_user(
+    user_id: int,
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> dict[str, str]:
+    if admin_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    if not delete_user(settings.auth_db_path, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "deleted"}
 
 
 @app.get("/v1/search/", include_in_schema=False, name="search_v1")
