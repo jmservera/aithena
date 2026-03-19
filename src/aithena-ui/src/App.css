@@ -1463,6 +1463,68 @@ select:focus-visible,
   margin-top: 60px;
 }
 
+.admin-infra {
+  margin-bottom: 28px;
+}
+
+.admin-infra-heading {
+  font-size: 0.9em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 12px;
+}
+
+.admin-infra-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-infra-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+  min-width: 200px;
+}
+
+.admin-infra-card:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(126, 200, 227, 0.5);
+}
+
+.admin-infra-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.admin-infra-card-label {
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+.admin-infra-card-desc {
+  font-size: 0.78em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-infra-card-ext {
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
 .stats-main {
   flex: 1;
   overflow-y: auto;

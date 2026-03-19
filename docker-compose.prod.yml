@@ -251,58 +251,6 @@ services:
         target: /data/auth
     networks:
       - default
-  streamlit-admin:
-    image: ghcr.io/jmservera/aithena-admin:${VERSION:-latest}
-    expose:
-      - "8501"
-    restart: unless-stopped
-    stop_grace_period: 10s
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "from urllib.request import urlopen; urlopen('http://localhost:8501/admin/streamlit/_stcore/health').read()",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-        reservations:
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
-      - QUEUE_NAME=shortembeddings
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_MGMT_PORT=15672
-      - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
-      - SOLR_SEARCH_URL=http://solr-search:8080
-      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-change-me-in-production}
-      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
-      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
-      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
-      - AUTH_ENABLED=${AUTH_ENABLED:-true}
-    networks:
-      - default
   redis-commander:
     image: rediscommander/redis-commander:latest
     expose:
@@ -378,8 +326,6 @@ services:
       aithena-ui:
         condition: service_healthy
       solr-search:
-        condition: service_healthy
-      streamlit-admin:
         condition: service_healthy
       redis-commander:
         condition: service_healthy
