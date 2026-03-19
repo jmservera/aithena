@@ -216,7 +216,6 @@ def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
 
 
 MAX_PASSWORD_LENGTH = 128
-MIN_PASSWORD_LENGTH = 8
 VALID_ROLES = frozenset({"admin", "user", "viewer"})
 
 
