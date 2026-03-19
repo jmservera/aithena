@@ -575,3 +575,10 @@ POST /v1/upload (multipart/form-data)
 - COPY paths inside Dockerfiles updated: `COPY src/solr-search/...` (not just `solr-search/...`)
 - installer.py paths: `ROOT / "src" / "solr-search"`, test file needs `parents[3]` for repo root
 - Local .venv shebangs must be refreshed after git moves
+
+### Auth Directory Permissions Fix (#543, PR #546)
+- Bind-mounted dirs created by Docker as root:root cause crash-loops when container runs as non-root
+- Standard Docker fix: entrypoint script that runs as root, chowns bind mounts, then `exec gosu app "$@"` to drop privileges
+- Replaced `USER app` directive with runtime privilege drop via gosu — more robust for bind mounts
+- gosu added to apt-get install in Dockerfile (standard Docker pattern from postgres/redis images)
+- All 256 solr-search tests pass — no application code changes needed

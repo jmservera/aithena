@@ -132,6 +132,14 @@
 6. Screenshots captured (if applicable)
 7. Tag created and pushed; GitHub Release created
 
+### Pre-Release Integration Test Process (Proposed 2026-03-19)
+- **Context:** User requested automated pre-release Docker Compose integration testing with failure → auto-issue and success → log-analysis-issue workflows
+- **Proposal:** New `pre-release-validation.yml` workflow (workflow_dispatch) + `e2e/pre-release-check.sh` log analyzer + Python issue-creation scripts
+- **Key design decisions:** Separate from existing CI workflow to isolate write permissions; findings are advisory (non-blocking); failures create single comprehensive issue; log analysis uses regex patterns across 9 categories
+- **Existing infrastructure leveraged:** integration-test.yml steps, failover-drill.sh patterns, e2e fixtures, benchmark.sh
+- **Status:** PROPOSED — awaiting user approval at `.squad/decisions/inbox/ripley-integration-test-process.md`
+- **Estimated effort:** ~7.5h across Brett (infra), Parker (scripts), Lambert (validation), Ripley (docs)
+
 ---
 
 ## Archive
