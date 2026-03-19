@@ -34,6 +34,7 @@ USERS_URL = "/v1/auth/users"
 LOGIN_URL = "/v1/auth/login"
 
 VALID_PASSWORD = "secure-password-123"  # noqa: S105
+TEST_SEED_PASSWORD = "correct-horse-battery-staple"  # noqa: S105 — intentional test data
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ def _clear_rate_limiter():
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(auth_db: Path) -> TestClient:  # noqa: ARG001 — ensures auth_db is initialized before app lifespan
     return TestClient(app)
 
 
@@ -68,7 +69,7 @@ def auth_db(tmp_path: Path) -> Path:
 
 
 def _seed_user(
-    db_path: Path, username: str = "admin", role: str = "admin", password: str = "correct-horse-battery-staple"
+    db_path: Path, username: str = "admin", role: str = "admin", password: str = TEST_SEED_PASSWORD
 ) -> AuthenticatedUser:
     """Insert a user directly into the DB and return an AuthenticatedUser."""
     pw_hash = hash_password(password)
