@@ -490,6 +490,32 @@ def test_search_semantic_falls_back_to_keyword_when_embeddings_fail(
 
 @patch("main.requests.post")
 @patch("main.requests.get")
+def test_search_semantic_degrades_when_circuit_open(
+    mock_solr_get: MagicMock,
+    mock_emb_post: MagicMock,
+) -> None:
+    """When the embeddings circuit breaker is open, semantic search should degrade to keyword."""
+    from circuit_breaker import CircuitOpenError
+
+    mock_solr_resp = MagicMock()
+    mock_solr_resp.status_code = 200
+    mock_solr_resp.json.return_value = _solr_payload(_make_solr_docs(1))
+    mock_solr_get.return_value = mock_solr_resp
+
+    with patch("main.embeddings_circuit") as mock_cb:
+        mock_cb.call.side_effect = CircuitOpenError("embeddings", 15.0)
+        client = get_client()
+        response = client.get("/search", params={"q": "test query", "mode": "semantic"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "keyword"
+    assert data["degraded"] is True
+    assert data["requested_mode"] == "semantic"
+
+
+@patch("main.requests.post")
+@patch("main.requests.get")
 def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
     """Hybrid mode must combine keyword + kNN results using RRF."""
     mock_emb_resp = MagicMock()
