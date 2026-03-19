@@ -23,7 +23,7 @@ Aithena runs as a Docker Compose stack built around Solr, a document ingestion p
 | `embeddings-server` | Embedding service used by the search stack | internal only; direct `8085` via override |
 | `streamlit-admin` | Lightweight admin dashboard | proxied through `nginx`; direct `8501` via override |
 | `redis-commander` | Web UI for Redis inspection | proxied through `nginx`; direct `8081` via override |
-| `certbot` | Certificate renewal helper | internal only |
+| `certbot` | Certificate renewal helper (optional — see `docker-compose.ssl.yml`) | internal only |
 
 ### Service dependencies
 
