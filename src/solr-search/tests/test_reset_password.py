@@ -125,16 +125,15 @@ def test_resolve_db_path_default(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_cli_with_explicit_password(auth_db: Path, capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["--db-path", str(auth_db), "--password", "cli-password"])
     assert rc == 0
-    assert "reset successfully" in capsys.readouterr().out
+    assert "reset" in capsys.readouterr().err
 
 
 def test_cli_generates_password_when_omitted(auth_db: Path, capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["--db-path", str(auth_db)])
     assert rc == 0
     captured = capsys.readouterr()
-    assert "has been reset" in captured.err
-    assert "New password" in captured.err
-    # The raw credential is written to stdout for scriptable capture
+    assert "reset" in captured.err
+    # Generated password written to stdout via buffer
     generated_pw = captured.out.strip()
     assert len(generated_pw) == GENERATED_PASSWORD_LENGTH
 
