@@ -34,7 +34,7 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends wget gosu && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
@@ -50,6 +50,8 @@ ENV CORS_ORIGINS="http://localhost:5173"
 
 RUN mkdir -p /data/documents/uploads /data/auth && chown -R app:app /data
 
-USER app
+COPY src/solr-search/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["sh","-c","python -m uvicorn --port=$PORT --host 0.0.0.0 main:app"]
