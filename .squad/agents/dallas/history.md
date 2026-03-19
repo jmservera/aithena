@@ -584,6 +584,9 @@ src/aithena-ui/src/
 
 - Responsive work is most maintainable when the base layout is desktop-first and media queries explicitly step down to tablet (2-column grid) and mobile (1-column grid).
 - Mobile navigation needs a dedicated hamburger toggle plus i18n-backed labels to keep accessibility intact.
+- The backend `/v1/status/` endpoint returns more fields than the frontend `StatusResponse` interface consumed — always verify TypeScript types match the actual API response shape when debugging display issues.
+- RabbitMQ management HTTP API (`/api/health/checks/alarms` on port 15672) is more reliable than raw TCP on AMQP port 5672 for health checks, since the Erlang VM can be "healthy" before the AMQP listener is fully bound.
+- When adding new service health indicators, remember to update: backend status endpoint, frontend TypeScript interface, React component, and all 4 locale files (en/es/ca/fr).
 
 **End of History — Dallas Frontend Developer**  
 **v1.8.0 Roadmap Complete | 13 issues prepared | Team: Ready for planning meeting**
