@@ -170,6 +170,7 @@
   "nav.library": "Library",
   "nav.login": "Login",
   "nav.mainNavigation": "Main navigation",
+  "nav.menuToggle": "Toggle navigation menu",
   "nav.search": "Search",
   "nav.signOut": "Sign out",
   "nav.signedIn": "Signed in",
