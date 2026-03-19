@@ -9,9 +9,11 @@ from unittest.mock import MagicMock, patch
 import jwt
 import pytest
 from auth import (
+    AUTH_COOKIE_NAME_DEFAULT,
     JWT_ALGORITHM,
     AuthenticatedUser,
     AuthSettings,
+    _check_cookie_auth,
     authenticate_user,
     check_auth,
     create_access_token,
@@ -59,6 +61,7 @@ class TestAuthSettings:
         s = AuthSettings.from_env()
         assert s.jwt_ttl_seconds == 86400
         assert s.admin_username == "admin"
+        assert s.auth_cookie_name == AUTH_COOKIE_NAME_DEFAULT
 
     def test_missing_secret(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("AUTH_JWT_SECRET", raising=False)
@@ -77,6 +80,12 @@ class TestAuthSettings:
         monkeypatch.setenv("AUTH_ADMIN_PASSWORD", "pass")
         monkeypatch.setenv("AUTH_JWT_TTL", "30m")
         assert AuthSettings.from_env().jwt_ttl_seconds == 1800
+
+    def test_custom_cookie_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AUTH_JWT_SECRET", SECRET)
+        monkeypatch.setenv("AUTH_ADMIN_PASSWORD", "pass")
+        monkeypatch.setenv("AUTH_COOKIE_NAME", "my_cookie")
+        assert AuthSettings.from_env().auth_cookie_name == "my_cookie"
 
 
 # \u2500\u2500 authenticate_user \u2500\u2500
@@ -154,6 +163,7 @@ class TestSession:
     @patch("auth.st")
     def test_check_auth_no_token(self, mock_st: MagicMock) -> None:
         mock_st.session_state = {}
+        mock_st.context.cookies = {}
         assert check_auth(self.SETTINGS) is None
 
     @patch("auth.st")
@@ -169,6 +179,7 @@ class TestSession:
         user = AuthenticatedUser(username="admin", role="admin")
         token = create_access_token(user, SECRET, 1, now=datetime(2020, 1, 1, tzinfo=UTC))
         mock_st.session_state = {"auth_token": token}
+        mock_st.context.cookies = {}
         assert check_auth(self.SETTINGS) is None
 
     @patch("auth.st")
@@ -188,3 +199,136 @@ class TestSession:
         mock_st.session_state = {"auth_token": "tok", "auth_user": "admin"}
         logout()
         assert "auth_token" not in mock_st.session_state
+
+
+# ── Cookie-based SSO auth ──
+
+
+class TestCookieAuth:
+    """Tests for _check_cookie_auth and the SSO cookie fallback in check_auth."""
+
+    SETTINGS = AuthSettings(jwt_secret=SECRET, jwt_ttl_seconds=3600, admin_username="admin", admin_password="secret")
+
+    @patch("auth.st")
+    def test_cookie_auth_valid_token(self, mock_st: MagicMock) -> None:
+        user = AuthenticatedUser(username="admin", role="admin")
+        token = create_access_token(user, SECRET, 3600)
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"aithena_auth": token}
+        result = _check_cookie_auth(self.SETTINGS)
+        assert result is not None
+        assert result.username == "admin"
+        assert result.role == "admin"
+        assert mock_st.session_state["auth_token"] == token
+        assert mock_st.session_state["auth_user"] == "admin"
+
+    @patch("auth.st")
+    def test_cookie_auth_expired_token(self, mock_st: MagicMock) -> None:
+        user = AuthenticatedUser(username="admin", role="admin")
+        token = create_access_token(user, SECRET, 1, now=datetime(2020, 1, 1, tzinfo=UTC))
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"aithena_auth": token}
+        assert _check_cookie_auth(self.SETTINGS) is None
+        assert "auth_token" not in mock_st.session_state
+
+    @patch("auth.st")
+    def test_cookie_auth_wrong_secret(self, mock_st: MagicMock) -> None:
+        user = AuthenticatedUser(username="admin", role="admin")
+        token = create_access_token(user, "wrong-secret", 3600)
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"aithena_auth": token}
+        assert _check_cookie_auth(self.SETTINGS) is None
+
+    @patch("auth.st")
+    def test_cookie_auth_no_cookie(self, mock_st: MagicMock) -> None:
+        mock_st.session_state = {}
+        mock_st.context.cookies = {}
+        assert _check_cookie_auth(self.SETTINGS) is None
+
+    @patch("auth.st")
+    def test_cookie_auth_malformed_token(self, mock_st: MagicMock) -> None:
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"aithena_auth": "not-a-jwt"}
+        assert _check_cookie_auth(self.SETTINGS) is None
+
+    @patch("auth.st")
+    def test_cookie_auth_context_not_available(self, mock_st: MagicMock) -> None:
+        """When st.context is unavailable (old Streamlit), returns None."""
+        mock_st.session_state = {}
+        type(mock_st).context = property(lambda self: (_ for _ in ()).throw(AttributeError))
+        assert _check_cookie_auth(self.SETTINGS) is None
+
+    @patch("auth.st")
+    def test_cookie_auth_custom_cookie_name(self, mock_st: MagicMock) -> None:
+        settings = AuthSettings(
+            jwt_secret=SECRET, jwt_ttl_seconds=3600,
+            admin_username="admin", admin_password="secret",
+            auth_cookie_name="custom_auth",
+        )
+        user = AuthenticatedUser(username="admin", role="admin")
+        token = create_access_token(user, SECRET, 3600)
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"custom_auth": token}
+        result = _check_cookie_auth(settings)
+        assert result is not None and result.username == "admin"
+
+    @patch("auth.st")
+    def test_check_auth_falls_back_to_cookie(self, mock_st: MagicMock) -> None:
+        """check_auth uses cookie when session state is empty."""
+        user = AuthenticatedUser(username="admin", role="admin")
+        token = create_access_token(user, SECRET, 3600)
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"aithena_auth": token}
+        result = check_auth(self.SETTINGS)
+        assert result is not None
+        assert result.username == "admin"
+        # Token should be persisted in session state for future reruns
+        assert mock_st.session_state["auth_token"] == token
+
+    @patch("auth.st")
+    def test_check_auth_session_state_takes_priority(self, mock_st: MagicMock) -> None:
+        """Session state token is used even if a different cookie is present."""
+        session_user = AuthenticatedUser(username="session-admin", role="admin")
+        session_token = create_access_token(session_user, SECRET, 3600)
+        cookie_user = AuthenticatedUser(username="cookie-admin", role="admin")
+        cookie_token = create_access_token(cookie_user, SECRET, 3600)
+        mock_st.session_state = {"auth_token": session_token}
+        mock_st.context.cookies = {"aithena_auth": cookie_token}
+        result = check_auth(self.SETTINGS)
+        assert result is not None
+        assert result.username == "session-admin"
+
+    @patch("auth.st")
+    def test_check_auth_expired_session_falls_back_to_cookie(self, mock_st: MagicMock) -> None:
+        """When session token expires, falls back to valid cookie."""
+        expired_token = create_access_token(
+            AuthenticatedUser(username="admin", role="admin"), SECRET, 1,
+            now=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+        valid_token = create_access_token(
+            AuthenticatedUser(username="cookie-admin", role="admin"), SECRET, 3600,
+        )
+        mock_st.session_state = {"auth_token": expired_token, "auth_user": "admin"}
+        mock_st.context.cookies = {"aithena_auth": valid_token}
+        result = check_auth(self.SETTINGS)
+        assert result is not None
+        assert result.username == "cookie-admin"
+        assert mock_st.session_state["auth_token"] == valid_token
+
+    @patch("auth.st")
+    def test_solr_search_jwt_compatible(self, mock_st: MagicMock) -> None:
+        """JWTs created by solr-search (with user_id claim) are accepted."""
+        payload = {
+            "sub": "admin",
+            "user_id": 1,
+            "role": "admin",
+            "iat": int(datetime.now(UTC).timestamp()),
+            "exp": int(datetime.now(UTC).timestamp()) + 3600,
+        }
+        token = jwt.encode(payload, SECRET, algorithm=JWT_ALGORITHM)
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"aithena_auth": token}
+        result = check_auth(self.SETTINGS)
+        assert result is not None
+        assert result.username == "admin"
+        assert result.role == "admin"
