@@ -7441,3 +7441,76 @@ Phase 5 — Final gate:
 1. **Account lockout after N failed attempts?** — Deferred to v2.0.0 (rate limiting is sufficient for v1.9.0)
 2. **Email field for password reset?** — Deferred (no email infrastructure in on-premises deployment)
 3. **Audit logging of user management actions?** — Nice-to-have for v1.9.0, required for v2.0.0
+
+---
+
+# Decision: setupdev.sh — Dev Environment Bootstrap Expansion
+
+**Date:** 2026-03-19
+**Author:** Brett (Infrastructure Architect)
+**Scope:** `installer/setupdev.sh`
+
+## Decision
+
+Extended `setupdev.sh` to be a complete dev environment bootstrapper, not just a Docker/Node installer. The script now handles:
+
+1. **System utilities** — `jq` and `xdg-utils` for scripting support on headless VMs
+2. **Python tooling** — `ruff` installed globally via `uv tool install`
+3. **All project dependencies** — Frontend npm, Playwright E2E npm, and all five Python service virtualenvs
+4. **Playwright Chromium** — Browser + system deps for both E2E tests and Copilot CLI MCP browser tool
+
+## Rationale
+
+- A new developer (or fresh VM) should run one script to be fully ready. Previously, `setupdev.sh` only covered infra tooling (Docker, Node, uv, gh), leaving project deps as manual steps.
+- Playwright needs `--with-deps` to install OS-level libraries (libatk, libcups, etc.) that Chromium requires — this is easy to forget manually.
+- Subshells `(cd ... && ...)` keep directory state clean and prevent cascading failures.
+
+## Impact
+
+- No changes to existing script content — purely additive (appended after line 74).
+- New developers benefit from zero-touch setup.
+- CI/CD environments can reuse the same script for VM provisioning.
+
+---
+
+# Decision: Use ESM-safe __dirname in vite.config.ts
+
+**Date:** 2026-03-19
+**Author:** Dallas (Frontend Dev)
+**PR:** #569
+**Context:** PR review flagged that `__dirname` is not defined in ESM modules. Since `package.json` sets `"type": "module"` and Vite configs are ESM, using `__dirname` directly would throw at config-load time.
+
+## Decision
+
+Derive `__dirname` from `import.meta.url` using `fileURLToPath` + `dirname` from Node built-ins. This is the standard ESM pattern and keeps the rest of the `getVersion()` logic unchanged.
+
+## Impact
+
+Any future Vite config or Node ESM script in `aithena-ui` should use this pattern instead of bare `__dirname`/`__filename`.
+
+---
+
+# Decision: Enforce admin role in cookie SSO
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-19
+**PR:** #570
+
+## Context
+
+The cookie-based SSO path in `src/admin/src/auth.py` (`_check_cookie_auth`) accepted any valid JWT from the shared auth cookie — including tokens issued to non-admin users (viewers, editors) by the main app's login flow.
+
+## Decision
+
+After decoding the JWT in `_check_cookie_auth`, we now explicitly check `user.role != 'admin'` and reject non-admin users. This aligns the cookie SSO path with the credential-based login, which only ever mints admin tokens.
+
+## Rationale
+
+- The admin dashboard should only be accessible to admin users.
+- The main app issues JWTs with various roles (admin, viewer, editor). Accepting all of them at the admin dashboard is a privilege escalation vector.
+- Hardcoding `'admin'` is acceptable since the admin dashboard is inherently single-role. If multi-role admin access is needed later, this can be expanded to a configurable allowed-role set.
+
+## Impact
+
+- Non-admin users who previously could access the admin dashboard via shared cookie will now be redirected to the login page.
+- No breaking change for admin users.

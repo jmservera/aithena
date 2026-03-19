@@ -622,3 +622,22 @@ POST /v1/upload (multipart/form-data)
 - `_seed_default_admin` uses lazy import of `config.settings` to avoid circular import
 - `init_auth_db()` now calls `_seed_default_admin()` — all callers (including test fixtures) trigger it
 - Config env vars: `AUTH_DEFAULT_ADMIN_USERNAME` (default: "admin"), `AUTH_DEFAULT_ADMIN_PASSWORD` (no default)
+- PR #573 review fix: `_zookeeper_check()` needs try/except ValueError around `int(parts[1])` to handle malformed ZOOKEEPER_HOSTS entries
+- PR #573 review fix: `_rabbitmq_management_check()` should catch `(requests.RequestException, OSError)` not blanket `Exception`, and log warning on fallback
+- Status endpoint helpers should never raise unhandled exceptions — always degrade gracefully to prevent 500s on `/v1/status`
+
+### 2026-03-19 — PR #568 Review Feedback (empty-query handling)
+
+**Task:** Address 3 Copilot review comments on PR #568 (fix: handle empty query and 502 in vector/hybrid search).
+
+**Changes:**
+- Added inline code comments in `main.py` at both semantic and hybrid empty-query guards explaining the intentional behavior difference vs keyword mode (keyword → `*:*` returns all docs; semantic/hybrid → empty set because no embedding can be generated)
+- Added `mock_emb_post.assert_not_called()` and `mock_solr_get.assert_not_called()` to both `test_search_semantic_empty_query_returns_empty_results` and `test_search_hybrid_empty_query_returns_empty_results` tests
+- All 274 tests pass, ruff clean, commit pushed, PR comments replied to
+
+**Learnings:**
+- Empty-query tests with mocked HTTP clients should always assert mocks are NOT called to catch regressions where empty queries accidentally trigger external requests
+- When search modes handle edge cases differently (keyword vs semantic/hybrid), add inline comments explaining the design rationale to prevent future confusion
+- Cookie-based SSO in admin auth must enforce `user.role == 'admin'` — without this, any valid JWT from the main app (viewer, editor) grants admin access
+- When mocking `st.context` to raise AttributeError, don't mutate `type(MagicMock)` — use a scoped stub object with a `@property` that raises, wrapped in `patch("auth.st", stub_instance)`
+- Admin auth tests live in `src/admin/tests/test_auth.py`; run with `cd src/admin && uv run pytest -v --tb=short`
