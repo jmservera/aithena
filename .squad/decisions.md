@@ -7261,3 +7261,183 @@ directories to exist. A compose overlay file cleanly isolates all SSL config.
 **By:** jmservera (via Copilot)
 **What:** Make the certbot container optional in docker-compose. Most deployments run behind a general reverse proxy or on local networks and don't need Let's Encrypt certificate management.
 **Why:** User request — simplifies default deployment, reduces unnecessary container overhead.
+
+---
+
+# Decision: User Management Module (v1.9.0)
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-19
+**Status:** PROPOSED
+**Milestone:** [v1.9.0](https://github.com/jmservera/aithena/milestone/23)
+
+## Context
+
+Aithena currently has basic JWT authentication with Argon2 password hashing and HTTP-only cookies. However, user lifecycle management is entirely manual — users must be created via direct DB access or the `reset_password.py` CLI tool. There is no way to:
+
+- Create users from the application
+- List, edit, or delete users
+- Change passwords from the UI
+- Auto-seed a default admin on first startup
+- Enforce role-based access beyond admin vs. non-admin
+
+This proposal adds a full user management module for v1.9.0.
+
+## Design Decisions
+
+### 1. Role Model: Three-Tier RBAC
+
+| Role | Search | View Books | Upload | Admin Panel | Manage Users |
+|------|--------|-----------|--------|-------------|-------------|
+| `viewer` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `user` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**Rationale:** Three tiers cover the known use cases (public browsing, contributor access, full admin) without over-engineering. Adding roles later is a data migration, not an architecture change.
+
+### 2. Admin API Key Transition (Phased)
+
+- **v1.9.0:** RBAC enforced on **new** user management endpoints only. Existing admin endpoints keep X-API-Key.
+- **v2.0.0:** Migrate all admin endpoints to RBAC. Accept both X-API-Key and JWT during transition.
+- **v2.1.0+:** Deprecate and remove X-API-Key.
+
+**Rationale:** Avoid breaking existing deployments. Operators using X-API-Key-based automation need a migration window.
+
+### 3. Password Policy
+
+- Minimum 10 characters, maximum 128 characters
+- At least 3 of 4 complexity categories (upper, lower, digit, special)
+- No username in password (case-insensitive)
+- Max length prevents Argon2 denial-of-service on huge inputs
+
+**Rationale:** NIST 800-63B recommends minimum 8 characters with no composition rules, but we're a self-hosted library app where "check three of four categories" provides reasonable security without frustrating users. The 128-char max prevents Argon2 DoS.
+
+### 4. Token Revocation: Deferred to v2.0.0
+
+Current JWT tokens are stateless — there's no token revocation mechanism. Changing your password does NOT invalidate existing tokens (they expire naturally via TTL).
+
+**v1.9.0:** Accept this limitation. Default TTL is 24h, which is acceptable for a library search tool.
+**v2.0.0:** Implement token version counter in user record; increment on password change; validate version in JWT.
+
+**Rationale:** Stateless JWT is simpler and sufficient for our threat model. Token revocation requires either a blocklist (Redis) or a version check (DB hit per request), both adding complexity.
+
+### 5. Default Admin Seeding
+
+On first startup with an empty DB, auto-create an admin user from environment variables:
+- `AUTH_DEFAULT_ADMIN_USERNAME` (default: `admin`)
+- `AUTH_DEFAULT_ADMIN_PASSWORD` (required for seeding, no default)
+
+**Rationale:** Eliminates the manual step of running `reset_password.py` after deployment. The existing CLI tool remains for password resets.
+
+### 6. Schema: No Changes Needed for v1.9.0
+
+The current `users` table schema already has all columns needed:
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+A schema versioning table (`schema_version`) will be added for future migrations.
+
+---
+
+## Feature Breakdown by Agent
+
+### Parker (Backend Dev) — 4 Issues
+
+| # | Issue | Priority | Effort |
+|---|-------|----------|--------|
+| [#549](https://github.com/jmservera/aithena/issues/549) | User CRUD API endpoints | P0 | L |
+| [#550](https://github.com/jmservera/aithena/issues/550) | Default admin user seeding | P0 | S |
+| [#551](https://github.com/jmservera/aithena/issues/551) | Change password endpoint | P0 | S |
+| [#553](https://github.com/jmservera/aithena/issues/553) | RBAC middleware | P0 | M |
+
+### Dallas (Frontend Dev) — 3 Issues
+
+| # | Issue | Priority | Effort |
+|---|-------|----------|--------|
+| [#554](https://github.com/jmservera/aithena/issues/554) | User management page (admin) | P1 | L |
+| [#555](https://github.com/jmservera/aithena/issues/555) | Change password form | P1 | S |
+| [#556](https://github.com/jmservera/aithena/issues/556) | User profile page | P1 | S |
+
+### Kane (Security Engineer) — 2 Issues
+
+| # | Issue | Priority | Effort |
+|---|-------|----------|--------|
+| [#552](https://github.com/jmservera/aithena/issues/552) | Password policy enforcement | P0 | S |
+| [#560](https://github.com/jmservera/aithena/issues/560) | Security review (full module) | P0 | M |
+
+### Brett (Infrastructure Architect) — 1 Issue
+
+| # | Issue | Priority | Effort |
+|---|-------|----------|--------|
+| [#557](https://github.com/jmservera/aithena/issues/557) | Auth DB migration & backup | P1 | M |
+
+### Lambert (Tester) — 2 Issues
+
+| # | Issue | Priority | Effort |
+|---|-------|----------|--------|
+| [#558](https://github.com/jmservera/aithena/issues/558) | Auth API integration tests | P0 | L |
+| [#559](https://github.com/jmservera/aithena/issues/559) | RBAC access control tests | P0 | M |
+
+---
+
+## Dependency Graph
+
+```
+Phase 1 — Foundation (parallel):
+  #553 RBAC middleware ──┐
+  #552 Password policy ──┤
+  #550 Admin seeding ────┤
+  #557 DB migration ─────┘ (all independent)
+
+Phase 2 — Core API (depends on Phase 1):
+  #549 User CRUD API ←── #553, #552
+  #551 Change password ←── #552
+
+Phase 3 — Frontend (depends on Phase 2):
+  #554 User mgmt page ←── #549, #553
+  #555 Change password form ←── #551
+  #556 User profile page ←── (no backend deps, but logically Phase 3)
+
+Phase 4 — Validation (depends on Phase 2):
+  #558 Auth integration tests ←── #549, #550, #551, #553
+  #559 RBAC tests ←── #553, #549
+
+Phase 5 — Final gate:
+  #560 Security review ←── ALL implementation issues
+```
+
+## Execution Order
+
+1. **Sprint 1:** Parker starts #553 (RBAC) + #550 (seeding). Kane starts #552 (password policy). Brett starts #557 (migration).
+2. **Sprint 2:** Parker builds #549 (CRUD) + #551 (change-password) using RBAC + policy from Sprint 1.
+3. **Sprint 3:** Dallas builds #554, #555, #556 (all frontend). Lambert writes #558, #559 (tests).
+4. **Sprint 4:** Kane does #560 (security review). Fix any findings. Ship.
+
+## Risks
+
+| Risk | Mitigation |
+|------|-----------|
+| RBAC breaks existing admin endpoints | Phase 1 keeps X-API-Key; RBAC only on new endpoints |
+| Password policy too strict for existing passwords | Existing passwords are not retroactively validated |
+| Token revocation gap (password change doesn't invalidate tokens) | Accepted for v1.9.0; 24h TTL is acceptable |
+| SQLite concurrent writes during user management | SQLite WAL mode handles this; user management is low-frequency |
+
+## Impact
+
+- **Users:** Can change passwords and view profile from UI
+- **Admins:** Full user lifecycle management from browser (no more CLI/DB access)
+- **Operators:** Default admin seeding simplifies first deployment
+- **Security:** Stronger access control with three-tier RBAC
+
+## Open Questions
+
+1. **Account lockout after N failed attempts?** — Deferred to v2.0.0 (rate limiting is sufficient for v1.9.0)
+2. **Email field for password reset?** — Deferred (no email infrastructure in on-premises deployment)
+3. **Audit logging of user management actions?** — Nice-to-have for v1.9.0, required for v2.0.0
