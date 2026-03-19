@@ -137,6 +137,10 @@ def _check_cookie_auth(settings: AuthSettings) -> AuthenticatedUser | None:
 
     try:
         user = decode_access_token(token, settings.jwt_secret)
+        # Only admin users may access the admin dashboard via cookie SSO.
+        if user.role != "admin":
+            _logger.warning("Cookie SSO rejected: user %r has role %r, admin required", user.username, user.role)
+            return None
         # Persist in session state so subsequent reruns skip the cookie lookup.
         st.session_state["auth_token"] = token
         st.session_state["auth_user"] = user.username

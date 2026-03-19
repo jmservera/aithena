@@ -254,9 +254,36 @@ class TestCookieAuth:
     @patch("auth.st")
     def test_cookie_auth_context_not_available(self, mock_st: MagicMock) -> None:
         """When st.context is unavailable (old Streamlit), returns None."""
+
+        class _NoContext:
+            session_state: dict = {}  # noqa: RUF012
+
+            @property
+            def context(self):
+                raise AttributeError("no context")
+
+        with patch("auth.st", _NoContext()):
+            assert _check_cookie_auth(self.SETTINGS) is None
+
+    @patch("auth.st")
+    def test_cookie_auth_rejects_non_admin_role(self, mock_st: MagicMock) -> None:
+        """A valid JWT with a non-admin role must be rejected by cookie SSO."""
+        viewer = AuthenticatedUser(username="viewer-user", role="viewer")
+        token = create_access_token(viewer, SECRET, 3600)
         mock_st.session_state = {}
-        type(mock_st).context = property(lambda self: (_ for _ in ()).throw(AttributeError))
+        mock_st.context.cookies = {"aithena_auth": token}
         assert _check_cookie_auth(self.SETTINGS) is None
+        assert "auth_token" not in mock_st.session_state
+
+    @patch("auth.st")
+    def test_check_auth_cookie_fallback_rejects_non_admin(self, mock_st: MagicMock) -> None:
+        """check_auth rejects a non-admin cookie even when session state is empty."""
+        editor = AuthenticatedUser(username="editor-user", role="editor")
+        token = create_access_token(editor, SECRET, 3600)
+        mock_st.session_state = {}
+        mock_st.context.cookies = {"aithena_auth": token}
+        assert check_auth(self.SETTINGS) is None
+        assert "auth_token" not in mock_st.session_state
 
     @patch("auth.st")
     def test_cookie_auth_custom_cookie_name(self, mock_st: MagicMock) -> None:
