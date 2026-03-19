@@ -68,6 +68,18 @@
 - Graceful skip pattern (try/catch + annotation) works well for CI resilience — used for status, stats, library, and similar books in addition to the existing admin dashboard pattern.
 - Facet filter screenshot requires `waitForSearchResponse` with `fq_author` param check to ensure filtered results have loaded before capture.
 - The E2E project has no `tsconfig.json` or TypeScript compiler — Playwright handles TS transpilation at runtime, so no `tsc --noEmit` validation is possible.
+### 2026-03-19T07:07Z — Expanded Playwright screenshot spec to 11 pages (PR #535 merged)
+
+**Issue:** #530 (v1.8.0 milestone)  
+**PR:** #535 (merged to `dev`)  
+**Scope:** Screenshot spec expansion from 4 to 11 pages
+
+**Summary:** 
+Expanded the Playwright screenshot spec to cover all 11 pages documented in user and admin manuals. The spec now captures login, search (empty and faceted), results, PDF viewer, similar books, admin dashboard, upload, status, stats, and library pages. Data-dependent pages (PDF viewer, similar books, status, stats, library) use graceful skip pattern with annotation if data is unavailable, keeping tests resilient in CI.
+
+**Key learning:** Sequential page capture is critical for dependent UI flows. PDF viewer must be captured before similar books panel (which depends on open PDF modal).
+
+**Unblocks:** #531 (Brett's artifact step) — can now proceed.
 
 ### 2026-03-14 — Playwright browser E2E suite for the local stack
 

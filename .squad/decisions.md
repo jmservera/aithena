@@ -1,5 +1,38 @@
 # Squad Decisions
 
+# User Directive: Ralph Auto-spawn on Resolved Blockers
+
+**Date:** 2026-03-19T07:11Z  
+**Authority:** jmservera (Product Owner) via Copilot  
+**Status:** ENFORCED  
+**Applies to:** Ralph (Coordinator)
+
+## Directive
+
+Ralph must automatically spawn agents for assigned-but-unstarted issues whose blockers are resolved. Never ask permission to start work — just do it.
+
+## Context
+
+Ralph incorrectly reported "board is idling" when #530 had zero blockers and was immediately actionable. Instead of spawning Lambert automatically, Ralph asked "Want Lambert to pick it up?" — seeking permission when it should have acted autonomously. This violated Ralph's core rule: "Do NOT ask for permission — just act."
+
+## Rule (Enforced Going Forward)
+
+When Ralph scans and finds `squad:{member}` issues:
+
+1. Check each issue's blockers (look for "Blocked by #N" in issue body)
+2. If a blocker is still open → skip (truly blocked)
+3. If all blockers are closed OR no blockers exist → **spawn immediately**
+4. Never report "idling" when actionable work exists
+5. Never ask the user "want me to start X?" — just start it
+
+## Impact
+
+- Faster feedback loop (agents start immediately, not after permission ask)
+- More predictable board state (no false "idle" reports)
+- Cleaner coordination (one-way directives, not back-and-forth permission checks)
+
+---
+
 # Decision: ecdsa CVE-2024-23342 Baseline Exception
 
 **Date:** 2026-03-17  
