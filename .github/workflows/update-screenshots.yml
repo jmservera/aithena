@@ -34,8 +34,11 @@ jobs:
 
     steps:
       - name: Validate workflow run source
+        env:
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          TARGET_REPO: ${{ github.repository }}
         run: |
-          if [[ "${{ github.event.workflow_run.head_repository.full_name }}" != "${{ github.repository }}" ]]; then
+          if [[ "$HEAD_REPO" != "$TARGET_REPO" ]]; then
             echo "::error::Workflow run from fork detected - rejecting"
             exit 1
           fi
