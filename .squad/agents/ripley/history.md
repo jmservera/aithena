@@ -392,3 +392,43 @@ Key active decisions managed in .squad/decisions.md:
 **Decision Filed:** `.squad/decisions.md` (merged from inbox)
 
 **Outcome:** Screenshot pipeline unblocked for v1.8.0; all 5 issues must close before release; automation ready for future releases.
+
+## Session: User Management Module Design (2026-03-19)
+
+**Context:** User requested a proper user management system for v1.9.0 to replace the current CLI-only user creation workflow. Explored existing auth system (auth.py, reset_password.py, AuthContext, LoginPage) and designed a complete module.
+
+**Key Design Decisions:**
+1. **Three-tier RBAC:** admin/user/viewer — covers browsing, contributing, and admin use cases
+2. **Phased X-API-Key migration:** New endpoints use RBAC; existing admin endpoints keep X-API-Key until v2.0.0
+3. **Password policy:** 10-char min, 3-of-4 complexity categories, 128-char max (Argon2 DoS prevention)
+4. **Token revocation deferred:** Stateless JWT is sufficient for v1.9.0; version-based revocation planned for v2.0.0
+5. **No schema changes needed:** Current users table already has all required columns
+6. **Default admin seeding:** ENV-var-driven on first startup, idempotent
+
+**Artifacts Created:**
+- Milestone: v1.9.0 (#23)
+- Proposal: `.squad/decisions/inbox/ripley-user-management-module.md`
+- Labels: `release:v1.9.0`, squad member labels (parker, dallas, brett, lambert, kane)
+
+**Issues Created (12 total):**
+- #549: User CRUD API (Parker) — foundation
+- #550: Default admin seeding (Parker)
+- #551: Change password endpoint (Parker)
+- #552: Password policy enforcement (Kane)
+- #553: RBAC middleware (Parker)
+- #554: User management page (Dallas) — blocked by #549, #553
+- #555: Change password form (Dallas) — blocked by #551
+- #556: User profile page (Dallas)
+- #557: Auth DB migration & backup (Brett)
+- #558: Auth integration tests (Lambert) — blocked by #549-#553
+- #559: RBAC access control tests (Lambert) — blocked by #549, #553
+- #560: Security review (Kane) — final gate, blocked by ALL impl
+
+**Execution Plan:** 4 sprints — Foundation → Core API → Frontend + Tests → Security Review
+
+## Learnings
+
+- **Current auth schema is sufficient for user management.** The SQLite users table already has id, username, password_hash, role, created_at — no migration needed for CRUD. This validates the original schema design.
+- **X-API-Key and JWT RBAC coexistence is necessary.** Existing admin endpoints use X-API-Key; new user management uses JWT RBAC. A phased migration avoids breaking deployed automation. Key learning: don't mix auth mechanisms in one release.
+- **Argon2 has a DoS vector via large inputs.** Password max-length (128 chars) must be enforced BEFORE hashing to prevent CPU exhaustion. This should be a standard check in any Argon2 implementation.
+- **Stateless JWT trade-off is acceptable for low-risk apps.** Token revocation adds significant complexity (blocklist or DB-per-request). For a library search tool with 24h TTL, the gap is acceptable. Document the trade-off explicitly so future engineers don't re-debate it.
