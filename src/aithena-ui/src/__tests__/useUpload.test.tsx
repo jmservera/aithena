@@ -192,7 +192,9 @@ describe('useUpload', () => {
 
     await waitFor(() => {
       expect(result.current.uploading).toBe(false);
-      expect(result.current.error).toBe('File exceeds the server upload limit. Please try a smaller file.');
+      expect(result.current.error).toBe(
+        'File exceeds the server upload limit. Please try a smaller file.'
+      );
     });
   });
 
