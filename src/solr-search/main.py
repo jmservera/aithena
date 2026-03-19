@@ -210,6 +210,23 @@ upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 
+def get_client_ip(request: Request) -> str:
+    """Extract the real client IP from a proxied request.
+
+    Checks X-Forwarded-For first (first IP only, set by our trusted nginx proxy),
+    then X-Real-IP, then falls back to the direct connection IP.
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
 class RedisRateLimiter:
     """Redis-backed sliding window rate limiter."""
 
@@ -218,16 +235,8 @@ class RedisRateLimiter:
         self.window_seconds = 60
 
     def _get_client_ip(self, request: Request) -> str:
-        """Extract client IP, checking X-Forwarded-For then X-Real-IP."""
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        real_ip = request.headers.get("X-Real-IP")
-        if real_ip:
-            return real_ip.strip()
-        if request.client:
-            return request.client.host
-        return "unknown"
+        """Extract client IP, delegating to module-level helper."""
+        return get_client_ip(request)
 
     def check_rate_limit(self, request: Request) -> tuple[bool, int]:
         """Check if request is within rate limit.
@@ -529,7 +538,7 @@ def version() -> dict[str, str]:
 @app.post("/v1/auth/login/", include_in_schema=False, name="auth_login_v1_slash")
 @app.post("/v1/auth/login", name="auth_login_v1")
 def auth_login(credentials: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     if not login_rate_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 

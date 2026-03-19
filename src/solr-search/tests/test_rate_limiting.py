@@ -1,4 +1,4 @@
-"""Tests for rate limiting on the search endpoint."""
+"""Tests for rate limiting on the search and login endpoints."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import redis as redis_lib  # noqa: E402
 from fastapi import Request  # noqa: E402
-from main import RedisRateLimiter  # noqa: E402
+from main import RedisRateLimiter, get_client_ip  # noqa: E402
 
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
@@ -54,44 +54,97 @@ def _mock_solr_ok(mock_get: MagicMock) -> None:
 
 
 # ---------------------------------------------------------------------------
-# RedisRateLimiter unit tests
+# get_client_ip module-level function tests
+# ---------------------------------------------------------------------------
+
+
+def _make_request(forwarded_for: str | None = None, real_ip: str | None = None,
+                  client_host: str | None = "192.168.1.1") -> MagicMock:
+    """Create a mock Request with configurable proxy headers."""
+    mock_request = MagicMock(spec=Request)
+
+    def _header_get(name: str, default=None):
+        headers = {}
+        if forwarded_for is not None:
+            headers["X-Forwarded-For"] = forwarded_for
+        if real_ip is not None:
+            headers["X-Real-IP"] = real_ip
+        return headers.get(name, default)
+
+    mock_request.headers.get = _header_get
+    if client_host is None:
+        mock_request.client = None
+    else:
+        mock_request.client.host = client_host
+    return mock_request
+
+
+def test_get_client_ip_extracts_first_ip_from_x_forwarded_for() -> None:
+    """Should extract only the first (client) IP from X-Forwarded-For chain."""
+    req = _make_request(forwarded_for="203.0.113.5, 198.51.100.1", client_host="172.18.0.2")
+    assert get_client_ip(req) == "203.0.113.5"
+
+
+def test_get_client_ip_single_forwarded_for() -> None:
+    """Should handle a single IP in X-Forwarded-For."""
+    req = _make_request(forwarded_for="203.0.113.5")
+    assert get_client_ip(req) == "203.0.113.5"
+
+
+def test_get_client_ip_uses_x_real_ip_when_no_forwarded_for() -> None:
+    """Should fall back to X-Real-IP when X-Forwarded-For is absent."""
+    req = _make_request(real_ip="10.0.0.5")
+    assert get_client_ip(req) == "10.0.0.5"
+
+
+def test_get_client_ip_prefers_forwarded_for_over_real_ip() -> None:
+    """X-Forwarded-For should take precedence over X-Real-IP."""
+    req = _make_request(forwarded_for="203.0.113.5", real_ip="10.0.0.5")
+    assert get_client_ip(req) == "203.0.113.5"
+
+
+def test_get_client_ip_falls_back_to_client_host() -> None:
+    """Should use request.client.host when no proxy headers are present."""
+    req = _make_request(client_host="192.168.1.1")
+    assert get_client_ip(req) == "192.168.1.1"
+
+
+def test_get_client_ip_returns_unknown_when_no_client() -> None:
+    """Should return 'unknown' when request.client is None and no proxy headers."""
+    req = _make_request(client_host=None)
+    assert get_client_ip(req) == "unknown"
+
+
+def test_get_client_ip_strips_whitespace() -> None:
+    """Should strip whitespace from forwarded IPs."""
+    req = _make_request(forwarded_for="  203.0.113.5 , 198.51.100.1 ")
+    assert get_client_ip(req) == "203.0.113.5"
+
+
+# ---------------------------------------------------------------------------
+# RedisRateLimiter delegates to get_client_ip
 # ---------------------------------------------------------------------------
 
 
 def test_rate_limiter_extracts_ip_from_x_forwarded_for() -> None:
-    """Should extract client IP from X-Forwarded-For header when present."""
+    """RedisRateLimiter._get_client_ip should delegate to get_client_ip."""
     limiter = RedisRateLimiter(requests_per_minute=5)
-    mock_request = MagicMock(spec=Request)
-    mock_request.headers.get.return_value = "203.0.113.5, 198.51.100.1"
-    mock_request.client.host = "192.168.1.1"
-
-    client_ip = limiter._get_client_ip(mock_request)
-
-    assert client_ip == "203.0.113.5"
+    req = _make_request(forwarded_for="203.0.113.5, 198.51.100.1", client_host="192.168.1.1")
+    assert limiter._get_client_ip(req) == "203.0.113.5"
 
 
 def test_rate_limiter_uses_client_host_when_no_forwarded_header() -> None:
     """Should use request.client.host when X-Forwarded-For is absent."""
     limiter = RedisRateLimiter(requests_per_minute=5)
-    mock_request = MagicMock(spec=Request)
-    mock_request.headers.get.return_value = None
-    mock_request.client.host = "192.168.1.1"
-
-    client_ip = limiter._get_client_ip(mock_request)
-
-    assert client_ip == "192.168.1.1"
+    req = _make_request(client_host="192.168.1.1")
+    assert limiter._get_client_ip(req) == "192.168.1.1"
 
 
 def test_rate_limiter_handles_missing_client() -> None:
     """Should handle case where request.client is None."""
     limiter = RedisRateLimiter(requests_per_minute=5)
-    mock_request = MagicMock(spec=Request)
-    mock_request.headers.get.return_value = None
-    mock_request.client = None
-
-    client_ip = limiter._get_client_ip(mock_request)
-
-    assert client_ip == "unknown"
+    req = _make_request(client_host=None)
+    assert limiter._get_client_ip(req) == "unknown"
 
 
 @patch("main.redis_lib.Redis")
@@ -206,3 +259,70 @@ def test_rate_limit_dependency_called_for_all_search_routes(mock_rate_limit: Mag
 
     # Should have been called 3 times
     assert mock_rate_limit.call_count == 3
+
+
+# ---------------------------------------------------------------------------
+# Login rate limiter tests – verify it uses get_client_ip (X-Forwarded-For)
+# ---------------------------------------------------------------------------
+
+
+@patch("main.login_rate_limiter")
+@patch("main.authenticate_user")
+def test_login_rate_limiter_uses_forwarded_ip(mock_auth: MagicMock, mock_limiter: MagicMock) -> None:
+    """Login endpoint should rate-limit by the real client IP from X-Forwarded-For."""
+    mock_limiter.is_allowed.return_value = True
+    mock_auth.return_value = None  # auth will fail, but we only care about rate limiter call
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app)
+    client.post(
+        "/v1/auth/login",
+        json={"username": "test", "password": "test"},
+        headers={"X-Forwarded-For": "203.0.113.50, 172.18.0.2"},
+    )
+
+    # The rate limiter should have been called with the real client IP, not the proxy IP
+    mock_limiter.is_allowed.assert_called_once_with("203.0.113.50")
+
+
+@patch("main.login_rate_limiter")
+@patch("main.authenticate_user")
+def test_login_rate_limiter_falls_back_to_client_host(mock_auth: MagicMock, mock_limiter: MagicMock) -> None:
+    """Login endpoint should fall back to client.host when X-Forwarded-For is absent."""
+    mock_limiter.is_allowed.return_value = True
+    mock_auth.return_value = None
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app)
+    client.post(
+        "/v1/auth/login",
+        json={"username": "test", "password": "test"},
+    )
+
+    # Without X-Forwarded-For, should use the direct connection IP (testclient)
+    called_ip = mock_limiter.is_allowed.call_args[0][0]
+    assert called_ip != "unknown"
+    mock_limiter.is_allowed.assert_called_once()
+
+
+@patch("main.login_rate_limiter")
+def test_login_returns_429_when_rate_limited(mock_limiter: MagicMock) -> None:
+    """Login endpoint should return 429 when rate limit is exceeded."""
+    mock_limiter.is_allowed.return_value = False
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/auth/login",
+        json={"username": "test", "password": "test"},
+        headers={"X-Forwarded-For": "203.0.113.50"},
+    )
+
+    assert response.status_code == 429
+    assert "Too many login attempts" in response.json()["detail"]
