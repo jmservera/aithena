@@ -116,7 +116,6 @@ function SearchResultsSection({
         id={resultsRegionId}
         ref={resultsRegionRef}
         className="search-results"
-        role="region"
         aria-labelledby={resultsHeadingId}
         aria-describedby={query ? resultsSummaryId : undefined}
         aria-busy={loading}

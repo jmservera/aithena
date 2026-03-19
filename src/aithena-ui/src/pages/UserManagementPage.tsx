@@ -193,10 +193,10 @@ function UserManagementPage() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>{intl.formatMessage({ id: 'users.headerUsername' })}</th>
-                <th>{intl.formatMessage({ id: 'users.headerRole' })}</th>
-                <th>{intl.formatMessage({ id: 'users.headerCreatedAt' })}</th>
-                <th>{intl.formatMessage({ id: 'users.headerActions' })}</th>
+                <th scope="col">{intl.formatMessage({ id: 'users.headerUsername' })}</th>
+                <th scope="col">{intl.formatMessage({ id: 'users.headerRole' })}</th>
+                <th scope="col">{intl.formatMessage({ id: 'users.headerCreatedAt' })}</th>
+                <th scope="col">{intl.formatMessage({ id: 'users.headerActions' })}</th>
               </tr>
             </thead>
             <tbody>
@@ -235,10 +235,14 @@ function UserManagementPage() {
 
       {/* Add User Modal */}
       {modalMode === 'add' && (
-        <div className="users-modal-overlay" onClick={closeModal}>
-          <div
+        <div // eslint-disable-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop dismiss pattern
+          className="users-modal-overlay"
+          onClick={closeModal}
+        >
+          <div // eslint-disable-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation for modal backdrop pattern
             className="users-modal"
             role="dialog"
+            aria-modal="true"
             aria-labelledby="add-user-title"
             onClick={(e) => e.stopPropagation()}
           >
@@ -328,10 +332,14 @@ function UserManagementPage() {
 
       {/* Edit User Modal */}
       {modalMode === 'edit' && selectedUser && (
-        <div className="users-modal-overlay" onClick={closeModal}>
-          <div
+        <div // eslint-disable-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop dismiss pattern
+          className="users-modal-overlay"
+          onClick={closeModal}
+        >
+          <div // eslint-disable-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation for modal backdrop pattern
             className="users-modal"
             role="dialog"
+            aria-modal="true"
             aria-labelledby="edit-user-title"
             onClick={(e) => e.stopPropagation()}
           >
@@ -389,10 +397,14 @@ function UserManagementPage() {
 
       {/* Delete Confirmation Modal */}
       {modalMode === 'delete' && selectedUser && (
-        <div className="users-modal-overlay" onClick={closeModal}>
-          <div
+        <div // eslint-disable-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop dismiss pattern
+          className="users-modal-overlay"
+          onClick={closeModal}
+        >
+          <div // eslint-disable-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation for modal backdrop pattern
             className="users-modal"
             role="dialog"
+            aria-modal="true"
             aria-labelledby="delete-user-title"
             onClick={(e) => e.stopPropagation()}
           >

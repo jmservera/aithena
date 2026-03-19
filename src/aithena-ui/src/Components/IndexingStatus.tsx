@@ -8,6 +8,7 @@ function ServiceDot({ serviceStatus }: { serviceStatus: string }) {
   return (
     <span
       className={`health-dot ${isUp ? 'health-dot--ok' : 'health-dot--error'}`}
+      role="img"
       title={serviceStatus}
       aria-label={serviceStatus}
     />
