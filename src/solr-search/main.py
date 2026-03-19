@@ -666,6 +666,11 @@ def _search_semantic(
     Facets and highlights degrade to empty because the kNN query path does not
     produce Solr facet counts or highlight snippets.
     """
+    # Empty-query handling: semantic/hybrid modes return an empty result set
+    # immediately, skipping embeddings and Solr calls entirely.  This differs
+    # from keyword mode, which normalizes "" to "*:*" and returns all indexed
+    # documents with facets.  The distinction exists because generating a
+    # meaningful embedding from an empty string is not possible.
     if not q.strip():
         return {
             "query": q,
@@ -736,6 +741,7 @@ def _search_hybrid(
     The RRF k constant is configurable via the ``RRF_K`` environment variable
     (default 60, per the original RRF paper).
     """
+    # See semantic mode comment — same rationale: no embedding possible for "".
     if not q.strip():
         return {
             "query": q,

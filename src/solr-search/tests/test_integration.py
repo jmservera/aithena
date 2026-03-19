@@ -454,6 +454,8 @@ def test_search_semantic_empty_query_returns_empty_results(mock_solr_get: MagicM
     assert data["mode"] == "semantic"
     assert data["results"] == []
     assert data["total"] == 0
+    mock_emb_post.assert_not_called()
+    mock_solr_get.assert_not_called()
 
 
 @patch("main.requests.post")
@@ -555,6 +557,8 @@ def test_search_hybrid_empty_query_returns_empty_results(mock_solr_get: MagicMoc
     assert data["mode"] == "hybrid"
     assert data["results"] == []
     assert data["total"] == 0
+    mock_emb_post.assert_not_called()
+    mock_solr_get.assert_not_called()
 
 
 @patch("main.requests.post")
