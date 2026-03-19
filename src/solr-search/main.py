@@ -1542,14 +1542,6 @@ def admin_containers() -> dict[str, Any]:
         ),
         lambda: _get_http_container_status("embeddings-server", _get_embeddings_version_url()),
         lambda: _get_tcp_container_status(
-            "streamlit-admin",
-            "streamlit-admin",
-            8501,
-            "service",
-            settings.version,
-            settings.commit,
-        ),
-        lambda: _get_tcp_container_status(
             "aithena-ui",
             "aithena-ui",
             80,
