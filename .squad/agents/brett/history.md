@@ -450,3 +450,29 @@ jobs:
 - 8 tests covering schema versioning, migration apply/skip/idempotency
 
 **Learning:** SQLite's `.backup` command is the safest way to back up an active database — it creates a consistent snapshot without requiring application downtime. Forward-only migrations with a version table are the right approach for embedded databases; no need for heavy ORM migration tools like Alembic for SQLite.
+---
+
+#### 2025-07-25 — setupdev.sh: Dev Environment Expansion
+
+**Task:** Extended `installer/setupdev.sh` to install all dev tools needed for a headless VM, then executed the new sections to prepare the machine.
+
+**What was added (appended after existing content):**
+1. System utilities: `jq`, `xdg-utils`
+2. Python dev tools: `ruff` via `uv tool install`
+3. Frontend deps: `npm install` in `src/aithena-ui/`
+4. Playwright E2E deps: `npm install` in `e2e/playwright/`, then `npx playwright install --with-deps chromium`
+5. Python service virtualenvs: `uv sync --frozen` for solr-search, document-indexer, document-lister, admin; `uv venv + uv pip install -r requirements.txt` for embeddings-server
+
+**Machine verification:**
+- Playwright 1.58.2 installed with Chromium
+- jq 1.7, ruff 0.15.7 available
+- All 240 frontend tests pass
+- All Python service venvs synced
+
+**Key design choices:**
+- Used subshells `(cd ... && ...)` for directory changes to avoid polluting the parent shell's CWD
+- Sourced nvm explicitly in sections needing npm/node for robustness
+- Used `$REPO_ROOT` derived from `$SCRIPT_DIR` for path portability
+- embeddings-server kept on `requirements.txt` path per project convention (even though it now has uv.lock)
+
+**Learning:** embeddings-server now has both `pyproject.toml`+`uv.lock` AND `requirements.txt`. The project convention still treats it as the requirements.txt service. All other Python services (solr-search, document-indexer, document-lister, admin) use `uv sync --frozen`.

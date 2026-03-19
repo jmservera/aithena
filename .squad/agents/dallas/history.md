@@ -587,6 +587,7 @@ src/aithena-ui/src/
 - The backend `/v1/status/` endpoint returns more fields than the frontend `StatusResponse` interface consumed — always verify TypeScript types match the actual API response shape when debugging display issues.
 - RabbitMQ management HTTP API (`/api/health/checks/alarms` on port 15672) is more reliable than raw TCP on AMQP port 5672 for health checks, since the Erlang VM can be "healthy" before the AMQP listener is fully bound.
 - When adding new service health indicators, remember to update: backend status endpoint, frontend TypeScript interface, React component, and all 4 locale files (en/es/ca/fr).
+- `vite.config.ts` is ESM — `__dirname` is not available. Use `dirname(fileURLToPath(import.meta.url))` from `node:path` and `node:url` to derive the config file directory. Fixed in PR #569.
 
 **End of History — Dallas Frontend Developer**  
 **v1.8.0 Roadmap Complete | 13 issues prepared | Team: Ready for planning meeting**
