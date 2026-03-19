@@ -159,11 +159,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if generated:
-        print(f"Password for '{username}' has been reset.", file=sys.stderr)
-        print("New password (store securely — shown once):", file=sys.stderr)
-        # Write raw credential to stdout for scriptable capture
-        sys.stdout.buffer.write((password + "\n").encode())
-        sys.stdout.buffer.flush()
+        print(f"Password for '{username}' has been reset. New password:\n{password}")
     else:
         print(f"Password for '{username}' has been reset successfully.")
 
