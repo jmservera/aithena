@@ -60,6 +60,15 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-19 — Expanded Playwright screenshot spec to 11 pages (#530 → PR #535)
+
+- Screenshot spec now covers 11 pages (was 4): login, search empty, search results, search faceted, PDF viewer, similar books, admin dashboard, upload, status, stats, library.
+- `gotoAppPage` and `waitForSearchResponse` helpers were already exported but unused by the screenshot spec — now imported and used for navigation and facet filter waits.
+- Similar books panel depends on PDF viewer being open; they must be captured sequentially, not independently.
+- Graceful skip pattern (try/catch + annotation) works well for CI resilience — used for status, stats, library, and similar books in addition to the existing admin dashboard pattern.
+- Facet filter screenshot requires `waitForSearchResponse` with `fq_author` param check to ensure filtered results have loaded before capture.
+- The E2E project has no `tsconfig.json` or TypeScript compiler — Playwright handles TS transpilation at runtime, so no `tsc --noEmit` validation is possible.
+
 ### 2026-03-14 — Playwright browser E2E suite for the local stack
 
 - Browser suite (`e2e/playwright/`) is read-only: discovers queries from live `/v1/search/` API instead of uploading fixtures
