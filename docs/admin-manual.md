@@ -515,6 +515,66 @@ Preferred workflow:
 
 The full production procedure and recovery notes are documented in the [Production deployment guide](deployment/production.md).
 
+### Password reset
+
+The `reset_password.py` CLI tool lets administrators reset any user's password without restarting the service or deleting the database.
+
+#### Usage
+
+```bash
+# Inside the solr-search container (recommended for production)
+docker compose exec solr-search python reset_password.py
+
+# With a specific password
+docker compose exec solr-search python reset_password.py --password "new-secure-password"
+
+# For a specific user
+docker compose exec solr-search python reset_password.py --username myuser --password "new-pass"
+```
+
+#### On the host (development)
+
+If the auth database is bind-mounted to the host:
+
+```bash
+cd src/solr-search
+uv run python reset_password.py --db-path ~/.local/share/aithena/auth/users.db
+```
+
+#### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--db-path` | From `AUTH_DB_PATH` env or `/data/auth/users.db` | Path to the SQLite auth database |
+| `--username` | `admin` | User account to reset |
+| `--password` | *(auto-generated)* | New password. If omitted, generates a secure 32-character random password |
+
+#### Behavior
+
+- If `--password` is omitted, the tool generates a secure random password and prints it to stdout
+- Status messages go to stderr, so you can pipe the password: `docker compose exec solr-search python reset_password.py | clip`
+- Passwords are hashed with Argon2 (same algorithm as the login flow)
+- The tool validates the database exists and the user is found before making changes
+
+#### First-time setup
+
+If the auth database is empty (e.g., after a fresh install or volume recreation), you can create the initial admin user:
+
+```bash
+docker compose exec solr-search python -c "
+from auth import init_auth_db, hash_password
+from pathlib import Path
+import sqlite3
+init_auth_db(Path('/data/auth/users.db'))
+conn = sqlite3.connect('/data/auth/users.db')
+conn.execute('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+    ('admin', hash_password('your-password'), 'admin'))
+conn.commit()
+"
+```
+
+Or use the installer: `python3 -m installer --reset`
+
 ### Degraded-mode semantic search behavior
 
 When Solr is healthy but the embeddings service is unavailable, semantic and hybrid requests no longer fail closed. Instead, `solr-search` automatically reruns the request in keyword mode and returns a normal search payload with extra metadata describing the degradation:
