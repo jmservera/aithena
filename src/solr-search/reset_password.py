@@ -159,9 +159,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if generated:
-        print(f"Password for '{username}' has been reset. New password:\n{password}")
+        print(f"Password for '{username}' has been reset.", file=sys.stderr)
+        sys.stdout.buffer.write(password.encode() + b"\n")
     else:
-        print(f"Password for '{username}' has been reset successfully.")
+        print(f"Password for '{username}' has been reset successfully.", file=sys.stderr)
 
     return 0
 
