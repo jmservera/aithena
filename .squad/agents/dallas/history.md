@@ -587,3 +587,16 @@ src/aithena-ui/src/
 
 **End of History — Dallas Frontend Developer**  
 **v1.8.0 Roadmap Complete | 13 issues prepared | Team: Ready for planning meeting**
+
+## Learnings
+
+### 2026 — Issue #564: Incomplete i18n on Search, Library, Upload pages (PR #567)
+
+**Problem:** Despite the i18n system being in place since v1.6.0, the `search.*`, `library.*`, and `upload.*` locale keys in es/ca/fr were never actually translated — they still contained English values. Additionally, LibraryPage had a hardcoded "Library" heading and UploadPage had 3 hardcoded button labels.
+
+**Fix:**
+- Replaced 4 hardcoded strings in LibraryPage.tsx and UploadPage.tsx with `intl.formatMessage()` calls using existing keys
+- Translated 65 keys × 3 languages = 195 translations (search: 31, library: 15, upload: 19)
+- Removed emoji from `library.title` key since the component uses a Lucide `BookOpen` icon
+
+**Key takeaway:** When adding i18n keys, always verify the non-English locale files actually contain translations, not just copies of the English values. The existing locale completeness test only checks that keys exist across all files — it doesn't detect values left in English. Consider adding a test that flags identical values across locales (excluding brand names and technical terms).
