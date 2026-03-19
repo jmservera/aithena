@@ -7,6 +7,7 @@ import Footer from './Components/Footer';
 import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import LoadingSpinner from './Components/LoadingSpinner';
 import ProtectedRoute from './Components/ProtectedRoute';
+import AdminRoute from './Components/AdminRoute';
 import TabNav from './Components/TabNav';
 
 const SearchPage = lazy(() => import('./pages/SearchPage'));
@@ -16,6 +17,9 @@ const StatusPage = lazy(() => import('./pages/StatusPage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
+const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 
 function LazyRoute({
   element,
@@ -127,6 +131,38 @@ function App() {
                   element={<AdminPage />}
                   titleId="loading.admin"
                   messageId="loading.adminMessage"
+                />
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <LazyRoute
+                  element={<ProfilePage />}
+                  titleId="loading.profile"
+                  messageId="loading.profileMessage"
+                />
+              }
+            />
+            <Route
+              path="/profile/change-password"
+              element={
+                <LazyRoute
+                  element={<ChangePasswordPage />}
+                  titleId="loading.changePassword"
+                  messageId="loading.changePasswordMessage"
+                />
+              }
+            />
+          </Route>
+          <Route element={<AdminRoute />}>
+            <Route
+              path="/admin/users"
+              element={
+                <LazyRoute
+                  element={<UserManagementPage />}
+                  titleId="loading.users"
+                  messageId="loading.usersMessage"
                 />
               }
             />

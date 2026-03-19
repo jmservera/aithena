@@ -2268,3 +2268,268 @@ select:focus-visible,
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Profile dropdown (in TabNav) ──────────────────────────────── */
+
+.profile-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.profile-dropdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: white;
+  border-radius: 6px;
+  padding: 8px 14px;
+  min-height: 40px;
+  font-size: 0.88em;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.profile-dropdown-toggle:hover {
+  background-color: rgba(126, 200, 227, 0.15);
+  border-color: rgba(126, 200, 227, 0.45);
+}
+
+.profile-dropdown-chevron {
+  transition: transform 0.2s;
+}
+
+.profile-dropdown-chevron--open {
+  transform: rotate(180deg);
+}
+
+.profile-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  min-width: 200px;
+  background: linear-gradient(180deg, rgba(64, 65, 79, 0.98) 0%, rgba(43, 44, 56, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 0.88em;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background-color 0.12s;
+}
+
+.profile-dropdown-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.profile-dropdown-item--logout {
+  color: var(--color-error-soft, #fca5a5);
+}
+
+.profile-dropdown-divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.1);
+  margin: 4px 0;
+}
+
+/* ── Profile page ──────────────────────────────────────────────── */
+
+.profile-page {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 20px;
+  background-color: var(--color-bg-surface-alt);
+}
+
+.profile-card {
+  width: min(100%, 480px);
+  background: linear-gradient(180deg, rgba(64, 65, 79, 0.98) 0%, rgba(43, 44, 56, 0.98) 100%);
+  border: 1px solid rgba(126, 200, 227, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  padding: 32px;
+}
+
+.profile-title {
+  margin: 0 0 24px;
+  font-size: 1.6em;
+  font-weight: 700;
+}
+
+.profile-details {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-detail-label {
+  font-size: 0.88em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  min-width: 120px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-detail-value {
+  margin: 0;
+  font-size: 1em;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.profile-actions {
+  margin-top: 28px;
+  display: flex;
+  gap: 12px;
+}
+
+/* ── User management extras ────────────────────────────────────── */
+
+.users-role-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.users-role-badge--admin {
+  background-color: rgba(126, 200, 227, 0.2);
+  color: var(--color-primary);
+  border: 1px solid rgba(126, 200, 227, 0.35);
+}
+
+.users-role-badge--user {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.users-role-badge--viewer {
+  background-color: rgba(148, 163, 184, 0.15);
+  color: rgba(148, 163, 184, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.users-action-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.users-toast {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(80, 200, 120, 0.18);
+  border: 1px solid rgba(80, 200, 120, 0.4);
+  color: #86efac;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+}
+
+.users-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.55);
+  padding: 20px;
+}
+
+.users-modal {
+  width: min(100%, 440px);
+  background: linear-gradient(180deg, rgba(64, 65, 79, 0.98) 0%, rgba(43, 44, 56, 0.98) 100%);
+  border: 1px solid rgba(126, 200, 227, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  padding: 28px;
+}
+
+.users-modal-title {
+  margin: 0 0 20px;
+  font-size: 1.3em;
+  font-weight: 700;
+}
+
+.users-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.users-modal-body {
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.users-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* ── Change password page extras ───────────────────────────────── */
+
+.change-password-back-link {
+  display: inline-block;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.88em;
+  text-decoration: none;
+  margin-top: 4px;
+  transition: color 0.15s;
+}
+
+.change-password-back-link:hover {
+  color: var(--color-primary);
+}
+
+/* ── Responsive: profile dropdown on mobile ────────────────────── */
+
+@media (max-width: 900px) {
+  .profile-dropdown-menu {
+    position: static;
+    box-shadow: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    min-width: auto;
+  }
+
+  .profile-dropdown-item {
+    padding: 8px 0;
+  }
+}
