@@ -427,3 +427,13 @@ jobs:
 - Category→squad routing: crash/security→kane, connection→parker, all infra→brett
 
 **Learning:** POSIX shell pattern matching via `case` statements is sufficient for log scanning without needing grep/awk. The `tr '[:upper:]' '[:lower:]'` approach for case-insensitive matching is portable across all sh implementations. Separating the issue-creation job from the test job avoids needing to handle both artifact upload and GitHub API calls in the same step.
+### Certbot Made Optional (docker-compose.ssl.yml)
+
+**Date:** $(date -u +%Y-%m-%dT%H:%MZ)
+**Context:** Most deployments run behind a reverse proxy or on local networks and don't need Let's Encrypt. The certbot service and its bind-mount volumes were always required, even for HTTP-only setups.
+
+**Solution:** Extracted all certbot/SSL configuration into a dedicated `docker-compose.ssl.yml` overlay file. The base `docker-compose.yml` and `docker-compose.prod.yml` now run HTTP-only on port 80. SSL users compose the files together: `docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d`.
+
+**Why overlay instead of profiles:** Docker Compose profiles can disable services but can't conditionally add volume mounts or port bindings to *other* services (nginx). The certbot bind-mount volumes (`/source/volumes/certbot-data/`) would still need to exist on the host because nginx referenced them. An overlay file cleanly isolates all SSL-related config in one place.
+
+**Learning:** When making a sidecar optional, check whether the *main* service (nginx) has dependencies on the sidecar's infrastructure (shared volumes, ports). Profiles alone can't handle cross-service dependency removal — use a compose overlay file instead.

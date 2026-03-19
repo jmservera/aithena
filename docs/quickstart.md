@@ -49,7 +49,6 @@ Create the Docker volume mount points:
 
 ```bash
 sudo mkdir -p /source/volumes/{rabbitmq-data,redis,solr-data,solr-data2,solr-data3}
-sudo mkdir -p /source/volumes/certbot-data/{conf,www}
 sudo mkdir -p /source/volumes/{zoo-data1,zoo-data2,zoo-data3}/{logs,data,datalog}
 sudo mkdir -p /source/volumes/zoo-backup
 ```
@@ -106,11 +105,22 @@ Sign in with the admin credentials you configured during installation.
 
 ### Enable HTTPS with Let's Encrypt
 
-Edit the nginx configuration to enable TLS:
+To add TLS, use the SSL overlay:
 
 ```bash
-# Update src/nginx/default.conf with your domain and enable certbot
-docker compose -f docker-compose.prod.yml restart nginx
+# Create certbot volume directories
+sudo mkdir -p /source/volumes/certbot-data/{conf,www}
+
+# Start with SSL enabled
+docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+
+# Obtain the initial certificate
+docker compose -f docker-compose.yml -f docker-compose.ssl.yml \
+  run --rm certbot certonly --webroot -w /var/www/certbot \
+  -d your.domain.com --agree-tos -m you@example.com
+
+# Update src/nginx/default.conf with your domain's HTTPS server block
+docker compose -f docker-compose.yml -f docker-compose.ssl.yml restart nginx
 ```
 
 ### Add Documents to the Library

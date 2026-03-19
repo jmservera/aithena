@@ -154,10 +154,9 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
 
 2. **Create volume directories**:
    ```bash
-   sudo mkdir -p /source/volumes/{solr-data,solr-data2,solr-data3}
+   sudo mkdir -p /source/volumes/{rabbitmq-data,redis,solr-data,solr-data2,solr-data3}
    sudo mkdir -p /source/volumes/{zoo-data1,zoo-data2,zoo-data3}/{data,logs,datalog}
    sudo mkdir -p /source/volumes/{rabbitmq-data,redis,zoo-backup}
-   sudo mkdir -p /source/volumes/certbot-data/{conf,www}
    sudo chown -R 8983:8983 /source/volumes/solr-data*  # Solr UID
    sudo chown -R 1000:1000 /source/volumes/zoo-data*   # ZooKeeper UID
    ```
@@ -544,6 +543,45 @@ If full system failure:
    docker compose restart document-lister  # Triggers full library scan
    ```
 
+## Enable HTTPS
+
+The base Compose files run HTTP-only on port 80. To add Let's Encrypt TLS via
+certbot, use the `docker-compose.ssl.yml` overlay:
+
+1. **Create certbot volume directories:**
+
+   ```bash
+   sudo mkdir -p /source/volumes/certbot-data/{conf,www}
+   ```
+
+2. **Start the stack with SSL:**
+
+   ```bash
+   # Development (local build)
+   docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+
+   # Production (GHCR images)
+   docker compose -f docker-compose.prod.yml -f docker-compose.ssl.yml up -d
+   ```
+
+3. **Obtain the initial certificate:**
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.ssl.yml \
+     run --rm certbot certonly --webroot -w /var/www/certbot \
+     -d your.domain.com --agree-tos -m you@example.com
+   ```
+
+4. **Add an HTTPS server block** to `src/nginx/default.conf` that references
+   `/etc/letsencrypt/live/your.domain.com/`. Restart nginx after editing.
+
+The certbot sidecar renews certificates automatically every 12 hours, and
+nginx reloads every 6 hours to pick up renewed certificates.
+
+> **Migrating from older setups:** If your deployment previously had certbot
+> in the base compose file, add `-f docker-compose.ssl.yml` to your
+> `docker compose` commands to restore the same behavior.
+
 ## Production Hardening Checklist
 
 Before going to production, verify:
@@ -552,7 +590,7 @@ Before going to production, verify:
 - [ ] `python3 -m installer` completed successfully — `.env` written, auth DB created, and generated secrets reviewed
 - [ ] Volume directories created with correct ownership
 - [ ] Firewall configured (only 80/443 public, block all other ports)
-- [ ] SSL certificates configured in nginx (Let's Encrypt via certbot)
+- [ ] SSL certificates configured in nginx if public-facing (see [Enable HTTPS](#enable-https) below)
 - [ ] RabbitMQ credentials rotated away from `guest/guest` via `.env` (`RABBITMQ_USER` / `RABBITMQ_PASS`) or matching `default_user` / `default_pass` settings in `src/rabbitmq/rabbitmq.conf`
 - [ ] Redis password set in `.env` (`REDIS_PASSWORD`) so Compose enables `redis-server --requirepass`
 - [ ] Rotated credentials applied with `docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx`
