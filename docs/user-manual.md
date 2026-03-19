@@ -321,7 +321,7 @@ The embedded Streamlit dashboard currently includes:
 
 ### What to expect
 
-- The Admin tab loads `/admin/streamlit/` inside the app rather than sending you to a different product.
+- The Admin tab loads `/admin/` inside the app rather than sending you to a different product.
 - It is mainly intended for operators and library administrators, not day-to-day readers.
 - The admin dashboard now requires an authenticated session; if your session expires, Aithena redirects you back to `/login`.
 - If the dashboard cannot load after you sign in, contact your administrator to confirm the admin services are running and your account has been provisioned correctly.

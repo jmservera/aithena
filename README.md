@@ -157,8 +157,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 | **Document Indexer** | Consumes queue, extracts metadata, uploads to Solr | Python service with configurable path heuristics |
 | **Solr Search API** | FastAPI wrapper around the `books` collection | Normalized results, facets, highlights, PDF document URLs |
 | **Embeddings Server** | Semantic search vectors (Phase 3+) | `distiluse-base-multilingual-cased-v2` |
-| **Streamlit Admin UI** | Basic document management & monitoring | `/admin/streamlit/` via nginx |
-| **React/Vite Frontend** | Search UI with faceting | `/` via nginx |
+| **React/Vite Frontend** | Search UI with faceting, document management | `/` via nginx |
 | **nginx + Certbot** | Reverse proxy, TLS termination, admin entry point | Production-ready |
 
 ### Data Flow
@@ -238,7 +237,6 @@ Once `solr-init` completes:
 | RabbitMQ Admin | http://localhost/admin/rabbitmq/ | Monitor queue depth through the management UI |
 | Redis Commander | http://localhost/admin/redis/ | Inspect Redis state through a lightweight web UI |
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
-| Streamlit Admin | http://localhost/admin/streamlit/ | Document management dashboard |
 
 When `docker compose up` loads `docker-compose.override.yml` (the default local workflow), these direct debug ports are also available:
 
@@ -249,7 +247,6 @@ When `docker compose up` loads `docker-compose.override.yml` (the default local 
 | rabbitmq | `5672`, `15672` | AMQP clients and direct management UI |
 | redis | `6379` | Redis CLI and direct state inspection |
 | redis-commander | `8081` | Direct Redis Commander UI |
-| streamlit-admin | `8501` | Direct Streamlit debugging |
 | zoo1 / zoo2 / zoo3 | `18080`, `2181`, `2182`, `2183` | ZooKeeper AdminServer and node client ports |
 | embeddings-server | `8085` | Embeddings API debugging / local external tools |
 

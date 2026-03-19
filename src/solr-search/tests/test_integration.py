@@ -1278,8 +1278,8 @@ def test_admin_containers_endpoint_happy_path(
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total"] == 10
-    assert data["healthy"] == 8
+    assert data["total"] == 9
+    assert data["healthy"] == 7
     assert data["last_updated"].endswith("Z")
 
     solr_search = _container_by_name(data["containers"], "solr-search")
@@ -1300,13 +1300,6 @@ def test_admin_containers_endpoint_happy_path(
         "commit": "abc1234",
     }
 
-    assert _container_by_name(data["containers"], "streamlit-admin") == {
-        "name": "streamlit-admin",
-        "status": "up",
-        "type": "service",
-        "version": settings.version,
-        "commit": settings.commit,
-    }
     assert _container_by_name(data["containers"], "aithena-ui") == {
         "name": "aithena-ui",
         "status": "up",
@@ -1357,7 +1350,6 @@ def test_admin_containers_endpoint_degraded_path(
 
     def tcp_side_effect(host: str, port: int, timeout: float = 2.0) -> bool:
         host_statuses = {
-            "streamlit-admin": False,
             settings.redis_host: True,
             settings.rabbitmq_host: False,
             "aithena-ui": True,
@@ -1376,7 +1368,7 @@ def test_admin_containers_endpoint_degraded_path(
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total"] == 10
+    assert data["total"] == 9
     assert data["healthy"] == 4
     assert _container_by_name(data["containers"], "embeddings-server") == {
         "name": "embeddings-server",
@@ -1385,7 +1377,6 @@ def test_admin_containers_endpoint_degraded_path(
         "version": "unknown",
         "commit": "unknown",
     }
-    assert _container_by_name(data["containers"], "streamlit-admin")["status"] == "down"
     assert _container_by_name(data["containers"], "solr")["status"] == "down"
     assert _container_by_name(data["containers"], "rabbitmq")["status"] == "down"
     assert _container_by_name(data["containers"], "document-indexer")["status"] == "unknown"

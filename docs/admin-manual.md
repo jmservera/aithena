@@ -21,7 +21,6 @@ Aithena runs as a Docker Compose stack built around Solr, a document ingestion p
 | `document-lister` | Scans the mounted library and enqueues PDFs | internal only |
 | `document-indexer` | Consumes queue items and indexes books into Solr | internal only |
 | `embeddings-server` | Embedding service used by the search stack | internal only; direct `8085` via override |
-| `streamlit-admin` | Lightweight admin dashboard | proxied through `nginx`; direct `8501` via override |
 | `redis-commander` | Web UI for Redis inspection | proxied through `nginx`; direct `8081` via override |
 | `certbot` | Certificate renewal helper (optional — see `docker-compose.ssl.yml`) | internal only |
 
@@ -43,7 +42,6 @@ Current shipped behavior:
 
 - `document-lister` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
 - `document-indexer` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
-- `streamlit-admin` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
 - `redis-commander` waits for **Redis** health
 - `nginx` also waits for **RabbitMQ** health before exposing the admin surfaces
 
@@ -117,10 +115,9 @@ Common local URLs:
 | Stats API | `http://localhost/v1/stats/` | Protected |
 | Solr admin | `http://localhost/admin/solr/` | Protected |
 | RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
-| Streamlit admin | `http://localhost/admin/streamlit/` | Protected |
 | Redis Commander | `http://localhost/admin/redis/` | Protected |
 
-Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8501`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
+Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
 
 ## Configuration
 
@@ -183,17 +180,6 @@ That means every service using `/data/documents` is reading from the same mounte
 | `AUTH_JWT_SECRET` | installer-generated | JWT signing secret required at startup (v0.11.0+) |
 | `AUTH_JWT_TTL` | `24h` | Session lifetime for issued JWTs (v0.11.0+) |
 | `AUTH_COOKIE_NAME` | `aithena_auth` | Cookie name used for browser auth (v0.11.0+) |
-
-#### `streamlit-admin`
-
-| Variable | Value in Compose | Purpose |
-|---|---|---|
-| `REDIS_HOST` | `redis` | Redis hostname |
-| `REDIS_PORT` | `6379` | Redis port |
-| `QUEUE_NAME` | `shortembeddings` | Queue name used by the stack |
-| `RABBITMQ_HOST` | `rabbitmq` | RabbitMQ hostname |
-| `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ management port |
-| `RABBITMQ_MGMT_PATH_PREFIX` | `/admin/rabbitmq` | Reverse-proxy path prefix |
 
 #### Infrastructure services
 
@@ -510,7 +496,7 @@ Preferred workflow:
 2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD`.
 3. Recreate every dependent service so clients reconnect with the new credentials:
    ```bash
-   docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx
+   docker compose up -d --force-recreate redis rabbitmq redis-commander document-lister document-indexer solr-search nginx
    ```
 
 The full production procedure and recovery notes are documented in the [Production deployment guide](deployment/production.md).
@@ -696,7 +682,7 @@ Without a reindex, language filters and language-facing reports can mix old and 
    ```bash
    docker compose ps
    ```
-2. Open the embedded admin dashboard at **Admin** in the UI or directly at `http://localhost/admin/streamlit/`.
+2. Open the embedded admin dashboard at **Admin** in the UI or directly at `http://localhost/admin/`.
 3. In **Document Manager → Processed**, click **🗑️ Clear All** and confirm. This removes the Redis processed-state entries so the lister will rediscover the files.
 4. In **Document Manager → Failed**, click **🔄 Requeue All** if any failed documents are present.
 5. Wait for the next lister scan (default: **60 seconds**) or restart the lister/indexer services if you need the cycle to begin immediately.
@@ -886,7 +872,7 @@ Before calling a deployment healthy, confirm:
 - `http://localhost/v1/stats/` returns JSON after authentication
 - the main UI at `http://localhost/` loads Search, Status, and Stats after login
 - a known PDF can be searched and opened from results
-- `/admin/streamlit/`, `/admin/solr/`, and `/admin/rabbitmq/` redirect or deny access when unauthenticated
+- `/admin/`, `/admin/solr/`, and `/admin/rabbitmq/` redirect or deny access when unauthenticated
 
 ## Deployment Updates for v1.3.0 (Structured Logging, Admin Auth, Observability)
 
@@ -941,11 +927,11 @@ For comprehensive guidance, see `docs/observability-runbook.md`.
 
 ### Admin dashboard authentication
 
-v1.3.0 requires authentication for the embedded Streamlit admin dashboard. Users must log in before accessing the dashboard.
+v1.3.0 requires authentication for the embedded admin dashboard. Users must log in before accessing the dashboard.
 
 **Admin access behavior:**
 
-- Users accessing `/admin/streamlit/` while not authenticated are redirected to `/login`
+- Users accessing `/admin/` while not authenticated are redirected to `/login`
 - After successful login, users can access the admin dashboard via the **Admin** tab in the UI
 - Sessions expire after 24 hours (configurable via `AUTH_JWT_TTL`)
 - Logging out clears the browser session
@@ -1394,7 +1380,7 @@ docker compose exec rabbitmq curl -s http://localhost:15672/api/healthchecks/nod
 4. Access UI: `https://aithena.example.com/` and log in
 5. Run smoke tests: `docker compose -f docker-compose.smoke.yml up --abort-on-container-exit`
 6. Verify search works: Execute a known search query
-7. Check admin dashboard: Access `/admin/streamlit/` after login
+7. Check admin dashboard: Access `/admin/` after login
 
 ### Rollback procedures
 

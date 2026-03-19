@@ -46,10 +46,9 @@ A healthy baseline should show:
 | `document-lister` | `rabbitmq`, `redis` healthy | Polls `document-data` and publishes indexing work to RabbitMQ. |
 | `document-indexer` | `rabbitmq`, `redis`, `embeddings-server` healthy | Consumes queue items, creates embeddings, and writes to Solr. |
 | `solr-search` | `solr`, `embeddings-server`, `rabbitmq`, `redis` healthy | Search/API tier. Startup is gated by Redis and RabbitMQ, but runtime search availability mainly depends on Solr and embeddings. |
-| `streamlit-admin` | `rabbitmq`, `redis` healthy | Admin dashboard for queue/indexing visibility. |
 | `redis-commander` | `redis` healthy | Redis admin UI. |
 | `aithena-ui` | `solr-search` healthy | End-user UI. |
-| `nginx` | `aithena-ui`, `solr-search`, `streamlit-admin`, `redis-commander`, `rabbitmq`, `solr` healthy | Public ingress and auth gate for `/v1/*`, `/documents/*`, and `/admin/*`. |
+| `nginx` | `aithena-ui`, `solr-search`, `redis-commander`, `rabbitmq`, `solr` healthy | Public ingress and auth gate for `/v1/*`, `/documents/*`, and `/admin/*`. |
 | `certbot` | — | Certificate renewal sidecar (optional — only with `docker-compose.ssl.yml`). |
 
 ### Important architecture caveat
@@ -133,7 +132,7 @@ There is **no** fallback when Solr is unavailable. Semantic/hybrid fallback only
 - `/v1/status/` reports `services.redis = down`.
 - `indexing.total_discovered`, `indexed`, `failed`, and `pending` fall back to zeros because Redis reads fail.
 - Search requests usually continue to work.
-- `document-lister`, `document-indexer`, `streamlit-admin`, and `redis-commander` may stop working or restart repeatedly until Redis returns.
+- `document-lister`, `document-indexer`, and `redis-commander` may stop working or restart repeatedly until Redis returns.
 
 **Detection**
 
@@ -153,7 +152,7 @@ docker compose exec -T solr-search wget -qO- http://localhost:8080/v1/status/
    ```
 3. Restart Redis-dependent services if they do not reconnect automatically:
    ```bash
-   docker compose restart document-lister document-indexer streamlit-admin redis-commander
+   docker compose restart document-lister document-indexer redis-commander
    ```
 4. Re-run `/v1/status/` and confirm `services.redis = up`.
 
@@ -169,7 +168,7 @@ docker compose exec -T solr-search wget -qO- http://localhost:8080/v1/status/
 - `/v1/status/` reports `services.rabbitmq = down`.
 - Search requests usually continue to work.
 - New uploads and document discovery stop flowing into the indexing queue.
-- `document-lister`, `document-indexer`, and `streamlit-admin` may fail or restart until RabbitMQ is healthy again.
+- `document-lister` and `document-indexer` may fail or restart until RabbitMQ is healthy again.
 
 **Detection**
 
@@ -189,7 +188,7 @@ docker compose exec -T solr-search wget -qO- http://localhost:8080/v1/status/
    ```
 3. Restart queue-dependent services if needed:
    ```bash
-   docker compose restart document-lister document-indexer streamlit-admin
+   docker compose restart document-lister document-indexer
    ```
 4. Re-run `/v1/status/` and confirm `services.rabbitmq = up`.
 
@@ -262,7 +261,7 @@ This is the designed graceful-degradation path: semantic/hybrid requests fall ba
 
 1. Confirm upstream services are healthy enough to serve traffic:
    ```bash
-   docker compose ps aithena-ui solr-search streamlit-admin redis-commander rabbitmq solr
+   docker compose ps aithena-ui solr-search redis-commander rabbitmq solr
    ```
 2. Restart nginx:
    ```bash
@@ -310,7 +309,6 @@ Compose health checks define the safe recovery order. Restart from the bottom of
    - `document-indexer`
    - `solr-search`
 5. **Operator and user interfaces**
-   - `streamlit-admin`
    - `redis-commander`
    - `aithena-ui`
 6. **Ingress**

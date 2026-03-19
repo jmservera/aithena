@@ -16,10 +16,6 @@ services:
     ports:
       - "8080:8080" # Direct FastAPI access without going through nginx
 
-  streamlit-admin:
-    ports:
-      - "8501:8501" # Direct Streamlit debugging without nginx path rewriting
-
   redis-commander:
     ports:
       - "8081:8081" # Direct Redis Commander UI for local debugging
