@@ -10,6 +10,36 @@
   font-family: var(--font-family);
 }
 
+/* ── Skip-to-content link (WCAG 2.4.1) ───────────────────────── */
+
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 10000;
+  padding: 12px 24px;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-base);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+}
+
+.skip-to-content:focus {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  width: auto;
+  height: auto;
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -30,6 +60,11 @@ select:focus-visible,
 [role='option']:focus-visible {
   outline: 3px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* Remove visible focus outline on programmatically-focused content containers */
+#main-content:focus {
+  outline: none;
 }
 
 .side-menu-button {
@@ -178,7 +213,7 @@ select:focus-visible,
 .placeholder-subtitle {
   margin: 0;
   font-size: 1em;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* ── Sidebar ───────────────────────────────────────────────────── */
@@ -277,7 +312,7 @@ select:focus-visible,
 }
 
 .facet-count {
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 0.85em;
   flex-shrink: 0;
 }
@@ -561,7 +596,7 @@ select:focus-visible,
 
 .book-meta-label {
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .book-highlights {
@@ -587,7 +622,7 @@ select:focus-visible,
 .book-filepath {
   margin: 6px 0 0;
   font-size: 0.75em;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.65);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -842,14 +877,14 @@ select:focus-visible,
 }
 
 .pagination-ellipsis {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.65);
   padding: 0 4px;
 }
 
 .pagination-info {
   margin: 0;
   font-size: 0.78em;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.65);
   max-width: 70ch;
 }
 
@@ -988,7 +1023,7 @@ select:focus-visible,
 
 .status-updated {
   font-size: 0.8em;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .status-error-inline {
@@ -1109,7 +1144,7 @@ select:focus-visible,
 
 .service-detail {
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* ── Mode selector ─────────────────────────────────────────────── */
@@ -1409,7 +1444,7 @@ select:focus-visible,
 .admin-empty {
   padding: 40px 0;
   text-align: center;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .admin-error-banner {
@@ -1554,7 +1589,7 @@ select:focus-visible,
 
 .stats-empty {
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.65);
   margin: 0;
 }
 
@@ -1569,7 +1604,7 @@ select:focus-visible,
   padding: 4px 8px 8px 0;
   font-size: 0.82em;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.7);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -2531,5 +2566,49 @@ select:focus-visible,
 
   .profile-dropdown-item {
     padding: 8px 0;
+  }
+}
+
+/* ── Accessibility: prefers-reduced-motion (WCAG 2.3.3) ───────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Accessibility: prefers-contrast (WCAG 1.4.11) ────────────── */
+
+@media (prefers-contrast: more) {
+  :root {
+    --color-bg: #000000;
+    --color-bg-dark: #000000;
+    --color-bg-surface: #1a1a1a;
+    --color-bg-surface-alt: #111111;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #ffffff;
+    --color-primary: #66ccff;
+  }
+
+  .book-meta-label,
+  .facet-count,
+  .pagination-info,
+  .pagination-ellipsis,
+  .placeholder-subtitle,
+  .book-filepath,
+  .status-updated {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .book-card,
+  .admin-table,
+  .sort-select,
+  .search-input {
+    border-color: rgba(255, 255, 255, 0.5);
   }
 }

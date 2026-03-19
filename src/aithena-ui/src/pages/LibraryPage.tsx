@@ -165,7 +165,6 @@ function LibraryPage() {
           id={resultsRegionId}
           ref={resultsRegionRef}
           className="search-results"
-          role="region"
           aria-labelledby={resultsHeadingId}
           aria-describedby={resultsSummaryId}
           aria-busy={loading}
