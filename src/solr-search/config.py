@@ -61,6 +61,8 @@ class Settings:
     cb_solr_recovery_timeout: float
     admin_api_key: str | None
     rate_limit_requests_per_minute: int
+    rabbitmq_management_port: int
+    zookeeper_hosts: str
 
     @property
     def select_url(self) -> str:
@@ -117,4 +119,6 @@ settings = Settings(
     cb_solr_recovery_timeout=float(os.environ.get("CB_SOLR_RECOVERY_TIMEOUT", "30")),
     admin_api_key=os.environ.get("ADMIN_API_KEY") or None,
     rate_limit_requests_per_minute=int(os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE", "100")),
+    rabbitmq_management_port=int(os.environ.get("RABBITMQ_MANAGEMENT_PORT", "15672")),
+    zookeeper_hosts=os.environ.get("ZOOKEEPER_HOSTS", "zoo1:2181"),
 )

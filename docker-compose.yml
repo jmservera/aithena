@@ -273,6 +273,7 @@ services:
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
       - ADMIN_API_KEY=${ADMIN_API_KEY:-}
       - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-100}
+      - ZOOKEEPER_HOSTS=zoo1:2181,zoo2:2181,zoo3:2181
     volumes:
       - document-data:/data/documents
       - type: bind
