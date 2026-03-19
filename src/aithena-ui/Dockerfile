@@ -13,7 +13,9 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN VERSION=${VERSION} npm run build
+
+ENV VERSION=${VERSION}
+RUN npm run build
 
 # ---------- runtime stage ----------
 FROM nginx:1.27-alpine AS runtime
