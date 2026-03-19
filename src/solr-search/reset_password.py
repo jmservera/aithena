@@ -28,7 +28,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from auth import hash_password  # noqa: E402
+from auth import hash_password, validate_password  # noqa: E402
 
 DEFAULT_DB_PATH = Path("/data/auth/users.db")
 GENERATED_PASSWORD_LENGTH = 32
@@ -74,7 +74,9 @@ def reset_password(db_path: Path, username: str, new_password: str) -> bool:
     Returns True if the user was found and updated, False if the user doesn't exist.
     Raises FileNotFoundError if the database file is missing.
     Raises ValueError if the database is corrupt or missing the users table.
+    Raises PasswordPolicyError if the new password violates the password policy.
     """
+    validate_password(new_password, username)
     conn = _open_db(db_path)
     try:
         password_hash = hash_password(new_password)
