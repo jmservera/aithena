@@ -40,12 +40,14 @@ function ProfilePage() {
               </span>
             </dd>
           </div>
-          <div className="profile-detail-row">
-            <dt className="profile-detail-label">
-              {intl.formatMessage({ id: 'profile.createdAt' })}
-            </dt>
-            <dd className="profile-detail-value">{formatTimestamp(createdAt)}</dd>
-          </div>
+          {createdAt && (
+            <div className="profile-detail-row">
+              <dt className="profile-detail-label">
+                {intl.formatMessage({ id: 'profile.createdAt' })}
+              </dt>
+              <dd className="profile-detail-value">{formatTimestamp(createdAt)}</dd>
+            </div>
+          )}
         </dl>
 
         <div className="profile-actions">

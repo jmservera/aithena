@@ -333,6 +333,7 @@
   "users.passwordTooShort": "La contrasenya ha de tenir almenys 10 caràcters.",
   "users.role": "Rol",
   "users.roleAdmin": "Admin",
+  "users.roleViewer": "Visualitzador",
   "users.roleUser": "Usuari",
   "users.save": "Desar",
   "users.saving": "Desant…",

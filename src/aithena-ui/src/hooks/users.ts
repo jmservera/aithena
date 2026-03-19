@@ -72,6 +72,7 @@ export function useUsers(): UseUsersReturn {
     setLoading(true);
     setError(null);
     try {
+      // Endpoint added in feat: auth user management (#572)
       const data = await apiRequest<UserRecord[]>(buildApiUrl('/v1/auth/users'));
       setUsers(data);
     } catch (err) {
@@ -83,6 +84,7 @@ export function useUsers(): UseUsersReturn {
 
   const createUser = useCallback(
     async (payload: CreateUserPayload) => {
+      // Endpoint added in feat: auth user management (#572)
       await apiRequest<UserRecord>(buildApiUrl('/v1/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -134,6 +136,7 @@ export function useChangePassword(): UseChangePasswordReturn {
     setError(null);
     setSuccess(false);
     try {
+      // Endpoint added in feat: admin seeding (#576)
       await apiRequestNoBody(buildApiUrl('/v1/auth/change-password'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

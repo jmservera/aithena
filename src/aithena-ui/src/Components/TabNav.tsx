@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { type FocusEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import {
@@ -55,11 +55,35 @@ function TabNav() {
     setIsProfileOpen((open) => !open);
   };
 
-  const handleProfileBlur = (e: React.FocusEvent) => {
+  const handleProfileBlur = (e: FocusEvent<HTMLDivElement>) => {
     if (profileRef.current && !profileRef.current.contains(e.relatedTarget as Node)) {
       setIsProfileOpen(false);
     }
   };
+
+  const closeProfile = useCallback(() => setIsProfileOpen(false), []);
+
+  // Close profile dropdown on outside click or Escape key
+  useEffect(() => {
+    if (!isProfileOpen) return;
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        closeProfile();
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeProfile();
+    };
+
+    document.addEventListener('click', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('click', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isProfileOpen, closeProfile]);
 
   return (
     <nav className="tab-nav" aria-label={intl.formatMessage({ id: 'nav.mainNavigation' })}>

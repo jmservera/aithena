@@ -333,6 +333,7 @@
   "users.passwordTooShort": "La contraseña debe tener al menos 10 caracteres.",
   "users.role": "Rol",
   "users.roleAdmin": "Admin",
+  "users.roleViewer": "Visualizador",
   "users.roleUser": "Usuario",
   "users.save": "Guardar",
   "users.saving": "Guardando…",

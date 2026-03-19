@@ -77,6 +77,8 @@ function UserManagementPage() {
     e.preventDefault();
     setFormError(null);
 
+    if (!newUsername.trim()) return;
+
     if (newPassword !== newConfirmPassword) {
       setFormError(intl.formatMessage({ id: 'users.passwordMismatch' }));
       return;
@@ -294,6 +296,7 @@ function UserManagementPage() {
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
               >
+                <option value="viewer">{intl.formatMessage({ id: 'users.roleViewer' })}</option>
                 <option value="user">{intl.formatMessage({ id: 'users.roleUser' })}</option>
                 <option value="admin">{intl.formatMessage({ id: 'users.roleAdmin' })}</option>
               </select>
@@ -358,6 +361,7 @@ function UserManagementPage() {
                 value={editRole}
                 onChange={(e) => setEditRole(e.target.value)}
               >
+                <option value="viewer">{intl.formatMessage({ id: 'users.roleViewer' })}</option>
                 <option value="user">{intl.formatMessage({ id: 'users.roleUser' })}</option>
                 <option value="admin">{intl.formatMessage({ id: 'users.roleAdmin' })}</option>
               </select>
