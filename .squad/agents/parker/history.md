@@ -603,3 +603,41 @@ POST /v1/upload (multipart/form-data)
 - `hash_password()` from `auth.py` is the single source of truth for hashing
 - ruff is not installed in the venv; use `uv run --with ruff ruff check ...` to lint
 - Coverage config in `pyproject.toml` needs module added to both `addopts` and `[tool.coverage.run]`
+
+### 2026-03-19 — Auth Features: Admin Seeding, Change Password, RBAC (#550, #551, #553)
+
+**PR:** #576
+
+**Changes:**
+- `_seed_default_admin()` in auth.py: seeds admin user on empty DB if `AUTH_DEFAULT_ADMIN_PASSWORD` is set
+- `change_password()` in auth.py: verifies current password, validates new, rejects same-password
+- Enhanced `validate_password()`: now requires uppercase, lowercase, and digit (not just length)
+- `PUT /v1/auth/change-password` endpoint in main.py
+- RBAC on `/v1/upload` via `require_role("admin", "user")` — viewers get 403
+- Admin endpoints keep X-API-Key for backward compat (Phase 1)
+
+**Key Patterns:**
+- `require_role()` returns `Depends(...)` so use it directly in `dependencies=[...]` list, not `Depends(require_role(...))`
+- Password policy changes break existing tests — must update all test passwords to comply
+- `_seed_default_admin` uses lazy import of `config.settings` to avoid circular import
+- `init_auth_db()` now calls `_seed_default_admin()` — all callers (including test fixtures) trigger it
+- Config env vars: `AUTH_DEFAULT_ADMIN_USERNAME` (default: "admin"), `AUTH_DEFAULT_ADMIN_PASSWORD` (no default)
+- PR #573 review fix: `_zookeeper_check()` needs try/except ValueError around `int(parts[1])` to handle malformed ZOOKEEPER_HOSTS entries
+- PR #573 review fix: `_rabbitmq_management_check()` should catch `(requests.RequestException, OSError)` not blanket `Exception`, and log warning on fallback
+- Status endpoint helpers should never raise unhandled exceptions — always degrade gracefully to prevent 500s on `/v1/status`
+
+### 2026-03-19 — PR #568 Review Feedback (empty-query handling)
+
+**Task:** Address 3 Copilot review comments on PR #568 (fix: handle empty query and 502 in vector/hybrid search).
+
+**Changes:**
+- Added inline code comments in `main.py` at both semantic and hybrid empty-query guards explaining the intentional behavior difference vs keyword mode (keyword → `*:*` returns all docs; semantic/hybrid → empty set because no embedding can be generated)
+- Added `mock_emb_post.assert_not_called()` and `mock_solr_get.assert_not_called()` to both `test_search_semantic_empty_query_returns_empty_results` and `test_search_hybrid_empty_query_returns_empty_results` tests
+- All 274 tests pass, ruff clean, commit pushed, PR comments replied to
+
+**Learnings:**
+- Empty-query tests with mocked HTTP clients should always assert mocks are NOT called to catch regressions where empty queries accidentally trigger external requests
+- When search modes handle edge cases differently (keyword vs semantic/hybrid), add inline comments explaining the design rationale to prevent future confusion
+- Cookie-based SSO in admin auth must enforce `user.role == 'admin'` — without this, any valid JWT from the main app (viewer, editor) grants admin access
+- When mocking `st.context` to raise AttributeError, don't mutate `type(MagicMock)` — use a scoped stub object with a `@property` that raises, wrapped in `patch("auth.st", stub_instance)`
+- Admin auth tests live in `src/admin/tests/test_auth.py`; run with `cd src/admin && uv run pytest -v --tb=short`

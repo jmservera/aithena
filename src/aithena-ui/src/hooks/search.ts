@@ -71,13 +71,7 @@ export function useSearch() {
 
   const runSearch = useCallback(async (state: SearchState) => {
     if (!state.query.trim()) {
-      if (state.mode !== 'keyword') {
-        setError(`${modeLabel(state.mode)} search requires a search query.`);
-        setResults([]);
-        setFacets({});
-        setTotal(0);
-        return;
-      }
+      setError(null);
       setResults([]);
       setFacets({});
       setTotal(0);
