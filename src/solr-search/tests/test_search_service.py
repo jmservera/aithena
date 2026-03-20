@@ -43,6 +43,7 @@ def test_build_solr_params_adds_pagination_sort_facets_and_highlights() -> None:
         "language_detected_s",
         "language_s",
         "series_s",
+        "folder_path_s",
     ]
     assert params["hl.fl"] == "content,_text_"
 
@@ -118,20 +119,44 @@ def test_build_sort_clause_invalid_format() -> None:
 
 def test_parse_facet_counts_series_empty_bucket() -> None:
     """Series facet returns empty list when Solr returns an empty bucket."""
+def test_build_filter_queries_supports_folder_filter() -> None:
+    filters = build_filter_queries({"folder": "en/Science Fiction"})
+
+    assert filters == [r"folder_path_s:en\/Science\ Fiction"]
+
+
+def test_build_filter_queries_folder_with_special_chars() -> None:
+    filters = build_filter_queries({"folder": 'es/Ciencia Ficción'})
+
+    assert filters == [r"folder_path_s:es\/Ciencia\ Ficción"]
+
+
+def test_parse_facet_counts_includes_folder_facet() -> None:
     payload = {
         "facet_counts": {
             "facet_fields": {
                 "author_s": ["Author One", 2],
-                "category_s": [],
-                "year_i": [],
-                "language_detected_s": [],
+                "category_s": ["Folklore", 4],
+                "year_i": [1901, 1],
+                "language_detected_s": ["ca", 3],
                 "language_s": [],
                 "series_s": [],
+                "folder_path_s": [
+                    "en/Science Fiction", 125,
+                    "en/History", 89,
+                    "es/Ciencia Ficción", 47,
+                ],
             }
         }
     }
 
     facets = parse_facet_counts(payload)
+    assert facets["folder"] == [
+        {"value": "en/Science Fiction", "count": 125},
+        {"value": "en/History", "count": 89},
+        {"value": "es/Ciencia Ficción", "count": 47},
+    ]
+    assert facets["author"] == [{"value": "Author One", "count": 2}]
     assert facets["series"] == []
 
 
@@ -153,6 +178,26 @@ def test_parse_facet_counts_series_absent_from_response() -> None:
     assert facets["series"] == []
 
 
+def test_parse_facet_counts_folder_empty_when_no_values() -> None:
+    payload = {
+        "facet_counts": {
+            "facet_fields": {
+                "author_s": [],
+                "category_s": [],
+                "year_i": [],
+                "language_detected_s": [],
+                "language_s": [],
+                "series_s": [],
+                "folder_path_s": [],
+            }
+        }
+    }
+
+    facets = parse_facet_counts(payload)
+    assert facets["folder"] == []
+    assert facets["series"] == []
+
+
 def test_normalize_book_series_none_when_absent() -> None:
     book = normalize_book(
         {
@@ -167,6 +212,13 @@ def test_normalize_book_series_none_when_absent() -> None:
     )
 
     assert book["series"] is None
+
+
+def test_solr_escape_handles_folder_path_characters() -> None:
+    assert solr_escape("en/Science Fiction") == r"en\/Science\ Fiction"
+    assert solr_escape('es/Ciencia Ficción') == r"es\/Ciencia\ Ficción"
+    assert solr_escape("") == ""
+    assert solr_escape('path/with "quotes"') == r'path\/with\ \"quotes\"'
 
 
 def test_normalize_book_collects_fields_and_highlights() -> None:
