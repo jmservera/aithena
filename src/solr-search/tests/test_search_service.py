@@ -878,7 +878,6 @@ def test_rrf_deduplicates_by_document_id() -> None:
 
 def test_knn_params_include_chunk_relevant_fields() -> None:
     """kNN field list includes parent_id_s-related fields so chunks can be resolved."""
-    from search_service import SOLR_FIELD_LIST
 
     params = build_knn_params([0.1], top_k=5, knn_field="embedding_v")
     fl_fields = params["fl"].split(",")
