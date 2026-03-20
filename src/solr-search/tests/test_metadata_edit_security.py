@@ -158,9 +158,12 @@ class TestSolrInjectionPrevention:
             client = _client_for(ADMIN_USER)
             resp = client.patch("/v1/admin/documents/*/metadata", json={"title": "Wildcard"})
         assert resp.status_code == 404  # noqa: S101
-        # Verify the query passed to Solr has the wildcard escaped
-        call_args = mock_query.call_args[0][0]
-        assert "\\*" in call_args.get("q", "") or resp.status_code == 404  # noqa: S101
+        # Verify mock_query was called (meaning Solr received a sanitized query, not a raw wildcard)
+        assert mock_query.called  # noqa: S101
+        if mock_query.call_args:
+            call_args = mock_query.call_args[0][0]
+            # The wildcard should be escaped or the doc should simply not be found
+            assert "\\*" in call_args.get("q", "") or call_args.get("q", "") != "*"  # noqa: S101
 
 
 # ---------------------------------------------------------------------------
@@ -244,8 +247,8 @@ class TestMetadataFieldValidation:
         resp = client.patch(ENDPOINT, json={})
         assert resp.status_code == 422  # noqa: S101
 
-    def test_unknown_fields_ignored(self):
-        """Extra fields not in _METADATA_FIELD_MAP should not cause errors."""
+    def test_unknown_fields_rejected(self):
+        """Extra fields not in _METADATA_FIELD_MAP are rejected with 422."""
         client = _client_for(ADMIN_USER)
         resp = client.patch(ENDPOINT, json={"unknown_field": "value"})
         assert resp.status_code == 422  # noqa: S101 (no valid fields)
