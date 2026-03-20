@@ -13,6 +13,35 @@
 
 # Kane — History
 
+## Core Context
+
+**Role:** Security Engineer — SAST/SAST scanning, supply chain security, baseline exceptions
+
+**Current Focus (v1.10.0):**
+- Security scanning infrastructure (Bandit, Checkov, zizmor) implemented and documented
+- Dependency vulnerabilities triaged and tracked
+- Baseline security exceptions documented
+
+**Key Expertise:**
+- GitHub Actions security (workflow scanning with zizmor)
+- Container/IaC security (Dockerfiles, docker-compose, Checkov)
+- Python SAST (Bandit, rule configuration, exception handling)
+- Security triage & exceptions (HIGH/CRITICAL must fix, MEDIUM/LOW documented)
+- OWASP ZAP manual DAST audits
+
+**Current Blockers:** None
+
+**Key Security Decisions (Active):**
+1. Non-blocking CI scanners with SARIF upload to GitHub Code Scanning
+2. Baseline exceptions for legitimate patterns (pytest assert, 0.0.0.0 binding, subprocess in tests)
+3. Known gaps documented & deferred: missing auth on admin endpoints, insecure defaults, exposed ports
+
+**Team Assignments (v1.10.0):**
+- Collections auth & access (#659)
+- Metadata editing security review (#695)
+- CI/CD security policy (Bandit enforcement, Checkov/zizmor consolidation) (#690, #698)
+
+
 ## Project Context
 - **Project:** aithena — Book library search engine
 - **User:** jmservera
