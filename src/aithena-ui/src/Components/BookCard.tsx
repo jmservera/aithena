@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { FileText } from 'lucide-react';
 
@@ -8,6 +8,8 @@ interface BookCardProps {
   book: BookResult;
   onOpenPdf?: (book: BookResult) => void;
   isSelected?: boolean;
+  isAdmin?: boolean;
+  onEditMetadata?: (book: BookResult) => void;
 }
 
 function sanitizeHighlight(raw: string): string {
@@ -19,8 +21,38 @@ function sanitizeHighlight(raw: string): string {
     .replace(/&lt;\/em&gt;/g, '</em>');
 }
 
-const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
+const BookCard = memo(function BookCard({
+  book,
+  onOpenPdf,
+  isSelected = false,
+  isAdmin = false,
+  onEditMetadata,
+}: BookCardProps) {
   const intl = useIntl();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const showMenu = isAdmin && onEditMetadata;
+
+  const handleToggleMenu = useCallback(() => {
+    setMenuOpen((prev) => !prev);
+  }, []);
+
+  const handleEditMetadata = useCallback(() => {
+    setMenuOpen(false);
+    onEditMetadata?.(book);
+  }, [book, onEditMetadata]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
 
   const foundPagesLabel = useMemo(() => {
     if (!book.pages) return null;
@@ -45,7 +77,37 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
 
   return (
     <article className={`book-card${isSelected ? ' book-card--active' : ''}`}>
-      <h2 className="book-title">{book.title}</h2>
+      <div className="book-card-header">
+        <h2 className="book-title">{book.title}</h2>
+        {showMenu && (
+          <div className="book-card-menu-wrapper" ref={menuRef}>
+            <button
+              type="button"
+              className="book-card-menu-btn"
+              onClick={handleToggleMenu}
+              aria-label={intl.formatMessage({ id: 'book.menuToggle' }, { title: book.title })}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              ⋮
+            </button>
+            {menuOpen && (
+              <ul className="book-card-menu" role="menu">
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="book-card-menu-item"
+                    onClick={handleEditMetadata}
+                  >
+                    {intl.formatMessage({ id: 'book.editMetadata' })}
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
       <div className="book-meta">
         {book.author && (
           <span className="book-meta-item">
