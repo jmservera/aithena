@@ -7514,3 +7514,397 @@ After decoding the JWT in `_check_cookie_auth`, we now explicitly check `user.ro
 
 - Non-admin users who previously could access the admin dashboard via shared cookie will now be redirected to the login page.
 - No breaking change for admin users.
+
+---
+
+# Decision: Nginx Proxy Timeouts Must Match Upstream Service Timeouts
+
+**Author:** Ash (Search Engineer)
+**Date:** 2026-03-19
+**Context:** Issue #562 — 502 Bad Gateway on vector/hybrid search
+
+## Decision
+
+Any nginx `location` block that proxies to a service with configurable timeouts (e.g., embeddings generation, Solr bulk operations) **must** set `proxy_read_timeout` to at least 1.5× the upstream service timeout.
+
+For the `/v1/` API location (which routes search requests through solr-search → embeddings-server):
+- `proxy_read_timeout 180s` (1.5× the 120s `EMBEDDINGS_TIMEOUT`)
+- `proxy_connect_timeout 10s` (fail fast on unreachable upstream)
+
+## Rationale
+
+The default nginx `proxy_read_timeout` is 60s. The embeddings server timeout is 120s. When embedding generation for long queries exceeded 60s, nginx killed the connection before solr-search could return a graceful degradation response (fallback to keyword search). This caused a raw 502 error to reach the user.
+
+## Impact
+
+Team members adding new nginx proxy locations or changing service timeouts should verify the nginx timeout chain is consistent.
+
+---
+
+# Decision: Nginx Config Template as Source of Truth
+
+**Date:** 2026-03-20
+**Author:** Ash (Search Engineer)
+**Context:** #562 — Vector/hybrid search 502 errors
+
+## Problem
+
+The nginx `default.conf` file was out of sync with `default.conf.template`:
+- **Template** (`default.conf.template`) had `proxy_read_timeout 180s` in `/v1/` location (added in PR #568)
+- **Active config** (`default.conf`) was missing these timeouts
+- This caused 502 Bad Gateway errors when embedding generation exceeded nginx's default 60s timeout
+
+## Root Cause
+
+`default.conf` appears to have been manually edited or regenerated from an older template, losing the timeout directives.
+
+## Decision
+
+**Nginx template file (`default.conf.template`) is the source of truth.**
+
+### Guidelines:
+1. **Always edit both** `default.conf` and `default.conf.template` together — they must stay in sync
+2. `default.conf` is the runtime config mounted directly by docker-compose.yml
+3. `default.conf.template` is used for SSL/envsubst builds (docker-compose.ssl.yml)
+4. There is no automated generation step — both files must be manually maintained in sync
+
+### Why this matters:
+- Nginx config drift causes hard-to-debug production issues (like 502s)
+- Template-first approach enables environment-specific config via variable substitution
+- Single source of truth prevents config divergence
+
+## Action Items
+
+- [x] Fixed immediate issue: added missing timeouts to `default.conf` (PR #626)
+- [ ] Document in `.squad/decisions.md` or project README that template is source of truth
+- [ ] Verify build process generates `default.conf` from template (or document manual sync requirement)
+
+## Related
+
+- PR #568 — originally added timeouts to template
+- PR #626 — fixed config drift in `default.conf`
+
+---
+
+# Decision: Auth DB Migration Framework
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-07-22
+**Issue:** #557
+**PR:** #571
+
+## Context
+
+The auth system uses an SQLite database at `AUTH_DB_PATH`. As features evolve, the schema will need changes. We need a strategy that is safe, forward-only, and doesn't require external tools.
+
+## Decisions
+
+1. **Schema versioning via `schema_version` table.** Every auth DB tracks its version. Version 1 is the initial schema (users table). This is the source of truth for migration state.
+
+2. **Forward-only migrations.** Rollbacks are not supported. Migrations must be additive (add columns, add tables, add indexes). Destructive changes should be avoided or handled by creating new structures and migrating data forward.
+
+3. **Migration naming convention:** `mNNNN_<description>.py` in `src/solr-search/migrations/`. Each module exposes `VERSION` (int), `DESCRIPTION` (str), and `upgrade(conn)` (function). Migrations are auto-discovered and applied in VERSION order on startup.
+
+4. **Migrations run inside transactions.** The `upgrade()` function must NOT call `conn.commit()`. The framework commits after recording the version. If a migration fails, the transaction rolls back and the app will retry on next startup.
+
+5. **Backup strategy:** Use SQLite `.backup` command via `scripts/backup_auth_db.sh`. This is safe to run while the app is serving traffic. Backups go to `/data/auth/backups/` by default.
+
+6. **No external migration tools.** We chose a lightweight custom framework over Alembic because the auth DB is a single-file embedded SQLite database with a simple schema. The custom approach has zero dependencies and is self-contained.
+
+## Impact
+
+- **Parker/Dallas:** When adding auth features that need schema changes, create a new migration file following the template. Don't modify `init_auth_db` directly for schema evolution.
+- **Brett:** Backup script is included in the container image. Production deployments should add a cron job for scheduled backups.
+- **All:** The migration framework applies automatically on startup — no manual intervention needed for upgrades.
+
+---
+
+# Decision: Docker Compose Service Parity Between Dev and Prod
+
+**Date:** 2026-03-20
+**Decider:** Brett (Infrastructure Architect)
+**Status:** Proposed
+
+## Context
+
+Investigation of docker compose build failure revealed that the `admin` service exists in `docker-compose.yml` (development) but is completely missing from `docker-compose.prod.yml` (production). This caused production deployment failures because the admin dashboard service was undefined.
+
+**Service count:**
+- `docker-compose.yml`: 17 services (includes admin)
+- `docker-compose.prod.yml`: 16 services (admin missing)
+
+## Decision
+
+**Immediate fix:** Add the missing `admin` service to `docker-compose.prod.yml` using the GHCR image pattern.
+
+**Long-term practice:**
+1. When adding a new service to `docker-compose.yml`, ALWAYS add the corresponding service definition to `docker-compose.prod.yml`
+2. Dev uses `build:` configs, prod uses `image:` configs pointing to GHCR
+3. Service definitions should be kept in sync except for the build vs. image distinction
+
+## Rationale
+
+- **Dev/prod parity:** Services should exist in both environments to catch deployment issues early
+- **Production-ready from day one:** New services should be deployment-ready when merged to dev
+- **Single source of truth:** Both compose files should reflect the same service architecture
+
+## Prevention Mechanism
+
+Consider adding a CI validation step that:
+1. Extracts service names from both `docker-compose.yml` and `docker-compose.prod.yml`
+2. Fails the build if services are present in one but missing from the other (excluding any documented exceptions)
+3. Runs on every PR that touches docker-compose files
+
+Example validation script:
+```python
+import yaml
+import sys
+
+with open('docker-compose.yml') as f:
+    dev = set(yaml.safe_load(f)['services'].keys())
+    
+with open('docker-compose.prod.yml') as f:
+    prod = set(yaml.safe_load(f)['services'].keys())
+    
+if dev != prod:
+    print(f"❌ Service mismatch between dev and prod:")
+    print(f"  Dev only: {dev - prod}")
+    print(f"  Prod only: {prod - dev}")
+    sys.exit(1)
+```
+
+## Implementation Checklist
+
+- [ ] Add admin service to docker-compose.prod.yml
+- [ ] Test production config: `docker compose -f docker-compose.prod.yml config`
+- [ ] (Optional) Implement CI service parity validation
+- [ ] Document this pattern in `.squad/decisions.md`
+
+## Related
+
+- Issue: docker compose build failure investigation
+- Commit: fa9d831 (admin Dockerfile fix for repo-root context)
+- Files: `docker-compose.yml`, `docker-compose.prod.yml`
+
+---
+
+# User Directive: Milestones Released in Sequential Order
+
+**Date:** 2026-03-19T21:35Z
+**Authority:** Juanma (via Copilot)
+
+Milestones MUST be released in sequential order: v1.8.0 → v1.8.1 → v1.8.2 → v1.9.0 → v1.10.0. Do not skip ahead. Finish current in-flight work, but then prioritize releasing in the correct order. v1.8.0 has not been released yet — that's the blocker.
+
+---
+
+# User Directive: Release Flow (dev → main → tag)
+
+**Date:** 2026-03-20T06:23:00Z
+**Authority:** Juanma (via Copilot)
+
+Releases must merge dev → main before tagging. Don't upgrade VERSION on dev until the release is cut to main. The full process: finish work on dev → create PR dev → main → merge → tag on main → create GitHub release.
+
+---
+
+# User Directive: MCP Servers Available
+
+**Date:** 2026-03-19T21:20Z
+**Authority:** Juanma (via Copilot)
+
+Three MCP servers are configured in `.vscode/mcp.json` and available for development:
+- **Context7** (`@upstash/context7-mcp`) — library documentation lookup (use for API docs of dependencies like FastAPI, Solr, React, Playwright, etc.)
+- **DeepWiki** (`https://mcp.deepwiki.com/mcp`) — deep repository/wiki knowledge (use for understanding external project internals)
+- **Playwright MCP** (`@playwright/mcp@latest`) — browser automation via MCP (use for UI testing, screenshots, browser interaction)
+
+Agents should leverage these when available (VS Code sessions) for library docs lookups instead of guessing APIs. In CLI sessions, fall back to web_fetch or documentation files.
+
+---
+
+# Decision: WCAG 2.1 AA Accessibility Standards for Aithena UI
+
+**Author:** Dallas (Frontend Dev)
+**Date:** 2026-03-19
+**Context:** Issue #514, PR #597
+
+## Decision
+
+The Aithena React frontend now enforces WCAG 2.1 AA accessibility standards through:
+
+1. **Static linting:** `eslint-plugin-jsx-a11y` (recommended ruleset) is integrated into the ESLint flat config. All new components must pass these rules.
+
+2. **Color contrast minimum:** All text on dark backgrounds must use `rgba(255, 255, 255, 0.65)` or higher. The previous pattern of 0.3–0.45 opacity fails WCAG 1.4.3 (4.5:1 contrast ratio).
+
+3. **Skip-to-content pattern:** The app includes a skip-to-content link in App.tsx that targets `#main-content`. Future layout changes must preserve this `id`.
+
+4. **Motion/contrast media queries:** `prefers-reduced-motion` and `prefers-contrast` are handled at the App.css level. New animations should use CSS custom properties or `transition-duration` so they're automatically disabled.
+
+5. **Modal pattern:** All modal dialogs must include `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` pointing to a heading. Backdrop click-dismiss overlays use eslint-disable comments with the `-- modal backdrop dismiss pattern` reason.
+
+## Rationale
+
+- Legal compliance (accessibility requirements in EU, US Section 508)
+- Inclusive UX for all users
+- SEO benefits from semantic HTML
+- eslint-plugin-jsx-a11y catches ~70% of issues at dev time, preventing regressions
+
+## Impact
+
+- All squad members writing React components should be aware of jsx-a11y lint rules
+- Lambert (QA) should add browser-based axe DevTools testing to the QA checklist
+
+---
+
+# Decision: Password Policy Module Design
+
+**Author:** Kane (Security Engineer)
+**Date:** 2026-03-19
+**PR:** #574 (Closes #552)
+**Status:** PROPOSED
+
+## Context
+
+v1.9.0 user management needs password validation beyond the basic 8-char length check in the User CRUD PR (#572). Issue #552 defines the required policy.
+
+## Decision
+
+Created a standalone `password_policy.py` module with a single public function:
+
+```python
+validate_password(password: str, username: str) -> list[str]
+```
+
+Returns a list of violation messages (empty = valid). This list-based return enables the API to send all violations at once (422 response) rather than failing on the first one.
+
+**Policy defaults (v1.9.0, hardcoded):**
+- Min length: 10 characters
+- Max length: 128 characters (Argon2 DoS protection)
+- Complexity: at least 3 of 4 categories (uppercase, lowercase, digit, special)
+- No username in password (case-insensitive substring match)
+
+## Design Rationale
+
+1. **Standalone module** — no dependency on auth.py. Any endpoint (register, change-password, reset-password CLI) can import it independently.
+2. **List return vs. exception** — returning violations as a list lets the caller decide whether to raise, log, or aggregate. The CRUD PR's `PasswordPolicyError` exception can still be used by wrapping the list check.
+3. **Unicode as special** — non-ASCII characters (`[^A-Za-z0-9]`) count as "special". This is the secure default — it broadens the character space and avoids locale-dependent regex behavior.
+4. **Hardcoded constants** — configurable policy deferred to a future release. Constants are module-level for easy access from tests and future config loading.
+
+## Integration Path
+
+The User CRUD PR (#572) should:
+1. Import `validate_password` from `password_policy`
+2. Replace the existing `validate_password` in auth.py
+3. Call it in `create_user()` and pass violations to `PasswordPolicyError`
+4. Return 422 with the violation list
+
+## Impact
+
+- **Parker (Backend):** Integration needed in User CRUD PR #572 — replace auth.py's basic check with this module.
+- **Dallas (Frontend):** API will return a list of violation strings in 422 responses — display them to the user.
+- **All:** Password minimum increased from 8 to 10 characters. Existing users are not affected until they change their password.
+
+---
+
+# Decision: User CRUD API Pattern (Issue #549)
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-19
+**PR:** #572
+
+## Context
+Implemented the 4 User Management API endpoints as the v1.9.0 critical-path foundation.
+
+## Decisions Made
+
+### 1. `require_role()` as reusable FastAPI dependency
+- Returns `Depends(inner_function)` so it can be used directly in `Annotated[AuthenticatedUser, require_role("admin")]`
+- Centralizes role checking — all future admin-only endpoints should use this pattern
+- Lives in `main.py` alongside the other auth helpers (`_get_current_user`, `_authenticate_request`)
+
+### 2. Password policy enforcement in auth.py
+- 8 char minimum, 128 char maximum — enforced in `validate_password()` before Argon2 hashing
+- Max-length check prevents DoS via oversized inputs to Argon2
+- Policy lives in auth.py constants (`MIN_PASSWORD_LENGTH`, `MAX_PASSWORD_LENGTH`) for single source of truth
+
+### 3. Custom exception types for auth errors
+- `UserExistsError(ValueError)` — for duplicate username on create/update
+- `PasswordPolicyError(ValueError)` — for password validation failures
+- Endpoints catch these and translate to appropriate HTTP status codes (409, 422)
+
+### 4. PUT /v1/auth/users/{id} authorization model
+- Admin: can update any user's username and role
+- Non-admin: can update ONLY their own username, cannot change role
+- This allows self-service username changes while preventing privilege escalation
+
+### 5. Self-delete prevention
+- Admin cannot delete their own account via DELETE /v1/auth/users/{id}
+- Prevents last-admin lockout scenario
+- Simple check: `admin_user.id == user_id` → 400 Bad Request
+
+## Impact on Other Issues
+This unblocks all 8 dependent issues in v1.9.0 milestone. The `require_role()` dependency and auth CRUD functions are ready for reuse.
+
+---
+
+# Decision: Admin SSO via Shared JWT Cookie
+
+**Author:** Parker
+**Date:** 2025-07
+**Issue:** #561
+**PR:** #570
+
+## Context
+
+The admin Streamlit app had its own independent auth system (env-var credentials + session state JWT), completely separate from the main app's auth (SQLite + Argon2id + `aithena_auth` cookie). This caused an infinite login loop because users had to authenticate twice through different systems.
+
+## Decision
+
+Added SSO cookie-based authentication to the admin Streamlit app. `check_auth()` now falls back to reading the `aithena_auth` HTTP cookie (forwarded by nginx) and validating the JWT using the shared `AUTH_JWT_SECRET`. If valid, the user is auto-authenticated without a second login.
+
+## Implications
+
+- **AUTH_JWT_SECRET must be identical** between `solr-search` and `streamlit-admin` services (already the case in docker-compose.yml).
+- **AUTH_COOKIE_NAME must match** between services (default: `aithena_auth`, added to admin's docker-compose env).
+- The Streamlit fallback login form still works for direct access without nginx (e.g., local dev on port 8501).
+- Solr-search JWTs contain `user_id` which admin ignores — this is fine since admin only needs `sub` and `role`.
+
+## Affects
+
+- Brett: nginx config remains unchanged; `auth_request` still validates before forwarding to Streamlit.
+- Dallas: no frontend changes needed; the React app's login sets the `aithena_auth` cookie that now flows through to Streamlit.
+
+---
+
+# Decision: Enhanced Password Policy and Auth Feature Patterns
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-19
+**PR:** #576 (Closes #550, #551, #553)
+**Status:** PROPOSED
+
+## Context
+
+Three auth features were implemented together because they share the same module surface: admin seeding, change-password, and RBAC enforcement on endpoints.
+
+## Decisions
+
+### 1. Password policy now requires uppercase + lowercase + digit
+The `validate_password()` function was enhanced beyond simple length checks to require at least one uppercase letter, one lowercase letter, and one digit. This is a breaking change for any code creating users with weak passwords (e.g., tests).
+
+### 2. Admin seeding is triggered inside `init_auth_db()`
+Rather than adding a separate startup step, `_seed_default_admin()` runs automatically at the end of `init_auth_db()`. This ensures seeding happens exactly once when the table is created and is idempotent (skips if any users exist).
+
+### 3. RBAC Phase 1: new endpoints only, backward compat for admin
+- `/v1/upload` gets `require_role("admin", "user")` — viewers cannot upload
+- `/v1/admin/*` endpoints keep X-API-Key authentication (no change)
+- Search and books endpoints remain accessible to any authenticated user
+- Phase 2 (future): Consider migrating admin endpoints from API-key to role-based auth
+
+### 4. `require_role()` returns `Depends()` directly
+The factory pattern `require_role("admin", "user")` already wraps the inner function in `Depends()`. Use it directly in `dependencies=[...]` lists or `Annotated[AuthenticatedUser, require_role(...)]` type hints.
+
+## Impact
+
+- **All team members:** Test passwords must now include uppercase, lowercase, and digit (e.g., "SecurePass123" instead of "password123")
+- **Dallas (Frontend):** New endpoint `PUT /v1/auth/change-password` available for UI integration
+- **Brett (Infrastructure):** New env vars `AUTH_DEFAULT_ADMIN_USERNAME` and `AUTH_DEFAULT_ADMIN_PASSWORD` for Docker Compose
+

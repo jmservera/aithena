@@ -432,3 +432,22 @@ Key active decisions managed in .squad/decisions.md:
 - **X-API-Key and JWT RBAC coexistence is necessary.** Existing admin endpoints use X-API-Key; new user management uses JWT RBAC. A phased migration avoids breaking deployed automation. Key learning: don't mix auth mechanisms in one release.
 - **Argon2 has a DoS vector via large inputs.** Password max-length (128 chars) must be enforced BEFORE hashing to prevent CPU exhaustion. This should be a standard check in any Argon2 implementation.
 - **Stateless JWT trade-off is acceptable for low-risk apps.** Token revocation adds significant complexity (blocklist or DB-per-request). For a library search tool with 24h TTL, the gap is acceptable. Document the trade-off explicitly so future engineers don't re-debate it.
+
+
+### 2026-03-20: Docker Compose build diagnosis
+
+**Task:** Investigate reported Docker build failure after recent changes.
+
+**Investigation:**
+- Reviewed last 30 commits (fa9d831 HEAD, back to v1.8.0)
+- Identified root cause: Admin service restored (5e6b928) with repo-root build context but Dockerfile used relative paths
+- Fix already applied in fa9d831: Updated admin Dockerfile COPY paths to use `src/admin/` prefix
+- Verified all services: 6 Dockerfiles exist, all dependencies present, .env configured, YAML valid
+
+**Key findings:**
+1. Two services use repo-root context: `solr-search` and `admin` (both now have correct `src/{service}/` prefixes)
+2. All other services use service directory as context: `document-indexer`, `document-lister`, `embeddings-server`, `aithena-ui`
+3. Recent fix (fa9d831) should resolve the build failure — no additional issues found in static analysis
+4. If builds still fail: likely cache issue (try `--no-cache`) or network/registry problems
+
+**Architecture insight:** Inconsistent build context pattern (some repo-root, some service-dir). This works but creates maintenance complexity. Documented observation in `.squad/decisions/inbox/ripley-docker-diagnosis.md` for future architectural decision.
