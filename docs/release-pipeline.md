@@ -55,8 +55,8 @@ After the PR is merged to `main`, a semver tag is created on `main`:
 ```bash
 git checkout main
 git pull origin main
-git tag v1.X.0
-git push origin v1.X.0
+git tag v1.2.3
+git push origin v1.2.3
 ```
 
 - **CI trigger:** Tag push matching `v*.*.*` runs **release.yml**
@@ -82,7 +82,7 @@ This prevents accidental releases from `dev` or feature branches.
 
 ### Integration tests required for `main`
 
-PRs targeting `main` trigger the integration-test workflow, which runs the full E2E suite. This is a required check — PRs cannot be merged to `main` without passing integration tests.
+PRs targeting `main` trigger the integration-test workflow, which runs the full E2E suite. This must be configured as a required status check in GitHub branch protection settings — PRs cannot be merged to `main` without passing integration tests.
 
 ### No direct pushes to `main`
 
