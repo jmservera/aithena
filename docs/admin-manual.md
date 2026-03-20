@@ -594,6 +594,16 @@ Capacity planning for v0.12.0 is documented in the [Search and Indexing Sizing G
 
 Treat the published numbers as planning guidance until you have benchmark data from representative production hardware.
 
+### Hardware requirements and tuning guide
+
+For minimum hardware requirements, per-service resource breakdowns, GPU guidance, and tuning recommendations, see the [Hardware Requirements & Tuning Guide](hardware-requirements.md). It covers:
+
+- minimum hardware for small, medium, and large deployments
+- per-service CPU, RAM, and disk breakdown
+- GPU requirements for the embeddings server
+- Solr JVM heap sizing, RabbitMQ tuning, and indexer scaling
+- a pre-deployment checklist for new hosts
+
 ## Deployment Updates for v1.9.1 (Docker Build Fix)
 
 ### aithena-ui Docker build fix

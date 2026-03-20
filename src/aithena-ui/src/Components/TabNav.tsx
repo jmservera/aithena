@@ -7,6 +7,7 @@ import {
   Upload,
   CheckCircle,
   BarChart3,
+  FolderOpen,
   Wrench,
   User,
   Lock,
@@ -29,6 +30,7 @@ const TABS: { to: string; labelId: string; icon: LucideIcon }[] = [
   { to: '/upload', labelId: 'nav.upload', icon: Upload },
   { to: '/status', labelId: 'nav.status', icon: CheckCircle },
   { to: '/stats', labelId: 'nav.stats', icon: BarChart3 },
+  { to: '/collections', labelId: 'nav.collections', icon: FolderOpen },
   { to: '/admin', labelId: 'nav.admin', icon: Wrench },
 ];
 
