@@ -244,8 +244,10 @@ services:
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
+      - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}
     volumes:
       - document-data:/data/documents
+      - collections-db:/data/collections
       - type: bind
         source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
         target: /data/auth
@@ -637,6 +639,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "${BOOKS_PATH:-/data/booklibrary}"
+  collections-db:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${COLLECTIONS_DB_DIR:-/source/volumes/collections-db}"
   solr-data:
     driver: local
     driver_opts:
