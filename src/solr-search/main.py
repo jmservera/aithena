@@ -1827,9 +1827,13 @@ def _compute_upload_id(file_path: Path) -> str:
 
 def _publish_to_queue(file_path: Path) -> None:
     """Publish file path to RabbitMQ queue for indexing (per-request connection)."""
+    connection = None
     try:
+        credentials = pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_pass)
         connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host=settings.rabbitmq_host, port=settings.rabbitmq_port)
+            pika.ConnectionParameters(
+                host=settings.rabbitmq_host, port=settings.rabbitmq_port, credentials=credentials
+            )
         )
         channel = connection.channel()
         channel.queue_declare(queue=settings.rabbitmq_queue_name, durable=True, auto_delete=False)
@@ -1839,9 +1843,11 @@ def _publish_to_queue(file_path: Path) -> None:
             body=str(file_path),
             properties=pika.BasicProperties(delivery_mode=2),
         )
-        connection.close()
     except pika.exceptions.AMQPError as exc:
         raise HTTPException(status_code=502, detail="Failed to enqueue document for indexing") from exc
+    finally:
+        if connection and not connection.is_closed:
+            connection.close()
 
 
 @app.post("/v1/upload", name="upload_pdf", dependencies=[require_role("admin", "user")])
