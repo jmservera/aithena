@@ -144,6 +144,7 @@ def test_v1_search_alias_supports_ui_contract_params(mock_solr_get: MagicMock) -
     assert params["fq"] == [
         r"author_s:Joan\ Amades",
         "(language_detected_s:ca OR language_s:ca)",
+        "-parent_id_s:[* TO *]",
     ]
 
 

@@ -374,7 +374,10 @@ def test_books_multiple_filters(mock_get: MagicMock) -> None:
 
     params = mock_get.call_args[1]["params"]
     fq_list = params["fq"]
-    assert len(fq_list) == 2
+    assert "author_s:Amades" in fq_list
+    assert "category_s:Folklore" in fq_list
+    assert "-parent_id_s:[* TO *]" in fq_list
+    assert len(fq_list) == 3
 
 
 @patch("main.requests.get")
@@ -385,7 +388,7 @@ def test_books_no_filters_sends_no_fq(mock_get: MagicMock) -> None:
     client.get("/v1/books")
 
     params = mock_get.call_args[1]["params"]
-    assert "fq" not in params or params.get("fq") == [] or params.get("fq") is None
+    assert params["fq"] == ["-parent_id_s:[* TO *]"]
 
 
 @patch("main.requests.get")
