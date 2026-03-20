@@ -10,6 +10,7 @@ from search_service import (  # noqa: E402
     build_inline_content_disposition,
     build_pagination,
     build_solr_params,
+    build_sort_clause,
     decode_document_token,
     encode_document_token,
     normalize_book,
@@ -98,7 +99,25 @@ def test_build_filter_queries_supports_series_filter() -> None:
     assert filters == ["series_s:Foundation"]
 
 
-def test_parse_facet_counts_series_empty_when_absent() -> None:
+def test_build_sort_clause_title_asc() -> None:
+    result = build_sort_clause(sort="title asc")
+    assert result == "title_s asc"
+
+
+def test_build_sort_clause_year_desc() -> None:
+    result = build_sort_clause(sort="year desc")
+    assert result == "year_i desc"
+
+
+def test_build_sort_clause_invalid_format() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="Unsupported sort value"):
+        build_sort_clause(sort="invalid")
+
+
+def test_parse_facet_counts_series_empty_bucket() -> None:
+    """Series facet returns empty list when Solr returns an empty bucket."""
     payload = {
         "facet_counts": {
             "facet_fields": {
@@ -108,6 +127,24 @@ def test_parse_facet_counts_series_empty_when_absent() -> None:
                 "language_detected_s": [],
                 "language_s": [],
                 "series_s": [],
+            }
+        }
+    }
+
+    facets = parse_facet_counts(payload)
+    assert facets["series"] == []
+
+
+def test_parse_facet_counts_series_absent_from_response() -> None:
+    """Series facet returns empty list when series_s is absent from the Solr response."""
+    payload = {
+        "facet_counts": {
+            "facet_fields": {
+                "author_s": ["Author One", 2],
+                "category_s": [],
+                "year_i": [],
+                "language_detected_s": [],
+                "language_s": [],
             }
         }
     }
