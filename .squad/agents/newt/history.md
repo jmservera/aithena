@@ -472,3 +472,33 @@ Comprehensive 3-tier approach covering 14+ pages across user, admin, and operati
 - Screenshot pipeline (Brett's #531–#534) will populate missing 4 images
 - Release-docs.yml will use new structure automatically on next release
 
+
+---
+
+## 2026-03-21: LinkedIn Blog Post — Squad Experience
+
+**Task:** Write a LinkedIn blog post for Juanma about his experience using Squad to revive the abandoned Aithena project.
+
+**Deliverable:** `/home/jmservera/.copilot/session-state/4eaf0bb4-0598-4d18-b2c2-c0ca4901f91f/files/linkedin-blog-post.md`
+
+**Format:** ~2000 words, LinkedIn article style, matching Juanma's personal/technical blog voice.
+
+**Key Metrics Used:**
+- 495 commits (March 13–20, 2026)
+- 11 documented releases (v1.4.0 through v1.9.1)
+- 628 tests across 6 services
+- 6 PRDs created
+- 800+ lines of documentation
+- Project started July 16, 2023; abandoned mid-2024 (4 commits in 20 months)
+
+## Learnings
+
+1. **Narrative structure matters for credibility.** The blog post's strength comes from honesty about struggles (Docker issues, instructions not sticking, environment constraints) paired with concrete results. Pure "look how amazing AI is" posts don't resonate with engineers. The backstory of an abandoned project → revival makes the numbers believable.
+
+2. **Project history is documentation gold.** Having detailed history.md files, decisions.md, commit logs, and release notes made it possible to reconstruct the full story with accurate dates, metrics, and technical details. This is an unexpected benefit of the documentation-first approach — it creates the raw material for compelling narratives later.
+
+3. **Voice matching requires source material.** The user provided specific style guidance (personal, tutorial-like, honest about struggles, technical but accessible). Matching someone's writing voice requires understanding their patterns: Juanma uses first-person, addresses the reader directly, shares workarounds, and avoids marketing fluff. Future content tasks should request style samples or references.
+
+4. **LinkedIn format differs from blog format.** LinkedIn articles need: attention-grabbing opener with numbers, shorter paragraphs, clear section breaks, a forward-looking close, and relevant hashtags. The conversational tone works but needs to be slightly more professional than a personal blog. 1500-2000 words is the sweet spot.
+
+5. **Squad links should feel natural, not promotional.** The blog post includes 5 Squad links woven into relevant context (getting started → where the reader would actually need it, brownfield guide → where it solved the author's problem). Links placed at decision points in the narrative feel helpful rather than salesy.
