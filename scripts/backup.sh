@@ -45,13 +45,15 @@
 #   5. Verify with a dry-run:
 #        ./scripts/backup.sh --tier all --dry-run
 #
-# Environment variables (forwarded to tier scripts):
-#   BACKUP_DEST             Base directory for all backup tiers (default: /source/backups)
-#   DRY_RUN                 Set to 1 to skip actual file operations
-#   PROJECT_ROOT            Repository / project root on the host
+# Environment variables:
+#   BACKUP_DEST             Base directory for orchestrator lock and --dest default (default: /source/backups)
+#   DRY_RUN                 Set to 1 to skip actual file operations (forwarded to tier scripts)
+#   PROJECT_ROOT            Repository / project root on the host (forwarded to tier scripts)
 #   LOG_FILE                Orchestrator log file (default: /var/log/aithena-backup.log)
 #
-#   Plus all tier-specific variables — see individual scripts for details.
+#   Tier-specific variables (e.g. BACKUP_DIR, SOLR_BACKUP_DIR) are set by the
+#   orchestrator only when --dest is used. Otherwise, tier scripts use their own defaults.
+#   See individual scripts for tier-specific configuration.
 #
 # Exit codes:
 #   0  All requested tiers succeeded
@@ -203,21 +205,19 @@ run_tier() {
     tier_env+=("DRY_RUN=${DRY_RUN}")
     tier_env+=("PROJECT_ROOT=${PROJECT_ROOT}")
 
-    # Map --dest to the appropriate tier-specific env vars
-    if [[ -n "$DEST_OVERRIDE" ]]; then
-        case "$tier_name" in
-            critical)
-                tier_env+=("BACKUP_DIR=${BACKUP_DEST}/critical")
-                ;;
-            high)
-                tier_env+=("SOLR_BACKUP_DIR=${BACKUP_DEST}/high")
-                tier_env+=("ZK_BACKUP_DIR=${BACKUP_DEST}/zookeeper")
-                ;;
-            medium)
-                tier_env+=("BACKUP_DIR=${BACKUP_DEST}/medium")
-                ;;
-        esac
-    fi
+    # Map BACKUP_DEST to the appropriate tier-specific env vars
+    case "$tier_name" in
+        critical)
+            tier_env+=("BACKUP_DIR=${BACKUP_DEST}/critical")
+            ;;
+        high)
+            tier_env+=("SOLR_BACKUP_DIR=${BACKUP_DEST}/high")
+            tier_env+=("ZK_BACKUP_DIR=${BACKUP_DEST}/zookeeper")
+            ;;
+        medium)
+            tier_env+=("BACKUP_DIR=${BACKUP_DEST}/medium")
+            ;;
+    esac
 
     local tier_rc=0
     env "${tier_env[@]}" bash "$script_path" || tier_rc=$?
@@ -263,18 +263,18 @@ main() {
         medium)   tiers=(medium) ;;
     esac
 
-    # Track worst-case exit code across all tiers
+    # Track worst-case exit code: 1 (fatal) > 2 (partial) > 0 (ok)
     local worst_rc=0
 
     for tier in "${tiers[@]}"; do
         local tier_rc=0
         run_tier "$tier" || tier_rc=$?
 
-        # Escalate: 1 > 2 > 0
-        if [[ $tier_rc -gt $worst_rc ]]; then
-            worst_rc=$tier_rc
-        elif [[ $worst_rc -eq 2 && $tier_rc -eq 1 ]]; then
+        # Priority: fatal (1) beats partial (2) beats ok (0)
+        if [[ $tier_rc -eq 1 ]]; then
             worst_rc=1
+        elif [[ $tier_rc -eq 2 && $worst_rc -eq 0 ]]; then
+            worst_rc=2
         fi
     done
 
