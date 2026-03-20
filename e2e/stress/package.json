@@ -1,0 +1,17 @@
+{
+  "name": "aithena-playwright-stress",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright UI stress tests for the Aithena stack",
+  "scripts": {
+    "preinstall": "cd ../playwright && npm install",
+    "postinstall": "test -e node_modules || ln -s ../playwright/node_modules node_modules",
+    "test": "npx playwright test",
+    "test:list": "npx playwright test --list",
+    "test:upload": "npx playwright test upload-stress",
+    "test:search": "npx playwright test search-stress",
+    "test:admin": "npx playwright test admin-stress",
+    "test:pagination": "npx playwright test pagination-stress",
+    "test:concurrent": "npx playwright test concurrent-sessions"
+  }
+}
