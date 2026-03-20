@@ -534,9 +534,8 @@ def verify_no_log_errors(
 
     error_lines: list[str] = []
     for line in log_lines:
-        if any(pat.search(line) for pat in _ERROR_PATTERNS):
-            if not any(exc.search(line) for exc in _ERROR_EXCLUSIONS):
-                error_lines.append(line.strip())
+        if any(pat.search(line) for pat in _ERROR_PATTERNS) and not any(exc.search(line) for exc in _ERROR_EXCLUSIONS):
+            error_lines.append(line.strip())
 
     if len(error_lines) > max_errors:
         return CheckResult(

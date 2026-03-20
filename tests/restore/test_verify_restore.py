@@ -15,7 +15,6 @@ import subprocess
 
 import pytest
 import requests
-
 from verify_checks import (
     VerificationReport,
     verify_admin_ui_accessible,
@@ -40,8 +39,8 @@ from verify_checks import (
 
 def _docker_available() -> bool:
     try:
-        result = subprocess.run(  # noqa: S603, S607
-            ["docker", "info"],
+        result = subprocess.run(  # noqa: S603
+            ["docker", "info"],  # noqa: S607
             capture_output=True,
             text=True,
             timeout=10,
@@ -93,7 +92,7 @@ class TestSolrVerification:
         url = f"{solr_url}/select?q={query}&rows=1&wt=json"
         resp = requests.get(url, timeout=verify_timeout)
         resp.raise_for_status()
-        result = verify_solr_query(resp.json(), query=query)
+        _result = verify_solr_query(resp.json(), query=query)
         # Queries may return 0 on an empty-but-healthy index; just confirm no errors
         assert resp.status_code == 200
 
@@ -203,7 +202,7 @@ class TestRabbitMQVerification:
         except requests.RequestException:
             queues = []
 
-        result = verify_rabbitmq_queues(queues)
+        _result = verify_rabbitmq_queues(queues)
         # Queues may be empty on a fresh restore; just verify API works
         assert isinstance(queues, list)
 
@@ -340,8 +339,8 @@ class TestServiceHealthVerification:
     def test_disk_usage(self):
         """Check 9: Disk usage is reasonable."""
         try:
-            result = subprocess.run(  # noqa: S603, S607
-                ["df", "--output=pcent", "/"],
+            result = subprocess.run(  # noqa: S603
+                ["df", "--output=pcent", "/"],  # noqa: S607
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -491,8 +490,8 @@ class TestFullVerificationSuite:
 
         # 9. Disk usage
         try:
-            result = subprocess.run(  # noqa: S603, S607
-                ["df", "--output=pcent", "/"],
+            result = subprocess.run(  # noqa: S603
+                ["df", "--output=pcent", "/"],  # noqa: S607
                 capture_output=True,
                 text=True,
                 timeout=10,

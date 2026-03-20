@@ -138,8 +138,8 @@ def _compose_cmd(*args: str) -> list[str]:
 def _docker_available() -> bool:
     """Check if the Docker daemon is reachable."""
     try:
-        result = subprocess.run(  # noqa: S603, S607
-            ["docker", "info"],
+        result = subprocess.run(  # noqa: S603
+            ["docker", "info"],  # noqa: S607
             capture_output=True,
             text=True,
             timeout=10,

@@ -7,8 +7,6 @@ using synthetic data.  They run locally without Docker, Solr, Redis, etc.
 
 from __future__ import annotations
 
-import pytest
-
 from verify_checks import (
     CheckResult,
     CheckStatus,
