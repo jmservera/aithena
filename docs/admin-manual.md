@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.9.0 Release Notes](release-notes/v1.9.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.9.1 Release Notes](release-notes/v1.9.1.md).
 
 ## System architecture overview
 
@@ -593,6 +593,24 @@ Capacity planning for v0.12.0 is documented in the [Search and Indexing Sizing G
 - `e2e/benchmark.sh` for replacing the analytical baseline with measured results on your own hardware
 
 Treat the published numbers as planning guidance until you have benchmark data from representative production hardware.
+
+## Deployment Updates for v1.9.1 (Docker Build Fix)
+
+### aithena-ui Docker build fix
+
+v1.9.1 patches a critical build failure in the `aithena-ui` Docker image. The Dockerfile was missing a step to copy `.npmrc` before running `npm ci`, which caused an ERESOLVE error when `eslint-plugin-jsx-a11y@6.10.2` attempted to resolve peer dependencies.
+
+**What changed:**
+- The Dockerfile now copies `.npmrc` alongside `package*.json` before running `npm ci`
+- This ensures npm honors the `legacy-peer-deps=true` setting
+- The `eslint` peer dependency conflict is properly resolved
+
+**Upgrade steps:**
+1. Pull the latest code: `git pull origin main`
+2. Rebuild the aithena-ui image: `docker compose build aithena-ui`
+3. Restart the container: `docker compose up -d aithena-ui`
+
+No configuration changes are required. If you encounter a build failure with earlier v1.9.x images, this upgrade will resolve it.
 
 ## Monitoring
 
