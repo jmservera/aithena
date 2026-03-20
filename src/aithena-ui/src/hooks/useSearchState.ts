@@ -26,7 +26,13 @@ const VALID_SORT_VALUES: readonly string[] = [
 
 const VALID_LIMITS: readonly number[] = [10, 20, 50];
 
-const FILTER_KEYS: readonly (keyof SearchFilters)[] = ['author', 'category', 'language', 'year'];
+const FILTER_KEYS: readonly (keyof SearchFilters)[] = [
+  'author',
+  'category',
+  'language',
+  'year',
+  'folder',
+];
 
 // -- Defaults (exported so tests / other hooks can reference them) --
 
