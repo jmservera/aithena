@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
+from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -344,3 +345,37 @@ def reorder_items(db_path: Path, collection_id: str, user_id: str, item_ids: lis
             )
         conn.commit()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Batch lookup: document → collection membership
+# ---------------------------------------------------------------------------
+
+
+def get_collection_ids_for_documents(
+    db_path: Path,
+    user_id: str,
+    document_ids: list[str],
+) -> dict[str, list[str]]:
+    """Return a mapping of document_id → list of collection IDs for a user.
+
+    Only collections owned by *user_id* are considered.  Documents not found
+    in any collection are mapped to an empty list.
+    """
+    if not document_ids:
+        return {}
+
+    result: dict[str, list[str]] = defaultdict(list)
+    with _connect(db_path) as conn:
+        placeholders = ",".join("?" for _ in document_ids)
+        rows = conn.execute(
+            f"SELECT ci.document_id, ci.collection_id "  # noqa: S608  # nosec B608
+            f"FROM collection_items ci "
+            f"JOIN collections c ON ci.collection_id = c.id "
+            f"WHERE c.user_id = ? AND ci.document_id IN ({placeholders})",
+            [user_id, *document_ids],
+        ).fetchall()
+        for row in rows:
+            result[row["document_id"]].append(row["collection_id"])
+
+    return dict(result)
