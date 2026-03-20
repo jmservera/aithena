@@ -297,6 +297,62 @@ def index_chunks(
     return len(docs)
 
 
+def load_metadata_override(doc_id: str) -> dict | None:
+    """Load manual metadata override from Redis if one exists.
+
+    Returns the parsed JSON dict, or None when no override is stored
+    or Redis is unavailable (graceful degradation).
+    """
+    override_key = f"aithena:metadata-override:{doc_id}"
+    try:
+        raw = redis_client.get(override_key)
+    except Exception as exc:
+        logger.warning(
+            "Redis unavailable when loading metadata override for %s: %s",
+            doc_id,
+            exc,
+            extra={"doc_id": doc_id, "error": str(exc)},
+        )
+        return None
+
+    if raw is None:
+        return None
+
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.warning(
+            "Invalid JSON in metadata override for %s: %s",
+            doc_id,
+            exc,
+            extra={"doc_id": doc_id, "error": str(exc)},
+        )
+        return None
+
+
+_OVERRIDE_FIELD_MAP: dict[str, str] = {
+    "title_s": "title",
+    "author_s": "author",
+    "year_i": "year",
+    "category_s": "category",
+    "series_s": "series",
+}
+
+
+def apply_metadata_override(metadata: dict, override: dict) -> dict:
+    """Merge Redis override fields into auto-detected metadata.
+
+    Only known fields from _OVERRIDE_FIELD_MAP are applied; unknown
+    fields (e.g. edited_by, edited_at) are silently ignored.
+    Manual edits always win over auto-detected values.
+    """
+    merged = dict(metadata)
+    for solr_field, meta_key in _OVERRIDE_FIELD_MAP.items():
+        if solr_field in override:
+            merged[meta_key] = override[solr_field]
+    return merged
+
+
 def index_document(path: Path) -> dict:
     if path.suffix.lower() != ".pdf":
         raise ValueError(f"Unsupported file type: {path.suffix or 'unknown'}")
@@ -305,6 +361,18 @@ def index_document(path: Path) -> dict:
 
     metadata = extract_metadata(str(path), base_path=BASE_PATH)
     page_count = get_page_count(path)
+
+    # Apply manual metadata overrides from Redis (edits survive re-indexing)
+    doc_id = hashlib.sha256(metadata["file_path"].encode("utf-8")).hexdigest()
+    override = load_metadata_override(doc_id)
+    if override:
+        metadata = apply_metadata_override(metadata, override)
+        logger.info(
+            "Applied metadata override for %s",
+            doc_id,
+            extra={"doc_id": doc_id, "override_fields": list(override.keys())},
+        )
+
     params = build_literal_params(metadata, page_count)
     solr_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update/extract"
 
