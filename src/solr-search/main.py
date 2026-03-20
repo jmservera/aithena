@@ -63,6 +63,9 @@ from collections_service import (
     get_collection as svc_get_collection,
 )
 from collections_service import (
+    get_collection_ids_for_documents as svc_get_collection_ids_for_documents,
+)
+from collections_service import (
     list_collections as svc_list_collections,
 )
 from collections_service import (
@@ -471,6 +474,38 @@ def collect_search_filters(**filters: str | None) -> dict[str, str]:
     return {name: value.strip() for name, value in filters.items() if value and value.strip()}
 
 
+def _enrich_with_collections(
+    results: list[dict[str, Any]],
+    request: Request,
+) -> None:
+    """Annotate each result dict with ``in_collections`` for authenticated users.
+
+    Mutates *results* in place.  If the request has no authenticated user the
+    results are left untouched (field omitted entirely).
+    """
+    user: AuthenticatedUser | None = getattr(request.state, "auth_user", None)
+    if user is None or not results:
+        return
+
+    doc_ids = [r["id"] for r in results if r.get("id")]
+    if not doc_ids:
+        return
+
+    try:
+        membership = svc_get_collection_ids_for_documents(
+            settings.collections_db_path,
+            str(user.id),
+            doc_ids,
+        )
+    except Exception:
+        logger.warning("Failed to fetch collection membership; skipping enrichment", exc_info=True)
+        return
+
+    for result in results:
+        doc_id = result.get("id", "")
+        result["in_collections"] = membership.get(doc_id, [])
+
+
 @contextlib.contextmanager
 def _track_search_metrics(mode: str) -> Generator[None, None, None]:
     started = time.perf_counter()
@@ -815,11 +850,14 @@ def search(
 
     with _track_search_metrics(mode):
         if mode == "keyword":
-            return _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-        if mode == "semantic":
-            return _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-        # hybrid
-        return _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+            response = _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+        elif mode == "semantic":
+            response = _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+        else:
+            response = _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+
+    _enrich_with_collections(response.get("results", []), request)
+    return response
 
 
 def _search_keyword(
