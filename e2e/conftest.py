@@ -134,6 +134,15 @@ def auth_headers(api_url: str) -> dict[str, str]:
 
 
 @pytest.fixture(scope="session")
+def admin_api_headers() -> dict[str, str]:
+    """Return X-API-Key headers for admin endpoints."""
+    api_key = os.environ.get("ADMIN_API_KEY")
+    if not api_key:
+        pytest.skip("ADMIN_API_KEY environment variable must be set for admin endpoints")
+    return {"X-API-Key": api_key}
+
+
+@pytest.fixture(scope="session")
 def test_library_root() -> Generator[Path, None, None]:
     """
     Temporary library directory used as the document-data volume root.

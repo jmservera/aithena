@@ -449,11 +449,7 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_solr_get: MagicMock,
 def test_search_semantic_empty_query_returns_empty_results(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "semantic"})
-    assert response.status_code == 200
-    data = response.json()
-    assert data["mode"] == "semantic"
-    assert data["results"] == []
-    assert data["total"] == 0
+    assert response.status_code == 400
     mock_emb_post.assert_not_called()
     mock_solr_get.assert_not_called()
 
@@ -578,11 +574,7 @@ def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_p
 def test_search_hybrid_empty_query_returns_empty_results(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "hybrid"})
-    assert response.status_code == 200
-    data = response.json()
-    assert data["mode"] == "hybrid"
-    assert data["results"] == []
-    assert data["total"] == 0
+    assert response.status_code == 400
     mock_emb_post.assert_not_called()
     mock_solr_get.assert_not_called()
 
