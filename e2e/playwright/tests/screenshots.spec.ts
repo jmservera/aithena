@@ -156,7 +156,7 @@ test('captures curated screenshots for release documentation', async ({ browser,
 
   await test.step('capture upload page', async () => {
     try {
-      await page.goto(new URL('/upload', `${appBaseURL}/`).toString(), { waitUntil: 'domcontentloaded' });
+      await gotoAppPage(page, appBaseURL, '/upload');
       await expect(page.locator('.upload-title')).toHaveText('Upload PDF', { timeout: 10_000 });
       await saveScreenshot(page, testInfo, 'upload-page.png');
     } catch {
