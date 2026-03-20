@@ -1983,13 +1983,14 @@ def _store_metadata_override(doc_id: str, fields: dict[str, str | int], edited_b
 @app.patch(
     "/v1/admin/documents/{doc_id}/metadata",
     name="admin_edit_document_metadata_v1",
-    dependencies=[Depends(require_admin_auth)],
+    dependencies=[Depends(require_admin_auth), require_role("admin")],
 )
 def admin_edit_document_metadata(doc_id: str, body: MetadataEditRequest) -> dict[str, Any]:
     """Edit metadata for a single document.
 
     Performs a Solr atomic update and stores the override in Redis so that
-    manual edits survive re-indexing.
+    manual edits survive re-indexing.  Requires both admin API key and
+    admin JWT role (defense-in-depth).
     """
     fields = body.validate_non_empty()
 

@@ -20,12 +20,12 @@ class AddItemsRequest(BaseModel):
 
 
 class UpdateItemRequest(BaseModel):
-    note: str | None = None
-    position: int | None = None
+    note: str | None = Field(default=None, max_length=5000)
+    position: int | None = Field(default=None, ge=0)
 
 
 class ReorderItemsRequest(BaseModel):
-    item_ids: list[str] = Field(..., min_length=1)
+    item_ids: list[str] = Field(..., min_length=1, max_length=50)
 
 
 class CollectionItemResponse(BaseModel):
