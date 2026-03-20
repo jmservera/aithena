@@ -27,10 +27,10 @@
 #
 # Exit codes:
 #   0  All backups succeeded
-#   1  Fatal error (missing tools, health check failure, backup failure)
-#   2  Partial failure (some optional components unavailable — logged as warnings)
+#   1  Fatal error (missing tools, backup failure)
+#   2  Partial failure (some services unavailable — logged as warnings)
 #
-# See also: docs/prd/bcdr-plan.md §4.2 — Tier 3
+# See also: docs/prd/bcdr-plan.md §4.1 — Tier 3
 # =============================================================================
 set -euo pipefail
 
@@ -40,7 +40,6 @@ set -euo pipefail
 REDIS_CONTAINER="${REDIS_CONTAINER:-redis}"
 REDIS_RDB_PATH="${REDIS_RDB_PATH:-/data/dump.rdb}"
 REDIS_BGSAVE_TIMEOUT="${REDIS_BGSAVE_TIMEOUT:-120}"
-RABBITMQ_CONTAINER="${RABBITMQ_CONTAINER:-rabbitmq}"
 RABBITMQ_URL="${RABBITMQ_URL:-http://localhost:15672}"
 RABBITMQ_USER="${RABBITMQ_USER:-guest}"
 RABBITMQ_PASS="${RABBITMQ_PASS:-guest}"
@@ -97,7 +96,9 @@ _init_log() {
     if ! touch "$LOG_FILE" 2>/dev/null; then
         LOG_FILE="${PROJECT_ROOT}/backup-medium.log"
         mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
-        touch "$LOG_FILE" 2>/dev/null || true
+        if ! touch "$LOG_FILE" 2>/dev/null; then
+            LOG_FILE="/dev/null"
+        fi
     fi
 }
 _init_log
@@ -109,7 +110,8 @@ log() {
     local level="$1"; shift
     local msg
     msg="$(date -u '+%Y-%m-%dT%H:%M:%SZ') [${level}] $*"
-    echo "$msg" | tee -a "$LOG_FILE" >&2
+    echo "$msg" >&2
+    echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_info()  { log "INFO"  "$@"; }
@@ -276,7 +278,7 @@ backup_rabbitmq() {
     local http_code=""
     http_code=$(curl -sf --max-time 60 -w "%{http_code}" -o "$stage_file" \
         -u "${RABBITMQ_USER}:${RABBITMQ_PASS}" \
-        "${RABBITMQ_URL}/api/definitions" 2>&1) || {
+        "${RABBITMQ_URL}/api/definitions" 2>/dev/null) || {
         log_error "Failed to export RabbitMQ definitions (HTTP ${http_code})"
         return 1
     }
@@ -287,8 +289,13 @@ backup_rabbitmq() {
         return 1
     fi
 
-    # Basic JSON validity check — definitions must contain rabbit_version key
-    if ! grep -q '"rabbit_version"' "$stage_file"; then
+    # Validate JSON structure and expected content
+    if command -v python3 &>/dev/null; then
+        if ! python3 -c "import json; d=json.load(open('$stage_file')); assert 'rabbit_version' in d" 2>/dev/null; then
+            log_warn "RabbitMQ definitions export may be incomplete or invalid JSON"
+            EXIT_CODE=2
+        fi
+    elif ! grep -q '"rabbit_version"' "$stage_file"; then
         log_warn "RabbitMQ definitions export may be incomplete (missing rabbit_version key)"
         EXIT_CODE=2
     fi
@@ -343,6 +350,9 @@ purge_old_backups() {
 # Main
 # ---------------------------------------------------------------------------
 main() {
+    # --- Pre-flight: flock required before lock guard ---
+    require_cmd flock
+
     # Concurrency guard — only one backup instance at a time
     local lock_file="${BACKUP_DIR}/.backup-medium.lock"
     mkdir -p "$BACKUP_DIR"
