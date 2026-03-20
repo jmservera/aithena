@@ -451,3 +451,62 @@ Key active decisions managed in .squad/decisions.md:
 4. If builds still fail: likely cache issue (try `--no-cache`) or network/registry problems
 
 **Architecture insight:** Inconsistent build context pattern (some repo-root, some service-dir). This works but creates maintenance complexity. Documented observation in `.squad/decisions/inbox/ripley-docker-diagnosis.md` for future architectural decision.
+---
+
+## 2026-03-20 — PRD Issue Decomposition: v1.10.0 Features
+
+**Context:** Reviewed and decomposed two PRDs into GitHub issues for the v1.10.0 milestone. Both features are substantial new capabilities for the platform.
+
+### PRD 1: User Document Collections (docs/prd/user-document-collections.md)
+**7 issues created:**
+- #655 — Collections backend: SQLite data model, schema migration & CRUD API (Parker)
+- #659 — Collections access control & security review (Kane)
+- #661 — Collections frontend: pages, components & navigation (Dallas)
+- #664 — Collections frontend: search integration, add-to-collection modal & badges (Dallas)
+- #668 — Search result enrichment with collection membership (Ash)
+- #670 — Collections infrastructure: Docker volume & database configuration (Brett)
+- #674 — Collections E2E testing & documentation (Lambert)
+
+### PRD 2: Book Metadata Editing (docs/prd/book-metadata-editing.md)
+**9 issues created:**
+- #677 — Add series_s field to Solr schema (Ash)
+- #681 — Single document metadata edit API with Solr atomic updates & Redis overrides (Parker)
+- #683 — Batch metadata edit API endpoints (by IDs and by Solr query) (Parker)
+- #686 — Metadata override persistence in document-indexer (Parker)
+- #688 — Single book metadata edit modal UI (Dallas)
+- #691 — Batch metadata selection & edit panel UI (Dallas)
+- #693 — Series facet in search sidebar (Ash)
+- #695 — Metadata editing security review (Kane)
+- #697 — Metadata editing E2E testing & documentation (Lambert)
+
+### Decomposition Decisions
+
+1. **Separated data model + API from security review** — Kane reviews independently to avoid blocking Parker's implementation. Security review gates frontend merge, not development.
+
+2. **Split frontend into pages vs. search integration** — CollectionsPage/CollectionDetailPage are independent from AddToCollectionModal/CollectionBadge. Dallas can ship pages first, then integrate with search.
+
+3. **Separated single edit API from batch edit API** — Single document PATCH is simpler and ships first. Batch endpoints build on the same Solr atomic update utility. Independent issues enable incremental delivery.
+
+4. **Document-indexer override integration is a separate issue** — The Redis override read (in document-indexer) is a different service from the override write (in solr-search). Cross-service changes deserve separate issues and PRs.
+
+5. **Infrastructure (Docker volumes) gets its own issue** — Brett handles Docker compose changes; keeps infra concerns out of application code PRs.
+
+6. **Series facet separated from schema change** — Adding the field to Solr schema (Ash, Phase 1) is independent from building the facet UI (Ash + Dallas, Phase 4). Schema ships early to unblock API work.
+
+7. **Testing & docs are final-phase issues** — Lambert's E2E tests depend on all implementation being complete. One testing issue per PRD keeps scope clear.
+
+**All 16 issues assigned to milestone v1.10.0, added to project board with "Todo" status, and routed to squad members via labels.**
+
+## v1.10.0 PRD Decomposition Session (2026-03-20)
+
+Ripley decomposed two PRDs into 16 GitHub issues for v1.10.0:
+
+- **User Document Collections:** Backend, auth, frontend, search integration, enrichment, infra, testing (#655-#674)
+- **Book Metadata Editing:** Schema, single/batch API, indexer, single/batch UI, series facet, security, testing (#677-#697)
+
+Key decisions:
+- Field named `series_s` (not `collection_s`) to avoid naming collision
+- Collections use `collections.db`; metadata edits use Redis
+- Both features phase-gated and independent with no cross-feature dependencies
+
+Teams: Parker, Kane, Dallas, Ash, Brett, Lambert assigned across 16 issues.

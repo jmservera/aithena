@@ -4993,104 +4993,6 @@ Adopt "docs gate the tag" (Option B) as the standard release process. Release do
 **By:** jmservera (via Copilot)
 **What:** Once a milestone is done, always run the release process. Don't just close issues — ship the release (bump VERSION, merge dev→main, tag, push).
 **Why:** User request — v1.4.0 and v1.5.0 milestones were cleared but no releases were created. Captured for team memory.
-# Decision: react-intl for i18n Foundation
-
-**Date:** 2026-01-21  
-**Author:** Dallas (Frontend Dev)  
-**Issue:** #374  
-**PR:** #422
-
-## Context
-
-Setting up internationalization infrastructure for Aithena UI to support English, Spanish, Catalan, and French. Need to choose between react-intl and react-i18next, and establish the architecture for locale management.
-
-## Decision
-
-### 1. Use react-intl (not react-i18next)
-
-**Rationale:**
-- Superior ICU MessageFormat support for complex formatting (plurals, dates, numbers, gender, selectordinal)
-- Better handling of non-Latin scripts and Unicode normalization (future-proofs for potential Arabic, Japanese, Chinese)
-- First-class TypeScript support with message extraction tooling
-- Follows Unicode CLDR standards for locale data
-
-### 2. Language Detection Fallback Chain
-
-**Architecture:**
-```
-localStorage preference → browser locale → English (default)
-```
-
-**Implementation details:**
-- Exact match first (`es` → Spanish)
-- Prefix match second (`es-AR` → `es` → Spanish)
-- Default to English if no match
-- Detection runs once on app bootstrap
-- User selections persist to `localStorage` with key `aithena-locale`
-
-### 3. Locale File Structure
-
-```
-src/aithena-ui/src/locales/
-  en.json  # English (baseline, ~30 keys)
-  es.json  # Spanish (sample translations)
-  ca.json  # Catalan (sample translations)
-  fr.json  # French (sample translations)
-```
-
-- Flat JSON structure (no nesting)
-- Keys use dot notation: `app.title`, `nav.search`, `loading.searchMessage`
-- All locale files include same keys (react-intl falls back to `defaultLocale` messages for missing keys)
-
-### 4. Context Architecture
-
-- **I18nProvider:** Outermost context wrapper in `main.tsx` (wraps BrowserRouter, AuthProvider)
-- **Exports:** 
-  - `useI18n()` hook for locale switching (`locale`, `setLocale`)
-  - `Locale` type for type-safe locale codes
-- **Integration:** React components use `useIntl()` from react-intl for message formatting
-
-### 5. Language Switcher Placement
-
-- Added to TabNav component in `tab-nav-actions` section
-- Positioned before username display, after nav links
-- Basic select dropdown (issue #379 will refine UI)
-- Visible only when authenticated (matches existing TabNav pattern)
-
-## Impact
-
-### Unblocks
-- #375: Extract all hardcoded strings to locale files
-- #376-378: Complete Spanish/Catalan/French translations
-- #379: Refine language switcher UI
-- #380: Add date/number formatting with `FormattedDate`/`FormattedNumber`
-- #381: Add pluralization with `FormattedMessage`
-
-### Testing
-- All 180 existing tests pass
-- No test regressions from i18n integration
-- Future string extraction may require updating test snapshots
-
-### Dependencies
-- `react-intl` added to `package.json` (only new production dependency)
-
-## Alternatives Considered
-
-### react-i18next
-**Pros:** Larger community, more plugins, simpler setup for basic translations  
-**Cons:** Weaker ICU MessageFormat support, manual pluralization rules, less Unicode-aware  
-**Rejected because:** ICU MessageFormat and non-Latin script support are critical for quality i18n
-
-### Custom i18n solution
-**Pros:** No external dependencies, full control  
-**Cons:** Reinventing the wheel, missing CLDR data, no pluralization engine  
-**Rejected because:** Not worth the maintenance burden
-
-## Follow-up Actions
-
-1. Issue #375: Extract all remaining hardcoded English strings
-2. Issue #379: Improve language switcher UX (flag display, keyboard nav, aria-label)
-3. Document i18n patterns for future component authors (use `FormattedMessage`, avoid string concatenation)
 # Decision: Baseline bot-conditions findings for Dependabot workflow
 
 **Date:** 2026-07-25
@@ -7214,56 +7116,6 @@ Implemented two artifacts:
 
 ---
 
-# Decision: Certbot container is optional via docker-compose.ssl.yml
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2025-07-18
-**Status:** Implemented
-
-## Context
-
-The certbot service and its Let's Encrypt volumes were always started by
-`docker compose up`, even for deployments that run behind a reverse proxy or
-on local networks without TLS. This forced operators to create
-`/source/volumes/certbot-data/{conf,www}` directories even when they had no
-use for them.
-
-## Decision
-
-All certbot/SSL configuration has been moved to `docker-compose.ssl.yml`:
-
-- **HTTP-only (default):** `docker compose up -d`
-- **With SSL:** `docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d`
-
-The overlay adds port 443, certbot volume mounts on nginx, the periodic nginx
-reload command, and the certbot sidecar container.
-
-## Rationale
-
-Docker Compose profiles (`profiles: ["ssl"]`) can disable services but cannot
-conditionally add volume mounts or ports to other services. Since nginx needed
-certbot's bind-mount volumes, profiles alone would still require the host
-directories to exist. A compose overlay file cleanly isolates all SSL config.
-
-## Impact
-
-- **New HTTP deployments:** No change needed — `docker compose up` works.
-- **Existing SSL deployments:** Add `-f docker-compose.ssl.yml` to all
-  `docker compose` commands.
-- Docs updated: production.md, quickstart.md, admin-manual.md,
-  failover-runbook.md.
-
----
-
-# User Directive: Certbot Optional
-
-**Date:** 2026-03-19T13:10Z
-**By:** jmservera (via Copilot)
-**What:** Make the certbot container optional in docker-compose. Most deployments run behind a general reverse proxy or on local networks and don't need Let's Encrypt certificate management.
-**Why:** User request — simplifies default deployment, reduces unnecessary container overhead.
-
----
-
 # Decision: User Management Module (v1.9.0)
 
 **Author:** Ripley (Lead)
@@ -7908,3 +7760,132 @@ The factory pattern `require_role("admin", "user")` already wraps the inner func
 - **Dallas (Frontend):** New endpoint `PUT /v1/auth/change-password` available for UI integration
 - **Brett (Infrastructure):** New env vars `AUTH_DEFAULT_ADMIN_USERNAME` and `AUTH_DEFAULT_ADMIN_PASSWORD` for Docker Compose
 
+# Decision: v1.10.0 PRD Issue Decomposition — User Document Collections & Book Metadata Editing
+
+**Date:** 2026-03-20  
+**Author:** Ripley (Lead)  
+**Status:** Active
+
+## Context
+
+Two PRDs were reviewed and decomposed into 16 GitHub issues for the v1.10.0 milestone:
+- **User Document Collections** (7 issues): #655, #659, #661, #664, #668, #670, #674
+- **Book Metadata Editing** (9 issues): #677, #681, #683, #686, #688, #691, #693, #695, #697
+
+## Key Decisions
+
+### 1. Naming: `series_s` not `collection_s`
+The new Solr field for book series/magazines/newspapers is named `series_s` to avoid confusion with the user-facing "Collections" feature (#591). This distinction is important — "collections" are personal reading lists (user data), "series" is document metadata.
+
+### 2. Separate databases for collections
+Collections use a new SQLite database (`collections.db`) separate from `auth.db`. This allows independent schema evolution and keeps user data isolated from auth concerns.
+
+### 3. Redis for metadata overrides (not SQLite)
+Manual metadata edits are persisted in Redis (permanent keys) rather than SQLite. Redis is already in the infrastructure, and the document-indexer already has Redis access. Simple key-value lookup during indexing avoids new schema migrations.
+
+### 4. Phase ordering
+Both features follow the established phase-gated execution pattern:
+- **Collections:** Backend API → Security review → Frontend pages → Search integration → Search enrichment → Infra → Testing
+- **Metadata editing:** Schema → Single API → Batch API → Indexer integration → Single UI → Batch UI → Series facet → Security → Testing
+
+### 5. Cross-feature coordination
+Both features are in v1.10.0 but are independent. No cross-feature dependencies. Team members working on both (Parker, Dallas, Ash) should prioritize whichever feature's dependencies are met first.
+
+## Team Routing
+
+| Member | Collections Issues | Metadata Issues |
+|--------|-------------------|-----------------|
+| Parker | #655 | #681, #683, #686 |
+| Kane | #659 | #695 |
+| Dallas | #661, #664 | #688, #691 |
+| Ash | #668 | #677, #693 |
+| Brett | #670 | — |
+| Lambert | #674 | #697 |
+
+---
+
+# Decision: v1.10.0 PRD Issue Decomposition — BCDR Plan & CI/CD Workflow Review
+
+**Author:** Brett (Infra Architect)  
+**Date:** 2026-03-20  
+**Status:** Active
+
+## Context
+
+Decomposed `docs/prd/bcdr-plan.md` and `docs/prd/cicd-workflow-review.md` into 19 GitHub issues for v1.10.0.
+
+## Key Decisions
+
+1. **BCDR phased delivery:** Phase 1 (scripts), Phase 2 (API + UI), Phase 3 (testing + hardening) all tracked in v1.10.0 milestone with phase noted in descriptions. Team can reprioritize across milestones if needed.
+
+2. **Backup tiers as separate issues:** Each tier (critical/high/medium) is its own issue because they use fundamentally different backup mechanisms (SQLite API, Solr REST API, Redis CLI). The orchestrator is a separate issue.
+
+3. **CI/CD grouped by workflow file:** Dependabot changes (branch filter, dedup, admin coverage) grouped since they all modify the same workflow file. Squad cleanup (JS extraction + label fix) similarly grouped.
+
+4. **Security routing to Kane:** Bandit enforcement (#690) and Checkov/zizmor consolidation (#698) routed to Kane as security domain. Brett handles the CI/CD plumbing; Kane owns the security policy decisions.
+
+5. **Embeddings-server uv migration out of scope:** Per CI/CD PRD Section 7, this is tracked separately — not included in these issues.
+
+## Issue Summary
+
+**BCDR:** #657, #660, #663, #665, #669, #672, #673, #676, #680, #682, #685  
+**CI/CD:** #687, #689, #690, #692, #694, #696, #698, #699
+
+---
+
+# Decision: v1.10.0 PRD Issue Decomposition — Folder Path Facet
+
+**Author:** Ash (Search / Content)  
+**Date:** 2026-03-20  
+**Status:** Active
+
+## Context
+
+Decomposed the Folder Path Facet PRD into 4 issues (#650, #652, #653, #656) targeting v1.10.0.
+
+## Key Decisions
+
+1. **Option A (client-side tree building)** chosen over Solr PathHierarchyTokenizer — simpler backend, keeps schema unchanged. If performance degrades with thousands of folders, upgrade to Option C in a future release.
+
+2. **Frontend tree UI kept as single issue (#652)** — flat list rendering, tree parsing, filter integration, and breadcrumb are tightly coupled. Splitting would create unnecessary handoff overhead for Dallas.
+
+3. **Batch operations (#656) is a coordination issue** — depends on the sister batch editing feature (#593). No search work needed beyond #650; this issue tracks the integration between folder facet and batch workflow.
+
+4. **Tests (#653) routed to Lambert as a separate issue** — follows team convention of testing as independent work item, not embedded in feature issues.
+
+## Impact
+
+All squad members working on v1.10.0 folder facet should reference the PRD and their assigned issue. Backend (#650) and frontend (#652) can start in parallel. Tests (#653) should start after #650 and #652 are ready. Batch integration (#656) waits for #593.
+
+---
+
+# Decision: v1.10.0 PRD Issue Decomposition — Stress Testing
+
+**Author:** Lambert (Tester)  
+**Date:** 2026-03-20  
+**Status:** Active
+
+## Context
+
+Decomposed the stress testing PRD into 9 GitHub issues for milestone v1.10.0 (#651, #654, #658, #662, #666, #671, #675, #679, #684).
+
+## Key Decomposition Choices
+
+1. **Phase 1 split into 3 issues** — Framework setup, test data generator, and resource monitor are each independently implementable with different owners (Brett, Parker, Brett).
+
+2. **One issue per test category** — Indexing (#662), search (#666), concurrent (#671), and UI (#675) are separate issues. They have different domain owners and can be developed in parallel once foundation is ready.
+
+3. **Documentation separated from testing** — Hardware requirements & tuning docs (#679) is its own issue, depends on all test results. This avoids blocking test implementation on doc writing.
+
+4. **CI integration is last** — #684 is independent and follows the PRD's recommendation to start with manual trigger before automating.
+
+## Team Routing
+
+- **Brett (Infra):** Framework setup (#651), resource monitor (#658), hardware docs (#679), CI integration (#684)
+- **Parker (Backend):** Test data generator (#654), indexing tests (#662), concurrent load tests (#671)
+- **Ash (Search):** Search latency benchmarks (#666)
+- **Lambert (Tester):** Playwright UI stress tests (#675)
+
+## Impact
+
+All squad members with stress test issues should read the PRD at `docs/prd/stress-testing.md` before starting work. Foundation issues (#651, #654, #658) block the test implementation issues.
