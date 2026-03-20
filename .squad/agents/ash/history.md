@@ -44,6 +44,38 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-20 — Fix #562: Vector/hybrid 502 errors (nginx timeout issue)
+
+**Problem**: Vector/hybrid search was returning 502 Bad Gateway errors intermittently. Additionally, user reported "keyword search returns no results" but this was not reproducible in tests.
+
+**Root cause (502)**: The nginx `/v1/` location block was missing `proxy_read_timeout` and `proxy_connect_timeout` directives:
+- Embeddings-server timeout: 120s (configured via `EMBEDDINGS_TIMEOUT`)
+- Nginx default `proxy_read_timeout`: 60s
+- Long queries (complex embeddings) exceeded 60s → nginx killed the connection → 502
+
+**Fix**: Added timeout directives to `src/nginx/default.conf`:
+- `proxy_read_timeout 180s` (1.5× embeddings timeout for safety margin)
+- `proxy_connect_timeout 10s` (fast failure on connection issues)
+
+**Key insight**: `default.conf.template` already had these timeouts from PR #568, but `default.conf` was out of sync. This suggests someone manually edited `default.conf` or regenerated it from an older template. The template file is the source of truth — `default.conf` should be generated from it.
+
+**Keyword search "no results" investigation**:
+- All 503 unit tests pass, including keyword search tests
+- Code logic is correct (94.03% coverage)
+- No code changes found that would break keyword search
+- **Conclusion**: Likely a data issue (Solr index empty) or environment issue (Solr not running), not a code bug
+- Recommended verifying Solr index via admin dashboard
+
+**Empty query behavior** (also part of #562):
+- Keyword mode: empty query → 200 with 0 results (normalized to `*:*`) ✅ correct
+- Semantic/hybrid: empty query → 400 error ✅ correct (per PR #622, intentional — can't generate embedding from empty string)
+
+**Lesson**: When debugging 502 errors from nginx → upstream service:
+1. Check nginx timeout configs first (`proxy_read_timeout`, `proxy_connect_timeout`, `proxy_send_timeout`)
+2. Compare against upstream service timeouts (embeddings, Solr, etc.)
+3. Always set nginx timeout > upstream timeout (1.5× is a good safety margin)
+4. Check both `.conf` and `.conf.template` files for drift
+
 ### 2026-03-19 — Fix #562: Empty query + 502 in vector/hybrid search
 
 **Issue A (empty query):** `_search_semantic` and `_search_hybrid` raised HTTP 400 on blank queries. Fixed to return empty result sets (mode, empty results, empty facets) — consistent with keyword mode which normalizes blank to `*:*`.
