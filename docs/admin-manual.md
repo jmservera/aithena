@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.7.0 Release Notes](release-notes-v1.7.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.8.1 Release Notes](release-notes/v1.8.1.md).
 
 ## System architecture overview
 
@@ -21,9 +21,8 @@ Aithena runs as a Docker Compose stack built around Solr, a document ingestion p
 | `document-lister` | Scans the mounted library and enqueues PDFs | internal only |
 | `document-indexer` | Consumes queue items and indexes books into Solr | internal only |
 | `embeddings-server` | Embedding service used by the search stack | internal only; direct `8085` via override |
-| `streamlit-admin` | Lightweight admin dashboard | proxied through `nginx`; direct `8501` via override |
 | `redis-commander` | Web UI for Redis inspection | proxied through `nginx`; direct `8081` via override |
-| `certbot` | Certificate renewal helper | internal only |
+| `certbot` | Certificate renewal helper (optional — see `docker-compose.ssl.yml`) | internal only |
 
 ### Service dependencies
 
@@ -43,7 +42,6 @@ Current shipped behavior:
 
 - `document-lister` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
 - `document-indexer` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
-- `streamlit-admin` waits for **RabbitMQ** and **Redis** with `condition: service_healthy`
 - `redis-commander` waits for **Redis** health
 - `nginx` also waits for **RabbitMQ** health before exposing the admin surfaces
 
@@ -117,10 +115,9 @@ Common local URLs:
 | Stats API | `http://localhost/v1/stats/` | Protected |
 | Solr admin | `http://localhost/admin/solr/` | Protected |
 | RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
-| Streamlit admin | `http://localhost/admin/streamlit/` | Protected |
 | Redis Commander | `http://localhost/admin/redis/` | Protected |
 
-Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8501`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
+Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
 
 ## Configuration
 
@@ -183,17 +180,6 @@ That means every service using `/data/documents` is reading from the same mounte
 | `AUTH_JWT_SECRET` | installer-generated | JWT signing secret required at startup (v0.11.0+) |
 | `AUTH_JWT_TTL` | `24h` | Session lifetime for issued JWTs (v0.11.0+) |
 | `AUTH_COOKIE_NAME` | `aithena_auth` | Cookie name used for browser auth (v0.11.0+) |
-
-#### `streamlit-admin`
-
-| Variable | Value in Compose | Purpose |
-|---|---|---|
-| `REDIS_HOST` | `redis` | Redis hostname |
-| `REDIS_PORT` | `6379` | Redis port |
-| `QUEUE_NAME` | `shortembeddings` | Queue name used by the stack |
-| `RABBITMQ_HOST` | `rabbitmq` | RabbitMQ hostname |
-| `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ management port |
-| `RABBITMQ_MGMT_PATH_PREFIX` | `/admin/rabbitmq` | Reverse-proxy path prefix |
 
 #### Infrastructure services
 
@@ -404,7 +390,7 @@ v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
    - **Resources** — CPU and memory usage graphs
    - **Logs** — recent system events and state changes
 
-**Auto-refresh behavior:**
+![System status page](images/status-tab.png)
 
 - Polls `/version` and `/admin/containers` every 30 seconds
 - Changes highlighted in green (improvement) or red (degradation)
@@ -494,7 +480,7 @@ Current metrics cover:
 - embeddings availability
 - Solr live-node count
 
-For a ready-to-use scrape example and starter alert thresholds, see the dedicated [Monitoring guide](monitoring.md).
+For a ready-to-use scrape example and starter alert thresholds, see the dedicated [Monitoring guide](guides/monitoring.md).
 
 ### Credential rotation procedure
 
@@ -510,10 +496,70 @@ Preferred workflow:
 2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD`.
 3. Recreate every dependent service so clients reconnect with the new credentials:
    ```bash
-   docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx
+   docker compose up -d --force-recreate redis rabbitmq redis-commander document-lister document-indexer solr-search nginx
    ```
 
 The full production procedure and recovery notes are documented in the [Production deployment guide](deployment/production.md).
+
+### Password reset
+
+The `reset_password.py` CLI tool lets administrators reset any user's password without restarting the service or deleting the database.
+
+#### Usage
+
+```bash
+# Inside the solr-search container (recommended for production)
+docker compose exec solr-search python reset_password.py
+
+# With a specific password
+docker compose exec solr-search python reset_password.py --password "new-secure-password"
+
+# For a specific user
+docker compose exec solr-search python reset_password.py --username myuser --password "new-pass"
+```
+
+#### On the host (development)
+
+If the auth database is bind-mounted to the host:
+
+```bash
+cd src/solr-search
+uv run python reset_password.py --db-path ~/.local/share/aithena/auth/users.db
+```
+
+#### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--db-path` | From `AUTH_DB_PATH` env or `/data/auth/users.db` | Path to the SQLite auth database |
+| `--username` | `admin` | User account to reset |
+| `--password` | *(auto-generated)* | New password. If omitted, generates a secure 32-character random password |
+
+#### Behavior
+
+- If `--password` is omitted, the tool generates a secure random password and prints it to stdout
+- Status messages go to stderr, so you can pipe the password: `docker compose exec solr-search python reset_password.py | clip`
+- Passwords are hashed with Argon2 (same algorithm as the login flow)
+- The tool validates the database exists and the user is found before making changes
+
+#### First-time setup
+
+If the auth database is empty (e.g., after a fresh install or volume recreation), you can create the initial admin user:
+
+```bash
+docker compose exec solr-search python -c "
+from auth import init_auth_db, hash_password
+from pathlib import Path
+import sqlite3
+init_auth_db(Path('/data/auth/users.db'))
+conn = sqlite3.connect('/data/auth/users.db')
+conn.execute('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+    ('admin', hash_password('your-password'), 'admin'))
+conn.commit()
+"
+```
+
+Or use the installer: `python3 -m installer --reset`
 
 ### Degraded-mode semantic search behavior
 
@@ -554,7 +600,7 @@ Treat the published numbers as planning guidance until you have benchmark data f
 
 The UI **Status** tab is the fastest operator-friendly health check.
 
-![Status tab](images/status-tab.png)
+![System status page](images/status-tab.png)
 
 It shows:
 
@@ -565,7 +611,7 @@ It shows:
 
 Important: this dashboard is focused on the search and ingestion path. It does **not** report health for every container in the stack.
 
-![Stats tab](images/stats-tab.png)
+![Collection statistics](images/stats-tab.png)
 
 ### Use the API directly
 
@@ -636,7 +682,7 @@ Without a reindex, language filters and language-facing reports can mix old and 
    ```bash
    docker compose ps
    ```
-2. Open the embedded admin dashboard at **Admin** in the UI or directly at `http://localhost/admin/streamlit/`.
+2. Open the embedded admin dashboard at **Admin** in the UI or directly at `http://localhost/admin/`.
 3. In **Document Manager → Processed**, click **🗑️ Clear All** and confirm. This removes the Redis processed-state entries so the lister will rediscover the files.
 4. In **Document Manager → Failed**, click **🔄 Requeue All** if any failed documents are present.
 5. Wait for the next lister scan (default: **60 seconds**) or restart the lister/indexer services if you need the cycle to begin immediately.
@@ -826,7 +872,7 @@ Before calling a deployment healthy, confirm:
 - `http://localhost/v1/stats/` returns JSON after authentication
 - the main UI at `http://localhost/` loads Search, Status, and Stats after login
 - a known PDF can be searched and opened from results
-- `/admin/streamlit/`, `/admin/solr/`, and `/admin/rabbitmq/` redirect or deny access when unauthenticated
+- `/admin/`, `/admin/solr/`, and `/admin/rabbitmq/` redirect or deny access when unauthenticated
 
 ## Deployment Updates for v1.3.0 (Structured Logging, Admin Auth, Observability)
 
@@ -881,14 +927,19 @@ For comprehensive guidance, see `docs/observability-runbook.md`.
 
 ### Admin dashboard authentication
 
-v1.3.0 requires authentication for the embedded Streamlit admin dashboard. Users must log in before accessing the dashboard.
+v1.3.0 requires authentication for the embedded admin dashboard. Users must log in before accessing the dashboard.
 
 **Admin access behavior:**
 
-- Users accessing `/admin/streamlit/` while not authenticated are redirected to `/login`
+- Users accessing `/admin/` while not authenticated are redirected to `/login`
 - After successful login, users can access the admin dashboard via the **Admin** tab in the UI
 - Sessions expire after 24 hours (configurable via `AUTH_JWT_TTL`)
 - Logging out clears the browser session
+
+![Admin dashboard](images/admin-dashboard.png)
+
+<!-- TODO: capture screenshot -->
+
 
 **Environment variables:**
 
@@ -1329,7 +1380,7 @@ docker compose exec rabbitmq curl -s http://localhost:15672/api/healthchecks/nod
 4. Access UI: `https://aithena.example.com/` and log in
 5. Run smoke tests: `docker compose -f docker-compose.smoke.yml up --abort-on-container-exit`
 6. Verify search works: Execute a known search query
-7. Check admin dashboard: Access `/admin/streamlit/` after login
+7. Check admin dashboard: Access `/admin/` after login
 
 ### Rollback procedures
 
@@ -1934,3 +1985,224 @@ To roll back to v1.6.0:
    docker compose up -d
    ```
 3. No data migration rollback needed — v1.7.0 makes no schema or volume changes. Note: v1.6.0 code reads only the old `aithena-locale` key, so after rollback it will not find the migrated `aithena.locale` key. Users who switched languages during v1.7.0 will revert to browser locale detection on their next visit. This is a cosmetic reset, not data loss.
+
+## Deployment Updates for v1.8.1 (Bug Fixes & Stability)
+
+v1.8.1 is a patch release addressing four critical bugs discovered after v1.8.0: incomplete i18n translations, admin login loop, incorrect service status reporting, and version display errors. This section covers operator-relevant changes and deployment validation.
+
+### Incomplete i18n translations (#564)
+
+v1.8.1 completes internationalization coverage for all user-facing pages.
+
+**What changed:**
+
+- Search, Library, and Upload pages now have all UI strings extracted and integrated into the i18n translation system.
+- All hardcoded English strings on these pages have been replaced with `react-intl` message keys.
+- Full multilingual support (en, es, ca, fr) is now available on all pages.
+
+**Impact on operators:**
+
+- No environment variables, configuration files, or database changes needed.
+- Users switching languages will see all UI text in their selected language, including page headers, labels, button text, and placeholder strings.
+- No migration or special deployment steps required.
+
+**Verifying i18n after upgrade:**
+
+```bash
+# Open the app and switch language using the LanguageSwitcher
+# Visit each page (Search, Library, Upload) and confirm all text is translated
+# Check that no English hardcoded strings remain on these pages
+# Verify browser console shows no missing translation warnings
+```
+
+### Admin page login loop fix (#561)
+
+v1.8.1 fixes the authentication flow preventing admin dashboard access.
+
+**What changed:**
+
+- Admin (Streamlit) page authentication flow now works correctly without login redirects.
+- Session state persists across admin page navigation.
+
+**Impact on operators:**
+
+- No configuration changes, no new environment variables.
+- Administrators can now access the admin dashboard without being stuck in a login loop.
+- Session authentication is now reliable.
+
+**Verifying admin access after upgrade:**
+
+```bash
+# Navigate to the Admin tab in the application
+# Log in if prompted
+# Verify that login succeeds and the admin dashboard displays
+# Verify that you can navigate within the admin dashboard without being redirected to login
+# Reload the page and confirm the session persists
+```
+
+### Service status reporting improvements (#563)
+
+v1.8.1 enhances the status endpoint to report all critical services accurately.
+
+**What changed:**
+
+- The status endpoint now reports health for Solr (all 3 nodes), ZooKeeper (all 3 nodes), RabbitMQ, embeddings-server, and Redis.
+- The Stats page UI now displays accurate real-time status for all services.
+- RabbitMQ is no longer incorrectly reported as down when it is actually healthy.
+
+**Impact on operators:**
+
+- No configuration changes needed.
+- Monitoring and troubleshooting become more accurate — operators see true service status instead of false negatives.
+- The status endpoint can be used for health monitoring and alerting.
+
+**Verifying status reporting after upgrade:**
+
+```bash
+# Open the Status tab in the application
+# Verify that all services (Solr, ZooKeeper, RabbitMQ, embeddings-server, Redis) are listed
+# Confirm that healthy services show a healthy indicator (not "down")
+# If any service is actually down, verify it shows as down (not false healthy indicator)
+# Test by stopping a service and confirming the status updates correctly
+```
+
+### Version display correction (#569)
+
+v1.8.1 fixes version reporting in the application.
+
+**What changed:**
+
+- The application version display now shows the actual deployed release value.
+- Version information is updated and consistent across the application.
+
+**Impact on operators:**
+
+- No configuration changes needed.
+- Version reporting is now accurate for monitoring and troubleshooting.
+
+**Verifying version display after upgrade:**
+
+```bash
+# Check the application version display — it should show v1.8.1
+# Reload the page and confirm the version remains correct
+```
+
+### Deployment checklist for v1.8.1
+
+1. **Pre-upgrade:**
+   - Verify all services are healthy: `curl -s http://localhost/health`
+   - Back up any user accounts or custom admin configurations
+
+2. **Upgrade:**
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
+
+3. **Post-upgrade validation:**
+   - Open the application and verify the footer displays v1.8.1
+   - Test the Status tab — all services should be listed and show accurate status
+   - Navigate to the Admin tab and verify login succeeds without redirects
+   - Switch language and verify all pages display translated text
+   - Check `docker compose ps` to ensure all services are running
+   - Check `docker compose logs` for any errors or warnings
+
+4. **No rollback-specific actions needed:**
+   - All v1.8.1 changes are backward-compatible bug fixes.
+   - If you roll back to v1.8.0, the app will work correctly but with the four bugs re-present.
+
+### Rollback procedure for v1.8.1
+
+To roll back to v1.8.0:
+
+1. Stop the current stack:
+   ```bash
+   docker compose down
+   ```
+2. Switch to v1.8.0 images:
+   ```bash
+   git checkout v1.8.0 -- docker-compose.yml
+   docker compose pull
+   docker compose up -d
+   ```
+3. No data migration rollback needed — v1.8.1 makes no schema or volume changes. The four bugs will reappear (i18n, admin login, status display, version), but data integrity is unchanged.
+
+## Auth Database Management
+
+### Schema versioning
+
+The authentication database (`AUTH_DB_PATH`, default `/data/auth/users.db`) tracks its own version in a `schema_version` table. Every time `solr-search` starts it checks the current version and applies any pending migrations automatically — no manual intervention required.
+
+You can inspect the current schema version at any time:
+
+```bash
+docker compose exec solr-search sqlite3 /data/auth/users.db "SELECT * FROM schema_version ORDER BY version;"
+```
+
+### Migration framework
+
+Forward-only migrations live in `src/solr-search/migrations/` as Python modules named `mNNNN_<description>.py`. Each module exposes:
+
+| Attribute | Type | Purpose |
+|---|---|---|
+| `VERSION` | `int` | Target schema version (must be > all previous) |
+| `DESCRIPTION` | `str` | Human-readable summary |
+| `upgrade(conn)` | function | DDL/DML using the provided `sqlite3.Connection` |
+
+Migrations run inside a transaction — do **not** call `conn.commit()`. The framework handles commit and records the version after success.
+
+To add a new migration, copy `migrations/template.py` to a new file:
+
+```bash
+cp src/solr-search/migrations/template.py src/solr-search/migrations/m0002_add_email.py
+```
+
+Edit the file to set `VERSION`, `DESCRIPTION`, and implement `upgrade()`. On next startup the migration will apply automatically.
+
+### Backup
+
+The auth database is a single SQLite file. Use the included backup script for a safe, non-locking snapshot:
+
+```bash
+# Inside the container (recommended)
+docker compose exec solr-search /app/scripts/backup_auth_db.sh
+
+# Custom backup directory
+docker compose exec solr-search /app/scripts/backup_auth_db.sh /data/auth/my-backups
+
+# From the host (if the volume is bind-mounted)
+sqlite3 /path/to/auth/users.db ".backup '/path/to/backup/users_backup.db'"
+```
+
+The script uses SQLite's `.backup` command, which creates a consistent snapshot without locking the database. Backups are written to `/data/auth/backups/` by default with UTC timestamps.
+
+**Scheduled backups:** Add a cron entry on the Docker host:
+
+```cron
+0 2 * * * docker compose -f /path/to/docker-compose.yml exec -T solr-search /app/scripts/backup_auth_db.sh
+```
+
+### Restore
+
+To restore from a backup:
+
+```bash
+# 1. Stop the service
+docker compose stop solr-search
+
+# 2. Replace the database file
+cp /data/auth/backups/users_20250115T020000Z.db /data/auth/users.db
+
+# 3. Restart — migrations will re-apply if the backup is from an older version
+docker compose start solr-search
+```
+
+> **Note:** Restoring an older backup may lose user accounts created after that backup. The migration framework will automatically apply any missing migrations on startup.
+
+### Docker volume considerations
+
+The auth database directory (`/data/auth/`) is bind-mounted from the host. Key points:
+
+- The `entrypoint.sh` script ensures correct ownership (`app:app`, UID 1000) on startup.
+- **Always back up before upgrading** — while migrations are forward-only and additive, a backup lets you roll back if needed.
+- Named Docker volumes vs. bind mounts: bind mounts are recommended for the auth DB because they make backup and restore trivial from the host filesystem.

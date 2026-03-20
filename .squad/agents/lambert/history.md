@@ -60,6 +60,37 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-19 — Auth API integration tests (#558 → PR #575)
+
+- **54 integration tests** added for User CRUD API endpoints (POST register, GET users, PUT users/{id}, DELETE users/{id}).
+- Based branch on `squad/549-user-crud-api` (PR #572) since CRUD endpoints don't exist on `dev` yet — tests need the endpoints to run.
+- Cross-endpoint flows are the highest-value integration tests: register→login, delete→login-fails, update→list-reflects, role-promotion→login-role-changes.
+- **Rate limiter interference:** Login rate limiter (`login_rate_limiter`) accumulates across tests when using TestClient against the shared FastAPI app. Fixed with an `autouse` fixture that clears `login_rate_limiter.requests` before/after each test.
+- `object.__setattr__(settings, "auth_db_path", db_path)` is the pattern for patching frozen dataclass settings in fixtures.
+- RBAC: `require_role()` is a FastAPI `Depends()` factory — returns 403 when user role not in allowed set, 401 when unauthenticated (caught by auth middleware first).
+- Username uniqueness is case-insensitive (`COLLATE NOCASE` on the `username` column).
+
+### 2026-03-19 — Expanded Playwright screenshot spec to 11 pages (#530 → PR #535)
+
+- Screenshot spec now covers 11 pages (was 4): login, search empty, search results, search faceted, PDF viewer, similar books, admin dashboard, upload, status, stats, library.
+- `gotoAppPage` and `waitForSearchResponse` helpers were already exported but unused by the screenshot spec — now imported and used for navigation and facet filter waits.
+- Similar books panel depends on PDF viewer being open; they must be captured sequentially, not independently.
+- Graceful skip pattern (try/catch + annotation) works well for CI resilience — used for status, stats, library, and similar books in addition to the existing admin dashboard pattern.
+- Facet filter screenshot requires `waitForSearchResponse` with `fq_author` param check to ensure filtered results have loaded before capture.
+- The E2E project has no `tsconfig.json` or TypeScript compiler — Playwright handles TS transpilation at runtime, so no `tsc --noEmit` validation is possible.
+### 2026-03-19T07:07Z — Expanded Playwright screenshot spec to 11 pages (PR #535 merged)
+
+**Issue:** #530 (v1.8.0 milestone)  
+**PR:** #535 (merged to `dev`)  
+**Scope:** Screenshot spec expansion from 4 to 11 pages
+
+**Summary:** 
+Expanded the Playwright screenshot spec to cover all 11 pages documented in user and admin manuals. The spec now captures login, search (empty and faceted), results, PDF viewer, similar books, admin dashboard, upload, status, stats, and library pages. Data-dependent pages (PDF viewer, similar books, status, stats, library) use graceful skip pattern with annotation if data is unavailable, keeping tests resilient in CI.
+
+**Key learning:** Sequential page capture is critical for dependent UI flows. PDF viewer must be captured before similar books panel (which depends on open PDF modal).
+
+**Unblocks:** #531 (Brett's artifact step) — can now proceed.
+
 ### 2026-03-14 — Playwright browser E2E suite for the local stack
 
 - Browser suite (`e2e/playwright/`) is read-only: discovers queries from live `/v1/search/` API instead of uploading fixtures

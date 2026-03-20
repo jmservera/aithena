@@ -1,5 +1,6 @@
 import { useCallback, useId, useRef, useState, useEffect } from 'react';
 import { useIntl } from 'react-intl';
+import { BookOpen, AlertTriangle } from 'lucide-react';
 import { useLibrary } from '../hooks/library';
 import { BookResult, SearchFilters } from '../hooks/search';
 import FacetPanel from '../Components/FacetPanel';
@@ -98,7 +99,9 @@ function LibraryPage() {
 
       <main className="search-main">
         <header className="search-header">
-          <h1 className="page-title">📖 Library</h1>
+          <h1 className="page-title">
+            <BookOpen size={20} aria-hidden="true" /> {intl.formatMessage({ id: 'library.title' })}
+          </h1>
 
           <div className="search-controls">
             <p
@@ -162,7 +165,6 @@ function LibraryPage() {
           id={resultsRegionId}
           ref={resultsRegionRef}
           className="search-results"
-          role="region"
           aria-labelledby={resultsHeadingId}
           aria-describedby={resultsSummaryId}
           aria-busy={loading}
@@ -174,7 +176,7 @@ function LibraryPage() {
 
           {error && (
             <div className="search-error" role="alert">
-              ⚠️ {error}
+              <AlertTriangle size={20} aria-hidden="true" /> {error}
             </div>
           )}
 

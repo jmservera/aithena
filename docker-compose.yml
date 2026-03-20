@@ -12,8 +12,8 @@ services:
         exec redis-server --save 20 1 --loglevel warning;
       fi'
     environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - REDISCLI_AUTH=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      - REDISCLI_AUTH=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     expose:
       - 6379
     healthcheck:
@@ -45,8 +45,8 @@ services:
     command: rabbitmq-server
     hostname: rabbitmq
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
     expose:
       - 5672
       - 15672
@@ -119,10 +119,10 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - DOCUMENT_WILDCARD=*.pdf
@@ -164,10 +164,10 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
       - BASE_PATH=/data/documents/
       - SOLR_HOST=solr
@@ -261,78 +261,24 @@ services:
       - MAX_UPLOAD_SIZE_MB=50
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
       - RABBITMQ_QUEUE_NAME=shortembeddings
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-100}
+      - ZOOKEEPER_HOSTS=zoo1:2181,zoo2:2181,zoo3:2181
     volumes:
       - document-data:/data/documents
       - type: bind
         source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
         target: /data/auth
-    networks:
-      - default
-  streamlit-admin:
-    build:
-      context: ./src/admin
-      args:
-        VERSION: ${VERSION:-dev}
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
-        BUILD_DATE: ${BUILD_DATE:-unknown}
-    expose:
-      - "8501"
-    restart: unless-stopped
-    stop_grace_period: 10s
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "from urllib.request import urlopen; urlopen('http://localhost:8501/admin/streamlit/_stcore/health').read()",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-        reservations:
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - QUEUE_NAME=shortembeddings
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_MGMT_PORT=15672
-      - RABBITMQ_MGMT_PATH_PREFIX=/admin/rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
-      - SOLR_SEARCH_URL=http://solr-search:8080
-      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-change-me-in-production}
-      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
-      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
-      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
-      - AUTH_ENABLED=${AUTH_ENABLED:-true}
     networks:
       - default
   redis-commander:
@@ -368,8 +314,66 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - URL_PREFIX=/admin/redis
+    networks:
+      - default
+  admin:
+    build:
+      context: .
+      dockerfile: ./src/admin/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    expose:
+      - "8501"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      solr-search:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8501/admin/streamlit/_stcore/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - VERSION=${VERSION:-dev}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      - QUEUE_NAME=shortembeddings
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_MGMT_PORT=15672
+      - RABBITMQ_MGMT_PATH_PREFIX=
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - SOLR_SEARCH_URL=http://solr-search:8080
+      - AUTH_ENABLED=true
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
+      - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
+      - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
+      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
+      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:?Set AUTH_ADMIN_PASSWORD in .env}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
     networks:
       - default
   aithena-ui:
@@ -406,15 +410,13 @@ services:
     networks:
       - default
   nginx:
-    image: nginx:1.15-alpine
+    image: nginx:1.27-alpine
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
       aithena-ui:
         condition: service_healthy
       solr-search:
-        condition: service_healthy
-      streamlit-admin:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -439,20 +441,9 @@ services:
         max-file: "3"
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./src/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./src/nginx/html:/usr/share/nginx/html:ro
-      - certbot-data-conf:/etc/letsencrypt
-      - certbot-data-www:/var/www/certbot
-    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
-  certbot:
-    image: certbot/certbot
-    restart: unless-stopped
-    volumes:
-      - certbot-data-conf:/etc/letsencrypt
-      - certbot-data-www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
   zoo1:
     image: zookeeper:3.9
     expose:
@@ -739,18 +730,7 @@ volumes:
       type: "none"
       o: "bind"
       device: "/source/volumes/rabbitmq-data"
-  certbot-data-conf:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/certbot-data/conf"
-  certbot-data-www:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/certbot-data/www"
+
   redis-data:
     driver: local
     driver_opts:

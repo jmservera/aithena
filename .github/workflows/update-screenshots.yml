@@ -1,0 +1,116 @@
+# GitHub Action: Update Release Screenshots
+#
+# Triggers on: workflow_run completion of Integration Test
+#
+# What it does:
+# 1. Detects when integration-test succeeds on main branch
+# 2. Downloads the release-screenshots artifact from the triggering run
+# 3. Commits updated screenshots to docs/screenshots/ on the dev branch
+#
+# This keeps release screenshots in the repo for release-docs.yml to consume.
+
+name: Update Screenshots
+
+on:
+  workflow_run:
+    workflows: ["Integration Test"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  commit-screenshots:
+    name: Commit release screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    env:
+      WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+
+    steps:
+      - name: Validate workflow run source
+        env:
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          if [[ "$HEAD_REPO" != "$TARGET_REPO" ]]; then
+            echo "::error::Workflow run from fork detected - rejecting"
+            exit 1
+          fi
+          echo "Workflow run validated: same repository"
+
+      - name: Checkout dev branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: dev
+          persist-credentials: true
+
+      - name: Download release-screenshots artifact
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const runId = Number(process.env.WORKFLOW_RUN_ID);
+            core.info(`Downloading artifacts from workflow run ${runId}`);
+
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+
+            const screenshotArtifact = artifacts.data.artifacts.find(
+              (a) => a.name === 'release-screenshots'
+            );
+
+            if (!screenshotArtifact) {
+              core.setFailed('release-screenshots artifact not found in triggering run');
+              return;
+            }
+
+            core.info(`Found artifact: ${screenshotArtifact.name} (${screenshotArtifact.size_in_bytes} bytes)`);
+
+            const download = await github.rest.actions.downloadArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: screenshotArtifact.id,
+              archive_format: 'zip',
+            });
+
+            const artifactPath = path.join(process.env.RUNNER_TEMP, 'release-screenshots.zip');
+            fs.writeFileSync(artifactPath, Buffer.from(download.data));
+            core.info(`Artifact saved to ${artifactPath}`);
+
+      - name: Extract screenshots
+        env:
+          ARTIFACT_ZIP: ${{ runner.temp }}/release-screenshots.zip
+        run: |
+          mkdir -p docs/screenshots
+          unzip -o "$ARTIFACT_ZIP" -d docs/screenshots/
+          echo "Extracted screenshots:"
+          ls -la docs/screenshots/
+
+      - name: Commit and push if changed
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add docs/screenshots/
+          if git diff --staged --quiet; then
+            echo "No changes to screenshots — skipping commit"
+            exit 0
+          fi
+
+          git commit -m "docs: update screenshots from integration test (run #${RUN_ID})" \
+            -m "" \
+            -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          git push origin dev

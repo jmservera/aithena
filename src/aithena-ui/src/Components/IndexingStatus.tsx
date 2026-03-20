@@ -1,4 +1,5 @@
 import { useIntl } from 'react-intl';
+import { CheckCircle } from 'lucide-react';
 
 import { useStatus } from '../hooks/status';
 
@@ -7,6 +8,7 @@ function ServiceDot({ serviceStatus }: { serviceStatus: string }) {
   return (
     <span
       className={`health-dot ${isUp ? 'health-dot--ok' : 'health-dot--error'}`}
+      role="img"
       title={serviceStatus}
       aria-label={serviceStatus}
     />
@@ -42,7 +44,10 @@ function IndexingStatus() {
   return (
     <main className="status-main">
       <header className="status-header">
-        <h2 className="status-title">🟢 {intl.formatMessage({ id: 'indexing.title' })}</h2>
+        <h2 className="status-title">
+          <CheckCircle size={20} aria-hidden="true" />{' '}
+          {intl.formatMessage({ id: 'indexing.title' })}
+        </h2>
         {lastUpdated && (
           <span className="status-updated">
             {intl.formatMessage(
@@ -100,6 +105,11 @@ function IndexingStatus() {
             </span>
           </li>
           <li className="service-item">
+            <ServiceDot serviceStatus={services?.zookeeper ?? 'unknown'} />
+            <span className="service-name">{intl.formatMessage({ id: 'indexing.zookeeper' })}</span>
+            <span className="service-detail">{services?.zookeeper ?? '—'}</span>
+          </li>
+          <li className="service-item">
             <ServiceDot serviceStatus={services?.redis ?? 'unknown'} />
             <span className="service-name">{intl.formatMessage({ id: 'indexing.redis' })}</span>
             <span className="service-detail">{services?.redis ?? '—'}</span>
@@ -108,6 +118,13 @@ function IndexingStatus() {
             <ServiceDot serviceStatus={services?.rabbitmq ?? 'unknown'} />
             <span className="service-name">{intl.formatMessage({ id: 'indexing.rabbitmq' })}</span>
             <span className="service-detail">{services?.rabbitmq ?? '—'}</span>
+          </li>
+          <li className="service-item">
+            <ServiceDot serviceStatus={services?.embeddings ?? 'unknown'} />
+            <span className="service-name">
+              {intl.formatMessage({ id: 'indexing.embeddings' })}
+            </span>
+            <span className="service-detail">{services?.embeddings ?? '—'}</span>
           </li>
         </ul>
       </section>

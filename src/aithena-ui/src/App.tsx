@@ -1,11 +1,13 @@
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useRef, type ReactNode } from 'react';
 import { useIntl } from 'react-intl';
+import { Library } from 'lucide-react';
 import './App.css';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Footer from './Components/Footer';
 import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import LoadingSpinner from './Components/LoadingSpinner';
 import ProtectedRoute from './Components/ProtectedRoute';
+import AdminRoute from './Components/AdminRoute';
 import TabNav from './Components/TabNav';
 
 const SearchPage = lazy(() => import('./pages/SearchPage'));
@@ -15,6 +17,9 @@ const StatusPage = lazy(() => import('./pages/StatusPage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
+const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 
 function LazyRoute({
   element,
@@ -44,16 +49,34 @@ function LazyRoute({
 
 function App() {
   const intl = useIntl();
+  const location = useLocation();
+  const mainRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+
+  // Move focus to main content on route changes for screen readers
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    mainRef.current?.focus();
+  }, [location.pathname]);
+
   return (
     <div className="App">
-      <div className="app-header">
+      <a href="#main-content" className="skip-to-content">
+        {intl.formatMessage({ id: 'app.skipToContent' })}
+      </a>
+      <header className="app-header">
         <div className="app-branding">
-          <h1 className="sidebar-title">📚 {intl.formatMessage({ id: 'app.title' })}</h1>
+          <h1 className="sidebar-title">
+            <Library size={20} aria-hidden="true" /> {intl.formatMessage({ id: 'app.title' })}
+          </h1>
           <p className="sidebar-subtitle">{intl.formatMessage({ id: 'app.subtitle' })}</p>
         </div>
         <TabNav />
-      </div>
-      <div className="app-content">
+      </header>
+      <div className="app-content" id="main-content" ref={mainRef} tabIndex={-1}>
         <Routes>
           <Route
             path="/login"
@@ -124,6 +147,38 @@ function App() {
                   element={<AdminPage />}
                   titleId="loading.admin"
                   messageId="loading.adminMessage"
+                />
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <LazyRoute
+                  element={<ProfilePage />}
+                  titleId="loading.profile"
+                  messageId="loading.profileMessage"
+                />
+              }
+            />
+            <Route
+              path="/profile/change-password"
+              element={
+                <LazyRoute
+                  element={<ChangePasswordPage />}
+                  titleId="loading.changePassword"
+                  messageId="loading.changePasswordMessage"
+                />
+              }
+            />
+          </Route>
+          <Route element={<AdminRoute />}>
+            <Route
+              path="/admin/users"
+              element={
+                <LazyRoute
+                  element={<UserManagementPage />}
+                  titleId="loading.users"
+                  messageId="loading.usersMessage"
                 />
               }
             />

@@ -446,10 +446,12 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_solr_get: MagicMock,
 
 @patch("main.requests.post")
 @patch("main.requests.get")
-def test_search_semantic_empty_query_returns_400(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
+def test_search_semantic_empty_query_returns_empty_results(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "semantic"})
     assert response.status_code == 400
+    mock_emb_post.assert_not_called()
+    mock_solr_get.assert_not_called()
 
 
 @patch("main.requests.post")
@@ -480,6 +482,32 @@ def test_search_semantic_falls_back_to_keyword_when_embeddings_fail(
 
     mock_solr_get.assert_called_once()
     assert mock_solr_get.call_args[1]["params"]["q"] == "catalan history"
+
+
+@patch("main.requests.post")
+@patch("main.requests.get")
+def test_search_semantic_degrades_when_circuit_open(
+    mock_solr_get: MagicMock,
+    mock_emb_post: MagicMock,
+) -> None:
+    """When the embeddings circuit breaker is open, semantic search should degrade to keyword."""
+    from circuit_breaker import CircuitOpenError
+
+    mock_solr_resp = MagicMock()
+    mock_solr_resp.status_code = 200
+    mock_solr_resp.json.return_value = _solr_payload(_make_solr_docs(1))
+    mock_solr_get.return_value = mock_solr_resp
+
+    with patch("main.embeddings_circuit") as mock_cb:
+        mock_cb.call.side_effect = CircuitOpenError("embeddings", 15.0)
+        client = get_client()
+        response = client.get("/search", params={"q": "test query", "mode": "semantic"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "keyword"
+    assert data["degraded"] is True
+    assert data["requested_mode"] == "semantic"
 
 
 @patch("main.requests.post")
@@ -543,10 +571,12 @@ def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_p
 
 @patch("main.requests.post")
 @patch("main.requests.get")
-def test_search_hybrid_empty_query_returns_400(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
+def test_search_hybrid_empty_query_returns_empty_results(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "hybrid"})
     assert response.status_code == 400
+    mock_emb_post.assert_not_called()
+    mock_solr_get.assert_not_called()
 
 
 @patch("main.requests.post")
@@ -1068,6 +1098,8 @@ def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -
 
 
 @patch("main._embeddings_available")
+@patch("main._zookeeper_check")
+@patch("main._rabbitmq_management_check")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1075,6 +1107,8 @@ def test_status_endpoint_returns_expected_shape(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_rabbitmq: MagicMock,
+    mock_zk: MagicMock,
     mock_embeddings_available: MagicMock,
 ) -> None:
     """GET /v1/status/ must return solr, indexing, and services keys."""
@@ -1086,6 +1120,8 @@ def test_status_endpoint_returns_expected_shape(
         "pending": 91,
     }
     mock_tcp.return_value = True
+    mock_rabbitmq.return_value = True
+    mock_zk.return_value = True
     mock_embeddings_available.return_value = True
 
     client = get_client()
@@ -1102,10 +1138,18 @@ def test_status_endpoint_returns_expected_shape(
         "pending": 91,
     }
     assert data["embeddings_available"] is True
-    assert data["services"] == {"solr": "up", "redis": "up", "rabbitmq": "up", "embeddings": "up"}
+    assert data["services"] == {
+        "solr": "up",
+        "redis": "up",
+        "rabbitmq": "up",
+        "zookeeper": "up",
+        "embeddings": "up",
+    }
 
 
 @patch("main._embeddings_available")
+@patch("main._zookeeper_check")
+@patch("main._rabbitmq_management_check")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1113,6 +1157,8 @@ def test_status_endpoint_slash_alias(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_rabbitmq: MagicMock,
+    mock_zk: MagicMock,
     mock_embeddings_available: MagicMock,
 ) -> None:
     """/v1/status/ (with trailing slash) must also return 200."""
@@ -1124,6 +1170,8 @@ def test_status_endpoint_slash_alias(
         "pending": 0,
     }
     mock_tcp.return_value = True
+    mock_rabbitmq.return_value = True
+    mock_zk.return_value = True
     mock_embeddings_available.return_value = True
 
     client = get_client()
@@ -1133,6 +1181,8 @@ def test_status_endpoint_slash_alias(
 
 
 @patch("main._embeddings_available")
+@patch("main._zookeeper_check")
+@patch("main._rabbitmq_management_check")
 @patch("main._tcp_check")
 @patch("main._get_indexing_status")
 @patch("main._get_solr_status")
@@ -1140,9 +1190,11 @@ def test_status_services_down_when_tcp_fails(
     mock_solr_status: MagicMock,
     mock_indexing: MagicMock,
     mock_tcp: MagicMock,
+    mock_rabbitmq: MagicMock,
+    mock_zk: MagicMock,
     mock_embeddings_available: MagicMock,
 ) -> None:
-    """Services must report 'down' when TCP check fails."""
+    """Services must report 'down' when health checks fail."""
     mock_solr_status.return_value = {"status": "error", "nodes": 0, "docs_indexed": 0}
     mock_indexing.return_value = {
         "total_discovered": 0,
@@ -1151,6 +1203,8 @@ def test_status_services_down_when_tcp_fails(
         "pending": 0,
     }
     mock_tcp.return_value = False
+    mock_rabbitmq.return_value = False
+    mock_zk.return_value = False
     mock_embeddings_available.return_value = False
 
     client = get_client()
@@ -1162,6 +1216,7 @@ def test_status_services_down_when_tcp_fails(
     assert data["services"]["solr"] == "down"
     assert data["services"]["redis"] == "down"
     assert data["services"]["rabbitmq"] == "down"
+    assert data["services"]["zookeeper"] == "down"
     assert data["services"]["embeddings"] == "down"
 
 
@@ -1171,7 +1226,9 @@ def _container_by_name(containers: list[dict[str, str]], name: str) -> dict[str,
 
 @patch("main._tcp_check", return_value=True)
 @patch("main.requests.get")
+@patch("admin_auth._get_admin_api_key", return_value="integration-test-admin-key")
 def test_admin_containers_endpoint_happy_path(
+    _mock_admin_key: MagicMock,
     mock_requests_get: MagicMock,
     _mock_tcp: MagicMock,
 ) -> None:
@@ -1207,13 +1264,14 @@ def test_admin_containers_endpoint_happy_path(
     mock_requests_get.side_effect = side_effect
 
     client = get_client()
+    client.headers["X-API-Key"] = "integration-test-admin-key"
     response = client.get("/v1/admin/containers")
 
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total"] == 10
-    assert data["healthy"] == 8
+    assert data["total"] == 9
+    assert data["healthy"] == 7
     assert data["last_updated"].endswith("Z")
 
     solr_search = _container_by_name(data["containers"], "solr-search")
@@ -1234,13 +1292,6 @@ def test_admin_containers_endpoint_happy_path(
         "commit": "abc1234",
     }
 
-    assert _container_by_name(data["containers"], "streamlit-admin") == {
-        "name": "streamlit-admin",
-        "status": "up",
-        "type": "service",
-        "version": settings.version,
-        "commit": settings.commit,
-    }
     assert _container_by_name(data["containers"], "aithena-ui") == {
         "name": "aithena-ui",
         "status": "up",
@@ -1275,7 +1326,11 @@ def test_admin_containers_endpoint_happy_path(
 
 
 @patch("main.requests.get")
-def test_admin_containers_endpoint_degraded_path(mock_requests_get: MagicMock) -> None:
+@patch("admin_auth._get_admin_api_key", return_value="integration-test-admin-key")
+def test_admin_containers_endpoint_degraded_path(
+    _mock_admin_key: MagicMock,
+    mock_requests_get: MagicMock,
+) -> None:
     """GET /v1/admin/containers marks failed checks down while workers remain unknown."""
 
     def requests_side_effect(url: str, *args: object, **kwargs: object) -> MagicMock:
@@ -1287,7 +1342,6 @@ def test_admin_containers_endpoint_degraded_path(mock_requests_get: MagicMock) -
 
     def tcp_side_effect(host: str, port: int, timeout: float = 2.0) -> bool:
         host_statuses = {
-            "streamlit-admin": False,
             settings.redis_host: True,
             settings.rabbitmq_host: False,
             "aithena-ui": True,
@@ -1300,12 +1354,13 @@ def test_admin_containers_endpoint_degraded_path(mock_requests_get: MagicMock) -
 
     with patch("main._tcp_check", side_effect=tcp_side_effect):
         client = get_client()
+        client.headers["X-API-Key"] = "integration-test-admin-key"
         response = client.get("/v1/admin/containers/")
 
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total"] == 10
+    assert data["total"] == 9
     assert data["healthy"] == 4
     assert _container_by_name(data["containers"], "embeddings-server") == {
         "name": "embeddings-server",
@@ -1314,7 +1369,6 @@ def test_admin_containers_endpoint_degraded_path(mock_requests_get: MagicMock) -
         "version": "unknown",
         "commit": "unknown",
     }
-    assert _container_by_name(data["containers"], "streamlit-admin")["status"] == "down"
     assert _container_by_name(data["containers"], "solr")["status"] == "down"
     assert _container_by_name(data["containers"], "rabbitmq")["status"] == "down"
     assert _container_by_name(data["containers"], "document-indexer")["status"] == "unknown"

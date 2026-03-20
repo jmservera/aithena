@@ -19,21 +19,30 @@ from urllib.parse import urlparse
 import pika
 import redis as redis_lib
 import requests
+from admin_auth import require_admin_auth
 from auth import (
     AuthenticatedUser,
     AuthenticationError,
+    PasswordPolicyError,
+    UserExistsError,
     authenticate_user,
+    change_password,
     clear_auth_cookie,
     create_access_token,
+    create_user,
     decode_access_token,
+    delete_user,
     get_token_from_sources,
+    get_user_by_id,
     init_auth_db,
+    list_users,
     set_auth_cookie,
+    update_user,
 )
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from config import settings
 from correlation import CorrelationIdMiddleware, get_correlation_id
-from fastapi import FastAPI, HTTPException, Query, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from logging_config import setup_logging
@@ -104,6 +113,13 @@ solr_circuit = CircuitBreaker(
     expected_exceptions=(requests.RequestException, ValueError),
 )
 
+embeddings_circuit = CircuitBreaker(
+    name="embeddings",
+    failure_threshold=settings.cb_embeddings_failure_threshold,
+    recovery_timeout=settings.cb_embeddings_recovery_timeout,
+    expected_exceptions=(requests.RequestException, ValueError, KeyError, TypeError, IndexError),
+)
+
 PUBLIC_PATHS: frozenset[str] = frozenset(
     {
         "/health",
@@ -132,6 +148,34 @@ PUBLIC_PATH_PREFIXES = ("/docs", "/redoc", "/openapi.json")
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+
+class UpdateUserRequest(BaseModel):
+    username: str | None = None
+    role: str | None = None
+
+
+def require_role(*allowed_roles: str) -> Any:
+    """FastAPI dependency that enforces role-based access control."""
+
+    def _dependency(request: Request) -> AuthenticatedUser:
+        user = _get_current_user(request)
+        if user.role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+
+    return Depends(_dependency)
 
 
 class RateLimiter:
@@ -166,11 +210,120 @@ upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 
+def get_client_ip(request: Request) -> str:
+    """Extract the real client IP from a proxied request.
+
+    Reads X-Forwarded-For set by nginx (configured as $remote_addr to prevent
+    spoofing). Falls back to the direct connection IP.
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip()
+        if ip:
+            return ip
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+class RedisRateLimiter:
+    """Redis-backed sliding window rate limiter."""
+
+    def __init__(self, requests_per_minute: int = 100):
+        self.requests_per_minute = requests_per_minute
+        self.window_seconds = 60
+
+    def _get_client_ip(self, request: Request) -> str:
+        """Extract client IP, delegating to module-level helper."""
+        return get_client_ip(request)
+
+    def check_rate_limit(self, request: Request) -> tuple[bool, int]:
+        """Check if request is within rate limit.
+
+        Returns:
+            tuple[bool, int]: (is_allowed, retry_after_seconds)
+        """
+        if self.requests_per_minute <= 0:
+            return True, 0
+
+        client_ip = self._get_client_ip(request)
+        key = f"ratelimit:search:{client_ip}"
+        now = time.time()
+        window_start = now - self.window_seconds
+
+        try:
+            pool = _get_redis_pool()
+            client = redis_lib.Redis(connection_pool=pool)
+
+            # Clean old entries and count current requests
+            pipe = client.pipeline()
+            pipe.zremrangebyscore(key, "-inf", window_start)
+            pipe.zcard(key)
+            results = pipe.execute()
+
+            request_count = results[1]  # zcard result
+
+            if request_count >= self.requests_per_minute:
+                oldest = client.zrange(key, 0, 0, withscores=True)
+                if oldest:
+                    oldest_timestamp = oldest[0][1]
+                    retry_after = int(oldest_timestamp + self.window_seconds - now) + 1
+                    return False, max(retry_after, 1)
+                return False, self.window_seconds
+
+            # Only record request after confirming it's allowed
+            member = f"{now}:{id(request)}"
+            pipe2 = client.pipeline()
+            pipe2.zadd(key, {member: now})
+            pipe2.expire(key, self.window_seconds)
+            pipe2.execute()
+
+            return True, 0
+
+        except (redis_lib.RedisError, OSError, ConnectionError) as exc:
+            logger.warning(
+                "rate_limit_redis_error",
+                extra={
+                    "error": str(exc),
+                    "client_ip": client_ip,
+                },
+            )
+            # Fail open: allow request if Redis is unavailable
+            return True, 0
+
+
+search_rate_limiter = RedisRateLimiter(requests_per_minute=settings.rate_limit_requests_per_minute)
+
+
 def build_params_or_400(**kwargs: Any) -> dict[str, Any]:
     try:
         return build_solr_params(**kwargs)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def check_search_rate_limit(request: Request) -> None:
+    """FastAPI dependency to check rate limit for search endpoint.
+
+    Raises:
+        HTTPException: 429 Too Many Requests if rate limit exceeded
+    """
+    allowed, retry_after = search_rate_limiter.check_rate_limit(request)
+    if not allowed:
+        logger.warning(
+            "rate_limit_exceeded",
+            extra={
+                "client_ip": search_rate_limiter._get_client_ip(request),
+                "path": request.url.path,
+                "retry_after": retry_after,
+            },
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
 
 
 if settings.cors_origins:
@@ -235,19 +388,28 @@ def query_solr(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_embedding(text: str) -> list[float]:
-    """Call the embeddings server; wrap errors as HTTP 502."""
+    """Call the embeddings server through the circuit breaker; wrap errors as HTTP 502/503/504."""
     try:
-        return get_query_embedding(settings.embeddings_url, text, settings.embeddings_timeout)
+        return embeddings_circuit.call(
+            get_query_embedding, settings.embeddings_url, text, settings.embeddings_timeout
+        )
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503, detail="Embeddings service temporarily unavailable — circuit breaker is open"
+        ) from exc
     except requests.Timeout as exc:
         raise HTTPException(status_code=504, detail="Timed out waiting for embeddings server") from exc
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail="Embeddings server request failed") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        raise HTTPException(status_code=502, detail=f"Embeddings server returned invalid response: {exc}") from exc
+    except Exception as exc:
+        logger.exception("Unexpected error fetching embedding")
+        raise HTTPException(status_code=502, detail="Unexpected error from embeddings server") from exc
 
 
 def _should_degrade_to_keyword(exc: HTTPException) -> bool:
-    return exc.status_code in {502, 504}
+    return exc.status_code in {502, 503, 504}
 
 
 def build_document_url(request: Request, file_path: str | None) -> str | None:
@@ -338,10 +500,11 @@ async def require_authentication(request: Request, call_next):
 def health() -> dict[str, Any]:
     redis_cb = redis_circuit.get_status()
     solr_cb = solr_circuit.get_status()
+    embeddings_cb = embeddings_circuit.get_status()
 
     if solr_cb["state"] == CircuitState.OPEN.value:
         overall = "unavailable"
-    elif redis_cb["state"] == CircuitState.OPEN.value:
+    elif redis_cb["state"] == CircuitState.OPEN.value or embeddings_cb["state"] == CircuitState.OPEN.value:
         overall = "degraded"
     else:
         overall = "ok"
@@ -353,6 +516,7 @@ def health() -> dict[str, Any]:
         "circuit_breakers": {
             "redis": redis_cb,
             "solr": solr_cb,
+            "embeddings": embeddings_cb,
         },
     }
 
@@ -376,7 +540,7 @@ def version() -> dict[str, str]:
 @app.post("/v1/auth/login/", include_in_schema=False, name="auth_login_v1_slash")
 @app.post("/v1/auth/login", name="auth_login_v1")
 def auth_login(credentials: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     if not login_rate_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
@@ -423,9 +587,118 @@ def auth_me(request: Request) -> dict[str, Any]:
     return _get_current_user(request).to_dict()
 
 
+@app.put("/v1/auth/change-password/", include_in_schema=False, name="auth_change_password_v1_slash")
+@app.put("/v1/auth/change-password", name="auth_change_password_v1")
+def auth_change_password(body: ChangePasswordRequest, request: Request) -> dict[str, str]:
+    """Change the current user's password."""
+    user = _get_current_user(request)
+
+    try:
+        change_password(settings.auth_db_path, user.id, body.current_password, body.new_password)
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        status = 404 if "User not found" in str(exc) else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+    return {"status": "password_changed"}
+
+
+# ---------------------------------------------------------------------------
+# User CRUD endpoints (v1.9.0)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/v1/auth/register/", include_in_schema=False, name="auth_register_v1_slash")
+@app.post("/v1/auth/register", include_in_schema=False, name="auth_register_v1")
+def auth_register(
+    body: RegisterRequest,
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> dict[str, Any]:
+    try:
+        return create_user(settings.auth_db_path, body.username, body.password, body.role)
+    except UserExistsError as exc:
+        raise HTTPException(status_code=409, detail="Username already exists") from exc
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/v1/auth/users/", include_in_schema=False, name="auth_list_users_v1_slash")
+@app.get("/v1/auth/users", include_in_schema=False, name="auth_list_users_v1")
+def auth_list_users(
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> list[dict[str, Any]]:
+    return list_users(settings.auth_db_path)
+
+
+@app.put("/v1/auth/users/{user_id}/", include_in_schema=False, name="auth_update_user_v1_slash")
+@app.put("/v1/auth/users/{user_id}", include_in_schema=False, name="auth_update_user_v1")
+def auth_update_user(
+    user_id: int,
+    body: UpdateUserRequest,
+    request: Request,
+) -> dict[str, Any]:
+    current_user = _get_current_user(request)
+    is_admin = current_user.role == "admin"
+
+    if not is_admin and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    if not is_admin and body.role is not None:
+        raise HTTPException(status_code=403, detail="Only admins can change roles")
+
+    target = get_user_by_id(settings.auth_db_path, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        updated = update_user(settings.auth_db_path, user_id, username=body.username, role=body.role)
+    except UserExistsError as exc:
+        raise HTTPException(status_code=409, detail="Username already taken") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="User not found")  # pragma: no cover
+    return updated
+
+
+@app.delete("/v1/auth/users/{user_id}/", include_in_schema=False, name="auth_delete_user_v1_slash")
+@app.delete("/v1/auth/users/{user_id}", include_in_schema=False, name="auth_delete_user_v1")
+def auth_delete_user(
+    user_id: int,
+    admin_user: Annotated[AuthenticatedUser, require_role("admin")],
+) -> dict[str, str]:
+    if admin_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    if not delete_user(settings.auth_db_path, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "deleted"}
+
+
 @app.get("/v1/search/", include_in_schema=False, name="search_v1")
 @app.get("/v1/search", include_in_schema=False, name="search_v1_no_slash")
-@app.get("/search")
+@app.get(
+    "/search",
+    responses={
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Rate limit exceeded. Please try again later."}
+                }
+            },
+            "headers": {
+                "Retry-After": {
+                    "description": "Number of seconds to wait before retrying",
+                    "schema": {"type": "integer"},
+                }
+            },
+        }
+    },
+)
 def search(
     request: Request,
     q: str = Query("", description="Keyword search. Empty values return all indexed books."),
@@ -444,6 +717,7 @@ def search(
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
         enum=list(VALID_SEARCH_MODES),
     ),
+    _rate_limit: None = Depends(check_search_rate_limit),
 ) -> dict[str, Any]:
     """Search for books.
 
@@ -453,6 +727,9 @@ def search(
 
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
+
+    **Rate Limit:** Configurable via ``RATE_LIMIT_REQUESTS_PER_MINUTE`` (default: 100).
+    Set to 0 to disable rate limiting (e.g., for E2E testing).
     """
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
@@ -546,8 +823,10 @@ def _search_semantic(
     Facets and highlights degrade to empty because the kNN query path does not
     produce Solr facet counts or highlight snippets.
     """
+    # Empty-query guard: semantic mode requires a non-empty string to generate
+    # an embedding vector.  Return 400 rather than silently returning no results.
     if not q.strip():
-        raise HTTPException(status_code=400, detail="Query must not be empty for semantic search")
+        raise HTTPException(status_code=400, detail="Query cannot be empty for semantic search")
 
     try:
         vector = _fetch_embedding(q)
@@ -608,8 +887,9 @@ def _search_hybrid(
     The RRF k constant is configurable via the ``RRF_K`` environment variable
     (default 60, per the original RRF paper).
     """
+    # Empty-query guard: hybrid mode needs an embedding for the kNN leg.
     if not q.strip():
-        raise HTTPException(status_code=400, detail="Query must not be empty for hybrid search")
+        raise HTTPException(status_code=400, detail="Query cannot be empty for hybrid search")
 
     candidate_limit = max(page_size * 2, 20)
 
@@ -947,6 +1227,42 @@ def _tcp_check(host: str, port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def _rabbitmq_management_check(
+    host: str,
+    management_port: int,
+    user: str,
+    password: str,
+    path_prefix: str = "/admin/rabbitmq",
+    timeout: float = 2.0,
+) -> bool:
+    """Check RabbitMQ via management HTTP API, falling back to AMQP TCP check."""
+    url = f"http://{host}:{management_port}{path_prefix}/api/health/checks/alarms"
+    try:
+        resp = requests.get(url, auth=(user, password), timeout=timeout)
+        return resp.status_code == 200
+    except (requests.RequestException, OSError) as exc:
+        logger.warning("RabbitMQ management check failed (%s), falling back to TCP probe", exc)
+        return _tcp_check(host, settings.rabbitmq_port)
+
+
+def _zookeeper_check(hosts_csv: str, timeout: float = 2.0) -> bool:
+    """Return True if at least one ZooKeeper node is reachable."""
+    for entry in hosts_csv.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.rsplit(":", 1)
+        host = parts[0]
+        try:
+            port = int(parts[1]) if len(parts) > 1 else 2181
+        except ValueError:
+            logger.warning("Skipping malformed ZooKeeper entry %r: invalid port", entry)
+            continue
+        if _tcp_check(host, port, timeout=timeout):
+            return True
+    return False
+
+
 def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
     """Query Solr CLUSTERSTATUS and return aggregated node/doc information."""
     cluster_url = f"{solr_url}/admin/collections"
@@ -1043,7 +1359,8 @@ def service_status() -> dict[str, Any]:
     Aggregates:
     - Solr CLUSTERSTATUS (node health + doc count)
     - Redis ``doc:*`` key scan (indexing state breakdown)
-    - TCP reachability checks for Solr, Redis, and RabbitMQ
+    - TCP reachability checks for Solr, Redis, and ZooKeeper
+    - RabbitMQ management HTTP API health check
     - Embeddings `/version` probe for semantic-search readiness
     """
     parsed = urlparse(settings.solr_url)
@@ -1055,7 +1372,13 @@ def service_status() -> dict[str, Any]:
 
     solr_up = _tcp_check(solr_host, solr_port)
     redis_up = _tcp_check(settings.redis_host, settings.redis_port)
-    rabbitmq_up = _tcp_check(settings.rabbitmq_host, settings.rabbitmq_port)
+    rabbitmq_up = _rabbitmq_management_check(
+        settings.rabbitmq_host,
+        settings.rabbitmq_management_port,
+        settings.rabbitmq_user,
+        settings.rabbitmq_pass,
+    )
+    zookeeper_up = _zookeeper_check(settings.zookeeper_hosts)
     embeddings_available = _embeddings_available(timeout=CONTAINER_VERSION_TIMEOUT)
 
     return {
@@ -1066,6 +1389,7 @@ def service_status() -> dict[str, Any]:
             "solr": "up" if solr_up else "down",
             "redis": "up" if redis_up else "down",
             "rabbitmq": "up" if rabbitmq_up else "down",
+            "zookeeper": "up" if zookeeper_up else "down",
             "embeddings": "up" if embeddings_available else "down",
         },
     }
@@ -1192,8 +1516,13 @@ def _get_solr_container_status() -> dict[str, str]:
     return _build_container_entry("solr", status, "infrastructure")
 
 
-@app.get("/v1/admin/containers/", include_in_schema=False, name="admin_containers_v1_slash")
-@app.get("/v1/admin/containers", name="admin_containers_v1")
+@app.get(
+    "/v1/admin/containers/",
+    include_in_schema=False,
+    name="admin_containers_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get("/v1/admin/containers", name="admin_containers_v1", dependencies=[Depends(require_admin_auth)])
 def admin_containers() -> dict[str, Any]:
     """Return a combined version/health snapshot for app and infrastructure containers."""
     checks = [
@@ -1205,14 +1534,6 @@ def admin_containers() -> dict[str, Any]:
             settings.commit,
         ),
         lambda: _get_http_container_status("embeddings-server", _get_embeddings_version_url()),
-        lambda: _get_tcp_container_status(
-            "streamlit-admin",
-            "streamlit-admin",
-            8501,
-            "service",
-            settings.version,
-            settings.commit,
-        ),
         lambda: _get_tcp_container_status(
             "aithena-ui",
             "aithena-ui",
@@ -1373,8 +1694,13 @@ def _delete_admin_key(redis_key: str) -> bool:
         raise HTTPException(status_code=503, detail="Cannot connect to Redis") from exc
 
 
-@app.get("/v1/admin/documents/", include_in_schema=False, name="admin_documents_v1_slash")
-@app.get("/v1/admin/documents", name="admin_documents_v1")
+@app.get(
+    "/v1/admin/documents/",
+    include_in_schema=False,
+    name="admin_documents_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get("/v1/admin/documents", name="admin_documents_v1", dependencies=[Depends(require_admin_auth)])
 def admin_list_documents(
     status: Annotated[
         DocumentStatus | None,
@@ -1394,7 +1720,11 @@ def admin_list_documents(
     return _load_admin_documents(status_filter=status)
 
 
-@app.post("/v1/admin/documents/requeue-failed", name="admin_requeue_failed_v1")
+@app.post(
+    "/v1/admin/documents/requeue-failed",
+    name="admin_requeue_failed_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
 def admin_requeue_failed() -> dict[str, Any]:
     """Requeue all failed documents by deleting their Redis tracking entries.
 
@@ -1412,7 +1742,11 @@ def admin_requeue_failed() -> dict[str, Any]:
     return {"requeued": len(requeued_ids), "ids": requeued_ids}
 
 
-@app.delete("/v1/admin/documents/processed", name="admin_clear_processed_v1")
+@app.delete(
+    "/v1/admin/documents/processed",
+    name="admin_clear_processed_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
 def admin_clear_processed() -> dict[str, Any]:
     """Clear all processed document entries from Redis.
 
@@ -1430,7 +1764,11 @@ def admin_clear_processed() -> dict[str, Any]:
     return {"cleared": cleared}
 
 
-@app.post("/v1/admin/documents/{doc_id}/requeue", name="admin_requeue_document_v1")
+@app.post(
+    "/v1/admin/documents/{doc_id}/requeue",
+    name="admin_requeue_document_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
 def admin_requeue_document(doc_id: str) -> dict[str, Any]:
     """Requeue a single document identified by its opaque ``doc_id`` token.
 
@@ -1489,9 +1827,13 @@ def _compute_upload_id(file_path: Path) -> str:
 
 def _publish_to_queue(file_path: Path) -> None:
     """Publish file path to RabbitMQ queue for indexing (per-request connection)."""
+    connection = None
     try:
+        credentials = pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_pass)
         connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host=settings.rabbitmq_host, port=settings.rabbitmq_port)
+            pika.ConnectionParameters(
+                host=settings.rabbitmq_host, port=settings.rabbitmq_port, credentials=credentials
+            )
         )
         channel = connection.channel()
         channel.queue_declare(queue=settings.rabbitmq_queue_name, durable=True, auto_delete=False)
@@ -1501,12 +1843,14 @@ def _publish_to_queue(file_path: Path) -> None:
             body=str(file_path),
             properties=pika.BasicProperties(delivery_mode=2),
         )
-        connection.close()
     except pika.exceptions.AMQPError as exc:
         raise HTTPException(status_code=502, detail="Failed to enqueue document for indexing") from exc
+    finally:
+        if connection and not connection.is_closed:
+            connection.close()
 
 
-@app.post("/v1/upload", name="upload_pdf")
+@app.post("/v1/upload", name="upload_pdf", dependencies=[require_role("admin", "user")])
 async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
     """Upload a PDF document for indexing.
 

@@ -1,0 +1,491 @@
+name: Pre-release Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: 'Milestone to validate (e.g. v1.8.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pre-release-validation
+  cancel-in-progress: false
+
+jobs:
+  build-and-test:
+    name: Build, test, and analyze logs
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      analyzer-exit-code: ${{ steps.analyze.outputs.exit_code }}
+      findings-json: ${{ steps.analyze.outputs.findings_file }}
+      has-errors: ${{ steps.analyze.outputs.has_errors }}
+      has-warnings: ${{ steps.analyze.outputs.has_warnings }}
+    env:
+      E2E_LIBRARY_PATH: /tmp/aithena-e2e-library
+      CI_ADMIN_USERNAME: ci-admin
+      CI_ADMIN_PASSWORD: ci-password-ChangeMe123!
+      BASE_URL: http://localhost
+      FALLBACK_BASE_URL: http://localhost
+      SEARCH_API_URL: http://localhost:8080
+      SOLR_URL: http://localhost:8983/solr/books
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: e2e/playwright/package-lock.json
+
+      - name: Bootstrap CI auth + compose overrides
+        run: |
+          mkdir -p "$E2E_LIBRARY_PATH"
+          mkdir -p "$RUNNER_TEMP/aithena-auth"
+
+          uv run --project src/solr-search python -m installer \
+            --library-path "$E2E_LIBRARY_PATH" \
+            --admin-user "$CI_ADMIN_USERNAME" \
+            --admin-password "$CI_ADMIN_PASSWORD" \
+            --origin "http://localhost" \
+            --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
+            --reset
+
+          cat > docker-compose.github-actions.yml <<'EOF'
+          volumes:
+            rabbitmq-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            certbot-data-conf:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            certbot-data-www:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            redis-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            solr-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
+            solr-data2:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
+            solr-data3:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
+            zoo-data1_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data2_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data2_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data2_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data3_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data3_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data3_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-backup:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+          EOF
+
+      - name: Generate sample PDF fixtures
+        run: |
+          python3 e2e/create-sample-docs.py "$E2E_LIBRARY_PATH"
+          find "$E2E_LIBRARY_PATH" -maxdepth 2 -type f -name '*.pdf' -printf '%P\n' | sort
+
+      - name: Validate merged Docker Compose config
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            --profile production \
+            config >/dev/null
+
+      - name: Build all container images
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            --profile production \
+            build
+
+      - name: Start full stack
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            --profile production \
+            up -d
+
+      - name: Wait for services to become healthy
+        run: |
+          wait_for_url() {
+            local url="$1"
+            local label="$2"
+            local attempts="${3:-60}"
+            local sleep_seconds="${4:-5}"
+
+            for ((attempt=1; attempt<=attempts; attempt+=1)); do
+              if curl --fail --silent --show-error "$url" >/dev/null; then
+                echo "$label is ready ($url)"
+                return 0
+              fi
+
+              echo "[$attempt/$attempts] Waiting for $label at $url"
+              sleep "$sleep_seconds"
+            done
+
+            echo "$label did not become ready in time ($url)" >&2
+            return 1
+          }
+
+          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr"
+          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection"
+          wait_for_url "http://localhost:8080/health" "solr-search API"
+          wait_for_url "http://localhost/health" "nginx"
+          wait_for_url "http://localhost/search" "Aithena UI"
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            --profile production \
+            ps
+
+      - name: Install Python E2E dependencies
+        working-directory: e2e
+        run: pip install -r requirements.txt
+
+      - name: Run Python E2E tests
+        working-directory: e2e
+        run: pytest -v --junitxml=pytest-results.xml
+
+      - name: Install Playwright dependencies
+        working-directory: e2e/playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright browser tests
+        working-directory: e2e/playwright
+        env:
+          E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
+          E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
+        run: |
+          export E2E_AUTH_COOKIE_NAME=aithena_auth
+          export E2E_API_TOKEN="$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$(python3 -c 'import json, os; print(json.dumps({"username": os.environ["E2E_USERNAME"], "password": os.environ["E2E_PASSWORD"]}))')" \
+            http://localhost/v1/auth/login | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')"
+          npx playwright test
+
+      - name: Gather Docker Compose logs
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            --profile production \
+            logs --no-color > "$RUNNER_TEMP/compose-logs.txt" 2>&1
+
+      - name: Run pre-release log analyzer
+        if: always()
+        id: analyze
+        run: |
+          set +e
+          sh e2e/pre-release-check.sh \
+            --version-file ./VERSION \
+            "$RUNNER_TEMP/compose-logs.txt" \
+            > "$RUNNER_TEMP/findings.json" 2>"$RUNNER_TEMP/analyzer-summary.txt"
+          EXIT_CODE=$?
+          set -e
+
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "findings_file=$RUNNER_TEMP/findings.json" >> "$GITHUB_OUTPUT"
+
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "has_errors=true" >> "$GITHUB_OUTPUT"
+            echo "has_warnings=false" >> "$GITHUB_OUTPUT"
+          elif [ "$EXIT_CODE" -eq 2 ]; then
+            echo "has_errors=false" >> "$GITHUB_OUTPUT"
+            echo "has_warnings=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_errors=false" >> "$GITHUB_OUTPUT"
+            echo "has_warnings=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "::group::Analyzer summary"
+          cat "$RUNNER_TEMP/analyzer-summary.txt"
+          echo "::endgroup::"
+
+          echo "::group::Findings JSON"
+          cat "$RUNNER_TEMP/findings.json"
+          echo "::endgroup::"
+
+      - name: Upload findings and logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: pre-release-validation
+          path: |
+            ${{ runner.temp }}/findings.json
+            ${{ runner.temp }}/compose-logs.txt
+            ${{ runner.temp }}/analyzer-summary.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: pre-release-e2e-results
+          path: |
+            e2e/pytest-results.xml
+            e2e/playwright/playwright-report
+            e2e/playwright/test-results
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Tear down integration stack
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.yml \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            --profile production \
+            down -v --remove-orphans
+          rm -f docker-compose.github-actions.yml
+
+  create-issues:
+    name: Create issues for findings
+    needs: build-and-test
+    if: always() && (needs.build-and-test.result == 'failure' || needs.build-and-test.outputs.has_errors == 'true' || needs.build-and-test.outputs.has_warnings == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download findings artifact
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4.2.2
+        with:
+          name: pre-release-validation
+          path: ${{ runner.temp }}/validation
+
+      - name: Create failure issue
+        if: needs.build-and-test.result == 'failure' || needs.build-and-test.outputs.has_errors == 'true'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          MILESTONE: ${{ inputs.milestone }}
+        with:
+          script: |
+            const fs = require('fs');
+            const milestone = process.env.MILESTONE;
+
+            let findingsText = 'No findings file available.';
+            const findingsPath = '${{ runner.temp }}/validation/findings.json';
+            try {
+              const raw = fs.readFileSync(findingsPath, 'utf8');
+              const findings = JSON.parse(raw);
+              const errors = findings.filter(f => f.severity === 'error');
+              const warnings = findings.filter(f => f.severity === 'warning');
+
+              findingsText = `### Error findings (${errors.length})\n\n`;
+              if (errors.length > 0) {
+                findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
+                for (const f of errors.slice(0, 50)) {
+                  const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                  findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
+                }
+              }
+
+              findingsText += `\n### Warning findings (${warnings.length})\n\n`;
+              if (warnings.length > 0) {
+                findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
+                for (const f of warnings.slice(0, 50)) {
+                  const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                  findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
+                }
+              }
+            } catch (e) {
+              findingsText = `Failed to read findings: ${e.message}`;
+            }
+
+            // Find milestone by title
+            let milestoneNumber = null;
+            try {
+              const milestones = await github.rest.issues.listMilestones({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+              });
+              const match = milestones.data.find(m => m.title === milestone);
+              if (match) milestoneNumber = match.number;
+            } catch (e) {
+              core.warning(`Could not find milestone: ${e.message}`);
+            }
+
+            const body = [
+              `## Pre-release validation failed for ${milestone}`,
+              '',
+              `**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `**Triggered by:** ${context.actor}`,
+              '',
+              findingsText,
+              '',
+              '---',
+              '_Created automatically by pre-release-validation workflow._',
+            ].join('\n');
+
+            const issueParams = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Pre-release validation failed for ${milestone}`,
+              body: body,
+              labels: ['squad', 'squad:brett'],
+            };
+            if (milestoneNumber) issueParams.milestone = milestoneNumber;
+
+            await github.rest.issues.create(issueParams);
+
+      - name: Create warning issues by category
+        if: needs.build-and-test.outputs.has_errors != 'true' && needs.build-and-test.outputs.has_warnings == 'true'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          MILESTONE: ${{ inputs.milestone }}
+        with:
+          script: |
+            const fs = require('fs');
+            const milestone = process.env.MILESTONE;
+
+            const findingsPath = '${{ runner.temp }}/validation/findings.json';
+            let findings;
+            try {
+              findings = JSON.parse(fs.readFileSync(findingsPath, 'utf8'));
+            } catch (e) {
+              core.setFailed(`Cannot read findings: ${e.message}`);
+              return;
+            }
+
+            const warnings = findings.filter(f => f.severity === 'warning' || f.severity === 'info');
+            if (warnings.length === 0) return;
+
+            // Category → squad label mapping
+            const categoryLabels = {
+              crash: 'squad:kane',
+              security: 'squad:kane',
+              deprecation: 'squad:brett',
+              dependency: 'squad:brett',
+              slow_startup: 'squad:brett',
+              memory: 'squad:brett',
+              connection: 'squad:parker',
+              config: 'squad:brett',
+              version: 'squad:brett',
+            };
+
+            // Find milestone by title
+            let milestoneNumber = null;
+            try {
+              const milestones = await github.rest.issues.listMilestones({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+              });
+              const match = milestones.data.find(m => m.title === milestone);
+              if (match) milestoneNumber = match.number;
+            } catch (e) {
+              core.warning(`Could not find milestone: ${e.message}`);
+            }
+
+            // Group warnings by category
+            const grouped = {};
+            for (const f of warnings) {
+              if (!grouped[f.category]) grouped[f.category] = [];
+              grouped[f.category].push(f);
+            }
+
+            for (const [category, items] of Object.entries(grouped)) {
+              let table = '| Service | Severity | Message | Line |\n|---|---|---|---|\n';
+              for (const f of items.slice(0, 30)) {
+                const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                table += `| ${f.service} | ${f.severity} | ${msg} | ${f.line} |\n`;
+              }
+              if (items.length > 30) {
+                table += `\n_... and ${items.length - 30} more findings._\n`;
+              }
+
+              const squadLabel = categoryLabels[category] || 'squad:brett';
+              const body = [
+                `## Pre-release warning: ${category} (${milestone})`,
+                '',
+                `**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                `**Category:** ${category}`,
+                `**Finding count:** ${items.length}`,
+                '',
+                table,
+                '',
+                '---',
+                '_Created automatically by pre-release-validation workflow._',
+              ].join('\n');
+
+              const issueParams = {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Pre-release ${category} warnings for ${milestone}`,
+                body: body,
+                labels: ['squad', squadLabel],
+              };
+              if (milestoneNumber) issueParams.milestone = milestoneNumber;
+
+              await github.rest.issues.create(issueParams);
+              core.info(`Created issue for category: ${category} (${items.length} findings)`);
+            }

@@ -239,7 +239,9 @@ jobs:
 
       - name: Run Python E2E tests
         working-directory: e2e
-        run: pytest -v --junitxml=pytest-results.xml
+        run: |
+          export ADMIN_API_KEY=$(grep '^ADMIN_API_KEY=' ../.env | cut -d= -f2)
+          pytest -v --junitxml=pytest-results.xml
 
       - name: Install Playwright dependencies
         working-directory: e2e/playwright
@@ -279,6 +281,25 @@ jobs:
             e2e/playwright/test-results
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Extract release screenshots
+        if: always()
+        env:
+          STAGING_DIR: /tmp/release-screenshots
+        run: |
+          mkdir -p "$STAGING_DIR"
+          find e2e/playwright/test-results -name '*.png' -type f -exec cp {} "$STAGING_DIR/" \; 2>/dev/null || true
+          echo "Release screenshots staged:"
+          ls -la "$STAGING_DIR/" 2>/dev/null || echo "No screenshots found"
+
+      - name: Upload release screenshots
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: release-screenshots
+          path: /tmp/release-screenshots/
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Dump Compose logs on failure
         if: failure()

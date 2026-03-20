@@ -59,6 +59,14 @@ class Settings:
     cb_redis_recovery_timeout: float
     cb_solr_failure_threshold: int
     cb_solr_recovery_timeout: float
+    cb_embeddings_failure_threshold: int
+    cb_embeddings_recovery_timeout: float
+    admin_api_key: str | None
+    rate_limit_requests_per_minute: int
+    rabbitmq_management_port: int
+    zookeeper_hosts: str
+    auth_default_admin_username: str
+    auth_default_admin_password: str | None
 
     @property
     def select_url(self) -> str:
@@ -100,8 +108,8 @@ settings = Settings(
     redis_queue_name=os.environ.get("REDIS_QUEUE_NAME", os.environ.get("QUEUE_NAME", "shortembeddings")),
     rabbitmq_host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
     rabbitmq_port=int(os.environ.get("RABBITMQ_PORT", "5672")),
-    rabbitmq_user=os.environ.get("RABBITMQ_USER", "guest"),
-    rabbitmq_pass=os.environ.get("RABBITMQ_PASS", "guest"),
+    rabbitmq_user=os.environ.get("RABBITMQ_USER", ""),
+    rabbitmq_pass=os.environ.get("RABBITMQ_PASS", ""),
     upload_dir=Path(os.environ.get("UPLOAD_DIR", "/data/documents/uploads")).resolve(),
     max_upload_size_mb=int(os.environ.get("MAX_UPLOAD_SIZE_MB", "50")),
     rabbitmq_queue_name=os.environ.get("RABBITMQ_QUEUE_NAME", "shortembeddings"),
@@ -113,4 +121,12 @@ settings = Settings(
     cb_redis_recovery_timeout=float(os.environ.get("CB_REDIS_RECOVERY_TIMEOUT", "30")),
     cb_solr_failure_threshold=int(os.environ.get("CB_SOLR_FAILURE_THRESHOLD", "5")),
     cb_solr_recovery_timeout=float(os.environ.get("CB_SOLR_RECOVERY_TIMEOUT", "30")),
+    cb_embeddings_failure_threshold=int(os.environ.get("CB_EMBEDDINGS_FAILURE_THRESHOLD", "3")),
+    cb_embeddings_recovery_timeout=float(os.environ.get("CB_EMBEDDINGS_RECOVERY_TIMEOUT", "30")),
+    admin_api_key=os.environ.get("ADMIN_API_KEY") or None,
+    rate_limit_requests_per_minute=int(os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE", "100")),
+    rabbitmq_management_port=int(os.environ.get("RABBITMQ_MANAGEMENT_PORT", "15672")),
+    zookeeper_hosts=os.environ.get("ZOOKEEPER_HOSTS", "zoo1:2181"),
+    auth_default_admin_username=os.environ.get("AUTH_DEFAULT_ADMIN_USERNAME", "admin").strip() or "admin",
+    auth_default_admin_password=os.environ.get("AUTH_DEFAULT_ADMIN_PASSWORD") or None,
 )

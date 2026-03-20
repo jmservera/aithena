@@ -2,9 +2,9 @@
 
 A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
-**Current Release:** v1.0.0 ✅ — Production-ready with authentication, PDF upload, admin dashboard, and security hardening.  
-**Development:** v1.x milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
-**[View v1.x Milestones](https://github.com/jmservera/aithena/milestones)** | **[v1.0.0 Release Notes](docs/release-notes-v1.0.0.md)**
+**Current Release:** v1.9.1 — Docker build fix for aithena-ui.  
+**Development:** v1.10.0 milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
+**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v1.9.1.md)**
 
 ## What It Does
 
@@ -88,26 +88,68 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 ## Documentation
 
-- [v1.0.0 Release Notes](docs/release-notes-v1.0.0.md)
-- [v1.0.0 Test Report](docs/test-report-v1.0.0.md)
+### Guides
+
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
-- [Deployment sizing guide](docs/deployment/sizing-guide.md)
-- [v0.12.0 Release Notes](docs/release-notes-v0.12.0.md)
-- [v0.12.0 Test Report](docs/test-report-v0.12.0.md)
+- [Deployment Sizing Guide](docs/deployment/sizing-guide.md)
+- [i18n Contributor Guide](docs/guides/i18n-guide.md)
+- [Security Baseline](docs/security/baseline-v0.6.0.md)
+
+### Release Notes (newest first)
+
+- [v1.9.1 Release Notes](docs/release-notes/v1.9.1.md)
+- [v1.9.0 Release Notes](docs/release-notes/v1.9.0.md)
+- [v1.8.2 Release Notes](docs/release-notes/v1.8.2.md)
+- [v1.8.1 Release Notes](docs/release-notes/v1.8.1.md)
+- [v1.8.0 Release Notes](docs/release-notes/v1.8.0.md)
+- [v1.7.0 Release Notes](docs/release-notes/v1.7.0.md)
+- [v1.6.0 Release Notes](docs/release-notes/v1.6.0.md)
+- [v1.5.0 Release Notes](docs/release-notes/v1.5.0.md)
+- [v1.4.0 Release Notes](docs/release-notes/v1.4.0.md)
+- [v1.3.0 Release Notes](docs/release-notes/v1.3.0.md)
+- [v1.2.0 Release Notes](docs/release-notes/v1.2.0.md)
+- [v1.1.0 Release Notes](docs/release-notes/v1.1.0.md)
+- [v1.0.1 Release Notes](docs/release-notes/v1.0.1.md)
+- [v1.0.0 Release Notes](docs/release-notes/v1.0.0.md)
+- [v0.12.0 Release Notes](docs/release-notes/v0.12.0.md)
+- [v0.11.0 Release Notes](docs/release-notes/v0.11.0.md)
+- [v0.10.0 Release Notes](docs/release-notes/v0.10.0.md)
+
+### Test Reports (newest first)
+
+- [v1.8.1 Test Report](docs/test-reports/v1.8.1.md)
+- [v1.8.0 Test Report](docs/test-reports/v1.8.0.md)
+- [v1.7.0 Test Report](docs/test-reports/v1.7.0.md)
+- [v1.6.0 Test Report](docs/test-reports/v1.6.0.md)
+- [v1.5.0 Test Report](docs/test-reports/v1.5.0.md)
+- [v1.4.0 Test Report](docs/test-reports/v1.4.0.md)
+- [v1.3.0 Test Report](docs/test-reports/v1.3.0.md)
+- [v1.2.0 Test Report](docs/test-reports/v1.2.0.md)
+- [v1.0.0 Test Report](docs/test-reports/v1.0.0.md)
+- [v0.12.0 Test Report](docs/test-reports/v0.12.0.md)
+- [v0.11.0 Test Report](docs/test-reports/v0.11.0.md)
+- [v0.10.0 Test Report](docs/test-reports/v0.10.0.md)
+
+### Feature Guides
+
 - [v0.11.0 Feature Guide](docs/features/v0.11.0.md)
-- [v0.11.0 Release Notes](docs/release-notes-v0.11.0.md)
-- [v0.11.0 Test Report](docs/test-report-v0.11.0.md)
-- [v0.10.0 Release Notes](docs/release-notes-v0.10.0.md)
-- [v0.10.0 Test Report](docs/test-report-v0.10.0.md)
 - [v0.7.0 Feature Guide](docs/features/v0.7.0.md)
 - [v0.6.0 Feature Guide](docs/features/v0.6.0.md)
 - [v0.5.0 Feature Guide](docs/features/v0.5.0.md)
 - [v0.4.0 Feature Guide](docs/features/v0.4.0.md)
-- [Security Baseline](docs/security/baseline-v0.6.0.md)
-- [v0.7.0 Test Report](docs/test-report-v0.7.0.md)
-- [v0.6.0 Test Report](docs/test-report-v0.6.0.md)
-- [v0.5.0 Test Report](docs/test-report-v0.5.0.md)
+
+## Roadmap
+
+| Milestone | Theme | Status |
+|-----------|-------|--------|
+| [v1.8.0](https://github.com/jmservera/aithena/milestone/22) | UI/UX improvements, design system | Complete |
+| [v1.8.1](https://github.com/jmservera/aithena/milestone/24) | Bug fixes (search, stats, i18n, admin) | Complete |
+| [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Streamlit retirement, infra UI links | Complete |
+| [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | Complete |
+| [v1.9.1](https://github.com/jmservera/aithena/milestone/28) | Docker build fix | Complete |
+| [v1.10.0](https://github.com/jmservera/aithena/milestone/26) | User collections, metadata editing | Planned |
+| [v1.10.1](https://github.com/jmservera/aithena/milestone/27) | BCDR backup/restore | Planned |
 
 ## Architecture
 
@@ -123,8 +165,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 | **Document Indexer** | Consumes queue, extracts metadata, uploads to Solr | Python service with configurable path heuristics |
 | **Solr Search API** | FastAPI wrapper around the `books` collection | Normalized results, facets, highlights, PDF document URLs |
 | **Embeddings Server** | Semantic search vectors (Phase 3+) | `distiluse-base-multilingual-cased-v2` |
-| **Streamlit Admin UI** | Basic document management & monitoring | `/admin/streamlit/` via nginx |
-| **React/Vite Frontend** | Search UI with faceting | `/` via nginx |
+| **React/Vite Frontend** | Search UI with faceting, document management | `/` via nginx |
 | **nginx + Certbot** | Reverse proxy, TLS termination, admin entry point | Production-ready |
 
 ### Data Flow
@@ -204,7 +245,6 @@ Once `solr-init` completes:
 | RabbitMQ Admin | http://localhost/admin/rabbitmq/ | Monitor queue depth through the management UI |
 | Redis Commander | http://localhost/admin/redis/ | Inspect Redis state through a lightweight web UI |
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
-| Streamlit Admin | http://localhost/admin/streamlit/ | Document management dashboard |
 
 When `docker compose up` loads `docker-compose.override.yml` (the default local workflow), these direct debug ports are also available:
 
@@ -215,7 +255,6 @@ When `docker compose up` loads `docker-compose.override.yml` (the default local 
 | rabbitmq | `5672`, `15672` | AMQP clients and direct management UI |
 | redis | `6379` | Redis CLI and direct state inspection |
 | redis-commander | `8081` | Direct Redis Commander UI |
-| streamlit-admin | `8501` | Direct Streamlit debugging |
 | zoo1 / zoo2 / zoo3 | `18080`, `2181`, `2182`, `2183` | ZooKeeper AdminServer and node client ports |
 | embeddings-server | `8085` | Embeddings API debugging / local external tools |
 

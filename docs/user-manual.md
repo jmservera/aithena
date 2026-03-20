@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.4.0 Release Notes](release-notes-v1.4.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.9.1 Release Notes](release-notes/v1.9.1.md).
 
 ## Getting started
 
@@ -38,13 +38,46 @@ With the v0.11.0 auth flow enabled, visiting protected pages redirects you to `/
 3. Submit the login form.
 4. After login, Aithena keeps your browser session active and automatically attaches auth to protected requests until you log out or the session expires.
 
+![Aithena login page](images/login-page.png)
+
+<!-- TODO: capture screenshot -->
+
+### Reset your password
+
+If you forget your password, an administrator can reset it using the CLI tool:
+
+```bash
+# From the project root — generates a new random password and prints it
+cd src/solr-search
+uv run python reset_password.py --db-path /data/auth/users.db
+
+# Or set a specific password
+uv run python reset_password.py --db-path /data/auth/users.db --password "your-new-password"
+
+# Reset a specific user (default is "admin")
+uv run python reset_password.py --db-path /data/auth/users.db --username myuser --password "new-pass"
+```
+
+On a local dev machine, the database is typically at `~/.local/share/aithena/auth/users.db`. In Docker, it's at `/data/auth/users.db` inside the `solr-search` container.
+
+To reset the password inside a running container:
+
+```bash
+docker compose exec solr-search python reset_password.py
+```
+
+The tool generates a secure 32-character random password if `--password` is omitted, and prints it to stdout.
+
+
 ![Aithena tab navigation](images/tab-navigation.png)
 
 ## Searching for books
 
 The **Search** tab is the main place to work.
 
-![Search page](images/search-page.png)
+*New in v1.8.1:* All text on this page, including labels, buttons, and placeholders, is now fully translated. The page automatically displays in your selected language.
+
+![Search page before querying](images/search-page.png)
 
 ### Run a search
 
@@ -131,7 +164,7 @@ The URL encodes:
 - current page number
 - results per page (10, 20, or 50)
 
-
+![Search results with book cards](images/search-results.png)
 
 Facet filters appear in the left sidebar.
 
@@ -158,13 +191,13 @@ You can filter by:
 - Changing a filter refreshes the results immediately.
 - When you change a filter, the result list returns to page 1.
 
-![Search results](images/search-results.png)
-
-![Facet panel](images/facet-panel.png)
+![Filtered search results](images/facet-panel.png)
 
 ## Viewing PDFs
 
 When a result includes an attached document link, you can open the PDF directly from the result card.
+
+*New in v1.8.1:* All text on this page, including labels and buttons, is now fully translated to your selected language.
 
 ### Open a PDF
 
@@ -174,7 +207,7 @@ When a result includes an attached document link, you can open the PDF directly 
 
 The document opens in an overlay viewer without leaving the search page.
 
-![PDF viewer](images/pdf-viewer.png)
+![PDF viewer with document open](images/pdf-viewer.png)
 
 ### Page navigation from search results
 
@@ -213,6 +246,11 @@ The **Similar Books** panel appears after you open a book from the search result
 
 Click any similar-book card to replace the currently selected PDF with that recommendation. This makes it easy to explore related titles without starting a new search from scratch.
 
+![Similar Books recommendations](images/similar-books.png)
+
+<!-- TODO: capture screenshot -->
+
+
 ## Understanding the Status tab
 
 The **Status** tab is a quick health dashboard.
@@ -231,14 +269,18 @@ This section shows:
 This section shows whether key services are reachable:
 
 - **Solr** — search engine health, node count, and indexed document count
-- **Redis** — indexing state store
+- **ZooKeeper** — coordination service for search nodes
 - **RabbitMQ** — queue service used by the ingestion pipeline
+- **Redis** — indexing state store
+- **embeddings-server** — semantic search backend
+
+*New in v1.8.1:* The Status tab now reports all critical services, including previously missing services like ZooKeeper and embeddings-server.
 
 ### Auto-refresh
 
 The Status tab refreshes automatically every **10 seconds**, so it is the best place to watch the system during imports or after operational changes.
 
-![Status tab](images/status-tab.png)
+![System status page](images/status-tab.png)
 
 ## Understanding the Stats tab
 
@@ -271,7 +313,7 @@ The page also shows counts grouped by:
 
 The Stats tab loads when you open it. If new books have been indexed since the page was opened, refresh the browser page to load the latest totals.
 
-![Stats tab](images/stats-tab.png)
+![Collection statistics](images/stats-tab.png)
 
 ## Using the Admin tab
 
@@ -287,10 +329,17 @@ The embedded Streamlit dashboard currently includes:
 
 ### What to expect
 
-- The Admin tab loads `/admin/streamlit/` inside the app rather than sending you to a different product.
+- The Admin tab loads `/admin/` inside the app rather than sending you to a different product.
 - It is mainly intended for operators and library administrators, not day-to-day readers.
 - The admin dashboard now requires an authenticated session; if your session expires, Aithena redirects you back to `/login`.
 - If the dashboard cannot load after you sign in, contact your administrator to confirm the admin services are running and your account has been provisioned correctly.
+
+*New in v1.8.1:* The admin dashboard login issue has been fixed. You should now be able to access it without being stuck in a login loop.
+
+![Admin dashboard](images/admin-dashboard.png)
+
+<!-- TODO: capture screenshot -->
+
 
 ## Uploading PDFs (v0.6.0+)
 
@@ -303,12 +352,18 @@ The **Upload** tab lets authenticated users add PDFs to the library without dire
 3. Watch the real-time progress bar as the file transfers.
 4. When the upload completes, you'll see a success message.
 
+![PDF upload page](images/upload-page.png)
+
+<!-- TODO: capture screenshot -->
+
 ### What happens after upload
 
 - Your PDF is placed in the library staging area.
 - The indexer picks it up on the next scan cycle (usually within seconds to minutes depending on queue size).
 - Once indexed, the document appears in search results.
 - If indexing fails, check the Admin tab to see failed documents.
+
+*New in v1.8.1:* The Upload page now displays all instructions and status messages in your selected language. No more English-only UI text.
 
 ### Upload limits
 
@@ -331,11 +386,13 @@ The Aithena version appears in the footer of the web app as a small version badg
 
 ### What the version means
 
-The version (e.g., **v0.7.0**) tells you which release you are running. This is useful when:
+The version (e.g., **v1.8.1**) tells you which release you are running. This is useful when:
 
 - **Troubleshooting:** Knowing the version helps you search documentation for known issues.
-- **Feature confirmation:** New features appear only in version 0.6.0 and later (e.g., PDF upload).
+- **Feature confirmation:** New features appear only in specific versions (e.g., PDF upload in v0.6.0 and later).
 - **Support:** When contacting support, mention your version and the commit hash shown in the tooltip.
+
+*New in v1.8.1:* The version now always matches the shipped release value, even after updates. Earlier versions sometimes showed stale version numbers.
 
 ### How to find the version
 

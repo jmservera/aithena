@@ -1,5 +1,6 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
+import { Database, Rabbit, ExternalLink } from 'lucide-react';
 import { useAdmin, AdminDocument } from '../hooks/admin';
 
 type TabKey = 'queued' | 'processed' | 'failed';
@@ -38,8 +39,8 @@ function QueuedTable({ docs }: QueuedTableProps) {
       <table className="admin-table">
         <thead>
           <tr>
-            <th>{intl.formatMessage({ id: 'admin.queued.headerPath' })}</th>
-            <th>{intl.formatMessage({ id: 'admin.queued.headerQueuedAt' })}</th>
+            <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerPath' })}</th>
+            <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerQueuedAt' })}</th>
           </tr>
         </thead>
         <tbody>
@@ -115,11 +116,11 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerPath' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerTitle' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerAuthor' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerYear' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.processed.headerIndexedAt' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerPath' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerTitle' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerAuthor' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerYear' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.processed.headerIndexedAt' })}</th>
             </tr>
           </thead>
           <tbody>
@@ -171,10 +172,10 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
         <table className="admin-table">
           <thead>
             <tr>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerPath' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerError' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerFailedAt' })}</th>
-              <th>{intl.formatMessage({ id: 'admin.failed.headerAction' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerPath' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerError' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerFailedAt' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.failed.headerAction' })}</th>
             </tr>
           </thead>
           <tbody>
@@ -205,6 +206,55 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
         </table>
       </div>
     </>
+  );
+}
+
+const INFRA_LINKS = [
+  {
+    labelId: 'admin.infra.solr',
+    descriptionId: 'admin.infra.solrDescription',
+    href: '/admin/solr/',
+    Icon: Database,
+  },
+  {
+    labelId: 'admin.infra.rabbitmq',
+    descriptionId: 'admin.infra.rabbitmqDescription',
+    href: '/admin/rabbitmq/',
+    Icon: Rabbit,
+  },
+];
+
+function InfrastructureLinks() {
+  const intl = useIntl();
+  return (
+    <section
+      className="admin-infra"
+      aria-label={intl.formatMessage({ id: 'admin.infra.sectionAria' })}
+    >
+      <h3 className="admin-infra-heading">{intl.formatMessage({ id: 'admin.infra.heading' })}</h3>
+      <div className="admin-infra-cards">
+        {INFRA_LINKS.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="admin-infra-card"
+          >
+            <link.Icon size={24} aria-hidden="true" />
+            <div className="admin-infra-card-text">
+              <span className="admin-infra-card-label">
+                {intl.formatMessage({ id: link.labelId })}
+              </span>
+              <span className="admin-infra-card-desc">
+                {intl.formatMessage({ id: link.descriptionId })}
+              </span>
+            </div>
+            <ExternalLink size={14} aria-hidden="true" className="admin-infra-card-ext" />
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -348,6 +398,8 @@ function AdminPage() {
               </span>
             </div>
           </section>
+
+          <InfrastructureLinks />
 
           <div
             className="admin-tabs"

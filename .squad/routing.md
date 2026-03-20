@@ -16,10 +16,10 @@ How to decide who handles what.
 | CI/CD container builds | Brett | Image optimization, caching, GitHub Actions container pipelines |
 | Security scanning & audits | Kane | bandit, checkov, zizmor, OWASP ZAP, dependency vulnerabilities, container CVEs |
 | Code review | Ripley | Review PRs, check quality, suggest improvements |
-| Key decisions & approvals | Juanma 👤 | Product scope, UX direction, architecture trade-offs requiring human judgment |
+| Key decisions & approvals | Juanma | Product scope, UX direction, architecture trade-offs requiring human judgment |
 | Testing | Lambert | Write tests, find edge cases, verify fixes, integration testing |
 | Scope & priorities | Ripley | What to build next, trade-offs, decisions |
-| Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |
+| Async issue work (bugs, tests, small features) | @copilot | Well-defined tasks matching capability profile |
 | Release validation, screenshots, docs | Newt | Pre-release smoke test, user/admin manuals, changelog |
 | Session logging | Scribe | Automatic — never needs routing |
 
@@ -29,7 +29,7 @@ How to decide who handles what.
 |-------|--------|-----|
 | `squad` | Triage: analyze issue, evaluate @copilot fit, assign `squad:{member}` label | Lead |
 | `squad:{name}` | Pick up issue and complete the work | Named member |
-| `squad:copilot` | Assign to @copilot for autonomous work (if enabled) | @copilot 🤖 |
+| `squad:copilot` | Assign to @copilot for autonomous work (if enabled) | @copilot |
 
 ### How Issue Assignment Works
 

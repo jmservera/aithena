@@ -1,10 +1,9 @@
 name: Squad Heartbeat (Ralph)
 
 on:
-  # DISABLED: Cron heartbeat commented out pre-migration — re-enable when ready
-  # schedule:
-  #   # Every 30 minutes — adjust or remove if not needed
-  #   - cron: '*/30 * * * *'
+  schedule:
+    # Every 30 minutes — adjust or remove if not needed
+    - cron: '*/30 * * * *'
 
   # React to completed work or new squad work
   issues:
@@ -107,6 +106,17 @@ jobs:
                   per_page: 10
                 });
                 for (const issue of memberIssues) {
+                  // Ensure parent 'squad' label is present (fix orphaned squad:* labels)
+                  const hasSquadLabel = issue.labels.some(l => l.name === 'squad');
+                  if (!hasSquadLabel) {
+                    await github.rest.issues.addLabels({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number,
+                      labels: ['squad']
+                    });
+                    core.info(`Fixed orphaned label: added 'squad' to #${issue.number}`);
+                  }
                   if (!issue.assignees || issue.assignees.length === 0) {
                     unstarted.push({ issue, member });
                   }

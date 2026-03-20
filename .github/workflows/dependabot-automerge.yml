@@ -73,7 +73,7 @@ jobs:
       - name: Run tests
         working-directory: src/${{ matrix.service }}
         run: |
-          if [ -f pyproject.toml ]; then
+          if [ "${{ matrix.service }}" != "embeddings-server" ]; then
             uv run pytest -v --tb=short
           else
             python -m pytest -v --tb=short

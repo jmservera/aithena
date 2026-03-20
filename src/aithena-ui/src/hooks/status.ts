@@ -20,10 +20,13 @@ export interface IndexingProgress {
 export interface StatusResponse {
   solr: SolrInfo;
   indexing: IndexingProgress;
+  embeddings_available: boolean;
   services: {
     solr: string;
     redis: string;
     rabbitmq: string;
+    zookeeper?: string;
+    embeddings: string;
   };
 }
 

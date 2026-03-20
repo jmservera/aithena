@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { useIntl, FormattedMessage } from 'react-intl';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
@@ -16,6 +17,8 @@ import BookCard from '../Components/BookCard';
 import Pagination from '../Components/Pagination';
 import PdfViewer from '../Components/PdfViewer';
 import SimilarBooks from '../Components/SimilarBooks';
+import SkeletonCard from '../Components/SkeletonCard';
+import SkeletonFacetPanel from '../Components/SkeletonFacetPanel';
 import { SearchFilters } from '../hooks/search';
 import { getCachedSimilarBook } from '../hooks/similarBooks';
 import { useSearch, BookResult, SearchMode } from '../hooks/search';
@@ -113,7 +116,6 @@ function SearchResultsSection({
         id={resultsRegionId}
         ref={resultsRegionRef}
         className="search-results"
-        role="region"
         aria-labelledby={resultsHeadingId}
         aria-describedby={query ? resultsSummaryId : undefined}
         aria-busy={loading}
@@ -125,7 +127,7 @@ function SearchResultsSection({
 
         {error && (
           <div className="search-error" role="alert">
-            ⚠️ {error}
+            <AlertTriangle size={20} aria-hidden="true" /> {error}
           </div>
         )}
 
@@ -141,7 +143,13 @@ function SearchResultsSection({
           </div>
         )}
 
-        {results.length > 0 && (
+        {loading && query && (
+          <ul className="search-results-list">
+            <SkeletonCard count={limit || 10} />
+          </ul>
+        )}
+
+        {!loading && results.length > 0 && (
           <ul className="search-results-list">
             {results.map((book) => (
               <li key={book.id} className="search-results-item">
@@ -273,12 +281,16 @@ function SearchPage() {
   return (
     <div className="search-layout">
       <aside className="sidebar">
-        <FacetPanel
-          facets={facets}
-          filters={searchState.filters}
-          onFilterChange={setFilter}
-          mode={searchState.mode}
-        />
+        {loading && !searchState.query ? (
+          <SkeletonFacetPanel />
+        ) : (
+          <FacetPanel
+            facets={facets}
+            filters={searchState.filters}
+            onFilterChange={setFilter}
+            mode={searchState.mode}
+          />
+        )}
       </aside>
 
       <main className="search-main">
@@ -302,7 +314,14 @@ function SearchPage() {
               aria-label={intl.formatMessage({ id: 'search.inputAriaLabel' })}
             />
             <button className="search-btn" type="submit" disabled={loading}>
-              {loading ? '…' : intl.formatMessage({ id: 'search.button' })}
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="spinner" aria-hidden="true" />
+                  {intl.formatMessage({ id: 'search.searching' })}
+                </>
+              ) : (
+                intl.formatMessage({ id: 'search.button' })
+              )}
             </button>
           </form>
 

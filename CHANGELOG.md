@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] — 2026-03-20
+
+### Fixed
+
+- **aithena-ui Docker build** — copy `.npmrc` before `npm ci` so `legacy-peer-deps=true` is respected (#616)
+
+## [1.9.0] — 2026-03-19
+
+### Added
+
+- **User CRUD API endpoints** — register, list, update, and delete users via `/v1/auth/` (#549, #572)
+- **Password policy enforcement** — configurable password strength requirements with 3+ complexity categories (#552, #574, #584)
+- **Auth DB migration framework and backup tooling** — versioned schema migrations with backup/restore (#557, #571)
+- **User management UI** — admin-only user management page, user profile page, and change password form (#554, #555, #556, #579, #589)
+- **Password reset CLI tool** for solr-search admin operations (#547)
+- **Auth API integration tests** for full authentication flow validation (#558, #575)
+- **Role-based access control (RBAC)** — middleware and comprehensive parametrized test suite (#553, #559)
+- **Default admin user seeding** on first startup (#550)
+- **Change password endpoint** — `PUT /v1/auth/change-password` (#551)
+- **Stress testing PRD** — product requirements document for load testing and hardware profiling (#590)
+
+### Fixed
+
+- **Vector/hybrid search errors** on empty query and 502 responses (#568)
+- **PDF viewer** — allow same-origin iframe embedding for document preview (#577)
+- **Embeddings server** — enforce offline mode to prevent HuggingFace requests at startup (#578)
+- **Login rate limiter** — use real client IP behind reverse proxy to prevent brute-force attacks (#583)
+- **Password policy enforcement** — wire up strong policy (min 10 chars, 3+ complexity categories) in all code paths including CLI (#584)
+
+### Security
+
+- **Security review** of user management module (#560)
+
+### Documentation
+
+- **Password reset instructions** added to user and admin manuals
+
+## [1.8.2] — 2026-03-19
+
+### Fixed
+
+- **File upload failing with size error** — added `client_max_body_size 64m` to nginx config so uploads up to 50MB (backend limit) are no longer rejected by the reverse proxy (#596)
+- **Dependabot automerge CI** — fixed workflow test detection for embeddings-server which uses pip, not uv (#598)
+
+### Removed
+
+- **Streamlit admin service** — removed `streamlit-admin` from Docker Compose, nginx, and backend container health checks; React admin page now provides full feature parity (#587)
+
+### Added
+
+- **Infrastructure UI links** — Solr Admin and RabbitMQ Management cards on the React admin page with i18n support (#588)
+
+## [1.8.1] — 2026-03-19
+
+### Fixed
+
+- **Incomplete i18n translations** on Search, Library, and Upload pages (#564)
+- **Stats UI service status display** incorrectly showing RabbitMQ as down and missing other service statuses (#563)
+- **Admin page infinite login loop** preventing admin access (#561)
+- **Version display** corrected to show actual VERSION file value in UI (#569)
+
+## [1.8.0] — 2026-03-19
+
+### Added
+
+- **Design tokens (CSS custom properties)** — Centralized design system for colors, typography, spacing, and shadows (#510)
+- **Lucide React icon library** — Professional SVG icons replacing emoji, improving visual consistency and accessibility (#511)
+- **Loading states and skeleton screens** — Intelligent loading indicators for data-fetching operations (#508)
+- **Mobile-responsive design** — Responsive layout with breakpoints for phones, tablets, and desktops (#509)
+- **Search rate limiting** — Redis-based rate limiting on `/v1/search` endpoint (50 requests per 15 minutes per IP) to prevent abuse (#516)
+- **Improved empty and error states** — Enhanced messaging and visual design for empty searches, failed requests, and errors (#513)
+- **Pre-release integration test process** — Docker Compose integration testing framework for multi-service validation (#542)
+- **Screenshot automation** — Playwright-based screenshot capture and GitHub Actions workflow for UI documentation (#530, #531, #532)
+- **Release documentation automation** — GitHub Actions integration with Copilot CLI for automated release notes (#523)
+
+### Fixed
+
+- **UI version display** — Fixed header to correctly display the running application version (#545)
+- **solr-search auth directory permissions** — Corrected permissions issue on host bind mounts (#543)
+
+### Changed
+
+- **Repository settings** — Enabled GitHub Actions to create PRs for automated workflows (#534)
+
+### Documentation
+
+- **Updated user and admin manuals** to reference screenshots and new features (#533)
+
+## [1.7.1] — 2026-03-18
+
+### Changed
+
+- **Embeddings-server migrated to uv** — Replaced bare `requirements.txt` with `pyproject.toml` + `uv.lock` for consistent, reproducible dependency management aligned with all other Python services (#517)
+- **Docker multi-stage builds** for all services — Separates build and runtime stages, reducing final image sizes and eliminating build-time tooling from production images (#521)
+
+### Fixed
+
+- **document-indexer test collection error** resolved — Tests now pass cleanly (#497)
+- **document-lister failing tests** resolved — Tests now pass cleanly (#498)
+
+### Security
+
+- **Nginx upgraded to 1.27 LTS** — Base image updated from EOL 1.15 to current stable LTS in both dev and production compose files (#518)
+- **Default credentials removed** — RabbitMQ and Redis no longer fall back to `guest/guest` or empty passwords. Compose files use `${VAR:?error}` syntax to require explicit credentials. **Breaking:** `.env` must define `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD` (#518)
+- **Admin API key authentication** — All solr-search admin endpoints (`/v1/admin/*`) now require a valid `ADMIN_API_KEY` via `X-API-Key` header. **Breaking:** `ADMIN_API_KEY` environment variable must be set (#519)
+- **Content-Security-Policy header** added to nginx — Restricts resource loading origins to mitigate XSS and data injection attacks (#520)
+
 ## [1.7.0] — 2026-03-18
 
 ### Added

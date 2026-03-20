@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
+
+logger = logging.getLogger(__name__)
 
 JWT_ALGORITHM = "HS256"
 _PASSWORD_HASHER = PasswordHasher()
@@ -57,6 +60,32 @@ def parse_ttl_to_seconds(raw_value: str) -> int:
     return ttl_seconds
 
 
+SCHEMA_VERSION = 1
+
+
+def _ensure_schema_version_table(connection: sqlite3.Connection) -> None:
+    """Create the schema_version tracking table if it does not exist."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER NOT NULL,
+            applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            description TEXT
+        )
+        """
+    )
+
+
+def get_schema_version(db_path: Path) -> int:
+    """Return the current schema version, or 0 if unversioned."""
+    with sqlite3.connect(db_path) as connection:
+        try:
+            row = connection.execute("SELECT MAX(version) FROM schema_version").fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+        except sqlite3.OperationalError:
+            return 0
+
+
 def init_auth_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as connection:
@@ -71,7 +100,19 @@ def init_auth_db(db_path: Path) -> None:
             )
             """
         )
+        _ensure_schema_version_table(connection)
+        row = connection.execute("SELECT MAX(version) FROM schema_version").fetchone()
+        if row is None or row[0] is None:
+            connection.execute(
+                "INSERT INTO schema_version (version, description) VALUES (?, ?)",
+                (SCHEMA_VERSION, "Initial schema: users table"),
+            )
         connection.commit()
+
+    from migrations import apply_pending_migrations
+
+    apply_pending_migrations(db_path)
+    _seed_default_admin(db_path)
 
 
 def hash_password(password: str) -> str:
@@ -172,6 +213,207 @@ def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
         raise AuthenticationError("Invalid authentication token")
 
     return AuthenticatedUser(id=user_id, username=username, role=role)
+
+
+MAX_PASSWORD_LENGTH = 128
+VALID_ROLES = frozenset({"admin", "user", "viewer"})
+
+
+class UserExistsError(ValueError):
+    """Raised when a user with the given username already exists."""
+
+
+class PasswordPolicyError(ValueError):
+    """Raised when a password fails validation checks."""
+
+
+def validate_password(password: str, username: str = "") -> None:
+    """Validate password against policy using the standalone password_policy module."""
+    from password_policy import validate_password as _check_policy
+
+    violations = _check_policy(password, username)
+    if violations:
+        raise PasswordPolicyError("; ".join(violations))
+
+
+def validate_role(role: str) -> str:
+    normalized = role.strip().lower()
+    if normalized not in VALID_ROLES:
+        raise ValueError(f"Invalid role: {role!r}. Must be one of: {', '.join(sorted(VALID_ROLES))}")
+    return normalized
+
+
+def create_user(db_path: Path, username: str, password: str, role: str) -> dict:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise ValueError("Username must not be empty")
+    validated_role = validate_role(role)
+    validate_password(password, normalized_username)
+
+    password_hash = hash_password(password)
+    with _connect(db_path) as connection:
+        try:
+            cursor = connection.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                (normalized_username, password_hash, validated_role),
+            )
+            connection.commit()
+        except sqlite3.IntegrityError as exc:
+            raise UserExistsError(f"User {normalized_username!r} already exists") from exc
+        row = connection.execute(
+            "SELECT created_at FROM users WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return {
+            "id": cursor.lastrowid,
+            "username": normalized_username,
+            "role": validated_role,
+            "created_at": row["created_at"],
+        }
+
+
+def list_users(db_path: Path) -> list[dict]:
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT id, username, role, created_at FROM users ORDER BY id"
+        ).fetchall()
+    return [
+        {"id": row["id"], "username": row["username"], "role": row["role"], "created_at": row["created_at"]}
+        for row in rows
+    ]
+
+
+def get_user_by_id(db_path: Path, user_id: int) -> dict | None:
+    with _connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT id, username, role, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"id": row["id"], "username": row["username"], "role": row["role"], "created_at": row["created_at"]}
+
+
+def update_user(db_path: Path, user_id: int, *, username: str | None = None, role: str | None = None) -> dict | None:
+    normalized_username: str | None = None
+    validated_role: str | None = None
+
+    if username is not None:
+        normalized_username = username.strip()
+        if not normalized_username:
+            raise ValueError("Username must not be empty")
+
+    if role is not None:
+        validated_role = validate_role(role)
+
+    if normalized_username is None and validated_role is None:
+        return get_user_by_id(db_path, user_id)
+
+    with _connect(db_path) as connection:
+        try:
+            if normalized_username is not None and validated_role is not None:
+                connection.execute(
+                    "UPDATE users SET username = ?, role = ? WHERE id = ?",
+                    (normalized_username, validated_role, user_id),
+                )
+            elif normalized_username is not None:
+                connection.execute(
+                    "UPDATE users SET username = ? WHERE id = ?",
+                    (normalized_username, user_id),
+                )
+            else:
+                connection.execute(
+                    "UPDATE users SET role = ? WHERE id = ?",
+                    (validated_role, user_id),
+                )
+            connection.commit()
+        except sqlite3.IntegrityError as exc:
+            raise UserExistsError("Username already taken") from exc
+    return get_user_by_id(db_path, user_id)
+
+
+def delete_user(db_path: Path, user_id: int) -> bool:
+    with _connect(db_path) as connection:
+        cursor = connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        connection.commit()
+        return cursor.rowcount > 0
+
+
+def _seed_default_admin(db_path: Path) -> None:
+    """Seed a default admin user if the users table is empty and AUTH_DEFAULT_ADMIN_PASSWORD is set."""
+    from config import settings
+
+    with _connect(db_path) as connection:
+        row = connection.execute("SELECT COUNT(*) FROM users").fetchone()
+        user_count = row[0] if row else 0
+
+    if user_count > 0:
+        return
+
+    password = settings.auth_default_admin_password
+    if not password:
+        logger.warning(
+            "No users in the database and AUTH_DEFAULT_ADMIN_PASSWORD is not set. "
+            "No default admin user created. Use reset_password.py or set the env var to bootstrap."
+        )
+        return
+
+    username = settings.auth_default_admin_username
+    try:
+        validate_password(password, username)
+    except PasswordPolicyError:
+        logger.warning(
+            "Default admin password does not meet password policy. "
+            "Seeding anyway to avoid blocking startup — please change the password promptly."
+        )
+    password_hash = hash_password(password)
+    created_at = datetime.now(UTC).isoformat()
+
+    with _connect(db_path) as connection:
+        connection.execute(
+            "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
+            (username, password_hash, "admin", created_at),
+        )
+        connection.commit()
+
+    logger.info("Default admin user '%s' created on first startup", username)
+
+
+def change_password(db_path: Path, user_id: int, current_password: str, new_password: str) -> None:
+    """Change a user's password after verifying the current one.
+
+    Raises:
+        ValueError: current password wrong, or same password.
+        PasswordPolicyError: new password doesn't meet policy.
+    """
+    # Validate lengths before expensive Argon2 operations to prevent DoS
+    if len(current_password) > MAX_PASSWORD_LENGTH:
+        raise ValueError("Current password is incorrect")
+
+    with _connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT username, password_hash FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+
+    if row is None:
+        raise ValueError("User not found")
+
+    validate_password(new_password, str(row["username"]))
+
+    stored_hash = str(row["password_hash"])
+
+    if not _verify_password(stored_hash, current_password):
+        raise ValueError("Current password is incorrect")
+
+    if _verify_password(stored_hash, new_password):
+        raise ValueError("New password must be different from the current password")
+
+    new_hash = hash_password(new_password)
+    with _connect(db_path) as connection:
+        connection.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (new_hash, user_id),
+        )
+        connection.commit()
 
 
 def get_token_from_sources(authorization_header: str | None, cookie_token: str | None) -> str | None:

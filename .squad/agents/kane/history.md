@@ -534,3 +534,80 @@
 3. All CI checks pass except Code Scanning (impostor-commit blocks)
 
 **Status:** ⚠️ AWAITING AUTHOR FIX — one-line SHA correction needed before merge
+
+---
+
+## 2026-03-18 — Comprehensive Threat Assessment & Security Roadmap (v1.7.1+)
+
+**Requested by:** jmservera (Juanma)
+
+**Objective:** Conduct STRIDE threat modeling across all aithena services; identify gaps beyond v1.0.1–v1.7.0 scanning work; produce prioritized security roadmap.
+
+**Scope:** 10 services (aithena-ui, solr-search, embeddings-server, document-indexer, document-lister, admin, solr, redis, rabbitmq, nginx) assessed across 6 STRIDE categories.
+
+**Findings Summary:**
+- 23 total vulnerabilities identified (5 critical, 5 high, 9 medium, 4 low)
+- **Critical gaps:** Admin endpoints unprotected; nginx 1.15 EOL; RabbitMQ guest/guest; Redis no password; missing CSP
+- **Infrastructure gaps:** No network segmentation; insecure defaults; missing audit logs
+- **Application gaps:** No RBAC; no rate limiting; CORS allows credentials; no MFA
+
+**Comprehensive Report Generated:**
+- File: `/tmp/kane-threat-assessment.md` (36+ KB, 9-section analysis)
+- Includes STRIDE per-service analysis, current posture review, vulnerability table, roadmap with issue templates
+- Prioritized into v1.7.1 (6 critical/high fixes), v1.8.0 (10 medium fixes), Future (7 low-priority hardening)
+
+**Key Decisions for Squad:**
+1. **v1.7.1 Release Blockers (Must fix before next release):**
+   - Admin endpoints need `Depends(require_authentication)` guard
+   - Nginx 1.15 upgrade to 1.27-alpine (CVE: auth bypass)
+   - RabbitMQ/Redis password requirements (disable guest/guest, require env vars)
+   - CSP header on React UI (block XSS injection)
+   - CORS restrict to frontend domain
+
+2. **v1.8.0 Release (Hardening sprint):**
+   - Implement RBAC (admin role checks on endpoints)
+   - Rate limiting (search, nginx)
+   - User audit logging on mutations
+   - RabbitMQ/Redis audit logs
+   - Security headers (nginx: Server, X-Content-Type-Options, rate-limiting)
+   - Optional MFA on admin dashboard
+
+3. **Deferred to v1.9.0+ (Defense-in-depth):**
+   - Network segmentation (separate Docker networks by function)
+   - TLS for RabbitMQ AMQP, Redis protocols
+   - ZooKeeper authentication
+   - CSRF tokens on frontend forms
+   - Sentry/analytics integration
+
+**OWASP Top 10 (2023) Coverage:**
+- ⚠️ Broken Access Control (critical)
+- ⚠️ Cryptographic Failures (no TLS for inter-service)
+- ✅ Injection (parameterized queries in use)
+- ⚠️ Insecure Design (no CSP, network isolation)
+- ❌ Security Misconfiguration (EOL nginx, default credentials)
+- ✅ Vulnerable Components (deps up-to-date except nginx)
+- ⚠️ Auth Failures (no MFA, weak password policy)
+- ⚠️ Logging/Monitoring (mutation logs lack user context)
+
+**Known Limitations (Accepted Risks):**
+- On-premises only (no cloud deps) → lower supply-chain risk
+- Single Docker network (accepted for v1.7.1) → deferred segmentation
+- TLS for RabbitMQ/Redis (accepted for v1.7.1) → deferred to v2.0
+
+**Learnings:**
+1. **Admin API attack surface** — POST/DELETE endpoints to `/v1/admin/*` lack any authentication check (GET `/v1/admin/documents` is also unprotected). This allows any client to requeue/clear document state or view container stats. Discovered via code inspection; should have been caught in auth design review.
+
+2. **Nginx version management** — Using nginx 1.15-alpine is a 5-year-old EOL image (May 2019) with known auth bypass CVEs. Standard base image upgrades were missed in docker-compose.yml maintenance. Alpine versioning is more critical than Debian for security patch frequency.
+
+3. **RabbitMQ/Redis defaults in compose** — Docker environment defaults (guest/guest, empty password) are not enforced; services start with weak auth if env vars not set. Recommend making secrets required by validation in entrypoint or compose healthcheck.
+
+4. **Logging-security skill is working** — Verified that solr-search, admin, and other services follow the two-tier logging pattern (CRITICAL/ERROR without stack traces, DEBUG with exc_info=True). This controls information disclosure effectively.
+
+5. **CORS misconfiguration risk** — CORS is properly scoped to localhost:5173 in dev, but `allow_credentials=true` + missing CORS validation can lead to CSRF if credentials are present. This requires both a misconfigured browser AND a malicious origin; risk is medium if strict CORS is enforced.
+
+6. **Network security is physical, not logical** — Single Docker network means any container breach leads to full access to RabbitMQ, Redis, Solr, etc. This is acceptable for on-premises v1.7.x but should be addressed in v1.9.0 microservice hardening.
+
+7. **CSP is non-trivial in Vite + React** — Adding CSP requires handling nonces for inline scripts (if any) and testing with Vite HMR in dev. Recommend Vite CSP plugin or nginx nonce injection middleware.
+
+8. **Admin dashboard role-based access** — Auth DB already supports roles (user/admin) but endpoints don't enforce them. This is a low-effort high-impact fix; add role check to admin endpoints in v1.8.0.
+

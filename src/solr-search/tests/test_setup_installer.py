@@ -44,7 +44,6 @@ def test_run_setup_writes_env_and_hashes_password(tmp_path: Path) -> None:
     )
 
     env_values = load_env_file(env_path)
-    env_text = env_path.read_text(encoding="utf-8")
 
     assert result.generated_jwt_secret is True
     assert REQUIRED_ENV_KEYS.issubset(env_values)
@@ -57,7 +56,7 @@ def test_run_setup_writes_env_and_hashes_password(tmp_path: Path) -> None:
     assert env_values["RABBITMQ_USER"] == "aithena"
     assert env_values["RABBITMQ_PASS"] == "generated-secret-value"
     assert env_values["REDIS_PASSWORD"] == "generated-secret-value"
-    assert "correct-horse-battery-staple" not in env_text
+    assert env_values["AUTH_ADMIN_PASSWORD"] == "correct-horse-battery-staple"
     assert authenticate_user(auth_db_path, "admin", "correct-horse-battery-staple") is not None
 
     with sqlite3.connect(auth_db_path) as connection:
@@ -169,12 +168,55 @@ def test_rerun_preserves_existing_jwt_secret_and_users(tmp_path: Path) -> None:
     assert env_values["RABBITMQ_USER"] == "custom-rabbitmq-user"
     assert env_values["RABBITMQ_PASS"] == "keep-rabbitmq-secret"
     assert env_values["REDIS_PASSWORD"] == "keep-redis-secret"
+    assert env_values["AUTH_ADMIN_PASSWORD"] == "second-password"
     assert authenticate_user(auth_db_path, "admin", "second-password") is not None
 
     with sqlite3.connect(auth_db_path) as connection:
         usernames = [row[0] for row in connection.execute("SELECT username FROM users ORDER BY username")]
 
     assert usernames == ["admin", "other-user"]
+
+
+def test_rerun_without_password_preserves_admin_password_in_env(tmp_path: Path) -> None:
+    """When the user keeps the existing password (admin_password=None),
+    AUTH_ADMIN_PASSWORD from the prior .env is preserved."""
+    library_path = tmp_path / "library"
+    env_path = tmp_path / ".env"
+    auth_db_path = tmp_path / "state" / "users.db"
+
+    run_setup(
+        InstallerConfig(
+            library_path=str(library_path),
+            admin_user="admin",
+            admin_password="original-password",
+            origin="http://localhost",
+            auth_db_path=auth_db_path,
+            env_path=env_path,
+        ),
+        interactive=False,
+        secret_factory=fake_secret,
+    )
+
+    env_values_first = load_env_file(env_path)
+    assert env_values_first["AUTH_ADMIN_PASSWORD"] == "original-password"
+
+    # Re-run without providing a password (keep existing)
+    run_setup(
+        InstallerConfig(
+            library_path=str(library_path),
+            admin_user="admin",
+            admin_password=None,
+            origin="http://localhost",
+            auth_db_path=auth_db_path,
+            env_path=env_path,
+        ),
+        interactive=False,
+        secret_factory=fake_secret,
+    )
+
+    env_values_second = load_env_file(env_path)
+    assert env_values_second["AUTH_ADMIN_PASSWORD"] == "original-password"
+    assert authenticate_user(auth_db_path, "admin", "original-password") is not None
 
 
 def test_reset_recreates_auth_db(tmp_path: Path) -> None:

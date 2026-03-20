@@ -1,6 +1,7 @@
 import { ChangeEvent, DragEvent, Profiler, RefObject, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useIntl, FormattedMessage } from 'react-intl';
+import { FileText, XCircle, CircleCheck, Loader } from 'lucide-react';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import { useUpload, UploadProgress, UploadResult } from '../hooks/upload';
 import { onRenderCallback } from '../utils/profiler';
@@ -102,7 +103,7 @@ function UploadContent({
           {!uploading && (
             <div className="upload-dropzone-content">
               <div className="upload-icon" aria-hidden="true">
-                📄
+                <FileText size={64} />
               </div>
               <p className="upload-prompt">
                 {intl.formatMessage({ id: 'upload.dragPrompt' })}{' '}
@@ -130,7 +131,7 @@ function UploadContent({
               aria-atomic="true"
             >
               <div className="upload-progress-spinner" aria-hidden="true">
-                ⏳
+                <Loader size={48} className="upload-spinner-icon" />
               </div>
               <p className="upload-progress-text">
                 {intl.formatMessage({ id: 'upload.uploading' })}
@@ -160,14 +161,14 @@ function UploadContent({
       {error && (
         <div className="upload-result upload-result--error" role="alert">
           <div className="upload-result-icon" aria-hidden="true">
-            ❌
+            <XCircle size={64} />
           </div>
           <h3 className="upload-result-title">
             {intl.formatMessage({ id: 'upload.failedTitle' })}
           </h3>
           <p className="upload-result-message">{error}</p>
           <button type="button" className="upload-result-button" onClick={onReset}>
-            Try Again
+            {intl.formatMessage({ id: 'upload.tryAgain' })}
           </button>
         </div>
       )}
@@ -175,7 +176,7 @@ function UploadContent({
       {result && (
         <div className="upload-result upload-result--success" role="status" aria-live="polite">
           <div className="upload-result-icon" aria-hidden="true">
-            ✅
+            <CircleCheck size={64} />
           </div>
           <h3 className="upload-result-title">
             {intl.formatMessage({ id: 'upload.successTitle' })}
@@ -196,10 +197,10 @@ function UploadContent({
           </div>
           <div className="upload-result-actions">
             <Link to="/search" className="upload-result-button upload-result-button--primary">
-              Back to Search
+              {intl.formatMessage({ id: 'upload.backToSearch' })}
             </Link>
             <button type="button" className="upload-result-button" onClick={onReset}>
-              Upload Another
+              {intl.formatMessage({ id: 'upload.uploadAnother' })}
             </button>
           </div>
         </div>
