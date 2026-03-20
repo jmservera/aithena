@@ -39,6 +39,57 @@ pytest -v -m search
 pytest -v -m concurrent
 ```
 
+### Run Locust load tests
+
+#### Interactive mode (web UI)
+
+```bash
+cd tests/stress
+locust -f locustfile.py --host http://localhost:8080
+# Open http://localhost:8089 in your browser
+```
+
+#### Headless mode (CI)
+
+```bash
+# Light scenario — 5 users, 80% search / 20% browse
+LOCUST_SCENARIO=light locust -f tests/stress/locustfile.py --headless \
+    -u 5 -r 1 --run-time 60s \
+    --csv tests/stress/results/light \
+    --host http://localhost:8080
+
+# Medium scenario — 10 users, mixed workload
+locust -f tests/stress/locustfile.py --headless \
+    -u 10 -r 2 --run-time 120s \
+    --csv tests/stress/results/medium \
+    --host http://localhost:8080
+
+# Heavy scenario — 25 users, uploads + admin
+locust -f tests/stress/locustfile.py --headless \
+    -u 25 -r 5 --run-time 180s \
+    --csv tests/stress/results/heavy \
+    --host http://localhost:8080
+```
+
+#### Via pytest (all three scenarios automatically)
+
+```bash
+cd tests/stress
+pytest -v -m concurrent
+```
+
+#### Smoke tests (no stack required)
+
+```bash
+cd tests/stress
+python3 -m pytest test_locust_smoke.py -x -q --timeout=30
+```
+
+#### Output
+
+Headless runs produce CSV files (Locust default) and a `locust_summary.json`
+with aggregated throughput, error rate, and latency percentiles (p50/p95/p99).
+
 ### Run with resource monitoring
 
 The `docker_monitor` fixture automatically captures Docker resource metrics
@@ -82,23 +133,17 @@ python tests/stress/monitor.py --interval 2 --output-dir tests/stress/results --
 tests/stress/
 ├── conftest.py               # Shared fixtures (Docker Compose lifecycle, URLs, helpers)
 ├── generate_test_data.py     # Synthetic PDF/EPUB generator
+├── locustfile.py             # Locust user classes & task definitions
 ├── monitor.py                # Docker resource monitoring collector
 ├── pytest.ini                # pytest configuration for stress tests
 ├── requirements-stress.txt   # Python dependencies
 ├── README.md                 # This file
+├── test_concurrent.py        # Pytest wrapper for headless Locust scenarios
 ├── test_generate_test_data.py # Tests for the data generator
+├── test_indexing.py          # Indexing pipeline benchmarks
+├── test_locust_smoke.py      # Unit tests for Locust helpers (no stack needed)
 └── results/                  # Output directory (gitignored)
     └── .gitkeep
-```
-
-Future test files (Phase 2+):
-
-```
-tests/stress/
-├── test_indexing.py           # Indexing pipeline benchmarks
-├── test_search_latency.py    # Search latency curves
-├── test_concurrent.py         # Concurrent user simulation
-└── locustfile.py             # Locust user definitions
 ```
 
 ## Synthetic Test Data Generator
