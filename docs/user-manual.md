@@ -4,6 +4,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
+**v1.10.0 introduces Collections** — personal reading lists where you can organize, annotate, and revisit documents. See [Collections](#collections-v1100) below.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -14,6 +16,7 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - open PDFs directly from search results
 - use Similar Books recommendations after opening a document
 - upload PDF files via drag-and-drop (v0.6.0+)
+- organize documents into personal collections with notes (v1.10.0+)
 - check the Aithena version in the footer (v0.7.0+)
 - check system health in the Status tab
 - view library-wide statistics in the Stats tab
@@ -435,6 +438,86 @@ The **Upload** tab lets authenticated users add PDFs to the library without dire
 | "File is too large. Maximum size is 50 MB." | Your PDF exceeds the size limit | Split the PDF or contact your administrator |
 | "Too many uploads. Please wait a moment and try again." | You've hit the rate limit | Wait a minute and try again |
 | "Upload failed. Please try again." | Server error during upload | Try again; if it persists, contact your administrator |
+
+## Collections (v1.10.0+)
+
+Collections let you organize, annotate, and revisit documents you find interesting. Think of them as personal reading lists within Aithena.
+
+### Creating a collection
+
+1. Open the **Collections** tab from the main navigation.
+2. Click the **New Collection** button.
+3. Enter a name (required, up to 200 characters) and an optional description.
+4. Click **Create**.
+
+Your new collection appears in the grid immediately.
+
+### Browsing your collections
+
+The collections page shows all your collections as a card grid. Each card displays:
+
+- The collection name and description
+- How many items it contains
+- When it was last updated
+
+Click a card to open the collection detail view.
+
+### Adding documents to a collection
+
+From search results, each book card has an **Add to Collection** button. Click it to open the collection picker:
+
+1. Search for books as usual.
+2. On a result card, click the collection picker toggle.
+3. Select a collection from the dropdown (you can search by name).
+4. The document is added to the collection instantly.
+
+### Viewing collection details
+
+The detail page shows all items in a collection with:
+
+- Document title, author, and year
+- A note area for each item
+- Sort controls (newest first, title A–Z, author A–Z, year, etc.)
+- Edit and Delete buttons for the collection itself
+
+### Taking notes on items
+
+Each item in a collection has a note field. Type your notes directly — they auto-save after a brief pause (about 1 second). A "Saving…" indicator appears while the note is being saved.
+
+Notes are great for recording why you added a document, key takeaways, or page references.
+
+### Editing a collection
+
+1. Open the collection detail page.
+2. Click the **Edit** button.
+3. Change the name or description.
+4. Click **Save**.
+
+### Deleting a collection
+
+1. Open the collection detail page.
+2. Click the **Delete** button.
+3. Confirm the deletion in the dialog.
+
+> **Warning:** Deleting a collection permanently removes all its items and notes. This action cannot be undone.
+
+### Removing items from a collection
+
+1. In the collection detail view, find the item you want to remove.
+2. Click the **Remove** button on the item card.
+3. Click **Confirm** to complete the removal.
+
+The two-step confirmation prevents accidental removals.
+
+### Collection badges on search results
+
+When you search for books, results that belong to one of your collections display a small badge. This helps you quickly see which documents you've already organized.
+
+### Tips
+
+- Use descriptive collection names so you can find them quickly.
+- The sort dropdown is useful for large collections — try sorting by title or author.
+- Notes support plain text only (no formatting).
 
 ## Version information (v0.7.0+)
 
