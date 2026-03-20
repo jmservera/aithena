@@ -1980,6 +1980,143 @@ def _store_metadata_override(doc_id: str, fields: dict[str, str | int], edited_b
         raise HTTPException(status_code=503, detail="Cannot store metadata override in Redis") from exc
 
 
+# ---------------------------------------------------------------------------
+# Phase 2: Batch metadata edit endpoints (defined before single-doc route
+# so that FastAPI does not match "/batch/metadata" as {doc_id}="batch")
+# ---------------------------------------------------------------------------
+
+_BATCH_MAX_DOCUMENT_IDS = 1000
+_BATCH_PAGE_SIZE = 100
+
+
+class BatchMetadataEditRequest(BaseModel):
+    """Batch metadata edit by explicit document IDs."""
+
+    document_ids: list[str]
+    updates: MetadataEditRequest
+
+    model_config = {"str_strip_whitespace": True}
+
+
+class BatchMetadataByQueryRequest(BaseModel):
+    """Batch metadata edit by Solr query."""
+
+    query: str
+    updates: MetadataEditRequest
+
+    model_config = {"str_strip_whitespace": True}
+
+
+def _batch_apply_updates(
+    doc_ids: list[str],
+    fields: dict[str, str | int],
+) -> dict[str, Any]:
+    """Apply metadata updates to a list of document IDs.
+
+    Returns a batch result dict with matched/updated/failed/errors counts.
+    Continues on individual document failures (partial failure handling).
+    """
+    matched = len(doc_ids)
+    updated = 0
+    failed = 0
+    errors: list[dict[str, str]] = []
+
+    for doc_id in doc_ids:
+        try:
+            _solr_atomic_update(doc_id, fields)
+            _store_metadata_override(doc_id, fields, edited_by="admin")
+            updated += 1
+        except HTTPException as exc:
+            failed += 1
+            errors.append({"document_id": doc_id, "error": exc.detail})
+        except Exception as exc:
+            failed += 1
+            errors.append({"document_id": doc_id, "error": str(exc)})
+
+    return {
+        "matched": matched,
+        "updated": updated,
+        "failed": failed,
+        "errors": errors,
+    }
+
+
+def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[str]:
+    """Execute a Solr query and return all matching document IDs, paginated."""
+    if page_size is None:
+        page_size = _BATCH_PAGE_SIZE
+    all_ids: list[str] = []
+    start = 0
+
+    while True:
+        params: dict[str, Any] = {
+            "q": query,
+            "fl": "id",
+            "rows": page_size,
+            "start": start,
+            "wt": "json",
+        }
+        result = query_solr(params)
+        docs = result.get("response", {}).get("docs", [])
+        if not docs:
+            break
+        all_ids.extend(doc["id"] for doc in docs if "id" in doc)
+        num_found = result.get("response", {}).get("numFound", 0)
+        start += page_size
+        if start >= num_found:
+            break
+
+    return all_ids
+
+
+@app.patch(
+    "/v1/admin/documents/batch/metadata",
+    name="admin_batch_edit_metadata_v1",
+    dependencies=[Depends(require_admin_auth), require_role("admin")],
+)
+def admin_batch_edit_metadata(body: BatchMetadataEditRequest) -> dict[str, Any]:
+    """Edit metadata for multiple documents by ID.
+
+    Applies the same field updates to every document in the list.
+    Continues on individual failures and reports partial results.
+    Requires both admin API key and admin JWT role (defense-in-depth).
+    """
+    if not body.document_ids:
+        raise HTTPException(status_code=422, detail="document_ids must not be empty")
+    if len(body.document_ids) > _BATCH_MAX_DOCUMENT_IDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Too many document IDs — maximum is {_BATCH_MAX_DOCUMENT_IDS}",
+        )
+
+    fields = body.updates.validate_non_empty()
+    return _batch_apply_updates(body.document_ids, fields)
+
+
+@app.patch(
+    "/v1/admin/documents/batch/metadata-by-query",
+    name="admin_batch_edit_metadata_by_query_v1",
+    dependencies=[Depends(require_admin_auth), require_role("admin")],
+)
+def admin_batch_edit_metadata_by_query(body: BatchMetadataByQueryRequest) -> dict[str, Any]:
+    """Edit metadata for documents matching a Solr query.
+
+    Resolves matching document IDs via Solr search, then applies updates
+    in pages.  Requires both admin API key and admin JWT role (defense-in-depth).
+    """
+    query = body.query.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="query must not be empty")
+
+    fields = body.updates.validate_non_empty()
+    doc_ids = _solr_query_document_ids(query)
+
+    if not doc_ids:
+        return {"matched": 0, "updated": 0, "failed": 0, "errors": []}
+
+    return _batch_apply_updates(doc_ids, fields)
+
+
 @app.patch(
     "/v1/admin/documents/{doc_id}/metadata",
     name="admin_edit_document_metadata_v1",
