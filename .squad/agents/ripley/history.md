@@ -451,3 +451,107 @@ Key active decisions managed in .squad/decisions.md:
 4. If builds still fail: likely cache issue (try `--no-cache`) or network/registry problems
 
 **Architecture insight:** Inconsistent build context pattern (some repo-root, some service-dir). This works but creates maintenance complexity. Documented observation in `.squad/decisions/inbox/ripley-docker-diagnosis.md` for future architectural decision.
+---
+
+## 2026-03-20 — PRD Issue Decomposition: v1.10.0 Features
+
+**Context:** Reviewed and decomposed two PRDs into GitHub issues for the v1.10.0 milestone. Both features are substantial new capabilities for the platform.
+
+### PRD 1: User Document Collections (docs/prd/user-document-collections.md)
+**7 issues created:**
+- #655 — Collections backend: SQLite data model, schema migration & CRUD API (Parker)
+- #659 — Collections access control & security review (Kane)
+- #661 — Collections frontend: pages, components & navigation (Dallas)
+- #664 — Collections frontend: search integration, add-to-collection modal & badges (Dallas)
+- #668 — Search result enrichment with collection membership (Ash)
+- #670 — Collections infrastructure: Docker volume & database configuration (Brett)
+- #674 — Collections E2E testing & documentation (Lambert)
+
+### PRD 2: Book Metadata Editing (docs/prd/book-metadata-editing.md)
+**9 issues created:**
+- #677 — Add series_s field to Solr schema (Ash)
+- #681 — Single document metadata edit API with Solr atomic updates & Redis overrides (Parker)
+- #683 — Batch metadata edit API endpoints (by IDs and by Solr query) (Parker)
+- #686 — Metadata override persistence in document-indexer (Parker)
+- #688 — Single book metadata edit modal UI (Dallas)
+- #691 — Batch metadata selection & edit panel UI (Dallas)
+- #693 — Series facet in search sidebar (Ash)
+- #695 — Metadata editing security review (Kane)
+- #697 — Metadata editing E2E testing & documentation (Lambert)
+
+### Decomposition Decisions
+
+1. **Separated data model + API from security review** — Kane reviews independently to avoid blocking Parker's implementation. Security review gates frontend merge, not development.
+
+2. **Split frontend into pages vs. search integration** — CollectionsPage/CollectionDetailPage are independent from AddToCollectionModal/CollectionBadge. Dallas can ship pages first, then integrate with search.
+
+3. **Separated single edit API from batch edit API** — Single document PATCH is simpler and ships first. Batch endpoints build on the same Solr atomic update utility. Independent issues enable incremental delivery.
+
+4. **Document-indexer override integration is a separate issue** — The Redis override read (in document-indexer) is a different service from the override write (in solr-search). Cross-service changes deserve separate issues and PRs.
+
+5. **Infrastructure (Docker volumes) gets its own issue** — Brett handles Docker compose changes; keeps infra concerns out of application code PRs.
+
+6. **Series facet separated from schema change** — Adding the field to Solr schema (Ash, Phase 1) is independent from building the facet UI (Ash + Dallas, Phase 4). Schema ships early to unblock API work.
+
+7. **Testing & docs are final-phase issues** — Lambert's E2E tests depend on all implementation being complete. One testing issue per PRD keeps scope clear.
+
+**All 16 issues assigned to milestone v1.10.0, added to project board with "Todo" status, and routed to squad members via labels.**
+
+## v1.10.0 PRD Decomposition Session (2026-03-20)
+
+Ripley decomposed two PRDs into 16 GitHub issues for v1.10.0:
+
+- **User Document Collections:** Backend, auth, frontend, search integration, enrichment, infra, testing (#655-#674)
+- **Book Metadata Editing:** Schema, single/batch API, indexer, single/batch UI, series facet, security, testing (#677-#697)
+
+Key decisions:
+- Field named `series_s` (not `collection_s`) to avoid naming collision
+- Collections use `collections.db`; metadata edits use Redis
+- Both features phase-gated and independent with no cross-feature dependencies
+
+Teams: Parker, Kane, Dallas, Ash, Brett, Lambert assigned across 16 issues.
+
+---
+
+### 2026-03-20 — v1.10.0 Milestone Kickoff Ceremony
+
+**Context:** Facilitated milestone kickoff for v1.10.0 — the largest milestone to date with 48 issues across 6 PRD areas (BCDR, Book Metadata Editing, CI/CD Review, Folder Path Facet, Stress Testing, User Document Collections) plus 7 pre-milestone bugs.
+
+**Key Decisions:**
+
+1. **Bugs before features:** 7 bugs (including P0 #646 semantic index 502) must be resolved before any v1.10.0 work starts. P0 gets Lambert for investigation, then Ash + Parker for fix.
+
+2. **4-wave execution plan:**
+   - Wave 0: Bug fixes (days 1–3)
+   - Wave 1: Foundations — API scaffolds, Solr schema, infra (week 1–2)
+   - Wave 2: Building blocks — UI, secondary APIs, mid-tier backup (week 2–3)
+   - Wave 3: Integration — orchestrators, E2E flows (week 3–4)
+   - Wave 4: Polish — E2E tests, docs, admin UI (week 4–5)
+
+3. **4 issues deferred to v1.10.1:** #682 (automated restore drill), #685 (backup checksums), #684 (stress test CI), #656 (folder facet batch operations). All "hardening" items, not core functionality.
+
+4. **Critical path is BCDR:** 8 sequential steps from infra (#670) through runbook (#673). Any delay here cascades to the entire milestone.
+
+5. **Parker bottleneck identified:** Parker is primary on 20+ issues. Mitigations: Brett leads BCDR infra independently, Ash leads all Solr schema work, @copilot picks up 2 CI/CD issues (#689, #699).
+
+6. **Solr schema coordination required:** 3 features touch Solr schema (folder facet, series_s, metadata). Ash coordinates all schema changes to prevent conflicts.
+
+7. **5 issues flagged for research before implementation:** #655 (SQLite volume strategy), #681 (Solr atomic update compatibility), #670 (backup volume layout), #651 (stress test tooling choice), #648 (duplicate books root cause).
+
+**Risks Tracked:**
+- 48-issue scope (mitigated by 4 deferrals + strict wave gating)
+- Parker overload (mitigated by delegation strategy)
+- Stress tests may surface new performance issues (discovery-only for v1.10.0; fixes deferred)
+
+**Decision recorded:** `.squad/decisions/inbox/ripley-v1100-kickoff.md`
+
+## 2026-03-20T12:07 — v1.10.0 Kickoff Ceremony
+
+**Mode:** sync  
+**Outcome:** Produced comprehensive kickoff report with 4-wave delivery plan
+
+Established priority ordering, wave plan, critical path analysis, and agent load balancing for v1.10.0 (48 open issues + 7 bugs). Deferred 4 lower-priority issues (#682, #685, #684, #656) to v1.10.0.1 to reduce scope from 48 to 44 issues. Identified BCDR as critical path (8 sequential dependency steps). Identified Parker as primary bottleneck; mitigations: Brett leads BCDR infra independently, Ash leads search schema, @copilot picks up CI/CD, Parker sequenced by user value.
+
+**Milestone:** v1.10.0  
+**Decision:** Written to .squad/decisions.md  
+**References:** Orchestration log at .squad/orchestration-log/2026-03-20T12-07-ripley-kickoff.md

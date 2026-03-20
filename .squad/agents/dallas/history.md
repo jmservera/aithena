@@ -653,3 +653,16 @@ src/aithena-ui/src/
 - Use `repeat(auto-fill, minmax(Npx, 1fr))` instead of fixed column counts for responsive grids. Combined with `min-width: 0` on grid items, this prevents content overflow at all viewport sizes.
 - Backend-generated URLs behind reverse proxies may contain internal hostnames. Always normalise `/documents/` URLs to relative paths on the frontend to avoid mixed-content and unreachable-host issues.
 - The auth cookie (`aithena_auth`, HttpOnly, SameSite=lax) is set by the backend during login and is forwarded by nginx's `auth_request` for `/documents/` requests. This means iframe-based PDF viewing works in production without additional frontend auth handling — but only if the login response cookie is properly stored by the browser (same-origin required).
+## 2026-03-20: v1.10.0 Kickoff — Wave 0 Bug Fixes + CI/CD
+
+**Assigned:** 2 Wave 0 bugs + 1 Wave 1 CI + 4 Wave 2 UI + 2 Wave 3 UI + 2 Wave 4 polish (~11 total)
+
+Wave 0 bugs (Days 1–3):
+- #667 (Low) — Version number in UI (0.25d)
+- #649 (Low) — Responsive overlap / CSS fix (0.5d, with Lambert)
+
+Wave 1: #692 (merge lint-frontend.yml into ci.yml) with Brett
+
+Wave 2–4: Metadata UI (#688 modal, #691 batch panel), folder facet UI (#652 tree), collections UI (#661, #664), and release pipeline enforcement (#687, #694).
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

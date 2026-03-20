@@ -4993,104 +4993,6 @@ Adopt "docs gate the tag" (Option B) as the standard release process. Release do
 **By:** jmservera (via Copilot)
 **What:** Once a milestone is done, always run the release process. Don't just close issues — ship the release (bump VERSION, merge dev→main, tag, push).
 **Why:** User request — v1.4.0 and v1.5.0 milestones were cleared but no releases were created. Captured for team memory.
-# Decision: react-intl for i18n Foundation
-
-**Date:** 2026-01-21  
-**Author:** Dallas (Frontend Dev)  
-**Issue:** #374  
-**PR:** #422
-
-## Context
-
-Setting up internationalization infrastructure for Aithena UI to support English, Spanish, Catalan, and French. Need to choose between react-intl and react-i18next, and establish the architecture for locale management.
-
-## Decision
-
-### 1. Use react-intl (not react-i18next)
-
-**Rationale:**
-- Superior ICU MessageFormat support for complex formatting (plurals, dates, numbers, gender, selectordinal)
-- Better handling of non-Latin scripts and Unicode normalization (future-proofs for potential Arabic, Japanese, Chinese)
-- First-class TypeScript support with message extraction tooling
-- Follows Unicode CLDR standards for locale data
-
-### 2. Language Detection Fallback Chain
-
-**Architecture:**
-```
-localStorage preference → browser locale → English (default)
-```
-
-**Implementation details:**
-- Exact match first (`es` → Spanish)
-- Prefix match second (`es-AR` → `es` → Spanish)
-- Default to English if no match
-- Detection runs once on app bootstrap
-- User selections persist to `localStorage` with key `aithena-locale`
-
-### 3. Locale File Structure
-
-```
-src/aithena-ui/src/locales/
-  en.json  # English (baseline, ~30 keys)
-  es.json  # Spanish (sample translations)
-  ca.json  # Catalan (sample translations)
-  fr.json  # French (sample translations)
-```
-
-- Flat JSON structure (no nesting)
-- Keys use dot notation: `app.title`, `nav.search`, `loading.searchMessage`
-- All locale files include same keys (react-intl falls back to `defaultLocale` messages for missing keys)
-
-### 4. Context Architecture
-
-- **I18nProvider:** Outermost context wrapper in `main.tsx` (wraps BrowserRouter, AuthProvider)
-- **Exports:** 
-  - `useI18n()` hook for locale switching (`locale`, `setLocale`)
-  - `Locale` type for type-safe locale codes
-- **Integration:** React components use `useIntl()` from react-intl for message formatting
-
-### 5. Language Switcher Placement
-
-- Added to TabNav component in `tab-nav-actions` section
-- Positioned before username display, after nav links
-- Basic select dropdown (issue #379 will refine UI)
-- Visible only when authenticated (matches existing TabNav pattern)
-
-## Impact
-
-### Unblocks
-- #375: Extract all hardcoded strings to locale files
-- #376-378: Complete Spanish/Catalan/French translations
-- #379: Refine language switcher UI
-- #380: Add date/number formatting with `FormattedDate`/`FormattedNumber`
-- #381: Add pluralization with `FormattedMessage`
-
-### Testing
-- All 180 existing tests pass
-- No test regressions from i18n integration
-- Future string extraction may require updating test snapshots
-
-### Dependencies
-- `react-intl` added to `package.json` (only new production dependency)
-
-## Alternatives Considered
-
-### react-i18next
-**Pros:** Larger community, more plugins, simpler setup for basic translations  
-**Cons:** Weaker ICU MessageFormat support, manual pluralization rules, less Unicode-aware  
-**Rejected because:** ICU MessageFormat and non-Latin script support are critical for quality i18n
-
-### Custom i18n solution
-**Pros:** No external dependencies, full control  
-**Cons:** Reinventing the wheel, missing CLDR data, no pluralization engine  
-**Rejected because:** Not worth the maintenance burden
-
-## Follow-up Actions
-
-1. Issue #375: Extract all remaining hardcoded English strings
-2. Issue #379: Improve language switcher UX (flag display, keyboard nav, aria-label)
-3. Document i18n patterns for future component authors (use `FormattedMessage`, avoid string concatenation)
 # Decision: Baseline bot-conditions findings for Dependabot workflow
 
 **Date:** 2026-07-25
@@ -7214,56 +7116,6 @@ Implemented two artifacts:
 
 ---
 
-# Decision: Certbot container is optional via docker-compose.ssl.yml
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2025-07-18
-**Status:** Implemented
-
-## Context
-
-The certbot service and its Let's Encrypt volumes were always started by
-`docker compose up`, even for deployments that run behind a reverse proxy or
-on local networks without TLS. This forced operators to create
-`/source/volumes/certbot-data/{conf,www}` directories even when they had no
-use for them.
-
-## Decision
-
-All certbot/SSL configuration has been moved to `docker-compose.ssl.yml`:
-
-- **HTTP-only (default):** `docker compose up -d`
-- **With SSL:** `docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d`
-
-The overlay adds port 443, certbot volume mounts on nginx, the periodic nginx
-reload command, and the certbot sidecar container.
-
-## Rationale
-
-Docker Compose profiles (`profiles: ["ssl"]`) can disable services but cannot
-conditionally add volume mounts or ports to other services. Since nginx needed
-certbot's bind-mount volumes, profiles alone would still require the host
-directories to exist. A compose overlay file cleanly isolates all SSL config.
-
-## Impact
-
-- **New HTTP deployments:** No change needed — `docker compose up` works.
-- **Existing SSL deployments:** Add `-f docker-compose.ssl.yml` to all
-  `docker compose` commands.
-- Docs updated: production.md, quickstart.md, admin-manual.md,
-  failover-runbook.md.
-
----
-
-# User Directive: Certbot Optional
-
-**Date:** 2026-03-19T13:10Z
-**By:** jmservera (via Copilot)
-**What:** Make the certbot container optional in docker-compose. Most deployments run behind a general reverse proxy or on local networks and don't need Let's Encrypt certificate management.
-**Why:** User request — simplifies default deployment, reduces unnecessary container overhead.
-
----
-
 # Decision: User Management Module (v1.9.0)
 
 **Author:** Ripley (Lead)
@@ -7908,3 +7760,815 @@ The factory pattern `require_role("admin", "user")` already wraps the inner func
 - **Dallas (Frontend):** New endpoint `PUT /v1/auth/change-password` available for UI integration
 - **Brett (Infrastructure):** New env vars `AUTH_DEFAULT_ADMIN_USERNAME` and `AUTH_DEFAULT_ADMIN_PASSWORD` for Docker Compose
 
+# Decision: v1.10.0 PRD Issue Decomposition — User Document Collections & Book Metadata Editing
+
+**Date:** 2026-03-20  
+**Author:** Ripley (Lead)  
+**Status:** Active
+
+## Context
+
+Two PRDs were reviewed and decomposed into 16 GitHub issues for the v1.10.0 milestone:
+- **User Document Collections** (7 issues): #655, #659, #661, #664, #668, #670, #674
+- **Book Metadata Editing** (9 issues): #677, #681, #683, #686, #688, #691, #693, #695, #697
+
+## Key Decisions
+
+### 1. Naming: `series_s` not `collection_s`
+The new Solr field for book series/magazines/newspapers is named `series_s` to avoid confusion with the user-facing "Collections" feature (#591). This distinction is important — "collections" are personal reading lists (user data), "series" is document metadata.
+
+### 2. Separate databases for collections
+Collections use a new SQLite database (`collections.db`) separate from `auth.db`. This allows independent schema evolution and keeps user data isolated from auth concerns.
+
+### 3. Redis for metadata overrides (not SQLite)
+Manual metadata edits are persisted in Redis (permanent keys) rather than SQLite. Redis is already in the infrastructure, and the document-indexer already has Redis access. Simple key-value lookup during indexing avoids new schema migrations.
+
+### 4. Phase ordering
+Both features follow the established phase-gated execution pattern:
+- **Collections:** Backend API → Security review → Frontend pages → Search integration → Search enrichment → Infra → Testing
+- **Metadata editing:** Schema → Single API → Batch API → Indexer integration → Single UI → Batch UI → Series facet → Security → Testing
+
+### 5. Cross-feature coordination
+Both features are in v1.10.0 but are independent. No cross-feature dependencies. Team members working on both (Parker, Dallas, Ash) should prioritize whichever feature's dependencies are met first.
+
+## Team Routing
+
+| Member | Collections Issues | Metadata Issues |
+|--------|-------------------|-----------------|
+| Parker | #655 | #681, #683, #686 |
+| Kane | #659 | #695 |
+| Dallas | #661, #664 | #688, #691 |
+| Ash | #668 | #677, #693 |
+| Brett | #670 | — |
+| Lambert | #674 | #697 |
+
+---
+
+# Decision: v1.10.0 PRD Issue Decomposition — BCDR Plan & CI/CD Workflow Review
+
+**Author:** Brett (Infra Architect)  
+**Date:** 2026-03-20  
+**Status:** Active
+
+## Context
+
+Decomposed `docs/prd/bcdr-plan.md` and `docs/prd/cicd-workflow-review.md` into 19 GitHub issues for v1.10.0.
+
+## Key Decisions
+
+1. **BCDR phased delivery:** Phase 1 (scripts), Phase 2 (API + UI), Phase 3 (testing + hardening) all tracked in v1.10.0 milestone with phase noted in descriptions. Team can reprioritize across milestones if needed.
+
+2. **Backup tiers as separate issues:** Each tier (critical/high/medium) is its own issue because they use fundamentally different backup mechanisms (SQLite API, Solr REST API, Redis CLI). The orchestrator is a separate issue.
+
+3. **CI/CD grouped by workflow file:** Dependabot changes (branch filter, dedup, admin coverage) grouped since they all modify the same workflow file. Squad cleanup (JS extraction + label fix) similarly grouped.
+
+4. **Security routing to Kane:** Bandit enforcement (#690) and Checkov/zizmor consolidation (#698) routed to Kane as security domain. Brett handles the CI/CD plumbing; Kane owns the security policy decisions.
+
+5. **Embeddings-server uv migration out of scope:** Per CI/CD PRD Section 7, this is tracked separately — not included in these issues.
+
+## Issue Summary
+
+**BCDR:** #657, #660, #663, #665, #669, #672, #673, #676, #680, #682, #685  
+**CI/CD:** #687, #689, #690, #692, #694, #696, #698, #699
+
+---
+
+# Decision: v1.10.0 PRD Issue Decomposition — Folder Path Facet
+
+**Author:** Ash (Search / Content)  
+**Date:** 2026-03-20  
+**Status:** Active
+
+## Context
+
+Decomposed the Folder Path Facet PRD into 4 issues (#650, #652, #653, #656) targeting v1.10.0.
+
+## Key Decisions
+
+1. **Option A (client-side tree building)** chosen over Solr PathHierarchyTokenizer — simpler backend, keeps schema unchanged. If performance degrades with thousands of folders, upgrade to Option C in a future release.
+
+2. **Frontend tree UI kept as single issue (#652)** — flat list rendering, tree parsing, filter integration, and breadcrumb are tightly coupled. Splitting would create unnecessary handoff overhead for Dallas.
+
+3. **Batch operations (#656) is a coordination issue** — depends on the sister batch editing feature (#593). No search work needed beyond #650; this issue tracks the integration between folder facet and batch workflow.
+
+4. **Tests (#653) routed to Lambert as a separate issue** — follows team convention of testing as independent work item, not embedded in feature issues.
+
+## Impact
+
+All squad members working on v1.10.0 folder facet should reference the PRD and their assigned issue. Backend (#650) and frontend (#652) can start in parallel. Tests (#653) should start after #650 and #652 are ready. Batch integration (#656) waits for #593.
+
+---
+
+# Decision: v1.10.0 PRD Issue Decomposition — Stress Testing
+
+**Author:** Lambert (Tester)  
+**Date:** 2026-03-20  
+**Status:** Active
+
+## Context
+
+Decomposed the stress testing PRD into 9 GitHub issues for milestone v1.10.0 (#651, #654, #658, #662, #666, #671, #675, #679, #684).
+
+## Key Decomposition Choices
+
+1. **Phase 1 split into 3 issues** — Framework setup, test data generator, and resource monitor are each independently implementable with different owners (Brett, Parker, Brett).
+
+2. **One issue per test category** — Indexing (#662), search (#666), concurrent (#671), and UI (#675) are separate issues. They have different domain owners and can be developed in parallel once foundation is ready.
+
+3. **Documentation separated from testing** — Hardware requirements & tuning docs (#679) is its own issue, depends on all test results. This avoids blocking test implementation on doc writing.
+
+4. **CI integration is last** — #684 is independent and follows the PRD's recommendation to start with manual trigger before automating.
+
+## Team Routing
+
+- **Brett (Infra):** Framework setup (#651), resource monitor (#658), hardware docs (#679), CI integration (#684)
+- **Parker (Backend):** Test data generator (#654), indexing tests (#662), concurrent load tests (#671)
+- **Ash (Search):** Search latency benchmarks (#666)
+- **Lambert (Tester):** Playwright UI stress tests (#675)
+
+## Impact
+
+All squad members with stress test issues should read the PRD at `docs/prd/stress-testing.md` before starting work. Foundation issues (#651, #654, #658) block the test implementation issues.
+
+---
+
+# Decision: v1.10.0 Milestone Kickoff — Priority Ordering & Wave Plan
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-20  
+**Status:** ACTIVE  
+**Milestone:** v1.10.0  
+**Scope:** 48 open issues + 7 pre-milestone bugs
+
+## Context
+
+v1.10.0 is the largest milestone to date: 48 issues across 6 PRD areas (BCDR, Book Metadata Editing, CI/CD Review, Folder Path Facet, Stress Testing, User Document Collections) plus 1 cross-cutting issue. Additionally, 7 bugs outside the milestone are assigned to squad members and must be resolved first. This decision records the priority ordering, wave plan, critical path, and deferral recommendations established at the milestone kickoff ceremony.
+
+## Priority Ordering (Top to Bottom)
+
+### Tier 0 — Bugs (before any v1.10.0 work)
+
+| # | Issue | Severity | Owner | Notes |
+|---|-------|----------|-------|-------|
+| 1 | #646 | P0 | Lambert → Ash + Parker | Semantic index 502 — service is broken for users |
+| 2 | #645 | High | Parker | Auth cookie — impacts every user session |
+| 3 | #678 | High | Parker | Admin infinite login loop — blocks admin workflows |
+| 4 | #648 | Medium | Parker + Ash | Duplicate books in library — data integrity issue |
+| 5 | #647 | Medium | Parker | PDFs don't open — core feature regression |
+| 6 | #667 | Low | Dallas | Version number in UI — quick cosmetic fix |
+| 7 | #649 | Low | Dallas + Lambert | Responsive overlap — CSS fix |
+
+### Tier 1 — Foundations (Wave 1, no dependencies)
+
+Backend API foundations, search schema changes, infra scaffolding, CI quick wins.
+
+### Tier 2 — Building Blocks (Wave 2, depends on foundations)
+
+UI components, secondary APIs, mid-tier backup scripts, stress test scenarios.
+
+### Tier 3 — Integration (Wave 3, depends on building blocks)
+
+Orchestrators, full API surface, end-to-end flows, security reviews.
+
+### Tier 4 — Polish & Finalization (Wave 4)
+
+E2E tests, documentation, automated drills, CI integration, batch operations.
+
+## Wave Plan
+
+### Wave 0: Bug Fixes (Days 1–3)
+
+All hands on bugs. No v1.10.0 work starts until P0 (#646) is resolved.
+
+| Issue | Title | Agent(s) | Est. |
+|-------|-------|----------|------|
+| #646 | Semantic index 502 | Lambert (investigate) → Ash + Parker (fix) | 1d |
+| #645 | Login cookie missing | Parker | 0.5d |
+| #678 | Admin infinite login loop | Parker | 0.5d |
+| #648 | Duplicate books in library | Parker + Ash (investigate) | 1d |
+| #647 | PDFs don't open in library | Parker | 0.5d |
+| #667 | Version number incorrect | Dallas | 0.25d |
+| #649 | Book results overlap (small screens) | Dallas + Lambert | 0.5d |
+
+**Exit criteria:** All 7 bugs closed. P0 #646 verified in integration test environment.
+
+### Wave 1: Foundations (Week 1–2, after bugs)
+
+Start foundation work for all 6 PRD areas in parallel. Each area begins with its lowest-dependency issue.
+
+| Issue | Title | Agent(s) | PRD Area |
+|-------|-------|----------|----------|
+| #670 | Collections infra: Docker volume & DB config | Brett + Parker | BCDR |
+| #657 | Backup script: Critical tier | Parker + Brett | BCDR |
+| #681 | Single doc metadata edit API | Parker | Metadata |
+| #650 | folder_path_s search facet in API | Ash + Parker | Folder Facet |
+| #677 | Add series_s field to Solr schema | Ash | Collections |
+| #655 | Collections SQLite model & CRUD API | Parker | Collections |
+| #651 | Stress test framework foundation | Brett + Parker | Stress |
+| #658 | Docker resource monitoring collector | Brett | Stress |
+| #692 | Merge lint-frontend.yml into ci.yml | Dallas + Brett | CI/CD |
+| #690 | Bandit as required status check | Kane + Dallas | CI/CD |
+| #689 | Refactor dependabot-automerge | @copilot or Brett | CI/CD |
+| #699 | Clean up squad automation workflows | @copilot or Brett | CI/CD |
+| #696 | Improve integration test reliability | Brett + Lambert | Cross-cutting |
+| #659 | Collections access control review | Kane | Collections (security) |
+| #695 | Metadata editing security review | Kane | Metadata (security) |
+
+**Parker bottleneck mitigation:** Parker has 6 foundation items. Sequence: #681 (metadata API) and #655 (collections API) first (highest user value), then #657 (critical backup) and #650 (folder facet support for Ash). Brett leads #670, #651, #658 independently.
+
+**@copilot candidates:** #689 and #699 are well-defined CI/CD refactors — good fit for autonomous pickup.
+
+**Exit criteria:** All foundation APIs return 200 on happy path. Solr schema changes deployed to dev. Stress test framework runs a no-op test. CI/CD quick wins merged.
+
+### Wave 2: Building Blocks (Week 2–3)
+
+Build on foundation APIs with UI, secondary APIs, and mid-tier backup scripts.
+
+| Issue | Title | Agent(s) | Depends On |
+|-------|-------|----------|------------|
+| #660 | Backup script: High tier (Solr + ZK) | Parker + Brett | #657 |
+| #683 | Batch metadata edit API | Parker | #681 |
+| #686 | Metadata override persistence in indexer | Parker | #681 |
+| #688 | Single book metadata edit modal UI | Dallas + Parker | #681 |
+| #652 | Folder facet hierarchical tree UI | Dallas + Parker | #650 |
+| #661 | Collections frontend: pages & components | Dallas + Parker | #655 |
+| #654 | Synthetic test data generator | Parker + Dallas | #651 |
+| #666 | Search latency benchmarks | Ash + Parker | #651 |
+| #668 | Search enrichment with collection membership | Ash + Parker | #655 |
+| #653 | Folder facet unit/integration tests | Lambert + Parker | #650 |
+| #687 | Enforce release pipeline: dev → main → tag | Dallas + Brett | — |
+| #694 | Auto-trigger pre-release validation | Dallas + Brett | — |
+| #698 | Consolidate IaC scans (Checkov + zizmor) | Kane + Dallas | — |
+
+**Exit criteria:** Backup covers critical + high tiers. Single and batch metadata edit APIs functional. Core UI components rendered. Folder facet visible in search results. Collections pages navigable.
+
+### Wave 3: Integration (Week 3–4)
+
+Connect the pieces: orchestrators, full API surface, end-to-end flows.
+
+| Issue | Title | Agent(s) | Depends On |
+|-------|-------|----------|------------|
+| #663 | Backup script: Medium tier (Redis + RMQ) | Parker + Brett | #660 |
+| #665 | Backup orchestrator & cron scheduling | Brett + Lambert | #657, #660, #663 |
+| #669 | Restore orchestrator & component restore | Parker + Brett | #657, #660, #663 |
+| #676 | Backup/Restore API endpoints | Parker | #665, #669 |
+| #691 | Batch metadata selection & edit panel UI | Dallas + Parker | #683 |
+| #664 | Collections: search integration & add-to-collection | Dallas + Parker | #661, #655 |
+| #662 | Indexing pipeline stress tests | Parker | #651, #654 |
+| #671 | Concurrent user load testing (Locust) | Parker | #651 |
+| #675 | Playwright UI stress tests | Lambert + Parker | #651 |
+
+**Exit criteria:** Full backup/restore cycle works (backup all tiers → restore → verify). Metadata editing complete end-to-end. Collections usable from search. Stress test suite runs key scenarios.
+
+### Wave 4: Polish & Finalization (Week 4–5)
+
+E2E tests, docs, admin UI, automated workflows.
+
+| Issue | Title | Agent(s) | Depends On |
+|-------|-------|----------|------------|
+| #672 | Post-restore verification test suite | Lambert + Parker | #669 |
+| #680 | Admin UI backup dashboard & restore wizard | Dallas + Parker | #676 |
+| #697 | Metadata editing E2E testing & docs | Lambert + Parker | #683, #688, #691 |
+| #674 | Collections E2E testing & docs | Lambert + Parker | #664 |
+| #673 | Disaster recovery runbook | Newt + Dallas | #669, #672 |
+| #679 | Min hardware requirements & tuning docs | Dallas + Brett | stress test results |
+
+### Deferred to v1.10.1 (Recommended)
+
+| Issue | Title | Reason |
+|-------|-------|--------|
+| #682 | Automated monthly restore drill workflow | Nice-to-have automation; manual drills sufficient for v1.10.0 |
+| #685 | Backup integrity verification & checksum system | Can ship backup/restore without checksums initially; add as hardening |
+| #684 | Stress test CI integration | Manual stress test runs acceptable for v1.10.0; CI integration is polish |
+| #656 | Folder facet as batch operation selector | Cross-cutting dependency on both folder facet (#650) and batch metadata (#683); complex integration best done after both stabilize |
+
+**Deferring 4 issues reduces scope from 48 to 44 issues.** These are all "hardening" or "automation" items, not core functionality. They make the milestone realistic without sacrificing user value.
+
+## Critical Path
+
+The longest dependency chain runs through **BCDR**:
+
+```
+#670 (infra) → #657 (critical) → #660 (high) → #663 (medium)
+                                                      ↓
+                                          #665 (orchestrator) + #669 (restore)
+                                                      ↓
+                                              #676 (API endpoints)
+                                                      ↓
+                                              #680 (Admin UI)
+                                                      ↓
+                                          #672 (verification) → #673 (runbook)
+```
+
+**Critical path length: 8 sequential steps (BCDR).** This is the schedule driver. Any delay in backup script development cascades to everything downstream.
+
+**Secondary critical paths:**
+- Metadata: #681 → #683 → #691 → #697 (4 steps)
+- Collections: #655 → #661 → #664 → #674 (4 steps)
+
+## Risks & Mitigations
+
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|-----------|------------|
+| **Parker bottleneck** | Parker is primary on 25+ issues | HIGH | Delegate well-defined CI/CD to @copilot; Brett leads BCDR infra; Ash leads search schema changes independently |
+| **BCDR scope creep** | 12 issues is the largest single area | MEDIUM | Defer #682, #685 to v1.10.1; strict phase gating |
+| **Solr schema conflicts** | 3 features (#650 folder facet, #677 series_s, #681 metadata) all touch Solr | MEDIUM | Ash coordinates all schema changes; single configset PR per wave |
+| **Stress tests reveal new work** | Performance issues create unplanned issues | MEDIUM | Stress testing is diagnostic only for v1.10.0; fixes go to v1.10.1+ |
+| **Bug investigation unknowns** | #646 P0 or #648 duplicates may have deep root causes | MEDIUM | Time-box bug investigation to 2 days; escalate if not root-caused |
+| **48-issue milestone is too large** | Risk of shipping a partial release | HIGH | 4 issues deferred; strict wave gating; weekly check-ins with Juanma |
+
+## Agent Load Balancing
+
+| Agent | Wave 0 | Wave 1 | Wave 2 | Wave 3 | Wave 4 | Total |
+|-------|--------|--------|--------|--------|--------|-------|
+| Parker | 4 bugs | 4 foundations | 5 building | 4 integration | 3 polish | ~20 |
+| Brett | — | 4 infra | — | 3 orchestration | 1 docs | ~8 |
+| Dallas | 2 bugs | 1 CI | 4 UI | 2 UI | 2 polish | ~11 |
+| Ash | (bug support) | 2 schema | 2 search | — | — | ~4 |
+| Lambert | 1 bug (investigate) | 1 test | 1 test | 1 stress | 3 E2E | ~7 |
+| Kane | — | 2 security reviews | 1 CI | — | — | ~3 |
+| Newt | — | — | — | — | 1 runbook | ~1 |
+| @copilot | — | 2 CI/CD | — | — | — | ~2 |
+
+**Parker is the bottleneck.** Mitigate by: (1) having Brett lead all BCDR infra independently, (2) Ash leading all Solr schema work, (3) @copilot picking up CI/CD, (4) sequencing Parker's work by user value.
+
+## Definition of Done — v1.10.0 Shipped
+
+1. **All 7 bugs resolved** and verified (especially P0 #646)
+2. **BCDR:** Full backup/restore cycle works for all 3 tiers; API endpoints exist; Admin UI has basic dashboard; DR runbook written
+3. **Book Metadata:** Single and batch edit via API and UI; metadata survives re-indexing; security review complete
+4. **CI/CD:** Workflows consolidated; Bandit required; release pipeline enforced
+5. **Folder Path Facet:** folder_path_s available as facet in search API and UI with hierarchical tree
+6. **Stress Testing:** Framework exists; indexing, search, and concurrent user benchmarks run; minimum hardware documented
+7. **Collections:** CRUD API, frontend pages with search integration, access control reviewed, series_s field in Solr
+8. **Cross-cutting:** Integration test reliability improved (#696)
+9. **All 6 service test suites passing** (solr-search, document-indexer, document-lister, embeddings-server, aithena-ui, admin)
+10. **Release documentation committed** (CHANGELOG, release notes, test report, feature guides)
+11. **VERSION file updated to 1.10.0**
+12. **4 deferred issues** (#682, #685, #684, #656) tracked in v1.10.1 milestone
+
+## Issues Needing Research Before Implementation
+
+| Issue | Question | Who Investigates |
+|-------|----------|-----------------|
+| #655 | SQLite for collections — where does the DB file live in Docker? Volume strategy? | Brett + Parker |
+| #681 | Solr atomic updates — which fields support partial updates in our schema? | Ash |
+| #670 | Volume layout for backup targets — single volume or per-tier? | Brett |
+| #651 | Stress test tooling choice — Locust vs. k6 vs. custom? | Brett + Parker |
+| #648 | Root cause of duplicate books — indexer bug, Solr uniqueKey issue, or file watcher re-trigger? | Parker + Ash |
+
+## Impact
+
+- All squad members: Work assigned for the next 4-5 weeks
+- Juanma: Weekly check-in recommended at wave boundaries
+- @copilot: 2 CI/CD issues queued for autonomous pickup
+- This plan supersedes any prior v1.10.0 planning documents
+
+## References
+
+- Milestone: v1.10.0
+- Team roster: .squad/team.md
+- Routing rules: .squad/routing.md
+- Bug issues: #645, #646, #647, #648, #649, #667, #678
+- PRD issues: #650–#699 (see wave plan above)
+
+---
+
+# Decision: Nginx proxy timeouts must match upstream service timeouts
+
+**Author:** Ash (Search Engineer)
+**Date:** 2026-03-19
+**Context:** Issue #562 — 502 Bad Gateway on vector/hybrid search
+
+## Decision
+
+Any nginx `location` block that proxies to a service with configurable timeouts (e.g., embeddings generation, Solr bulk operations) **must** set `proxy_read_timeout` to at least 1.5× the upstream service timeout.
+
+For the `/v1/` API location (which routes search requests through solr-search → embeddings-server):
+- `proxy_read_timeout 180s` (1.5× the 120s `EMBEDDINGS_TIMEOUT`)
+- `proxy_connect_timeout 10s` (fail fast on unreachable upstream)
+
+## Rationale
+
+The default nginx `proxy_read_timeout` is 60s. The embeddings server timeout is 120s. When embedding generation for long queries exceeded 60s, nginx killed the connection before solr-search could return a graceful degradation response (fallback to keyword search). This caused a raw 502 error to reach the user.
+
+## Impact
+
+Team members adding new nginx proxy locations or changing service timeouts should verify the nginx timeout chain is consistent.
+
+---
+
+# Decision: Nginx Config Template as Source of Truth
+
+**Date**: 2026-03-20  
+**Author**: Ash (Search Engineer)  
+**Context**: #562 — Vector/hybrid search 502 errors
+
+## Problem
+
+The nginx `default.conf` file was out of sync with `default.conf.template`:
+- **Template** (`default.conf.template`) had `proxy_read_timeout 180s` in `/v1/` location (added in PR #568)
+- **Active config** (`default.conf`) was missing these timeouts
+- This caused 502 Bad Gateway errors when embedding generation exceeded nginx's default 60s timeout
+
+## Root Cause
+
+`default.conf` appears to have been manually edited or regenerated from an older template, losing the timeout directives.
+
+## Decision
+
+**Nginx template file (`default.conf.template`) is the source of truth.**
+
+### Guidelines:
+1. **Always edit both** `default.conf` and `default.conf.template` together — they must stay in sync
+2. `default.conf` is the runtime config mounted directly by docker-compose.yml
+3. `default.conf.template` is used for SSL/envsubst builds (docker-compose.ssl.yml)
+4. There is no automated generation step — both files must be manually maintained in sync
+
+### Why this matters:
+- Nginx config drift causes hard-to-debug production issues (like 502s)
+- Template-first approach enables environment-specific config via variable substitution
+- Single source of truth prevents config divergence
+
+## Action Items
+
+- [x] Fixed immediate issue: added missing timeouts to `default.conf` (PR #626)
+- [ ] Document in `.squad/decisions.md` or project README that template is source of truth
+- [ ] Verify build process generates `default.conf` from template (or document manual sync requirement)
+
+## Related
+
+- PR #568 — originally added timeouts to template
+- PR #626 — fixed config drift in `default.conf`
+
+---
+
+# Decision: Auth DB Migration Framework
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-07-22
+**Issue:** #557
+**PR:** #571
+
+## Context
+
+The auth system uses an SQLite database at `AUTH_DB_PATH`. As features evolve, the schema will need changes. We need a strategy that is safe, forward-only, and doesn't require external tools.
+
+## Decisions
+
+1. **Schema versioning via `schema_version` table.** Every auth DB tracks its version. Version 1 is the initial schema (users table). This is the source of truth for migration state.
+
+2. **Forward-only migrations.** Rollbacks are not supported. Migrations must be additive (add columns, add tables, add indexes). Destructive changes should be avoided or handled by creating new structures and migrating data forward.
+
+3. **Migration naming convention:** `mNNNN_<description>.py` in `src/solr-search/migrations/`. Each module exposes `VERSION` (int), `DESCRIPTION` (str), and `upgrade(conn)` (function). Migrations are auto-discovered and applied in VERSION order on startup.
+
+4. **Migrations run inside transactions.** The `upgrade()` function must NOT call `conn.commit()`. The framework commits after recording the version. If a migration fails, the transaction rolls back and the app will retry on next startup.
+
+5. **Backup strategy:** Use SQLite `.backup` command via `scripts/backup_auth_db.sh`. This is safe to run while the app is serving traffic. Backups go to `/data/auth/backups/` by default.
+
+6. **No external migration tools.** We chose a lightweight custom framework over Alembic because the auth DB is a single-file embedded SQLite database with a simple schema. The custom approach has zero dependencies and is self-contained.
+
+## Impact
+
+- **Parker/Dallas:** When adding auth features that need schema changes, create a new migration file following the template. Don't modify `init_auth_db` directly for schema evolution.
+- **Brett:** Backup script is included in the container image. Production deployments should add a cron job for scheduled backups.
+- **All:** The migration framework applies automatically on startup — no manual intervention needed for upgrades.
+
+---
+
+# User Directive: Board Status Updates (2026-03-20)
+
+**By:** Juanma (via Copilot)
+**What:** Every team member must update the project board status when they complete work. Agents should set the issue/PR status on the GitHub Project Board as part of their workflow.
+**Why:** User request — captured for team memory
+
+---
+
+# User Directive: Release Order Enforcement (2026-03-19)
+
+**By:** Juanma (via Copilot)
+**What:** Milestones MUST be released in sequential order: v1.8.0 → v1.8.1 → v1.8.2 → v1.9.0 → v1.10.0. Do not skip ahead. Finish current in-flight work, but then prioritize releasing in the correct order. v1.8.0 has not been released yet — that's the blocker.
+**Why:** User request — the team was working on v1.9.0 PRs while v1.8.0 still has 2 open issues (#515 release docs, #514 WCAG). This violates the project's sequential release policy.
+
+---
+
+# User Directive: Release to Main Branch (2026-03-20)
+
+**By:** Juanma (via Copilot)
+**What:** Releases must merge dev → main before tagging. Don't upgrade VERSION on dev until the release is cut to main. The full process: finish work on dev → create PR dev → main → merge → tag on main → create GitHub release.
+**Why:** User request — captured for team memory. Production releases must flow through main.
+
+---
+
+# User Directive: MCP Servers Available (2026-03-19)
+
+**By:** Juanma (via Copilot)
+**What:** Three MCP servers are configured in `.vscode/mcp.json` and available for development:
+- **Context7** (`@upstash/context7-mcp`) — library documentation lookup (use for API docs of dependencies like FastAPI, Solr, React, Playwright, etc.)
+- **DeepWiki** (`https://mcp.deepwiki.com/mcp`) — deep repository/wiki knowledge (use for understanding external project internals)
+- **Playwright MCP** (`@playwright/mcp@latest`) — browser automation via MCP (use for UI testing, screenshots, browser interaction)
+
+Agents should leverage these when available (VS Code sessions) for library docs lookups instead of guessing APIs. In CLI sessions, fall back to web_fetch or documentation files.
+**Why:** User request — captured for team memory. Ensures agents use available tools for accurate library/API information.
+
+---
+
+# Decision: E2E emoji and checkbox assertion patterns
+
+**Author:** Dallas (Frontend Dev)
+**Date:** 2026-07-22
+**PR:** #638
+
+## Context
+
+Two E2E Playwright tests were failing in CI (headless Chromium):
+1. Emoji characters in page titles rendered as whitespace, breaking exact `toHaveText` assertions
+2. `facetCheckbox.check()` failed due to React controlled component state management
+
+## Decision
+
+1. **Emoji text assertions:** Use `toContainText("Library")` instead of `toHaveText("📖 Library")` for all page title assertions in E2E tests. This tolerates missing emoji rendering in headless browsers.
+
+2. **Facet interaction pattern:** Click the `.facet-label` element (not `.facet-checkbox` with `.check()`) when toggling facet filters. This matches the proven pattern in `search.spec.ts` and avoids Playwright's native checkbox toggle expectation conflicting with React's controlled state.
+
+## Applies to
+
+All E2E Playwright tests in `e2e/playwright/tests/`. Future tests should follow these patterns.
+
+---
+
+# Decision: WCAG 2.1 AA Accessibility Standards for Aithena UI
+
+**Author:** Dallas (Frontend Dev)
+**Date:** 2026-03-19
+**Context:** Issue #514, PR #597
+
+## Decision
+
+The Aithena React frontend now enforces WCAG 2.1 AA accessibility standards through:
+
+1. **Static linting:** `eslint-plugin-jsx-a11y` (recommended ruleset) is integrated into the ESLint flat config. All new components must pass these rules.
+
+2. **Color contrast minimum:** All text on dark backgrounds must use `rgba(255, 255, 255, 0.65)` or higher. The previous pattern of 0.3–0.45 opacity fails WCAG 1.4.3 (4.5:1 contrast ratio).
+
+3. **Skip-to-content pattern:** The app includes a skip-to-content link in App.tsx that targets `#main-content`. Future layout changes must preserve this `id`.
+
+4. **Motion/contrast media queries:** `prefers-reduced-motion` and `prefers-contrast` are handled at the App.css level. New animations should use CSS custom properties or `transition-duration` so they're automatically disabled.
+
+5. **Modal pattern:** All modal dialogs must include `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` pointing to a heading. Backdrop click-dismiss overlays use eslint-disable comments with the `-- modal backdrop dismiss pattern` reason.
+
+## Rationale
+
+- Legal compliance (accessibility requirements in EU, US Section 508)
+- Inclusive UX for all users
+- SEO benefits from semantic HTML
+- eslint-plugin-jsx-a11y catches ~70% of issues at dev time, preventing regressions
+
+## Impact
+
+- All squad members writing React components should be aware of jsx-a11y lint rules
+- Lambert (QA) should add browser-based axe DevTools testing to the QA checklist
+
+---
+
+# Decision: Password Policy Module Design
+
+**Author:** Kane (Security Engineer)  
+**Date:** 2026-03-19  
+**PR:** #574 (Closes #552)  
+**Status:** PROPOSED
+
+## Context
+
+v1.9.0 user management needs password validation beyond the basic 8-char length check in the User CRUD PR (#572). Issue #552 defines the required policy.
+
+## Decision
+
+Created a standalone `password_policy.py` module with a single public function:
+
+```python
+validate_password(password: str, username: str) -> list[str]
+```
+
+Returns a list of violation messages (empty = valid). This list-based return enables the API to send all violations at once (422 response) rather than failing on the first one.
+
+**Policy defaults (v1.9.0, hardcoded):**
+- Min length: 10 characters
+- Max length: 128 characters (Argon2 DoS protection)
+- Complexity: at least 3 of 4 categories (uppercase, lowercase, digit, special)
+- No username in password (case-insensitive substring match)
+
+## Design Rationale
+
+1. **Standalone module** — no dependency on auth.py. Any endpoint (register, change-password, reset-password CLI) can import it independently.
+2. **List return vs. exception** — returning violations as a list lets the caller decide whether to raise, log, or aggregate. The CRUD PR's `PasswordPolicyError` exception can still be used by wrapping the list check.
+3. **Unicode as special** — non-ASCII characters (`[^A-Za-z0-9]`) count as "special". This is the secure default — it broadens the character space and avoids locale-dependent regex behavior.
+4. **Hardcoded constants** — configurable policy deferred to a future release. Constants are module-level for easy access from tests and future config loading.
+
+## Integration Path
+
+The User CRUD PR (#572) should:
+1. Import `validate_password` from `password_policy`
+2. Replace the existing `validate_password` in auth.py
+3. Call it in `create_user()` and pass violations to `PasswordPolicyError`
+4. Return 422 with the violation list
+
+## Impact
+
+- **Parker (Backend):** Integration needed in User CRUD PR #572 — replace auth.py's basic check with this module.
+- **Dallas (Frontend):** API will return a list of violation strings in 422 responses — display them to the user.
+- **All:** Password minimum increased from 8 to 10 characters. Existing users are not affected until they change their password.
+
+---
+
+# Decision: User CRUD API Pattern (Issue #549)
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-19
+**PR:** #572
+
+## Context
+Implemented the 4 User Management API endpoints as the v1.9.0 critical-path foundation.
+
+## Decisions Made
+
+### 1. `require_role()` as reusable FastAPI dependency
+- Returns `Depends(inner_function)` so it can be used directly in `Annotated[AuthenticatedUser, require_role("admin")]`
+- Centralizes role checking — all future admin-only endpoints should use this pattern
+- Lives in `main.py` alongside the other auth helpers (`_get_current_user`, `_authenticate_request`)
+
+### 2. Password policy enforcement in auth.py
+- 8 char minimum, 128 char maximum — enforced in `validate_password()` before Argon2 hashing
+- Max-length check prevents DoS via oversized inputs to Argon2
+- Policy lives in auth.py constants (`MIN_PASSWORD_LENGTH`, `MAX_PASSWORD_LENGTH`) for single source of truth
+
+### 3. Custom exception types for auth errors
+- `UserExistsError(ValueError)` — for duplicate username on create/update
+- `PasswordPolicyError(ValueError)` — for password validation failures
+- Endpoints catch these and translate to appropriate HTTP status codes (409, 422)
+
+### 4. PUT /v1/auth/users/{id} authorization model
+- Admin: can update any user's username and role
+- Non-admin: can update ONLY their own username, cannot change role
+- This allows self-service username changes while preventing privilege escalation
+
+### 5. Self-delete prevention
+- Admin cannot delete their own account via DELETE /v1/auth/users/{id}
+- Prevents last-admin lockout scenario
+- Simple check: `admin_user.id == user_id` → 400 Bad Request
+
+## Impact on Other Issues
+This unblocks all 8 dependent issues in v1.9.0 milestone. The `require_role()` dependency and auth CRUD functions are ready for reuse.
+
+---
+
+# Decision: Restore Admin Streamlit Service Deployment
+
+**Date:** 2026-03-20  
+**Author:** Parker (Backend Dev)  
+**Issue:** #561 — Admin page infinite login loop  
+**PR:** #628
+
+## Context
+
+The admin Streamlit dashboard service was removed from `docker-compose.yml` in v1.8.2, but:
+- The service code still existed in `src/admin/`
+- The HTML landing page at `/admin/` still linked to `/admin/streamlit/`
+- PR #570 had implemented cookie-based SSO auth for the service (reading the `aithena_auth` JWT cookie)
+
+This created a redirect loop: clicking "Streamlit Admin" on `/admin/` redirected to `/admin/streamlit/`, which nginx redirected back to `/admin/`.
+
+## Decision
+
+**Re-deploy the admin Streamlit service** with proper Docker Compose configuration.
+
+### Service Configuration
+
+```yaml
+admin:
+  build: ./src/admin/Dockerfile
+  expose: ["8501"]
+  depends_on:
+    - redis (healthy)
+    - rabbitmq (healthy)
+    - solr-search (healthy)
+  healthcheck:
+    test: wget -qO /dev/null http://localhost:8501/admin/streamlit/healthz
+  environment:
+    - AUTH_JWT_SECRET (required for cookie SSO)
+    - AUTH_COOKIE_NAME (default: aithena_auth)
+    - AUTH_ADMIN_USERNAME (fallback login, default: admin)
+    - AUTH_ADMIN_PASSWORD (fallback login, required)
+    - REDIS_HOST, RABBITMQ_HOST, etc.
+```
+
+### Nginx Routing
+
+```nginx
+location /admin/streamlit/ {
+    auth_request /_auth;  # Validate JWT via solr-search
+    proxy_set_header Cookie $http_cookie;  # Forward auth cookie
+    proxy_pass http://admin:8501;
+}
+```
+
+### Authentication Flow
+
+1. User logs into main app at `/` → receives `aithena_auth` JWT cookie (24h TTL)
+2. User clicks "Streamlit Admin" link → `/admin/streamlit/`
+3. Nginx validates JWT via `auth_request /_auth` (calls solr-search `/v1/auth/validate`)
+4. If valid, nginx forwards request to `admin:8501` with cookies
+5. Admin service reads cookie via `st.context.cookies`, validates JWT, checks `role == "admin"`
+6. If cookie auth succeeds → auto-login via SSO, no second login needed
+7. If cookie auth fails (expired, non-admin role) → show Streamlit login form (fallback)
+
+## Rationale
+
+- The admin dashboard provides operational visibility (Redis keys, RabbitMQ queue stats)
+- The SSO auth implementation from PR #570 was solid, just needed deployment
+- Deploying the service is safer than removing the link (users expect admin tools)
+- Health check ensures the service is ready before nginx routes to it
+- Resource limits (256MB) keep it lightweight
+
+## Alternatives Considered
+
+1. **Remove the /admin/streamlit/ link entirely** → Rejected: loses operational visibility
+2. **Build a new admin UI in React** → Rejected: Streamlit app works, just needs deployment
+3. **Merge admin into solr-search service** → Rejected: separate concerns, easier to debug
+
+## Impact
+
+- **Users:** Can now access the admin dashboard via cookie-based SSO
+- **Ops:** No change to deployment flow (`./buildall.sh` includes admin service)
+- **Security:** Admin dashboard requires `admin` role (non-admin JWTs rejected)
+
+## Testing
+
+- All 95 admin tests pass (auth, JWT, cookie SSO, role enforcement)
+- docker-compose.yml validates as proper YAML
+- Service dependencies ensure correct startup order
+
+---
+
+# Decision: Admin SSO via shared JWT cookie
+
+**Author:** Parker  
+**Date:** 2025-07  
+**Issue:** #561  
+**PR:** #570
+
+## Context
+
+The admin Streamlit app had its own independent auth system (env-var credentials + session state JWT), completely separate from the main app's auth (SQLite + Argon2id + `aithena_auth` cookie). This caused an infinite login loop because users had to authenticate twice through different systems.
+
+## Decision
+
+Added SSO cookie-based authentication to the admin Streamlit app. `check_auth()` now falls back to reading the `aithena_auth` HTTP cookie (forwarded by nginx) and validating the JWT using the shared `AUTH_JWT_SECRET`. If valid, the user is auto-authenticated without a second login.
+
+## Implications
+
+- **AUTH_JWT_SECRET must be identical** between `solr-search` and `streamlit-admin` services (already the case in docker-compose.yml).
+- **AUTH_COOKIE_NAME must match** between services (default: `aithena_auth`, added to admin's docker-compose env).
+- The Streamlit fallback login form still works for direct access without nginx (e.g., local dev on port 8501).
+- Solr-search JWTs contain `user_id` which admin ignores — this is fine since admin only needs `sub` and `role`.
+
+## Affects
+
+- Brett: nginx config remains unchanged; `auth_request` still validates before forwarding to Streamlit.
+- Dallas: no frontend changes needed; the React app's login sets the `aithena_auth` cookie that now flows through to Streamlit.
+
+---
+
+# Decision: Enhanced Password Policy and Auth Feature Patterns
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-19
+**PR:** #576 (Closes #550, #551, #553)
+**Status:** PROPOSED
+
+## Context
+
+Three auth features were implemented together because they share the same module surface: admin seeding, change-password, and RBAC enforcement on endpoints.
+
+## Decisions
+
+### 1. Password policy now requires uppercase + lowercase + digit
+The `validate_password()` function was enhanced beyond simple length checks to require at least one uppercase letter, one lowercase letter, and one digit. This is a breaking change for any code creating users with weak passwords (e.g., tests).
+
+### 2. Admin seeding is triggered inside `init_auth_db()`
+Rather than adding a separate startup step, `_seed_default_admin()` runs automatically at the end of `init_auth_db()`. This ensures seeding happens exactly once when the table is created and is idempotent (skips if any users exist).
+
+### 3. RBAC Phase 1: new endpoints only, backward compat for admin
+- `/v1/upload` gets `require_role("admin", "user")` — viewers cannot upload
+- `/v1/admin/*` endpoints keep X-API-Key authentication (no change)
+- Search and books endpoints remain accessible to any authenticated user
+- Phase 2 (future): Consider migrating admin endpoints from API-key to role-based auth
+
+### 4. `require_role()` returns `Depends()` directly
+The factory pattern `require_role("admin", "user")` already wraps the inner function in `Depends()`. Use it directly in `dependencies=[...]` lists or `Annotated[AuthenticatedUser, require_role(...)]` type hints.
+
+## Impact
+
+- **All team members:** Test passwords must now include uppercase, lowercase, and digit (e.g., "SecurePass123" instead of "password123")
+- **Dallas (Frontend):** New endpoint `PUT /v1/auth/change-password` available for UI integration
+- **Brett (Infrastructure):** New env vars `AUTH_DEFAULT_ADMIN_USERNAME` and `AUTH_DEFAULT_ADMIN_PASSWORD` for Docker Compose

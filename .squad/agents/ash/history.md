@@ -44,6 +44,24 @@
 
 <!-- Append learnings below -->
 
+### 2026-03-20 — PRD decomposition: Folder Path Facet (#592)
+
+**PRD:** `docs/prd/folder-path-facet.md` — decomposed into 4 GitHub issues for v1.10.0 milestone:
+
+| Issue | Title | Routed to |
+|-------|-------|-----------|
+| #650 | Add folder_path_s as search facet in solr-search API | squad:ash |
+| #652 | Folder facet hierarchical tree UI component | squad:dallas |
+| #653 | Folder facet unit and integration tests | squad:lambert |
+| #656 | Folder facet as selection mechanism for batch operations | squad:dallas + squad:parker |
+
+**Decomposition decisions:**
+- Split backend (small, 3-5 LOC) from frontend (medium, tree rendering) since they're independently implementable
+- Kept the entire frontend tree UI as one issue rather than splitting flat list vs. tree — they're tightly coupled and one developer should own the full component
+- Tests as a separate issue routed to Lambert, not embedded in backend/frontend issues — follows the squad routing table
+- Batch operations integration kept as its own issue because it depends on the sister batch editing feature (#593) and involves both Dallas and Parker
+- Used Option A (client-side tree building) per PRD recommendation — simpler first, Solr PathHierarchy upgrade deferred
+
 ### 2026-03-20 — Fix #562: Vector/hybrid 502 errors (nginx timeout issue)
 
 **Problem**: Vector/hybrid search was returning 502 Bad Gateway errors intermittently. Additionally, user reported "keyword search returns no results" but this was not reproducible in tests.
@@ -112,3 +130,31 @@
 - v0.5 completion: #163 (search mode selector UI), #41 (frontend tests), #47 (similar-books UI)
 - v0.6 planning: upload endpoint, file watcher, hardening
 - Post-v1.0: query reranking, semantic similarity tuning, OCR quality improvements
+
+## v1.10.0 PRD Decomposition Session (2026-03-20)
+
+Ash decomposed the Folder Path Facet PRD into 4 GitHub issues for v1.10.0:
+
+- #650: Solr schema & backend folder facet
+- #652: Frontend folder tree UI (tree parsing, filter, breadcrumb)
+- #653: Testing & benchmarks
+- #656: Batch operations coordination (depends on #593)
+
+Key decisions:
+- Option A (client-side tree building) chosen for simplicity
+- Frontend consolidated to avoid handoff overhead
+- Lambert assigned to testing as separate work item
+
+Status: Backend (#650) and frontend (#652) can start in parallel; tests wait for both to be ready.
+
+## 2026-03-20: v1.10.0 Kickoff — Wave 0 + Wave 1 Schema Work
+
+**Assigned:** Support Wave 0 bug (#646, #648) + Wave 1 schema + Wave 2 search
+
+Wave 0: Bug investigation/fix support for semantic index 502 (#646 P0) and duplicate books (#648).
+
+Wave 1 foundations: #650 (folder_path_s facet in API) and #677 (add series_s field to Solr schema).
+
+Critical path: Solr schema changes coordinate across 3 features (#650, #677, #681 metadata). Ash coordinates all schema PRs per wave.
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

@@ -472,3 +472,13 @@ Comprehensive 3-tier approach covering 14+ pages across user, admin, and operati
 - Screenshot pipeline (Brett's #531–#534) will populate missing 4 images
 - Release-docs.yml will use new structure automatically on next release
 
+
+## 2026-03-20: v1.10.0 Kickoff — Release Documentation
+
+**Assigned:** 1 Wave 4 runbook (~1 issue)
+
+Wave 4: #673 (disaster recovery runbook) with Dallas
+
+Dependencies: Runbook written after restore orchestrator (#669) and verification tests (#672) complete.
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

@@ -125,6 +125,7 @@ export async function apiFetch(input: string, options: ApiFetchOptions = {}): Pr
   const { skipAuth = false, skipUnauthorizedHandler = false, headers, ...rest } = options;
   const response = await fetch(createRequestUrl(input), {
     ...rest,
+    credentials: 'include',
     headers: withAuthorization(headers, skipAuth),
   });
 

@@ -58,6 +58,32 @@
 
 ## Learnings
 
+### 2025-07-17 — PRD Decomposition: Stress Testing Suite (#590 → 9 issues)
+
+**PRD:** `docs/prd/stress-testing.md`
+**Milestone:** v1.10.0
+
+**Issues Created (9):**
+
+| # | Title | Owner |
+|---|-------|-------|
+| #651 | Stress test framework foundation & project setup | Brett |
+| #654 | Synthetic test data generator for stress tests | Parker |
+| #658 | Docker resource monitoring collector | Brett |
+| #662 | Indexing pipeline stress tests | Parker |
+| #666 | Search latency benchmarks across index sizes | Ash |
+| #671 | Concurrent user load testing with Locust | Parker |
+| #675 | Playwright UI stress tests | Lambert |
+| #679 | Minimum hardware requirements & tuning documentation | Brett |
+| #684 | Stress test CI integration (nightly/manual trigger) | Brett |
+
+**Decomposition Decisions:**
+- Split Phase 1 (Foundation) into 3 issues: framework setup (#651), test data generator (#654), resource monitor (#658) — each is independently implementable and owned by different people.
+- Kept each test category (indexing, search, concurrent, UI) as a separate issue — they have different owners and can run in parallel once foundation is done.
+- Separated hardware requirements docs (#679) from test execution — docs depend on all test results being available.
+- Added CI integration (#684) as a separate issue — it's independently implementable and explicitly deferred to "after stabilization" per PRD §10.
+- Routed search latency to Ash (search domain), indexing/concurrent to Parker (backend), UI stress to myself (tester), infra/docs/CI to Brett.
+
 <!-- Append learnings below -->
 
 ### 2026-03-19 — Auth API integration tests (#558 → PR #575)
@@ -196,3 +222,31 @@ Expanded the Playwright screenshot spec to cover all 11 pages documented in user
 - Will confirm total CI time stays under 5-minute acceptance criterion
 
 **Session Role:** Pre-flight quality gate for expanded CI pipeline.
+
+## v1.10.0 PRD Decomposition Session (2026-03-20)
+
+Lambert decomposed the Stress Testing PRD into 9 GitHub issues for v1.10.0:
+
+**Phase 1 (Foundation):** Framework (#651), test data generator (#654), resource monitor (#658)  
+**Phase 2 (Tests):** Indexing (#662), search (#666), concurrent (#671), UI (#675)  
+**Phase 3 (Hardening):** Hardware docs (#679), CI integration (#684)
+
+Key decisions:
+- Phase 1 split into 3 separate issues (framework, data, monitor)
+- One issue per test category (parallel once foundation ready)
+- Docs separated to avoid blocking tests
+- CI integration is independent
+
+Teams: Brett (foundation + hardening + CI), Parker (data + indexing + concurrent), Ash (search), Lambert (UI tests).
+
+## 2026-03-20: v1.10.0 Kickoff — Bug Investigation Lead + Testing Track
+
+**Assigned:** 1 Wave 0 bug investigation + 1 Wave 1 test + 1 Wave 2 test + 1 Wave 3 stress + 3 Wave 4 E2E (~7 total)
+
+Wave 0: Lead investigation on P0 #646 (semantic index 502). Time-box to 2 days; escalate if not root-caused.
+
+Wave 1: #696 (improve integration test reliability) with Brett
+
+Wave 2–4: Testing track — folder facet tests (#653), stress test runs (#675, #662), post-restore verification (#672), E2E testing for metadata (#697) and collections (#674).
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
