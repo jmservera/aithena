@@ -23,6 +23,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const BackupDashboardPage = lazy(() => import('./pages/BackupDashboardPage'));
 
 function LazyRoute({
   element,
@@ -202,6 +203,16 @@ function App() {
                   element={<UserManagementPage />}
                   titleId="loading.users"
                   messageId="loading.usersMessage"
+                />
+              }
+            />
+            <Route
+              path="/admin/backups"
+              element={
+                <LazyRoute
+                  element={<BackupDashboardPage />}
+                  titleId="loading.backups"
+                  messageId="loading.backupsMessage"
                 />
               }
             />
