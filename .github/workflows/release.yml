@@ -32,6 +32,37 @@ jobs:
 
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Validate tag exists on main branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          TAG_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          echo "Validating that tag $TAG_NAME ($TAG_SHA) is on the main branch..."
+
+          # Use GitHub API to check if main branch contains the tagged commit
+          compare_json=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/compare/main...$TAG_SHA" 2>/dev/null) || {
+            echo "::error::Failed to query GitHub API. Cannot verify tag branch."
+            exit 1
+          }
+
+          # "behind" or "identical" means the tag commit is reachable from main
+          ahead_by=$(echo "$compare_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['ahead_by'])")
+
+          if [ "$ahead_by" != "0" ]; then
+            echo "::error::Tag $TAG_NAME points to a commit that is $ahead_by commit(s) ahead of main."
+            echo "::error::Release tags must only be created on the main branch."
+            echo "::error::Pipeline: dev → main (PR with integration tests) → tag on main → release"
+            exit 1
+          fi
+
+          echo "✅ Tag $TAG_NAME is on the main branch (commit is reachable from main HEAD)"
+
       - name: Capture build timestamp
         id: build_date
         shell: bash
