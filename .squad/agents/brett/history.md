@@ -476,3 +476,47 @@ jobs:
 - embeddings-server kept on `requirements.txt` path per project convention (even though it now has uv.lock)
 
 **Learning:** embeddings-server now has both `pyproject.toml`+`uv.lock` AND `requirements.txt`. The project convention still treats it as the requirements.txt service. All other Python services (solr-search, document-indexer, document-lister, admin) use `uv sync --frozen`.
+
+## Docker Compose Build Failure Investigation (2026-03-20)
+
+**Task:** Investigate why `docker compose up -d --build` is failing
+
+**Audit scope:**
+- All docker-compose YAML files (base, override, prod, e2e, ssl)
+- All 6 service Dockerfiles (admin, solr-search, aithena-ui, embeddings-server, document-lister, document-indexer)
+- Build contexts, COPY commands, file paths, YAML syntax
+- Service dependencies, circular deps, environment variables
+- Recent git changes (last 20 commits)
+
+**Issues found:**
+1. ❌ **CRITICAL:** `admin` service completely missing from `docker-compose.prod.yml`
+   - Present in docker-compose.yml (dev) but omitted from prod
+   - This breaks production deploys — admin dashboard won't be defined
+   - Service count: dev has 17 services, prod has 16
+   - Root cause: Admin service added to dev but prod.yml not updated to match
+
+**All other checks PASSED:**
+- ✅ All Dockerfiles exist and have correct build contexts
+- ✅ All COPY commands reference existing files
+- ✅ No circular service dependencies
+- ✅ YAML syntax valid in all compose files
+- ✅ buildall.sh syntax valid
+- ✅ No tabs in YAML (spaces only)
+- ✅ Recent admin Dockerfile fix (fa9d831) correctly updated for repo-root context
+- ✅ All prod services use GHCR images (no build configs in prod.yml)
+
+**Build context patterns (reskilled):**
+| Service | Context | Dockerfile | Pattern |
+|---------|---------|------------|---------|
+| admin | `.` (repo root) | `./src/admin/Dockerfile` | Repo-root context, uses `src/admin/` paths in COPY |
+| solr-search | `.` (repo root) | `./src/solr-search/Dockerfile` | Repo-root context, uses `src/solr-search/` paths |
+| embeddings-server | `./src/embeddings-server` | `Dockerfile` | Service-dir context, relative paths |
+| document-lister | `./src/document-lister` | `Dockerfile` | Service-dir context, relative paths |
+| document-indexer | `./src/document-indexer` | `Dockerfile` | Service-dir context, relative paths |
+| aithena-ui | `./src/aithena-ui` | `Dockerfile` | Service-dir context, relative paths |
+
+**Decision:** Use repo-root context (`.`) for services with shared dependencies or complex monorepo structure (admin, solr-search). Use service-dir context (`./src/{service}`) for isolated services.
+
+**Fix required:** Add admin service to docker-compose.prod.yml with GHCR image reference, matching the pattern of other services.
+
+**Prevention:** CI validation to check service parity between dev and prod compose files would catch this class of issue.
