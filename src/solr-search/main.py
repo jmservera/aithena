@@ -1821,6 +1821,154 @@ def admin_requeue_document(doc_id: str) -> dict[str, Any]:
     return {"requeued": 1, "id": doc_id}
 
 
+
+# ---------------------------------------------------------------------------
+# Metadata edit — PATCH /v1/admin/documents/{doc_id}/metadata
+# ---------------------------------------------------------------------------
+
+# Field mapping: request field → list of Solr fields to update atomically
+_METADATA_FIELD_MAP: dict[str, list[str]] = {
+    "title": ["title_s", "title_t"],
+    "author": ["author_s", "author_t"],
+    "year": ["year_i"],
+    "category": ["category_s"],
+    "series": ["series_s"],
+}
+
+
+class MetadataEditRequest(BaseModel):
+    """Pydantic model for single-document metadata edit."""
+
+    title: str | None = None
+    author: str | None = None
+    year: int | None = None
+    category: str | None = None
+    series: str | None = None
+
+    model_config = {"str_strip_whitespace": True}
+
+    def non_empty_fields(self) -> dict[str, str | int]:
+        """Return only supplied, non-empty fields."""
+        result: dict[str, str | int] = {}
+        for field_name in _METADATA_FIELD_MAP:
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            if isinstance(value, str) and not value:
+                continue
+            result[field_name] = value
+        return result
+
+    def validate_non_empty(self) -> dict[str, str | int]:
+        """Return non-empty fields or raise HTTPException(422) if none."""
+        fields = self.non_empty_fields()
+        if not fields:
+            raise HTTPException(status_code=422, detail="At least one metadata field must be provided")
+        if "title" in fields and len(str(fields["title"])) > 255:
+            raise HTTPException(status_code=422, detail="title must be 255 characters or fewer")
+        if "author" in fields and len(str(fields["author"])) > 255:
+            raise HTTPException(status_code=422, detail="author must be 255 characters or fewer")
+        if "category" in fields and len(str(fields["category"])) > 100:
+            raise HTTPException(status_code=422, detail="category must be 100 characters or fewer")
+        if "series" in fields and len(str(fields["series"])) > 100:
+            raise HTTPException(status_code=422, detail="series must be 100 characters or fewer")
+        if "year" in fields:
+            year_val = int(fields["year"])
+            if year_val < 1000 or year_val > 2099:
+                raise HTTPException(status_code=422, detail="year must be between 1000 and 2099")
+        return fields
+
+
+def _solr_document_exists(doc_id: str) -> bool:
+    """Check if a document exists in Solr by its ID."""
+    params = {
+        "q": f"id:{solr_escape(doc_id)}",
+        "rows": 0,
+        "wt": "json",
+    }
+    result = query_solr(params)
+    return result.get("response", {}).get("numFound", 0) > 0
+
+
+def _solr_atomic_update(doc_id: str, fields: dict[str, str | int]) -> None:
+    """Send an atomic update to Solr for the given fields."""
+    update_doc: dict[str, Any] = {"id": doc_id}
+    for field_name, value in fields.items():
+        for solr_field in _METADATA_FIELD_MAP[field_name]:
+            update_doc[solr_field] = {"set": value}
+
+    update_url = f"{settings.solr_url}/{settings.solr_collection}/update/json"
+    try:
+        response = solr_circuit.call(
+            requests.post,
+            update_url,
+            json=[update_doc],
+            params={"commit": "true"},
+            timeout=settings.request_timeout,
+        )
+        response.raise_for_status()
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Search service temporarily unavailable — Solr circuit breaker is open",
+        ) from exc
+    except requests.Timeout as exc:
+        raise HTTPException(status_code=504, detail="Timed out waiting for Solr update") from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Solr update request failed: {exc}") from exc
+
+
+def _store_metadata_override(doc_id: str, fields: dict[str, str | int], edited_by: str) -> None:
+    """Persist metadata override in Redis so re-indexing preserves manual edits."""
+    override_key = f"aithena:metadata-override:{doc_id}"
+    override_data: dict[str, Any] = {}
+    for field_name, value in fields.items():
+        for sf in _METADATA_FIELD_MAP[field_name]:
+            override_data[sf] = value
+    override_data["edited_by"] = edited_by
+    override_data["edited_at"] = datetime.now(UTC).isoformat()
+
+    try:
+        client = _get_admin_redis_client()
+        _redis_call(client.set, override_key, json.dumps(override_data))
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Redis circuit breaker is open — override store temporarily unavailable",
+        ) from exc
+    except Exception as exc:
+        logger.warning("metadata_override_store_failed", extra={"doc_id": doc_id, "error": str(exc)})
+        raise HTTPException(status_code=503, detail="Cannot store metadata override in Redis") from exc
+
+
+@app.patch(
+    "/v1/admin/documents/{doc_id}/metadata",
+    name="admin_edit_document_metadata_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_edit_document_metadata(doc_id: str, body: MetadataEditRequest) -> dict[str, Any]:
+    """Edit metadata for a single document.
+
+    Performs a Solr atomic update and stores the override in Redis so that
+    manual edits survive re-indexing.
+    """
+    fields = body.validate_non_empty()
+
+    if not _solr_document_exists(doc_id):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    _solr_atomic_update(doc_id, fields)
+    _store_metadata_override(doc_id, fields, edited_by="admin")
+
+    return {
+        "id": doc_id,
+        "updated_fields": sorted(fields.keys()),
+        "status": "ok",
+        "message": "Metadata updated in Solr and override store",
+    }
+
+
+
 # ---------------------------------------------------------------------------
 # Phase 4 — /v1/upload endpoint
 # ---------------------------------------------------------------------------
