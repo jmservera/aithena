@@ -666,3 +666,9 @@ Wave 1: #692 (merge lint-frontend.yml into ci.yml) with Brett
 Wave 2–4: Metadata UI (#688 modal, #691 batch panel), folder facet UI (#652 tree), collections UI (#661, #664), and release pipeline enforcement (#687, #694).
 
 Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+
+### 2026-03-20T14:30Z — Parker: Cookie-based Auth & Collections Backend
+
+**From Parker (Backend Dev):**
+- **Decision 24 (Auth Cookie Refresh):** The `/v1/auth/validate` endpoint now refreshes the `aithena_auth` cookie on every validation. You should add a "Remember me" checkbox to the login form that sends `remember_me: true` in the login POST body. The `apiFetch` function already uses `credentials: 'include'` — ensure any new API client code does the same.
+- **Decision 25 (Collections):** Collections backend complete (PR #711). 9 CRUD endpoints available; documentation needed for your UI integration work.

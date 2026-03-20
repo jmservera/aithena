@@ -8572,3 +8572,33 @@ The factory pattern `require_role("admin", "user")` already wraps the inner func
 - **All team members:** Test passwords must now include uppercase, lowercase, and digit (e.g., "SecurePass123" instead of "password123")
 - **Dallas (Frontend):** New endpoint `PUT /v1/auth/change-password` available for UI integration
 - **Brett (Infrastructure):** New env vars `AUTH_DEFAULT_ADMIN_USERNAME` and `AUTH_DEFAULT_ADMIN_PASSWORD` for Docker Compose
+
+## Decision 24: Validate Endpoint Refreshes Auth Cookie (Parker)
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-20  
+**PRs:** #700, #702  
+**Status:** PROPOSED
+
+The auth cookie was only set at login. The `/v1/auth/validate` endpoint now sets/refreshes the `aithena_auth` cookie on every successful validation. Since the frontend calls validate on every page load, this keeps the cookie fresh.
+
+The `set_auth_cookie` function now supports `max_age=None` for session cookies (browser closes = logout). The `LoginRequest` model accepts a `remember_me` boolean.
+
+**Impact:**
+- **Dallas (Frontend):** Add "Remember me" checkbox in login form; send `remember_me: true` in login POST
+- **Admin (Streamlit):** SSO via cookie should now work reliably
+- **All team members:** The `apiFetch` function uses `credentials: 'include'` — new API clients should do the same
+
+## Decision 25: Collections Backend uses separate SQLite database (Parker)
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-20  
+**Issue:** #655  
+**PR:** #711
+
+Collections use a **separate SQLite database** at a configurable path (`/data/collections/collections.db`), rather than adding tables to the existing auth database. This provides separation of concerns, independent backup/restore, and avoids mixing auth and user content data lifecycles.
+
+**Impact:**
+- New Docker volume mount needed for `/data/collections/` in production
+- New env var `COLLECTIONS_DB_PATH` available for customization
+- Collections DB is initialized during FastAPI lifespan startup
