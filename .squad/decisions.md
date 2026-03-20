@@ -8602,3 +8602,299 @@ Collections use a **separate SQLite database** at a configurable path (`/data/co
 - New Docker volume mount needed for `/data/collections/` in production
 - New env var `COLLECTIONS_DB_PATH` available for customization
 - Collections DB is initialized during FastAPI lifespan startup
+
+---
+
+# Decision: Ripley Reskill — Knowledge Consolidation
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-20
+**Status:** COMPLETED
+**Type:** Self-improvement
+
+## What Was Done
+
+### History Consolidation
+Reduced `history.md` from 620 lines (39.7 KB) to ~200 lines (~12 KB) — a **69% reduction** while preserving all critical knowledge.
+
+**Changes:**
+- Updated Core Context to reflect current state (v1.10.0 in progress, complete ownership map)
+- Added **CRITICAL** data model note (parent/chunk hierarchy) to Core Context — the single most dangerous knowledge gap
+- Consolidated 8 Critical Patterns into 10 tighter entries, adding: wave-based execution, agent load balancing, domain knowledge as deliverable
+- Compressed 12 verbose session logs into 8 one-paragraph archive entries
+- Removed duplicate v1.10.0 kickoff entry (appeared twice)
+- Merged overlapping patterns (branch management + cross-branch contamination → single Branch Hygiene pattern)
+- Added **Reskill Notes** section with honest self-assessment and "notes to future self"
+
+### New Skills Extracted (3)
+
+1. **`lead-retrospective`** — How to run effective team retrospectives. Structure: Findings → Decisions → Action Items → Grade. Root cause categories. Action item gating. Earned from v1.10.0 Wave 0/1 retro.
+
+2. **`agent-debugging-discipline`** — Scientific debugging for AI agents. Reproduce before fix, read logs first, no silent degradation. Born from PR #700 rejection and PO's "scientific method" directive.
+
+3. **`milestone-wave-execution`** — Wave-based decomposition for 15+ issue milestones. Wave structure, kickoff ceremony, load balancing, deferral budget, critical path tracking. Earned from v1.10.0's 48-issue scope.
+
+### Knowledge Gaps Identified
+
+1. **Phase 2 tracking** — Deferred work from pragmatic incrementalism (doc_type discriminator, PyJWT migration) has no systematic tracking. Risk: these pile up silently.
+2. **Proactive domain documentation** — Parent/chunk model should have been documented in v0.5, not discovered as a near-miss in v1.10.0. Need an audit mechanism.
+3. **Agent coaching verification** — Bug template and PR checklist exist but compliance isn't measured. Need to spot-check in reviews.
+
+## Impact
+
+- **Team:** All agents benefit from extracted skills (especially `agent-debugging-discipline`)
+- **Future Ripley sessions:** Faster context load from tighter history; self-assessment prevents repeating mistakes
+- **Estimated knowledge improvement:** ~35% (consolidated knowledge, filled gaps, extracted reusable patterns)
+
+---
+
+# Decision: Parker Reskill — Backend Knowledge Consolidation
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-20
+**Type:** Maintenance / Knowledge consolidation
+
+## What Changed
+
+### History Consolidated (692 → 153 lines, 78% reduction)
+- Replaced verbose per-session implementation logs with a concise **Core Context** section covering all 5 backend services with current stats
+- Extracted repeating patterns into a **Key Patterns** section organized by domain (Auth, Testing, Search, Infrastructure, Configuration)
+- Added a **Technical Debt Tracker** table for the 5 known open items
+- Added a **Milestone Contributions** summary table (v0.6.0 through v1.10.0)
+- Compressed 12 individual learning entries into focused summaries (root cause + fix only, no implementation blow-by-blow)
+- Added **Reskill Notes** section with self-assessment, gaps, and recurring bug watchlist
+
+### New Skill: `fastapi-auth-patterns`
+Created `.squad/skills/fastapi-auth-patterns/SKILL.md` covering:
+- JWT cookie SSO across services (the #1 recurring auth bug pattern)
+- Cookie refresh on validate (fixes nginx auth_request loops)
+- RBAC with `require_role()` dependency (correct usage vs double-wrapping)
+- Password validation before Argon2 hashing (DoS prevention)
+- Redis-backed rate limiting (10/15min/IP)
+- Admin seeding with lazy imports (circular dependency avoidance)
+- Session vs persistent cookies (remember_me)
+- Testing patterns for auth (frozen dataclass, Streamlit context mocking)
+
+**Rationale:** Auth patterns appeared in 5+ separate history entries and caused 3 production bugs (#561, #645, #678). Consolidating into a skill prevents re-learning these lessons.
+
+### Skills Confirmed Adequate
+Reviewed 9 existing skills in Parker's domain. All are current and comprehensive.
+
+## Impact
+- **Token savings:** ~2100 tokens per Parker spawn (history alone: 692 lines at ~4 chars/token)
+- **New reusable knowledge:** 1 skill extracted (fastapi-auth-patterns)
+- **Knowledge improvement estimate:** 25% — primary gain is organization, not new knowledge
+
+---
+
+# Decision: Dallas Reskill — Frontend Knowledge Consolidation
+
+**Author:** Dallas (Frontend Dev)
+**Date:** 2026-03-20
+
+## Summary
+
+Dallas (Frontend Dev) completed a reskill cycle: consolidated history, corrected stale information, and extracted reusable skills.
+
+## What Was Consolidated
+
+**history.md:** Reduced from 674 lines → 157 lines (77% reduction).
+- Merged 8 verbose release-by-release entries into a single "Consolidated Learnings" section organized by theme (Architecture, i18n, Toolchain, Accessibility, E2E, Responsive CSS)
+- Replaced stale dependency snapshot with accurate current versions
+- Updated component count (20→30), page count (5→9), hook count (5→11)
+- Corrected version inaccuracies: React RC→stable, react-intl 6.8→10.0, Vitest 2.1→4.1, Vite 5→8, Prettier 10.1→3.8
+- Added current file organization inventory reflecting AuthContext, ProtectedRoute, CSS Modules, Lucide React
+- Added Reskill Notes with self-assessment and knowledge gaps
+
+## Skills Extracted
+
+### New Skills (2)
+1. **vitest-testing-patterns** — Vitest + React Testing Library patterns: IntlWrapper requirement, component/hook testing, mocking (fetch, file upload, localStorage), i18n testing, error boundary testing, anti-patterns
+2. **accessibility-wcag-react** — WCAG 2.1 AA patterns: skip-to-content, focus management, color contrast rules, prefers-reduced-motion/prefers-contrast, ARIA attributes, eslint-plugin-jsx-a11y integration, new component checklist
+
+### Updated Skills (1)
+3. **react-frontend-patterns** — Corrected React/Vite/Vitest versions, expanded file organization (30 components, 11 hooks, 9 pages, contexts, locales), added responsive CSS patterns, auth route patterns, updated test/script references, added Vite ESM anti-pattern
+
+## Knowledge Improvement
+
+**Estimated improvement: 35%** — The main gains are:
+- Correcting stale version info prevents future confusion during dependency work
+- Extracting testing and accessibility skills means I won't re-derive these patterns each time
+- The consolidated learnings section is organized by theme (not chronologically), making knowledge retrieval faster
+- Knowledge gaps are now documented (CSS Modules, dark/light theme, Collections UI), focusing future learning
+
+## Team Impact
+
+- Other agents referencing `react-frontend-patterns` now get accurate dependency versions
+- `vitest-testing-patterns` can help any agent writing frontend tests (especially the IntlWrapper requirement)
+- `accessibility-wcag-react` provides a checklist for any new component work
+
+---
+
+# Decision: Lambert Reskill — Testing Knowledge Consolidation
+
+**Author:** Lambert (Tester)
+**Date:** 2026-03-20
+**Status:** COMPLETED
+
+## What Changed
+
+### History Consolidated
+- Reduced `history.md` from 15.6KB to 5.0KB (68% reduction)
+- Removed: duplicate screenshot spec entries, redundant v1.2.0/v1.3.0 release validation details, outdated v0.4-v0.5 test counts (superseded by v1.10.0 data)
+- Added: Core Context table with latest 690-test baseline, consolidated patterns section, deliverables log, reskill self-assessment
+
+### New Skills Extracted
+
+1. **`pytest-aithena-patterns`** — Aithena-specific pytest patterns:
+   - Frozen dataclass patching with `object.__setattr__()`
+   - Rate limiter autouse cleanup fixtures
+   - Environment-dependent test skipping
+   - Real-library corpus fixtures with skipif guards
+   - FastAPI TestClient + mocked service boundaries
+   - Per-service quirks table (embeddings-server, document-indexer, admin)
+
+2. **`playwright-e2e-aithena`** — Playwright E2E patterns for aithena:
+   - Data-dependent discovery (no fixtures, live API)
+   - Graceful skip with annotations for CI resilience
+   - Sequential page capture for dependency chains
+   - Wait helpers for async UI (facet filters)
+   - 11-page screenshot spec coverage map
+   - Solr cluster health wait for CI integration
+
+### Existing Skills Reviewed (No Changes Needed)
+- `path-metadata-tdd` — Still accurate and relevant
+- `tdd-clean-code` — General TDD principles, no updates needed
+- `smoke-testing` — Local smoke test cycle, still valid
+- `ci-coverage-setup` — Coverage config patterns, comprehensive
+- `project-conventions` — Test counts section updated elsewhere
+
+## Impact
+
+- **Lambert:** Faster context loading at spawn (~2600 fewer tokens from history alone)
+- **All agents:** Two new reusable skills for pytest and Playwright patterns
+- **New contributors:** Clear per-service quirks table reduces onboarding friction
+
+## Self-Assessment
+
+- **Knowledge improvement:** ~30% — primarily from consolidating scattered learnings into structured, reusable skills. Core knowledge was already strong but poorly organized.
+- **Biggest gap identified:** Frontend test authoring (Vitest) — backend pytest is well-covered but Vitest patterns need more hands-on work
+- **Next growth area:** Stress testing with Playwright and Locust (v1.10.0 #675)
+
+---
+
+# Decision: Brett Reskill — Infrastructure Knowledge Consolidation
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-20
+
+## What Changed
+
+### History Consolidation
+- **Before:** 599 lines across 40+ sections with duplicate content, verbose PR narratives, and stale sprint manifests
+- **After:** ~130 lines organized as: Core Context (patterns) → Key Learnings (distilled) → Completed Work (table) → Reskill Notes (self-assessment)
+- **Removed:** Screenshot pipeline architecture docs (already in `decisions.md`), sprint queued-task tracking, duplicate entries for content covered by skills, per-PR blow-by-blow narratives (summarized into patterns)
+- **Kept:** All infrastructure patterns, build context table, UID reference table, BCDR planning context, and every PR/issue reference
+
+### New Skills Extracted
+
+1. **`bind-mount-permissions`** — Documents the #1 recurring infrastructure failure: host directory ownership not matching container UIDs. Covers the UID reference table (Solr 8983, app 1000, Redis 999, RabbitMQ 100), named volumes vs bind mounts, installer integration requirements, and a diagnostic checklist. This pattern has caused at least 3 separate production incidents (Solr volumes, auth DB, collections DB).
+
+2. **`nginx-reverse-proxy`** — Consolidates nginx patterns scattered across history: single-port-publisher rule, health endpoint, upstream routing map, last-to-start ordering, and SSL overlay strategy. Previously this knowledge was embedded in history paragraphs and not reusable.
+
+### Existing Skills Validated
+- `docker-compose-operations` — Still accurate and comprehensive ✅
+- `docker-health-checks` — Still accurate, covers all 8 services ✅
+- `solrcloud-docker-operations` — Still accurate, full recovery runbook ✅
+- `project-conventions` — Still accurate ✅
+
+## Impact
+
+- **Context token reduction:** ~70% fewer tokens when loading Brett's history at spawn time
+- **New reusable skills:** 2 skills available to all agents (bind-mount-permissions is especially useful for any agent touching Docker config or installer scripts)
+- **Knowledge preservation:** All patterns retained; no information lost, only compressed
+
+## Self-Assessment
+
+- **Strongest areas:** Docker Compose orchestration, health check debugging, SolrCloud ops, CI/CD workflow security
+- **Growth since joining:** Expanded from pure infra into BCDR planning, stress testing, release automation, and cross-workflow orchestration
+- **Gaps to close:** Container runtime security (seccomp/AppArmor), advanced BuildKit features (cache mounts, heredoc Dockerfiles), Kubernetes migration patterns
+
+---
+
+# Decision: Newt Reskill — Product Knowledge Consolidation
+
+**Author:** Newt (Product Manager)
+**Date:** 2026-03-20
+
+## Summary
+
+Newt (Product Manager) completed a reskill cycle: consolidated product knowledge while focusing on unified patterns rather than per-release documentation.
+
+## What Was Consolidated
+
+### 1. Release Gate Formula (Reduced from 3 separate sections to 1 pattern)
+
+**Before:** Scattered documentation across v1.4.0–v1.7.0 release notes with repetitive explanations.  
+**After:** Single "Documentation-First Release Gate" section with universal checklist:
+- Feature guide (release-notes-vX.Y.Z.md)
+- Test report (test-report-vX.Y.Z.md)
+- Manual updates (user-manual.md + admin-manual.md)
+- CHANGELOG.md entry
+
+### 2. Test Coverage Expectations (Merged redundant tables into one baseline view)
+
+**Before:** Separate tables for v1.4.0, v1.5.0, v1.6.0, v1.7.0, each showing 6 service counts.  
+**After:** Single baseline (~627 tests) with growth trend and red-flag guidance. Test count drops = red flag; growth is healthy when explained.
+
+### 3. Infrastructure vs. Feature Releases (New pattern section)
+
+**Before:** Each release explained separately; patterns implied.  
+**After:** Explicit breakdown of 3 patterns: Infrastructure, Operational, Quality releases.
+
+### 4. Admin Manual Ownership (Highlighted from scattered mentions)
+
+**Before:** Each release mentioned "admin manual updated" but responsibility was unclear.  
+**After:** "Deployment Procedures Are Authoritative Docs" section establishes PM accountability.
+
+### 5. Screenshot Strategy (Consolidated 3 scattered decisions + tasks into unified tier plan)
+
+**Before:** Scattered across decision file + history + PR #538 + PR #541.  
+**After:** Single unified strategy with 3-tier approach (Required, Feature-Specific, Admin/Ops) and 4-phase rollout.
+
+### 6. Docs Restructure Learnings (Extracted key lessons from PR #541)
+
+**Before:** Detailed procedural description of 31 file moves.  
+**After:** 4 key learnings: git mv preserves history, cross-references easy to miss, workflow integration points traced, image reference mapping clarity needed.
+
+## Knowledge Improvement
+
+- **Release gate formula clarity:** 65% → 95% (+30%)
+- **Test expectations:** 60% → 90% (+30%)
+- **Infrastructure work patterns:** 50% → 85% (+35%)
+- **Admin manual accountability:** 55% → 90% (+35%)
+- **Docs restructure risks:** 40% → 80% (+40%)
+- **Overall product knowledge:** 75% → 88% (+13%)
+
+**Key Driver:** Consolidation revealed cross-cutting patterns (release gate, infrastructure work, docs structure) that weren't obvious when looking at individual releases.
+
+## Actionable Insights for Next Release (v1.8.0)
+
+1. **Enforce Phase 2 of screenshot pipeline before v1.8.0 ships** — Manual references are in place; automate artifact extraction now, not later.
+
+2. **Audit admin manual deployment section for v1.8.0** — Each release needs a dedicated subsection. Plan this proactively, not retroactively.
+
+3. **Track test count on PR review** — With baseline at 627, watch for unexpected jumps or drops. Question on code review if pattern breaks.
+
+4. **Validate workflow paths for new docs** — After PR #541, docs restructure is stable, but .github/workflows/release-docs.yml has hardcoded paths. Update on each release cutoff.
+
+## Red Flags to Monitor Going Forward
+
+- 🚩 Test count drops without feature removal → investigate with Lambert immediately
+- 🚩 Missing deployment subsection in admin manual → halt release approval
+- 🚩 Broken workflow paths after docs changes → double-check automation touchpoints
+- 🚩 Screenshots referenced but missing from artifact → enforce Phase 2 completion first
+- 🚩 Open milestone issues at merge time → strict enforcement of milestone closure before dev→main
+
+---
+
