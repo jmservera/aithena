@@ -182,7 +182,7 @@ decrypt_dir="${TEST_ROOT}/decrypt"
 mkdir -p "$decrypt_dir"
 
 # Verify auth DB round-trip
-gpg --decrypt --batch --yes --passphrase-file "$BACKUP_KEY" \
+gpg --decrypt --batch --yes --pinentry-mode loopback --no-tty --passphrase-file "$BACKUP_KEY" \
     --output "${decrypt_dir}/auth.db" "$auth_gpg" 2>/dev/null
 auth_names="$(sqlite3 "${decrypt_dir}/auth.db" "SELECT name FROM users ORDER BY id;")"
 if [[ "$auth_names" == $'Alice\nBob' ]]; then
@@ -192,7 +192,7 @@ else
 fi
 
 # Verify collections DB round-trip
-gpg --decrypt --batch --yes --passphrase-file "$BACKUP_KEY" \
+gpg --decrypt --batch --yes --pinentry-mode loopback --no-tty --passphrase-file "$BACKUP_KEY" \
     --output "${decrypt_dir}/collections.db" "$coll_gpg" 2>/dev/null
 coll_titles="$(sqlite3 "${decrypt_dir}/collections.db" "SELECT title FROM collections ORDER BY id;")"
 if [[ "$coll_titles" == $'My Reading List\nFavorites' ]]; then
@@ -202,7 +202,7 @@ else
 fi
 
 # Verify .env round-trip
-gpg --decrypt --batch --yes --passphrase-file "$BACKUP_KEY" \
+gpg --decrypt --batch --yes --pinentry-mode loopback --no-tty --passphrase-file "$BACKUP_KEY" \
     --output "${decrypt_dir}/env" "$env_gpg" 2>/dev/null
 if grep -q "AUTH_JWT_SECRET=supersecretjwtkey123" "${decrypt_dir}/env"; then
     pass ".env decryption round-trip — secrets intact"
@@ -287,7 +287,7 @@ rc=0
 bash "$BACKUP_SCRIPT" || rc=$?
 assert_exit_code "0" "$rc" "Dry-run exits cleanly"
 
-file_count=$(find "$BACKUP_DIR" -maxdepth 1 -type f | wc -l)
+file_count=$(find "$BACKUP_DIR" -maxdepth 1 -type f -not -name '.backup-critical.lock' | wc -l)
 if [[ "$file_count" -eq 0 ]]; then
     pass "Dry-run produced no output files"
 else
@@ -307,7 +307,7 @@ setup
 bash "$BACKUP_SCRIPT" >/dev/null 2>&1
 count_before=$(find "$BACKUP_DIR" -maxdepth 1 -name '*.gpg' -type f | wc -l)
 
-# Short sleep to ensure timestamp is the same (within the same minute)
+# Run again immediately; within the same minute files overwrite, later runs create new files
 bash "$BACKUP_SCRIPT" >/dev/null 2>&1
 count_after=$(find "$BACKUP_DIR" -maxdepth 1 -name '*.gpg' -type f | wc -l)
 

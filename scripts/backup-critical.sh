@@ -37,6 +37,15 @@ BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 PROJECT_ROOT="${PROJECT_ROOT:-/source/aithena}"
 DRY_RUN="${DRY_RUN:-0}"
 
+# Restrictive umask — encrypted backups must not be world-readable
+umask 077
+
+# Validate BACKUP_RETENTION_DAYS is a positive integer
+if ! [[ "$BACKUP_RETENTION_DAYS" =~ ^[0-9]+$ ]] || [[ "$BACKUP_RETENTION_DAYS" -lt 0 ]]; then
+    echo "ERROR: BACKUP_RETENTION_DAYS must be a non-negative integer, got '${BACKUP_RETENTION_DAYS}'" >&2
+    exit 1
+fi
+
 TIMESTAMP="$(date -u +%Y%m%d-%H%M)"
 LOG_FILE="${LOG_FILE:-/var/log/aithena-backup-critical.log}"
 TMPDIR_BASE="${TMPDIR:-/tmp}"
@@ -131,6 +140,8 @@ backup_sqlite() {
         --cipher-algo AES256 \
         --batch \
         --yes \
+        --pinentry-mode loopback \
+        --no-tty \
         --passphrase-file "$BACKUP_KEY" \
         --output "$enc_dest" \
         "$raw_copy"
@@ -179,6 +190,8 @@ backup_file() {
         --cipher-algo AES256 \
         --batch \
         --yes \
+        --pinentry-mode loopback \
+        --no-tty \
         --passphrase-file "$BACKUP_KEY" \
         --output "$enc_dest" \
         "$src"
@@ -215,6 +228,15 @@ purge_old_backups() {
 # Main
 # ---------------------------------------------------------------------------
 main() {
+    # Concurrency guard — only one backup instance at a time
+    local lock_file="${BACKUP_DIR}/.backup-critical.lock"
+    mkdir -p "$BACKUP_DIR"
+    exec 9>"$lock_file"
+    if ! flock -n 9; then
+        log_error "Another backup instance is already running (lock: ${lock_file})"
+        exit 1
+    fi
+
     log_info "========== Aithena Critical Backup START (${TIMESTAMP}) =========="
     log_info "AUTH_DB_DIR=${AUTH_DB_DIR}  BACKUP_DIR=${BACKUP_DIR}  RETENTION=${BACKUP_RETENTION_DAYS}d"
 
@@ -227,6 +249,14 @@ main() {
     if [[ ! -f "$BACKUP_KEY" ]]; then
         log_error "Encryption key not found: ${BACKUP_KEY}"
         log_error "Generate one with: sudo mkdir -p /etc/aithena && openssl rand -base64 32 | sudo tee ${BACKUP_KEY} && sudo chmod 600 ${BACKUP_KEY}"
+        exit 1
+    fi
+
+    # Verify backup key is not world/group-readable
+    local key_perms
+    key_perms="$(stat -c '%a' "$BACKUP_KEY" 2>/dev/null || stat -f '%Lp' "$BACKUP_KEY" 2>/dev/null)"
+    if [[ "${key_perms: -2:1}" != "0" || "${key_perms: -1}" != "0" ]]; then
+        log_error "Backup key ${BACKUP_KEY} is too permissive (mode ${key_perms}). Run: chmod 600 ${BACKUP_KEY}"
         exit 1
     fi
 

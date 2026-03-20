@@ -584,3 +584,8 @@ Wave 4: #679 (min hardware docs) with Dallas
 Critical path: BCDR is 8 sequential steps — the schedule driver. Any delay cascades downstream to #680 (admin UI) and #673 (runbook).
 
 Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+
+### 2026-03-20T14:30Z — Parker: Collections Backend Infrastructure
+
+**From Parker (Backend Dev):**
+- **Decision 25 (Collections SQLite):** Collections backend complete (PR #711). New Docker volume mount needed for `/data/collections/` in production. New env var `COLLECTIONS_DB_PATH` available for customization. Collections DB is initialized during FastAPI lifespan startup.
