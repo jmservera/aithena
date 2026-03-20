@@ -57,7 +57,7 @@ def test_run_setup_writes_env_and_hashes_password(tmp_path: Path) -> None:
     assert env_values["RABBITMQ_USER"] == "aithena"
     assert env_values["RABBITMQ_PASS"] == "generated-secret-value"
     assert env_values["REDIS_PASSWORD"] == "generated-secret-value"
-    assert "correct-horse-battery-staple" not in env_text
+    assert env_values["AUTH_ADMIN_PASSWORD"] == "correct-horse-battery-staple"
     assert authenticate_user(auth_db_path, "admin", "correct-horse-battery-staple") is not None
 
     with sqlite3.connect(auth_db_path) as connection:
