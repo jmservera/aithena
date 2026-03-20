@@ -5,6 +5,7 @@ import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
 import SearchPage from '../pages/SearchPage';
 import { SearchResponse } from '../hooks/search';
 import { IntlWrapper } from './test-intl-wrapper';
+import { ToastProvider } from '../contexts/ToastContext';
 
 const mockSearchResponse: SearchResponse = {
   query: 'react',
@@ -67,9 +68,11 @@ const similarBooksResponse = {
 function renderSearchPage() {
   return render(
     <IntlWrapper>
-      <MemoryRouter>
-        <SearchPage />
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter>
+          <SearchPage />
+        </MemoryRouter>
+      </ToastProvider>
     </IntlWrapper>
   );
 }

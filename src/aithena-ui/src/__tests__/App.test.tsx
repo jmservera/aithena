@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
+import { ToastProvider } from '../contexts/ToastContext';
 import { IntlWrapper } from './test-intl-wrapper';
 
 vi.mock('../pages/LoginPage', async () => {
@@ -21,7 +22,9 @@ describe('App', () => {
       <IntlWrapper>
         <MemoryRouter initialEntries={['/login']}>
           <AuthProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </AuthProvider>
         </MemoryRouter>
       </IntlWrapper>

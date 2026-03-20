@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import { useIntl, FormattedMessage } from 'react-intl';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckSquare, Loader2 } from 'lucide-react';
 import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBoundary';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
@@ -19,10 +19,12 @@ import PdfViewer from '../Components/PdfViewer';
 import SimilarBooks from '../Components/SimilarBooks';
 import SkeletonCard from '../Components/SkeletonCard';
 import SkeletonFacetPanel from '../Components/SkeletonFacetPanel';
+import AddToCollectionModal from '../Components/AddToCollectionModal';
 import { SearchFilters } from '../hooks/search';
 import { getCachedSimilarBook } from '../hooks/similarBooks';
 import { useSearch, BookResult, SearchMode } from '../hooks/search';
 import { onRenderCallback } from '../utils/profiler';
+import { useToast } from '../contexts/ToastContext';
 
 const SORT_OPTIONS = [
   { value: 'score desc', labelId: 'search.sortRelevance' },
@@ -61,6 +63,10 @@ interface SearchResultsSectionProps {
   onPageChange: (page: number) => void;
   onPdfClose: () => void;
   onSelectSimilarBook: (bookId: string) => void;
+  selectionMode?: boolean;
+  checkedIds?: Set<string>;
+  onToggleSelect?: (bookId: string) => void;
+  onSaveToCollection?: (book: BookResult) => void;
 }
 
 function renderSearchResultsFallback({ reset, reload }: ErrorBoundaryFallbackProps) {
@@ -105,6 +111,10 @@ function SearchResultsSection({
   onPageChange,
   onPdfClose,
   onSelectSimilarBook,
+  selectionMode,
+  checkedIds,
+  onToggleSelect,
+  onSaveToCollection,
 }: SearchResultsSectionProps) {
   const intl = useIntl();
   const totalPages = Math.ceil(total / limit);
@@ -157,6 +167,10 @@ function SearchResultsSection({
                   book={book}
                   onOpenPdf={onOpenPdf}
                   isSelected={selectedBook?.id === book.id}
+                  selectionMode={selectionMode}
+                  isChecked={checkedIds?.has(book.id)}
+                  onToggleSelect={onToggleSelect}
+                  onSaveToCollection={onSaveToCollection}
                 />
               </li>
             ))}
@@ -190,6 +204,7 @@ function SearchResultsSection({
 
 function SearchPage() {
   const intl = useIntl();
+  const { addToast } = useToast();
   const {
     searchState,
     results,
@@ -218,6 +233,10 @@ function SearchPage() {
   }, [searchState.query]);
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
+  const [addToCollectionDocIds, setAddToCollectionDocIds] = useState<string[]>([]);
   const resultsRegionRef = useRef<HTMLElement>(null);
   const lastLoadingStateRef = useRef(false);
   const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
@@ -277,6 +296,58 @@ function SearchPage() {
     },
     [results]
   );
+
+  const handleToggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      if (prev) setCheckedIds(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const handleToggleSelect = useCallback((bookId: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookId)) next.delete(bookId);
+      else next.add(bookId);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setCheckedIds(new Set(results.map((b) => b.id)));
+  }, [results]);
+
+  const handleDeselectAll = useCallback(() => {
+    setCheckedIds(new Set());
+  }, []);
+
+  const handleSaveToCollection = useCallback((book: BookResult) => {
+    setAddToCollectionDocIds([book.id]);
+    setAddToCollectionOpen(true);
+  }, []);
+
+  const handleBulkAddToCollection = useCallback(() => {
+    if (checkedIds.size === 0) return;
+    setAddToCollectionDocIds([...checkedIds]);
+    setAddToCollectionOpen(true);
+  }, [checkedIds]);
+
+  const handleAddToCollectionSuccess = useCallback(
+    (collectionName: string, count: number) => {
+      addToast(
+        intl.formatMessage({ id: 'collections.addedToast' }, { name: collectionName, count }),
+        'success'
+      );
+      setCheckedIds(new Set());
+      setSelectionMode(false);
+    },
+    [addToast, intl]
+  );
+
+  const handleAddToCollectionClose = useCallback(() => {
+    setAddToCollectionOpen(false);
+    setAddToCollectionDocIds([]);
+  }, []);
 
   return (
     <div className="search-layout">
@@ -420,6 +491,43 @@ function SearchPage() {
               onClearAll={clearFilters}
             />
           )}
+
+          {searchState.query && !loading && results.length > 0 && (
+            <div className="batch-select-all-bar">
+              <button
+                type="button"
+                className={`batch-select-mode-btn${selectionMode ? ' batch-select-mode-btn--active' : ''}`}
+                onClick={handleToggleSelectionMode}
+                aria-pressed={selectionMode}
+                title={intl.formatMessage({ id: 'search.multiSelectTitle' })}
+              >
+                <CheckSquare size={16} aria-hidden="true" />{' '}
+                {intl.formatMessage({ id: 'search.multiSelect' })}
+              </button>
+              {selectionMode && (
+                <>
+                  <button type="button" className="batch-select-all-btn" onClick={handleSelectAll}>
+                    {intl.formatMessage({ id: 'batchEdit.selectAll' })}
+                  </button>
+                  <button
+                    type="button"
+                    className="batch-select-all-btn"
+                    onClick={handleDeselectAll}
+                  >
+                    {intl.formatMessage({ id: 'batchEdit.deselectAll' })}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {selectionMode && checkedIds.size > 0 && (
+            <div className="search-collection-toolbar">
+              <button type="button" className="bulk-add-btn" onClick={handleBulkAddToCollection}>
+                {intl.formatMessage({ id: 'collections.bulkAdd' }, { count: checkedIds.size })}
+              </button>
+            </div>
+          )}
         </header>
 
         <ErrorBoundary fallback={renderSearchResultsFallback}>
@@ -441,10 +549,21 @@ function SearchPage() {
               onPageChange={setPage}
               onPdfClose={handleClosePdf}
               onSelectSimilarBook={handleSelectSimilarBook}
+              selectionMode={selectionMode}
+              checkedIds={checkedIds}
+              onToggleSelect={handleToggleSelect}
+              onSaveToCollection={handleSaveToCollection}
             />
           </Profiler>
         </ErrorBoundary>
       </main>
+
+      <AddToCollectionModal
+        open={addToCollectionOpen}
+        onClose={handleAddToCollectionClose}
+        documentIds={addToCollectionDocIds}
+        onSuccess={handleAddToCollectionSuccess}
+      />
     </div>
   );
 }
