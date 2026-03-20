@@ -592,3 +592,29 @@ Established priority ordering, wave plan, critical path analysis, and agent load
 - **Cross-branch contamination in shared repos needs mechanical prevention.** Telling agents "be careful with branches" doesn't work. The rule must be: always branch from `origin/dev`, verify clean working tree, never branch from local state. This is a process fix, not a training fix.
 - **Review iteration count is a leading indicator of submission quality.** 4-5 review rounds means the PR wasn't ready when submitted. A self-review checklist should cut this to 1-2 rounds for most PRs.
 - **Wave-based execution with retrospectives works.** Wave 0 was rough; Wave 1 was significantly better. The improvement came from the team internalizing lessons. Formalizing those lessons into process ensures they persist.
+
+---
+
+## Session: Retro Action Items R1, R3, R4, R6
+
+**Date:** 2026-03-20
+**Branch:** `squad/retro-process-docs`
+**PR:** #720
+**Task:** Implement process documentation from v1.10.0 Wave 0/1 retrospective
+
+### What was done
+
+Implemented four retrospective action items required before Wave 2:
+
+1. **R1 — Branch Hygiene Rule:** Created `.squad/decisions/inbox/ripley-branch-hygiene.md`. Mandatory `git fetch origin && git checkout -b <branch> origin/dev` for all agents. No branching from local state.
+
+2. **R3 — Bug Issue Template:** Created `.github/ISSUE_TEMPLATE/bug_report.yml` with required fields for reproduction steps, error log output, and root cause analysis. Severity dropdown included.
+
+3. **R4 — Pre-PR Self-Review Checklist:** Created `.squad/templates/pr-checklist.md` covering scope verification, security review, data model impact, error handling, testing, and branch hygiene.
+
+4. **R6 — No Silent Degradation Rule:** Created `.squad/decisions/inbox/ripley-no-degradation.md`. Error handlers must not silently change search mode or drop results. Must log WARNING and return clear error. Requires Lead/PO approval for any degradation behavior.
+
+### Learnings
+
+- Kept all items concise and actionable per the retrospective's intent — working documents, not policy papers.
+- Branch was created from `origin/dev` with clean working tree, following R1 rule being documented (eating our own dog food).
