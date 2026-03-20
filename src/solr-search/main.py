@@ -40,6 +40,27 @@ from auth import (
     set_auth_cookie,
     update_user,
 )
+from backup_service import (
+    BackupConfigRequest,
+    BackupInfo,
+    BackupListResponse,
+    BackupRequest,
+    BackupStatusResponse,
+    OperationRecord,
+    RestoreRequest,
+    get_backup_by_id,
+    get_tier_status,
+    run_backup,
+    run_restore,
+    run_test_restore,
+    scan_backups,
+)
+from backup_service import (
+    get_config as get_backup_config,
+)
+from backup_service import (
+    update_config as update_backup_config,
+)
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from collections_models import (
     AddItemsRequest,
@@ -2450,6 +2471,162 @@ def delete_collection_item(collection_id: str, item_id: str, request: Request):
     if not removed:
         raise HTTPException(status_code=404, detail="Item not found")
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Backup / Restore Admin Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/v1/admin/backups/",
+    include_in_schema=False,
+    name="admin_backups_list_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups",
+    include_in_schema=False,
+    name="admin_backups_list_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_list_backups() -> BackupListResponse:
+    """List all available backups across tiers."""
+    backups = scan_backups()
+    return BackupListResponse(backups=backups, total=len(backups))
+
+
+@app.post(
+    "/v1/admin/backups/",
+    include_in_schema=False,
+    name="admin_backups_trigger_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups",
+    include_in_schema=False,
+    name="admin_backups_trigger_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_trigger_backup(body: BackupRequest) -> OperationRecord:
+    """Trigger an immediate backup of the specified tier."""
+    record = await run_backup(tier=body.tier, dry_run=body.dry_run)
+    return record
+
+
+@app.get(
+    "/v1/admin/backups/status/",
+    include_in_schema=False,
+    name="admin_backups_status_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/status",
+    include_in_schema=False,
+    name="admin_backups_status_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_backup_status() -> BackupStatusResponse:
+    """Return per-tier backup status summary."""
+    return BackupStatusResponse(tiers=get_tier_status())
+
+
+@app.get(
+    "/v1/admin/backups/config/",
+    include_in_schema=False,
+    name="admin_backups_config_get_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/config",
+    include_in_schema=False,
+    name="admin_backups_config_get_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_get_backup_config() -> dict[str, Any]:
+    """Return current backup configuration."""
+    return get_backup_config().model_dump()
+
+
+@app.put(
+    "/v1/admin/backups/config/",
+    include_in_schema=False,
+    name="admin_backups_config_update_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.put(
+    "/v1/admin/backups/config",
+    include_in_schema=False,
+    name="admin_backups_config_update_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_update_backup_config(body: BackupConfigRequest) -> dict[str, Any]:
+    """Update backup schedule/retention settings."""
+    updated = update_backup_config(body)
+    return updated.model_dump()
+
+
+@app.post(
+    "/v1/admin/backups/test-restore/",
+    include_in_schema=False,
+    name="admin_backups_test_restore_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups/test-restore",
+    include_in_schema=False,
+    name="admin_backups_test_restore_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_test_restore() -> OperationRecord:
+    """Run an automated restore drill using the most recent backup."""
+    try:
+        record = await run_test_restore()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record
+
+
+@app.get(
+    "/v1/admin/backups/{backup_id}/",
+    include_in_schema=False,
+    name="admin_backup_detail_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/{backup_id}",
+    include_in_schema=False,
+    name="admin_backup_detail_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_backup_detail(backup_id: str) -> BackupInfo:
+    """Return details for a specific backup."""
+    backup = get_backup_by_id(backup_id)
+    if backup is None:
+        raise HTTPException(status_code=404, detail=f"Backup not found: {backup_id}")
+    return backup
+
+
+@app.post(
+    "/v1/admin/backups/{backup_id}/restore/",
+    include_in_schema=False,
+    name="admin_backup_restore_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups/{backup_id}/restore",
+    include_in_schema=False,
+    name="admin_backup_restore_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_restore_backup(backup_id: str, body: RestoreRequest | None = None) -> OperationRecord:
+    """Start a restore for the specified backup."""
+    dry_run = body.dry_run if body else False
+    try:
+        record = await run_restore(backup_id=backup_id, dry_run=dry_run)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record
 
 
 if __name__ == "__main__":
