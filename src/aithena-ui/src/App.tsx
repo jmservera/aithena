@@ -12,6 +12,8 @@ import TabNav from './Components/TabNav';
 
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const LibraryPage = lazy(() => import('./pages/LibraryPage'));
+const CollectionsPage = lazy(() => import('./pages/CollectionsPage'));
+const CollectionDetailPage = lazy(() => import('./pages/CollectionDetailPage'));
 const UploadPage = lazy(() => import('./pages/UploadPage'));
 const StatusPage = lazy(() => import('./pages/StatusPage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
@@ -107,6 +109,26 @@ function App() {
                   element={<LibraryPage />}
                   titleId="loading.library"
                   messageId="loading.libraryMessage"
+                />
+              }
+            />
+            <Route
+              path="/collections"
+              element={
+                <LazyRoute
+                  element={<CollectionsPage />}
+                  titleId="loading.collections"
+                  messageId="loading.collectionsMessage"
+                />
+              }
+            />
+            <Route
+              path="/collections/:id"
+              element={
+                <LazyRoute
+                  element={<CollectionDetailPage />}
+                  titleId="loading.collections"
+                  messageId="loading.collectionsMessage"
                 />
               }
             />
