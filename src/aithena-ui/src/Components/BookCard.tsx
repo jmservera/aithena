@@ -75,6 +75,12 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
             {book.language}
           </span>
         )}
+        {book.series && (
+          <span className="book-meta-item">
+            <span className="book-meta-label">{intl.formatMessage({ id: 'book.metaSeries' })}</span>{' '}
+            {book.series}
+          </span>
+        )}
         {book.page_count !== undefined && (
           <span className="book-meta-item">
             <span className="book-meta-label">{intl.formatMessage({ id: 'book.metaPages' })}</span>{' '}

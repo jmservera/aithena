@@ -17,10 +17,11 @@ const FACET_LABEL_KEYS: Record<string, string> = {
   category: 'filters.category',
   language: 'filters.language',
   year: 'filters.year',
+  series: 'filters.series',
   folder: 'filters.folder',
 };
 
-const FACET_KEYS = ['author', 'category', 'language', 'year'] as const;
+const FACET_KEYS = ['author', 'category', 'language', 'year', 'series'] as const;
 
 const FacetPanel = memo(function FacetPanel({
   facets,

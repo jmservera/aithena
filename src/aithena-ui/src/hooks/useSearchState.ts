@@ -31,6 +31,7 @@ const FILTER_KEYS: readonly (keyof SearchFilters)[] = [
   'category',
   'language',
   'year',
+  'series',
   'folder',
 ];
 
