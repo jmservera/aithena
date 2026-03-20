@@ -21,7 +21,6 @@ from collections_service import (  # noqa: E402
     create_collection,
     get_collection,
     init_collections_db,
-    update_item,
 )
 from config import settings  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
