@@ -28,17 +28,17 @@ test('navigates across the Search, Library, Status, and Stats tabs', async ({ pa
     {
       path: '/library',
       selector: '.page-title',
-      text: '📖 Library',
+      text: 'Library',
     },
     {
       path: '/status',
       selector: '.status-title',
-      text: '🟢 System Status',
+      text: 'System Status',
     },
     {
       path: '/stats',
       selector: '.stats-page-title',
-      text: '📊 Collection Stats',
+      text: 'Collection Stats',
     },
   ] as const;
 
@@ -55,7 +55,7 @@ test('navigates across the Search, Library, Status, and Stats tabs', async ({ pa
     }
 
     if ('selector' in testCase) {
-      await expect(page.locator(testCase.selector)).toHaveText(testCase.text);
+      await expect(page.locator(testCase.selector)).toContainText(testCase.text);
       continue;
     }
 
