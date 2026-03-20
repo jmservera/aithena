@@ -175,3 +175,7 @@ llama-base/
 /*-smoke-*.md
 /*-snapshot.md
 
+# Stress test results (keep .gitkeep)
+tests/stress/results/*
+!tests/stress/results/.gitkeep
+

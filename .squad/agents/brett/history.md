@@ -589,3 +589,11 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 
 **From Parker (Backend Dev):**
 - **Decision 25 (Collections SQLite):** Collections backend complete (PR #711). New Docker volume mount needed for `/data/collections/` in production. New env var `COLLECTIONS_DB_PATH` available for customization. Collections DB is initialized during FastAPI lifespan startup.
+
+## Learnings
+
+### 2026-03-20 — Stress test framework (#651, #658)
+- **Branch hygiene matters:** Always verify `git branch --show-current` before committing. A stale working tree can lead to commits on wrong branches.
+- **Docker SDK approach:** Using the Python `docker` library's `container.stats(stream=False)` is more reliable than parsing `docker stats` CLI output. The JSON API gives structured data directly.
+- **Service-specific metrics need graceful fallback:** Solr/RabbitMQ/Redis collectors must handle connection failures silently (debug-level logging) since the stack may be partially up during test development.
+- **OOM detection via events API:** Docker events with filters `{"event": ["oom", "die"]}` plus exitCode=137 check covers both explicit OOM events and killed containers.
