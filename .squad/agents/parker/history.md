@@ -655,3 +655,24 @@ Wave 0 bugs (Days 1–3):
 Wave 0 exit criteria: All 7 bugs closed, P0 #646 verified. No v1.10.0 work starts until complete.
 
 Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+
+### Bug #646 — Semantic index returns 502 (P0)
+**PR:** #700 (squad/646-fix-semantic-502)
+**Root cause:** Two issues:
+1. Default `EMBEDDINGS_URL` in config.py used port 8001 but embeddings-server runs on 8080
+2. Solr kNN query failures in `_search_semantic` and `_search_hybrid` were NOT wrapped in the same degradation logic as embedding failures — when Solr's vector query failed (dimension mismatch, missing field, Solr overload), the 502 propagated directly to the user instead of degrading to keyword search
+
+**Fix:** Wrapped `query_solr` kNN calls with try/except + degradation to keyword search in both semantic and hybrid modes. Fixed default port.
+
+### Bugs #645 + #678 — Login cookie persistence + Admin infinite loop
+**PR:** #702 (squad/645-login-cookie-persist)
+**Root causes:**
+- #645: No `remember_me` support; cookie always set with persistent max_age; frontend never attempted cookie-based session recovery when localStorage was empty
+- #678: `/v1/auth/validate` endpoint did NOT refresh the auth cookie — cookie was only set at login. When cookie expired but JWT was still valid, main UI worked (Authorization header) but admin tabs through nginx failed (nginx `auth_request` relies on cookie), causing infinite 302 redirects
+
+**Fix:**
+- `set_auth_cookie` now supports `max_age=None` for session cookies
+- `LoginRequest` has `remember_me` field (default false → session cookie)
+- Validate endpoint refreshes the auth cookie on every successful validation
+- Frontend `apiFetch` uses `credentials: 'include'`
+- AuthContext always calls validate on mount (enables cookie-based session recovery)
