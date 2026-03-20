@@ -650,3 +650,29 @@ Wave 1: #659 (collections access control review), #695 (metadata editing securit
 Wave 2: #698 (consolidate IaC scans: Checkov + zizmor) with Dallas
 
 Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+
+
+## 2026-03-20: Security Reviews — Collections (#659) + Metadata Editing (#695)
+
+**PR:** #722 (squad/659-security-reviews → dev)
+**Tests:** 67 new security tests, all 664 tests pass, 94.72% coverage
+
+**Vulnerabilities Found & Fixed:**
+1. Metadata edit endpoint lacked JWT admin role check — only API key was required (Critical)
+2. Collection item position allowed negative values
+3. Reorder request had no list size limit (DoS risk)
+4. Collection item note lacked Pydantic-level max_length
+
+**Confirmed Secure:**
+- All SQLite queries use parameterized statements
+- Cross-user isolation enforced on all 8 collection endpoints
+- Solr query escaping prevents injection in doc_id
+- Redis key construction is safe (f-string with SET, no command injection)
+- Atomic updates restricted to allowed field mapping
+
+**Learnings:**
+9. **Defense-in-depth requires multiple layers** — API key auth alone is insufficient for admin endpoints. The metadata edit endpoint had API key protection but no JWT role verification, meaning any authenticated user with the key could edit. Always combine transport-level auth (API key) with identity-level auth (JWT role claims).
+
+10. **Pydantic model validation is the first defense line** — Input validation at the endpoint level can be bypassed if the endpoint code is refactored. Pydantic Field constraints (ge, max_length) provide model-level defense that persists regardless of endpoint changes. Always validate at the model level first, then add runtime checks for config-driven limits.
+
+11. **Security tests should verify both positive and negative cases** — Testing that SQL injection payloads are safely stored (not executed) is as important as testing that unauthorized access is blocked. The payloads should be retrievable from the database unchanged, proving parameterized queries work correctly.
