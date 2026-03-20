@@ -49,7 +49,7 @@ jobs:
       matrix:
         service:
           - image: admin
-            context: ./src/admin
+            context: .
             dockerfile: ./src/admin/Dockerfile
           - image: aithena-ui
             context: ./src/aithena-ui
