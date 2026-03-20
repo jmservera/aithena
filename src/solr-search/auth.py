@@ -179,6 +179,7 @@ def create_access_token(
     secret: str,
     ttl_seconds: int,
     *,
+    remember_me: bool = False,
     now: datetime | None = None,
 ) -> str:
     issued_at = now or datetime.now(UTC)
@@ -187,15 +188,17 @@ def create_access_token(
         "sub": user.username,
         "user_id": user.id,
         "role": user.role,
+        "rmb": remember_me,
         "iat": int(issued_at.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
+def _decode_payload(token: str, secret: str) -> dict:
+    """Decode a JWT and return the raw payload dict."""
     try:
-        payload = jwt.decode(
+        return jwt.decode(
             token, secret, algorithms=[JWT_ALGORITHM], options={"require": ["exp"]}
         )
     except ExpiredSignatureError as err:
@@ -203,6 +206,8 @@ def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
     except (DecodeError, InvalidTokenError) as err:
         raise AuthenticationError("Invalid authentication token") from err
 
+
+def _user_from_payload(payload: dict) -> AuthenticatedUser:
     try:
         user_id = int(payload["user_id"])
         username = str(payload["sub"])
@@ -214,6 +219,15 @@ def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
         raise AuthenticationError("Invalid authentication token")
 
     return AuthenticatedUser(id=user_id, username=username, role=role)
+
+
+def decode_access_token(token: str, secret: str) -> AuthenticatedUser:
+    return _user_from_payload(_decode_payload(token, secret))
+
+
+def get_token_remember_me(token: str, secret: str) -> bool:
+    """Return the ``remember_me`` flag stored in the JWT claims."""
+    return bool(_decode_payload(token, secret).get("rmb", False))
 
 
 MAX_PASSWORD_LENGTH = 128

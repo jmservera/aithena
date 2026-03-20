@@ -33,6 +33,7 @@ from auth import (
     decode_access_token,
     delete_user,
     get_token_from_sources,
+    get_token_remember_me,
     get_user_by_id,
     init_auth_db,
     list_users,
@@ -477,7 +478,7 @@ def _authenticate_request(request: Request) -> AuthenticatedUser:
 
 
 def _authenticate_request_with_token(request: Request) -> tuple[AuthenticatedUser, str]:
-    """Like _authenticate_request but also returns the raw token for cookie refresh."""
+    """Like ``_authenticate_request`` but also returns the raw token for cookie refresh."""
     token = get_token_from_sources(
         request.headers.get("Authorization"),
         request.cookies.get(settings.auth_cookie_name),
@@ -560,7 +561,9 @@ def auth_login(credentials: LoginRequest, request: Request, response: Response) 
     if user is None:
         raise _unauthorized_exception("Invalid username or password")
 
-    token = create_access_token(user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
+    token = create_access_token(
+        user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds, remember_me=credentials.remember_me
+    )
     cookie_max_age = settings.auth_jwt_ttl_seconds if credentials.remember_me else None
     set_auth_cookie(
         response,
@@ -584,13 +587,15 @@ def auth_validate(request: Request, response: Response) -> dict[str, Any]:
         user, token = _authenticate_request_with_token(request)
     except AuthenticationError as exc:
         raise _unauthorized_exception(str(exc)) from exc
-    # Refresh the auth cookie so that cookie-based auth (e.g. nginx
-    # subrequests for admin tabs) stays valid as long as the JWT is valid.
+    # Refresh the auth cookie so nginx auth_request subrequests keep working.
+    # Respect the original remember_me choice: only set max_age for persistent sessions.
+    remember_me = get_token_remember_me(token, settings.auth_jwt_secret)
+    cookie_max_age = settings.auth_jwt_ttl_seconds if remember_me else None
     set_auth_cookie(
         response,
         token,
         settings.auth_cookie_name,
-        settings.auth_jwt_ttl_seconds,
+        cookie_max_age,
         secure=_request_uses_https(request),
     )
     return {"authenticated": True, "user": user.to_dict()}

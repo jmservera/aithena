@@ -60,8 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => registerAuthFailureHandler(clearAuthState), [clearAuthState]);
 
-  // Initialize auth state from stored token on mount, or try cookie-based
-  // session recovery when localStorage is empty (e.g. new tab, cleared data).
+  // Validate session on mount — works with both localStorage tokens and
+  // cookie-only sessions (e.g. new tabs where localStorage is empty but the
+  // auth cookie is still valid).
   useEffect(() => {
     const storedToken = getStoredToken();
 
@@ -92,10 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           clearAuthState();
         }
       } catch {
-        // When there is no stored token, the validate call is a best-effort
+        // When there is no stored token the validate call is a best-effort
         // cookie recovery attempt — suppress errors so the user simply sees
-        // the login page.  When there IS a stored token, a network failure is
-        // still noteworthy but we still land on the login page either way.
+        // the login page.
         if (!cancelled) {
           clearAuthState();
         }
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       token,
-      isAuthenticated: Boolean(token && user),
+      isAuthenticated: Boolean(user),
       isLoading,
       error,
       login,

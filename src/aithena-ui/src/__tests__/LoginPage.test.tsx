@@ -142,17 +142,18 @@ describe('LoginPage', () => {
   it('stores the token when the login form succeeds through the auth provider', async () => {
     const fetchMock = vi
       .fn()
-      // First call: cookie-based session recovery on mount (no session → 401)
+      // Mount: cookie recovery attempt (no cookie in test env → 401)
       .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
-      // Second call: actual login
+      // Login call
       .mockResolvedValueOnce(mockJsonResponse(loginResponse));
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
     renderLoginPageWithProvider();
 
+    // Wait for cookie recovery to finish so the login form is interactive
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /sign in to aithena/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled();
     });
 
     await user.type(screen.getByLabelText(/username/i), 'dallas');
