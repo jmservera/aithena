@@ -641,3 +641,17 @@ POST /v1/upload (multipart/form-data)
 - Cookie-based SSO in admin auth must enforce `user.role == 'admin'` — without this, any valid JWT from the main app (viewer, editor) grants admin access
 - When mocking `st.context` to raise AttributeError, don't mutate `type(MagicMock)` — use a scoped stub object with a `@property` that raises, wrapped in `patch("auth.st", stub_instance)`
 - Admin auth tests live in `src/admin/tests/test_auth.py`; run with `cd src/admin && uv run pytest -v --tb=short`
+
+## 2026-03-20: v1.10.0 Kickoff — Wave 0 Bug Fixes (In Progress)
+
+**Assigned:** 4 Wave 0 bugs + 4 Wave 1 foundations + 5 Wave 2 building blocks + 4 Wave 3 integration + 3 Wave 4 polish (~20 total issues)
+
+Wave 0 bugs (Days 1–3):
+- #645 (High) — Login cookie missing (0.5d)
+- #678 (High) — Admin infinite login loop (0.5d)
+- #648 (Medium) — Duplicate books in library (1d, with Ash)
+- #647 (Medium) — PDFs don't open (0.5d)
+
+Wave 0 exit criteria: All 7 bugs closed, P0 #646 verified. No v1.10.0 work starts until complete.
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

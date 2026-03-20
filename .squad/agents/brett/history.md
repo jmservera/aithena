@@ -568,3 +568,19 @@ Key decisions:
 - Embeddings-server uv migration out of scope
 
 Teams: Brett (8 infra issues), Kane (2 security issues), Parker (testing), Dallas (UI) assigned.
+
+## 2026-03-20: v1.10.0 Kickoff — BCDR Critical Path Lead
+
+**Assigned:** 4 Wave 1 infra + 3 Wave 3 orchestration + 1 Wave 4 docs (~8 total)
+
+Brett leads BCDR infra independently to mitigate Parker bottleneck:
+
+Wave 1: #670 (Docker volume & DB config), #651 (stress test framework), #658 (Docker resource monitoring), #696 (integration test reliability) with Lambert
+
+Wave 3: #665 (backup orchestrator), #669 (restore orchestrator), #663 (backup medium tier)
+
+Wave 4: #679 (min hardware docs) with Dallas
+
+Critical path: BCDR is 8 sequential steps — the schedule driver. Any delay cascades downstream to #680 (admin UI) and #673 (runbook).
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

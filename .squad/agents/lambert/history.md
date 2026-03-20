@@ -238,3 +238,15 @@ Key decisions:
 - CI integration is independent
 
 Teams: Brett (foundation + hardening + CI), Parker (data + indexing + concurrent), Ash (search), Lambert (UI tests).
+
+## 2026-03-20: v1.10.0 Kickoff — Bug Investigation Lead + Testing Track
+
+**Assigned:** 1 Wave 0 bug investigation + 1 Wave 1 test + 1 Wave 2 test + 1 Wave 3 stress + 3 Wave 4 E2E (~7 total)
+
+Wave 0: Lead investigation on P0 #646 (semantic index 502). Time-box to 2 days; escalate if not root-caused.
+
+Wave 1: #696 (improve integration test reliability) with Brett
+
+Wave 2–4: Testing track — folder facet tests (#653), stress test runs (#675, #662), post-restore verification (#672), E2E testing for metadata (#697) and collections (#674).
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

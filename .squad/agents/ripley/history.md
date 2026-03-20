@@ -510,3 +510,48 @@ Key decisions:
 - Both features phase-gated and independent with no cross-feature dependencies
 
 Teams: Parker, Kane, Dallas, Ash, Brett, Lambert assigned across 16 issues.
+
+---
+
+### 2026-03-20 — v1.10.0 Milestone Kickoff Ceremony
+
+**Context:** Facilitated milestone kickoff for v1.10.0 — the largest milestone to date with 48 issues across 6 PRD areas (BCDR, Book Metadata Editing, CI/CD Review, Folder Path Facet, Stress Testing, User Document Collections) plus 7 pre-milestone bugs.
+
+**Key Decisions:**
+
+1. **Bugs before features:** 7 bugs (including P0 #646 semantic index 502) must be resolved before any v1.10.0 work starts. P0 gets Lambert for investigation, then Ash + Parker for fix.
+
+2. **4-wave execution plan:**
+   - Wave 0: Bug fixes (days 1–3)
+   - Wave 1: Foundations — API scaffolds, Solr schema, infra (week 1–2)
+   - Wave 2: Building blocks — UI, secondary APIs, mid-tier backup (week 2–3)
+   - Wave 3: Integration — orchestrators, E2E flows (week 3–4)
+   - Wave 4: Polish — E2E tests, docs, admin UI (week 4–5)
+
+3. **4 issues deferred to v1.10.1:** #682 (automated restore drill), #685 (backup checksums), #684 (stress test CI), #656 (folder facet batch operations). All "hardening" items, not core functionality.
+
+4. **Critical path is BCDR:** 8 sequential steps from infra (#670) through runbook (#673). Any delay here cascades to the entire milestone.
+
+5. **Parker bottleneck identified:** Parker is primary on 20+ issues. Mitigations: Brett leads BCDR infra independently, Ash leads all Solr schema work, @copilot picks up 2 CI/CD issues (#689, #699).
+
+6. **Solr schema coordination required:** 3 features touch Solr schema (folder facet, series_s, metadata). Ash coordinates all schema changes to prevent conflicts.
+
+7. **5 issues flagged for research before implementation:** #655 (SQLite volume strategy), #681 (Solr atomic update compatibility), #670 (backup volume layout), #651 (stress test tooling choice), #648 (duplicate books root cause).
+
+**Risks Tracked:**
+- 48-issue scope (mitigated by 4 deferrals + strict wave gating)
+- Parker overload (mitigated by delegation strategy)
+- Stress tests may surface new performance issues (discovery-only for v1.10.0; fixes deferred)
+
+**Decision recorded:** `.squad/decisions/inbox/ripley-v1100-kickoff.md`
+
+## 2026-03-20T12:07 — v1.10.0 Kickoff Ceremony
+
+**Mode:** sync  
+**Outcome:** Produced comprehensive kickoff report with 4-wave delivery plan
+
+Established priority ordering, wave plan, critical path analysis, and agent load balancing for v1.10.0 (48 open issues + 7 bugs). Deferred 4 lower-priority issues (#682, #685, #684, #656) to v1.10.0.1 to reduce scope from 48 to 44 issues. Identified BCDR as critical path (8 sequential dependency steps). Identified Parker as primary bottleneck; mitigations: Brett leads BCDR infra independently, Ash leads search schema, @copilot picks up CI/CD, Parker sequenced by user value.
+
+**Milestone:** v1.10.0  
+**Decision:** Written to .squad/decisions.md  
+**References:** Orchestration log at .squad/orchestration-log/2026-03-20T12-07-ripley-kickoff.md

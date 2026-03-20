@@ -640,3 +640,13 @@
 
 8. **Admin dashboard role-based access** — Auth DB already supports roles (user/admin) but endpoints don't enforce them. This is a low-effort high-impact fix; add role check to admin endpoints in v1.8.0.
 
+
+## 2026-03-20: v1.10.0 Kickoff — Security Reviews
+
+**Assigned:** 2 Wave 1 security reviews + 1 Wave 2 CI (~3 total)
+
+Wave 1: #659 (collections access control review), #695 (metadata editing security review)
+
+Wave 2: #698 (consolidate IaC scans: Checkov + zizmor) with Dallas
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

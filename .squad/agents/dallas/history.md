@@ -636,3 +636,17 @@ src/aithena-ui/src/
 **Key takeaways:**
 - Headless Chromium lacks emoji font support — never use exact emoji matching in E2E assertions. Use `toContainText` with the text portion only.
 - Playwright's `.check()` expects native checkbox toggle semantics. For React controlled checkboxes where state is managed via onChange handlers, prefer clicking the label element instead.
+
+## 2026-03-20: v1.10.0 Kickoff — Wave 0 Bug Fixes + CI/CD
+
+**Assigned:** 2 Wave 0 bugs + 1 Wave 1 CI + 4 Wave 2 UI + 2 Wave 3 UI + 2 Wave 4 polish (~11 total)
+
+Wave 0 bugs (Days 1–3):
+- #667 (Low) — Version number in UI (0.25d)
+- #649 (Low) — Responsive overlap / CSS fix (0.5d, with Lambert)
+
+Wave 1: #692 (merge lint-frontend.yml into ci.yml) with Brett
+
+Wave 2–4: Metadata UI (#688 modal, #691 batch panel), folder facet UI (#652 tree), collections UI (#661, #664), and release pipeline enforcement (#687, #694).
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).

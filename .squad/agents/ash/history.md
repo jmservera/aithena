@@ -146,3 +146,15 @@ Key decisions:
 - Lambert assigned to testing as separate work item
 
 Status: Backend (#650) and frontend (#652) can start in parallel; tests wait for both to be ready.
+
+## 2026-03-20: v1.10.0 Kickoff — Wave 0 + Wave 1 Schema Work
+
+**Assigned:** Support Wave 0 bug (#646, #648) + Wave 1 schema + Wave 2 search
+
+Wave 0: Bug investigation/fix support for semantic index 502 (#646 P0) and duplicate books (#648).
+
+Wave 1 foundations: #650 (folder_path_s facet in API) and #677 (add series_s field to Solr schema).
+
+Critical path: Solr schema changes coordinate across 3 features (#650, #677, #681 metadata). Ash coordinates all schema PRs per wave.
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
