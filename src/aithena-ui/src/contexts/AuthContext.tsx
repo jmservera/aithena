@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(getStoredToken());
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(getStoredToken()));
+  const [isLoading, setIsLoading] = useState(true);
 
   const clearAuthState = useCallback(() => {
     clearStoredToken();
@@ -60,14 +60,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => registerAuthFailureHandler(clearAuthState), [clearAuthState]);
 
-  // Initialize auth state from stored token on mount
+  // Initialize auth state from stored token on mount, or try cookie-based
+  // session recovery when localStorage is empty (e.g. new tab, cleared data).
   useEffect(() => {
     const storedToken = getStoredToken();
-    if (!storedToken) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsLoading(false);
-      return;
-    }
 
     let cancelled = false;
 
@@ -87,16 +83,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const data = (await response.json()) as AuthValidateResponse;
         if (!cancelled && data.authenticated && data.user) {
-          setToken(storedToken);
+          if (storedToken) {
+            setToken(storedToken);
+          }
           setUser(data.user);
           setError(null);
         } else if (!cancelled) {
           clearAuthState();
         }
-      } catch (err) {
+      } catch {
+        // When there is no stored token, the validate call is a best-effort
+        // cookie recovery attempt — suppress errors so the user simply sees
+        // the login page.  When there IS a stored token, a network failure is
+        // still noteworthy but we still land on the login page either way.
         if (!cancelled) {
           clearAuthState();
-          setError(err instanceof Error ? err.message : 'Failed to validate session');
         }
       } finally {
         if (!cancelled) {

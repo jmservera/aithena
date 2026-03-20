@@ -77,10 +77,19 @@ describe('useAuth', () => {
   });
 
   it('logs in successfully and persists the token', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(mockJsonResponse(loginResponse));
+    // First call: cookie-based session recovery on mount (no session → 401)
+    // Second call: actual login
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      .mockResolvedValueOnce(mockJsonResponse(loginResponse));
     const user = userEvent.setup();
 
     renderAuthHarness();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
+    });
+
     await user.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
@@ -97,12 +106,19 @@ describe('useAuth', () => {
   });
 
   it('surfaces login failures without persisting a token', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      mockJsonResponse({ detail: 'Invalid credentials' }, 401)
-    );
+    // First call: cookie-based session recovery on mount (no session → 401)
+    // Second call: login attempt that fails
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Invalid credentials' }, 401));
     const user = userEvent.setup();
 
     renderAuthHarness();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
+    });
+
     await user.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
@@ -133,12 +149,21 @@ describe('useAuth', () => {
   });
 
   it('includes the stored token in Authorization headers for protected requests', async () => {
+    // First call: cookie-based session recovery on mount (no session → 401)
+    // Second call: login
+    // Third call: protected API request
     vi.mocked(fetch)
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
       .mockResolvedValueOnce(mockJsonResponse(loginResponse))
       .mockResolvedValueOnce(mockJsonResponse({ ok: true }, 200));
     const user = userEvent.setup();
 
     renderAuthHarness();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
+    });
+
     await user.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
@@ -151,7 +176,8 @@ describe('useAuth', () => {
       expect(screen.getByTestId('request-status')).toHaveTextContent('200');
     });
 
-    const protectedRequest = vi.mocked(fetch).mock.calls[1]?.[1];
+    // The protected request is the third fetch call (index 2)
+    const protectedRequest = vi.mocked(fetch).mock.calls[2]?.[1];
     expect(
       new Headers((protectedRequest as RequestInit | undefined)?.headers).get('Authorization')
     ).toBe('Bearer jwt-123');

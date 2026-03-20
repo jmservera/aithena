@@ -148,6 +148,7 @@ PUBLIC_PATH_PREFIXES = ("/docs", "/redoc", "/openapi.json")
 class LoginRequest(BaseModel):
     username: str
     password: str
+    remember_me: bool = False
 
 
 class ChangePasswordRequest(BaseModel):
@@ -475,6 +476,17 @@ def _authenticate_request(request: Request) -> AuthenticatedUser:
     return decode_access_token(token, settings.auth_jwt_secret)
 
 
+def _authenticate_request_with_token(request: Request) -> tuple[AuthenticatedUser, str]:
+    """Like _authenticate_request but also returns the raw token for cookie refresh."""
+    token = get_token_from_sources(
+        request.headers.get("Authorization"),
+        request.cookies.get(settings.auth_cookie_name),
+    )
+    if token is None:
+        raise AuthenticationError("Not authenticated")
+    return decode_access_token(token, settings.auth_jwt_secret), token
+
+
 def _get_current_user(request: Request) -> AuthenticatedUser:
     current_user = getattr(request.state, "auth_user", None)
     if isinstance(current_user, AuthenticatedUser):
@@ -549,11 +561,12 @@ def auth_login(credentials: LoginRequest, request: Request, response: Response) 
         raise _unauthorized_exception("Invalid username or password")
 
     token = create_access_token(user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
+    cookie_max_age = settings.auth_jwt_ttl_seconds if credentials.remember_me else None
     set_auth_cookie(
         response,
         token,
         settings.auth_cookie_name,
-        settings.auth_jwt_ttl_seconds,
+        cookie_max_age,
         secure=_request_uses_https(request),
     )
     return {
@@ -566,11 +579,20 @@ def auth_login(credentials: LoginRequest, request: Request, response: Response) 
 
 @app.get("/v1/auth/validate/", include_in_schema=False, name="auth_validate_v1_slash")
 @app.get("/v1/auth/validate", name="auth_validate_v1")
-def auth_validate(request: Request) -> dict[str, Any]:
+def auth_validate(request: Request, response: Response) -> dict[str, Any]:
     try:
-        user = _authenticate_request(request)
+        user, token = _authenticate_request_with_token(request)
     except AuthenticationError as exc:
         raise _unauthorized_exception(str(exc)) from exc
+    # Refresh the auth cookie so that cookie-based auth (e.g. nginx
+    # subrequests for admin tabs) stays valid as long as the JWT is valid.
+    set_auth_cookie(
+        response,
+        token,
+        settings.auth_cookie_name,
+        settings.auth_jwt_ttl_seconds,
+        secure=_request_uses_https(request),
+    )
     return {"authenticated": True, "user": user.to_dict()}
 
 

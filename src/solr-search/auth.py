@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import jwt
 from argon2 import PasswordHasher
@@ -430,20 +431,27 @@ def set_auth_cookie(
     response,
     token: str,
     cookie_name: str,
-    max_age: int,
+    max_age: int | None,
     *,
     secure: bool,
 ) -> None:
-    response.set_cookie(
-        key=cookie_name,
-        value=token,
-        httponly=True,
-        max_age=max_age,
-        expires=max_age,
-        path="/",
-        samesite="lax",
-        secure=secure,
-    )
+    """Set the auth cookie on the response.
+
+    When *max_age* is ``None`` the cookie becomes a session cookie that is
+    deleted when the browser closes.
+    """
+    kwargs: dict[str, Any] = {
+        "key": cookie_name,
+        "value": token,
+        "httponly": True,
+        "path": "/",
+        "samesite": "lax",
+        "secure": secure,
+    }
+    if max_age is not None:
+        kwargs["max_age"] = max_age
+        kwargs["expires"] = max_age
+    response.set_cookie(**kwargs)
 
 
 def clear_auth_cookie(response, cookie_name: str, *, secure: bool) -> None:

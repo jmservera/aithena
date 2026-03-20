@@ -140,11 +140,20 @@ describe('LoginPage', () => {
   });
 
   it('stores the token when the login form succeeds through the auth provider', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(mockJsonResponse(loginResponse));
+    const fetchMock = vi
+      .fn()
+      // First call: cookie-based session recovery on mount (no session → 401)
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      // Second call: actual login
+      .mockResolvedValueOnce(mockJsonResponse(loginResponse));
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
     renderLoginPageWithProvider();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /sign in to aithena/i })).toBeInTheDocument();
+    });
 
     await user.type(screen.getByLabelText(/username/i), 'dallas');
     await user.type(screen.getByLabelText(/password/i), 'secret');
