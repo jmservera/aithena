@@ -41,7 +41,7 @@ const BookCard = memo(function BookCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const showMenu = (isAdmin && onEditMetadata) || onSaveToCollection;
+  const showMenu = Boolean((isAdmin && onEditMetadata) || onSaveToCollection);
 
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((prev) => !prev);
@@ -94,7 +94,9 @@ const BookCard = memo(function BookCard({
   }, [book.id, onToggleSelect]);
 
   return (
-    <article className={`book-card${isSelected ? ' book-card--active' : ''}`}>
+    <article
+      className={`book-card${isSelected ? ' book-card--active' : ''}${isChecked ? ' book-card--checked' : ''}`}
+    >
       <div className="book-card-header">
         {selectionMode && (
           <div className="book-card-select-checkbox">

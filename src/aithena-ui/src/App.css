@@ -3591,7 +3591,7 @@ select:focus-visible,
   margin-top: 8px;
 }
 
-.multi-select-toggle {
+.batch-select-mode-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3607,11 +3607,11 @@ select:focus-visible,
     background var(--transition-fast);
 }
 
-.multi-select-toggle:hover {
+.batch-select-mode-btn:hover {
   border-color: rgba(255, 255, 255, 0.4);
 }
 
-.multi-select-toggle--active {
+.batch-select-mode-btn--active {
   background: rgba(126, 200, 227, 0.12);
   border-color: var(--color-primary);
   color: var(--color-primary);
@@ -3635,7 +3635,7 @@ select:focus-visible,
 
 /* ── Book card checkbox ────────────────────────────────────────── */
 
-.book-card-checkbox {
+.book-card-select-checkbox {
   width: 18px;
   height: 18px;
   accent-color: var(--color-primary);

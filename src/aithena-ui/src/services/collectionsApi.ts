@@ -288,3 +288,39 @@ export async function addItemToCollection(
   if (col) col.item_count = items.length;
   return newItem;
 }
+
+export async function addItemsToCollection(
+  collectionId: string,
+  documentIds: string[]
+): Promise<CollectionItem[]> {
+  /* istanbul ignore next -- real endpoint */
+  if (import.meta.env.VITE_COLLECTIONS_API === 'real') {
+    const res = await apiFetch(`/v1/collections/${collectionId}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document_ids: documentIds }),
+    });
+    if (!res.ok) throw new Error('Failed to add items');
+    return (await res.json()) as CollectionItem[];
+  }
+  await delay();
+  const items = itemsByCollection[collectionId];
+  if (!items) throw new Error('Collection not found');
+  const newItems: CollectionItem[] = documentIds.map((documentId) => {
+    const newItem: CollectionItem = {
+      id: `item-${nextItemId++}`,
+      document_id: documentId,
+      title: `Document ${documentId}`,
+      author: 'Unknown',
+      year: undefined,
+      cover_url: null,
+      note: '',
+      added_at: new Date().toISOString(),
+    };
+    items.push(newItem);
+    return newItem;
+  });
+  const col = collections.find((c) => c.id === collectionId);
+  if (col) col.item_count = items.length;
+  return newItems;
+}

@@ -4,7 +4,7 @@ import { Plus, Search } from 'lucide-react';
 import {
   type Collection,
   type CollectionCreateRequest,
-  addItemToCollection,
+  addItemsToCollection,
   createCollection,
   fetchCollections,
 } from '../services/collectionsApi';
@@ -76,7 +76,7 @@ function AddToCollectionModal({
       setBusy(true);
       setError(null);
       try {
-        await Promise.all(documentIds.map((docId) => addItemToCollection(collectionId, docId)));
+        await addItemsToCollection(collectionId, documentIds);
         onSuccess(collectionName, documentIds.length);
         onClose();
       } catch {
@@ -98,7 +98,7 @@ function AddToCollectionModal({
       try {
         const req: CollectionCreateRequest = { name: trimmed };
         const created = await createCollection(req);
-        await Promise.all(documentIds.map((docId) => addItemToCollection(created.id, docId)));
+        await addItemsToCollection(created.id, documentIds);
         onSuccess(created.name, documentIds.length);
         onClose();
       } catch {

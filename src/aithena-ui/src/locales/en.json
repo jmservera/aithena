@@ -388,6 +388,7 @@
   "stats.pageStats": "Page stats",
   "stats.title": "Collection Stats",
   "stats.totalPages": "Total pages",
+  "toast.dismiss": "Dismiss notification {position} of {total}",
   "upload.backToSearch": "Back to Search",
   "upload.browse": "browse",
   "upload.description": "Add a new book to the library by uploading a PDF file (max 50MB)",

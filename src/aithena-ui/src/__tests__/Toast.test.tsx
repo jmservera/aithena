@@ -75,7 +75,7 @@ describe('Toast system', () => {
     await user.click(screen.getByText('Add Success'));
     expect(screen.getByText('Success message')).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText('Dismiss'));
+    await user.click(screen.getByLabelText('Dismiss notification 1 of 1'));
     expect(screen.queryByText('Success message')).not.toBeInTheDocument();
   });
 

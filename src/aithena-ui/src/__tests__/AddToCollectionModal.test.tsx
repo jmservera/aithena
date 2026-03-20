@@ -6,13 +6,13 @@ import { IntlWrapper } from './test-intl-wrapper';
 
 vi.mock('../services/collectionsApi', () => ({
   fetchCollections: vi.fn(),
-  addItemToCollection: vi.fn(),
+  addItemsToCollection: vi.fn(),
   createCollection: vi.fn(),
 }));
 
 import {
   fetchCollections,
-  addItemToCollection,
+  addItemsToCollection,
   createCollection,
 } from '../services/collectionsApi';
 
@@ -39,13 +39,15 @@ describe('AddToCollectionModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchCollections).mockResolvedValue(mockCollections);
-    vi.mocked(addItemToCollection).mockResolvedValue({
-      id: 'item-new',
-      document_id: 'doc-1',
-      title: 'Test',
-      note: '',
-      added_at: new Date().toISOString(),
-    });
+    vi.mocked(addItemsToCollection).mockResolvedValue([
+      {
+        id: 'item-new',
+        document_id: 'doc-1',
+        title: 'Test',
+        note: '',
+        added_at: new Date().toISOString(),
+      },
+    ]);
     vi.mocked(createCollection).mockResolvedValue({
       id: 'col-new',
       name: 'New Collection',
@@ -111,7 +113,7 @@ describe('AddToCollectionModal', () => {
     expect(screen.getByText('Philosophy')).toBeInTheDocument();
   });
 
-  it('calls addItemToCollection and onSuccess when collection is selected', async () => {
+  it('calls addItemsToCollection and onSuccess when collection is selected', async () => {
     const onSuccess = vi.fn();
     const onClose = vi.fn();
     const user = userEvent.setup();
@@ -134,7 +136,7 @@ describe('AddToCollectionModal', () => {
     await user.click(screen.getByText('ML Essentials'));
 
     await waitFor(() => {
-      expect(addItemToCollection).toHaveBeenCalledWith('col-1', 'doc-1');
+      expect(addItemsToCollection).toHaveBeenCalledWith('col-1', ['doc-1']);
       expect(onSuccess).toHaveBeenCalledWith('ML Essentials', 1);
       expect(onClose).toHaveBeenCalled();
     });
@@ -188,7 +190,7 @@ describe('AddToCollectionModal', () => {
 
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({ name: 'New Collection' });
-      expect(addItemToCollection).toHaveBeenCalledWith('col-new', 'doc-1');
+      expect(addItemsToCollection).toHaveBeenCalledWith('col-new', ['doc-1']);
       expect(onSuccess).toHaveBeenCalledWith('New Collection', 1);
       expect(onClose).toHaveBeenCalled();
     });
