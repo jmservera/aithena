@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] — 2026-03-20
+
+### Fixed
+
+- **aithena-ui Docker build** — copy `.npmrc` before `npm ci` so `legacy-peer-deps=true` is respected (#616)
+
 ## [1.9.0] — 2026-03-19
 
 ### Added

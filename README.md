@@ -2,9 +2,9 @@
 
 A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
-**Current Release:** v1.7.1 — Stability, Docker multi-stage builds, and security hardening.  
-**Development:** v1.8.0+ milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
-**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v1.7.0.md)**
+**Current Release:** v1.9.1 — Docker build fix for aithena-ui.  
+**Development:** v1.10.0 milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
+**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v1.9.1.md)**
 
 ## What It Does
 
@@ -140,6 +140,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 | [v1.8.1](https://github.com/jmservera/aithena/milestone/24) | Bug fixes (search, stats, i18n, admin) | Complete |
 | [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Streamlit retirement, infra UI links | Complete |
 | [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | Complete |
+| [v1.9.1](https://github.com/jmservera/aithena/milestone/28) | Docker build fix | Complete |
 | [v1.10.0](https://github.com/jmservera/aithena/milestone/26) | User collections, metadata editing | Planned |
 | [v1.10.1](https://github.com/jmservera/aithena/milestone/27) | BCDR backup/restore | Planned |
 
