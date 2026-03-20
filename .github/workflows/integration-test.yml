@@ -10,8 +10,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
-  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,6 +19,9 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       build: ${{ steps.filter.outputs.build }}
     steps:
@@ -28,11 +29,14 @@ jobs:
         id: filter
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO_NAME: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           NON_BUILD='^(\.squad/|\.github/(ISSUE_TEMPLATE|agents)/|docs/|[^/]*\.md$|LICENSE$|\.gitattributes$|\.gitignore$)'
 
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if ! CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if ! CHANGED=$(gh api "repos/$REPO_NAME/pulls/$PR_NUMBER/files" \
               --paginate --jq '.[].filename'); then
               echo "Failed to fetch changed files — running all checks"
               echo "build=true" >> "$GITHUB_OUTPUT"
@@ -59,6 +63,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    permissions:
+      contents: read
+      issues: write
     env:
       E2E_LIBRARY_PATH: /tmp/aithena-e2e-library
       CI_ADMIN_USERNAME: ci-admin

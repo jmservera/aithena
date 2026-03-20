@@ -40,11 +40,14 @@ runs:
     - name: Run pre-release log analyzer
       id: analyze
       shell: bash
+      env:
+        INPUT_VERSION_FILE: ${{ inputs.version-file }}
+        INPUT_COMPOSE_LOGS_PATH: ${{ inputs.compose-logs-path }}
       run: |
         set +e
         sh e2e/pre-release-check.sh \
-          --version-file "${{ inputs.version-file }}" \
-          "${{ inputs.compose-logs-path }}" \
+          --version-file "$INPUT_VERSION_FILE" \
+          "$INPUT_COMPOSE_LOGS_PATH" \
           > "$RUNNER_TEMP/findings.json" 2>"$RUNNER_TEMP/analyzer-summary.txt"
         EXIT_CODE=$?
         set -e
