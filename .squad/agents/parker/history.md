@@ -676,3 +676,17 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 - Validate endpoint refreshes the auth cookie on every successful validation
 - Frontend `apiFetch` uses `credentials: 'include'`
 - AuthContext always calls validate on mount (enables cookie-based session recovery)
+
+### Issue #681 — Single document metadata edit API
+**PR:** #709 (squad/681-metadata-edit-api)
+**Implemented:**
+- PATCH /v1/admin/documents/{doc_id}/metadata endpoint in solr-search
+- MetadataEditRequest Pydantic model with validation (title ≤255, author ≤255, year 1000-2099, category ≤100, series ≤100, whitespace trimming)
+- Solr atomic update with field mapping (title → title_s + title_t, author → author_s + author_t, year → year_i, category → category_s, series → series_s)
+- Redis override store at aithena:metadata-override:{doc_id} with permanent TTL
+- 23 tests, all passing with 94% coverage
+
+**Key decisions:**
+- Used `solr_circuit.call()` for atomic updates to leverage existing circuit breaker
+- Redis override stores Solr field names (not request field names) for direct use by document-indexer
+- Validation in model method (not Pydantic validators) to return HTTP-appropriate 422 errors
