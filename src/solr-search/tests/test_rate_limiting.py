@@ -318,3 +318,27 @@ def test_login_returns_429_when_rate_limited(mock_limiter: MagicMock) -> None:
 
     assert response.status_code == 429
     assert "Too many login attempts" in response.json()["detail"]
+
+
+def test_rate_limiter_disabled_when_zero() -> None:
+    """Rate limiter should bypass when requests_per_minute is 0."""
+    limiter = RedisRateLimiter(requests_per_minute=0)
+    request = MagicMock(spec=Request)
+    request.headers = {"x-forwarded-for": "10.0.0.1"}
+    request.client = MagicMock()
+    request.client.host = "10.0.0.1"
+    allowed, retry_after = limiter.check_rate_limit(request)
+    assert allowed is True
+    assert retry_after == 0
+
+
+def test_rate_limiter_disabled_when_negative() -> None:
+    """Rate limiter should bypass when requests_per_minute is negative."""
+    limiter = RedisRateLimiter(requests_per_minute=-1)
+    request = MagicMock(spec=Request)
+    request.headers = {"x-forwarded-for": "10.0.0.1"}
+    request.client = MagicMock()
+    request.client.host = "10.0.0.1"
+    allowed, retry_after = limiter.check_rate_limit(request)
+    assert allowed is True
+    assert retry_after == 0

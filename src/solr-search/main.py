@@ -729,6 +729,7 @@ def search(
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
 
     **Rate Limit:** Configurable via ``RATE_LIMIT_REQUESTS_PER_MINUTE`` (default: 100).
+    Set to 0 to disable rate limiting (e.g., for E2E testing).
     """
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
