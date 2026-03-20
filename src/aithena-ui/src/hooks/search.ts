@@ -20,6 +20,7 @@ export interface BookResult {
   file_path?: string;
   highlights?: string[];
   document_url?: string | null;
+  in_collections?: number;
 }
 
 export interface FacetValue {
