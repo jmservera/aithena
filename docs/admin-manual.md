@@ -2419,3 +2419,128 @@ docker compose up -d
 **Data integrity:** v1.9.0 schema is backwards-compatible with v1.8.x. Existing user accounts, passwords, and roles are preserved. If you restore an older backup, you lose any user accounts created after that backup was taken.
 
 ---
+
+## Metadata Editing
+
+Aithena allows administrators to correct or enrich document metadata directly, without re-indexing files. Changes are persisted in both Solr (for immediate search impact) and Redis (to survive re-indexing).
+
+### Prerequisites
+
+- An admin user account (role `admin`)
+- The `ADMIN_API_KEY` environment variable configured in the deployment
+
+### Single document edit
+
+Edit one document at a time from the UI detail view or via the API:
+
+```
+PATCH /v1/admin/documents/{doc_id}/metadata
+X-API-Key: <your-admin-key>
+Authorization: Bearer <admin-jwt>
+
+{
+  "title": "Corrected Title",
+  "author": "Corrected Author",
+  "year": 2020,
+  "category": "Science Fiction",
+  "series": "Foundation"
+}
+```
+
+All fields are optional — only include the fields you want to change. The response confirms which fields were updated:
+
+```json
+{
+  "id": "doc-id",
+  "updated_fields": ["title", "author", "year", "category", "series"],
+  "status": "ok",
+  "message": "Metadata updated in Solr and override store"
+}
+```
+
+### Batch edit by document IDs
+
+Update multiple documents at once (up to 1 000 IDs per request):
+
+```
+PATCH /v1/admin/documents/batch/metadata
+X-API-Key: <your-admin-key>
+Authorization: Bearer <admin-jwt>
+
+{
+  "document_ids": ["doc-1", "doc-2", "doc-3"],
+  "updates": {
+    "category": "History"
+  }
+}
+```
+
+The response reports partial failures:
+
+```json
+{
+  "matched": 3,
+  "updated": 2,
+  "failed": 1,
+  "errors": [
+    { "document_id": "doc-3", "error": "Document does not exist" }
+  ]
+}
+```
+
+### Batch edit by query
+
+Update all documents matching a Solr query (up to 5 000 results):
+
+```
+PATCH /v1/admin/documents/batch/metadata-by-query
+X-API-Key: <your-admin-key>
+Authorization: Bearer <admin-jwt>
+
+{
+  "query": "author_s:Asimov",
+  "updates": {
+    "series": "Foundation"
+  }
+}
+```
+
+### Field validation rules
+
+| Field | Type | Constraint |
+|-------|------|-----------|
+| `title` | string | Max 255 characters |
+| `author` | string | Max 255 characters |
+| `year` | integer | 1000–2099 |
+| `category` | string | Max 100 characters |
+| `series` | string | Max 100 characters |
+
+Whitespace is trimmed automatically. Whitespace-only strings are rejected (422).
+
+### How overrides work
+
+1. **Solr atomic update**: Each field is written to Solr using the `set` operation, preserving all other document fields.
+2. **Redis override store**: A JSON record is stored at `aithena:metadata-override:{doc_id}` containing the updated Solr field values, `edited_by`, and `edited_at`. This ensures overrides survive full re-indexing.
+
+### Using the batch edit UI
+
+1. Navigate to the search page and run a search.
+2. Select documents using the checkboxes on each book card.
+3. Click **Batch Edit** in the selection toolbar.
+4. In the batch edit panel, enable the fields you want to change using the toggle checkboxes.
+5. Enter new values. Category and series fields offer autocomplete from existing facet values.
+6. Review the preview section showing which fields will be updated.
+7. Click **Apply Changes** to submit.
+8. Review the result summary (updated count, failed count, and error details).
+
+### Troubleshooting
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| 401 on PATCH | Missing or invalid `X-API-Key` header | Verify `ADMIN_API_KEY` in `.env` and include it in the request |
+| 403 on PATCH | JWT user is not an admin | Log in with an admin account |
+| 404 on single edit | Document ID not in Solr | Verify the document was indexed; check `doc_id` spelling |
+| 503 on single edit | Redis unavailable | Check Redis health; the Solr update may still have succeeded |
+| 504 on single edit | Solr timeout | Check Solr health and load |
+
+---
