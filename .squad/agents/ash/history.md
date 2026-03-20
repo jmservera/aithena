@@ -1,177 +1,78 @@
-## v0.7.0 Milestone Completion
-
-**2026-03-15T15:00Z** — v0.7.0 milestone complete. All 7 issues closed, 7 PRs merged to `dev`. 
-- Versioning infrastructure (#199, #204) ✅
-- Version endpoints (#200, #203) ✅  
-- UI version footer (#201) ✅
-- Admin containers endpoint (#202) ✅
-- Documentation-first release process (#205) ✅
-
-3 decisions recorded. Ready for release to `main`.
-
----
-
 # Ash — History
-
-## Project Context
-- **Project:** aithena — Book library search engine with Solr indexing, multilingual embeddings, PDF processing
-- **User:** jmservera
-- **Stack:** Apache Solr 9.7, Docker Compose, multilingual embeddings (`distiluse-base-multilingual-cased-v2`, 512D)
-- **Languages:** Spanish, Catalan, French, English (including very old texts)
-- **Current setup:** Solr 3-node SolrCloud cluster with Tika extraction and langid detection
 
 ## Core Context
 
-**Solr Schema & Vector Setup (v0.4-v0.5):**
-- **Book metadata fields:** `title_s/t`, `author_s/t`, `year_i`, `page_count_i`, `file_path_s`, `folder_path_s`, `category_s`, `language_detected_s`
-- **copyField rules:** `title_t`, `author_t` → `_text_` for catch-all search
-- **Highlighting config:** unified highlighter with `content` snippet source, `_text_` alternate-field fallback
-- **Dense vector field:** `book_embedding` (512D, HNSW cosine similarity for kNN)
-- **Tika extraction:** Full-text + langid auto-detection enabled on all nodes
-- **Faceting:** author, category, year, language aggregations enabled
+**Project:** aithena — Book library search engine
+**Stack:** Solr 9.7, 3-node SolrCloud, distiluse-base-multilingual-cased-v2 (512D), Docker Compose
+**Languages indexed:** Spanish, Catalan, French, English (incl. historical texts)
 
-**Phase 1-3 Deliverables:**
-- Phase 1: 11 book metadata fields + copyFields, Tika + langid chains live
-- Phase 2: Faceting config, highlighting tuning, result ranking
-- Phase 3: Dense vector field `book_embedding`, kNN handler enabled
+### Solr Data Model (Parent-Chunk Architecture)
 
-**Search Modes (v0.5):**
-- `keyword` (BM25 on `_text_`)
-- `semantic` (kNN on `book_embedding`)
-- `hybrid` (RRF fusion with configurable weights)
+- **Parent documents:** Book metadata (`id` = SHA-256 of file path), no embeddings
+  - Fields: `title_s/t`, `author_s/t`, `year_i`, `page_count_i`, `file_path_s`, `folder_path_s`, `category_s`, `language_detected_s`
+- **Chunk documents:** Text fragments + `embedding_v` (512-dim HNSW cosine), linked via `parent_id_s`
+  - Chunking: 400 words, 50-word overlap, page-aware
+  - Fields: `chunk_text_t`, `embedding_v`, `chunk_index_i`, `parent_id_s`, `page_start_i`, `page_end_i`
+- **⚠ Critical rule:** `EXCLUDE_CHUNKS_FQ = "-parent_id_s:[* TO *]"` — applied to keyword leg only, NEVER to kNN
+- copyField rules: `title_t`, `author_t` → `_text_` for catch-all search
+- Dense vector: `book_embedding` (book-level, 512D) + `embedding_v` (chunk-level, 512D)
+- Tika extraction + langid auto-detection on `/update/extract`
 
-## Learnings
+### Search Modes
 
-<!-- Append learnings below -->
+- **keyword:** BM25 via edismax on `_text_`, facets + highlighting enabled
+- **semantic:** kNN on chunk `embedding_v`, collapse by `parent_id_s`
+- **hybrid:** Parallel BM25 + kNN, merged with RRF (k=60)
+- All modes support filter queries (`fq_author`, `fq_category`, `fq_language`, `fq_year`)
+- Highlighting: unified highlighter, `content` source, `_text_` alternate-field fallback
+- edismax: default qf `_text_`, pf `title_t^2`
+- Empty query: keyword returns 0 results (normalized `*:*`); semantic/hybrid returns 400 (can't embed empty string)
 
-### 2026-03-20 — PRD decomposition: Folder Path Facet (#592)
+### Faceting
 
-**PRD:** `docs/prd/folder-path-facet.md` — decomposed into 4 GitHub issues for v1.10.0 milestone:
+- Active: author, category, year, language
+- Added in v1.10.0: `folder_path_s` (client-side tree building, Solr PathHierarchy deferred)
+- Also v1.10.0: `series_s` field for book series grouping
 
-| Issue | Title | Routed to |
-|-------|-------|-----------|
-| #650 | Add folder_path_s as search facet in solr-search API | squad:ash |
-| #652 | Folder facet hierarchical tree UI component | squad:dallas |
-| #653 | Folder facet unit and integration tests | squad:lambert |
-| #656 | Folder facet as selection mechanism for batch operations | squad:dallas + squad:parker |
+### Key Architecture Docs
 
-**Decomposition decisions:**
-- Split backend (small, 3-5 LOC) from frontend (medium, tree rendering) since they're independently implementable
-- Kept the entire frontend tree UI as one issue rather than splitting flat list vs. tree — they're tightly coupled and one developer should own the full component
-- Tests as a separate issue routed to Lambert, not embedded in backend/frontend issues — follows the squad routing table
-- Batch operations integration kept as its own issue because it depends on the sister batch editing feature (#593) and involves both Dallas and Parker
-- Used Option A (client-side tree building) per PRD recommendation — simpler first, Solr PathHierarchy upgrade deferred
+- `docs/architecture/solr-data-model.md` — Parent/chunk model, search flows, critical rules (PR #723)
+- `src/solr-search/README.md` — Service README with data model summary
 
-### 2026-03-20 — Fix #562: Vector/hybrid 502 errors (nginx timeout issue)
+## Learned Patterns
 
-**Problem**: Vector/hybrid search was returning 502 Bad Gateway errors intermittently. Additionally, user reported "keyword search returns no results" but this was not reproducible in tests.
+### Nginx ↔ Upstream Timeout Alignment (#562)
+When nginx proxies to services with long timeouts (embeddings: 120s), set `proxy_read_timeout` ≥ 1.5× upstream timeout. The `/v1/` location lacked this → intermittent 502s. Also check `.conf` vs `.conf.template` for drift — template is source of truth.
 
-**Root cause (502)**: The nginx `/v1/` location block was missing `proxy_read_timeout` and `proxy_connect_timeout` directives:
-- Embeddings-server timeout: 120s (configured via `EMBEDDINGS_TIMEOUT`)
-- Nginx default `proxy_read_timeout`: 60s
-- Long queries (complex embeddings) exceeded 60s → nginx killed the connection → 502
+### PRD Decomposition for Search Features (#592 → v1.10.0)
+Decomposed folder-path-facet PRD into 4 issues: #650 (backend API, squad:ash), #652 (frontend tree, squad:dallas), #653 (tests, squad:lambert), #656 (batch ops, squad:dallas+parker). Principles: split backend/frontend for parallel work, route tests separately per squad table, choose simpler option first.
 
-**Fix**: Added timeout directives to `src/nginx/default.conf`:
-- `proxy_read_timeout 180s` (1.5× embeddings timeout for safety margin)
-- `proxy_connect_timeout 10s` (fast failure on connection issues)
+### Schema Coordination Across Features (v1.10.0)
+Three features needed schema changes (#650 folder facet, #677 series field, #681 metadata). Ash coordinates all schema PRs per wave to prevent conflicts. Schema changes are the critical path.
 
-**Key insight**: `default.conf.template` already had these timeouts from PR #568, but `default.conf` was out of sync. This suggests someone manually edited `default.conf` or regenerated it from an older template. The template file is the source of truth — `default.conf` should be generated from it.
+### Architecture Docs Prevent Incidents (PR #701 → R2 retro)
+PR #701 nearly broke semantic search — implementer didn't know embeddings live on chunks, not parents. Created `docs/architecture/solr-data-model.md` as retro action. **Lesson:** Document data model alongside features, not after incidents.
 
-**Keyword search "no results" investigation**:
-- All 503 unit tests pass, including keyword search tests
-- Code logic is correct (94.03% coverage)
-- No code changes found that would break keyword search
-- **Conclusion**: Likely a data issue (Solr index empty) or environment issue (Solr not running), not a code bug
-- Recommended verifying Solr index via admin dashboard
+## Completed Milestones
 
-**Empty query behavior** (also part of #562):
-- Keyword mode: empty query → 200 with 0 results (normalized to `*:*`) ✅ correct
-- Semantic/hybrid: empty query → 400 error ✅ correct (per PR #622, intentional — can't generate embedding from empty string)
+- v0.4–v0.5: Schema phases 1-3 (metadata fields, faceting, vector search) — all delivered
+- v0.7.0: Versioning infrastructure, endpoints, UI footer, admin containers — all 7 issues closed
+- v1.10.0: Wave 0 bugs (#646, #648), Wave 1 schema (#650, #677), Wave 2 search features
 
-**Lesson**: When debugging 502 errors from nginx → upstream service:
-1. Check nginx timeout configs first (`proxy_read_timeout`, `proxy_connect_timeout`, `proxy_send_timeout`)
-2. Compare against upstream service timeouts (embeddings, Solr, etc.)
-3. Always set nginx timeout > upstream timeout (1.5× is a good safety margin)
-4. Check both `.conf` and `.conf.template` files for drift
+## Reskill Notes
 
-### 2026-03-19 — Fix #562: Empty query + 502 in vector/hybrid search
+**Date:** 2026-03-21
+**Self-assessment:** Strong on Solr schema design, parent-chunk architecture, search mode implementation, and facet configuration. The parent/chunk model is the most critical knowledge — it's non-obvious and has caused near-incidents. Good at PRD decomposition and schema coordination across features.
 
-**Issue A (empty query):** `_search_semantic` and `_search_hybrid` raised HTTP 400 on blank queries. Fixed to return empty result sets (mode, empty results, empty facets) — consistent with keyword mode which normalizes blank to `*:*`.
+**Knowledge gaps:**
+- No hands-on performance benchmarking data yet (HNSW tuning, query latency profiling)
+- OCR quality improvement patterns unexplored
+- Query reranking beyond RRF not yet implemented
+- Advanced relevance tuning (learning-to-rank, field weight optimization) not yet needed
 
-**Issue B (502 Bad Gateway):** Root cause was nginx `/v1/` location using default `proxy_read_timeout` of 60s while `EMBEDDINGS_TIMEOUT` is 120s. Embedding generation for long queries could exceed 60s, causing nginx to kill the upstream connection. Fixed by adding `proxy_read_timeout 180s` (1.5× the embeddings timeout) and `proxy_connect_timeout 10s` to the `/v1/` location block.
+**Confidence levels:**
+- 🟢 Schema design, faceting, vector field config, search modes, data model documentation
+- 🟡 Cluster operations (documented via Brett's skill, not hands-on)
+- 🔴 Production performance tuning, advanced relevance engineering
 
-**Key insight:** Any nginx proxy location that routes to services with long timeouts (embeddings, Solr bulk ops) must have `proxy_read_timeout` set to at least match the upstream timeout. The Streamlit location already had `proxy_read_timeout 86400` — the API location was missing it.
-
-### 2026-03-14 — Reskill: Solr configuration snapshot + vector search readiness
-
-**Managed-schema.xml structure:**
-- 11 explicit book fields (all implemented + copyFields to `_text_`)
-- DenseVectorField `book_embedding` (512D) configured for HNSW kNN with cosine similarity
-- Tika extraction handler on `/update/extract` with langid detection chain
-- Unified highlighter configured for search result snippets
-
-**Faceting & Search Tuning:**
-- Author, category, year, language facets enabled on `/select` handler
-- `edismax` query parser for natural language search (default qf: `_text_`, pf: `title_t^2`)
-- Highlighting enabled with context window sizing
-
-**Vector search architecture (Phase 3):**
-- Query embeddings generated by embeddings-server POST `/v1/embeddings/` (512D)
-- Solr kNN handler queries `book_embedding` field with configurable `k` (default 10)
-- Book-level embeddings: generated during indexing by document-indexer
-- Integration: `solr-search` backend manages embedding calls + RRF fusion
-
-**Performance considerations:**
-- HNSW indexing during ingestion; kNN queries <100ms per benchmark expectations
-- 3-node cluster with replication factor 3 → distributed kNN across shards
-- No current performance bottlenecks identified; benchmarking deferred to post-v0.5
-
-**Remaining roadmap:**
-- v0.5 completion: #163 (search mode selector UI), #41 (frontend tests), #47 (similar-books UI)
-- v0.6 planning: upload endpoint, file watcher, hardening
-- Post-v1.0: query reranking, semantic similarity tuning, OCR quality improvements
-
-## v1.10.0 PRD Decomposition Session (2026-03-20)
-
-Ash decomposed the Folder Path Facet PRD into 4 GitHub issues for v1.10.0:
-
-- #650: Solr schema & backend folder facet
-- #652: Frontend folder tree UI (tree parsing, filter, breadcrumb)
-- #653: Testing & benchmarks
-- #656: Batch operations coordination (depends on #593)
-
-Key decisions:
-- Option A (client-side tree building) chosen for simplicity
-- Frontend consolidated to avoid handoff overhead
-- Lambert assigned to testing as separate work item
-
-Status: Backend (#650) and frontend (#652) can start in parallel; tests wait for both to be ready.
-
-## 2026-03-20: v1.10.0 Kickoff — Wave 0 + Wave 1 Schema Work
-
-**Assigned:** Support Wave 0 bug (#646, #648) + Wave 1 schema + Wave 2 search
-
-Wave 0: Bug investigation/fix support for semantic index 502 (#646 P0) and duplicate books (#648).
-
-Wave 1 foundations: #650 (folder_path_s facet in API) and #677 (add series_s field to Solr schema).
-
-Critical path: Solr schema changes coordinate across 3 features (#650, #677, #681 metadata). Ash coordinates all schema PRs per wave.
-
-Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
-
-### 2026-03-21 — Retro Action R2: Solr Data Model Documentation (PR #723)
-
-**Context:** v1.10.0 retrospective identified that PR #701 nearly broke semantic search because the implementer didn't understand that embeddings live on chunk documents, not parent documents. This was classified as retro action R2 (data model documentation gap).
-
-**Deliverables:**
-- `docs/architecture/solr-data-model.md` — Full architecture reference: parent vs. chunk document fields, search flow (keyword/semantic/hybrid), critical rules (kNN must target chunks, never apply `EXCLUDE_CHUNKS_FQ` to kNN), indexing pipeline, quick reference table.
-- `src/solr-search/README.md` — New service README with data model summary and link to architecture doc.
-
-**Key details documented:**
-- Parent documents: book metadata (`id` = SHA-256 of file path), no embeddings
-- Chunk documents: text fragments + `embedding_v` (512-dim, HNSW cosine), linked via `parent_id_s`
-- `EXCLUDE_CHUNKS_FQ = "-parent_id_s:[* TO *]"` — applied to keyword leg only, never to kNN
-- Chunking: 400 words, 50-word overlap (word-based, page-aware)
-- Model: distiluse-base-multilingual-cased-v2
-
-**Lesson:** Architecture documentation should be created alongside features, not after incidents. The parent/chunk relationship is non-obvious and critical for correctness.
+**Skills referenced:** `solr-pdf-indexing`, `solrcloud-docker-operations`, `hybrid-search-parent-chunk` (new)

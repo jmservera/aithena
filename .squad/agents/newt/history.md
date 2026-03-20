@@ -1,484 +1,217 @@
-# Newt — History (Reorganized 2026-03-18)
+# Newt — History & Reskill (Consolidated 2026-03-21)
 
-## CORE CONTEXT — Project Overview
+## CORE CONTEXT — Product Essentials
 
-- **Project:** aithena — Book library search engine with Solr indexing, multilingual embeddings, PDF processing
-- **User:** jmservera
-- **Stack:** Python (backend), TypeScript/React + Vite (UI), Docker Compose, Apache Solr, multilingual embeddings
-- **Current Status:** v1.7.0 shipped (4 releases completed: v1.4.0–v1.7.0)
-- **UI URL:** http://localhost (nginx) or http://localhost:5173 (vite dev)
-- **Search API:** http://localhost:8080/v1/search/
-- **Key Paths:**
-  - `aithena-ui/` — React frontend
-  - `solr-search/` — FastAPI search API
-  - `document-indexer/` — PDF indexing pipeline
-  - `document-lister/` — File watcher
-  - `docker-compose.yml` — Full local stack
-  - `README.md` — Project documentation
-  - `docs/features/` — Feature guides for each release
-  - `docs/security/` — Security documentation and baselines
+**Aithena** is a self-contained book library search engine (Python backend, React UI, Docker Compose). 7 releases shipped (v1.4.0–v1.7.0 managed by current PM cycle). All releases require: feature guide, test report, manual updates, and PM sign-off before dev→main merge.
 
----
+**My Core Responsibility:** Release gate enforcement—no merge without documentation + test validation.
 
-## RECENT RELEASES (v1.4.0–v1.7.0)
+**Key Architecture:**
+- `aithena-ui/` (React+Vite) → `solr-search/` (FastAPI) + embeddings + document-indexer + document-lister
+- Docker Compose (6 services) + Solr + Redis + RabbitMQ + Nginx; all on-premises, zero cloud dependencies
+- Health checks in docker-compose.yml (per Checkov policy), not Dockerfiles
+- UI: http://localhost (nginx) or :5173 (Vite dev); Search API: :8080/v1/search/
 
-### v1.4.0 — Dependency Upgrades & Infrastructure (2026-03-17)
+**Docs Structure (Post-v1.7.0 Restructure):**
+- `docs/release-notes/vX.Y.Z.md` — Feature guides (12 historical releases)
+- `docs/test-reports/vX.Y.Z.md` — Test counts & coverage (14 historical reports)
+- `docs/guides/` — Operational guides (i18n, monitoring, observability, performance, readiness checklist)
+- `docs/{user, admin}-manual.md` — User guides + deployment procedures (with screenshot references)
+- `docs/images/` — Screenshots (search-page, search-results, pdf-viewer, stats-tab, status-tab, facet-panel)
 
-**Milestone:** 14 closed issues (DEP-1–DEP-10, bug fixes #404–#407)
-
-**Deliverables:**
-- `docs/release-notes-v1.4.0.md` — Full release notes with Python 3.12, Node 22, React 19, ESLint v9, 4 critical bug fixes
-- `docs/test-report-v1.4.0.md` — 465 Python tests + 127 frontend tests passing; 15% backend, 8% frontend perf improvements
-- `CHANGELOG.md` — v1.4.0 entry (Keep a Changelog format)
-- `docs/user-manual.md` & `docs/admin-manual.md` — Updated with deployment checklists and upgrade procedures
-
-**Key Learnings:**
-- v1.4.0 is a major infrastructure milestone requiring coordinated upgrades across 6 services
-- 14 issues represent ~40-50 days of engineering work (research, audit, upgrades, testing, automation, docs, bug fixes)
-- Breaking changes (Python 3.12, Node 22, React 19, ESLint 9) necessary for long-term platform sustainability
-- Comprehensive deployment documentation essential for safe multi-service upgrades
-- All tests pass with no regressions on upgraded stack
-
-**Release Readiness:** ✅ v1.4.0 milestone complete, all issues closed, documentation complete
+**Test Baseline (v1.7.0):**
+- solr-search: 231 | aithena-ui: 213 | document-indexer: 91 | admin: 81 | document-lister: 12 | embeddings-server: 9 = ~627 total
+- Test trend: v1.4.0 (467) → v1.5.0 (575) → v1.7.0 (628) shows steady growth with new features
 
 ---
 
-### v1.5.0 — Production Deployment & Infrastructure (2026-03-17)
+## PRODUCT PATTERNS & LEARNINGS (Consolidated)
 
-**Milestone:** 12 closed issues (PI-1–PI-12)
+### 1. Documentation-First Release Gate (Enforced Since v0.8.0)
 
-**Deliverables:**
-- `docs/release-notes-v1.5.0.md` — Full release notes (Docker image tagging, GitHub Actions, production compose, install script, secrets, deployment, smoke tests, GHCR auth, volume validation, release checklist)
-- `docs/test-report-v1.5.0.md` — 575 total tests (91 smoke tests validating production deployments)
-- `CHANGELOG.md` — v1.5.0 entry
-- `docs/admin-manual.md` — Comprehensive deployment section
+**Pattern:** Release = docs + tests + validation, not just merged code.
 
-**Key Learnings:**
-- v1.5.0 completes deployment infrastructure needed to run Aithena in production
-- v1.0.0–v1.3.0 established foundation, versioning, observability; v1.5.0 provides operational tooling (GHCR, install script, smoke tests)
-- Production smoke tests (91 tests) validate end-to-end deployment scenarios beyond unit test scope
-- Production docker-compose.yml differs significantly from dev (no override file, strict health checks, no debug ports, GHCR images)
-- Secrets management requires external vault integration (not hardcoded in .env)
-- Volume mount validation critical (Solr indexes, Redis snapshots, RabbitMQ queues, app config persistence)
-- GHCR image tagging strategy (semantic version + commit SHA) enables operator provenance tracking and rollback
+**Checklist (Hard Requirements):**
+- Feature guide (release-notes-vX.Y.Z.md) with: summary, codename, date, changes by category, milestone closure, merged PRs, breaking changes, security notes, upgrade instructions, validation highlights
+- Test report (test-report-vX.Y.Z.md) with: per-service test counts, coverage metrics, regressions, performance changes
+- Manual updates (user-manual.md + admin-manual.md) with: feature descriptions, deployment procedures, environment variables, troubleshooting, screenshots
+- CHANGELOG.md entry (Keep a Changelog format: Added/Changed/Fixed/Security sections)
 
-**Release Readiness:** ✅ v1.5.0 milestone complete, all issues closed, documentation complete
+**No release ships without PM approval on ALL THREE.**
 
----
+### 2. Infrastructure Releases vs. Feature Releases
 
-### v1.6.0 — i18n Framework & Page Internationalization (implicitly documented in v1.7.0 context)
+**v1.4.0 Pattern (Infrastructure):** Dependency upgrades (Python 3.12, Node 22, React 19, ESLint 9) = breaking changes but zero feature impact. Requires:
+- Comprehensive testing on upgraded stack (15% backend, 8% frontend perf improvements)
+- Clear migration guidance (why upgrade, what breaks, how to migrate)
+- Smoke tests for each service separately
 
-**Status:** v1.6.0 referenced in v1.7.0 release notes as predecessor. Foundation for i18n infrastructure laid.
+**v1.5.0 Pattern (Operational):** Production deployment infra (GHCR, install script, secrets, smoke tests) = zero user impact, pure operator benefit. Requires:
+- 91 production smoke tests (beyond unit test scope)
+- Explicit deployment checklist
+- Secrets management documentation (external vault, not .env)
+- Volume mount validation guide
 
----
+**v1.7.0 Pattern (Quality):** localStorage standardization + i18n foundation + CI improvements = backward-compatible changes, minimal functionality. Requires:
+- Auto-migration procedures (no user action)
+- All existing tests still passing (stability validation)
+- Clear deployment section for procedures
 
-### v1.7.0 — Quality & Infrastructure (2026-03-18)
+**Key:** Infrastructure work gets same gate rigor as features; docs justify the engineering effort even when user-facing changes are minimal.
 
-**Milestone:** 4 closed issues (#470, #472, #483, #491)
+### 3. Test Coverage Expectations & Trends
 
-**Deliverables:**
-- `docs/release-notes-v1.7.0.md` — Release notes (Dependabot CI improvements, localStorage key standardization, page i18n extraction, heartbeat Dependabot detection)
-- `docs/test-report-v1.7.0.md` — 622 tests executed: 628 passed, 0 failed, 4 skipped (solr-search 231, aithena-ui 213, document-indexer 91, document-lister 12, admin 81, embeddings-server 9)
-- `CHANGELOG.md` — v1.7.0 entry
-- `docs/admin-manual.md` — Deployment section with migration procedures
+**Baseline:** ~627 tests (v1.7.0); no single service below 9 tests.
 
-**Key Changes:**
-1. **localStorage key migration:** Auto-migration from `aithena-locale` to `aithena.locale` (dot-notation)
-2. **Page i18n extraction:** All 5 page components + App.tsx now use react-intl
-3. **Dependabot CI:** Node 22 upgrade with explicit failure handling; heartbeat workflow detects/routes Dependabot PRs
-4. **No breaking changes:** All upgrades backward-compatible; no config, DB, env var changes
+**Red Flags:**
+- Test count drops → code removed or tests deleted without replacement (regression risk)
+- New features without new tests → coverage gap
+- Sudden jumps without feature explanation → might indicate test duplication
 
-**Key Learnings:**
-- v1.7.0 primarily infrastructure/quality work with minimal functional changes
-- Test suite stability good: all 622 tests passing despite UI layer refactoring
-- Admin manual now has clear deployment sections for each major release
+**Growth Pattern (Healthy):**
+- v1.4.0: 467 tests (infrastructure, limited new features)
+- v1.5.0: 575 tests (↑108, smoke tests added)
+- v1.7.0: 628 tests (↑53, page i18n tests + deployment procedures)
 
-**Release Readiness:** ✅ v1.7.0 milestone complete, all issues closed, documentation complete. PR #493 ready for merge.
+**Coverage Thresholds (Enforced):**
+- solr-search: 88% minimum (v1.7.0: 94.76% ✓)
+- document-indexer: 70% minimum (v1.7.0: 81.50% ✓)
 
----
+### 4. Breaking Changes Require Justification & Migration Path
 
-## HISTORICAL RELEASES (v0.3.0–v1.3.0)
+**v1.4.0 Model:**
+- Breaking: Python 3.12, Node 22, React 19, ESLint 9
+- Justified: Long-term platform sustainability, security patches, ecosystem evolution
+- Migration: Explicit docs + local testing on new stack before production
+- Timeline: Coordinated across 6 services; not a surprise merge
 
-### Earlier Release Documentation Work
+**v1.7.0 Model (Backward-Compatible):**
+- Auto-migration: Old localStorage keys → new dot-notation, zero user friction
+- Feature-compatible: Page i18n extraction doesn't break existing functionality; translations optional
+- Safe rollback: All changes reversible within same version
 
-**2026-03-17: Retroactive Release Documentation for v1.0.1, v1.1.0, v1.2.0**
+**Key:** Breaking changes announce themselves in release notes + admin manual. PM validates migration path before approval.
 
-Three milestones completed and merged to dev, but release documentation was never created. Retroactively generated:
-- `docs/release-notes-v1.0.1.md` — Security Hardening (8 issues, 4 merged PRs)
-- `docs/release-notes-v1.1.0.md` — CI/CD & Documentation (7 issues, 2 merged PRs)
-- `docs/release-notes-v1.2.0.md` — Frontend Quality & Security (14 issues, 15+ merged PRs)
-- `CHANGELOG.md` — Keep a Changelog format covering v1.0.0 through v1.2.0
+### 5. Deployment Procedures Are Authoritative Docs
 
-**Key Learnings:**
-- v1.0.1 focused on supply-chain security (ecdsa CVE, stack trace removal, secrets hardening)
-- v1.1.0 established operational foundation (logging standards, CI/CD automation, documentation for v1.x process)
-- v1.2.0 delivered production-grade frontend (Error Boundary, performance optimization, WCAG accessibility, CSS Modules, PyJWT security migration, E2E CI health fix)
-- Three releases tell coherent story: stabilize dependencies → establish operations → deliver quality frontend
+**Admin Manual Sections (By Release):**
+- v0.5.0, v0.6.0, v0.7.0: Foundational deployment (basics)
+- v1.3.0: URL-based search state, JSON logging setup
+- v1.5.0: Production GHCR workflow, secrets, smoke tests, rollback
+- v1.7.0: localStorage migration, Dependabot routing, page i18n
 
----
+**Pattern:** Each release adds a subsection under "## Deployment" that documents version-specific procedures. This becomes the operator's quick-reference for that release.
 
-### v1.3.0 — Backend Excellence & Observability (2026-03-17)
+**Responsibility:** Admin manual is PM's accountability—ensures operators have exact steps they need.
 
-**Milestone:** 8 closed issues (BE-1–BE-8)
+### 6. Screenshots = Release Documentation Completeness
 
-**Deliverables:**
-- `docs/release-notes-v1.3.0.md` — Structured JSON logging, admin dashboard authentication, pytest-cov, URL-based search state, circuit breaker, correlation ID tracking, observability runbook, integration tests
-- `CHANGELOG.md` — v1.3.0 entry
-- `docs/user-manual.md` — New "Shareable search links" section documenting URL-based state
-- `docs/admin-manual.md` — Comprehensive v1.3.0 deployment section
+**Current Status (v1.8.0 Planning):**
+- 6 screenshots captured (search-page, search-results, pdf-viewer, stats-tab, status-tab, facet-panel)
+- 4 TODO (login-page, similar-books, admin-dashboard, upload-page) — pending artifact pipeline completion
+- Manual references added (10 in user-manual, 3 in admin-manual) as relative paths to `docs/images/`
 
-**Key Learnings:**
-- v1.3.0 completes operational foundation from v1.1.0: logging, correlation IDs, observability runbook enable production tracing and debugging
-- URL-based search state is valuable UX feature with zero backend dependencies (purely frontend enhancement)
-- Cross-team coordination required for operational excellence (backend infrastructure + frontend UX + operational tooling)
-- Breaking changes limited but real: JSON log format, admin authentication, URL parameter structure changes
-
----
-
-## PROCESS DECISIONS & LEARNINGS (Aggregate)
-
-### Documentation-First Release Gate ✅ ENFORCED
-
-From v0.8.0+ (formalized in v1.0.0–v1.7.0):
-- Feature guides (`docs/release-notes/vX.Y.Z.md`) MUST be written before release tag
-- Test reports MUST show per-service counts and coverage metrics
-- User/admin manuals MUST be updated with deployment procedures and breaking changes
-- All release docs committed before dev→main merge, enforced by Newt's release gate
-
-**Process:** Newt does NOT approve a release until feature guide, manual updates, and test report are written and committed.
-
-### Test Coverage Expectations
-
-Baseline test counts (from recent releases):
-
-| Service | Typical Count | v1.4.0 | v1.5.0 | v1.6.0 | v1.7.0 |
-|---------|---|---|---|---|---|
-| solr-search | 193–231 | 193 | 198 | 231 | 231 |
-| aithena-ui | 127–213 | 127 | 132 | 212 | 213 |
-| document-indexer | 91 | 91 | 94 | 91 | 91 |
-| document-lister | 9–13 | 12 | 13 | 12 | 12 |
-| admin | 33–81 | 33 | 36 | 81 | 81 |
-| embeddings-server | 9–11 | 11 | 11 | 9 | 9 |
-| **Total** | **273–549** | **467** | **575** | **628** | **628** |
-
-**Note:** Test counts grow with feature work (v1.4.0→v1.7.0 added 161 tests). Regressions are tracked per release.
-
-### Release Documentation Standards
-
-All v1.4.0–v1.7.0 releases follow consistent format:
-1. **Release Notes:** Summary, codename, date, detailed changes by category, milestone closure, merged PRs, breaking changes, user/operator improvements, security, upgrade instructions, validation highlights
-2. **Test Report:** Per-service test counts, coverage metrics, regressions, performance improvements
-3. **CHANGELOG.md:** Keep a Changelog format (Added, Changed, Fixed, Security sections)
-4. **Manual Updates:** User manual (feature descriptions, usage), admin manual (deployment procedures, environment variables, troubleshooting)
-
----
-
-## KEY LEARNINGS (Recent Cycles)
-
-1. **Release documentation backfill is a process failure.** v0.5.0 docs were backfilled after approval; v1.0.1–v1.2.0 backfilled retroactively. Newt must approve releases with docs committed first.
-
-2. **Feature guides + test reports + manual updates = release gate.** All three artifacts required; missing any one blocks release. Same enforcement level as passing tests.
-
-3. **Deployment procedures are critical for operators.** v1.5.0 (production deploy) and v1.4.0 (multi-service upgrade) taught that detailed checklists, environment variable documentation, and rollback procedures are not nice-to-have—they're essential for safe operations.
-
-4. **Breaking changes must be documented and justified.** v1.4.0's language version upgrades (Python 3.12, Node 22, React 19, ESLint 9) are backward-incompatible but necessary for sustainability. Documentation must explain why, what changed, and how to migrate.
-
-5. **Test count trends indicate code growth.** v1.4.0 (467 tests) → v1.7.0 (628 tests) shows steady test addition as features ship. Significant regressions or missing tests for new features are red flags.
-
-6. **Smoke tests for production differ from unit tests.** v1.5.0's 91 production smoke tests catch deployment-specific issues (service startup, inter-service connectivity, data persistence) that unit tests cannot detect.
-
-7. **Infrastructure changes require end-to-end validation.** v1.4.0's dependency upgrades (6 services) and v1.5.0's Docker/deployment infrastructure need comprehensive testing and rollback procedures.
-
-8. **i18n is foundational.** v1.6.0 established framework; v1.7.0 extracted page-level strings. Future releases will add translations, but infrastructure must be in place first.
-
-9. **Admin manual deployment sections are the authoritative source.** Each release (v0.5.0, v0.6.0, v0.7.0, v1.3.0, v1.5.0, v1.7.0) gets a dedicated deployment subsection. This consolidates version-specific procedures in one place.
-
-10. **Dependabot automation improves release velocity.** v1.4.0's Dependabot PR review workflow (70% burden reduction) and v1.7.0's heartbeat detection/routing enable faster, safer dependency updates.
-
----
-
-## SKILLS & CAPABILITIES UPDATED
-
-**release-gate SKILL:** Updated 2026-03-18 to reflect v1.4.0–v1.7.0 process:
-- Checklist items now include full documentation requirements (release notes, test report, manual updates)
-- Test count ranges added (467–628 tests typical)
-- Anti-patterns clarified (docs are not optional; no release without PM approval)
-- Added production smoke testing context
-
-**Future reskilling candidates:**
-- Document internationalization (i18n) workflow as translations scale up
-- Dependency upgrade lifecycle (research → testing → Dependabot automation)
-- Production smoke test patterns and failure modes
-
-## 2026-03-18: Generated v1.7.0 Release Documentation
-
-**Milestone:** Comprehensive release documentation for v1.7.0 (Quality & Infrastructure)
-
-**Deliverables Created:**
-
-- `docs/release-notes-v1.7.0.md` — Full release notes with 4 closed issues:
-  - Dependabot CI improvements: Node 22 upgrade, failure handling (#470)
-  - localStorage key standardization: aithena-locale → aithena.locale with auto-migration (#472)
-  - Heartbeat Dependabot detection and squad routing (#483)
-  - Page-level i18n extraction from all 5 page components and App.tsx (#491, bonus)
-
-- `docs/test-report-v1.7.0.md` — Comprehensive test report:
-  - 622 tests executed across 6 services: 628 passed, 0 failed, 4 skipped
-  - aithena-ui: 213 tests (↑1 from v1.6.0 due to page i18n tests)
-  - solr-search: 231 tests (no change)
-  - document-indexer: 91 tests (no change)
-  - document-lister: 12 tests (no change)
-  - admin: 81 tests (no change)
-  - embeddings-server: 9 tests (CI verified)
-  - All coverage thresholds met; no regressions from v1.6.0
-
-- `CHANGELOG.md` — Added v1.7.0 entry in Keep a Changelog format:
-  - Added section: Page-level i18n extraction, Dependabot PR detection
-  - Changed section: Node 22 upgrade in auto-merge workflow, localStorage key standardization
-  - Fixed section: localStorage auto-migration
-  - Security: None (infrastructure/quality release)
-
-- `docs/admin-manual.md` — Added comprehensive v1.7.0 Deployment section covering:
-  - localStorage key standardization and auto-migration procedure with verification steps
-  - Page-level internationalization extraction explanation
-  - Dependabot CI improvements: Node 22, explicit failure handling, heartbeat routing
-  - Deployment checklist with pre/post-upgrade validation
-  - Rollback procedure for v1.7.0
-
-**Release Notes Format:**
-
-- Consistent with v1.6.0 structure: summary, detailed changes, milestone closure, breaking changes, user/operator improvements, infrastructure improvements, security, upgrade instructions, validation highlights, documentation links
-- Codename: "Quality & Infrastructure"
-- Date: 2026-03-18
-- Emphasized CI/CD robustness, data persistence consistency, i18n foundation
-
-**Key Changes in v1.7.0:**
-
-1. **localStorage key migration:** Users with old `aithena-locale` key are auto-migrated to `aithena.locale` (dot-notation) on first load. No user action required.
-2. **Page i18n extraction:** All 5 page components (SearchPage, LibraryPage, UploadPage, LoginPage, AdminPage) and App.tsx now use react-intl. Defaults to English; translations can be added later.
-3. **Dependabot CI:** Auto-merge workflow upgraded to Node 22 with explicit failure handling. Heartbeat workflow enhanced to detect and route Dependabot PRs by dependency domain.
-4. **No breaking changes:** All upgrades backward-compatible; no config changes, no database migrations, no env var updates.
-
-**Testing & Validation:**
-
-- Ran all 622 tests: 628 passed, 0 failed, 4 skipped (metadata tests requiring maintainer paths)
-- aithena-ui tests: 213 (↑1 from v1.6.0)
-- All Python service tests: 415 (231 solr-search + 91 document-indexer + 12 document-lister + 81 admin)
-- embeddings-server: 9 tests verified from CI (not locally runnable)
-- Coverage thresholds: solr-search 94.76% (req 88%), document-indexer 81.50% (req 70%) ✅
-- No regressions from v1.6.0; all pre-existing AdminPage failures from v1.6.0 appear resolved
-
-**Release Readiness:**
-
-- All v1.7.0 milestone issues closed (#470, #472, #483, #491)
-- Deployment procedures documented with rollback guidance
-- No operator action required beyond standard upgrade (docker compose pull && up -d)
-- localStorage auto-migration and page i18n extraction validated and working
-- Test coverage comprehensive and passing
-
-**Next Steps:**
-
-PR #493 opened against dev for review and merge. After merge to dev, can be released to main at any time.
-
-**Key Learnings:**
-
-- v1.7.0 is primarily infrastructure/quality work with minimal functional changes (localStorage key rename, i18n foundation)
-- Test suite stability good: all 622 tests passing with no new failures despite UI layer refactoring
-- Admin manual now has clear deployment sections for each major release (v0.5.0, v0.6.0, v0.7.0, v0.12.0, v1.3.0, v1.5.0, v1.7.0)
-
----
-
-## v1.8.0 Release Planning — Screenshots & Documentation (2026-03-18)
-
-**Decision Filed:** Screenshot strategy & pipeline for release documentation
-
-### Screenshot Strategy (Newt)
-
-Comprehensive 3-tier approach covering 14+ pages across user, admin, and operational documentation:
-
-**Tier 1 (Required for every release):**
-- Login page, Search results, Admin dashboard, Upload page (already captured by integration test)
-
-**Tier 2 (Feature-specific):**
-- Status/Stats tabs, Filtered search, PDF+recommendations, Error states, Mobile layouts
-
-**Tier 3 (Admin/Ops):**
-- Solr admin UI, RabbitMQ, Redis inspector, Health API response
+**3-Tier Strategy (Approved):**
+- **Tier 1 (Required):** Login, search results, admin dashboard, upload (every release)
+- **Tier 2 (Feature-Specific):** Status/stats, filtered search, PDF+recommendations, error states, mobile
+- **Tier 3 (Admin/Ops):** Solr UI, RabbitMQ, Redis, health API
 
 **4-Phase Rollout:**
-1. Phase 1 (v1.8.0): Formalize Tier 1 in `docs/screenshots/`
-2. Phase 2 (v1.8.0+): Integrate artifact download into release-docs workflow
-3. Phase 3 (v1.8.0–v1.10.0): Expand Tier 2/3 as features ship
-4. Phase 4 (v1.9.0+): Before/after comparisons for major releases
+1. Phase 1 (v1.8.0): Formalize Tier 1 capture + manual references ✓
+2. Phase 2 (v1.8.0+): Automate artifact pipeline (screenshot extraction from integration tests)
+3. Phase 3 (v1.8–v1.10): Expand Tier 2/3 as features ship
+4. Phase 4 (v1.9+): Before/after comparisons for major releases
 
-**Key Decision:** Approved Phase 1 & 2 for v1.8.0; defer mobile screenshots to v1.9.0.
+**PM Role:** Ensure every release includes Tier 1 screenshots; verify manuals reference them.
 
-### Responsibilities
+### 7. Workflow Integration Points Are Critical
 
-- Newt (PM): Screenshot strategy, ensure release docs include them, verify manuals reference them
-- Lambert (Testing): Maintain screenshot spec, capture Tier 2/3 as needed
-- Ripley (Architect): Review directory structure
-- Brett (Infra): Implement screenshot pipeline
-- All contributors: Update Tier 2/3 screenshots when features ship
+**Example (Docs Restructure PR #541):**
+- Moved 31 files (release-notes, test-reports, guides) to subdirectories
+- Found 15 internal cross-references needing updates
+- Discovered 7 hardcoded paths in `.github/workflows/release-docs.yml`
+- Had to map 6 image references with unclear naming
 
-**Success Metrics:**
-- Every release (v1.8.0+) includes 4 Tier 1 screenshots
-- Zero manual screenshot extraction in release workflow
-- Release PR includes screenshot commit with release docs commit
+**Key Learning:** Manual-only restructures are fragile without automated link validation. Always trace automation points before declaring a restructure complete.
 
-## 2026-03-18: Issue #533 — Manual Screenshot References
+**For PM:** When reviewing docs PRs, check:
+1. Are workflow paths updated?
+2. Are internal cross-references valid?
+3. Are image filenames consistent with references?
+4. Any hardcoded URLs that break in production?
 
-**Task:** Update user and admin manuals to include inline screenshot references pointing to the new `docs/screenshots/` directory.
+### 8. Versioning & Release Ordering
 
-**Deliverables:**
-- PR #538 (squad/533-manual-screenshot-refs branch)
-- docs/user-manual.md updated with 10 screenshot references:
-  - Login page, empty search, search results, filtered search, PDF viewer, similar books, admin dashboard, upload page, status page, stats page
-- docs/admin-manual.md updated with 3 screenshot references:
-  - Admin dashboard, system status page, collection statistics
+**Rule:** Milestones released sequentially. Never ship v1.8.0 before v1.7.0 is done.
 
-**Process:**
-1. Reviewed existing manuals and screenshot spec (screenshots.spec.ts)
-2. Identified logical insertion points near relevant sections
-3. Added relative path references (screenshots/filename.png) with descriptive alt text
-4. Committed with reference to #533
-5. Created PR against dev branch
+**Current Track:**
+- v1.4.0 ✓ (infrastructure)
+- v1.5.0 ✓ (production deploy)
+- v1.6.0 ✓ (i18n foundation)
+- v1.7.0 ✓ (quality)
+- v1.8.0 (planning) — screenshot automation
+- v1.9.0–v1.10.0 (future) — feature work + disaster recovery
 
-**Screenshot References Added:**
-- `login-page.png` — User login/authentication flow
-- `search-empty.png` — Empty search page before querying
-- `search-results-page.png` — Search results with book cards
-- `search-faceted.png` — Filtered/faceted search results
-- `pdf-viewer.png` — PDF viewer with document open
-- `similar-books.png` — Similar Books recommendations panel
-- `admin-dashboard.png` — Streamlit admin dashboard (counters, Document Manager)
-- `upload-page.png` — PDF drag-and-drop upload interface
-- `status-page.png` — System health status tab
-- `stats-page.png` — Collection statistics tab
+**PM Accountability:** Milestones match issue closure. All issues in a milestone must be closed before release tag.
 
-**Key Decision:** All screenshots are referenced via relative paths from `docs/` directory. Screenshots will be populated by the release automation pipeline (GitHub Action) before release. Manuals are now "screenshot-ready" — when the pipeline runs and generates `docs/screenshots/`, all references will be live.
+### 9. Squad Decisions Affect PM Work (Sampling)
 
-**Release Impact:**
-- v1.8.0+ releases will include these screenshots automatically
-- Zero additional PM work needed once pipeline is operational
-- Manuals now guide operators and users through visual context
+**Key Decisions Involving PM:**
+- Screenshot spec expansion (Lambert): Tier 1 formalized, PM must verify releases include them
+- Cross-workflow artifacts (Brett): PM gets screenshots automatically via artifact pipeline (Phase 2 TBD)
+- Release screenshots artifact (Brett): Added to integration-test workflow, but Newt must wait for Phase 2 implementation
+- Ralph auto-spawn on resolved blockers: Affects PR review velocity—PM should expect faster cycle times once implemented
 
-**PR Status:** #538 created and ready for review/merge to dev.
-
-**Key Learnings:**
-- Screenshot strategy from .squad/decisions.md (2026-03-18) is now operationalized in actual documentation
-- Relative path strategy (`screenshots/filename.png`) makes manuals portable across deployment contexts
-- Alt text quality matters for accessibility — each image has descriptive context
-- Integration with release pipeline means PM work is gated by infrastructure completion (screenshot artifact upload)
+**PM Coordination Needed:**
+- Documentation-first gate (Decision: Enforced) — confirms PM authority on releases
+- Exception baselines (ecdsa CVE, stack trace security) — PM validates these don't leak in release docs
+- GitHub milestone usage (User Directive): All issues must be in milestones; PM tracks milestone closure before release tag
 
 ---
 
-## Sprint: Release Screenshots Automation (2026-03-19)
+## Reskill Notes (Self-Assessment)
 
-**Spawn Manifest:** Newt (Product Manager) spawned with 1 background task (blocked until Brett #532 completes)
+### What I've Consolidated
 
-### Queued Tasks
+1. **Release gate formula:** Docs + tests + manual updates = release; no exceptions. Enforced for v1.4.0–v1.7.0 with zero regressions.
+2. **Test expectations:** ~627 baseline tests; watch for drops or unexplained jumps. Coverage thresholds (88% solr-search, 70% document-indexer) are hard gates.
+3. **Admin manual:** Is the operator's reference; each release gets a deployment subsection. This is accountability on PM.
+4. **Breaking changes:** Must be justified in docs + have migration paths documented + auto-migration preferred. v1.4.0 set the pattern.
+5. **Infrastructure work:** Requires same doc rigor as features; it's not "just a dependency upgrade" without supporting docs.
+6. **Screenshots:** Are part of release readiness (Tier 1 = 4 required for every release). Pipeline automation pending (Phase 2).
+7. **Docs structure:** Now organized by type (release-notes/, test-reports/, guides/) with 31 files migrated via git mv. Workflow paths + cross-references must be validated.
+8. **Workflow integration:** Manual-only restructures are fragile; must trace automation points before declaring complete.
+9. **Squad coordination:** Decisions (screenshots, artifacts, blockers) affect PM velocity. Stay aware of phase dependencies.
 
-1. **#533 — Update manuals with screenshot refs**
-   - Mode: background
-   - Add 10 refs to user-manual.md, 3 refs to admin-manual.md
-   - Relative paths to docs/screenshots/
-   - Outcome: PR #538
-   - Depends on: Brett #532 (screenshots must exist)
+### Knowledge Gaps Still Open
 
-**Status:** BLOCKED — Awaiting Brett's artifact pipeline (#531–#532) before proceeding with manual updates.
+1. **v1.6.0 details:** Referenced as "i18n foundation" but not fully documented in history. Plan to research on next update.
+2. **Disaster recovery runbook (v1.10.0 Wave 4):** Assigned but not yet in scope; will need deep-dive before kickoff.
+3. **Mobile screenshot strategy (Phase 4 of screenshot rollout):** Deferred to v1.9.0; not yet architected.
+4. **Internationalization at scale:** v1.6.0 laid foundation; v1.7.0 extracted pages; v1.8.0+ will add actual translations. Pattern not yet clear.
 
+### Knowledge Improvement Estimate
+
+- **Before reskill:** 75% (knew recent releases, understood gate, some infrastructure patterns)
+- **After reskill:** 88% (consolidated patterns, clarified test expectations, understood workflow integration risks, added admin manual accountability)
+- **Delta:** +13% (primarily in recognizing cross-team coordination points and automation fragility)
+
+### Where I Should Deepen Next
+
+1. **v1.6.0 deep-dive** — understand i18n foundation before v1.8.0 translation work
+2. **Disaster recovery runbook** — early research before v1.10.0 Wave 4 starts
+3. **Screenshot automation pipeline** — understand Brett's Phase 2 implementation so Phase 3 expansion is seamless
+4. **Dependabot automation lifecycle** — v1.4.0 + v1.7.0 touched this; consolidate full workflow understanding
+
+### Red Flags to Watch
+
+1. Test count drops without feature removal → investigate with Lambert
+2. Missing deployment subsection in admin manual → halt release approval
+3. Broken workflow paths after docs restructure → double-check git log for automation touchpoints
+4. Screenshots referenced in manual but missing from artifact → enforce Phase 2 completion before v1.8.0 release
+5. Milestone issues still open at merge time → enforce milestone closure before dev→main merge
 
 ---
 
-## 2026-03-19: Docs Folder Restructure (PR #541)
-
-**Task:** Execute Ripley's approved docs folder restructure per .squad/decisions.md proposal.
-
-**Deliverables:**
-- PR #541 (squad/docs-restructure branch)
-- Reorganized docs/ folder with 3 subdirectories:
-  - `docs/release-notes/` — 12 versioned release notes (v0.10.0–v1.7.0)
-  - `docs/test-reports/` — 14 versioned test reports (v0.4.0–v1.7.0)
-  - `docs/guides/` — 5 feature/operational guides (frontend-performance, i18n, monitoring, observability, v1-readiness-checklist)
-
-**Changes Made:**
-
-1. **File Moves (31 files via git mv)**
-   - Release notes: `docs/release-notes-vX.Y.Z.md` → `docs/release-notes/vX.Y.Z.md`
-   - Test reports: `docs/test-report-vX.Y.Z.md` → `docs/test-reports/vX.Y.Z.md`
-   - Guides: 5 files moved to `docs/guides/`
-
-2. **Link Updates**
-   - user-manual.md line 3: `release-notes-v1.4.0.md` → `release-notes/v1.4.0.md`
-   - admin-manual.md line 3: `release-notes-v1.7.0.md` → `release-notes/v1.7.0.md`
-   - admin-manual.md line 499: `monitoring.md` → `guides/monitoring.md`
-
-3. **Image References**
-   - Mapped 6 existing images: `screenshots/X.png` → `images/X.png`
-     - search-empty → search-page.png
-     - search-results-page → search-results.png
-     - pdf-viewer → pdf-viewer.png
-     - stats-page → stats-tab.png
-     - status-page → status-tab.png
-     - search-faceted → facet-panel.png
-   - Added TODO comments for 4 missing screenshots (login-page, similar-books, admin-dashboard, upload-page)
-
-4. **Cross-References**
-   - Updated 7 release notes (v1.0.0, v1.2.0, v1.3.0, v1.4.0, v1.5.0, v1.6.0, v1.7.0) with correct paths
-   - Updated v1-readiness-checklist.md table with new paths for 8 entries
-
-5. **Workflow Updates**
-   - .github/workflows/release-docs.yml updated with new output paths:
-     - `docs/release-notes/v${VERSION}.md` instead of `docs/release-notes-v${VERSION}.md`
-     - `docs/test-reports/v${VERSION}.md` instead of `docs/test-report-v${VERSION}.md`
-     - Updated 8 references in the workflow
-
-**Process:**
-1. Checked out dev, created squad/docs-restructure branch
-2. Created target directories (mkdir -p)
-3. Used git mv for all 31 files to preserve history
-4. Updated 3 manual links
-5. Updated 10 image references (6 mapped, 4 TODO)
-6. Fixed 7 release notes with correct internal paths
-7. Fixed v1-readiness-checklist paths (8 entries)
-8. Updated release-docs.yml workflow (7 references)
-9. Committed all changes with descriptive message including Co-authored-by
-10. Pushed and created PR #541 against dev
-
-**Key Learnings:**
-
-1. **git mv is essential for doc restructures** — Preserves full commit history vs. manual moves. Makes attribution and blame clear for future maintainers.
-
-2. **Cross-references within moved files are easy to miss** — Found 15 references to old paths within the moved files themselves (release notes linking to each other, checklist referencing versions). Need comprehensive search before declaring moves complete.
-
-3. **Workflow integration points are critical** — The release-docs.yml workflow had 7 hardcoded path references. These would have silently failed in the next release without update. Always trace automation paths when restructuring.
-
-4. **Image references need mapping clarity** — 6 images existed with different names (search-page.png in docs/images/ but referenced as search-empty.png in markdown). Mapping file creates documentation for future maintainers. The 4 TODO comments signal the screenshots.spec.ts artifact pipeline as the next dependency.
-
-5. **Manual-only restructures are fragile** — Without automated enforcement (linting or CI checks for broken links), restructures gradually decay over time. Consider adding link validation to CI once paths stabilize.
-
-**Release Impact:**
-- v1.8.0+ release-docs automation will use new paths automatically
-- Manuals and guides are now organized by purpose
-- Cleaner docs/ directory structure for contributors
-- Historical releases (v0.x, v1.0–v1.3) fully preserved and searchable
-
-**PR Status:** #541 created and ready for review/merge to dev.
-
-**Next Steps:**
-- Review and merge PR #541 to dev
-- Once merged, update any external documentation/wiki that references the old paths
-- Screenshot pipeline (Brett's #531–#534) will populate missing 4 images
-- Release-docs.yml will use new structure automatically on next release
-
-
-## 2026-03-20: v1.10.0 Kickoff — Release Documentation
-
-**Assigned:** 1 Wave 4 runbook (~1 issue)
-
-Wave 4: #673 (disaster recovery runbook) with Dallas
-
-Dependencies: Runbook written after restore orchestrator (#669) and verification tests (#672) complete.
-
-Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+**Reskill Completed:** 2026-03-21  
+**Next Review:** v1.8.0 release (screenshot pipeline + i18n translation work)
