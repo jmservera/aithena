@@ -778,6 +778,7 @@ def search(
     fq_category: str | None = Query(None),
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
+    fq_series: str | None = Query(None),
     mode: str = Query(
         settings.default_search_mode,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
@@ -809,6 +810,7 @@ def search(
         category=fq_category,
         language=fq_language,
         year=fq_year,
+        series=fq_series,
     )
 
     with _track_search_metrics(mode):
@@ -1047,6 +1049,7 @@ def facets(
     fq_category: str | None = Query(None),
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
+    fq_series: str | None = Query(None),
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -1061,6 +1064,7 @@ def facets(
                 category=fq_category,
                 language=fq_language,
                 year=fq_year,
+                series=fq_series,
             ),
             facet_limit=settings.facet_limit,
             rows=0,
@@ -1173,12 +1177,13 @@ def list_books(
     fq_category: str | None = Query(None, description="Filter by category."),
     fq_language: str | None = Query(None, description="Filter by language."),
     fq_year: str | None = Query(None, description="Filter by publication year."),
+    fq_series: str | None = Query(None, description="Filter by series name."),
 ) -> dict[str, Any]:
     """Browse the complete library of indexed books with pagination and filtering.
 
     Returns all books sorted by title (default) or other fields. Supports the same
     filter query parameters as the search endpoint (``fq_author``, ``fq_category``,
-    ``fq_language``, ``fq_year``).
+    ``fq_language``, ``fq_year``, ``fq_series``).
 
     This endpoint uses a wildcard ``*:*`` query to match all documents, making it
     suitable for library browsing and discovery.
@@ -1188,6 +1193,7 @@ def list_books(
         category=fq_category,
         language=fq_language,
         year=fq_year,
+        series=fq_series,
     )
 
     payload = query_solr(

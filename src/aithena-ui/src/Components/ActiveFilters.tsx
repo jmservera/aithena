@@ -15,6 +15,7 @@ const FILTER_LABEL_KEYS: Record<keyof SearchFilters, string> = {
   category: 'filters.category',
   language: 'filters.language',
   year: 'filters.year',
+  series: 'filters.series',
   folder: 'filters.folder',
 };
 
