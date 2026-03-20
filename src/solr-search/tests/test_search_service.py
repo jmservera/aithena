@@ -45,6 +45,19 @@ def test_build_solr_params_adds_pagination_sort_facets_and_highlights() -> None:
     assert params["hl.fl"] == "content,_text_"
 
 
+def test_build_solr_params_excludes_chunks_by_default() -> None:
+    """Even with no user filters, chunk docs must be excluded from keyword search."""
+    params = build_solr_params(
+        query="test",
+        page=1,
+        page_size=10,
+        sort_by="score",
+        sort_order="desc",
+        facet_limit=5,
+    )
+    assert "-parent_id_s:[* TO *]" in params["fq"]
+
+
 def test_parse_facet_counts_prefers_detected_language_buckets() -> None:
     payload = {
         "facet_counts": {
@@ -269,7 +282,15 @@ def test_build_knn_params_custom_field() -> None:
     params = build_knn_params([0.5], top_k=3, knn_field="embedding_v", filters=["author_s:Amades"])
     assert "f=embedding_v" in params["q"]
     assert "author_s:Amades" in params["fq"]
-    assert "-parent_id_s:[* TO *]" in params["fq"]
+
+
+def test_build_knn_params_does_not_exclude_chunks() -> None:
+    """kNN must search chunk docs because that's where embeddings live."""
+    params = build_knn_params([0.1], top_k=5, knn_field="embedding_v")
+    assert "fq" not in params
+    params_with_filter = build_knn_params([0.1], top_k=5, knn_field="embedding_v", filters=["author_s:X"])
+    for fq in params_with_filter["fq"]:
+        assert "parent_id_s" not in fq
 
 
 def test_reciprocal_rank_fusion_empty_inputs() -> None:

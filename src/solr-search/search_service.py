@@ -273,9 +273,13 @@ def build_knn_params(
         "fl": ",".join(SOLR_FIELD_LIST),
         "wt": "json",
     }
-    all_filters = list(filters) if filters else []
-    all_filters.append(EXCLUDE_CHUNKS_FQ)
-    params["fq"] = all_filters
+    # NOTE: Do NOT add EXCLUDE_CHUNKS_FQ here.  Embedding vectors live on
+    # chunk documents (they carry parent_id_s), so filtering them out would
+    # eliminate all kNN candidates and break semantic/hybrid search.
+    # Chunk de-duplication is handled by reciprocal_rank_fusion at the
+    # book level and by EXCLUDE_CHUNKS_FQ on the keyword leg.
+    if filters:
+        params["fq"] = list(filters)
     return params
 
 
