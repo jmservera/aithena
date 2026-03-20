@@ -1987,6 +1987,7 @@ def _store_metadata_override(doc_id: str, fields: dict[str, str | int], edited_b
 
 _BATCH_MAX_DOCUMENT_IDS = 1000
 _BATCH_PAGE_SIZE = 100
+_BATCH_MAX_QUERY_RESULTS = 5000
 
 
 class BatchMetadataEditRequest(BaseModel):
@@ -2023,6 +2024,10 @@ def _batch_apply_updates(
 
     for doc_id in doc_ids:
         try:
+            if not _solr_document_exists(doc_id):
+                failed += 1
+                errors.append({"document_id": doc_id, "error": "Document does not exist"})
+                continue
             _solr_atomic_update(doc_id, fields)
             _store_metadata_override(doc_id, fields, edited_by="admin")
             updated += 1
@@ -2114,6 +2119,13 @@ def admin_batch_edit_metadata_by_query(body: BatchMetadataByQueryRequest) -> dic
 
     if not doc_ids:
         return {"matched": 0, "updated": 0, "failed": 0, "errors": []}
+
+    if len(doc_ids) > _BATCH_MAX_QUERY_RESULTS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Query matched {len(doc_ids)} documents — maximum is {_BATCH_MAX_QUERY_RESULTS}. "
+            "Use a more specific query.",
+        )
 
     return _batch_apply_updates(doc_ids, fields)
 

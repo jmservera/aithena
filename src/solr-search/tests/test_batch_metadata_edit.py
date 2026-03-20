@@ -447,6 +447,7 @@ def test_query_batch_edit_pagination(mock_post: MagicMock, mock_pool: MagicMock)
     with (
         patch("main._raw_solr_query", side_effect=[page1, page2, page3]),
         patch("main._get_admin_redis_client", return_value=redis_mock),
+        patch("main._solr_document_exists", return_value=True),
     ):
         # Temporarily reduce batch page size for pagination test
         import main as main_module
