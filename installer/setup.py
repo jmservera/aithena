@@ -247,6 +247,11 @@ def build_env_values(
     if reset or existing_redis_password in INSECURE_REDIS_PASSWORDS:
         redis_password = secret_factory(32)
 
+    existing_admin_api_key = existing_env.get("ADMIN_API_KEY", "")
+    admin_api_key = existing_admin_api_key
+    if reset or not existing_admin_api_key:
+        admin_api_key = secret_factory(32)
+
     env_values = {
         "BOOKS_PATH": str(library_path),
         "BOOK_LIBRARY_PATH": str(library_path),
@@ -258,6 +263,7 @@ def build_env_values(
         "AUTH_JWT_TTL": existing_env.get("AUTH_JWT_TTL", DEFAULT_AUTH_JWT_TTL),
         "AUTH_COOKIE_NAME": existing_env.get("AUTH_COOKIE_NAME", DEFAULT_AUTH_COOKIE_NAME),
         "AUTH_ADMIN_USERNAME": admin_user,
+        "ADMIN_API_KEY": admin_api_key,
         "RABBITMQ_USER": rabbitmq_user,
         "RABBITMQ_PASS": rabbitmq_pass,
         "REDIS_PASSWORD": redis_password,

@@ -819,21 +819,10 @@ def _search_semantic(
     Facets and highlights degrade to empty because the kNN query path does not
     produce Solr facet counts or highlight snippets.
     """
-    # Empty-query handling: semantic/hybrid modes return an empty result set
-    # immediately, skipping embeddings and Solr calls entirely.  This differs
-    # from keyword mode, which normalizes "" to "*:*" and returns all indexed
-    # documents with facets.  The distinction exists because generating a
-    # meaningful embedding from an empty string is not possible.
+    # Empty-query guard: semantic mode requires a non-empty string to generate
+    # an embedding vector.  Return 400 rather than silently returning no results.
     if not q.strip():
-        return {
-            "query": q,
-            "mode": "semantic",
-            "sort": {"by": "score", "order": "desc"},
-            "degraded": False,
-            **build_pagination(0, 1, top_k),
-            "results": [],
-            "facets": {"author": [], "category": [], "year": [], "language": []},
-        }
+        raise HTTPException(status_code=400, detail="Query cannot be empty for semantic search")
 
     try:
         vector = _fetch_embedding(q)
@@ -894,17 +883,9 @@ def _search_hybrid(
     The RRF k constant is configurable via the ``RRF_K`` environment variable
     (default 60, per the original RRF paper).
     """
-    # See semantic mode comment — same rationale: no embedding possible for "".
+    # Empty-query guard: hybrid mode needs an embedding for the kNN leg.
     if not q.strip():
-        return {
-            "query": q,
-            "mode": "hybrid",
-            "sort": {"by": "score", "order": "desc"},
-            "degraded": False,
-            **build_pagination(0, 1, page_size),
-            "results": [],
-            "facets": {"author": [], "category": [], "year": [], "language": []},
-        }
+        raise HTTPException(status_code=400, detail="Query cannot be empty for hybrid search")
 
     candidate_limit = max(page_size * 2, 20)
 

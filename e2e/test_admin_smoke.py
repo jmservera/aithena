@@ -210,24 +210,24 @@ class TestAdminContainersEndpoint:
     """Container version/health snapshot coverage."""
 
     def test_admin_containers_returns_200(
-        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+        self, api_url: str, api_available: None, admin_api_headers: dict[str, str]
     ) -> None:
         """GET /v1/admin/containers must return HTTP 200."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=admin_api_headers, timeout=10)
         assert resp.status_code == 200
 
     def test_admin_containers_slash_alias_returns_200(
-        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+        self, api_url: str, api_available: None, admin_api_headers: dict[str, str]
     ) -> None:
         """GET /v1/admin/containers/ must return HTTP 200 (trailing slash alias)."""
-        resp = requests.get(f"{api_url}/v1/admin/containers/", headers=auth_headers, timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers/", headers=admin_api_headers, timeout=10)
         assert resp.status_code == 200
 
     def test_admin_containers_contains_containers_list(
-        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+        self, api_url: str, api_available: None, admin_api_headers: dict[str, str]
     ) -> None:
         """Admin containers response must include a 'containers' list."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=admin_api_headers, timeout=10)
         body = resp.json()
         assert "containers" in body, f"'containers' key missing from /v1/admin/containers: {body}"
         assert isinstance(body["containers"], list), (
@@ -235,18 +235,18 @@ class TestAdminContainersEndpoint:
         )
 
     def test_admin_containers_list_is_non_empty(
-        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+        self, api_url: str, api_available: None, admin_api_headers: dict[str, str]
     ) -> None:
         """The containers list must include at least one entry."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=admin_api_headers, timeout=10)
         containers = resp.json().get("containers", [])
         assert len(containers) > 0, "Expected at least one container entry in /v1/admin/containers."
 
     def test_admin_containers_entries_have_required_fields(
-        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+        self, api_url: str, api_available: None, admin_api_headers: dict[str, str]
     ) -> None:
         """Each container entry must include 'name', 'status', 'type', 'version', and 'commit'."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=admin_api_headers, timeout=10)
         containers = resp.json().get("containers", [])
         required_fields = {"name", "status", "type", "version", "commit"}
         for entry in containers:
@@ -254,10 +254,10 @@ class TestAdminContainersEndpoint:
             assert not missing, f"Container entry missing fields {missing}: {entry}"
 
     def test_admin_containers_includes_solr_search_entry(
-        self, api_url: str, api_available: None, auth_headers: dict[str, str]
+        self, api_url: str, api_available: None, admin_api_headers: dict[str, str]
     ) -> None:
         """The containers list must include an entry for 'solr-search'."""
-        resp = requests.get(f"{api_url}/v1/admin/containers", headers=auth_headers, timeout=10)
+        resp = requests.get(f"{api_url}/v1/admin/containers", headers=admin_api_headers, timeout=10)
         containers = resp.json().get("containers", [])
         names = [c.get("name") for c in containers]
         assert "solr-search" in names, f"'solr-search' not found in container names: {names}"
