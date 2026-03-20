@@ -250,3 +250,22 @@ Wave 1: #696 (improve integration test reliability) with Brett
 Wave 2–4: Testing track — folder facet tests (#653), stress test runs (#675, #662), post-restore verification (#672), E2E testing for metadata (#697) and collections (#674).
 
 Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+
+### 2026-03-20 — Folder facet tests, chunk embedding tests, CI reliability (#653, #696, R5 → PR #724)
+
+**Issues:** #653 (folder facet tests), #696 (integration test reliability), Retro Action R5 (chunk embedding tests)
+**PR:** #724 (targets `dev`)
+**Branch:** `squad/653-folder-facet-tests`
+
+**Summary:**
+- Added 26 new tests to `src/solr-search/tests/test_search_service.py`:
+  - 20 folder facet edge-case tests: empty/whitespace paths, deeply nested (a/b/c/d), double quotes, parentheses, CJK, Arabic, Cyrillic, combined filters, missing/single-entry facet values, normalize_book folder extraction
+  - 6 chunk embedding / semantic search tests (Retro R5): keyword vs kNN chunk exclusion invariant, kNN with folder filters, RRF deduplication, chunk dedup with highlights preservation
+- Improved integration test reliability (#696):
+  - Solr health checks: retries 10→15, timeout 5s→10s, start_period 30s→60s in `docker-compose.yml`
+  - Added `wait_for_solr_cluster()` in workflow — polls CLUSTERSTATUS API until all replicas ACTIVE
+  - Workflow timeout 60→75 min, ADMIN_API_KEY fallback, E2E auth env vars
+
+**Test results:** 690 passed (was 664), coverage 94.83% (threshold 88%).
+
+**Key finding:** No folder facet UI components exist in frontend, so no frontend tests were needed. Backend fully supports folder facets via `folder_path_s` field.
