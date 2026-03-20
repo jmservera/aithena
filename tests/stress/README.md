@@ -1,0 +1,152 @@
+# Aithena Stress Tests
+
+Automated stress tests for measuring performance, resource usage, and hardware
+sizing of the Aithena Docker Compose deployment.
+
+## Prerequisites
+
+- Python 3.12+
+- Docker and Docker Compose (the stack must be running)
+- The Aithena stack started via `docker compose up -d`
+
+## Setup
+
+Install stress test dependencies:
+
+```bash
+pip install -r tests/stress/requirements-stress.txt
+```
+
+## Running Tests
+
+### Run all stress tests
+
+```bash
+cd tests/stress
+pytest -v
+```
+
+### Run a specific test category
+
+```bash
+# Indexing pipeline benchmarks
+pytest -v -m indexing
+
+# Search latency benchmarks
+pytest -v -m search
+
+# Concurrent user simulation
+pytest -v -m concurrent
+```
+
+### Run with resource monitoring
+
+The `docker_monitor` fixture automatically captures Docker resource metrics
+during tests. Results are written to `tests/stress/results/<timestamp>/`.
+
+### Run the resource monitor standalone
+
+Monitor Docker resource usage without running tests:
+
+```bash
+python -m tests.stress.monitor --interval 2 --label my_session
+# Press Ctrl+C to stop and write results
+```
+
+Or from the repo root:
+
+```bash
+python tests/stress/monitor.py --interval 2 --output-dir tests/stress/results --label manual_run
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `COMPOSE_FILE` | `docker-compose.yml` | Path to Docker Compose file |
+| `COMPOSE_PROJECT` | `aithena` | Docker Compose project name |
+| `SOLR_URL` | `http://localhost:8983/solr/books` | Solr collection URL |
+| `SEARCH_API_URL` | `http://localhost:8080` | solr-search API URL |
+| `RABBITMQ_API_URL` | `http://localhost:15672` | RabbitMQ management URL |
+| `RABBITMQ_USER` | `guest` | RabbitMQ username |
+| `RABBITMQ_PASSWORD` | `guest` | RabbitMQ password |
+| `REDIS_HOST` | `localhost` | Redis host |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | *(empty)* | Redis password |
+| `STRESS_RESULTS_DIR` | `tests/stress/results` | Results output directory |
+| `MONITOR_INTERVAL` | `2` | Docker stats sampling interval (seconds) |
+
+## Directory Structure
+
+```
+tests/stress/
+├── conftest.py               # Shared fixtures (Docker Compose lifecycle, URLs, helpers)
+├── monitor.py                # Docker resource monitoring collector
+├── pytest.ini                # pytest configuration for stress tests
+├── requirements-stress.txt   # Python dependencies
+├── README.md                 # This file
+└── results/                  # Output directory (gitignored)
+    └── .gitkeep
+```
+
+Future test files (Phase 2+):
+
+```
+tests/stress/
+├── generate_test_data.py     # Synthetic PDF/EPUB generator
+├── test_indexing.py           # Indexing pipeline benchmarks
+├── test_search_latency.py    # Search latency curves
+├── test_concurrent.py         # Concurrent user simulation
+└── locustfile.py             # Locust user definitions
+```
+
+## Results Output
+
+Each test run creates a timestamped subdirectory under `results/`:
+
+```
+results/
+└── 20250120T143022Z/
+    ├── indexing_small.json           # Test results
+    ├── indexing_small_timeseries_*.json  # Docker resource time-series
+    └── indexing_small_summary_*.json     # Aggregated resource summary
+```
+
+### Time-series JSON format
+
+```json
+{
+  "label": "indexing_small",
+  "start_time": "2025-01-20T14:30:22Z",
+  "end_time": "2025-01-20T14:35:22Z",
+  "duration_seconds": 300.0,
+  "interval_seconds": 2.0,
+  "samples": [
+    {
+      "timestamp": "2025-01-20T14:30:24Z",
+      "service": "solr",
+      "cpu_percent": 45.2,
+      "memory_mb": 1024.5,
+      "memory_limit_mb": 2048.0,
+      "memory_percent": 50.0,
+      "net_rx_bytes": 123456,
+      "net_tx_bytes": 654321,
+      "block_read_bytes": 1048576,
+      "block_write_bytes": 2097152
+    }
+  ],
+  "service_metrics": [
+    {
+      "timestamp": "2025-01-20T14:30:24Z",
+      "source": "solr_heap",
+      "metrics": {"heap_used_mb": 512.3, "heap_max_mb": 1024.0}
+    }
+  ],
+  "oom_events": []
+}
+```
+
+## Playwright Stress Tests
+
+Browser-based stress tests live in `e2e/stress/` and are run separately
+via Playwright. See the main `e2e/` directory for setup instructions.
