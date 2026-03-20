@@ -22,6 +22,10 @@ services:
     environment:
       - POLL_INTERVAL=10
 
+  solr-search:
+    environment:
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=0
+
   # Disable nginx — not needed for local E2E testing
   nginx:
     profiles:

@@ -243,6 +243,9 @@ class RedisRateLimiter:
         Returns:
             tuple[bool, int]: (is_allowed, retry_after_seconds)
         """
+        if self.requests_per_minute <= 0:
+            return True, 0
+
         client_ip = self._get_client_ip(request)
         key = f"ratelimit:search:{client_ip}"
         now = time.time()
