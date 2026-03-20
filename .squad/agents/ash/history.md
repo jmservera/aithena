@@ -158,3 +158,20 @@ Wave 1 foundations: #650 (folder_path_s facet in API) and #677 (add series_s fie
 Critical path: Solr schema changes coordinate across 3 features (#650, #677, #681 metadata). Ash coordinates all schema PRs per wave.
 
 Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+
+### 2026-03-21 — Retro Action R2: Solr Data Model Documentation (PR #723)
+
+**Context:** v1.10.0 retrospective identified that PR #701 nearly broke semantic search because the implementer didn't understand that embeddings live on chunk documents, not parent documents. This was classified as retro action R2 (data model documentation gap).
+
+**Deliverables:**
+- `docs/architecture/solr-data-model.md` — Full architecture reference: parent vs. chunk document fields, search flow (keyword/semantic/hybrid), critical rules (kNN must target chunks, never apply `EXCLUDE_CHUNKS_FQ` to kNN), indexing pipeline, quick reference table.
+- `src/solr-search/README.md` — New service README with data model summary and link to architecture doc.
+
+**Key details documented:**
+- Parent documents: book metadata (`id` = SHA-256 of file path), no embeddings
+- Chunk documents: text fragments + `embedding_v` (512-dim, HNSW cosine), linked via `parent_id_s`
+- `EXCLUDE_CHUNKS_FQ = "-parent_id_s:[* TO *]"` — applied to keyword leg only, never to kNN
+- Chunking: 400 words, 50-word overlap (word-based, page-aware)
+- Model: distiluse-base-multilingual-cased-v2
+
+**Lesson:** Architecture documentation should be created alongside features, not after incidents. The parent/chunk relationship is non-obvious and critical for correctness.
