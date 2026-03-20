@@ -18,10 +18,8 @@ Skip logic:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -47,9 +45,18 @@ class LoadScenario:
 
 
 SCENARIOS: list[LoadScenario] = [
-    LoadScenario("light", users=5, spawn_rate=1, run_time_seconds=60, weights={"search": 80, "browse": 20}),
-    LoadScenario("medium", users=10, spawn_rate=2, run_time_seconds=120, weights={"search": 60, "browse": 20, "upload": 20}),
-    LoadScenario("heavy", users=25, spawn_rate=5, run_time_seconds=180, weights={"search": 50, "upload": 25, "admin": 25}),
+    LoadScenario(
+        "light", users=5, spawn_rate=1, run_time_seconds=60,
+        weights={"search": 80, "browse": 20},
+    ),
+    LoadScenario(
+        "medium", users=10, spawn_rate=2, run_time_seconds=120,
+        weights={"search": 60, "browse": 20, "upload": 20},
+    ),
+    LoadScenario(
+        "heavy", users=25, spawn_rate=5, run_time_seconds=180,
+        weights={"search": 50, "upload": 25, "admin": 25},
+    ),
 ]
 
 

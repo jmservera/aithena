@@ -309,8 +309,8 @@ class SearchUser(HttpUser):
         params = build_search_params(
             query,
             mode="keyword",
-            fq_author=random.choice(FACET_AUTHORS),
-            fq_category=random.choice(FACET_CATEGORIES),
+            fq_author=random.choice(FACET_AUTHORS),  # noqa: S311 — not crypto, test data selection
+            fq_category=random.choice(FACET_CATEGORIES),  # noqa: S311
         )
         self.client.get("/search", params=params, name="/search [faceted]")
 
@@ -331,7 +331,7 @@ class BrowseUser(HttpUser):
     @tag("browse")
     @task(3)
     def list_books(self):
-        page = random.randint(1, 5)
+        page = random.randint(1, 5)  # noqa: S311 — not crypto, test data selection
         params = build_books_params(page=page, page_size=20)
         self.client.get("/books", params=params, name="/books")
 
@@ -340,7 +340,7 @@ class BrowseUser(HttpUser):
     def get_facets(self):
         params = build_facet_params(
             query=choose_random_query(),
-            fq_category=random.choice(FACET_CATEGORIES),
+            fq_category=random.choice(FACET_CATEGORIES),  # noqa: S311 — not crypto, test data selection
         )
         self.client.get("/facets", params=params, name="/facets")
 

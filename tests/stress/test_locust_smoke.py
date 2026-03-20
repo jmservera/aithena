@@ -14,10 +14,6 @@ Run::
 
 from __future__ import annotations
 
-import csv
-import io
-import os
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -29,9 +25,9 @@ from locustfile import (
     SCENARIOS,
     SEARCH_MODES,
     SEARCH_QUERIES,
+    build_books_params,
     build_facet_params,
     build_search_params,
-    build_books_params,
     choose_random_mode,
     choose_random_query,
     get_scenario,
@@ -40,13 +36,14 @@ from locustfile import (
 )
 from test_concurrent import (
     SCENARIOS as CONCURRENT_SCENARIOS,
+)
+from test_concurrent import (
     LoadScenario,
     build_locust_command,
     check_pass_criteria,
     parse_locust_csv_stats,
     summarise_locust_run,
 )
-
 
 # ===================================================================
 # locustfile.py — query / data pool tests
@@ -81,9 +78,9 @@ class TestChooseRandom:
     def test_choose_random_query_deterministic(self):
         import random
 
-        rng = random.Random(42)
+        rng = random.Random(42)  # noqa: S311 — seeded RNG for deterministic test
         q1 = choose_random_query(rng)
-        rng2 = random.Random(42)
+        rng2 = random.Random(42)  # noqa: S311
         q2 = choose_random_query(rng2)
         assert q1 == q2
 
@@ -320,12 +317,13 @@ class TestBuildLocustCommand:
         idx = cmd.index("-u")
         assert cmd[idx + 1] == "5"
 
-    def test_csv_prefix(self):
+    def test_csv_prefix(self, tmp_path):
         scenario = LoadScenario("test", users=5, spawn_rate=1, run_time_seconds=60)
-        cmd = build_locust_command(scenario, host="http://localhost:8080", csv_prefix="/tmp/results")
+        csv_prefix = str(tmp_path / "results")  # use pytest tmp_path instead of hardcoded /tmp
+        cmd = build_locust_command(scenario, host="http://localhost:8080", csv_prefix=csv_prefix)
         assert "--csv" in cmd
         idx = cmd.index("--csv")
-        assert cmd[idx + 1] == "/tmp/results"
+        assert cmd[idx + 1] == csv_prefix
 
     def test_host_included(self):
         scenario = LoadScenario("test", users=5, spawn_rate=1, run_time_seconds=60)
