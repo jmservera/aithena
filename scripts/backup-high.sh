@@ -211,9 +211,14 @@ backup_solr() {
     }
     log_info "Copied Solr backup from container to staging"
 
+    # Clean up on-node backup to prevent container filesystem bloat
+    docker exec "${SOLR_CONTAINER}" rm -rf "${SOLR_BACKUP_LOCATION}/${backup_name}" 2>/dev/null || \
+        log_warn "Could not clean up on-node backup at ${SOLR_BACKUP_LOCATION}/${backup_name}"
+
     # Create compressed archive
-    tar -czf "$archive" -C "$WORK_DIR" "$backup_name" 2>&1 || {
-        log_error "Failed to create Solr backup archive: ${archive}"
+    local tar_err
+    tar_err=$(tar -czf "$archive" -C "$WORK_DIR" "$backup_name" 2>&1) || {
+        log_error "Failed to create Solr backup archive: ${archive} — ${tar_err}"
         return 1
     }
 
