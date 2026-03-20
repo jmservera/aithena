@@ -636,3 +636,20 @@ src/aithena-ui/src/
 **Key takeaways:**
 - Headless Chromium lacks emoji font support — never use exact emoji matching in E2E assertions. Use `toContainText` with the text portion only.
 - Playwright's `.check()` expects native checkbox toggle semantics. For React controlled checkboxes where state is managed via onChange handlers, prefer clicking the label element instead.
+
+### 2026 — v1.10.0 Wave 0: CSS overlap + PDF viewer URL fix (PR #703)
+
+**Problem 1 (#649):** Book result cards overlapped on small screens because the CSS grid used fixed column counts (`repeat(3, minmax(0, 1fr))`) and grid items lacked `min-width: 0`, allowing flex children to overflow their cells.
+
+**Fix:** Replaced fixed-column grid with `repeat(auto-fill, minmax(280px, 1fr))` so columns adjust automatically. Added `min-width: 0` and `overflow: hidden` to book cards. Added `overflow-wrap: anywhere` to titles and highlight snippets. Responsive breakpoints now use smaller minmax thresholds instead of hardcoded column counts.
+
+**Problem 2 (#647):** PDFs in the library section couldn't be opened because the backend's `request.url_for()` generates absolute URLs with internal Docker hostnames (e.g. `http://solr-search:8080/documents/...`) when `ProxyHeadersMiddleware` isn't configured. The browser iframe can't reach these internal URLs.
+
+**Fix:** `resolveDocumentUrl()` now detects absolute URLs whose pathname starts with `/documents/` and strips the origin, converting them to relative paths. External absolute URLs (e.g. `https://example.com/file.pdf`) are left unchanged.
+
+**Investigation (#667):** The version display pipeline (VERSION file → getVersion() → __APP_VERSION__ → Footer.tsx) is correct and produces "1.9.1" in both local dev and fresh builds. "1.0" cannot be reproduced — likely a stale Docker image or environment-specific VERSION env var.
+
+**Key takeaways:**
+- Use `repeat(auto-fill, minmax(Npx, 1fr))` instead of fixed column counts for responsive grids. Combined with `min-width: 0` on grid items, this prevents content overflow at all viewport sizes.
+- Backend-generated URLs behind reverse proxies may contain internal hostnames. Always normalise `/documents/` URLs to relative paths on the frontend to avoid mixed-content and unreachable-host issues.
+- The auth cookie (`aithena_auth`, HttpOnly, SameSite=lax) is set by the backend during login and is forwarded by nginx's `auth_request` for `/documents/` requests. This means iframe-based PDF viewing works in production without additional frontend auth handling — but only if the login response cookie is properly stored by the browser (same-origin required).
