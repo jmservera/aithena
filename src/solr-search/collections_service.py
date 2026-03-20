@@ -189,7 +189,7 @@ def update_collection(
             sets.append("updated_at = ?")
             params.append(now)
             params.append(collection_id)
-            conn.execute(f"UPDATE collections SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
+            conn.execute(f"UPDATE collections SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608  # nosec B608
             conn.commit()
 
     return get_collection(db_path, collection_id, user_id)
@@ -309,7 +309,7 @@ def update_item(
             sets.append("updated_at = ?")
             params.append(now)
             params.append(item_id)
-            conn.execute(f"UPDATE collection_items SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
+            conn.execute(f"UPDATE collection_items SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608  # nosec B608
             conn.commit()
 
         updated = conn.execute(
