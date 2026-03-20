@@ -368,7 +368,7 @@ async def request_logging_middleware(request: Request, call_next):
 
 def _raw_solr_query(params: dict[str, Any]) -> dict[str, Any]:
     """Execute a Solr HTTP request.  Raised exceptions feed the circuit breaker."""
-    response = requests.get(settings.select_url, params=params, timeout=settings.request_timeout)
+    response = requests.post(settings.select_url, data=params, timeout=settings.request_timeout)
     response.raise_for_status()
     return response.json()
 

@@ -24,7 +24,7 @@ def get_client() -> TestClient:
     return create_authenticated_client()
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_returns_results_with_mocked_solr(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_response = MagicMock()
@@ -107,7 +107,7 @@ def test_search_returns_results_with_mocked_solr(mock_solr_get: MagicMock) -> No
     assert len(facets["year"]) == 2
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_v1_search_alias_supports_ui_contract_params(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_response = MagicMock()
@@ -137,7 +137,7 @@ def test_v1_search_alias_supports_ui_contract_params(mock_solr_get: MagicMock) -
     assert data["limit"] == 10
     assert data["total"] == 2
 
-    params = mock_solr_get.call_args[1]["params"]
+    params = mock_solr_get.call_args[1]["data"]
     assert params["start"] == 10
     assert params["rows"] == 10
     assert params["sort"] == "year_i asc"
@@ -148,7 +148,7 @@ def test_v1_search_alias_supports_ui_contract_params(mock_solr_get: MagicMock) -
     ]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_handles_empty_query(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_response = MagicMock()
@@ -169,10 +169,10 @@ def test_search_handles_empty_query(mock_solr_get: MagicMock) -> None:
 
     mock_solr_get.assert_called_once()
     call_args = mock_solr_get.call_args
-    assert call_args[1]["params"]["q"] == "*:*"
+    assert call_args[1]["data"]["q"] == "*:*"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_facets_endpoint_returns_facet_counts(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_response = MagicMock()
@@ -209,7 +209,7 @@ def test_facets_endpoint_returns_facet_counts(mock_solr_get: MagicMock) -> None:
     ]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_handles_solr_timeout(mock_solr_get: MagicMock) -> None:
     import requests
 
@@ -222,7 +222,7 @@ def test_search_handles_solr_timeout(mock_solr_get: MagicMock) -> None:
     assert "Timed out" in response.json()["detail"]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_handles_solr_connection_error(mock_solr_get: MagicMock) -> None:
     import requests
 
@@ -235,7 +235,7 @@ def test_search_handles_solr_connection_error(mock_solr_get: MagicMock) -> None:
     assert "failed" in response.json()["detail"]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_handles_invalid_solr_response(mock_solr_get: MagicMock) -> None:
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -293,7 +293,7 @@ def test_version_endpoint_returns_build_metadata() -> None:
     }
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_pagination_parameters_passed_correctly(mock_solr_get: MagicMock) -> None:
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -315,11 +315,11 @@ def test_search_pagination_parameters_passed_correctly(mock_solr_get: MagicMock)
 
     mock_solr_get.assert_called_once()
     call_args = mock_solr_get.call_args
-    assert call_args[1]["params"]["start"] == 50
-    assert call_args[1]["params"]["rows"] == 25
+    assert call_args[1]["data"]["start"] == 50
+    assert call_args[1]["data"]["rows"] == 25
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_sorting_parameters_applied(mock_solr_get: MagicMock) -> None:
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -337,7 +337,7 @@ def test_search_sorting_parameters_applied(mock_solr_get: MagicMock) -> None:
 
     mock_solr_get.assert_called_once()
     call_args = mock_solr_get.call_args
-    assert call_args[1]["params"]["sort"] == "year_i asc"
+    assert call_args[1]["data"]["sort"] == "year_i asc"
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +381,7 @@ def _solr_payload(docs: list[dict], facets: dict | None = None) -> dict:
     }
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_keyword_mode_explicit(mock_solr_get: MagicMock) -> None:
     """?mode=keyword must behave identically to the default search."""
     mock_response = MagicMock()
@@ -399,7 +399,7 @@ def test_search_keyword_mode_explicit(mock_solr_get: MagicMock) -> None:
     assert "facets" in data
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_default_mode_is_keyword(mock_solr_get: MagicMock) -> None:
     """Default mode (no ?mode param) should be 'keyword'."""
     mock_response = MagicMock()
@@ -415,14 +415,12 @@ def test_search_default_mode_is_keyword(mock_solr_get: MagicMock) -> None:
 
 
 @patch("main.requests.post")
-@patch("main.requests.get")
-def test_search_semantic_mode_calls_embeddings_and_knn(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
+def test_search_semantic_mode_calls_embeddings_and_knn(mock_post: MagicMock) -> None:
     """Semantic mode must call embeddings server then Solr kNN."""
     mock_emb_resp = MagicMock()
     mock_emb_resp.status_code = 200
     mock_emb_resp.json.return_value = {"data": [{"embedding": [0.1] * 512}]}
     mock_emb_resp.raise_for_status = MagicMock()
-    mock_emb_post.return_value = mock_emb_resp
 
     mock_solr_resp = MagicMock()
     mock_solr_resp.status_code = 200
@@ -431,7 +429,13 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_solr_get: MagicMock,
         "highlighting": {},
         "facet_counts": {"facet_fields": {}},
     }
-    mock_solr_get.return_value = mock_solr_resp
+
+    def _dispatch(url, **kwargs):
+        if "json" in kwargs:
+            return mock_emb_resp
+        return mock_solr_resp
+
+    mock_post.side_effect = _dispatch
 
     client = get_client()
     response = client.get("/search", params={"q": "catalan history", "mode": "semantic"})
@@ -446,29 +450,29 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_solr_get: MagicMock,
 
 
 @patch("main.requests.post")
-@patch("main.requests.get")
-def test_search_semantic_empty_query_returns_empty_results(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
+def test_search_semantic_empty_query_returns_empty_results(mock_post: MagicMock) -> None:
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "semantic"})
     assert response.status_code == 400
-    mock_emb_post.assert_not_called()
-    mock_solr_get.assert_not_called()
+    mock_post.assert_not_called()
 
 
 @patch("main.requests.post")
-@patch("main.requests.get")
 def test_search_semantic_falls_back_to_keyword_when_embeddings_fail(
-    mock_solr_get: MagicMock,
-    mock_emb_post: MagicMock,
+    mock_post: MagicMock,
 ) -> None:
     import requests
-
-    mock_emb_post.side_effect = requests.ConnectionError("embeddings unavailable")
 
     mock_solr_resp = MagicMock()
     mock_solr_resp.status_code = 200
     mock_solr_resp.json.return_value = _solr_payload(_make_solr_docs(2))
-    mock_solr_get.return_value = mock_solr_resp
+
+    def _dispatch(url, **kwargs):
+        if "json" in kwargs:
+            raise requests.ConnectionError("embeddings unavailable")
+        return mock_solr_resp
+
+    mock_post.side_effect = _dispatch
 
     client = get_client()
     response = client.get("/search", params={"q": "catalan history", "mode": "semantic"})
@@ -481,15 +485,14 @@ def test_search_semantic_falls_back_to_keyword_when_embeddings_fail(
     assert data["message"] == "Embeddings unavailable — showing keyword results"
     assert len(data["results"]) == 2
 
-    mock_solr_get.assert_called_once()
-    assert mock_solr_get.call_args[1]["params"]["q"] == "catalan history"
+    solr_calls = [c for c in mock_post.call_args_list if "data" in c.kwargs]
+    assert len(solr_calls) == 1
+    assert solr_calls[0].kwargs["data"]["q"] == "catalan history"
 
 
 @patch("main.requests.post")
-@patch("main.requests.get")
 def test_search_semantic_degrades_when_circuit_open(
-    mock_solr_get: MagicMock,
-    mock_emb_post: MagicMock,
+    mock_post: MagicMock,
 ) -> None:
     """When the embeddings circuit breaker is open, semantic search should degrade to keyword."""
     from circuit_breaker import CircuitOpenError
@@ -497,7 +500,7 @@ def test_search_semantic_degrades_when_circuit_open(
     mock_solr_resp = MagicMock()
     mock_solr_resp.status_code = 200
     mock_solr_resp.json.return_value = _solr_payload(_make_solr_docs(1))
-    mock_solr_get.return_value = mock_solr_resp
+    mock_post.return_value = mock_solr_resp
 
     with patch("main.embeddings_circuit") as mock_cb:
         mock_cb.call.side_effect = CircuitOpenError("embeddings", 15.0)
@@ -512,14 +515,12 @@ def test_search_semantic_degrades_when_circuit_open(
 
 
 @patch("main.requests.post")
-@patch("main.requests.get")
-def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
+def test_search_hybrid_mode_fuses_both_legs(mock_post: MagicMock) -> None:
     """Hybrid mode must combine keyword + kNN results using RRF."""
     mock_emb_resp = MagicMock()
     mock_emb_resp.status_code = 200
     mock_emb_resp.json.return_value = {"data": [{"embedding": [0.1] * 512}]}
     mock_emb_resp.raise_for_status = MagicMock()
-    mock_emb_post.return_value = mock_emb_resp
 
     kw_docs = _make_solr_docs(3)
     knn_docs = [
@@ -540,11 +541,14 @@ def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_p
 
     solr_call_count = [0]
 
-    def _solr_side_effect(url: str, params: dict, timeout: float):
+    def _dispatch(url, **kwargs):
+        if "json" in kwargs:
+            return mock_emb_resp
+        data = kwargs.get("data", {})
         mock_r = MagicMock()
         mock_r.status_code = 200
         solr_call_count[0] += 1
-        if "{!knn" in str(params.get("q", "")):
+        if "{!knn" in str(data.get("q", "")):
             mock_r.json.return_value = {
                 "response": {"numFound": len(knn_docs), "docs": knn_docs},
                 "highlighting": {},
@@ -554,7 +558,7 @@ def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_p
             mock_r.json.return_value = _solr_payload(kw_docs)
         return mock_r
 
-    mock_solr_get.side_effect = _solr_side_effect
+    mock_post.side_effect = _dispatch
 
     client = get_client()
     response = client.get("/search", params={"q": "folklore", "mode": "hybrid", "page_size": 5})
@@ -571,29 +575,29 @@ def test_search_hybrid_mode_fuses_both_legs(mock_solr_get: MagicMock, mock_emb_p
 
 
 @patch("main.requests.post")
-@patch("main.requests.get")
-def test_search_hybrid_empty_query_returns_empty_results(mock_solr_get: MagicMock, mock_emb_post: MagicMock) -> None:
+def test_search_hybrid_empty_query_returns_empty_results(mock_post: MagicMock) -> None:
     client = get_client()
     response = client.get("/search", params={"q": "", "mode": "hybrid"})
     assert response.status_code == 400
-    mock_emb_post.assert_not_called()
-    mock_solr_get.assert_not_called()
+    mock_post.assert_not_called()
 
 
 @patch("main.requests.post")
-@patch("main.requests.get")
 def test_search_hybrid_falls_back_to_keyword_when_embeddings_fail(
-    mock_solr_get: MagicMock,
-    mock_emb_post: MagicMock,
+    mock_post: MagicMock,
 ) -> None:
     import requests
-
-    mock_emb_post.side_effect = requests.Timeout("embeddings timeout")
 
     mock_solr_resp = MagicMock()
     mock_solr_resp.status_code = 200
     mock_solr_resp.json.return_value = _solr_payload(_make_solr_docs(3))
-    mock_solr_get.return_value = mock_solr_resp
+
+    def _dispatch(url, **kwargs):
+        if "json" in kwargs:
+            raise requests.Timeout("embeddings timeout")
+        return mock_solr_resp
+
+    mock_post.side_effect = _dispatch
 
     client = get_client()
     response = client.get("/search", params={"q": "folklore", "mode": "hybrid", "page_size": 2})
@@ -605,8 +609,9 @@ def test_search_hybrid_falls_back_to_keyword_when_embeddings_fail(
     assert data["degraded"] is True
     assert data["message"] == "Embeddings unavailable — showing keyword results"
     assert len(data["results"]) == 3
-    assert mock_solr_get.call_count == 2
-    assert all("{!knn" not in call[1]["params"]["q"] for call in mock_solr_get.call_args_list)
+    solr_calls = [c for c in mock_post.call_args_list if "data" in c.kwargs]
+    assert len(solr_calls) == 2
+    assert all("{!knn" not in c.kwargs["data"]["q"] for c in solr_calls)
 
 
 # ---------------------------------------------------------------------------
@@ -627,7 +632,7 @@ def test_search_invalid_mode_returns_400() -> None:
     assert "hybrid" in detail
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_keyword_mode_returns_200(mock_solr_get: MagicMock) -> None:
     """GET /v1/search?q=test&mode=keyword must return 200 (control case)."""
     mock_response = MagicMock()
@@ -688,7 +693,7 @@ def _make_mock_response(docs: list[dict], num_found: int | None = None) -> Magic
     return mock_resp
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_returns_200_with_results(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -704,7 +709,7 @@ def test_similar_returns_200_with_results(mock_solr_get: MagicMock) -> None:
     assert len(body["results"]) == 2
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_v1_similar_alias_returns_results(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -718,7 +723,7 @@ def test_v1_similar_alias_returns_results(mock_solr_get: MagicMock) -> None:
     assert len(response.json()["results"]) == 2
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_result_contains_required_fields(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -734,7 +739,7 @@ def test_similar_result_contains_required_fields(mock_solr_get: MagicMock) -> No
         assert field in result, f"Missing required field: {field}"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_excludes_source_document_via_fq(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -745,13 +750,13 @@ def test_similar_excludes_source_document_via_fq(mock_solr_get: MagicMock) -> No
     client.get("/books/source-doc-id/similar")
 
     assert mock_solr_get.call_count == 2
-    knn_call_params = mock_solr_get.call_args_list[1][1]["params"]
+    knn_call_params = mock_solr_get.call_args_list[1][1]["data"]
     fq = knn_call_params.get("fq", "")
     assert "source" in fq
     assert fq.startswith("-id:")
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_uses_knn_query_parser(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -761,13 +766,13 @@ def test_similar_uses_knn_query_parser(mock_solr_get: MagicMock) -> None:
 
     client.get("/books/source-doc-id/similar")
 
-    knn_call_params = mock_solr_get.call_args_list[1][1]["params"]
+    knn_call_params = mock_solr_get.call_args_list[1][1]["data"]
     q = knn_call_params.get("q", "")
     assert "{!knn" in q
     assert "embedding_v" in q
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_retrieves_embedding_field_from_source(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -777,12 +782,12 @@ def test_similar_retrieves_embedding_field_from_source(mock_solr_get: MagicMock)
 
     client.get("/books/source-doc-id/similar")
 
-    source_call_params = mock_solr_get.call_args_list[0][1]["params"]
+    source_call_params = mock_solr_get.call_args_list[0][1]["data"]
     fl = source_call_params.get("fl", "")
     assert "embedding_v" in fl
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_limit_controls_rows_in_knn_query(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -792,11 +797,11 @@ def test_similar_limit_controls_rows_in_knn_query(mock_solr_get: MagicMock) -> N
 
     client.get("/books/source-doc-id/similar?limit=3")
 
-    knn_call_params = mock_solr_get.call_args_list[1][1]["params"]
+    knn_call_params = mock_solr_get.call_args_list[1][1]["data"]
     assert knn_call_params.get("rows") == 3
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_min_score_filters_results(mock_solr_get: MagicMock) -> None:
     client = get_client()
     low_score_doc = {**SIMILAR_BOOKS_DOCS[1], "score": 0.50}
@@ -813,7 +818,7 @@ def test_similar_min_score_filters_results(mock_solr_get: MagicMock) -> None:
     assert len(scores) == 1
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_returns_404_for_unknown_id(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.return_value = _make_mock_response([])
@@ -823,7 +828,7 @@ def test_similar_returns_404_for_unknown_id(mock_solr_get: MagicMock) -> None:
     assert response.status_code == 404
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_returns_422_when_embedding_missing(mock_solr_get: MagicMock) -> None:
     client = get_client()
     doc_no_embedding = {"id": "source-doc-id"}
@@ -834,7 +839,7 @@ def test_similar_returns_422_when_embedding_missing(mock_solr_get: MagicMock) ->
     assert response.status_code == 422
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_returns_empty_list_when_no_similar_found(mock_solr_get: MagicMock) -> None:
     client = get_client()
     mock_solr_get.side_effect = [
@@ -848,7 +853,7 @@ def test_similar_returns_empty_list_when_no_similar_found(mock_solr_get: MagicMo
     assert response.json()["results"] == []
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_similar_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
     import requests as req
 
@@ -899,7 +904,7 @@ _STATS_SOLR_PAYLOAD = {
 }
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_stats_returns_200_with_correct_shape(mock_solr_get: MagicMock) -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -923,7 +928,7 @@ def test_stats_returns_200_with_correct_shape(mock_solr_get: MagicMock) -> None:
     assert data["page_stats"]["avg"] == 158
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_stats_no_slash_alias_returns_200(mock_solr_get: MagicMock) -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -936,7 +941,7 @@ def test_stats_no_slash_alias_returns_200(mock_solr_get: MagicMock) -> None:
     assert response.status_code == 200
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_stats_legacy_path_returns_200(mock_solr_get: MagicMock) -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -949,7 +954,7 @@ def test_stats_legacy_path_returns_200(mock_solr_get: MagicMock) -> None:
     assert response.status_code == 200
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_stats_sends_correct_solr_params(mock_solr_get: MagicMock) -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -960,7 +965,7 @@ def test_stats_sends_correct_solr_params(mock_solr_get: MagicMock) -> None:
     client.get("/v1/stats/")
 
     mock_solr_get.assert_called_once()
-    params = mock_solr_get.call_args[1]["params"]
+    params = mock_solr_get.call_args[1]["data"]
     assert params["q"] == "*:*"
     assert params["rows"] == 0
     assert params["group"] == "true"
@@ -975,7 +980,7 @@ def test_stats_sends_correct_solr_params(mock_solr_get: MagicMock) -> None:
     assert "language_detected_s" in params["facet.field"]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_stats_handles_empty_collection(mock_solr_get: MagicMock) -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -997,7 +1002,7 @@ def test_stats_handles_empty_collection(mock_solr_get: MagicMock) -> None:
     assert data["page_stats"] == {"total": 0, "avg": 0, "min": 0, "max": 0}
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_stats_returns_504_on_solr_timeout(mock_solr_get: MagicMock) -> None:
     import requests as req
 
@@ -1009,7 +1014,7 @@ def test_stats_returns_504_on_solr_timeout(mock_solr_get: MagicMock) -> None:
     assert response.status_code == 504
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_stats_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
     import requests as req
 
@@ -1026,7 +1031,7 @@ def test_stats_returns_502_on_solr_error(mock_solr_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_chunk_hits_include_page_range(mock_solr_get: MagicMock) -> None:
     """Chunk documents with page_start_i/page_end_i must expose pages in results."""
     client = get_client()
@@ -1073,7 +1078,7 @@ def test_search_chunk_hits_include_page_range(mock_solr_get: MagicMock) -> None:
     assert full_result["pages"] is None
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -> None:
     """Solr queries must request page_start_i and page_end_i fields."""
     client = get_client()
@@ -1088,7 +1093,7 @@ def test_search_solr_field_list_includes_page_fields(mock_solr_get: MagicMock) -
 
     client.get("/search", params={"q": "test"})
 
-    params = mock_solr_get.call_args[1]["params"]
+    params = mock_solr_get.call_args[1]["data"]
     assert "page_start_i" in params["fl"]
     assert "page_end_i" in params["fl"]
 

@@ -262,7 +262,7 @@ class TestHealthEndpointCircuitBreakers:
 
 class TestSolrCircuitBreaker:
 
-    @patch("main.requests.get")
+    @patch("main.requests.post")
     def test_solr_failure_trips_circuit(self, mock_get: MagicMock) -> None:
         import main
         main.solr_circuit.reset()
@@ -278,7 +278,7 @@ class TestSolrCircuitBreaker:
         assert "circuit breaker" in resp.json()["detail"].lower()
         main.solr_circuit.reset()
 
-    @patch("main.requests.get")
+    @patch("main.requests.post")
     def test_solr_recovers_after_timeout(self, mock_get: MagicMock) -> None:
         import main
         original_timeout = main.solr_circuit.recovery_timeout
