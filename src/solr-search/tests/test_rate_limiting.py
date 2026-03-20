@@ -162,7 +162,7 @@ def test_rate_limiter_fails_open_on_redis_error(mock_redis: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 @patch("main.RedisRateLimiter.check_rate_limit")
 def test_search_endpoint_allows_requests_within_limit(mock_rate_limit: MagicMock, mock_get: MagicMock) -> None:
     """Search endpoint should allow requests within rate limit."""
@@ -176,7 +176,7 @@ def test_search_endpoint_allows_requests_within_limit(mock_rate_limit: MagicMock
     mock_rate_limit.assert_called_once()
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 @patch("main.RedisRateLimiter.check_rate_limit")
 def test_search_endpoint_returns_429_when_limit_exceeded(mock_rate_limit: MagicMock, mock_get: MagicMock) -> None:
     """Search endpoint should return 429 when rate limit is exceeded."""
@@ -194,7 +194,7 @@ def test_search_endpoint_returns_429_when_limit_exceeded(mock_rate_limit: MagicM
     mock_rate_limit.assert_called_once()
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 @patch("main.RedisRateLimiter.check_rate_limit")
 def test_search_endpoint_works_when_redis_fails(mock_rate_limit: MagicMock, mock_get: MagicMock) -> None:
     """Search endpoint should still work (fail open) when Redis is unavailable."""
@@ -228,7 +228,7 @@ def test_rate_limit_only_applies_to_search_endpoint(mock_get: MagicMock) -> None
     assert response.status_code == 200
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 @patch("main.RedisRateLimiter.check_rate_limit")
 def test_rate_limit_dependency_called_for_all_search_routes(mock_rate_limit: MagicMock, mock_get: MagicMock) -> None:
     """Rate limiting should be applied to all search endpoint routes."""
