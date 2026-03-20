@@ -33,7 +33,7 @@ Newt (PM) is the release gate owner — no release without Newt's explicit appro
    ```
 
 ### Documentation Gate (REQUIRED — blocks release if incomplete)
-5. ✅ **Release notes created:** `docs/release-notes-vX.Y.Z.md` with:
+5. ✅ **Release notes created:** `docs/release-notes/vX.Y.Z.md` with:
    - Summary/codename/date
    - Milestone closure (all issues listed with GitHub #)
    - Per-category changes (Dependency Upgrades, Bug Fixes, Infrastructure, etc.)
@@ -43,7 +43,7 @@ Newt (PM) is the release gate owner — no release without Newt's explicit appro
    - Operator/infrastructure improvements (if applicable)
    - Security improvements (if any)
    - Upgrade instructions and validation highlights
-6. ✅ **Test report created:** `docs/test-report-vX.Y.Z.md` with:
+6. ✅ **Test report created:** `docs/test-reports/vX.Y.Z.md` with:
    - Per-service test counts (e.g., solr-search 231, aithena-ui 213, ...)
    - Total test count and pass/fail/skip breakdown
    - Coverage metrics (% of critical code)
@@ -112,7 +112,7 @@ All X issues in the vX.Y.Z milestone have been closed.
 
 ## See Also
 - Feature guide: docs/features/vX.Y.Z.md (if applicable)
-- Test report: docs/test-report-vX.Y.Z.md
+- Test report: docs/test-reports/vX.Y.Z.md
 - User manual: docs/user-manual.md
 - Admin manual: docs/admin-manual.md
 ```

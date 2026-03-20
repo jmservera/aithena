@@ -93,11 +93,16 @@ See [Release Process Overview](#release-process-overview) below for full details
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
 - [Deployment Sizing Guide](docs/deployment/sizing-guide.md)
-- [i18n Contributor Guide](docs/i18n-guide.md)
+- [i18n Contributor Guide](docs/guides/i18n-guide.md)
 - [Security Baseline](docs/security/baseline-v0.6.0.md)
 
 ### Release Notes (newest first)
 
+- [v1.9.1 Release Notes](docs/release-notes/v1.9.1.md)
+- [v1.9.0 Release Notes](docs/release-notes/v1.9.0.md)
+- [v1.8.2 Release Notes](docs/release-notes/v1.8.2.md)
+- [v1.8.1 Release Notes](docs/release-notes/v1.8.1.md)
+- [v1.8.0 Release Notes](docs/release-notes/v1.8.0.md)
 - [v1.7.0 Release Notes](docs/release-notes/v1.7.0.md)
 - [v1.6.0 Release Notes](docs/release-notes/v1.6.0.md)
 - [v1.5.0 Release Notes](docs/release-notes/v1.5.0.md)
@@ -113,6 +118,8 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 ### Test Reports (newest first)
 
+- [v1.8.1 Test Report](docs/test-reports/v1.8.1.md)
+- [v1.8.0 Test Report](docs/test-reports/v1.8.0.md)
 - [v1.7.0 Test Report](docs/test-reports/v1.7.0.md)
 - [v1.6.0 Test Report](docs/test-reports/v1.6.0.md)
 - [v1.5.0 Test Report](docs/test-reports/v1.5.0.md)
