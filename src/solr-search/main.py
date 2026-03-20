@@ -1828,8 +1828,11 @@ def _compute_upload_id(file_path: Path) -> str:
 def _publish_to_queue(file_path: Path) -> None:
     """Publish file path to RabbitMQ queue for indexing (per-request connection)."""
     try:
+        credentials = pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_pass)
         connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host=settings.rabbitmq_host, port=settings.rabbitmq_port)
+            pika.ConnectionParameters(
+                host=settings.rabbitmq_host, port=settings.rabbitmq_port, credentials=credentials
+            )
         )
         channel = connection.channel()
         channel.queue_declare(queue=settings.rabbitmq_queue_name, durable=True, auto_delete=False)
