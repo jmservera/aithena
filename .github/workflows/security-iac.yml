@@ -1,4 +1,15 @@
-name: Security - Checkov IaC Scanning
+# Consolidated IaC Security Scanning
+#
+# This workflow combines two complementary security tools:
+#   - Checkov: Scans Dockerfiles and GitHub Actions workflows for IaC
+#     misconfigurations (CIS benchmarks, best practices, supply-chain policies).
+#   - zizmor: Focuses on GitHub Actions-specific supply-chain risks such as
+#     template injection and dangerous triggers.
+#
+# Both jobs run in parallel and upload SARIF results to GitHub Code Scanning.
+# All findings are advisory (non-blocking) — they will not fail the pipeline.
+
+name: Security - IaC Scanning (Checkov + zizmor)
 
 on:
   push:
@@ -20,6 +31,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # Checkov – IaC misconfiguration scanner
+  # Covers: Dockerfiles, GitHub Actions workflows (CIS benchmarks)
+  # ──────────────────────────────────────────────────────────────────────
   checkov-scan:
     name: Checkov IaC Security Scan
     runs-on: ubuntu-latest
@@ -79,3 +94,25 @@ jobs:
           echo "View detailed results in the Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Note:** This scan runs with \`soft_fail: true\` and will not block CI/CD pipelines." >> $GITHUB_STEP_SUMMARY
+
+  # ──────────────────────────────────────────────────────────────────────
+  # zizmor – GitHub Actions supply-chain security scanner
+  # Covers: template injection, dangerous triggers, unpinned actions
+  # ──────────────────────────────────────────────────────────────────────
+  zizmor-scan:
+    name: GitHub Actions Security Scan (zizmor)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor security scan
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8  # v0.5.2
+        with:
+          # SARIF output automatically uploaded to GitHub Code Scanning
+          # Focuses on P0 findings: template-injection and dangerous-triggers
+          advanced-security: true
+          config: .zizmor.yml
