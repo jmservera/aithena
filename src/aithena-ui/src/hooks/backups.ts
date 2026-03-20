@@ -170,7 +170,16 @@ export function useBackups(): UseBackupsReturn {
     });
   }, []);
 
-  return { backups, tierStatuses, loading, error, refresh, triggerBackup, triggerRestore, testRestore };
+  return {
+    backups,
+    tierStatuses,
+    loading,
+    error,
+    refresh,
+    triggerBackup,
+    triggerRestore,
+    testRestore,
+  };
 }
 
 export function tierHealthColor(tier: TierStatus): 'green' | 'yellow' | 'red' {

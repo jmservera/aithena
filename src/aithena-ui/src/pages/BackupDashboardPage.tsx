@@ -1,11 +1,6 @@
-import { useState, useMemo } from "react";
-import { useIntl, FormattedMessage } from "react-intl";
-import {
-  useBackups,
-  tierHealthColor,
-  formatBytes,
-  formatDuration,
-} from "../hooks/backups";
+import { useState, useMemo } from 'react';
+import { useIntl, FormattedMessage } from 'react-intl';
+import { useBackups, tierHealthColor, formatBytes, formatDuration } from '../hooks/backups';
 import type {
   BackupTier,
   BackupStatus,
@@ -13,10 +8,8 @@ import type {
   TierStatus,
   RestoreWizardStep,
   RestoreResult,
-} from "../hooks/backups";
-import "./BackupDashboardPage.css";
-
-/* ---------- helpers ---------- */
+} from '../hooks/backups';
+import './BackupDashboardPage.css';
 
 function StatusBadge({ status }: { status: BackupStatus }) {
   const intl = useIntl();
@@ -27,10 +20,8 @@ function StatusBadge({ status }: { status: BackupStatus }) {
   );
 }
 
-type SortKey = "timestamp" | "tier" | "status" | "size";
-type SortDir = "asc" | "desc";
-
-/* ---------- TierStatusPanel ---------- */
+type SortKey = 'timestamp' | 'tier' | 'status' | 'size';
+type SortDir = 'asc' | 'desc';
 
 function TierStatusPanel({ tiers }: { tiers: TierStatus[] }) {
   const intl = useIntl();
@@ -42,14 +33,10 @@ function TierStatusPanel({ tiers }: { tiers: TierStatus[] }) {
       <div
         className="tier-status-grid"
         role="list"
-        aria-label={intl.formatMessage({ id: "backup.tierStatus.aria" })}
+        aria-label={intl.formatMessage({ id: 'backup.tierStatus.aria' })}
       >
         {tiers.map((t) => (
-          <div
-            key={t.tier}
-            className={`tier-card health-${tierHealthColor(t)}`}
-            role="listitem"
-          >
+          <div key={t.tier} className={`tier-card health-${tierHealthColor(t)}`} role="listitem">
             <h4>
               <FormattedMessage id={`backup.tier.${t.tier}`} />
             </h4>
@@ -57,24 +44,18 @@ function TierStatusPanel({ tiers }: { tiers: TierStatus[] }) {
               <dt>
                 <FormattedMessage id="backup.tierStatus.lastBackup" />
               </dt>
-              <dd>{t.last_backup ?? "—"}</dd>
+              <dd>{t.last_backup ?? '\u2014'}</dd>
               <dt>
                 <FormattedMessage id="backup.tierStatus.age" />
               </dt>
               <dd>
-                {intl.formatMessage(
-                  { id: "backup.tierStatus.ageValue" },
-                  { hours: t.age_hours },
-                )}
+                {intl.formatMessage({ id: 'backup.tierStatus.ageValue' }, { hours: t.age_hours })}
               </dd>
               <dt>
                 <FormattedMessage id="backup.tierStatus.rpo" />
               </dt>
               <dd>
-                {intl.formatMessage(
-                  { id: "backup.tierStatus.rpoValue" },
-                  { hours: t.rpo_hours },
-                )}
+                {intl.formatMessage({ id: 'backup.tierStatus.rpoValue' }, { hours: t.rpo_hours })}
               </dd>
               <dt>
                 <FormattedMessage id="backup.tierStatus.size" />
@@ -88,15 +69,9 @@ function TierStatusPanel({ tiers }: { tiers: TierStatus[] }) {
   );
 }
 
-/* ---------- BackupNowPanel ---------- */
-
-function BackupNowPanel({
-  onBackup,
-}: {
-  onBackup: (tier: BackupTier) => Promise<void>;
-}) {
+function BackupNowPanel({ onBackup }: { onBackup: (tier: BackupTier) => Promise<void> }) {
   const intl = useIntl();
-  const [tier, setTier] = useState<BackupTier>("all");
+  const [tier, setTier] = useState<BackupTier>('all');
   const [running, setRunning] = useState(false);
 
   const handleBackup = async () => {
@@ -122,7 +97,7 @@ function BackupNowPanel({
           value={tier}
           onChange={(e) => setTier(e.target.value as BackupTier)}
         >
-          {(["all", "critical", "high", "medium"] as BackupTier[]).map((t) => (
+          {(['all', 'critical', 'high', 'medium'] as BackupTier[]).map((t) => (
             <option key={t} value={t}>
               {intl.formatMessage({ id: `backup.tier.${t}` })}
             </option>
@@ -132,7 +107,7 @@ function BackupNowPanel({
           className="backup-now-btn"
           onClick={handleBackup}
           disabled={running}
-          aria-label={intl.formatMessage({ id: "backup.backupNow.aria" })}
+          aria-label={intl.formatMessage({ id: 'backup.backupNow.aria' })}
         >
           {running ? (
             <FormattedMessage id="backup.backupNow.running" />
@@ -145,8 +120,6 @@ function BackupNowPanel({
   );
 }
 
-/* ---------- BackupHistoryTable ---------- */
-
 function BackupHistoryTable({
   backups,
   onRestore,
@@ -155,15 +128,15 @@ function BackupHistoryTable({
   onRestore: (entry: BackupEntry) => void;
 }) {
   const intl = useIntl();
-  const [sortKey, setSortKey] = useState<SortKey>("timestamp");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useState<SortKey>('timestamp');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortKey(key);
-      setSortDir("desc");
+      setSortDir('desc');
     }
   };
 
@@ -171,18 +144,17 @@ function BackupHistoryTable({
     const copy = [...backups];
     copy.sort((a, b) => {
       let cmp = 0;
-      if (sortKey === "timestamp")
-        cmp = a.timestamp.localeCompare(b.timestamp);
-      else if (sortKey === "tier") cmp = a.tier.localeCompare(b.tier);
-      else if (sortKey === "status") cmp = a.status.localeCompare(b.status);
-      else if (sortKey === "size") cmp = a.size - b.size;
-      return sortDir === "asc" ? cmp : -cmp;
+      if (sortKey === 'timestamp') cmp = a.timestamp.localeCompare(b.timestamp);
+      else if (sortKey === 'tier') cmp = a.tier.localeCompare(b.tier);
+      else if (sortKey === 'status') cmp = a.status.localeCompare(b.status);
+      else if (sortKey === 'size') cmp = a.size - b.size;
+      return sortDir === 'asc' ? cmp : -cmp;
     });
     return copy;
   }, [backups, sortKey, sortDir]);
 
   const arrow = (key: SortKey) =>
-    sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+    sortKey === key ? (sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
 
   return (
     <section className="backup-history-section">
@@ -196,25 +168,25 @@ function BackupHistoryTable({
       ) : (
         <table
           className="backup-history-table"
-          aria-label={intl.formatMessage({ id: "backup.history.aria" })}
+          aria-label={intl.formatMessage({ id: 'backup.history.aria' })}
         >
           <thead>
             <tr>
-              <th onClick={() => handleSort("timestamp")}>
+              <th onClick={() => handleSort('timestamp')}>
                 <FormattedMessage id="backup.history.headerTimestamp" />
-                {arrow("timestamp")}
+                {arrow('timestamp')}
               </th>
-              <th onClick={() => handleSort("tier")}>
+              <th onClick={() => handleSort('tier')}>
                 <FormattedMessage id="backup.history.headerTier" />
-                {arrow("tier")}
+                {arrow('tier')}
               </th>
-              <th onClick={() => handleSort("status")}>
+              <th onClick={() => handleSort('status')}>
                 <FormattedMessage id="backup.history.headerStatus" />
-                {arrow("status")}
+                {arrow('status')}
               </th>
-              <th onClick={() => handleSort("size")}>
+              <th onClick={() => handleSort('size')}>
                 <FormattedMessage id="backup.history.headerSize" />
-                {arrow("size")}
+                {arrow('size')}
               </th>
               <th>
                 <FormattedMessage id="backup.history.headerComponents" />
@@ -237,13 +209,13 @@ function BackupHistoryTable({
                 <td>{formatBytes(b.size)}</td>
                 <td>{b.components.length}</td>
                 <td>
-                  {b.status === "completed" && (
+                  {b.status === 'completed' && (
                     <button
                       className="restore-btn-small"
                       onClick={() => onRestore(b)}
                       aria-label={intl.formatMessage(
-                        { id: "backup.history.restoreLabel" },
-                        { timestamp: b.timestamp },
+                        { id: 'backup.history.restoreLabel' },
+                        { timestamp: b.timestamp }
                       )}
                     >
                       <FormattedMessage id="backup.history.restore" />
@@ -259,14 +231,7 @@ function BackupHistoryTable({
   );
 }
 
-/* ---------- RestoreWizard ---------- */
-
-const STEPS: RestoreWizardStep[] = [
-  "select",
-  "preview",
-  "confirm",
-  "progress",
-];
+const STEPS: RestoreWizardStep[] = ['select', 'preview', 'confirm', 'progress'];
 
 function RestoreWizard({
   entry,
@@ -276,15 +241,11 @@ function RestoreWizard({
 }: {
   entry: BackupEntry;
   onClose: () => void;
-  onRestore: (
-    req: { backup_id: string; components?: string[] },
-  ) => Promise<RestoreResult>;
-  onTestRestore: (
-    req: { backup_id: string; components?: string[] },
-  ) => Promise<RestoreResult>;
+  onRestore: (req: { backup_id: string; components?: string[] }) => Promise<RestoreResult>;
+  onTestRestore: (req: { backup_id: string; components?: string[] }) => Promise<RestoreResult>;
 }) {
   const intl = useIntl();
-  const [step, setStep] = useState<RestoreWizardStep>("select");
+  const [step, setStep] = useState<RestoreWizardStep>('select');
   const [result, setResult] = useState<RestoreResult | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -302,15 +263,15 @@ function RestoreWizard({
     try {
       const res = await onRestore({ backup_id: entry.id });
       setResult(res);
-      setStep("progress");
+      setStep('progress');
     } catch (err) {
       setResult({
-        status: "failed",
-        message: err instanceof Error ? err.message : "Restore failed",
+        status: 'failed',
+        message: err instanceof Error ? err.message : 'Restore failed',
         components_restored: [],
         duration_seconds: 0,
       });
-      setStep("progress");
+      setStep('progress');
     } finally {
       setBusy(false);
     }
@@ -321,15 +282,15 @@ function RestoreWizard({
     try {
       const res = await onTestRestore({ backup_id: entry.id });
       setResult(res);
-      setStep("progress");
+      setStep('progress');
     } catch (err) {
       setResult({
-        status: "failed",
-        message: err instanceof Error ? err.message : "Test restore failed",
+        status: 'failed',
+        message: err instanceof Error ? err.message : 'Test restore failed',
         components_restored: [],
         duration_seconds: 0,
       });
-      setStep("progress");
+      setStep('progress');
     } finally {
       setBusy(false);
     }
@@ -343,7 +304,7 @@ function RestoreWizard({
         if (e.target === e.currentTarget) onClose();
       }}
       onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
+        if (e.key === 'Escape') onClose();
       }}
     >
       <div className="restore-wizard" role="dialog" aria-modal="true">
@@ -351,16 +312,12 @@ function RestoreWizard({
           <FormattedMessage id="backup.restore.title" />
         </h3>
 
-        {/* Step indicator */}
         <nav
           className="restore-steps"
-          aria-label={intl.formatMessage({ id: "backup.restore.stepsAria" })}
+          aria-label={intl.formatMessage({ id: 'backup.restore.stepsAria' })}
         >
           {STEPS.map((s) => (
-            <div
-              key={s}
-              className={`restore-step${s === step ? " active" : ""}`}
-            >
+            <div key={s} className={`restore-step${s === step ? ' active' : ''}`}>
               <FormattedMessage
                 id={`backup.restore.step${s.charAt(0).toUpperCase() + s.slice(1)}`}
               />
@@ -368,8 +325,7 @@ function RestoreWizard({
           ))}
         </nav>
 
-        {/* Select step */}
-        {step === "select" && (
+        {step === 'select' && (
           <div className="restore-info">
             <p>
               <FormattedMessage id="backup.restore.selectDescription" />
@@ -393,8 +349,7 @@ function RestoreWizard({
           </div>
         )}
 
-        {/* Preview step */}
-        {step === "preview" && (
+        {step === 'preview' && (
           <div className="restore-info">
             <p>
               <FormattedMessage id="backup.restore.previewDescription" />
@@ -428,8 +383,7 @@ function RestoreWizard({
           </div>
         )}
 
-        {/* Confirm step */}
-        {step === "confirm" && (
+        {step === 'confirm' && (
           <div className="restore-info">
             <div className="restore-warning">
               <strong>
@@ -445,8 +399,7 @@ function RestoreWizard({
           </div>
         )}
 
-        {/* Progress / result step */}
-        {step === "progress" && (
+        {step === 'progress' && (
           <div className="restore-result">
             {busy && (
               <p>
@@ -476,47 +429,38 @@ function RestoreWizard({
           </div>
         )}
 
-        {/* Actions */}
         <div className="restore-actions">
-          {step !== "progress" && (
+          {step !== 'progress' && (
             <button className="restore-cancel-btn" onClick={onClose}>
               <FormattedMessage id="backup.restore.cancel" />
             </button>
           )}
-          {stepIndex > 0 && step !== "progress" && (
+          {stepIndex > 0 && step !== 'progress' && (
             <button className="restore-back-btn" onClick={goBack}>
               <FormattedMessage id="backup.restore.back" />
             </button>
           )}
-          {step === "select" && (
+          {step === 'select' && (
             <button className="restore-next-btn" onClick={goNext}>
               <FormattedMessage id="backup.restore.next" />
             </button>
           )}
-          {step === "preview" && (
+          {step === 'preview' && (
             <button className="restore-next-btn" onClick={goNext}>
               <FormattedMessage id="backup.restore.next" />
             </button>
           )}
-          {step === "confirm" && (
+          {step === 'confirm' && (
             <>
-              <button
-                className="restore-test-btn"
-                onClick={handleTest}
-                disabled={busy}
-              >
+              <button className="restore-test-btn" onClick={handleTest} disabled={busy}>
                 <FormattedMessage id="backup.restore.testRestore" />
               </button>
-              <button
-                className="restore-confirm-btn"
-                onClick={handleRestore}
-                disabled={busy}
-              >
+              <button className="restore-confirm-btn" onClick={handleRestore} disabled={busy}>
                 <FormattedMessage id="backup.restore.confirmRestore" />
               </button>
             </>
           )}
-          {step === "progress" && !busy && (
+          {step === 'progress' && !busy && (
             <button className="restore-done-btn" onClick={onClose}>
               {result ? (
                 <FormattedMessage id="backup.restore.done" />
@@ -530,8 +474,6 @@ function RestoreWizard({
     </div>
   );
 }
-
-/* ---------- Main page ---------- */
 
 export default function BackupDashboardPage() {
   const intl = useIntl();
@@ -558,7 +500,7 @@ export default function BackupDashboardPage() {
       <button
         className="backup-refresh-btn"
         onClick={refresh}
-        aria-label={intl.formatMessage({ id: "backup.refresh" })}
+        aria-label={intl.formatMessage({ id: 'backup.refresh' })}
       >
         <FormattedMessage id="backup.refresh" />
       </button>
@@ -571,10 +513,7 @@ export default function BackupDashboardPage() {
         <>
           <TierStatusPanel tiers={tierStatuses} />
           <BackupNowPanel onBackup={triggerBackup} />
-          <BackupHistoryTable
-            backups={backups}
-            onRestore={setRestoreTarget}
-          />
+          <BackupHistoryTable backups={backups} onRestore={setRestoreTarget} />
         </>
       )}
 
