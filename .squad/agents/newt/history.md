@@ -502,3 +502,18 @@ Comprehensive 3-tier approach covering 14+ pages across user, admin, and operati
 4. **LinkedIn format differs from blog format.** LinkedIn articles need: attention-grabbing opener with numbers, shorter paragraphs, clear section breaks, a forward-looking close, and relevant hashtags. The conversational tone works but needs to be slightly more professional than a personal blog. 1500-2000 words is the sweet spot.
 
 5. **Squad links should feel natural, not promotional.** The blog post includes 5 Squad links woven into relevant context (getting started → where the reader would actually need it, brownfield guide → where it solved the author's problem). Links placed at decision points in the narrative feel helpful rather than salesy.
+
+## 2026-03-21: LinkedIn Blog Post — Revision (Feedback Integration)
+
+**Task:** Revised the LinkedIn blog post (`/home/jmservera/source/linkedin-blog-post.md`) incorporating 5 feedback points from Juanma.
+
+**Changes Made:**
+1. **Automatic guideline capture:** Rewrote "instructions don't stick" section to show the full journey — early frustration → Ripley and Scribe automatically capturing decisions → team self-documenting.
+2. **Reskill / nap time:** Added to new "How the Team Got Smarter Over Time" section. Described pausing to let agents extract reusable patterns into `.squad/skills/`.
+3. **Ceremonies:** Added milestone kickoffs and retrospectives to the same continuous improvement section, linked to Squad ceremonies docs.
+4. **PRDs by the team:** Corrected to show Ripley/Newt drafted PRDs, Juanma reviewed. Moved into "What Worked Amazingly Well" section as "The team writes its own requirements."
+5. **Ralph:** Added dedicated "Ralph: The Autopilot" section with 3 paragraphs covering the work loop, lifecycle monitoring, and GitHub Issues integration.
+
+**Also updated:** Casting the Team (added Ralph + Scribe), Lessons section (restructured from 7→8, added "Let Ralph drive" and "Build in reflection"), Numbers section (added ~30 earned skills, noted PRDs written by team), What's Next (added "Ralph is watching the board").
+
+**Word count:** ~2756 (up from ~1700 original, within the 2000-2500+ range for a LinkedIn article with 5 major additions).
