@@ -12,6 +12,7 @@ FACET_FIELDS: dict[str, tuple[str, ...]] = {
     "category": ("category_s",),
     "year": ("year_i",),
     "language": ("language_detected_s", "language_s"),
+    "series": ("series_s",),
 }
 
 SOLR_FIELD_LIST = [
@@ -22,6 +23,7 @@ SOLR_FIELD_LIST = [
     "category_s",
     "language_detected_s",
     "language_s",
+    "series_s",
     "file_path_s",
     "folder_path_s",
     "page_count_i",
@@ -228,6 +230,7 @@ def normalize_book(
         "year": document.get("year_i"),
         "category": document.get("category_s"),
         "language": document.get("language_detected_s") or document.get("language_s"),
+        "series": document.get("series_s"),
         "file_path": document.get("file_path_s"),
         "folder_path": document.get("folder_path_s"),
         "page_count": document.get("page_count_i"),

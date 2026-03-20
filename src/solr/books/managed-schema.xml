@@ -488,6 +488,7 @@
   <field name="category_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="file_size_l" type="plong" multiValued="false" indexed="true" stored="true"/>
   <field name="language_detected_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="series_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <!-- Phase 3 chunk + embedding fields (ADR-001) -->
   <field name="parent_id_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="chunk_index_i" type="pint" multiValued="false" indexed="true" stored="true"/>

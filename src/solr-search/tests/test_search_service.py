@@ -10,6 +10,7 @@ from search_service import (  # noqa: E402
     build_inline_content_disposition,
     build_pagination,
     build_solr_params,
+    build_sort_clause,
     decode_document_token,
     encode_document_token,
     normalize_book,
@@ -41,6 +42,7 @@ def test_build_solr_params_adds_pagination_sort_facets_and_highlights() -> None:
         "year_i",
         "language_detected_s",
         "language_s",
+        "series_s",
     ]
     assert params["hl.fl"] == "content,_text_"
 
@@ -67,6 +69,7 @@ def test_parse_facet_counts_prefers_detected_language_buckets() -> None:
                 "year_i": [1901, 1],
                 "language_detected_s": ["ca", 3],
                 "language_s": ["en", 2],
+                "series_s": ["Foundation", 5],
             }
         }
     }
@@ -77,6 +80,7 @@ def test_parse_facet_counts_prefers_detected_language_buckets() -> None:
     assert facets["category"] == [{"value": "Folklore", "count": 4}]
     assert facets["year"] == [{"value": 1901, "count": 1}]
     assert facets["language"] == [{"value": "ca", "count": 3}]
+    assert facets["series"] == [{"value": "Foundation", "count": 5}]
 
 
 def test_build_filter_queries_supports_language_fallback_and_exact_matches() -> None:
@@ -89,6 +93,82 @@ def test_build_filter_queries_supports_language_fallback_and_exact_matches() -> 
     ]
 
 
+def test_build_filter_queries_supports_series_filter() -> None:
+    filters = build_filter_queries({"series": "Foundation"})
+
+    assert filters == ["series_s:Foundation"]
+
+
+def test_build_sort_clause_title_asc() -> None:
+    result = build_sort_clause(sort="title asc")
+    assert result == "title_s asc"
+
+
+def test_build_sort_clause_year_desc() -> None:
+    result = build_sort_clause(sort="year desc")
+    assert result == "year_i desc"
+
+
+def test_build_sort_clause_invalid_format() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="Unsupported sort value"):
+        build_sort_clause(sort="invalid")
+
+
+def test_parse_facet_counts_series_empty_bucket() -> None:
+    """Series facet returns empty list when Solr returns an empty bucket."""
+    payload = {
+        "facet_counts": {
+            "facet_fields": {
+                "author_s": ["Author One", 2],
+                "category_s": [],
+                "year_i": [],
+                "language_detected_s": [],
+                "language_s": [],
+                "series_s": [],
+            }
+        }
+    }
+
+    facets = parse_facet_counts(payload)
+    assert facets["series"] == []
+
+
+def test_parse_facet_counts_series_absent_from_response() -> None:
+    """Series facet returns empty list when series_s is absent from the Solr response."""
+    payload = {
+        "facet_counts": {
+            "facet_fields": {
+                "author_s": ["Author One", 2],
+                "category_s": [],
+                "year_i": [],
+                "language_detected_s": [],
+                "language_s": [],
+            }
+        }
+    }
+
+    facets = parse_facet_counts(payload)
+    assert facets["series"] == []
+
+
+def test_normalize_book_series_none_when_absent() -> None:
+    book = normalize_book(
+        {
+            "id": "doc_no_series",
+            "title_s": "Standalone Book",
+            "author_s": "Author",
+            "file_path_s": "books/standalone.pdf",
+            "score": 5.0,
+        },
+        {},
+        None,
+    )
+
+    assert book["series"] is None
+
+
 def test_normalize_book_collects_fields_and_highlights() -> None:
     book = normalize_book(
         {
@@ -98,6 +178,7 @@ def test_normalize_book_collects_fields_and_highlights() -> None:
             "year_i": 1950,
             "category_s": "Folklore",
             "language_s": "ca",
+            "series_s": "Catalan Tales",
             "file_path_s": "amades/rondalles.pdf",
             "folder_path_s": "amades",
             "page_count_i": 320,
@@ -120,6 +201,7 @@ def test_normalize_book_collects_fields_and_highlights() -> None:
         "year": 1950,
         "category": "Folklore",
         "language": "ca",
+        "series": "Catalan Tales",
         "file_path": "amades/rondalles.pdf",
         "folder_path": "amades",
         "page_count": 320,
