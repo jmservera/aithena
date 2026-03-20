@@ -555,3 +555,40 @@ Established priority ordering, wave plan, critical path analysis, and agent load
 **Milestone:** v1.10.0  
 **Decision:** Written to .squad/decisions.md  
 **References:** Orchestration log at .squad/orchestration-log/2026-03-20T12-07-ripley-kickoff.md
+
+## 2026-03-20T15:48Z — v1.10.0 Mid-Milestone Retrospective (Wave 0 + Wave 1)
+
+**Context:** Facilitated retrospective covering Wave 0 (bug fixes) and Wave 1 (foundations). Triggered by PR #700 PO rejection, PR #701 critical review catch, cross-branch contamination incidents, and PO intervention on debugging methodology.
+
+**Key Findings:**
+
+1. **PR #700 rejection was the defining moment.** Parker's approach to silently degrade semantic search to keyword search would have masked two real bugs (kNN field name mismatch + URI too large). PO rightly rejected it. The fix was only found when actual Solr error logs were read — basic debugging that should have happened first.
+
+2. **PR #701 near-miss was the scariest incident.** Excluding chunks from kNN queries would have completely broken semantic search. Copilot review caught it, but this gap in domain understanding (embeddings live on chunks, not parents) should have been prevented by documentation.
+
+3. **Cross-branch contamination is a workflow bug, not a people bug.** Agents branching from a polluted local working tree instead of `origin/dev` is a systemic issue. Fixed with mandatory `git checkout -b <branch> origin/dev` rule.
+
+4. **Wave 1 showed real improvement.** 10 PRs merged with normal review cycles. Team internalized Wave 0 lessons. Coverage threshold caught a genuine gap.
+
+**Decisions Made (5):**
+- Branch hygiene: always branch from `origin/dev`
+- Bug fixes require reproduction evidence before PR
+- No silent degradation of user-visible behavior without Lead/PO approval
+- Pre-PR self-review checklist (scope, security, data model, error handling, tests)
+- Data model documentation required (starting with parent/chunk relationship)
+
+**Action Items (8):** R1-R8 assigned to Ripley, Ash, Lambert, Brett. R1-R6 must complete before Wave 2 starts.
+
+**Grade:** C+ for Wave 0, B+ for Wave 1. Target A- for Wave 2.
+
+**Artifacts:**
+- Retrospective log: `.squad/log/2026-03-20T15-48-retrospective.md`
+- Decisions: `.squad/decisions/inbox/ripley-retrospective.md`
+
+## Learnings
+
+- **"Fix the symptom" is the default agent behavior under time pressure.** Without explicit process guardrails (reproduction evidence, root cause analysis), agents will gravitate toward making errors disappear rather than understanding why they happen. The PO's "scientific method" directive must be encoded in the workflow, not left as verbal guidance.
+- **Domain knowledge gaps are invisible until they cause damage.** The parent/chunk document relationship is fundamental to the search system, but no agent documented it. Documentation of critical data model relationships must be treated as a first-class deliverable, not an afterthought.
+- **Cross-branch contamination in shared repos needs mechanical prevention.** Telling agents "be careful with branches" doesn't work. The rule must be: always branch from `origin/dev`, verify clean working tree, never branch from local state. This is a process fix, not a training fix.
+- **Review iteration count is a leading indicator of submission quality.** 4-5 review rounds means the PR wasn't ready when submitted. A self-review checklist should cut this to 1-2 rounds for most PRs.
+- **Wave-based execution with retrospectives works.** Wave 0 was rough; Wave 1 was significantly better. The improvement came from the team internalizing lessons. Formalizing those lessons into process ensures they persist.
