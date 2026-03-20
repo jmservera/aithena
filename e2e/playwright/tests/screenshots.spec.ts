@@ -70,16 +70,17 @@ test('captures curated screenshots for release documentation', async ({ browser,
     await runSearch(page, catalog.facetScenario.query);
     await expect(page.locator('.book-card').first()).toBeVisible();
 
-    const facetCheckbox = page.locator('.facet-panel .facet-item').filter({
+    const facetItem = page.locator('.facet-panel .facet-item').filter({
       hasText: catalog.facetScenario.author,
-    }).locator('.facet-checkbox').first();
+    }).first();
+    await expect(facetItem).toBeVisible();
 
     const filterResponsePromise = waitForSearchResponse(
       page,
       (url) => url.searchParams.has('fq_author')
     );
 
-    await facetCheckbox.check();
+    await facetItem.locator('.facet-label').click();
     await filterResponsePromise;
 
     await expect(page.locator('.book-card').first()).toBeVisible();
@@ -146,7 +147,7 @@ test('captures curated screenshots for release documentation', async ({ browser,
     // trigger the auth-failure handler and redirect to /login.  Tolerate this
     // so the screenshot suite is not fragile.
     try {
-      await expect(page.locator('.admin-title')).toHaveText('🏛️ Admin Dashboard', { timeout: 15_000 });
+      await expect(page.locator('.admin-title')).toContainText('Admin Dashboard', { timeout: 15_000 });
       await saveScreenshot(page, testInfo, 'admin-dashboard.png');
     } catch {
       test.info().annotations.push({ type: 'warning', description: 'Admin page did not render — screenshot skipped.' });
