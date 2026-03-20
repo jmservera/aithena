@@ -622,3 +622,17 @@ src/aithena-ui/src/
 - Installed eslint-plugin-jsx-a11y and integrated into ESLint flat config
 
 **Key takeaway:** Static analysis with eslint-plugin-jsx-a11y catches many issues (redundant roles, missing keyboard handlers) but cannot detect color contrast or focus management problems. A headless audit covers ~70% of WCAG issues; the remaining 30% (keyboard flow, screen reader announcements, visual contrast) requires a running browser with axe DevTools.
+
+### 2026 — E2E Fix: Emoji rendering + facet checkbox race condition (PR #638)
+
+**Problem:** Two E2E Playwright failures blocking v1.9.1 release merge:
+1. `navigation.spec.ts:18` — `toHaveText("📖 Library")` fails in headless Chromium because emojis render as whitespace without font support
+2. `screenshots.spec.ts:32` — `facetCheckbox.check()` fails with "did not change its state" due to React controlled component timing
+
+**Fix:**
+- Switched all emoji-containing text assertions from `toHaveText` (exact) to `toContainText` (substring) with text-only values — applies to Library, System Status, Collection Stats, and Admin Dashboard titles
+- Replaced `.facet-checkbox` + `.check()` with `.facet-label` + `.click()` to match the working pattern in search.spec.ts; added explicit visibility wait on the facet item before interaction
+
+**Key takeaways:**
+- Headless Chromium lacks emoji font support — never use exact emoji matching in E2E assertions. Use `toContainText` with the text portion only.
+- Playwright's `.check()` expects native checkbox toggle semantics. For React controlled checkboxes where state is managed via onChange handlers, prefer clicking the label element instead.
