@@ -68,4 +68,54 @@ describe('validateBatchField', () => {
     const result2 = validateBatchField('title', 'test');
     expect(result1).toBe(result2);
   });
+
+  // --- Enhanced tests: boundary values, concurrent scenarios, error recovery ---
+
+  it('accepts title at exactly 255 characters', () => {
+    expect(validateBatchField('title', 'x'.repeat(255))).toBeUndefined();
+  });
+
+  it('accepts author at exactly 255 characters', () => {
+    expect(validateBatchField('author', 'x'.repeat(255))).toBeUndefined();
+  });
+
+  it('accepts category at exactly 100 characters', () => {
+    expect(validateBatchField('category', 'x'.repeat(100))).toBeUndefined();
+  });
+
+  it('accepts series at exactly 100 characters', () => {
+    expect(validateBatchField('series', 'x'.repeat(100))).toBeUndefined();
+  });
+
+  it('accepts year boundary 1000', () => {
+    expect(validateBatchField('year', '1000')).toBeUndefined();
+  });
+
+  it('accepts year boundary 2099', () => {
+    expect(validateBatchField('year', '2099')).toBeUndefined();
+  });
+
+  it('rejects year with leading zeros as non-integer string', () => {
+    // '0999' → Number('0999') === 999 which is below min
+    expect(validateBatchField('year', '0999')).toBeDefined();
+  });
+
+  it('rejects negative year', () => {
+    expect(validateBatchField('year', '-1')).toBeDefined();
+  });
+
+  it('accepts title with special characters', () => {
+    expect(validateBatchField('title', "L'Étranger — A Novel (2nd ed.)")).toBeUndefined();
+  });
+
+  it('accepts author with unicode characters', () => {
+    expect(validateBatchField('author', 'José García Márquez')).toBeUndefined();
+  });
+
+  it('validates each field independently', () => {
+    // Valid title, but would fail if tested as category (at 101 chars)
+    const longButValidTitle = 'x'.repeat(101);
+    expect(validateBatchField('title', longButValidTitle)).toBeUndefined();
+    expect(validateBatchField('category', longButValidTitle)).toMatch(/100/);
+  });
 });

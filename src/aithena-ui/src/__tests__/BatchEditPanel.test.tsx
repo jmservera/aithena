@@ -189,4 +189,124 @@ describe('BatchEditPanel', () => {
       expect(screen.getByText(/1 failed/)).toBeInTheDocument();
     });
   });
+
+  // --- Enhanced tests for validation, errors, and series editing ---
+
+  it('shows validation error for invalid year', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    // Enable the year toggle (index 2: title=0, author=1, year=2)
+    const checkboxes = screen.getAllByRole('checkbox');
+    await user.click(checkboxes[2]);
+
+    // Type an invalid year
+    const yearInput = screen.getByRole('spinbutton');
+    await user.type(yearInput, '999');
+
+    await waitFor(() => {
+      expect(screen.getByText(/1000/)).toBeInTheDocument();
+    });
+  });
+
+  it('keeps submit disabled when enabled field has validation error', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    // Enable year
+    const checkboxes = screen.getAllByRole('checkbox');
+    await user.click(checkboxes[2]);
+
+    const yearInput = screen.getByRole('spinbutton');
+    await user.type(yearInput, '2100');
+
+    await waitFor(() => {
+      const submitBtn = screen.getByRole('button', { name: /apply changes/i });
+      expect(submitBtn).toBeDisabled();
+    });
+  });
+
+  it('shows error alert on network failure', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ facets: { category: [], series: [] } }),
+      } as Response)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    renderPanel();
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    await user.click(checkboxes[0]);
+
+    await user.click(screen.getByRole('button', { name: /apply changes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  it('can enable and use the series field', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          facets: { category: ['Science'], series: ['Foundation', 'Dune'] },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ matched: 2, updated: 2, failed: 0, errors: [] }),
+      } as Response);
+
+    const onSaved = vi.fn();
+    renderPanel({ onSaved });
+
+    // Enable series toggle (index 4: title=0, author=1, year=2, category=3, series=4)
+    const checkboxes = screen.getAllByRole('checkbox');
+    await user.click(checkboxes[4]);
+
+    // The submit button should now be enabled
+    const submitBtn = screen.getByRole('button', { name: /apply changes/i });
+    await waitFor(() => {
+      expect(submitBtn).toBeEnabled();
+    });
+
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('does not call onSaved when API returns non-ok status', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ facets: { category: [], series: [] } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        text: async () => 'Validation error',
+      } as Response);
+
+    renderPanel({ onSaved });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    await user.click(checkboxes[0]);
+    await user.click(screen.getByRole('button', { name: /apply changes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+    expect(onSaved).not.toHaveBeenCalled();
+  });
 });
