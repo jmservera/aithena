@@ -2031,7 +2031,8 @@ def _batch_apply_updates(
             errors.append({"document_id": doc_id, "error": exc.detail})
         except Exception as exc:
             failed += 1
-            errors.append({"document_id": doc_id, "error": str(exc)})
+            logger.error("batch_update_error", extra={"doc_id": doc_id, "error": str(exc)})
+            errors.append({"document_id": doc_id, "error": "Internal error updating document"})
 
     return {
         "matched": matched,
