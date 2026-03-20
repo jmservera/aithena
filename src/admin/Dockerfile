@@ -9,10 +9,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+COPY src/admin/pyproject.toml src/admin/uv.lock ./
 RUN uv sync --frozen --no-dev --native-tls
 
-COPY src ./src
+COPY src/admin/src ./src
 
 # ---------- runtime stage ----------
 FROM python:3.12-slim AS runtime
