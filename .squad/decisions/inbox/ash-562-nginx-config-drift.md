@@ -20,10 +20,10 @@ The nginx `default.conf` file was out of sync with `default.conf.template`:
 **Nginx template file (`default.conf.template`) is the source of truth.**
 
 ### Guidelines:
-1. **Always edit** `default.conf.template`, not `default.conf` directly
-2. **Regenerate** `default.conf` from template during build/deployment
-3. **Review PRs** carefully when both files change — ensure they stay in sync
-4. **Add to build process**: Generate `default.conf` from template with envsubst or similar tool (if not already done)
+1. **Always edit both** `default.conf` and `default.conf.template` together — they must stay in sync
+2. `default.conf` is the runtime config mounted directly by docker-compose.yml
+3. `default.conf.template` is used for SSL/envsubst builds (docker-compose.ssl.yml)
+4. There is no automated generation step — both files must be manually maintained in sync
 
 ### Why this matters:
 - Nginx config drift causes hard-to-debug production issues (like 502s)
