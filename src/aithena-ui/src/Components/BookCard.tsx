@@ -43,6 +43,10 @@ const BookCard = memo(function BookCard({
 
   const showMenu = Boolean((isAdmin && onEditMetadata) || onSaveToCollection);
 
+  const handleToggleSelect = useCallback(() => {
+    onToggleSelect?.(book.id);
+  }, [book.id, onToggleSelect]);
+
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((prev) => !prev);
   }, []);
@@ -88,10 +92,6 @@ const BookCard = memo(function BookCard({
   const handleOpenPdf = useCallback(() => {
     onOpenPdf?.(book);
   }, [book, onOpenPdf]);
-
-  const handleToggleSelect = useCallback(() => {
-    onToggleSelect?.(book.id);
-  }, [book.id, onToggleSelect]);
 
   return (
     <article
