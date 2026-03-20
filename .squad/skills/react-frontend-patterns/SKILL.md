@@ -3,15 +3,15 @@ name: "react-frontend-patterns"
 description: "React/TypeScript component and hook patterns for the aithena UI"
 domain: "frontend, react, typescript"
 confidence: "high"
-source: "earned — verified from aithena-ui codebase (2026-03-15 reskill)"
+source: "earned — verified from aithena-ui codebase (reskill 2026-03-20)"
 author: "Dallas"
 created: "2026-03-15"
-last_validated: "2026-03-15"
+last_validated: "2026-03-20"
 ---
 
 ## Overview
 
-Aithena UI uses React 18 + TypeScript + Vite with a consistent pattern library: custom hooks manage state/data-fetching, presentational components consume hook results, and global CSS styles all interactions.
+Aithena UI uses React 19 + TypeScript + Vite 8 with a consistent pattern library: custom hooks manage state/data-fetching, presentational components consume hook results, and global CSS (BEM) + emerging CSS Modules style all interactions. Lucide React provides accessible SVG icons.
 
 ## Component Patterns
 
@@ -254,50 +254,47 @@ export function useSearch() {
 
 ### Responsive Design
 
-- Flexbox throughout.
-- Mobile-first approach not heavily emphasized (project focuses on desktop/library use).
-- Use `flex-wrap`, `gap`, and `min-width: 0` for flex children to prevent overflow.
+- Use `repeat(auto-fill, minmax(280px, 1fr))` for responsive grids (never fixed column counts).
+- `min-width: 0` + `overflow: hidden` on grid/flex children to prevent overflow.
+- `overflow-wrap: anywhere` on long text content.
+- CSS Modules emerging for isolated components (Footer.module.css, LoadingSpinner.module.css).
+- Mobile navigation needs hamburger toggle + i18n labels.
 
 ## File Organization
 
 ```
 aithena-ui/src/
-├── App.tsx
-├── App.css
-├── main.tsx
-├── api.ts
-├── Components/
-│   ├── BookCard.tsx
-│   ├── FacetPanel.tsx
-│   ├── ActiveFilters.tsx
-│   ├── Pagination.tsx
-│   ├── PdfViewer.tsx
-│   ├── TabNav.tsx
-│   ├── IndexingStatus.tsx
-│   ├── CollectionStats.tsx
-│   └── types/
-├── hooks/
-│   ├── search.ts
-│   ├── status.ts
-│   ├── stats.ts
-│   └── chat.ts, input.ts (legacy)
-└── pages/
-    ├── SearchPage.tsx
-    ├── LibraryPage.tsx
-    ├── StatusPage.tsx
-    └── StatsPage.tsx
+├── App.tsx, App.css, main.tsx, api.ts
+├── Components/     (~30 presentational: BookCard, FacetPanel, PdfViewer, ErrorBoundary,
+│                    SimilarBooks, LanguageSwitcher, FolderFacetTree, SkeletonCard,
+│                    SkeletonFacetPanel, EmptyState, ErrorState, LoadingSpinner, Footer,
+│                    AdminRoute, ProtectedRoute, FilterChip, ActiveFilters, Pagination,
+│                    TabNav, CollectionStats, IndexingStatus, List)
+├── hooks/          (11: search, status, stats, library, upload, admin, users,
+│                    similarBooks, useSearchState, chat, input)
+├── pages/          (9: Search, Library, Upload, Status, Stats, Login, Admin,
+│                    Profile, UserManagement, ChangePassword)
+├── contexts/       (AuthContext — cookie-based auth, I18nContext — locale management)
+├── locales/        (en.json, es.json, ca.json, fr.json — ~260 keys each)
+└── __tests__/      (31 test files, Vitest + RTL)
 ```
 
 ## Routing
 
-Uses `react-router-dom` v7.13.1:
+Uses `react-router-dom` v7.13.1 with 9 routes:
 
 ```typescript
 <BrowserRouter>
   <Routes>
     <Route path="/" element={<Navigate to="/search" />} />
     <Route path="/search" element={<SearchPage />} />
+    <Route path="/library" element={<LibraryPage />} />
+    <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
     <Route path="/status" element={<StatusPage />} />
+    <Route path="/stats" element={<StatsPage />} />
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+    <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
   </Routes>
 </BrowserRouter>
 ```
@@ -306,6 +303,8 @@ Uses `react-router-dom` v7.13.1:
 - Tab navigation lives in app header (component: `TabNav`).
 - Active tab indicator via CSS class.
 - Route components are pages in `src/pages/`.
+- Auth-gated routes use `ProtectedRoute` or `AdminRoute` wrapper components.
+- BrowserRouter in `main.tsx` so top-level `RouteErrorBoundary` can access `useLocation()`.
 
 ## API Integration
 
@@ -377,8 +376,10 @@ const url = book.document_url?.trim() ?? null;
 {
   "dev": "vite",
   "build": "tsc && vite build",
-  "lint": "eslint . --max-warnings 0",
-  "format": "prettier --write ."
+  "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+  "format": "prettier --write .",
+  "format:check": "prettier --check .",
+  "test": "vitest run"
 }
 ```
 
@@ -393,9 +394,11 @@ npm run lint
 
 ### Testing
 
-- **Framework:** Vitest + React Testing Library
-- **Test files:** `*.test.ts` / `*.test.tsx`
-- **Status:** No test script yet; to be added in Phase 3+
+- **Framework:** Vitest 4.x + React Testing Library + jsdom
+- **Test files:** `*.test.ts` / `*.test.tsx` in `src/__tests__/`
+- **Test script:** `npm test` (vitest run)
+- **Coverage:** `@vitest/coverage-v8` available
+- **See skill:** `vitest-testing-patterns` for detailed testing patterns
 
 ## Anti-Patterns
 
@@ -405,8 +408,10 @@ npm run lint
 - **Don't use dangerouslySetInnerHTML without sanitization** — XSS risk
 - **Don't add CSS-in-JS libraries** — keep global CSS
 - **Don't forget to reset pagination when query/filters change**
-- **Don't rely on Bootstrap classes** — installed but unused
+- **Don't rely on Bootstrap classes** — installed but unused; consider removing
 - **Don't mix state management strategies** — use hooks for all state
+- **Don't use exact emoji matching in tests** — headless Chromium lacks emoji font support
+- **Don't use `__dirname` in Vite config** — use `dirname(fileURLToPath(import.meta.url))`
 
 ## References
 
