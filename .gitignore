@@ -179,3 +179,9 @@ llama-base/
 tests/stress/results/*
 !tests/stress/results/.gitkeep
 
+# Stress test generated data
+tests/stress/test_data/
+
+# Stress test virtualenv
+tests/stress/.venv/
+

@@ -81,10 +81,12 @@ python tests/stress/monitor.py --interval 2 --output-dir tests/stress/results --
 ```
 tests/stress/
 ├── conftest.py               # Shared fixtures (Docker Compose lifecycle, URLs, helpers)
+├── generate_test_data.py     # Synthetic PDF/EPUB generator
 ├── monitor.py                # Docker resource monitoring collector
 ├── pytest.ini                # pytest configuration for stress tests
 ├── requirements-stress.txt   # Python dependencies
 ├── README.md                 # This file
+├── test_generate_test_data.py # Tests for the data generator
 └── results/                  # Output directory (gitignored)
     └── .gitkeep
 ```
@@ -93,12 +95,31 @@ Future test files (Phase 2+):
 
 ```
 tests/stress/
-├── generate_test_data.py     # Synthetic PDF/EPUB generator
 ├── test_indexing.py           # Indexing pipeline benchmarks
 ├── test_search_latency.py    # Search latency curves
 ├── test_concurrent.py         # Concurrent user simulation
 └── locustfile.py             # Locust user definitions
 ```
+
+## Synthetic Test Data Generator
+
+Generate deterministic PDF and EPUB files for stress testing:
+
+```bash
+# Generate 50 PDFs with default seed
+python generate_test_data.py --count 50 --type pdf
+
+# Generate EPUBs with a specific seed
+python generate_test_data.py --count 100 --type epub --seed 99
+
+# Use batch presets (small=50, medium=500, large=2000 docs)
+python generate_test_data.py --batch medium --type pdf
+
+# Custom output directory
+python generate_test_data.py --count 10 --type pdf --output /tmp/test_data
+```
+
+Output is written to `tests/stress/test_data/` by default (gitignored).
 
 ## Results Output
 
