@@ -123,10 +123,14 @@ class CollectorResult:
                 "memory_avg_mb": round(sum(mems) / len(mems), 2) if mems else 0,
                 "memory_peak_mb": round(max(mems), 2) if mems else 0,
                 "memory_limit_mb": round(samples[-1].memory_limit_mb, 2) if samples else 0,
-                "net_rx_bytes_total": samples[-1].net_rx_bytes if samples else 0,
-                "net_tx_bytes_total": samples[-1].net_tx_bytes if samples else 0,
-                "block_read_bytes_total": samples[-1].block_read_bytes if samples else 0,
-                "block_write_bytes_total": samples[-1].block_write_bytes if samples else 0,
+                "net_rx_bytes_session": samples[-1].net_rx_bytes - samples[0].net_rx_bytes if len(samples) > 1 else 0,
+                "net_tx_bytes_session": samples[-1].net_tx_bytes - samples[0].net_tx_bytes if len(samples) > 1 else 0,
+                "block_read_bytes_session": (
+                    samples[-1].block_read_bytes - samples[0].block_read_bytes if len(samples) > 1 else 0
+                ),
+                "block_write_bytes_session": (
+                    samples[-1].block_write_bytes - samples[0].block_write_bytes if len(samples) > 1 else 0
+                ),
             }
 
         # Collect service-specific metrics summaries
@@ -194,8 +198,8 @@ def _calculate_network_io(stats: dict) -> tuple[int, int]:
 def _calculate_block_io(stats: dict) -> tuple[int, int]:
     """Return (read_bytes, write_bytes) from block I/O stats."""
     bio = stats.get("blkio_stats", {}).get("io_service_bytes_recursive", []) or []
-    read_bytes = sum(entry.get("value", 0) for entry in bio if entry.get("op") == "read")
-    write_bytes = sum(entry.get("value", 0) for entry in bio if entry.get("op") == "write")
+    read_bytes = sum(entry.get("value", 0) for entry in bio if entry.get("op", "").lower() == "read")
+    write_bytes = sum(entry.get("value", 0) for entry in bio if entry.get("op", "").lower() == "write")
     return read_bytes, write_bytes
 
 
@@ -376,7 +380,9 @@ class DockerStatsCollector:
     ):
         self.interval = interval
         self.output_dir = Path(output_dir)
-        self.label = label
+        import re
+
+        self.label = re.sub(r"[^A-Za-z0-9._-]", "_", label)
         self.compose_project = compose_project
         self.collect_service_metrics = collect_service_metrics
 
@@ -439,7 +445,9 @@ class DockerStatsCollector:
             len(self._result.samples) if self._result else 0,
             len(oom_events),
         )
-        return self._result  # type: ignore[return-value]
+        if self._result is None:
+            raise RuntimeError("Collector was never started or start() failed before recording results")
+        return self._result
 
     def summary(self) -> dict:
         """Return the aggregated summary. Call after stop()."""

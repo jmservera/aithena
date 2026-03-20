@@ -109,18 +109,29 @@ def compose_up() -> Generator[None, None, None]:
     """
     Ensure the Docker Compose stack is running for the test session.
 
-    If the stack is already running, this is a no-op.  Otherwise it brings
+    If ALL expected services are running, this is a no-op.  Otherwise it brings
     the stack up and waits for health checks to pass.  The stack is NOT
     torn down after tests (operator is expected to manage lifecycle).
     """
+    # Check if all services (not just any) are running
     try:
+        expected = subprocess.run(  # noqa: S603
+            _compose_cmd("config", "--services"),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        expected_count = len(expected.stdout.strip().splitlines()) if expected.stdout.strip() else 0
+
         result = subprocess.run(  # noqa: S603
             _compose_cmd("ps", "--status=running", "-q"),
             capture_output=True,
             text=True,
             timeout=30,
         )
-        if result.stdout.strip():
+        running_count = len(result.stdout.strip().splitlines()) if result.stdout.strip() else 0
+
+        if expected_count > 0 and running_count >= expected_count:
             yield
             return
     except (subprocess.SubprocessError, FileNotFoundError):
@@ -191,7 +202,7 @@ def docker_monitor(results_dir: Path):
                 pass
             summary = monitor.summary()
     """
-    from tests.stress.monitor import DockerStatsCollector
+    from monitor import DockerStatsCollector
 
     class _MonitorContext:
         def __init__(self, label: str):
