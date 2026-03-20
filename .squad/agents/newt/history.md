@@ -215,3 +215,123 @@
 
 **Reskill Completed:** 2026-03-21  
 **Next Review:** v1.8.0 release (screenshot pipeline + i18n translation work)
+## 2026-03-19: Docs Folder Restructure (PR #541)
+
+**Task:** Execute Ripley's approved docs folder restructure per .squad/decisions.md proposal.
+
+**Deliverables:**
+- PR #541 (squad/docs-restructure branch)
+- Reorganized docs/ folder with 3 subdirectories:
+  - `docs/release-notes/` — 12 versioned release notes (v0.10.0–v1.7.0)
+  - `docs/test-reports/` — 14 versioned test reports (v0.4.0–v1.7.0)
+  - `docs/guides/` — 5 feature/operational guides (frontend-performance, i18n, monitoring, observability, v1-readiness-checklist)
+
+**Changes Made:**
+
+1. **File Moves (31 files via git mv)**
+   - Release notes: `docs/release-notes-vX.Y.Z.md` → `docs/release-notes/vX.Y.Z.md`
+   - Test reports: `docs/test-report-vX.Y.Z.md` → `docs/test-reports/vX.Y.Z.md`
+   - Guides: 5 files moved to `docs/guides/`
+
+2. **Link Updates**
+   - user-manual.md line 3: `release-notes-v1.4.0.md` → `release-notes/v1.4.0.md`
+   - admin-manual.md line 3: `release-notes-v1.7.0.md` → `release-notes/v1.7.0.md`
+   - admin-manual.md line 499: `monitoring.md` → `guides/monitoring.md`
+
+3. **Image References**
+   - Mapped 6 existing images: `screenshots/X.png` → `images/X.png`
+     - search-empty → search-page.png
+     - search-results-page → search-results.png
+     - pdf-viewer → pdf-viewer.png
+     - stats-page → stats-tab.png
+     - status-page → status-tab.png
+     - search-faceted → facet-panel.png
+   - Added TODO comments for 4 missing screenshots (login-page, similar-books, admin-dashboard, upload-page)
+
+4. **Cross-References**
+   - Updated 7 release notes (v1.0.0, v1.2.0, v1.3.0, v1.4.0, v1.5.0, v1.6.0, v1.7.0) with correct paths
+   - Updated v1-readiness-checklist.md table with new paths for 8 entries
+
+5. **Workflow Updates**
+   - .github/workflows/release-docs.yml updated with new output paths:
+     - `docs/release-notes/v${VERSION}.md` instead of `docs/release-notes-v${VERSION}.md`
+     - `docs/test-reports/v${VERSION}.md` instead of `docs/test-report-v${VERSION}.md`
+     - Updated 8 references in the workflow
+
+**Process:**
+1. Checked out dev, created squad/docs-restructure branch
+2. Created target directories (mkdir -p)
+3. Used git mv for all 31 files to preserve history
+4. Updated 3 manual links
+5. Updated 10 image references (6 mapped, 4 TODO)
+6. Fixed 7 release notes with correct internal paths
+7. Fixed v1-readiness-checklist paths (8 entries)
+8. Updated release-docs.yml workflow (7 references)
+9. Committed all changes with descriptive message including Co-authored-by
+10. Pushed and created PR #541 against dev
+
+**Key Learnings:**
+
+1. **git mv is essential for doc restructures** — Preserves full commit history vs. manual moves. Makes attribution and blame clear for future maintainers.
+
+2. **Cross-references within moved files are easy to miss** — Found 15 references to old paths within the moved files themselves (release notes linking to each other, checklist referencing versions). Need comprehensive search before declaring moves complete.
+
+3. **Workflow integration points are critical** — The release-docs.yml workflow had 7 hardcoded path references. These would have silently failed in the next release without update. Always trace automation paths when restructuring.
+
+4. **Image references need mapping clarity** — 6 images existed with different names (search-page.png in docs/images/ but referenced as search-empty.png in markdown). Mapping file creates documentation for future maintainers. The 4 TODO comments signal the screenshots.spec.ts artifact pipeline as the next dependency.
+
+5. **Manual-only restructures are fragile** — Without automated enforcement (linting or CI checks for broken links), restructures gradually decay over time. Consider adding link validation to CI once paths stabilize.
+
+**Release Impact:**
+- v1.8.0+ release-docs automation will use new paths automatically
+- Manuals and guides are now organized by purpose
+- Cleaner docs/ directory structure for contributors
+- Historical releases (v0.x, v1.0–v1.3) fully preserved and searchable
+
+**PR Status:** #541 created and ready for review/merge to dev.
+
+**Next Steps:**
+- Review and merge PR #541 to dev
+- Once merged, update any external documentation/wiki that references the old paths
+- Screenshot pipeline (Brett's #531–#534) will populate missing 4 images
+- Release-docs.yml will use new structure automatically on next release
+
+
+## 2026-03-20: v1.10.0 Kickoff — Release Documentation
+
+**Assigned:** 1 Wave 4 runbook (~1 issue)
+
+Wave 4: #673 (disaster recovery runbook) with Dallas
+
+Dependencies: Runbook written after restore orchestrator (#669) and verification tests (#672) complete.
+
+Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
+---
+
+## 2026-03-21: LinkedIn Blog Post — Squad Experience
+
+**Task:** Write a LinkedIn blog post for Juanma about his experience using Squad to revive the abandoned Aithena project.
+
+**Deliverable:** `/home/jmservera/.copilot/session-state/4eaf0bb4-0598-4d18-b2c2-c0ca4901f91f/files/linkedin-blog-post.md`
+
+**Format:** ~2000 words, LinkedIn article style, matching Juanma's personal/technical blog voice.
+
+**Key Metrics Used:**
+- 495 commits (March 13–20, 2026)
+- 11 documented releases (v1.4.0 through v1.9.1)
+- 628 tests across 6 services
+- 6 PRDs created
+- 800+ lines of documentation
+- Project started July 16, 2023; abandoned mid-2024 (4 commits in 20 months)
+
+## Learnings
+
+1. **Narrative structure matters for credibility.** The blog post's strength comes from honesty about struggles (Docker issues, instructions not sticking, environment constraints) paired with concrete results. Pure "look how amazing AI is" posts don't resonate with engineers. The backstory of an abandoned project → revival makes the numbers believable.
+
+2. **Project history is documentation gold.** Having detailed history.md files, decisions.md, commit logs, and release notes made it possible to reconstruct the full story with accurate dates, metrics, and technical details. This is an unexpected benefit of the documentation-first approach — it creates the raw material for compelling narratives later.
+
+3. **Voice matching requires source material.** The user provided specific style guidance (personal, tutorial-like, honest about struggles, technical but accessible). Matching someone's writing voice requires understanding their patterns: Juanma uses first-person, addresses the reader directly, shares workarounds, and avoids marketing fluff. Future content tasks should request style samples or references.
+
+4. **LinkedIn format differs from blog format.** LinkedIn articles need: attention-grabbing opener with numbers, shorter paragraphs, clear section breaks, a forward-looking close, and relevant hashtags. The conversational tone works but needs to be slightly more professional than a personal blog. 1500-2000 words is the sweet spot.
+
+5. **Squad links should feel natural, not promotional.** The blog post includes 5 Squad links woven into relevant context (getting started → where the reader would actually need it, brownfield guide → where it solved the author's problem). Links placed at decision points in the narrative feel helpful rather than salesy.

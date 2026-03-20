@@ -8277,6 +8277,28 @@ Agents should leverage these when available (VS Code sessions) for library docs 
 
 **Author:** Dallas (Frontend Dev)
 **Date:** 2026-07-22
+---
+
+# User Directive: Project Board Status Updates (2026-03-20)
+
+**Captured:** 2026-03-20T14:11:50Z  
+**Authority:** jmservera (Product Owner) via Copilot  
+**Status:** ENFORCED  
+
+## Directive
+
+Every team member must update the project board status when they complete work. Agents should set the issue/PR status on the GitHub Project Board as part of their workflow.
+
+## Rationale
+
+User request — captured for team memory so all agents follow consistent project management practices.
+
+---
+
+# Decision: E2E Emoji and Checkbox Assertion Patterns
+
+**Author:** Dallas (Frontend Dev)  
+**Date:** 2026-07-22  
 **PR:** #638
 
 ## Context
