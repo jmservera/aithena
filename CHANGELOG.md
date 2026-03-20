@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-03-21
+
+### Added
+
+- **Folder path facet** — hierarchical folder tree UI component and `folder_path_s` search facet (#650, #652, #653, #592)
+- **User document collections** — personal bookshelves with notes: SQLite backend, CRUD API, access control, frontend pages, search integration with badges (#655, #659, #661, #664, #670, #674, #591)
+- **Book metadata editing** — single document edit modal, batch edit panel with selection toolbar, Solr atomic updates with Redis overrides, re-index safety, security review (#681, #683, #686, #688, #691, #695, #697, #593)
+- **Series facet** — `series_s` field in Solr schema with sidebar facet filtering (#677, #693)
+- **Search enrichment** — collection membership displayed in search results (#668)
+- **Backup & restore** — tiered backup scripts (critical/high/medium), restore orchestrator, post-restore verification, backup/restore API endpoints, admin backup dashboard with restore wizard (#657, #660, #663, #665, #669, #672, #676, #680, #594)
+- **Disaster recovery runbook** — 694-line runbook with decision tree, 5 recovery paths, drill procedures (#673)
+- **Hardware requirements docs** — per-service resource breakdown, GPU requirements, tuning guidelines (#679)
+- **Stress testing framework** — indexing pipeline stress tests, search latency benchmarks, Locust load testing, Playwright UI stress tests, Docker resource monitoring (#651, #654, #658, #662, #666, #671, #675)
+
+### Changed
+
+- **CI/CD improvements** — consolidated lint workflows with Prettier check, Bandit as required check, refactored dependabot-automerge, consolidated IaC security scans, auto-trigger pre-release validation (#689, #690, #692, #694, #698, #699, #624)
+- **Release pipeline** — enforced dev → main → tag flow with branch validation (#687)
+
+### Fixed
+
+- **Semantic index 502 error** — fixed URI-too-large error in vector search queries (#646, #704)
+- **PDF viewer** — fixed PDFs not opening in library section (#647)
+- **Version display** — corrected version number shown in UI (#667)
+- **Integration test reliability** — fixed Solr race conditions and E2E config issues (#696)
+
 ## [1.9.1] — 2026-03-20
 
 ### Fixed
