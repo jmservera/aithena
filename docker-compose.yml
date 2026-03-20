@@ -573,9 +573,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -615,9 +615,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -658,9 +658,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
     deploy:
       resources:
         limits:

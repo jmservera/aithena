@@ -57,7 +57,7 @@ jobs:
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       E2E_LIBRARY_PATH: /tmp/aithena-e2e-library
       CI_ADMIN_USERNAME: ci-admin
@@ -219,8 +219,47 @@ jobs:
             return 1
           }
 
-          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr"
-          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection"
+          wait_for_solr_cluster() {
+            local attempts="${1:-30}"
+            local sleep_seconds="${2:-10}"
+
+            for ((attempt=1; attempt<=attempts; attempt+=1)); do
+              status=$(curl --fail --silent \
+                "http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json" \
+                2>/dev/null) || true
+
+              if echo "$status" | python3 -c "
+          import json, sys
+          try:
+              data = json.load(sys.stdin)
+              colls = data.get('cluster', {}).get('collections', {})
+              books = colls.get('books', {})
+              shards = books.get('shards', {})
+              if not shards:
+                  sys.exit(1)
+              for shard_name, shard in shards.items():
+                  for replica_name, replica in shard.get('replicas', {}).items():
+                      if replica.get('state') != 'active':
+                          sys.exit(1)
+              sys.exit(0)
+          except Exception:
+              sys.exit(1)
+          "; then
+                echo "SolrCloud cluster healthy — all replicas active"
+                return 0
+              fi
+
+              echo "[$attempt/$attempts] Waiting for all Solr replicas to become active..."
+              sleep "$sleep_seconds"
+            done
+
+            echo "SolrCloud cluster did not become fully active in time" >&2
+            return 1
+          }
+
+          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr" 90
+          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection" 90
+          wait_for_solr_cluster 30 10
           wait_for_url "http://localhost:8080/health" "solr-search API"
           wait_for_url "http://localhost/health" "nginx"
           wait_for_url "http://localhost/search" "Aithena UI"
@@ -239,8 +278,13 @@ jobs:
 
       - name: Run Python E2E tests
         working-directory: e2e
+        env:
+          E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
+          E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
+          RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
         run: |
-          export ADMIN_API_KEY=$(grep '^ADMIN_API_KEY=' ../.env | cut -d= -f2)
+          ADMIN_API_KEY=$(grep '^ADMIN_API_KEY=' ../.env 2>/dev/null | cut -d= -f2 || true)
+          export ADMIN_API_KEY="${ADMIN_API_KEY:-ci-admin-api-key}"
           pytest -v --junitxml=pytest-results.xml
 
       - name: Install Playwright dependencies
