@@ -279,7 +279,7 @@ def get_query_embedding(embeddings_url: str, text: str, timeout: float) -> list[
 
     Args:
         embeddings_url: Full URL of the embeddings endpoint
-                        (e.g. ``http://embeddings-server:8001/v1/embeddings/``).
+                        (e.g. ``http://embeddings-server:8080/v1/embeddings/``).
         text: Query text to embed.
         timeout: HTTP request timeout in seconds.
 

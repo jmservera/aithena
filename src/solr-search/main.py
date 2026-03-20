@@ -847,7 +847,25 @@ def _search_semantic(
             )
         raise
 
-    payload = query_solr(build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)))
+    try:
+        payload = query_solr(build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)))
+    except HTTPException as exc:
+        if _should_degrade_to_keyword(exc):
+            logger.warning("Solr kNN query failed, degrading to keyword search: %s", exc.detail)
+            return _search_keyword(
+                request,
+                q,
+                page,
+                top_k,
+                sort_by,
+                sort_order,
+                sort,
+                filters,
+                degraded=True,
+                message="Semantic search unavailable — showing keyword results instead.",
+                requested_mode="semantic",
+            )
+        raise
 
     response = payload.get("response", {})
     results = [
@@ -931,9 +949,27 @@ def _search_hybrid(
 
         kw_payload = kw_future_result
 
-    knn_payload = query_solr(
-        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
-    )
+    try:
+        knn_payload = query_solr(
+            build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
+        )
+    except HTTPException as exc:
+        if _should_degrade_to_keyword(exc):
+            logger.warning("Solr kNN query failed in hybrid mode, degrading to keyword search: %s", exc.detail)
+            return _search_keyword(
+                request,
+                q,
+                page,
+                page_size,
+                sort_by,
+                sort_order,
+                sort,
+                filters,
+                degraded=True,
+                message="Semantic search unavailable — showing keyword results instead.",
+                requested_mode="hybrid",
+            )
+        raise
 
     kw_response = kw_payload.get("response", {})
     kw_highlighting = kw_payload.get("highlighting", {})
