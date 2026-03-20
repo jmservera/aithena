@@ -650,7 +650,7 @@ DUMMY_VECTOR = [round(0.002 * i, 4) for i in range(512)]
 
 SOURCE_DOC_WITH_EMBEDDING = {
     "id": "source-doc-id",
-    "book_embedding": DUMMY_VECTOR,
+    "embedding_v": DUMMY_VECTOR,
 }
 
 SIMILAR_BOOKS_DOCS = [
@@ -764,7 +764,7 @@ def test_similar_uses_knn_query_parser(mock_solr_get: MagicMock) -> None:
     knn_call_params = mock_solr_get.call_args_list[1][1]["params"]
     q = knn_call_params.get("q", "")
     assert "{!knn" in q
-    assert "book_embedding" in q
+    assert "embedding_v" in q
 
 
 @patch("main.requests.get")
@@ -779,7 +779,7 @@ def test_similar_retrieves_embedding_field_from_source(mock_solr_get: MagicMock)
 
     source_call_params = mock_solr_get.call_args_list[0][1]["params"]
     fl = source_call_params.get("fl", "")
-    assert "book_embedding" in fl
+    assert "embedding_v" in fl
 
 
 @patch("main.requests.get")
