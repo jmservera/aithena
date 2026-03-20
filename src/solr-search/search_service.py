@@ -13,6 +13,7 @@ FACET_FIELDS: dict[str, tuple[str, ...]] = {
     "year": ("year_i",),
     "language": ("language_detected_s", "language_s"),
     "series": ("series_s",),
+    "folder": ("folder_path_s",),
 }
 
 SOLR_FIELD_LIST = [
