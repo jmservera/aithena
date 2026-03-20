@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Prevent running the entire script as root (e.g., via sudo ./installer/setupdev.sh)
+if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  echo "ERROR: Do not run this script as root or with sudo." >&2
+  echo "Run it as your regular user; the script will invoke sudo only for privileged operations." >&2
+  exit 1
+fi
+
 # ============================================================
 # Development Environment Setup Script for Aithena
 # ============================================================
@@ -77,7 +84,7 @@ echo "==> For this session, run Docker with: sudo docker ..."
 # Using nvm v0.40.4 (pinned) to install Node.js v24.x (latest 24 minor)
 
 NVM_VERSION="v0.40.4"
-NODE_MAJOR_VERSION="24"
+NODE_MAJOR_VERSION="22"
 
 echo "==> Installing nvm ${NVM_VERSION}..."
 curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
