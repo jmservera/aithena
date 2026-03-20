@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -404,34 +405,6 @@ def _docker_available() -> bool:
         return True
     except Exception:  # noqa: BLE001
         return False
-
-
-def _rabbitmq_reachable(api_url: str, user: str, password: str) -> bool:
-    """Return True if RabbitMQ management API is reachable."""
-    try:
-        import requests
-
-        resp = requests.get(f"{api_url}/api/overview", auth=(user, password), timeout=5)
-        return resp.status_code == 200  # noqa: PLR2004
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def _solr_reachable(solr_url: str) -> bool:
-    """Return True if Solr is reachable."""
-    try:
-        import requests
-
-        resp = requests.get(f"{solr_url}/admin/ping", timeout=5)
-        return resp.status_code == 200  # noqa: PLR2004
-    except Exception:  # noqa: BLE001
-        return False
-
-
-skip_without_docker = pytest.mark.skipif(
-    not _docker_available(),
-    reason="Docker daemon not available",
-)
 
 
 # =========================================================================
@@ -917,23 +890,28 @@ class TestIndexingPipeline:
             initial_count = 0
 
         queue_samples: list[QueueDepthSample] = []
+        # TODO: Wire up docker_monitor fixture to capture real memory/CPU during workload
         memory_samples: list[float] = []
         cpu_samples: list[float] = []
 
+        # NOTE: This test requires an external ingestion workload running.
+        # In CI without Docker, this serves as a smoke test for the reporting pipeline.
         started_at = datetime.now(tz=UTC).isoformat()
         t = timer()
         with t:
             # In a real run, documents would be placed in the watched directory.
             # Here we poll until the expected count is reached (or timeout).
             target = initial_count + batch_count
-            timeout_sec = max(600, batch_count * 2)
+            timeout_sec = 600
             poll_interval = 5.0
 
             elapsed_so_far = 0.0
             actual = initial_count
             while elapsed_so_far < timeout_sec:
                 # Collect queue depth
-                sample = _collect_queue_depth(rabbitmq_api_url, "guest", "guest")
+                rmq_user = os.environ.get("RABBITMQ_USER", "guest")
+                rmq_pass = os.environ.get("RABBITMQ_PASSWORD", "guest")
+                sample = _collect_queue_depth(rabbitmq_api_url, rmq_user, rmq_pass)
                 if sample:
                     queue_samples.append(sample)
 
@@ -985,34 +963,11 @@ class TestIndexingPipeline:
         timer,
     ) -> None:
         """Measure indexing with different pipeline configurations."""
-        batch = BatchConfig(label=f"config_{_config_id(config)}", doc_count=50, pipeline=config)
-
-        started_at = datetime.now(tz=UTC).isoformat()
-        t = timer()
-        with t:
-            # Placeholder: in a real test, reconfigure the pipeline
-            # and index documents. Here we just measure baseline.
-            actual, _ = _poll_until_indexed(solr_url, expected_count=0, timeout=10.0, interval=2.0)
-
-        finished_at = datetime.now(tz=UTC).isoformat()
-
-        metrics = build_indexing_metrics(
-            batch_label=batch.label,
-            doc_count=batch.doc_count,
-            pipeline_config=config,
-            elapsed_seconds=t.elapsed,
-            memory_samples=[],
-            cpu_samples=[],
-            queue_samples=[],
-            docs_indexed=actual,
-            docs_failed=0,
-            disk_write_bytes=0,
-            started_at=started_at,
-            finished_at=finished_at,
+        pytest.xfail(
+            "Stress workload for pipeline configuration variants is not yet "
+            "implemented; enable this test once reconfiguration + ingestion "
+            "can be executed end-to-end."
         )
-
-        report = generate_report(metrics)
-        write_result(f"indexing_{batch.label}", report)
 
 
 @pytest.mark.docker
