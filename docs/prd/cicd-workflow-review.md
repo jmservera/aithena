@@ -63,7 +63,7 @@ The team's release process (dev → main → tag) is not enforced by any workflo
 #### 3.3 Security Scans Are Non-Blocking
 All three security workflows (`bandit`, `checkov`, `zizmor`) use `continue-on-error: true` or `--soft-fail`. Findings appear in the Security tab but never prevent merges. This means a critical vulnerability could be merged without anyone noticing.
 
-**Proposed fix:** Make Bandit a required check (it's the most actionable for Python code). Keep Checkov and zizmor as advisory but add workflow summary annotations.
+**Proposed fix:** Remove `continue-on-error: true` AND the `--exit-zero` / `|| true` flags from the Bandit scan step so failures actually propagate. Add as required status check for dev and main PRs.
 
 ### ⚠️ High Priority — Should Fix
 
@@ -79,7 +79,7 @@ Backend unit tests run in **both** `ci.yml` and `dependabot-automerge.yml`. Fron
 | Frontend ESLint | ✅ | ✅ | ✅ |
 | Frontend Prettier | — | ✅ | ✅ |
 
-**Proposed fix:** Have `dependabot-automerge.yml` depend on `ci.yml` results instead of running its own tests. Remove `lint-frontend.yml` entirely (ci.yml already covers it).
+**Proposed fix:** Have `dependabot-automerge.yml` use `workflow_run` to wait for `ci.yml` completion (since `needs` only works within a single workflow), or use required status checks to gate auto-merge on ci.yml's `all-tests-passed` result. Remove `lint-frontend.yml` but first move its Prettier check into ci.yml (ci.yml currently lacks `format:check`).
 
 #### 3.5 Pre-Release Validation Is Never Triggered Automatically
 `pre-release-validation.yml` is manual-only (`workflow_dispatch`). It contains valuable features: full E2E stack testing, Docker log analysis for errors/warnings/deprecations, and automatic issue creation for findings. None of this happens automatically.
@@ -162,12 +162,12 @@ Work on dev → Merge PRs to dev → Bump VERSION on dev → Tag on dev → Manu
 ### 5.1 `ci.yml` — No Changes
 Works well as-is. Required status check for dev PRs.
 
-### 5.2 `lint-frontend.yml` — DELETE
-Redundant with ci.yml which already runs ESLint + Vitest for aithena-ui.
+### 5.2 `lint-frontend.yml` — MERGE INTO ci.yml
+Move the Prettier `format:check` step into ci.yml's aithena-ui job (ci.yml currently only runs ESLint, not Prettier). Then delete `lint-frontend.yml`.
 
 ### 5.3 `dependabot-automerge.yml` — Refactor
 - Add `branches: [dev]` filter to trigger
-- Remove duplicate test jobs — use `workflow_run` or `needs` to depend on ci.yml results
+- Remove duplicate test jobs — use `workflow_run` trigger (not `needs`, which only works within one workflow) or rely on required status checks from ci.yml to gate auto-merge
 - Add `admin` to test matrix
 - Replace stub security check with real validation
 
@@ -183,7 +183,7 @@ Redundant with ci.yml which already runs ESLint + Vitest for aithena-ui.
 - Integration-test.yml can call this action for PRs to main
 
 ### 5.6 `security-bandit.yml` — Make Required
-- Remove `continue-on-error: true`
+- Remove `continue-on-error: true` AND `--exit-zero` / `|| true` flags from scan step
 - Add as required status check for dev and main PRs
 
 ### 5.7 `security-checkov.yml` + `security-zizmor.yml` — Consolidate
