@@ -31,6 +31,7 @@ export interface FacetGroups {
   category?: FacetValue[];
   language?: FacetValue[];
   year?: FacetValue[];
+  folder?: FacetValue[];
 }
 
 export interface SearchFilters {
@@ -38,6 +39,7 @@ export interface SearchFilters {
   category?: string;
   language?: string;
   year?: string;
+  folder?: string;
 }
 
 export interface SearchResponse {
@@ -93,6 +95,7 @@ export function useSearch() {
       if (state.filters.category) params.set('fq_category', state.filters.category);
       if (state.filters.language) params.set('fq_language', state.filters.language);
       if (state.filters.year) params.set('fq_year', state.filters.year);
+      if (state.filters.folder) params.set('fq_folder', state.filters.folder);
 
       const response = await apiFetch(`${searchBaseURL}?${params.toString()}`);
       if (!response.ok) {
