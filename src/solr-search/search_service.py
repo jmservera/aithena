@@ -48,6 +48,10 @@ SORT_FIELDS = {
 
 HIGHLIGHT_FIELDS = ("content", "_text_")
 
+# Filter to exclude chunk-level documents from search results.
+# Chunks always have parent_id_s set; parent (book-level) documents do not.
+EXCLUDE_CHUNKS_FQ = "-parent_id_s:[* TO *]"
+
 
 def build_sort_clause(
     sort_by: str = "score",
@@ -136,8 +140,8 @@ def build_solr_params(
         "f._text_.hl.maxAlternateFieldLength": 300,
     }
     filter_queries = build_filter_queries(filters)
-    if filter_queries:
-        params["fq"] = filter_queries
+    filter_queries.append(EXCLUDE_CHUNKS_FQ)
+    params["fq"] = filter_queries
     return params
 
 
@@ -269,8 +273,9 @@ def build_knn_params(
         "fl": ",".join(SOLR_FIELD_LIST),
         "wt": "json",
     }
-    if filters:
-        params["fq"] = filters
+    all_filters = list(filters) if filters else []
+    all_filters.append(EXCLUDE_CHUNKS_FQ)
+    params["fq"] = all_filters
     return params
 
 

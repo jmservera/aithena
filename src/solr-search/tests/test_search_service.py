@@ -268,7 +268,8 @@ def test_build_knn_params_produces_correct_solr_query() -> None:
 def test_build_knn_params_custom_field() -> None:
     params = build_knn_params([0.5], top_k=3, knn_field="embedding_v", filters=["author_s:Amades"])
     assert "f=embedding_v" in params["q"]
-    assert params["fq"] == ["author_s:Amades"]
+    assert "author_s:Amades" in params["fq"]
+    assert "-parent_id_s:[* TO *]" in params["fq"]
 
 
 def test_reciprocal_rank_fusion_empty_inputs() -> None:
