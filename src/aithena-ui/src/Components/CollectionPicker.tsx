@@ -19,9 +19,13 @@ function CollectionPicker({ onSelect, excludeIds = [] }: CollectionPickerProps) 
 
   useEffect(() => {
     let cancelled = false;
-    void fetchCollections().then((data) => {
-      if (!cancelled) setCollections(data);
-    });
+    void fetchCollections()
+      .then((data) => {
+        if (!cancelled) setCollections(data);
+      })
+      .catch(() => {
+        /* swallow — picker shows empty list on error */
+      });
     return () => {
       cancelled = true;
     };

@@ -8,12 +8,7 @@ describe('NoteEditor', () => {
   it('renders textarea with initial note', () => {
     render(
       <IntlWrapper>
-        <NoteEditor
-          itemId="item-1"
-          collectionId="col-1"
-          initialNote="Hello world"
-          onSave={vi.fn()}
-        />
+        <NoteEditor itemId="item-1" initialNote="Hello world" onSave={vi.fn()} />
       </IntlWrapper>
     );
 
@@ -27,7 +22,7 @@ describe('NoteEditor', () => {
 
     render(
       <IntlWrapper>
-        <NoteEditor itemId="item-1" collectionId="col-1" initialNote="" onSave={onSave} />
+        <NoteEditor itemId="item-1" initialNote="" onSave={onSave} />
       </IntlWrapper>
     );
 
@@ -42,7 +37,7 @@ describe('NoteEditor', () => {
   it('shows character count', () => {
     render(
       <IntlWrapper>
-        <NoteEditor itemId="item-1" collectionId="col-1" initialNote="Hi" onSave={vi.fn()} />
+        <NoteEditor itemId="item-1" initialNote="Hi" onSave={vi.fn()} />
       </IntlWrapper>
     );
 
@@ -55,7 +50,7 @@ describe('NoteEditor', () => {
 
     render(
       <IntlWrapper>
-        <NoteEditor itemId="item-1" collectionId="col-1" initialNote="" onSave={onSave} />
+        <NoteEditor itemId="item-1" initialNote="" onSave={onSave} />
       </IntlWrapper>
     );
 
@@ -69,13 +64,7 @@ describe('NoteEditor', () => {
   it('shows saving indicator when saving prop is true', () => {
     render(
       <IntlWrapper>
-        <NoteEditor
-          itemId="item-1"
-          collectionId="col-1"
-          initialNote=""
-          onSave={vi.fn()}
-          saving={true}
-        />
+        <NoteEditor itemId="item-1" initialNote="" onSave={vi.fn()} saving={true} />
       </IntlWrapper>
     );
 

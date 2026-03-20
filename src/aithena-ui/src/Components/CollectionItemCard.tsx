@@ -6,19 +6,12 @@ import NoteEditor from './NoteEditor';
 
 interface CollectionItemCardProps {
   item: CollectionItem;
-  collectionId: string;
   onRemove: (itemId: string) => void;
   onSaveNote: (itemId: string, note: string) => void;
   saving?: boolean;
 }
 
-function CollectionItemCard({
-  item,
-  collectionId,
-  onRemove,
-  onSaveNote,
-  saving,
-}: CollectionItemCardProps) {
+function CollectionItemCard({ item, onRemove, onSaveNote, saving }: CollectionItemCardProps) {
   const intl = useIntl();
   const [confirmRemove, setConfirmRemove] = useState(false);
 
@@ -67,13 +60,7 @@ function CollectionItemCard({
           </button>
         </div>
       </div>
-      <NoteEditor
-        itemId={item.id}
-        collectionId={collectionId}
-        initialNote={item.note}
-        onSave={onSaveNote}
-        saving={saving}
-      />
+      <NoteEditor itemId={item.id} initialNote={item.note} onSave={onSaveNote} saving={saving} />
     </article>
   );
 }

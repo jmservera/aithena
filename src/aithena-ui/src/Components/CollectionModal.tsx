@@ -27,6 +27,16 @@ function CollectionModal({
   const overlayRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync state when initial values change (e.g. edit mode re-open)
+  useEffect(() => {
+    if (open) {
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setName(initialName);
+      setDescription(initialDescription);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    }
+  }, [open, initialName, initialDescription]);
+
   // Focus the name input when the modal opens
   useEffect(() => {
     if (open) {

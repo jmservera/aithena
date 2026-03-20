@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 interface ConfirmDialogProps {
@@ -22,11 +22,23 @@ function ConfirmDialog({
 }: ConfirmDialogProps) {
   const intl = useIntl();
   const [busy, setBusy] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     setBusy(true);
-    onConfirm();
+    try {
+      await Promise.resolve(onConfirm());
+    } finally {
+      setBusy(false);
+    }
   }, [onConfirm]);
+
+  // Focus the overlay when dialog opens so Escape key works
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => overlayRef.current?.focus());
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -34,9 +46,11 @@ function ConfirmDialog({
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className="collection-modal-overlay"
+      ref={overlayRef}
       role="alertdialog"
       aria-modal="true"
       aria-label={intl.formatMessage({ id: titleId })}
+      tabIndex={-1}
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}

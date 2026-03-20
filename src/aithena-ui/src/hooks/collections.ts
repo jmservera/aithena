@@ -75,7 +75,10 @@ export function useCollectionDetail(id: string | undefined) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -151,14 +154,19 @@ export function useAutoSaveNote(
   debounceMs = 800
 ) {
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const inflightRef = useRef(0);
   const [saving, setSaving] = useState(false);
 
   const debouncedSave = useCallback(
     (itemId: string, note: string) => {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
+        inflightRef.current += 1;
         setSaving(true);
-        void save(itemId, note).finally(() => setSaving(false));
+        void save(itemId, note).finally(() => {
+          inflightRef.current -= 1;
+          if (inflightRef.current === 0) setSaving(false);
+        });
       }, debounceMs);
     },
     [save, debounceMs]

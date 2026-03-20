@@ -20,12 +20,7 @@ describe('CollectionItemCard', () => {
   it('renders the item title and metadata', () => {
     render(
       <IntlWrapper>
-        <CollectionItemCard
-          item={mockItem}
-          collectionId="col-1"
-          onRemove={vi.fn()}
-          onSaveNote={vi.fn()}
-        />
+        <CollectionItemCard item={mockItem} onRemove={vi.fn()} onSaveNote={vi.fn()} />
       </IntlWrapper>
     );
 
@@ -37,12 +32,7 @@ describe('CollectionItemCard', () => {
   it('renders the note in the editor', () => {
     render(
       <IntlWrapper>
-        <CollectionItemCard
-          item={mockItem}
-          collectionId="col-1"
-          onRemove={vi.fn()}
-          onSaveNote={vi.fn()}
-        />
+        <CollectionItemCard item={mockItem} onRemove={vi.fn()} onSaveNote={vi.fn()} />
       </IntlWrapper>
     );
 
@@ -56,12 +46,7 @@ describe('CollectionItemCard', () => {
 
     render(
       <IntlWrapper>
-        <CollectionItemCard
-          item={mockItem}
-          collectionId="col-1"
-          onRemove={onRemove}
-          onSaveNote={vi.fn()}
-        />
+        <CollectionItemCard item={mockItem} onRemove={onRemove} onSaveNote={vi.fn()} />
       </IntlWrapper>
     );
 
@@ -82,12 +67,7 @@ describe('CollectionItemCard', () => {
 
     render(
       <IntlWrapper>
-        <CollectionItemCard
-          item={mockItem}
-          collectionId="col-1"
-          onRemove={onRemove}
-          onSaveNote={vi.fn()}
-        />
+        <CollectionItemCard item={mockItem} onRemove={onRemove} onSaveNote={vi.fn()} />
       </IntlWrapper>
     );
 

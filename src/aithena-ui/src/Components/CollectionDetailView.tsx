@@ -134,7 +134,6 @@ function CollectionDetailView({
             <CollectionItemCard
               key={item.id}
               item={item}
-              collectionId={detail.id}
               onRemove={onRemoveItem}
               onSaveNote={onSaveNote}
               saving={saving}

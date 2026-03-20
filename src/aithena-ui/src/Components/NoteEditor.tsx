@@ -5,7 +5,6 @@ const NOTE_MAX_LENGTH = 5000;
 
 interface NoteEditorProps {
   itemId: string;
-  collectionId: string;
   initialNote: string;
   onSave: (itemId: string, note: string) => void;
   saving?: boolean;
