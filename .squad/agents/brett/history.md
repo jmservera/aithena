@@ -520,3 +520,51 @@ jobs:
 **Fix required:** Add admin service to docker-compose.prod.yml with GHCR image reference, matching the pattern of other services.
 
 **Prevention:** CI validation to check service parity between dev and prod compose files would catch this class of issue.
+#### 2026-04-10 — PRD Decomposition: BCDR Plan + CI/CD Workflow Review
+
+**Task:** Review two PRDs (`docs/prd/bcdr-plan.md` and `docs/prd/cicd-workflow-review.md`) and create GitHub issues for all work items.
+
+**BCDR Plan — 11 issues created (milestone v1.10.0):**
+- #657: Backup script: Critical tier (SQLite + secrets) → squad:brett
+- #660: Backup script: High tier (Solr + ZK) → squad:brett
+- #663: Backup script: Medium tier (Redis + RabbitMQ) → squad:brett
+- #665: Backup orchestrator & cron scheduling → squad:brett
+- #669: Restore orchestrator & component restore → squad:brett + squad:parker
+- #672: Post-restore verification test suite → squad:lambert
+- #673: Disaster recovery runbook → squad:newt
+- #676: Backup/Restore API endpoints → squad:parker
+- #680: Admin UI backup dashboard & restore wizard → squad:dallas
+- #682: Automated monthly restore drill workflow → squad:lambert
+- #685: Backup integrity verification & checksums → squad:brett
+
+**CI/CD Workflow Review — 8 issues created (milestone v1.10.0):**
+- #687: Enforce release pipeline (dev → main → tag) → squad:brett
+- #689: Refactor dependabot-automerge workflow → squad:brett
+- #690: Make Bandit security scan required → squad:kane
+- #692: Merge lint-frontend.yml into ci.yml → squad:brett
+- #694: Auto-trigger pre-release validation on main PRs → squad:brett
+- #696: Improve integration test reliability → squad:brett + squad:lambert
+- #698: Consolidate IaC security scans (Checkov + zizmor) → squad:kane
+- #699: Clean up squad automation workflows → squad:brett
+
+**Decomposition decisions:**
+- Kept each backup tier as separate issue (different mechanisms: SQLite API, Solr REST API, Redis CLI)
+- Grouped Dependabot fixes (branch filter + dedup + admin coverage) into one issue since all touch the same workflow
+- Combined squad JS extraction + label sync fix into one cleanup issue (same maintenance scope)
+- PRD Phase 2 (API + UI) and Phase 3 (testing + hardening) items placed in v1.10.0 milestone per instructions, with phase noted in descriptions
+- Routed security issues (Bandit, Checkov/zizmor) to Kane; testing issues to Lambert; backend API to Parker; frontend UI to Dallas; docs to Newt
+
+## v1.10.0 PRD Decomposition Session (2026-03-20)
+
+Brett decomposed two PRDs into 19 GitHub issues for v1.10.0:
+
+- **BCDR Plan:** Orchestrator, backup tiers (critical/high/medium), restore, monitoring, docs, security, hardening (#657-#685)
+- **CI/CD Workflow Review:** Dependabot config, squad cleanup, Bandit enforcement, Checkov/zizmor consolidation, docs, security, validation (#687-#699)
+
+Key decisions:
+- BCDR phased: Phase 1 (scripts), Phase 2 (API+UI), Phase 3 (testing+hardening)
+- Backup tiers separate issues (different mechanisms)
+- Security routing to Kane; Brett handles plumbing
+- Embeddings-server uv migration out of scope
+
+Teams: Brett (8 infra issues), Kane (2 security issues), Parker (testing), Dallas (UI) assigned.
