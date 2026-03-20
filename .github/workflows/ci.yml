@@ -159,6 +159,10 @@ jobs:
         working-directory: src/aithena-ui
         run: npm run lint
 
+      - name: Format check (Prettier)
+        working-directory: src/aithena-ui
+        run: npm run format:check
+
       - name: Build
         working-directory: src/aithena-ui
         run: npm run build
