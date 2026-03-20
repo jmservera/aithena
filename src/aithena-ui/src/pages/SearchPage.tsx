@@ -25,6 +25,9 @@ import { getCachedSimilarBook } from '../hooks/similarBooks';
 import { useSearch, BookResult, SearchMode } from '../hooks/search';
 import { onRenderCallback } from '../utils/profiler';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
+import BatchSelectionToolbar from '../Components/BatchSelectionToolbar';
+import BatchEditPanel from '../Components/BatchEditPanel';
 
 const SORT_OPTIONS = [
   { value: 'score desc', labelId: 'search.sortRelevance' },
@@ -59,13 +62,15 @@ interface SearchResultsSectionProps {
   resultsSummaryId: string;
   selectedBook: BookResult | null;
   total: number;
+  selectionMode?: boolean;
+  checkedIds?: Set<string>;
+  isAdmin?: boolean;
+  onToggleSelect?: (bookId: string) => void;
+  onEditMetadata?: (book: BookResult) => void;
   onOpenPdf: (book: BookResult) => void;
   onPageChange: (page: number) => void;
   onPdfClose: () => void;
   onSelectSimilarBook: (bookId: string) => void;
-  selectionMode?: boolean;
-  checkedIds?: Set<string>;
-  onToggleSelect?: (bookId: string) => void;
   onSaveToCollection?: (book: BookResult) => void;
 }
 
@@ -107,13 +112,15 @@ function SearchResultsSection({
   resultsSummaryId,
   selectedBook,
   total,
+  selectionMode = false,
+  checkedIds,
+  isAdmin = false,
+  onToggleSelect,
+  onEditMetadata,
   onOpenPdf,
   onPageChange,
   onPdfClose,
   onSelectSimilarBook,
-  selectionMode,
-  checkedIds,
-  onToggleSelect,
   onSaveToCollection,
 }: SearchResultsSectionProps) {
   const intl = useIntl();
@@ -168,9 +175,11 @@ function SearchResultsSection({
                   onOpenPdf={onOpenPdf}
                   isSelected={selectedBook?.id === book.id}
                   selectionMode={selectionMode}
-                  isChecked={checkedIds?.has(book.id)}
+                  isChecked={checkedIds?.has(book.id) ?? false}
                   onToggleSelect={onToggleSelect}
                   onSaveToCollection={onSaveToCollection}
+                  isAdmin={isAdmin}
+                  onEditMetadata={onEditMetadata}
                 />
               </li>
             ))}
@@ -221,6 +230,13 @@ function SearchPage() {
     setMode,
   } = useSearch();
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [batchEditOpen, setBatchEditOpen] = useState(false);
+
   // Keep the text input in sync with the committed query from the URL so
   // that deep-links and browser back / forward reflect the correct value.
   const [inputValue, setInputValue] = useState(searchState.query);
@@ -233,8 +249,6 @@ function SearchPage() {
   }, [searchState.query]);
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
   const [addToCollectionDocIds, setAddToCollectionDocIds] = useState<string[]>([]);
   const resultsRegionRef = useRef<HTMLElement>(null);
@@ -307,8 +321,11 @@ function SearchPage() {
   const handleToggleSelect = useCallback((bookId: string) => {
     setCheckedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(bookId)) next.delete(bookId);
-      else next.add(bookId);
+      if (next.has(bookId)) {
+        next.delete(bookId);
+      } else {
+        next.add(bookId);
+      }
       return next;
     });
   }, []);
@@ -347,6 +364,20 @@ function SearchPage() {
   const handleAddToCollectionClose = useCallback(() => {
     setAddToCollectionOpen(false);
     setAddToCollectionDocIds([]);
+  }, []);
+
+  const handleOpenBatchEdit = useCallback(() => {
+    if (checkedIds.size > 0) setBatchEditOpen(true);
+  }, [checkedIds.size]);
+
+  const handleBatchEditClose = useCallback(() => {
+    setBatchEditOpen(false);
+  }, []);
+
+  const handleBatchEditSaved = useCallback(() => {
+    setBatchEditOpen(false);
+    setCheckedIds(new Set());
+    setSelectionMode(false);
   }, []);
 
   return (
@@ -545,13 +576,15 @@ function SearchPage() {
               resultsSummaryId={resultsSummaryId}
               selectedBook={selectedBook}
               total={total}
+              selectionMode={selectionMode}
+              checkedIds={checkedIds}
+              isAdmin={isAdmin}
+              onToggleSelect={handleToggleSelect}
+              onEditMetadata={handleOpenBatchEdit}
               onOpenPdf={handleOpenPdf}
               onPageChange={setPage}
               onPdfClose={handleClosePdf}
               onSelectSimilarBook={handleSelectSimilarBook}
-              selectionMode={selectionMode}
-              checkedIds={checkedIds}
-              onToggleSelect={handleToggleSelect}
               onSaveToCollection={handleSaveToCollection}
             />
           </Profiler>
@@ -564,6 +597,22 @@ function SearchPage() {
         documentIds={addToCollectionDocIds}
         onSuccess={handleAddToCollectionSuccess}
       />
+
+      {isAdmin && selectionMode && (
+        <BatchSelectionToolbar
+          selectedCount={checkedIds.size}
+          onEdit={handleOpenBatchEdit}
+          onClearSelection={handleDeselectAll}
+        />
+      )}
+
+      {batchEditOpen && (
+        <BatchEditPanel
+          documentIds={[...checkedIds]}
+          onClose={handleBatchEditClose}
+          onSaved={handleBatchEditSaved}
+        />
+      )}
     </div>
   );
 }
