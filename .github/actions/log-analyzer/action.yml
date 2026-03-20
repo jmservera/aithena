@@ -1,0 +1,232 @@
+name: 'Pre-release Log Analyzer'
+description: >-
+  Analyze Docker Compose logs for errors, warnings, and deprecations.
+  Optionally create GitHub issues for findings.
+
+inputs:
+  compose-logs-path:
+    description: 'Path to the Docker Compose logs file'
+    required: true
+  version-file:
+    description: 'Path to the VERSION file'
+    default: './VERSION'
+  create-issues:
+    description: 'Whether to create GitHub issues for findings (true/false)'
+    default: 'false'
+  milestone:
+    description: 'Milestone name for issue creation (e.g. v1.10.0)'
+    default: ''
+  artifact-name:
+    description: 'Name for the uploaded findings artifact'
+    default: 'pre-release-validation'
+
+outputs:
+  exit_code:
+    description: 'Exit code from the log analyzer (0=clean, 1=errors, 2=warnings)'
+    value: ${{ steps.analyze.outputs.exit_code }}
+  has_errors:
+    description: 'Whether errors were found'
+    value: ${{ steps.analyze.outputs.has_errors }}
+  has_warnings:
+    description: 'Whether warnings were found'
+    value: ${{ steps.analyze.outputs.has_warnings }}
+  findings_file:
+    description: 'Path to the findings JSON file'
+    value: ${{ steps.analyze.outputs.findings_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run pre-release log analyzer
+      id: analyze
+      shell: bash
+      run: |
+        set +e
+        sh e2e/pre-release-check.sh \
+          --version-file "${{ inputs.version-file }}" \
+          "${{ inputs.compose-logs-path }}" \
+          > "$RUNNER_TEMP/findings.json" 2>"$RUNNER_TEMP/analyzer-summary.txt"
+        EXIT_CODE=$?
+        set -e
+
+        echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        echo "findings_file=$RUNNER_TEMP/findings.json" >> "$GITHUB_OUTPUT"
+
+        if [ "$EXIT_CODE" -eq 1 ]; then
+          echo "has_errors=true" >> "$GITHUB_OUTPUT"
+          echo "has_warnings=false" >> "$GITHUB_OUTPUT"
+        elif [ "$EXIT_CODE" -eq 2 ]; then
+          echo "has_errors=false" >> "$GITHUB_OUTPUT"
+          echo "has_warnings=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "has_errors=false" >> "$GITHUB_OUTPUT"
+          echo "has_warnings=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        echo "::group::Analyzer summary"
+        cat "$RUNNER_TEMP/analyzer-summary.txt"
+        echo "::endgroup::"
+
+        echo "::group::Findings JSON"
+        cat "$RUNNER_TEMP/findings.json"
+        echo "::endgroup::"
+
+    - name: Upload findings and logs
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          ${{ steps.analyze.outputs.findings_file }}
+          ${{ inputs.compose-logs-path }}
+          ${{ runner.temp }}/analyzer-summary.txt
+        if-no-files-found: warn
+        retention-days: 90
+
+    - name: Create issues for findings
+      if: >-
+        inputs.create-issues == 'true'
+        && (steps.analyze.outputs.has_errors == 'true'
+            || steps.analyze.outputs.has_warnings == 'true')
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+      env:
+        MILESTONE: ${{ inputs.milestone }}
+        FINDINGS_FILE: ${{ steps.analyze.outputs.findings_file }}
+        HAS_ERRORS: ${{ steps.analyze.outputs.has_errors }}
+      with:
+        script: |
+          const fs = require('fs');
+          const milestone = process.env.MILESTONE;
+          const findingsPath = process.env.FINDINGS_FILE;
+          const hasErrors = process.env.HAS_ERRORS === 'true';
+
+          let findings;
+          try {
+            findings = JSON.parse(fs.readFileSync(findingsPath, 'utf8'));
+          } catch (e) {
+            core.setFailed(`Cannot read findings: ${e.message}`);
+            return;
+          }
+
+          // Find milestone by title (if provided)
+          let milestoneNumber = null;
+          if (milestone) {
+            try {
+              const milestones = await github.rest.issues.listMilestones({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+              });
+              const match = milestones.data.find(m => m.title === milestone);
+              if (match) milestoneNumber = match.number;
+            } catch (e) {
+              core.warning(`Could not find milestone: ${e.message}`);
+            }
+          }
+
+          const errors = findings.filter(f => f.severity === 'error');
+          const warnings = findings.filter(f => f.severity === 'warning' || f.severity === 'info');
+
+          // Category → squad label mapping
+          const categoryLabels = {
+            crash: 'squad:kane',
+            security: 'squad:kane',
+            deprecation: 'squad:brett',
+            dependency: 'squad:brett',
+            slow_startup: 'squad:brett',
+            memory: 'squad:brett',
+            connection: 'squad:parker',
+            config: 'squad:brett',
+            version: 'squad:brett',
+          };
+
+          const milestoneLabel = milestone || 'pre-release';
+          const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+          if (hasErrors) {
+            // Create one combined failure issue
+            let findingsText = `### Error findings (${errors.length})\n\n`;
+            if (errors.length > 0) {
+              findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
+              for (const f of errors.slice(0, 50)) {
+                const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
+              }
+            }
+
+            findingsText += `\n### Warning findings (${warnings.length})\n\n`;
+            if (warnings.length > 0) {
+              findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
+              for (const f of warnings.slice(0, 50)) {
+                const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
+              }
+            }
+
+            const body = [
+              `## Pre-release validation failed for ${milestoneLabel}`,
+              '',
+              `**Run:** ${runUrl}`,
+              `**Triggered by:** ${context.actor}`,
+              '',
+              findingsText,
+              '',
+              '---',
+              '_Created automatically by pre-release log analyzer._',
+            ].join('\n');
+
+            const issueParams = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Pre-release validation failed for ${milestoneLabel}`,
+              body,
+              labels: ['squad', 'squad:brett'],
+            };
+            if (milestoneNumber) issueParams.milestone = milestoneNumber;
+
+            await github.rest.issues.create(issueParams);
+            core.info('Created failure issue');
+          } else {
+            // Create per-category warning issues
+            const grouped = {};
+            for (const f of warnings) {
+              if (!grouped[f.category]) grouped[f.category] = [];
+              grouped[f.category].push(f);
+            }
+
+            for (const [category, items] of Object.entries(grouped)) {
+              let table = '| Service | Severity | Message | Line |\n|---|---|---|---|\n';
+              for (const f of items.slice(0, 30)) {
+                const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                table += `| ${f.service} | ${f.severity} | ${msg} | ${f.line} |\n`;
+              }
+              if (items.length > 30) {
+                table += `\n_... and ${items.length - 30} more findings._\n`;
+              }
+
+              const squadLabel = categoryLabels[category] || 'squad:brett';
+              const body = [
+                `## Pre-release warning: ${category} (${milestoneLabel})`,
+                '',
+                `**Run:** ${runUrl}`,
+                `**Category:** ${category}`,
+                `**Finding count:** ${items.length}`,
+                '',
+                table,
+                '',
+                '---',
+                '_Created automatically by pre-release log analyzer._',
+              ].join('\n');
+
+              const issueParams = {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Pre-release ${category} warnings for ${milestoneLabel}`,
+                body,
+                labels: ['squad', squadLabel],
+              };
+              if (milestoneNumber) issueParams.milestone = milestoneNumber;
+
+              await github.rest.issues.create(issueParams);
+              core.info(`Created issue for category: ${category} (${items.length} findings)`);
+            }
+          }

@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: pre-release-validation
@@ -20,11 +21,6 @@ jobs:
     name: Build, test, and analyze logs
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    outputs:
-      analyzer-exit-code: ${{ steps.analyze.outputs.exit_code }}
-      findings-json: ${{ steps.analyze.outputs.findings_file }}
-      has-errors: ${{ steps.analyze.outputs.has_errors }}
-      has-warnings: ${{ steps.analyze.outputs.has_warnings }}
     env:
       E2E_LIBRARY_PATH: /tmp/aithena-e2e-library
       CI_ADMIN_USERNAME: ci-admin
@@ -234,48 +230,12 @@ jobs:
       - name: Run pre-release log analyzer
         if: always()
         id: analyze
-        run: |
-          set +e
-          sh e2e/pre-release-check.sh \
-            --version-file ./VERSION \
-            "$RUNNER_TEMP/compose-logs.txt" \
-            > "$RUNNER_TEMP/findings.json" 2>"$RUNNER_TEMP/analyzer-summary.txt"
-          EXIT_CODE=$?
-          set -e
-
-          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
-          echo "findings_file=$RUNNER_TEMP/findings.json" >> "$GITHUB_OUTPUT"
-
-          if [ "$EXIT_CODE" -eq 1 ]; then
-            echo "has_errors=true" >> "$GITHUB_OUTPUT"
-            echo "has_warnings=false" >> "$GITHUB_OUTPUT"
-          elif [ "$EXIT_CODE" -eq 2 ]; then
-            echo "has_errors=false" >> "$GITHUB_OUTPUT"
-            echo "has_warnings=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_errors=false" >> "$GITHUB_OUTPUT"
-            echo "has_warnings=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          echo "::group::Analyzer summary"
-          cat "$RUNNER_TEMP/analyzer-summary.txt"
-          echo "::endgroup::"
-
-          echo "::group::Findings JSON"
-          cat "$RUNNER_TEMP/findings.json"
-          echo "::endgroup::"
-
-      - name: Upload findings and logs
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: ./.github/actions/log-analyzer
         with:
-          name: pre-release-validation
-          path: |
-            ${{ runner.temp }}/findings.json
-            ${{ runner.temp }}/compose-logs.txt
-            ${{ runner.temp }}/analyzer-summary.txt
-          if-no-files-found: warn
-          retention-days: 90
+          compose-logs-path: ${{ runner.temp }}/compose-logs.txt
+          version-file: ./VERSION
+          create-issues: 'true'
+          milestone: ${{ inputs.milestone }}
 
       - name: Upload E2E test results
         if: always()
@@ -300,192 +260,3 @@ jobs:
             --profile production \
             down -v --remove-orphans
           rm -f docker-compose.github-actions.yml
-
-  create-issues:
-    name: Create issues for findings
-    needs: build-and-test
-    if: always() && (needs.build-and-test.result == 'failure' || needs.build-and-test.outputs.has_errors == 'true' || needs.build-and-test.outputs.has_warnings == 'true')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Download findings artifact
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4.2.2
-        with:
-          name: pre-release-validation
-          path: ${{ runner.temp }}/validation
-
-      - name: Create failure issue
-        if: needs.build-and-test.result == 'failure' || needs.build-and-test.outputs.has_errors == 'true'
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
-        env:
-          MILESTONE: ${{ inputs.milestone }}
-        with:
-          script: |
-            const fs = require('fs');
-            const milestone = process.env.MILESTONE;
-
-            let findingsText = 'No findings file available.';
-            const findingsPath = '${{ runner.temp }}/validation/findings.json';
-            try {
-              const raw = fs.readFileSync(findingsPath, 'utf8');
-              const findings = JSON.parse(raw);
-              const errors = findings.filter(f => f.severity === 'error');
-              const warnings = findings.filter(f => f.severity === 'warning');
-
-              findingsText = `### Error findings (${errors.length})\n\n`;
-              if (errors.length > 0) {
-                findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
-                for (const f of errors.slice(0, 50)) {
-                  const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
-                  findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
-                }
-              }
-
-              findingsText += `\n### Warning findings (${warnings.length})\n\n`;
-              if (warnings.length > 0) {
-                findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
-                for (const f of warnings.slice(0, 50)) {
-                  const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
-                  findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
-                }
-              }
-            } catch (e) {
-              findingsText = `Failed to read findings: ${e.message}`;
-            }
-
-            // Find milestone by title
-            let milestoneNumber = null;
-            try {
-              const milestones = await github.rest.issues.listMilestones({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-              });
-              const match = milestones.data.find(m => m.title === milestone);
-              if (match) milestoneNumber = match.number;
-            } catch (e) {
-              core.warning(`Could not find milestone: ${e.message}`);
-            }
-
-            const body = [
-              `## Pre-release validation failed for ${milestone}`,
-              '',
-              `**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              `**Triggered by:** ${context.actor}`,
-              '',
-              findingsText,
-              '',
-              '---',
-              '_Created automatically by pre-release-validation workflow._',
-            ].join('\n');
-
-            const issueParams = {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Pre-release validation failed for ${milestone}`,
-              body: body,
-              labels: ['squad', 'squad:brett'],
-            };
-            if (milestoneNumber) issueParams.milestone = milestoneNumber;
-
-            await github.rest.issues.create(issueParams);
-
-      - name: Create warning issues by category
-        if: needs.build-and-test.outputs.has_errors != 'true' && needs.build-and-test.outputs.has_warnings == 'true'
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
-        env:
-          MILESTONE: ${{ inputs.milestone }}
-        with:
-          script: |
-            const fs = require('fs');
-            const milestone = process.env.MILESTONE;
-
-            const findingsPath = '${{ runner.temp }}/validation/findings.json';
-            let findings;
-            try {
-              findings = JSON.parse(fs.readFileSync(findingsPath, 'utf8'));
-            } catch (e) {
-              core.setFailed(`Cannot read findings: ${e.message}`);
-              return;
-            }
-
-            const warnings = findings.filter(f => f.severity === 'warning' || f.severity === 'info');
-            if (warnings.length === 0) return;
-
-            // Category → squad label mapping
-            const categoryLabels = {
-              crash: 'squad:kane',
-              security: 'squad:kane',
-              deprecation: 'squad:brett',
-              dependency: 'squad:brett',
-              slow_startup: 'squad:brett',
-              memory: 'squad:brett',
-              connection: 'squad:parker',
-              config: 'squad:brett',
-              version: 'squad:brett',
-            };
-
-            // Find milestone by title
-            let milestoneNumber = null;
-            try {
-              const milestones = await github.rest.issues.listMilestones({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-              });
-              const match = milestones.data.find(m => m.title === milestone);
-              if (match) milestoneNumber = match.number;
-            } catch (e) {
-              core.warning(`Could not find milestone: ${e.message}`);
-            }
-
-            // Group warnings by category
-            const grouped = {};
-            for (const f of warnings) {
-              if (!grouped[f.category]) grouped[f.category] = [];
-              grouped[f.category].push(f);
-            }
-
-            for (const [category, items] of Object.entries(grouped)) {
-              let table = '| Service | Severity | Message | Line |\n|---|---|---|---|\n';
-              for (const f of items.slice(0, 30)) {
-                const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
-                table += `| ${f.service} | ${f.severity} | ${msg} | ${f.line} |\n`;
-              }
-              if (items.length > 30) {
-                table += `\n_... and ${items.length - 30} more findings._\n`;
-              }
-
-              const squadLabel = categoryLabels[category] || 'squad:brett';
-              const body = [
-                `## Pre-release warning: ${category} (${milestone})`,
-                '',
-                `**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-                `**Category:** ${category}`,
-                `**Finding count:** ${items.length}`,
-                '',
-                table,
-                '',
-                '---',
-                '_Created automatically by pre-release-validation workflow._',
-              ].join('\n');
-
-              const issueParams = {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: `Pre-release ${category} warnings for ${milestone}`,
-                body: body,
-                labels: ['squad', squadLabel],
-              };
-              if (milestoneNumber) issueParams.milestone = milestoneNumber;
-
-              await github.rest.issues.create(issueParams);
-              core.info(`Created issue for category: ${category} (${items.length} findings)`);
-            }
