@@ -23,9 +23,7 @@ jobs:
   bandit-scan:
     name: Bandit Python security scan
     runs-on: ubuntu-latest
-    # Non-blocking: allow workflow to succeed even if vulnerabilities found
-    continue-on-error: true
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -48,10 +46,12 @@ jobs:
           # -r: recursive scan
           # -f sarif: output SARIF format for GitHub Code Scanning
           # -o: output file
-          # --exit-zero: don't fail on findings (handled by continue-on-error)
-          bandit -c .bandit -r . -f sarif -o bandit-results.sarif --exit-zero || true
+          # Exits non-zero on findings — this is intentional so security
+          # issues block merges (required status check)
+          bandit -c .bandit -r . -f sarif -o bandit-results.sarif
 
       - name: Upload SARIF to GitHub Code Scanning
+        if: always()
         uses: github/codeql-action/upload-sarif@820e3160e279568db735cee8ed8f8e77a6da7818  # v3.32.6
         with:
           sarif_file: bandit-results.sarif
