@@ -749,7 +749,7 @@ def search(
     """Search for books.
 
     - **keyword** (default): BM25 full-text search via Solr edismax.
-    - **semantic**: Dense vector kNN search using Solr HNSW (``book_embedding`` field).
+    - **semantic**: Dense vector kNN search using Solr HNSW (``embedding_v`` field).
     - **hybrid**: Reciprocal Rank Fusion of the BM25 and kNN legs.
 
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
@@ -845,7 +845,7 @@ def _search_semantic(
     sort: str | None,
     filters: dict[str, str],
 ) -> dict[str, Any]:
-    """Execute a Solr kNN semantic search using the ``book_embedding`` field.
+    """Execute a Solr kNN semantic search using the ``embedding_v`` field.
 
     Facets and highlights degrade to empty because the kNN query path does not
     produce Solr facet counts or highlight snippets.
@@ -1061,7 +1061,7 @@ def similar_books(
     """Return books semantically similar to the one identified by *document_id*.
 
     The source document is always excluded from results. Similarity is computed
-    using Solr's kNN query against the ``book_embedding`` DenseVectorField.
+    using Solr's kNN query against the ``embedding_v`` DenseVectorField.
     """
     embedding_field = settings.book_embedding_field
 

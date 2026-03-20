@@ -264,7 +264,7 @@ def build_knn_params(
     """Build Solr parameters for a kNN (dense vector) query.
 
     Uses the Solr ``{!knn}`` local-parameter syntax with the pre-existing
-    ``book_embedding`` DenseVectorField (HNSW, cosine similarity, 512-dim).
+    ``embedding_v`` DenseVectorField (HNSW, cosine similarity, 512-dim).
     """
     vector_str = "[" + ",".join(str(v) for v in vector) + "]"
     params = {
