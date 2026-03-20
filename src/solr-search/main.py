@@ -41,6 +41,42 @@ from auth import (
     update_user,
 )
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
+from collections_models import (
+    AddItemsRequest,
+    CollectionDetailResponse,
+    CollectionResponse,
+    CreateCollectionRequest,
+    ReorderItemsRequest,
+    UpdateCollectionRequest,
+    UpdateItemRequest,
+)
+from collections_service import (
+    add_items as svc_add_items,
+)
+from collections_service import (
+    create_collection as svc_create_collection,
+)
+from collections_service import (
+    delete_collection as svc_delete_collection,
+)
+from collections_service import (
+    get_collection as svc_get_collection,
+)
+from collections_service import (
+    list_collections as svc_list_collections,
+)
+from collections_service import (
+    remove_item as svc_remove_item,
+)
+from collections_service import (
+    reorder_items as svc_reorder_items,
+)
+from collections_service import (
+    update_collection as svc_update_collection,
+)
+from collections_service import (
+    update_item as svc_update_item,
+)
 from config import settings
 from correlation import CorrelationIdMiddleware, get_correlation_id
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
@@ -89,6 +125,9 @@ async def lifespan(_app: FastAPI):
             "Set a strong random secret via the AUTH_JWT_SECRET environment variable."
         )
     init_auth_db(settings.auth_db_path)
+    from collections_service import init_collections_db
+
+    init_collections_db(settings.collections_db_path)
     logger.info("solr-search started", extra={"version": settings.version, "port": settings.port})
     yield
     logger.info("solr-search shutting down")
@@ -2115,6 +2154,107 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
         "status": "accepted",
         "message": "File uploaded and queued for indexing",
     }
+
+
+# ---------------------------------------------------------------------------
+# Collections CRUD endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/v1/collections", response_model=CollectionResponse, status_code=201)
+def create_collection(body: CreateCollectionRequest, request: Request):
+    user = _get_current_user(request)
+    result = svc_create_collection(settings.collections_db_path, str(user.id), body.name, body.description)
+    return result
+
+
+@app.get("/v1/collections", response_model=list[CollectionResponse])
+def list_collections(request: Request):
+    user = _get_current_user(request)
+    return svc_list_collections(settings.collections_db_path, str(user.id))
+
+
+@app.get("/v1/collections/{collection_id}", response_model=CollectionDetailResponse)
+def get_collection(collection_id: str, request: Request):
+    user = _get_current_user(request)
+    result = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return result
+
+
+@app.put("/v1/collections/{collection_id}", response_model=CollectionDetailResponse)
+def update_collection(collection_id: str, body: UpdateCollectionRequest, request: Request):
+    user = _get_current_user(request)
+    if body.name is None and body.description is None:
+        raise HTTPException(status_code=422, detail="At least one of name or description must be provided")
+    result = svc_update_collection(
+        settings.collections_db_path, collection_id, str(user.id), name=body.name, description=body.description
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return result
+
+
+@app.delete("/v1/collections/{collection_id}", status_code=204)
+def delete_collection(collection_id: str, request: Request):
+    user = _get_current_user(request)
+    deleted = svc_delete_collection(settings.collections_db_path, collection_id, str(user.id))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return Response(status_code=204)
+
+
+@app.post("/v1/collections/{collection_id}/items", status_code=201)
+def add_collection_items(collection_id: str, body: AddItemsRequest, request: Request):
+    user = _get_current_user(request)
+    # Verify the collection exists and is owned by user
+    col = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
+    if col is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    added = svc_add_items(settings.collections_db_path, collection_id, str(user.id), body.document_ids)
+    return {"added": added, "added_count": len(added)}
+
+
+@app.put("/v1/collections/{collection_id}/items/reorder")
+def reorder_collection_items(collection_id: str, body: ReorderItemsRequest, request: Request):
+    user = _get_current_user(request)
+    col = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
+    if col is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    svc_reorder_items(settings.collections_db_path, collection_id, str(user.id), body.item_ids)
+    return {"status": "reordered"}
+
+
+@app.put("/v1/collections/{collection_id}/items/{item_id}")
+def update_collection_item(collection_id: str, item_id: str, body: UpdateItemRequest, request: Request):
+    user = _get_current_user(request)
+    if body.note is not None and len(body.note) > settings.collections_note_max_length:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Note exceeds maximum length of {settings.collections_note_max_length} characters",
+        )
+    result = svc_update_item(
+        settings.collections_db_path,
+        collection_id,
+        str(user.id),
+        item_id,
+        note=body.note,
+        position=body.position,
+        note_max_length=settings.collections_note_max_length,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return result
+
+
+@app.delete("/v1/collections/{collection_id}/items/{item_id}", status_code=204)
+def delete_collection_item(collection_id: str, item_id: str, request: Request):
+    user = _get_current_user(request)
+    removed = svc_remove_item(settings.collections_db_path, collection_id, str(user.id), item_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return Response(status_code=204)
 
 
 if __name__ == "__main__":

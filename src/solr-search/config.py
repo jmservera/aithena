@@ -67,6 +67,8 @@ class Settings:
     zookeeper_hosts: str
     auth_default_admin_username: str
     auth_default_admin_password: str | None
+    collections_db_path: Path
+    collections_note_max_length: int
 
     @property
     def select_url(self) -> str:
@@ -129,4 +131,6 @@ settings = Settings(
     zookeeper_hosts=os.environ.get("ZOOKEEPER_HOSTS", "zoo1:2181"),
     auth_default_admin_username=os.environ.get("AUTH_DEFAULT_ADMIN_USERNAME", "admin").strip() or "admin",
     auth_default_admin_password=os.environ.get("AUTH_DEFAULT_ADMIN_PASSWORD") or None,
+    collections_db_path=Path(os.environ.get("COLLECTIONS_DB_PATH", "/data/collections/collections.db")).resolve(),
+    collections_note_max_length=int(os.environ.get("COLLECTIONS_NOTE_MAX_LENGTH", "1000")),
 )
