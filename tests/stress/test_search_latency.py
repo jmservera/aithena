@@ -385,10 +385,7 @@ def calculate_facet_overhead(
     (50.0, 0.0)
     """
     overhead_ms = round(faceted_latency_ms - base_latency_ms, 2)
-    if base_latency_ms > 0:
-        overhead_pct = round((overhead_ms / base_latency_ms) * 100.0, 2)
-    else:
-        overhead_pct = 0.0
+    overhead_pct = round((overhead_ms / base_latency_ms) * 100.0, 2) if base_latency_ms > 0 else 0.0
     return overhead_ms, overhead_pct
 
 
@@ -405,10 +402,7 @@ def calculate_cold_start_overhead(
     (100.0, 0.0)
     """
     overhead_ms = round(first_query_ms - warmed_p50_ms, 2)
-    if warmed_p50_ms > 0:
-        overhead_pct = round((overhead_ms / warmed_p50_ms) * 100.0, 2)
-    else:
-        overhead_pct = 0.0
+    overhead_pct = round((overhead_ms / warmed_p50_ms) * 100.0, 2) if warmed_p50_ms > 0 else 0.0
     return overhead_ms, overhead_pct
 
 
@@ -427,7 +421,7 @@ def group_latencies_by_query_type(
     200.0
     """
     by_type: dict[str, list[float]] = {}
-    for query, latency in zip(queries, latencies_ms):
+    for query, latency in zip(queries, latencies_ms, strict=False):
         qtype = query.get("type", "unknown")
         by_type.setdefault(qtype, []).append(latency)
 
@@ -1798,7 +1792,9 @@ class TestSearchLatencyBenchmark:
 
         # Determine current index size
         try:
-            resp = requests.get(f"{search_api_url}/search", params={"q": "", "mode": "keyword", "page_size": "1"}, timeout=10)
+            resp = requests.get(
+                f"{search_api_url}/search", params={"q": "", "mode": "keyword", "page_size": "1"}, timeout=10
+            )
             total = resp.json().get("total", 0) if resp.ok else 0
         except Exception:  # noqa: BLE001
             total = 0
@@ -1871,8 +1867,8 @@ class TestSearchLatencyBenchmark:
             try:
                 lat, _ = _search_api_query(search_api_url, test_query, "keyword")
                 base_latencies.append(lat)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:  # noqa: BLE001, S110
+                pass  # intentional: skip failed queries in stress benchmark
 
         base_p50 = calculate_percentiles(base_latencies).p50_ms if base_latencies else 0.0
 
@@ -1884,8 +1880,8 @@ class TestSearchLatencyBenchmark:
                 try:
                     lat, _ = _facets_api_query(search_api_url, test_query, filters)
                     filter_latencies.append(lat)
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception:  # noqa: BLE001, S110
+                    pass  # intentional: skip failed queries in stress benchmark
 
             if filter_latencies:
                 faceted_p50 = calculate_percentiles(filter_latencies).p50_ms
@@ -1929,8 +1925,8 @@ class TestSearchLatencyBenchmark:
             try:
                 lat, _ = _embeddings_query(embeddings_url, query["q"])
                 latencies.append(lat)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:  # noqa: BLE001, S110
+                pass  # intentional: skip failed queries in stress benchmark
 
         if not latencies:
             pytest.skip("Embeddings server not reachable")
@@ -2049,8 +2045,8 @@ class TestColdStartLatency:
             try:
                 lat, _ = _search_api_query(search_api_url, "science", "keyword")
                 warmed_latencies.append(lat)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:  # noqa: BLE001, S110
+                pass  # intentional: skip failed queries in stress benchmark
 
         if not warmed_latencies:
             pytest.skip("Could not collect warm-up latencies")
