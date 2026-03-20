@@ -47,10 +47,10 @@ SUPPORTED_TYPES = ("pdf", "pdf-ocr", "epub")
 
 
 def _make_faker(seed: int) -> Faker:
-    """Return a seeded Faker instance for deterministic output."""
+    """Return a seeded Faker instance with a local Random for deterministic output."""
     fake = Faker()
     Faker.seed(seed)
-    random.seed(seed)
+    fake.random = random.Random(seed)  # noqa: S311 — local RNG, no global state
     return fake
 
 
@@ -62,7 +62,7 @@ def generate_title(fake: Faker) -> str:
         lambda: f"A {fake.word().title()} {fake.word().title()}",
         lambda: fake.sentence(nb_words=4).rstrip("."),
     ]
-    return random.choice(patterns)()  # noqa: S311
+    return fake.random.choice(patterns)()
 
 
 def generate_author(fake: Faker) -> str:
@@ -72,8 +72,8 @@ def generate_author(fake: Faker) -> str:
 
 def generate_page_text(fake: Faker, min_paragraphs: int = 3, max_paragraphs: int = 6) -> str:
     """Generate realistic page content with multiple paragraphs."""
-    n = random.randint(min_paragraphs, max_paragraphs)  # noqa: S311
-    return "\n\n".join(fake.paragraph(nb_sentences=random.randint(4, 8)) for _ in range(n))  # noqa: S311
+    n = fake.random.randint(min_paragraphs, max_paragraphs)
+    return "\n\n".join(fake.paragraph(nb_sentences=fake.random.randint(4, 8)) for _ in range(n))
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +198,13 @@ def generate_documents(
     """
     if doc_type not in SUPPORTED_TYPES:
         msg = f"Unsupported document type: {doc_type!r}. Choose from {SUPPORTED_TYPES}"
+        raise ValueError(msg)
+
+    if count < 0:
+        msg = f"count must be >= 0, got {count}"
+        raise ValueError(msg)
+    if pages_per_doc < 1:
+        msg = f"pages_per_doc must be >= 1, got {pages_per_doc}"
         raise ValueError(msg)
 
     fake = _make_faker(seed)
