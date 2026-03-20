@@ -274,8 +274,10 @@ services:
       - ADMIN_API_KEY=${ADMIN_API_KEY:-}
       - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-100}
       - ZOOKEEPER_HOSTS=zoo1:2181,zoo2:2181,zoo3:2181
+      - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}
     volumes:
       - document-data:/data/documents
+      - collections-db:/data/collections
       - type: bind
         source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
         target: /data/auth
@@ -743,6 +745,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "${BOOKS_PATH:-/data/booklibrary}"
+  collections-db:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${COLLECTIONS_DB_DIR:-/source/volumes/collections-db}"
   solr-data:
     driver: local
     driver_opts:
