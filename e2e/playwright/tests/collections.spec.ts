@@ -264,9 +264,9 @@ test.describe('create collection flow', () => {
     // Modal should close
     await expect(modal).toBeHidden();
 
-    // Collection should appear in the grid
-    const card = page.locator('.collection-card', { hasText: collName });
-    await expect(card).toBeVisible({ timeout: 10_000 });
+    // After creation the UI navigates to the detail page
+    await expect(page).toHaveURL(/\/collections\//, { timeout: 10_000 });
+    await expect(page.locator('h2', { hasText: collName })).toBeVisible({ timeout: 10_000 });
 
     // Cleanup via API
     const resp = await request.get(`${apiBaseURL}/v1/collections`, { headers, timeout: 10_000 });
