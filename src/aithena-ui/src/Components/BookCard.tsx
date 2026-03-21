@@ -81,6 +81,17 @@ const BookCard = memo(function BookCard({
     return intl.formatMessage({ id: 'book.foundOnPage' }, { pageStart });
   }, [book.pages, intl]);
 
+  const chunkPagesLabel = useMemo(() => {
+    if (!book.is_chunk || book.page_start == null || book.page_end == null) return null;
+    if (book.page_start === book.page_end) {
+      return intl.formatMessage({ id: 'book.chunkPage' }, { page: book.page_start });
+    }
+    return intl.formatMessage(
+      { id: 'book.chunkPages' },
+      { start: book.page_start, end: book.page_end }
+    );
+  }, [book.is_chunk, book.page_start, book.page_end, intl]);
+
   const highlightMarkup = useMemo(
     () =>
       book.highlights?.map((snippet, index) => ({
@@ -200,6 +211,17 @@ const BookCard = memo(function BookCard({
           <span className="book-meta-item book-found-pages">{foundPagesLabel}</span>
         )}
       </div>
+      {book.is_chunk && book.chunk_text && (
+        <div className="book-chunk-text">
+          <span className="book-chunk-text__label">
+            {intl.formatMessage({ id: 'book.matchingText' })}
+            {chunkPagesLabel && (
+              <span className="book-chunk-text__pages"> · {chunkPagesLabel}</span>
+            )}
+          </span>
+          <p className="book-chunk-text__content">{book.chunk_text}</p>
+        </div>
+      )}
       {highlightMarkup.length > 0 && (
         <div className="book-highlights">
           {highlightMarkup.map((snippet) => (

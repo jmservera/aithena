@@ -700,6 +700,41 @@ select:focus-visible,
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* ── Book card: chunk text preview (vector search) ─────────────── */
+
+.book-chunk-text {
+  background-color: rgba(126, 200, 227, 0.06);
+  border-left: 3px solid rgba(126, 200, 227, 0.4);
+  border-radius: 0 6px 6px 0;
+  padding: 10px 14px;
+  margin-top: 8px;
+}
+
+.book-chunk-text__label {
+  display: block;
+  font-size: 0.78em;
+  font-weight: 600;
+  color: rgba(126, 200, 227, 0.85);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.book-chunk-text__pages {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.book-chunk-text__content {
+  margin: 0;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 .book-highlights {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 8px;
