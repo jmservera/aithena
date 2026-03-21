@@ -163,3 +163,16 @@ src/aithena-ui/src/
 **"Select all N matching" UX:** When total results exceed visible page size, a "Select all N matching results" button appears. This sets `allMatchingSelected` state, which passes `queryContext` (with current query + active filters including folder) to `BatchEditPanel`. Individual checkbox toggles reset `allMatchingSelected` to prevent mixed-mode confusion.
 
 **i18n pattern:** Used `{count, plural, one {# matching result} other {# matching results}}` for the selectAllMatching key — follows established ICU MessageFormat pattern from existing batch keys.
+
+### Version Display Fix (#810, 2026-07-17)
+
+**Bug:** UI footer showed stale version (e.g. v1.0.0) instead of actual version from VERSION file.
+
+**Root cause:** `getVersion()` in `vite.config.ts` checked `process.env.VERSION` before the VERSION file. A stale env var (from `.env`, Docker cache, or shell) would override the actual VERSION file.
+
+**Fix:** Flipped resolution priority — VERSION file first, env var fallback. Also updated Dockerfile to write the VERSION build arg to a file so the file-based path works inside Docker builds.
+
+**Learnings:**
+- The VERSION file at repo root is the single source of truth; always prefer reading it over env vars.
+- Docker build context for aithena-ui is `./src/aithena-ui/`, so the repo-root VERSION file is not in context. Must write it from the build arg in the Dockerfile.
+- `.env.example` files contain stale VERSION values (0.8.0, 1.4.0) — operators copying these to `.env` get wrong versions. Flagged for infra team to fix.
