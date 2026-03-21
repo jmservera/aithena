@@ -71,7 +71,7 @@ fi
 
 # JSON escaping helper — escapes backslash, double quotes, and control chars
 json_escape() {
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g' | tr '\n' ' '
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g' | tr -d '\000-\011\013-\037' | tr '\n' ' '
 }
 
 # Extract service name from a Docker Compose log line (format: "service-name  | ...")

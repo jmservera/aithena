@@ -22,6 +22,8 @@
 #   SOLR_CONTAINER          Docker container name (default: solr)
 #   SOLR_HEALTH_TIMEOUT     Seconds to wait for Solr health check (default: 30)
 #   SOLR_RESTORE_TIMEOUT    Max seconds for Solr RESTORE API call (default: 600)
+#   SEARCH_API_URL          Search API base URL for post-restore verification (default: http://localhost:8080)
+#   SEARCH_VERIFY_QUERY     Query string for search verification (default: *)
 #   ZK_VOLUME_BASE          Host path to ZK volume root (default: /source/volumes)
 #   ZK_NODES                Number of ZooKeeper nodes (default: 3)
 #   PROJECT_ROOT            Repository / project root on the host
@@ -49,6 +51,8 @@ SOLR_BACKUP_LOCATION="${SOLR_BACKUP_LOCATION:-/var/solr/backups}"
 SOLR_CONTAINER="${SOLR_CONTAINER:-solr}"
 SOLR_HEALTH_TIMEOUT="${SOLR_HEALTH_TIMEOUT:-30}"
 SOLR_RESTORE_TIMEOUT="${SOLR_RESTORE_TIMEOUT:-600}"
+SEARCH_API_URL="${SEARCH_API_URL:-http://localhost:8080}"
+SEARCH_VERIFY_QUERY="${SEARCH_VERIFY_QUERY:-*}"
 ZK_VOLUME_BASE="${ZK_VOLUME_BASE:-/source/volumes}"
 ZK_NODES="${ZK_NODES:-3}"
 PROJECT_ROOT="${PROJECT_ROOT:-/source/aithena}"
@@ -201,6 +205,64 @@ check_solr_health() {
 }
 
 # ---------------------------------------------------------------------------
+# verify_search_api — call the search API after restore and validate results
+# ---------------------------------------------------------------------------
+verify_search_api() {
+    log_info "Verifying search API at ${SEARCH_API_URL}..."
+
+    # Step 1: Check the health endpoint is reachable
+    local health_response=""
+    health_response=$(curl -sf --max-time 15 "${SEARCH_API_URL}/health" 2>/dev/null) || {
+        log_error "Search API health check FAILED: ${SEARCH_API_URL}/health unreachable"
+        return 1
+    }
+    log_info "Search API health endpoint reachable"
+
+    # Step 2: Call the search endpoint with a test query and verify the response
+    local search_response=""
+    local http_code=""
+    http_code=$(curl -sf --max-time 30 -w "%{http_code}" \
+        -o "${WORK_DIR}/search_verify.json" \
+        "${SEARCH_API_URL}/v1/search?q=${SEARCH_VERIFY_QUERY}&page_size=1" 2>/dev/null) || {
+        log_error "Search API verification FAILED: request to /v1/search returned HTTP ${http_code}"
+        return 1
+    }
+
+    if [[ ! "$http_code" =~ ^2 ]]; then
+        log_error "Search API verification FAILED: /v1/search returned HTTP ${http_code}"
+        return 1
+    fi
+
+    # Step 3: Validate the response contains expected structure (total field)
+    if command -v python3 &>/dev/null; then
+        local total=""
+        total=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('${WORK_DIR}/search_verify.json'))
+    print(d.get('total', d.get('numFound', -1)))
+except Exception as e:
+    print(-1, file=sys.stderr)
+    sys.exit(1)
+" 2>/dev/null) || total="-1"
+
+        if [[ "$total" == "-1" ]]; then
+            log_error "Search API verification FAILED: response is not valid JSON or missing total field"
+            return 1
+        fi
+        log_info "Search API verified: /v1/search returned HTTP ${http_code}, total=${total} result(s)"
+    elif grep -q '"total"' "${WORK_DIR}/search_verify.json" 2>/dev/null || \
+         grep -q '"numFound"' "${WORK_DIR}/search_verify.json" 2>/dev/null; then
+        log_info "Search API verified: /v1/search returned HTTP ${http_code} with results"
+    else
+        log_error "Search API verification FAILED: response missing expected result fields"
+        return 1
+    fi
+
+    rm -f "${WORK_DIR}/search_verify.json"
+}
+
+# ---------------------------------------------------------------------------
 # restore_solr — extract archive, copy to container, trigger RESTORE API
 # ---------------------------------------------------------------------------
 restore_solr() {
@@ -273,13 +335,16 @@ restore_solr() {
     sleep 5
     local status_response=""
     status_response=$(curl -sf --max-time 30 \
-        "${SOLR_URL}/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null) || true
+        "${SOLR_URL}/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null) || {
+        log_error "Post-restore verification FAILED: cannot reach Solr cluster status API"
+        return 1
+    }
 
     if echo "$status_response" | grep -q "\"${SOLR_COLLECTION}\""; then
         log_info "Post-restore verification: collection '${SOLR_COLLECTION}' present in cluster"
     else
-        log_warn "Post-restore verification: collection '${SOLR_COLLECTION}' not found — may need time"
-        EXIT_CODE=2
+        log_error "Post-restore verification FAILED: collection '${SOLR_COLLECTION}' not found in cluster"
+        return 1
     fi
 
     # Clean up on-node restore data
@@ -391,11 +456,13 @@ main() {
             # Verify Solr cluster health before restore
             check_solr_health || exit 1
             restore_solr || exit 1
+            verify_search_api || exit 1
             restore_zookeeper || exit 1
             ;;
         solr)
             check_solr_health || exit 1
             restore_solr || exit 1
+            verify_search_api || exit 1
             ;;
         zk)
             restore_zookeeper || exit 1

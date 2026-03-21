@@ -168,6 +168,9 @@ jobs:
             zoo-backup:
               driver: local
               driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            collections-db:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
           EOF
 
       - name: Generate sample PDF fixtures
@@ -196,6 +199,8 @@ jobs:
             build
 
       - name: Start full stack
+        env:
+          ADMIN_API_KEY: ci-admin-api-key
         run: |
           docker compose \
             -f docker-compose.yml \

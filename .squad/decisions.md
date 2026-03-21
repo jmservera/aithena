@@ -8920,3 +8920,427 @@ Newt (Product Manager) completed a reskill cycle: consolidated product knowledge
 
 ---
 
+
+---
+
+# Decision: Ash Reskill — History Consolidation + Skill Extraction
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2026-03-21  
+**Status:** IMPLEMENTED
+
+## What Changed
+
+### History Consolidation
+- **Before:** 177 lines with significant redundancy (two overlapping #562 entries, duplicated PRD decomposition, stale v0.5 roadmap items, repeated schema snapshots)
+- **After:** 82 lines with zero information loss on actionable knowledge
+- **Removed:** Duplicate #562 fix entries (merged into one pattern), stale roadmap items (v0.5 issues long closed), verbose PRD decomposition tables (compressed to principles), redundant 2026-03-14 reskill snapshot (subsumed by Core Context)
+- **Added:** Reskill Notes section with confidence self-assessment and knowledge gaps
+
+### New Skill Extracted
+- **`hybrid-search-parent-chunk`** — Documents the parent-chunk document model, EXCLUDE_CHUNKS_FQ correctness rule, all three search mode implementations, and embedding pipeline. This was the #1 knowledge gap that caused the PR #701 near-incident. Now any agent touching search queries has a reference skill.
+
+### Existing Skills Reviewed
+- `solr-pdf-indexing` — Still accurate, covers indexing side well. No changes needed.
+- `solrcloud-docker-operations` — Still accurate, covers cluster ops. No changes needed.
+
+## Impact
+- **Ash spawn cost:** Reduced context tokens (~380 tokens saved)
+- **Team safety:** The parent-chunk model is now a standalone skill that any agent can reference before modifying search code
+- **Charter:** No changes needed (already lean at 27 lines)
+
+## Knowledge Improvement Estimate
+~25% — Primary improvement is in consolidation quality (removing noise) and externalizing the most critical pattern (parent-chunk model) into a reusable skill. Domain knowledge was already solid; the improvement is in how it's organized and accessible.
+
+---
+
+# Decision: Backup Verification as Pre-Restore Gate
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-21  
+**Context:** #685 / PR #800
+
+## Decision
+
+`scripts/verify-backup.sh` is the canonical tool for backup integrity checks. The restore orchestrator (`restore.sh`) calls it automatically before any restore operation.
+
+## Key Points
+
+1. **Verification is non-blocking on warnings (exit 2)** — missing optional files (e.g., collections DB) don't prevent restore.
+2. **Verification is blocking on failures (exit 1)** — checksum mismatches or missing required files abort the restore.
+3. **GPG validation uses `file -b` for structure detection** — `gpg --list-packets` does NOT work non-interactively on symmetric-encrypted files.
+4. **Backup scripts already generate `.sha256` sidecars** — no changes needed to `backup-critical.sh`, `backup-high.sh`, or `backup-medium.sh`.
+5. **Standalone CLI available** for monitoring: `./scripts/verify-backup.sh /source/backups/` — suitable for cron health checks.
+
+---
+
+# Decision: Milestone Branch Strategy (Starting v1.11.0)
+
+**Author:** jmservera (Juanma) + Squad Coordinator  
+**Date:** 2026-03-21  
+**Status:** APPROVED (user proposed, coordinator validated)
+
+## What
+
+Starting with v1.11.0, each milestone gets its own integration branch. All feature/fix branches PR against the milestone branch, not dev. At milestone close (after security + performance review), the milestone branch merges to dev, and for releases, dev merges to main.
+
+## Branch Naming
+
+`milestone/v{X.Y.Z}` (e.g., `milestone/v1.11.0`)
+
+## Flow
+
+1. Create `milestone/v1.11.0` from `dev` at milestone start
+2. Feature branches: `squad/{issue}-{slug}` → PR to `milestone/v1.11.0`
+3. Periodically sync: merge `dev` into milestone branch (to limit drift)
+4. At milestone close:
+   - Run security review (Kane) + performance review on milestone branch
+   - Merge `milestone/v1.11.0` → `dev`
+   - For releases: merge `dev` → `main`, tag
+
+## Why
+
+- Parallel agent PRs don't conflict with each other or external dev changes
+- CI gates only run against milestone-relevant code
+- Security + performance review happens on the full milestone as a unit
+- Cleaner rollback: revert one merge commit vs cherry-picking
+- Observed problems in v1.10.1: PR #795 went DIRTY after #794 merged, PR #785 blocked by Bandit on docs-only PR, accidental direct push to dev
+
+## Sync Cadence
+
+Merge dev → milestone branch weekly or before each wave, whichever is sooner.
+
+## Applies To
+
+All milestones starting v1.11.0. Previous milestones (v1.10.x) continue with current strategy since they're nearly done.
+
+## Agent Instructions Update Needed
+
+- When Ralph starts a new milestone's work, create the milestone branch first: `git checkout -b milestone/v{X.Y.Z} dev && git push -u origin milestone/v{X.Y.Z}`
+- All agent spawn prompts must use `--base milestone/v{X.Y.Z}` instead of `--base dev`
+- Scribe should note which milestone branch is active in `.squad/identity/now.md`
+- PR merge at milestone close uses: `gh pr create --base dev --head milestone/v{X.Y.Z}`
+
+---
+
+# Decision: Security + Performance Review Release Gate
+
+**Author:** jmservera (Juanma)  
+**Date:** 2026-03-21  
+**Status:** APPROVED (user directive)
+
+## Decision
+
+Every milestone must have a security and performance review before it can be closed. This is a release gate — no milestone ships without both reviews passing.
+
+## Why
+
+User request — captured for team memory. Ensures quality and security standards are maintained across all releases.
+
+## Enforcement
+
+- **Security Review:** Kane (Security Engineer) reviews security posture, SAST findings, and dependency vulnerabilities
+- **Performance Review:** TBD — assigned to performance specialist (to be designated)
+- **Gate:** Both reviews must pass before merge from milestone branch to `dev`
+- **Documentation:** Findings and approval recorded in milestone close decision
+
+---
+
+# Decision: Kane Reskill — Security Scanning Baseline
+
+**Author:** Kane (Security Engineer)  
+**Date:** 2026-03-21  
+**Type:** Maintenance / Knowledge Consolidation  
+**Status:** IMPLEMENTED
+
+## What Changed
+
+### History Consolidated (678 → 104 lines, 85% reduction)
+- Compressed verbose PR narratives into summary tables
+- Merged duplicate SEC-1 through SEC-5 descriptions into single "Completed Work" section
+- Distilled 11 key learnings from 20+ session entries
+- Added structured "Security Posture" reference section with scanner configs, baseline exceptions, known gaps
+- Added "Reskill Notes" self-assessment
+
+### New Skill Extracted
+- **`security-scanning-baseline`** — Bandit/Checkov/zizmor configuration, baseline exception patterns, and triage workflow. This was the most-repeated pattern in history (appeared in 6+ entries) but had no dedicated skill.
+
+### Existing Skills Reviewed (no changes needed)
+- `fastapi-auth-patterns` — comprehensive, covers JWT/RBAC/rate-limiting (Parker authored)
+- `ci-workflow-security` — covers zizmor, template injection, bot-condition guards (Brett authored)
+- `logging-security` — covers two-tier logging pattern (Kane approved)
+- `workflow-secrets-security` — covers secret handling in Actions (Brett authored)
+- `dependabot-triage-routing` — covers dependency classification (Brett authored)
+
+## Self-Assessment
+
+**Strengths:** Auth review (JWT, RBAC, rate limiting), SAST tooling (Bandit config, triage), CI security (zizmor, Checkov), vulnerability documentation
+
+**Gaps:**
+1. No automated DAST integration (ZAP guide is manual-only)
+2. No container image CVE scanning (trivy/grype not yet in CI)
+3. Limited runtime security monitoring experience
+
+**Knowledge improvement estimate:** 15% — the consolidation itself doesn't add new knowledge, but makes existing knowledge 4x more accessible. The new skill extraction ensures triage patterns survive context window limits.
+
+---
+
+# Decision: Metadata Edit API — Redis Override Store Format
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-20  
+**Issue:** #681  
+**Status:** IMPLEMENTED  
+
+## Context
+
+The metadata edit endpoint needs to store overrides in Redis so document-indexer can apply them during re-indexing.
+
+## Decision
+
+Redis override values use **Solr field names** (e.g., `title_s`, `title_t`, `year_i`) rather than request field names (e.g., `title`, `year`). This means document-indexer can apply overrides directly to the Solr document without needing a field mapping table.
+
+Key format: `aithena:metadata-override:{document_id}`
+Value: JSON with Solr field names + `edited_by` + `edited_at`
+
+## Impact
+- **Ash (Search/Solr):** Override keys use Solr field names — if schema changes, update `_METADATA_FIELD_MAP` in main.py
+- **Document-indexer integration:** Can do `metadata_dict.update(json.loads(overrides))` directly (after filtering out `edited_by`/`edited_at`)
+
+---
+
+# Decision: Branch Hygiene Rule (R1)
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-20  
+**Status:** APPROVED  
+**Source:** v1.10.0 Wave 0/1 Retrospective — Action Item R1  
+
+## Context
+
+During Wave 0, multiple cross-branch contamination incidents occurred: auth cookie changes leaked into unrelated PRs, backup script files appeared on wrong branches, and documentation commits landed on incorrect branches. Root cause: agents created branches from a polluted local working tree instead of clean `origin/dev`.
+
+## Rule
+
+**All agents must follow this exact sequence when creating a new branch:**
+
+```bash
+git fetch origin
+git status              # must show clean working tree
+git checkout -b <branch-name> origin/dev
+```
+
+### Prohibited
+
+- `git checkout -b <branch> dev` — local `dev` may be stale or dirty
+- `git checkout -b <branch>` — branches from current HEAD, which may contain other agents' work
+- Creating a branch with uncommitted changes in the working tree
+
+### Enforcement
+
+- Agents must verify `git status` shows a clean working tree before branching
+- PR reviewers should check `git diff --stat origin/dev` for unrelated files
+- If contamination is detected, the branch must be recreated from `origin/dev`
+
+## Impact
+
+All squad agents. This rule is non-negotiable — no exceptions.
+
+---
+
+# Decision: No Silent Degradation Rule (R6)
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-20  
+**Status:** APPROVED  
+**Source:** v1.10.0 Wave 0/1 Retrospective — Action Item R6  
+
+## Context
+
+PR #700 proposed silently degrading semantic search to keyword search when kNN failed. This would have masked two real bugs (field name mismatch + URI too large) and permanently degraded search quality without any user-visible indication. PO rejected the PR.
+
+## Rule
+
+**Error handlers must NOT silently change search mode or drop results.**
+
+### Required behavior when an error occurs in a search/data path:
+
+1. **Log a WARNING-level message** with the error details and context
+2. **Return a clear indication to the user/API consumer** — e.g., an error field in the response, an HTTP error status, or a user-visible message
+3. **Never silently fall back** to a degraded mode (e.g., semantic → keyword, full results → partial results)
+
+### Approval required
+
+Any error handler that changes user-visible behavior (search mode, result count, result quality) requires **explicit approval from the Lead or PO** before implementation. This must be documented as a squad decision.
+
+### Examples
+
+**❌ Prohibited:**
+```python
+try:
+    results = knn_search(query)
+except Exception:
+    results = keyword_search(query)  # silent degradation
+```
+
+**✅ Required:**
+```python
+try:
+    results = knn_search(query)
+except Exception as e:
+    logger.warning("kNN search failed: %s — returning error to client", e)
+    raise SearchError("Semantic search unavailable", cause=e)
+```
+
+## Impact
+
+All agents implementing error handling in search or data paths. Existing degradation code must be reviewed for compliance.
+
+---
+
+# Decision: v1.10.0 Retrospective Process Changes
+
+**Author:** Ripley (Project Lead)  
+**Date:** 2026-03-20  
+**Status:** APPROVED  
+**Trigger:** v1.10.0 Wave 0/1 retrospective — PR #700 PO rejection, PR #701 near-miss, cross-branch contamination  
+
+## Decisions
+
+### 1. Branch Hygiene: Always branch from origin/dev
+
+**Rule:** All agents must create feature branches using:
+```bash
+git fetch origin
+git checkout -b squad/<issue>-<slug> origin/dev
+```
+
+Never branch from local `dev` or an existing local working tree. Before creating a branch, verify `git status` shows a clean working tree. If unclean, stash or discard before branching.
+
+**Reason:** Multiple cross-branch contamination incidents in Wave 0 — Parker's auth changes leaked into Ash's branches, Scribe's commits landed on wrong branches, Brett's backup scripts appeared on Ash's folder facet PR. All caused by branching from a polluted local state.
+
+### 2. Bug Fixes Require Reproduction Evidence
+
+**Rule:** Before opening a PR for any bug fix, the assigned agent must post a comment on the issue with:
+1. **Reproduction steps** — how to trigger the bug
+2. **Error evidence** — actual log output, stack trace, or observable behavior
+3. **Root cause analysis** — why the bug occurs (not just what symptom it causes)
+
+No PR should be opened for a bug fix without this evidence.
+
+**Reason:** PR #700 was rejected because it treated the symptom (502 error) instead of diagnosing the root cause (kNN field name mismatch + URI too large). The real fix was only found when actual Solr error logs were read. PO directive: "reproduce the bug, read the logs, analyze what's happening."
+
+### 3. No Silent Degradation of User-Visible Behavior
+
+**Rule:** Error handlers must NOT silently change search mode (e.g., semantic → keyword), drop results, or reduce functionality without:
+- Logging a WARNING-level message
+- Returning a clear indication to the user/API consumer that degradation occurred
+- Explicit approval from Ripley (Lead) or Juanma (PO) in a squad decision
+
+**Reason:** PR #700 proposed silently degrading semantic search to keyword search on kNN failure. This would have hidden two real bugs and permanently degraded search quality for users without them knowing. Error handling should make problems visible, not invisible.
+
+### 4. Pre-PR Self-Review Checklist
+
+**Rule:** Before opening a PR, the implementing agent must verify:
+- [ ] `git diff --stat origin/dev` shows ONLY files related to this issue
+- [ ] Security implications reviewed (auth flows, input validation, permissions)
+- [ ] Data model impact assessed (parent/chunk docs, cross-service data flows)
+- [ ] Error handling doesn't silently change user-visible behavior
+- [ ] Tests cover the specific bug/feature, not just happy path
+
+**Reason:** 4-5 Copilot review rounds per PR in Wave 0 indicates quality issues at submission time. Security (backup script permissions), auth flows (cookie handling), and data model (chunk vs parent docs) were all caught by reviewers, not by the implementing agent.
+
+### 5. Data Model Documentation Required
+
+**Rule:** Critical data model relationships must be documented in service READMEs or `docs/architecture/`. The first required document is the Solr parent/chunk document relationship:
+- Parent documents: book metadata (title, author, path, etc.)
+- Chunk documents: text chunks with `embedding_v` vectors, linked via `parent_id_s`
+- kNN queries MUST target chunks (embeddings live there)
+- Results are de-duplicated by `parent_id_s` after retrieval
+
+**Reason:** PR #701 nearly broke semantic search because the implementing agent didn't understand that embeddings live on chunk documents, not parent documents. This knowledge was implicit in the document-indexer code and not documented anywhere.
+
+## Impact
+
+- **All agents:** Must follow branch hygiene and pre-PR checklist immediately
+- **Ash:** Owns data model documentation (R2 action item)
+- **Lambert:** Must create semantic search integration test on chunks (R5 action item)
+- **Ripley:** Will enforce reproduction evidence requirement on Wave 2 bug fixes
+- **Brett:** Will document merge chain workflow (R7 action item)
+
+
+# Decision: CI Workflow Design for BCDR and Stress Tests
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-07-25  
+**Context:** Issues #682, #684 / PR #799  
+**Status:** PROPOSED  
+
+## Decision
+
+Two new CI workflows designed for environments **without Docker daemon access**:
+
+1. **monthly-restore-drill.yml** — Validates restore scripts via `bash -n` syntax checking + `DRY_RUN=1` orchestrator execution. Creates a GitHub issue on failure. Exit codes: 0=pass, 2=warnings, 1=fail.
+2. **stress-tests.yml** — `--collect-only` dry-run validates test infrastructure; always runs Locust smoke tests. Full tests require `dry_run: false` on self-hosted runners. Nightly schedule commented out per PRD §10.
+
+Both use `workflow_dispatch` for on-demand validation. Neither blocks PRs (manual/scheduled only).
+
+## Impact
+
+- Lambert: stress test CI surfaces collection errors early.
+- Brett: restore drill catches script regressions monthly.
+
+---
+
+# Decision: Search Results Redesign PRD — Phasing & Scope
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-21  
+**Context:** Issues #796, #797 / PR #798  
+**PRD:** `docs/prd/search-results-redesign.md`  
+**Status:** PROPOSED — Awaiting PO approval  
+
+## Decision
+
+v1.11.0 search improvements split into 3 waves:
+
+- **Wave 1 (S+M):** R1 (chunk text preview — nearly complete, chunk text already in Solr) + R2 (PDF viewer improvements). No backend architecture changes.
+- **Wave 2 (L):** R3 (similar books + BookDetailView). Decoupled from PDF viewer state to fix z-index/overlay issues.
+- **Wave 3 or v1.12.0 (XL):** R4 (thumbnails) — deferred due to infrastructure dependencies.
+
+Chunking strategy (issue #796) requires PO decision before R1 — current 400-word/50-overlap defaults may exceed embedding model token limit.
+
+## Impact
+
+- Dallas: BookDetailView is a new component — design review needed.
+- Parker/Ash: R1 is small (add field to Solr response, update normalizer). R4 needs architecture discussion.
+- Newt: v1.11.0 milestone created with 4 requirements across 3 waves.
+
+---
+
+# Decision: v1.10.1 Security & Performance Gate Review — Approved
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-21  
+**Milestone:** v1.10.1 (13 issues)  
+**Status:** APPROVED  
+
+## Decision
+
+All 13 v1.10.1 issues pass security and performance review. **Release approved.**
+
+Key findings:
+- **SQL injection (collections_service):** All queries parameterized. Two `S608` suppressions justified (whitelist column names, placeholder expansion).
+- **Auth hardening:** All 401 responses include `WWW-Authenticate` headers (RFC 7235). If-guard refactor eliminates exception-driven control flow from middleware hot path.
+- **Shell scripts (verify-backup.sh):** `set -euo pipefail`, `umask 077`, no `eval`/`exec`, input validation via whitelist. No injection vectors.
+- **CI workflows:** Both `monthly-restore-drill.yml` and `stress-tests.yml` use SHA-pinned actions, minimal permissions, `persist-credentials: false`.
+- **Batch operations:** Admin-only with defense-in-depth auth, `solr_escape()` on all filter values, hard cap at 5000 docs.
+
+One performance note: sequential batch updates for large document sets (~100s for 5000 docs) — acceptable for admin-only scope, optimize in v1.11+.
+
+## Impact
+
+- All agents: v1.10.1 is clear to ship.
+- Future: consider chunked async execution for batch operations in v1.11+.
+
+---

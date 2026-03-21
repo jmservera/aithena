@@ -40,6 +40,27 @@ from auth import (
     set_auth_cookie,
     update_user,
 )
+from backup_service import (
+    BackupConfigRequest,
+    BackupInfo,
+    BackupListResponse,
+    BackupRequest,
+    BackupStatusResponse,
+    OperationRecord,
+    RestoreRequest,
+    get_backup_by_id,
+    get_tier_status,
+    run_backup,
+    run_restore,
+    run_test_restore,
+    scan_backups,
+)
+from backup_service import (
+    get_config as get_backup_config,
+)
+from backup_service import (
+    update_config as update_backup_config,
+)
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 from collections_models import (
     AddItemsRequest,
@@ -566,7 +587,10 @@ def _get_current_user(request: Request) -> AuthenticatedUser:
     current_user = getattr(request.state, "auth_user", None)
     if isinstance(current_user, AuthenticatedUser):
         return current_user
-    return _authenticate_request(request)
+    try:
+        return _authenticate_request(request)
+    except AuthenticationError as exc:
+        raise _unauthorized_exception(str(exc)) from exc
 
 
 @app.middleware("http")
@@ -574,8 +598,24 @@ async def require_authentication(request: Request, call_next):
     if request.method == "OPTIONS" or _is_public_path(request.url.path):
         return await call_next(request)
 
+    token = get_token_from_sources(
+        request.headers.get("Authorization"),
+        request.cookies.get(settings.auth_cookie_name),
+    )
+
+    # Admin endpoints with X-API-Key: attempt user auth but don't block on failure.
+    # Routes that need a logged-in user use require_role() which will reject if missing.
+    if request.headers.get("X-API-Key") and request.url.path.startswith("/v1/admin/"):
+        if token is not None:
+            with contextlib.suppress(AuthenticationError):
+                request.state.auth_user = decode_access_token(token, settings.auth_jwt_secret)
+        return await call_next(request)
+
+    if token is None:
+        return _unauthorized_response("Not authenticated")
+
     try:
-        request.state.auth_user = _authenticate_request(request)
+        request.state.auth_user = decode_access_token(token, settings.auth_jwt_secret)
     except AuthenticationError as exc:
         return _unauthorized_response(str(exc))
 
@@ -814,6 +854,7 @@ def search(
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
     mode: str = Query(
         settings.default_search_mode,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
@@ -846,6 +887,7 @@ def search(
         language=fq_language,
         year=fq_year,
         series=fq_series,
+        folder=fq_folder,
     )
 
     with _track_search_metrics(mode):
@@ -1088,6 +1130,7 @@ def facets(
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -1103,6 +1146,7 @@ def facets(
                 language=fq_language,
                 year=fq_year,
                 series=fq_series,
+                folder=fq_folder,
             ),
             facet_limit=settings.facet_limit,
             rows=0,
@@ -1216,12 +1260,13 @@ def list_books(
     fq_language: str | None = Query(None, description="Filter by language."),
     fq_year: str | None = Query(None, description="Filter by publication year."),
     fq_series: str | None = Query(None, description="Filter by series name."),
+    fq_folder: str | None = Query(None, description="Filter by folder path."),
 ) -> dict[str, Any]:
     """Browse the complete library of indexed books with pagination and filtering.
 
     Returns all books sorted by title (default) or other fields. Supports the same
     filter query parameters as the search endpoint (``fq_author``, ``fq_category``,
-    ``fq_language``, ``fq_year``, ``fq_series``).
+    ``fq_language``, ``fq_year``, ``fq_series``, ``fq_folder``).
 
     This endpoint uses a wildcard ``*:*`` query to match all documents, making it
     suitable for library browsing and discovery.
@@ -1232,6 +1277,7 @@ def list_books(
         language=fq_language,
         year=fq_year,
         series=fq_series,
+        folder=fq_folder,
     )
 
     payload = query_solr(
@@ -2044,9 +2090,10 @@ class BatchMetadataEditRequest(BaseModel):
 
 
 class BatchMetadataByQueryRequest(BaseModel):
-    """Batch metadata edit by Solr query."""
+    """Batch metadata edit by Solr query with optional filters."""
 
     query: str
+    filters: dict[str, str] | None = None
     updates: MetadataEditRequest
 
     model_config = {"str_strip_whitespace": True}
@@ -2091,7 +2138,11 @@ def _batch_apply_updates(
     }
 
 
-def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[str]:
+def _solr_query_document_ids(
+    query: str,
+    filter_queries: list[str] | None = None,
+    page_size: int | None = None,
+) -> list[str]:
     """Execute a Solr query and return all matching document IDs, paginated."""
     if page_size is None:
         page_size = _BATCH_PAGE_SIZE
@@ -2106,6 +2157,8 @@ def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[s
             "start": start,
             "wt": "json",
         }
+        if filter_queries:
+            params["fq"] = filter_queries
         result = query_solr(params)
         docs = result.get("response", {}).get("docs", [])
         if not docs:
@@ -2152,14 +2205,24 @@ def admin_batch_edit_metadata_by_query(body: BatchMetadataByQueryRequest) -> dic
     """Edit metadata for documents matching a Solr query.
 
     Resolves matching document IDs via Solr search, then applies updates
-    in pages.  Requires both admin API key and admin JWT role (defense-in-depth).
+    in pages.  Supports optional filters (folder, author, category, etc.)
+    to narrow the query scope.  Requires both admin API key and admin JWT
+    role (defense-in-depth).
     """
     query = body.query.strip()
     if not query:
         raise HTTPException(status_code=422, detail="query must not be empty")
 
     fields = body.updates.validate_non_empty()
-    doc_ids = _solr_query_document_ids(query)
+
+    filter_queries: list[str] | None = None
+    if body.filters:
+        try:
+            filter_queries = build_filter_queries(body.filters) or None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    doc_ids = _solr_query_document_ids(query, filter_queries=filter_queries)
 
     if not doc_ids:
         return {"matched": 0, "updated": 0, "failed": 0, "errors": []}
@@ -2356,6 +2419,51 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
+    """Enrich collection items with document metadata from Solr."""
+    doc_ids = [item["document_id"] for item in items if item.get("document_id")]
+    if not doc_ids:
+        return
+
+    try:
+        id_query = " OR ".join(f"id:{solr_escape(did)}" for did in doc_ids)
+        result = query_solr({
+            "q": f"({id_query})",
+            "fl": "id,title_s,author_s,year_i,file_path_s",
+            "rows": len(doc_ids),
+            "wt": "json",
+        })
+
+        docs = result.get("response", {}).get("docs", [])
+        metadata_map: dict[str, dict[str, Any]] = {}
+        for doc in docs:
+            doc_id = doc.get("id")
+            if doc_id:
+                metadata_map[doc_id] = doc
+
+        for item in items:
+            doc = metadata_map.get(item["document_id"], {})
+            item["title"] = doc.get("title_s") or Path(doc.get("file_path_s", "")).stem or None
+            item["author"] = doc.get("author_s") or None
+            item["year"] = doc.get("year_i")
+            item["cover_url"] = None
+    except Exception:
+        logger.warning("Failed to enrich collection items with Solr metadata", exc_info=True)
+        for item in items:
+            item.setdefault("title", None)
+            item.setdefault("author", None)
+            item.setdefault("year", None)
+            item.setdefault("cover_url", None)
+
+
+def _prepare_collection_detail(result: dict[str, Any]) -> dict[str, Any]:
+    """Enrich items and add item_count to a collection detail response."""
+    items = result.get("items", [])
+    _enrich_collection_items(items)
+    result["item_count"] = len(items)
+    return result
+
+
 @app.post("/v1/collections", response_model=CollectionResponse, status_code=201)
 def create_collection(body: CreateCollectionRequest, request: Request):
     user = _get_current_user(request)
@@ -2375,7 +2483,7 @@ def get_collection(collection_id: str, request: Request):
     result = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
     if result is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    return result
+    return _prepare_collection_detail(result)
 
 
 @app.put("/v1/collections/{collection_id}", response_model=CollectionDetailResponse)
@@ -2388,7 +2496,7 @@ def update_collection(collection_id: str, body: UpdateCollectionRequest, request
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    return result
+    return _prepare_collection_detail(result)
 
 
 @app.delete("/v1/collections/{collection_id}", status_code=204)
@@ -2450,6 +2558,162 @@ def delete_collection_item(collection_id: str, item_id: str, request: Request):
     if not removed:
         raise HTTPException(status_code=404, detail="Item not found")
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Backup / Restore Admin Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/v1/admin/backups/",
+    include_in_schema=False,
+    name="admin_backups_list_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups",
+    include_in_schema=False,
+    name="admin_backups_list_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_list_backups() -> BackupListResponse:
+    """List all available backups across tiers."""
+    backups = scan_backups()
+    return BackupListResponse(backups=backups, total=len(backups))
+
+
+@app.post(
+    "/v1/admin/backups/",
+    include_in_schema=False,
+    name="admin_backups_trigger_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups",
+    include_in_schema=False,
+    name="admin_backups_trigger_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_trigger_backup(body: BackupRequest) -> OperationRecord:
+    """Trigger an immediate backup of the specified tier."""
+    record = await run_backup(tier=body.tier, dry_run=body.dry_run)
+    return record
+
+
+@app.get(
+    "/v1/admin/backups/status/",
+    include_in_schema=False,
+    name="admin_backups_status_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/status",
+    include_in_schema=False,
+    name="admin_backups_status_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_backup_status() -> BackupStatusResponse:
+    """Return per-tier backup status summary."""
+    return BackupStatusResponse(tiers=get_tier_status())
+
+
+@app.get(
+    "/v1/admin/backups/config/",
+    include_in_schema=False,
+    name="admin_backups_config_get_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/config",
+    include_in_schema=False,
+    name="admin_backups_config_get_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_get_backup_config() -> dict[str, Any]:
+    """Return current backup configuration."""
+    return get_backup_config().model_dump()
+
+
+@app.put(
+    "/v1/admin/backups/config/",
+    include_in_schema=False,
+    name="admin_backups_config_update_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.put(
+    "/v1/admin/backups/config",
+    include_in_schema=False,
+    name="admin_backups_config_update_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_update_backup_config(body: BackupConfigRequest) -> dict[str, Any]:
+    """Update backup schedule/retention settings."""
+    updated = update_backup_config(body)
+    return updated.model_dump()
+
+
+@app.post(
+    "/v1/admin/backups/test-restore/",
+    include_in_schema=False,
+    name="admin_backups_test_restore_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups/test-restore",
+    include_in_schema=False,
+    name="admin_backups_test_restore_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_test_restore() -> OperationRecord:
+    """Run an automated restore drill using the most recent backup."""
+    try:
+        record = await run_test_restore()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record
+
+
+@app.get(
+    "/v1/admin/backups/{backup_id}/",
+    include_in_schema=False,
+    name="admin_backup_detail_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/{backup_id}",
+    include_in_schema=False,
+    name="admin_backup_detail_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_backup_detail(backup_id: str) -> BackupInfo:
+    """Return details for a specific backup."""
+    backup = get_backup_by_id(backup_id)
+    if backup is None:
+        raise HTTPException(status_code=404, detail=f"Backup not found: {backup_id}")
+    return backup
+
+
+@app.post(
+    "/v1/admin/backups/{backup_id}/restore/",
+    include_in_schema=False,
+    name="admin_backup_restore_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups/{backup_id}/restore",
+    include_in_schema=False,
+    name="admin_backup_restore_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_restore_backup(backup_id: str, body: RestoreRequest | None = None) -> OperationRecord:
+    """Start a restore for the specified backup."""
+    dry_run = body.dry_run if body else False
+    try:
+        record = await run_restore(backup_id=backup_id, dry_run=dry_run)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record
 
 
 if __name__ == "__main__":

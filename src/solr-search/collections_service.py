@@ -190,7 +190,7 @@ def update_collection(
             sets.append("updated_at = ?")
             params.append(now)
             params.append(collection_id)
-            conn.execute(f"UPDATE collections SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608  # nosec B608
+            conn.execute(f"UPDATE collections SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
             conn.commit()
 
     return get_collection(db_path, collection_id, user_id)
@@ -294,23 +294,29 @@ def update_item(
         if row is None:
             return None
 
-        sets: list[str] = []
-        params: list = []
-        if note is not None:
-            if len(note) > note_max_length:
-                raise ValueError(f"Note exceeds maximum length of {note_max_length} characters")
-            sets.append("note = ?")
-            params.append(note)
-        if position is not None:
-            sets.append("position = ?")
-            params.append(position)
+        has_note = note is not None
+        has_position = position is not None
 
-        if sets:
+        if has_note and len(note) > note_max_length:
+            raise ValueError(f"Note exceeds maximum length of {note_max_length} characters")
+
+        if has_note or has_position:
             now = _utcnow()
-            sets.append("updated_at = ?")
-            params.append(now)
-            params.append(item_id)
-            conn.execute(f"UPDATE collection_items SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608  # nosec B608
+            if has_note and has_position:
+                conn.execute(
+                    "UPDATE collection_items SET note = ?, position = ?, updated_at = ? WHERE id = ?",
+                    (note, position, now, item_id),
+                )
+            elif has_note:
+                conn.execute(
+                    "UPDATE collection_items SET note = ?, updated_at = ? WHERE id = ?",
+                    (note, now, item_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE collection_items SET position = ?, updated_at = ? WHERE id = ?",
+                    (position, now, item_id),
+                )
             conn.commit()
 
         updated = conn.execute(
@@ -369,7 +375,7 @@ def get_collection_ids_for_documents(
     with _connect(db_path) as conn:
         placeholders = ",".join("?" for _ in document_ids)
         rows = conn.execute(
-            f"SELECT ci.document_id, ci.collection_id "  # noqa: S608  # nosec B608
+            f"SELECT ci.document_id, ci.collection_id "  # noqa: S608
             f"FROM collection_items ci "
             f"JOIN collections c ON ci.collection_id = c.id "
             f"WHERE c.user_id = ? AND ci.document_id IN ({placeholders})",

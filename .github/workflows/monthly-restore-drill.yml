@@ -1,0 +1,254 @@
+# =============================================================================
+# Monthly Restore Drill — Automated BCDR verification
+# =============================================================================
+# Validates that the restore scripts are well-formed and their dry-run logic
+# executes without errors. This is a CI-level check — it does NOT perform a
+# full Docker-based restore (no Docker daemon available in CI).
+#
+# Schedule: first Monday of each month, 02:00 UTC
+# Manual:   workflow_dispatch
+#
+# Reference: docs/prd/bcdr-plan.md §5.4, Issue #682
+# =============================================================================
+
+name: Monthly Restore Drill
+
+on:
+  schedule:
+    # First Monday of each month, 2 AM UTC
+    # Cron fires on days 1-7 only when the day is a Monday
+    - cron: '0 2 1-7 * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: monthly-restore-drill
+  cancel-in-progress: false
+
+jobs:
+  restore-drill:
+    name: Restore script validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      # ---------------------------------------------------------------
+      # 1. Validate shell script syntax (bash -n)
+      # ---------------------------------------------------------------
+      - name: Validate restore script syntax
+        env:
+          SCRIPTS: >-
+            scripts/restore.sh
+            scripts/restore-critical.sh
+            scripts/restore-high.sh
+            scripts/restore-medium.sh
+        run: |
+          echo "## 🔍 Shell Syntax Validation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          errors=0
+          for script in $SCRIPTS; do
+            if [ ! -f "$script" ]; then
+              echo "::error file=${script}::Script not found: ${script}"
+              echo "- ❌ \`${script}\` — **not found**" >> "$GITHUB_STEP_SUMMARY"
+              errors=$((errors + 1))
+              continue
+            fi
+
+            if bash -n "$script" 2>/tmp/syntax-err; then
+              echo "- ✅ \`${script}\` — syntax OK" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error file=${script}::Syntax error in ${script}"
+              echo "- ❌ \`${script}\` — syntax error" >> "$GITHUB_STEP_SUMMARY"
+              echo '  ```' >> "$GITHUB_STEP_SUMMARY"
+              cat /tmp/syntax-err >> "$GITHUB_STEP_SUMMARY"
+              echo '  ```' >> "$GITHUB_STEP_SUMMARY"
+              errors=$((errors + 1))
+            fi
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::${errors} script(s) failed syntax validation"
+            exit 1
+          fi
+          echo "All restore scripts pass syntax validation ✅"
+
+      # ---------------------------------------------------------------
+      # 2. Validate backup script syntax (complementary)
+      # ---------------------------------------------------------------
+      - name: Validate backup script syntax
+        env:
+          SCRIPTS: >-
+            scripts/backup.sh
+            scripts/backup-critical.sh
+            scripts/backup-critical-test.sh
+            scripts/backup-high.sh
+            scripts/backup-medium.sh
+        run: |
+          echo "## 🔍 Backup Script Syntax Validation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          errors=0
+          for script in $SCRIPTS; do
+            if [ ! -f "$script" ]; then
+              echo "- ⚠️ \`${script}\` — not found (skipped)" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            if bash -n "$script" 2>/tmp/syntax-err; then
+              echo "- ✅ \`${script}\` — syntax OK" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error file=${script}::Syntax error in ${script}"
+              echo "- ❌ \`${script}\` — syntax error" >> "$GITHUB_STEP_SUMMARY"
+              echo '  ```' >> "$GITHUB_STEP_SUMMARY"
+              cat /tmp/syntax-err >> "$GITHUB_STEP_SUMMARY"
+              echo '  ```' >> "$GITHUB_STEP_SUMMARY"
+              errors=$((errors + 1))
+            fi
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::${errors} backup script(s) failed syntax validation"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------
+      # 3. Dry-run the restore orchestrator
+      # ---------------------------------------------------------------
+      - name: Dry-run restore orchestrator
+        run: |
+          echo "## 🔄 Restore Orchestrator Dry Run" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Create a minimal mock backup directory structure so the
+          # orchestrator's pre-flight validation succeeds.
+          MOCK_BACKUP="/tmp/drill-backup"
+          mkdir -p "${MOCK_BACKUP}/critical" "${MOCK_BACKUP}/high" \
+                   "${MOCK_BACKUP}/zookeeper" "${MOCK_BACKUP}/medium"
+
+          # Create placeholder files so the directory is not flagged empty
+          touch "${MOCK_BACKUP}/critical/.placeholder"
+          touch "${MOCK_BACKUP}/high/.placeholder"
+          touch "${MOCK_BACKUP}/medium/.placeholder"
+
+          # Run the orchestrator in dry-run mode.
+          # Expected: it logs its plan but performs no actual file I/O.
+          set +e
+          DRY_RUN=1 \
+          PROJECT_ROOT="$GITHUB_WORKSPACE" \
+          BACKUP_DEST="/tmp/drill-safety" \
+          LOG_FILE="/tmp/drill-restore.log" \
+            bash scripts/restore.sh \
+              --from "${MOCK_BACKUP}" \
+              --tier all \
+              --dry-run \
+              --skip-safety-backup 2>&1 | tee /tmp/drill-output.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/drill-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$rc" -eq 0 ]; then
+            echo "- ✅ Orchestrator dry-run completed successfully (exit 0)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$rc" -eq 2 ]; then
+            echo "- ⚠️ Orchestrator dry-run completed with warnings (exit 2)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ❌ Orchestrator dry-run **failed** (exit ${rc})" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Warnings (exit 2) are acceptable — tier scripts may note missing
+          # backup files, which is expected with placeholder data.
+          if [ "$rc" -eq 1 ]; then
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------
+      # 4. Verify script permissions and shebangs
+      # ---------------------------------------------------------------
+      - name: Verify script metadata
+        run: |
+          echo "## 📋 Script Metadata Checks" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          errors=0
+          for script in scripts/restore*.sh scripts/backup*.sh; do
+            [ -f "$script" ] || continue
+
+            # Check shebang
+            head_line=$(head -1 "$script")
+            if echo "$head_line" | grep -qE '^#!/usr/bin/env bash|^#!/bin/bash'; then
+              echo "- ✅ \`${script}\` — shebang OK (\`${head_line}\`)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- ❌ \`${script}\` — missing or bad shebang (\`${head_line}\`)" >> "$GITHUB_STEP_SUMMARY"
+              errors=$((errors + 1))
+            fi
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::${errors} script(s) have missing/bad shebangs"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------
+      # 5. Summary
+      # ---------------------------------------------------------------
+      - name: Write drill summary
+        if: always()
+        env:
+          DRILL_RESULT: ${{ job.status }}
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DRILL_RESULT" = "success" ]; then
+            echo "## ✅ Monthly Restore Drill: **PASS**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "All restore scripts are syntactically valid, the dry-run orchestrator" >> "$GITHUB_STEP_SUMMARY"
+            echo "executes cleanly, and script metadata checks pass." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ❌ Monthly Restore Drill: **FAIL**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "One or more validation steps failed. Review the details above." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "_Triggered: \`$(date -u '+%Y-%m-%d %H:%M UTC')\` · Run: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_" >> "$GITHUB_STEP_SUMMARY"
+
+      # ---------------------------------------------------------------
+      # 6. Create issue on failure
+      # ---------------------------------------------------------------
+      - name: Create issue on drill failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create \
+            --title "🚨 Monthly restore drill failed ($(date -u '+%Y-%m-%d'))" \
+            --label "type:bug,squad:brett" \
+            --body "The automated monthly restore drill failed.
+
+          **Run:** ${RUN_URL}
+          **Date:** $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          Please investigate the workflow logs and fix any broken restore scripts.
+
+          _This issue was created automatically by the monthly-restore-drill workflow._"

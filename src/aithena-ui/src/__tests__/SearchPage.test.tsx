@@ -5,6 +5,19 @@ import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
 import SearchPage from '../pages/SearchPage';
 import { SearchResponse } from '../hooks/search';
 import { IntlWrapper } from './test-intl-wrapper';
+import { ToastProvider } from '../contexts/ToastContext';
+import { AuthContext, AuthContextValue } from '../contexts/AuthContext';
+
+const mockAuthValue: AuthContextValue = {
+  user: { id: 1, username: 'testuser', role: 'user' },
+  token: 'test-token',
+  isAuthenticated: true,
+  isLoading: false,
+  error: null,
+  login: vi.fn(),
+  logout: vi.fn(),
+  clearError: vi.fn(),
+};
 
 const mockSearchResponse: SearchResponse = {
   query: 'react',
@@ -67,9 +80,13 @@ const similarBooksResponse = {
 function renderSearchPage() {
   return render(
     <IntlWrapper>
-      <MemoryRouter>
-        <SearchPage />
-      </MemoryRouter>
+      <ToastProvider>
+        <AuthContext.Provider value={mockAuthValue}>
+          <MemoryRouter>
+            <SearchPage />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ToastProvider>
     </IntlWrapper>
   );
 }

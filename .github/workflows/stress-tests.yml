@@ -1,0 +1,265 @@
+# =============================================================================
+# Stress Tests — Manual and scheduled performance testing
+# =============================================================================
+# Runs the Aithena stress test suite (tests/stress/) via pytest.
+#
+# Trigger:   workflow_dispatch with configurable inputs
+# Schedule:  nightly cron (COMMENTED OUT — enable after stabilisation)
+#
+# IMPORTANT: Full stress tests require a running Docker Compose stack.
+# In CI without Docker services, only --collect-only (dry-run) validation is
+# available, which confirms that the test infrastructure is correct without
+# executing tests against live services.
+#
+# Reference: docs/prd/stress-testing.md §3.2, Issue #684
+# =============================================================================
+
+name: Stress Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Test scope to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - indexing
+          - search
+          - concurrent
+          - smoke
+      dataset_size:
+        description: 'Dataset size preset for test data generation'
+        required: false
+        default: 'small'
+        type: choice
+        options:
+          - small
+          - medium
+          - large
+      user_count:
+        description: 'Simulated concurrent users (Locust tests)'
+        required: false
+        default: '5'
+        type: string
+      dry_run:
+        description: 'Dry run — validate test collection only (no live services needed)'
+        required: false
+        default: true
+        type: boolean
+
+  # Nightly schedule — uncomment after stress test suite stabilises
+  # schedule:
+  #   - cron: '0 3 * * *'  # 3 AM UTC daily
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stress-tests
+  cancel-in-progress: true
+
+jobs:
+  stress-tests:
+    name: Run stress tests (${{ inputs.test_scope || 'all' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      STRESS_RESULTS_DIR: ${{ github.workspace }}/tests/stress/results
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install stress test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tests/stress/requirements-stress.txt
+
+      - name: Show test configuration
+        env:
+          TEST_SCOPE: ${{ inputs.test_scope || 'all' }}
+          DATASET_SIZE: ${{ inputs.dataset_size || 'small' }}
+          USER_COUNT: ${{ inputs.user_count || '5' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          echo "## 📊 Stress Test Configuration" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Parameter | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test scope | \`${TEST_SCOPE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dataset size | \`${DATASET_SIZE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| User count | \`${USER_COUNT}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dry run | \`${DRY_RUN}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trigger | \`${{ github.event_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # ---------------------------------------------------------------
+      # Resolve pytest marker expression from test_scope input
+      # ---------------------------------------------------------------
+      - name: Resolve test markers
+        id: markers
+        env:
+          TEST_SCOPE: ${{ inputs.test_scope || 'all' }}
+        run: |
+          case "$TEST_SCOPE" in
+            indexing)   MARKER="-m indexing" ;;
+            search)     MARKER="-m search" ;;
+            concurrent) MARKER="-m concurrent" ;;
+            smoke)      MARKER="test_locust_smoke.py" ;;
+            all|*)      MARKER="" ;;
+          esac
+          echo "marker=${MARKER}" >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------
+      # Dry-run: collect tests without executing (validates infra)
+      # ---------------------------------------------------------------
+      - name: Validate test collection (dry run)
+        if: inputs.dry_run == true || inputs.dry_run == ''
+        working-directory: tests/stress
+        env:
+          MARKER: ${{ steps.markers.outputs.marker }}
+        run: |
+          echo "## 🔍 Test Collection (dry run)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Running \`pytest --collect-only\` to verify test infrastructure..." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          set +e
+          python -m pytest --collect-only -q $MARKER 2>&1 | tee /tmp/collect-output.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          # Count collected tests
+          collected=$(grep -oP '^\d+ test' /tmp/collect-output.txt | head -1 || echo "0 tests")
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/collect-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$rc" -eq 0 ] || [ "$rc" -eq 5 ]; then
+            echo "✅ Test collection succeeded — ${collected} found" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Test collection failed (exit ${rc})" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------
+      # Smoke tests — always safe to run (no stack needed)
+      # ---------------------------------------------------------------
+      - name: Run smoke tests (no stack required)
+        working-directory: tests/stress
+        run: |
+          echo "## 🔥 Locust Smoke Tests" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          set +e
+          python -m pytest test_locust_smoke.py -x -q --timeout=30 2>&1 | tee /tmp/smoke-output.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/smoke-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$rc" -eq 0 ]; then
+            echo "✅ Smoke tests passed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$rc" -eq 5 ]; then
+            echo "⚠️ No smoke tests collected (skipped)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Smoke tests failed (exit ${rc})" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------
+      # Full stress tests — only when dry_run is false
+      # NOTE: Requires a running Docker Compose stack. In standard CI
+      # runners this step will skip because services aren't available.
+      # Use self-hosted runners with the stack pre-deployed, or enable
+      # the Docker Compose setup step below.
+      # ---------------------------------------------------------------
+      - name: Run full stress tests
+        if: inputs.dry_run == false
+        working-directory: tests/stress
+        env:
+          MARKER: ${{ steps.markers.outputs.marker }}
+          DATASET_SIZE: ${{ inputs.dataset_size || 'small' }}
+          USER_COUNT: ${{ inputs.user_count || '5' }}
+          LOCUST_USERS: ${{ inputs.user_count || '5' }}
+        run: |
+          echo "## 🏋️ Full Stress Tests" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "⚠️ **Note:** Full stress tests require a running Docker Compose stack." >> "$GITHUB_STEP_SUMMARY"
+          echo "If services are not available, tests will be skipped via the \`stack_healthy\` fixture." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          mkdir -p results
+
+          set +e
+          python -m pytest -v --timeout=600 $MARKER \
+            --tb=short \
+            -o "junit_family=xunit2" \
+            --junitxml=results/stress-results.xml \
+            2>&1 | tee /tmp/stress-output.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -30 /tmp/stress-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$rc" -eq 0 ]; then
+            echo "✅ Stress tests passed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$rc" -eq 5 ]; then
+            echo "⚠️ No tests collected (services may be unavailable)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Stress tests failed (exit ${rc})" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------
+      # Upload results as artifacts
+      # ---------------------------------------------------------------
+      - name: Upload stress test results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: stress-test-results-${{ github.run_number }}
+          path: |
+            tests/stress/results/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # ---------------------------------------------------------------
+      # Summary
+      # ---------------------------------------------------------------
+      - name: Write final summary
+        if: always()
+        env:
+          JOB_RESULT: ${{ job.status }}
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$JOB_RESULT" = "success" ]; then
+            echo "## ✅ Stress Tests: **PASS**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ❌ Stress Tests: **FAIL**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "_Triggered: \`$(date -u '+%Y-%m-%d %H:%M UTC')\` · Run: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_" >> "$GITHUB_STEP_SUMMARY"

@@ -151,3 +151,11 @@
 5. Exception handling that masks errors (bare `except Exception:`)
 
 **Knowledge improvement:** ~25% -- consolidated sprawling 692-line history into focused reference; extracted auth patterns to a new skill; surfaced tech debt as trackable items.
+
+### Folder Batch Integration (#656, 2026-03-21)
+
+**Missing fq_folder on search endpoints:** The search, facets, and books endpoints all lacked `fq_folder` as a declared parameter. The frontend sent it, but FastAPI silently dropped undeclared query params. Fix: add `fq_folder: str | None = Query(None)` and include `folder=fq_folder` in `collect_search_filters()` on all three endpoints.
+
+**Batch-by-query filter support:** `BatchMetadataByQueryRequest` only accepted `query` + `updates`. Added optional `filters: dict[str, str] | None` field. `_solr_query_document_ids` now accepts `filter_queries: list[str] | None` and passes them as `fq` to Solr. The endpoint uses existing `build_filter_queries()` to convert the filters dict — same validation/escaping as search.
+
+**Recurring pattern — silent param drops:** FastAPI ignores undeclared query params without errors. When adding frontend filter params, always verify the backend endpoint declares them. Added to watch-for list.

@@ -4,6 +4,7 @@ import { Library } from 'lucide-react';
 import './App.css';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Footer from './Components/Footer';
+import ToastContainer from './Components/ToastContainer';
 import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import LoadingSpinner from './Components/LoadingSpinner';
 import ProtectedRoute from './Components/ProtectedRoute';
@@ -22,6 +23,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const BackupDashboardPage = lazy(() => import('./pages/BackupDashboardPage'));
 
 function LazyRoute({
   element,
@@ -204,11 +206,22 @@ function App() {
                 />
               }
             />
+            <Route
+              path="/admin/backups"
+              element={
+                <LazyRoute
+                  element={<BackupDashboardPage />}
+                  titleId="loading.backups"
+                  messageId="loading.backupsMessage"
+                />
+              }
+            />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
       <Footer />
+      <ToastContainer />
     </div>
   );
 }

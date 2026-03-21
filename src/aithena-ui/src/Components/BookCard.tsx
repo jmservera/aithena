@@ -3,6 +3,7 @@ import { useIntl } from 'react-intl';
 import { FileText } from 'lucide-react';
 
 import { BookResult } from '../hooks/search';
+import CollectionBadge from './CollectionBadge';
 
 interface BookCardProps {
   book: BookResult;
@@ -10,6 +11,10 @@ interface BookCardProps {
   isSelected?: boolean;
   isAdmin?: boolean;
   onEditMetadata?: (book: BookResult) => void;
+  onSaveToCollection?: (book: BookResult) => void;
+  selectionMode?: boolean;
+  isChecked?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function sanitizeHighlight(raw: string): string {
@@ -27,12 +32,20 @@ const BookCard = memo(function BookCard({
   isSelected = false,
   isAdmin = false,
   onEditMetadata,
+  onSaveToCollection,
+  selectionMode = false,
+  isChecked = false,
+  onToggleSelect,
 }: BookCardProps) {
   const intl = useIntl();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const showMenu = isAdmin && onEditMetadata;
+  const showMenu = Boolean((isAdmin && onEditMetadata) || onSaveToCollection);
+
+  const handleToggleSelect = useCallback(() => {
+    onToggleSelect?.(book.id);
+  }, [book.id, onToggleSelect]);
 
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((prev) => !prev);
@@ -42,6 +55,11 @@ const BookCard = memo(function BookCard({
     setMenuOpen(false);
     onEditMetadata?.(book);
   }, [book, onEditMetadata]);
+
+  const handleSaveToCollection = useCallback(() => {
+    setMenuOpen(false);
+    onSaveToCollection?.(book);
+  }, [book, onSaveToCollection]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -76,9 +94,24 @@ const BookCard = memo(function BookCard({
   }, [book, onOpenPdf]);
 
   return (
-    <article className={`book-card${isSelected ? ' book-card--active' : ''}`}>
+    <article
+      className={`book-card${isSelected ? ' book-card--active' : ''}${isChecked ? ' book-card--checked' : ''}`}
+    >
       <div className="book-card-header">
+        {selectionMode && (
+          <div className="book-card-select-checkbox">
+            <input
+              type="checkbox"
+              checked={isChecked}
+              onChange={handleToggleSelect}
+              aria-label={intl.formatMessage({ id: 'book.selectBook' }, { title: book.title })}
+            />
+          </div>
+        )}
         <h2 className="book-title">{book.title}</h2>
+        {book.in_collections != null && book.in_collections > 0 && (
+          <CollectionBadge count={book.in_collections} />
+        )}
         {showMenu && (
           <div className="book-card-menu-wrapper" ref={menuRef}>
             <button
@@ -93,16 +126,30 @@ const BookCard = memo(function BookCard({
             </button>
             {menuOpen && (
               <ul className="book-card-menu" role="menu">
-                <li role="none">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="book-card-menu-item"
-                    onClick={handleEditMetadata}
-                  >
-                    {intl.formatMessage({ id: 'book.editMetadata' })}
-                  </button>
-                </li>
+                {isAdmin && onEditMetadata && (
+                  <li role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="book-card-menu-item"
+                      onClick={handleEditMetadata}
+                    >
+                      {intl.formatMessage({ id: 'book.editMetadata' })}
+                    </button>
+                  </li>
+                )}
+                {onSaveToCollection && (
+                  <li role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="book-card-menu-item"
+                      onClick={handleSaveToCollection}
+                    >
+                      {intl.formatMessage({ id: 'collections.saveToCollection' })}
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </div>

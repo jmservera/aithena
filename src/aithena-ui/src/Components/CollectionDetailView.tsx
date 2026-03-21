@@ -21,7 +21,7 @@ function sortItems(items: CollectionItem[], key: SortKey, dir: SortDir): Collect
     let cmp = 0;
     switch (key) {
       case 'title':
-        cmp = a.title.localeCompare(b.title);
+        cmp = (a.title ?? '').localeCompare(b.title ?? '');
         break;
       case 'author':
         cmp = (a.author ?? '').localeCompare(b.author ?? '');
