@@ -155,3 +155,11 @@ src/aithena-ui/src/
 4. Advanced Playwright E2E patterns for React SPAs
 
 **End of History — Dallas Frontend Developer**
+
+### Folder Batch Integration (#656, 2026-03-21)
+
+**Query-based batch editing:** Added `BatchQueryContext` type to `useBatchMetadataEdit` — when provided, the hook calls `/metadata-by-query` with query+filters instead of `/batch/metadata` with explicit IDs. The `save()` function branches based on `queryContext` presence, keeping backward compatibility.
+
+**"Select all N matching" UX:** When total results exceed visible page size, a "Select all N matching results" button appears. This sets `allMatchingSelected` state, which passes `queryContext` (with current query + active filters including folder) to `BatchEditPanel`. Individual checkbox toggles reset `allMatchingSelected` to prevent mixed-mode confusion.
+
+**i18n pattern:** Used `{count, plural, one {# matching result} other {# matching results}}` for the selectAllMatching key — follows established ICU MessageFormat pattern from existing batch keys.
