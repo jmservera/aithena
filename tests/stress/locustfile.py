@@ -20,9 +20,12 @@ Run headless for CI::
         --host http://localhost:8080
 
 Environment variables:
-    SEARCH_API_URL      Base URL (default http://localhost:8080)
-    LOCUST_SCENARIO     light | medium | heavy (overrides -u/-r)
-    LOCUST_RUN_TIME     Duration string e.g. "120s" (default 60s)
+    SEARCH_API_URL              Base URL (default http://localhost:8080)
+    LOCUST_SCENARIO             light | medium | heavy (overrides -u/-r)
+    LOCUST_RUN_TIME             Duration string e.g. "120s" (default 60s)
+    STRESS_TEST_USERNAME        Username for JWT auth (optional; skips auth if unset)
+    STRESS_TEST_PASSWORD        Password for JWT auth (optional; skips auth if unset)
+    STRESS_TEST_API_KEY         Admin API key for /v1/admin/* endpoints (optional)
 """
 
 from __future__ import annotations
@@ -218,6 +221,62 @@ def choose_random_mode(rng: random.Random | None = None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Authentication helpers
+# ---------------------------------------------------------------------------
+
+_AUTH_USERNAME: str = os.environ.get("STRESS_TEST_USERNAME", "")
+_AUTH_PASSWORD: str = os.environ.get("STRESS_TEST_PASSWORD", "")
+_ADMIN_API_KEY: str = os.environ.get("STRESS_TEST_API_KEY", "")
+
+
+def _login_for_token(client, username: str, password: str) -> str | None:
+    """POST to /v1/auth/login and return the Bearer token, or None on failure."""
+    try:
+        resp = client.post(
+            "/v1/auth/login",
+            json={"username": username, "password": password},
+            name="[auth] /v1/auth/login",
+        )
+        if resp.status_code == 200:
+            return resp.json().get("access_token")
+        logger.warning("Auth login failed (HTTP %s): %s", resp.status_code, resp.text[:200])
+    except Exception:
+        logger.warning("Auth login request failed — continuing without auth", exc_info=True)
+    return None
+
+
+class AithenaUser(HttpUser):
+    """Base class that handles JWT authentication for all Locust personas.
+
+    Reads ``STRESS_TEST_USERNAME`` / ``STRESS_TEST_PASSWORD`` from the
+    environment.  If credentials are present, ``on_start`` logs in and sets
+    the ``Authorization: Bearer`` header for every subsequent request.
+    If credentials are absent, logs a warning and continues unauthenticated
+    (graceful degradation for environments without auth).
+    """
+
+    abstract = True
+
+    def on_start(self):
+        if _AUTH_USERNAME and _AUTH_PASSWORD:
+            token = _login_for_token(self.client, _AUTH_USERNAME, _AUTH_PASSWORD)
+            if token:
+                self.client.headers["Authorization"] = f"Bearer {token}"
+                logger.info("Authenticated as '%s' for %s", _AUTH_USERNAME, type(self).__name__)
+            else:
+                logger.warning(
+                    "Failed to obtain JWT token for %s — requests will be unauthenticated",
+                    type(self).__name__,
+                )
+        else:
+            logger.warning(
+                "STRESS_TEST_USERNAME / STRESS_TEST_PASSWORD not set — "
+                "%s will run without auth (expect 401s on protected endpoints)",
+                type(self).__name__,
+            )
+
+
+# ---------------------------------------------------------------------------
 # Locust event hooks — write JSON summary alongside CSV
 # ---------------------------------------------------------------------------
 
@@ -272,7 +331,7 @@ def _write_json_summary(environment, **_kwargs):
 # ---------------------------------------------------------------------------
 
 
-class SearchUser(HttpUser):
+class SearchUser(AithenaUser):
     """Simulates a user performing search operations.
 
     Covers keyword, semantic, and hybrid search with optional facet filters.
@@ -322,7 +381,7 @@ class SearchUser(HttpUser):
         self.client.get("/search", params=params, name="/search [page2]")
 
 
-class BrowseUser(HttpUser):
+class BrowseUser(AithenaUser):
     """Simulates a user browsing books, facets, and stats."""
 
     weight = 1
@@ -360,13 +419,14 @@ class BrowseUser(HttpUser):
         self.client.get("/v1/collections", name="/v1/collections")
 
 
-class UploadUser(HttpUser):
+class UploadUser(AithenaUser):
     """Simulates a user uploading documents."""
 
     weight = 1
     wait_time = between(5, 10)
 
     def on_start(self):
+        super().on_start()
         self._pdf_bytes = make_tiny_pdf()
 
     @tag("upload")
@@ -376,11 +436,22 @@ class UploadUser(HttpUser):
         self.client.post("/v1/upload", files=files, name="/v1/upload")
 
 
-class AdminUser(HttpUser):
+class AdminUser(AithenaUser):
     """Simulates an administrator monitoring and managing the queue."""
 
     weight = 1
     wait_time = between(3, 8)
+
+    def on_start(self):
+        super().on_start()
+        if _ADMIN_API_KEY:
+            self.client.headers["X-API-Key"] = _ADMIN_API_KEY
+            logger.info("Admin API key set for %s", type(self).__name__)
+        else:
+            logger.warning(
+                "STRESS_TEST_API_KEY not set — AdminUser will lack X-API-Key header "
+                "(expect 403/401 on /v1/admin/* endpoints)"
+            )
 
     @tag("admin")
     @task(3)
