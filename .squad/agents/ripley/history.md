@@ -200,6 +200,7 @@ Active decisions in `.squad/decisions.md`:
 - **Performance observation:** Sequential batch updates (up to 5000 docs) could take ~100s at max load. Acceptable for admin-only scope in v1.10.1; recommend async chunking for v1.11+.
 
 **Pattern reinforced:** Gate reviews catch the subtle things — the S608 suppressions required careful reading to confirm they're justified (dynamic column names vs user data). Automated linting alone would either flag false positives or miss the distinction.
+
 ### PDF Text Extraction Pipeline Analysis (2026-03-21)
 
 **Session:** Deep investigation of the two-tool extraction pipeline for hierarchical chunking feasibility.
@@ -217,3 +218,31 @@ Active decisions in `.squad/decisions.md`:
 - Open Questions updated with hierarchical chunking questions for PO and Ash
 
 **Pattern reinforced:** "Document the data model before anyone touches it" — the dual-extraction architecture had no documentation. Without reading `__main__.py` end-to-end, you'd assume Tika and pdfplumber were redundant. They're complementary by design.
+
+### Reskill + Wins Report for v1.10.1 (2026-03-21)
+
+**Session:** Extract skills from v1.10.1 work and write wins report.
+
+**Skills created:**
+1. **branch-protection-strict-mode** — Sequential PR merges with GitHub strict branch protection (use `gh pr merge --admin` to bypass BEHIND states when status checks pass)
+2. **milestone-gate-review** — Security/performance/architecture audit before closing any milestone (first enforced in v1.10.1, 13 issues reviewed, 0 blockers)
+3. **milestone-branching-strategy** — Using `milestone/v{X.Y.Z}` branches for parallel milestone work (planned for v1.11.0, confidence: medium, not yet validated)
+4. **copilot-review-to-issues** — Triage Copilot PR review comments into GitHub issues (P0–P2 get issues, P3 deferred). v1.10.1 had 7 issues from Copilot review → all fixed.
+5. **fastapi-query-params** — FastAPI silently ignores undeclared query params (different from Flask/Express). Bug found in #656: `fq_folder` sent but not received.
+6. **pdf-extraction-dual-tool** — Tika (Solr, full-text + metadata) vs pdfplumber (indexer, per-page chunks) — complementary tools, not redundant.
+
+**Skill updated:**
+- **fastapi-auth-patterns** — Confirmed in v1.10.1 auth hardening (WWW-Authenticate headers, no exception-driven flow, role checks enforced)
+
+**Wins report highlights:**
+- 13 issues closed, 7 PRs merged, 0 blockers
+- Security hardening (SQL injection prevention, auth RFC compliance, exception flow elimination)
+- BCDR workflows (monthly restore drills, stress test CI, backup checksums)
+- 4 new processes established (gate review, Copilot → issues, strict branch protection, milestone branching)
+- 5 lessons learned (Parker direct-push, cascading BEHIND states, docs-only PR gaps, FastAPI silent params, dual PDF extraction confusion)
+- Team performance: Parker+Lambert consolidated 7 issues into 1 PR, Brett took over infrastructure from Dallas
+
+**PR #805 created** — reskill + wins report to dev (pending CI checks)
+
+**Pattern reinforced:** "Reskill after every milestone" — v1.10.1 yielded 6 new skills + 1 update. Without dedicated reskill time, these patterns would have been lost. The wins report captures team morale, process improvements, and lessons learned in a shareable format for Juanma.
+
