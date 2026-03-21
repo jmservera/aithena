@@ -139,3 +139,11 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - `solrcloud-docker-operations` — comprehensive, covers backup/restore/recovery
 - **Gap identified:** nginx patterns scattered across history; build context patterns not in a skill
 - **Gap identified:** Bind-mount permission patterns are the #1 recurring issue but only partially covered in docker-compose-operations
+
+## Learnings
+
+### CI Workflow Patterns for BCDR Validation (2026-07-25)
+- Restore scripts support `DRY_RUN=1` and `--dry-run` flags — CI can validate orchestrator logic without Docker or real backup data by creating a mock backup directory structure with placeholder files.
+- `restore.sh` exit code 2 = warnings (e.g., missing files in a tier) — acceptable in CI mock environments. Only exit code 1 is fatal.
+- Stress tests use pytest markers (`indexing`, `search`, `concurrent`, `docker`) and a `stack_healthy` fixture that gracefully skips when services are unreachable — `--collect-only` validates infrastructure without a live stack.
+- `test_locust_smoke.py` is always safe to run in CI (no stack needed) — useful as a baseline sanity check in the stress workflow.

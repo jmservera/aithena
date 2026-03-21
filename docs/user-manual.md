@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.9.1 Release Notes](release-notes/v1.9.1.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.10.0 Release Notes](release-notes/v1.10.0.md).
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
@@ -249,6 +249,7 @@ You can filter by:
 - Counts next to each facet show how many matching books are in that bucket.
 - Changing a filter refreshes the results immediately.
 - When you change a filter, the result list returns to page 1.
+- **Folder filter (v1.10.0+):** Click the "📁 Folder" facet to filter by the directory where documents are stored. This is useful for organizing searches by physical location in your library (e.g., all books in "English/Science Fiction").
 
 ![Filtered search results](images/facet-panel.png)
 
@@ -518,6 +519,56 @@ When you search for books, results that belong to one of your collections displa
 - Use descriptive collection names so you can find them quickly.
 - The sort dropdown is useful for large collections — try sorting by title or author.
 - Notes support plain text only (no formatting).
+
+## Editing book metadata (Admin only, v1.10.0+)
+
+If you have admin privileges, you can correct or enhance book metadata (title, author, year, series/collection name, and category) for one book or many books at once.
+
+### Edit a single book
+
+1. From search results, click the **⋮** menu on a book card.
+2. Select **Edit metadata**.
+3. In the modal that appears:
+   - **Title** — The book title (max 255 characters)
+   - **Author** — Author name (max 255 characters)
+   - **Year** — Publication year (must be between 1000 and 2099)
+   - **Category** — Book category (e.g., "Science Fiction", "History"). The dropdown shows existing categories, but you can also type a new one.
+   - **Series** — The series or magazine name (e.g., "Foundation", "Nature Magazine"). Like category, you can select from existing values or create a new one.
+4. Change only the fields you want to update.
+5. Click **Save**.
+
+The metadata updates immediately in Solr search, and you'll see the changes reflected in search results right away.
+
+### Edit multiple books at once (Batch editing)
+
+When you need to update metadata for many books (e.g., all books in a folder):
+
+1. **Filter and select**: 
+   - Use the folder facet or other filters to narrow to the books you want to edit.
+   - Toggle **Select mode** at the top of the search results (or long-press on mobile).
+   - Checkboxes appear on each result; check the boxes for the books you want to update.
+   - Use **Select All** to select all results on the current page.
+
+2. **Open the batch editor**:
+   - A floating action bar appears at the bottom showing "Edit N books".
+   - Click **Edit selected**.
+
+3. **Configure changes**:
+   - In the batch editor panel, only fill in the fields you want to change.
+   - Empty fields mean "don't change this" — useful when updating only the year or series.
+   - Each field has a checkbox. Only checked fields will be updated.
+   - Look at the **Preview** section to confirm which fields will change and how many books will be affected.
+
+4. **Apply**:
+   - Click **Apply** to update all selected books.
+   - Aithena will show progress and a summary when complete.
+
+### Important notes about metadata editing
+
+- **Persistence**: Manual metadata edits are saved even if a book is re-indexed. Aithena stores your changes and reapplies them automatically.
+- **Audit trail**: Edits are attributed to the admin who made them (recorded with timestamp).
+- **Series field (v1.10.0+)**: The new series field groups books into series (e.g., "Discworld"), magazines (e.g., "Scientific American"), or newspaper collections (e.g., "The Guardian"). You can then filter by series in the facet panel.
+- **Batch limits**: Batch edits are limited to 1,000 documents per request to prevent accidental large-scale changes.
 
 ## Version information (v0.7.0+)
 

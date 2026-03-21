@@ -162,3 +162,25 @@ Active decisions in `.squad/decisions.md`:
 3. **Process fixes beat training.** Branch hygiene, PR checklists, bug templates — mechanical guardrails work better than verbal instructions for agents.
 4. **Wave retrospectives are non-negotiable for milestones over 15 issues.** The learning velocity between Wave 0 and Wave 1 proved this.
 5. **Document the data model before anyone touches it.** The single most dangerous knowledge gap is always in the data model.
+
+---
+
+## Learnings
+
+### v1.11.0 PRD: Search Results Redesign (2026-03-21)
+
+**Session:** Research + PRD authoring for 4 requirements from Juanma.
+
+**Key findings from code research:**
+- **Chunk text is already stored** — `chunk_text_t` in Solr schema is `stored="true"`, but `SOLR_FIELD_LIST` in `search_service.py` doesn't include it. The vector search text preview (R1) is a genuinely small change.
+- **Similar books aren't grayed out** — they're rendered below results but visually obscured by the PDF viewer's overlay (z-index 1000 with 65% black overlay). The fix is architectural: decouple similar books from PDF state.
+- **Parent vs chunk search gap** — keyword search returns parents (chunks excluded via `-parent_id_s:[* TO *]`), semantic returns chunks (with embeddings). Hybrid RRF merges both. This means chunk text previews only apply to semantic/hybrid results.
+- **Thumbnail generation is the largest risk** — no PDF rendering capability exists in the indexer today. Needs new dependencies (pymupdf or pdf2image), Docker changes, and storage decisions. Recommended deferral to Phase 3 or v1.12.0.
+
+**Decisions made:**
+- Created milestone v1.11.0 (GitHub milestone #29)
+- Separated chunking strategy into its own issue (#796) — PO decision needed before R1 implementation
+- PRD issue #797, PR #798 for review
+- Phasing: R1+R2 (quick wins) → R3 (main deliverable) → R4 (deferred)
+
+**Pattern reinforced:** "Research before implementation" — 30 minutes of code reading revealed that R1 is 80% done (chunk text stored but not retrieved), which completely changes the scoping estimate from what it would have been without research.
