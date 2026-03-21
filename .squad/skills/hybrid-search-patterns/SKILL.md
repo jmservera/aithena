@@ -92,7 +92,7 @@ Facet fields are defined in `FACET_FIELDS` dict mapping logical names to Solr fi
 
 ### 6. Filter query security
 
-All facet filter values must be Lucene-escaped before inclusion in `fq` parameters to prevent Solr query injection. Use the `lucene_escape()` utility function.
+All facet filter values must be Lucene-escaped before inclusion in `fq` parameters to prevent Solr query injection. Use the `solr_escape()` utility function (typically via `build_filter_queries`, which applies it for you).
 
 ## Anti-Patterns
 
