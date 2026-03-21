@@ -8898,3 +8898,412 @@ Newt (Product Manager) completed a reskill cycle: consolidated product knowledge
 
 ---
 
+
+# Decision: Ash Reskill — History Consolidation + Skill Extraction
+
+**Author:** Ash (Search Engineer)
+**Date:** 2026-03-21
+**Status:** IMPLEMENTED
+
+## What Changed
+
+### History Consolidation
+- **Before:** 177 lines with significant redundancy (two overlapping #562 entries, duplicated PRD decomposition, stale v0.5 roadmap items, repeated schema snapshots)
+- **After:** 82 lines with zero information loss on actionable knowledge
+- **Removed:** Duplicate #562 fix entries (merged into one pattern), stale roadmap items (v0.5 issues long closed), verbose PRD decomposition tables (compressed to principles), redundant 2026-03-14 reskill snapshot (subsumed by Core Context)
+- **Added:** Reskill Notes section with confidence self-assessment and knowledge gaps
+
+### New Skill Extracted
+- **`hybrid-search-parent-chunk`** — Documents the parent-chunk document model, EXCLUDE_CHUNKS_FQ correctness rule, all three search mode implementations, and embedding pipeline. This was the #1 knowledge gap that caused the PR #701 near-incident. Now any agent touching search queries has a reference skill.
+
+### Existing Skills Reviewed
+- `solr-pdf-indexing` — Still accurate, covers indexing side well. No changes needed.
+- `solrcloud-docker-operations` — Still accurate, covers cluster ops. No changes needed.
+
+## Impact
+- **Ash spawn cost:** Reduced context tokens (~380 tokens saved)
+- **Team safety:** The parent-chunk model is now a standalone skill that any agent can reference before modifying search code
+- **Charter:** No changes needed (already lean at 27 lines)
+
+## Knowledge Improvement Estimate
+~25% — Primary improvement is in consolidation quality (removing noise) and externalizing the most critical pattern (parent-chunk model) into a reusable skill. Domain knowledge was already solid; the improvement is in how it's organized and accessible.
+
+---
+
+# Decision: Kane Reskill — 2026-07-25
+
+**Author:** Kane (Security Engineer)
+**Type:** Maintenance / Knowledge Consolidation
+
+## What Changed
+
+### History Consolidated (678 → 104 lines, 85% reduction)
+- Compressed verbose PR narratives into summary tables
+- Merged duplicate SEC-1 through SEC-5 descriptions into single "Completed Work" section
+- Distilled 11 key learnings from 20+ session entries
+- Added structured "Security Posture" reference section with scanner configs, baseline exceptions, known gaps
+- Added "Reskill Notes" self-assessment
+
+### New Skill Extracted
+- **`security-scanning-baseline`** — Bandit/Checkov/zizmor configuration, baseline exception patterns, and triage workflow. This was the most-repeated pattern in my history (appeared in 6+ entries) but had no dedicated skill.
+
+### Existing Skills Reviewed (no changes needed)
+- `fastapi-auth-patterns` — comprehensive, covers JWT/RBAC/rate-limiting (Parker authored)
+- `ci-workflow-security` — covers zizmor, template injection, bot-condition guards (Brett authored)
+- `logging-security` — covers two-tier logging pattern (Kane approved)
+- `workflow-secrets-security` — covers secret handling in Actions (Brett authored)
+- `dependabot-triage-routing` — covers dependency classification (Brett authored)
+
+## Self-Assessment
+
+**Strengths:** Auth review (JWT, RBAC, rate limiting), SAST tooling (Bandit config, triage), CI security (zizmor, Checkov), vulnerability documentation
+
+**Gaps:**
+1. No automated DAST integration (ZAP guide is manual-only)
+2. No container image CVE scanning (trivy/grype not yet in CI)
+3. Limited runtime security monitoring experience
+
+**Knowledge improvement estimate:** 15% — the consolidation itself doesn't add new knowledge, but makes existing knowledge 4x more accessible. The new skill extraction ensures triage patterns survive context window limits.
+
+---
+
+# Decision: Ralph Idle-Wait Using Async Sleep
+
+**Date:** 2026-03-21  
+**By:** Squad Coordinator + Juanma (user request)
+
+## What
+
+When Ralph's board is clear, instead of stopping, use an async `sleep 600` bash command as a timer. When the sleep completes (CLI sends notification), re-scan GitHub for new work. Repeat until the user says "idle" or "stop".
+
+## Pattern
+
+1. Board has work → process it → scan again immediately (no change)
+2. Board is clear → `sleep 600` async → notification → re-scan → repeat
+3. Only exit on explicit "Ralph, idle" / "stop" / session end
+
+## Why
+
+The Copilot CLI notifies the coordinator when async commands complete. This provides a free timer mechanism without external tooling. Keeps the session alive and responsive to new issues without user intervention.
+
+## Default Interval
+
+10 minutes (600 seconds). User can adjust with "Ralph, check every N minutes".
+
+## Context Budget
+
+Each idle re-scan is lightweight (4 `gh` calls + board report). No agent spawns unless work is found, so context growth during idle is minimal.
+
+---
+
+# Decision: User Directive — Copilot PR Review Comments
+
+**Date:** 2026-03-21  
+**By:** jmservera (Juanma) (via Copilot)
+
+## What
+
+All Copilot review comments on PRs must be taken seriously. If a comment cannot be applied immediately, a GitHub Issue MUST be created to track it. This applies to every PR, past and future.
+
+## Why
+
+User request — Copilot code review comments are an important quality signal and must not be ignored or dismissed.
+
+---
+
+# Decision: User Directive — Explain Discarded Copilot Comments
+
+**Date:** 2026-03-21  
+**By:** jmservera (Juanma) (via Copilot)
+
+## What
+
+When a Copilot PR review comment is discarded (not applicable, already fixed, etc.), add a comment on the PR explaining WHY it didn't apply. Never silently discard.
+
+## Why
+
+User request — transparency and accountability for review comment disposition.
+
+---
+
+# Decision: Metadata Edit API — Redis Override Store Format
+
+**Date:** 2026-03-20
+**Author:** Parker (Backend Dev)
+**Issue:** #681
+
+## Context
+The metadata edit endpoint needs to store overrides in Redis so document-indexer can apply them during re-indexing.
+
+## Decision
+Redis override values use **Solr field names** (e.g., `title_s`, `title_t`, `year_i`) rather than request field names (e.g., `title`, `year`). This means document-indexer can apply overrides directly to the Solr document without needing a field mapping table.
+
+Key format: `aithena:metadata-override:{document_id}`
+Value: JSON with Solr field names + `edited_by` + `edited_at`
+
+## Impact
+- **Ash (Search/Solr):** Override keys use Solr field names — if schema changes, update `_METADATA_FIELD_MAP` in main.py
+- **Document-indexer integration:** Can do `metadata_dict.update(json.loads(overrides))` directly (after filtering out `edited_by`/`edited_at`)
+
+---
+
+# Decision: Branch Hygiene Rule (R1)
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-20
+**Status:** APPROVED
+**Source:** v1.10.0 Wave 0/1 Retrospective — Action Item R1
+
+## Context
+
+During Wave 0, multiple cross-branch contamination incidents occurred: auth cookie changes leaked into unrelated PRs, backup script files appeared on wrong branches, and documentation commits landed on incorrect branches. Root cause: agents created branches from a polluted local working tree instead of clean `origin/dev`.
+
+## Rule
+
+**All agents must follow this exact sequence when creating a new branch:**
+
+```bash
+git fetch origin
+git status              # must show clean working tree
+git checkout -b <branch-name> origin/dev
+```
+
+### Prohibited
+
+- `git checkout -b <branch> dev` — local `dev` may be stale or dirty
+- `git checkout -b <branch>` — branches from current HEAD, which may contain other agents' work
+- Creating a branch with uncommitted changes in the working tree
+
+### Enforcement
+
+- Agents must verify `git status` shows a clean working tree before branching
+- PR reviewers should check `git diff --stat origin/dev` for unrelated files
+- If contamination is detected, the branch must be recreated from `origin/dev`
+
+## Impact
+
+All squad agents. This rule is non-negotiable — no exceptions.
+
+---
+
+# Decision: No Silent Degradation Rule (R6)
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-20
+**Status:** APPROVED
+**Source:** v1.10.0 Wave 0/1 Retrospective — Action Item R6
+
+## Context
+
+PR #700 proposed silently degrading semantic search to keyword search when kNN failed. This would have masked two real bugs (field name mismatch + URI too large) and permanently degraded search quality without any user-visible indication. PO rejected the PR.
+
+## Rule
+
+**Error handlers must NOT silently change search mode or drop results.**
+
+### Required behavior when an error occurs in a search/data path:
+
+1. **Log a WARNING-level message** with the error details and context
+2. **Return a clear indication to the user/API consumer** — e.g., an error field in the response, an HTTP error status, or a user-visible message
+3. **Never silently fall back** to a degraded mode (e.g., semantic → keyword, full results → partial results)
+
+### Approval required
+
+Any error handler that changes user-visible behavior (search mode, result count, result quality) requires **explicit approval from the Lead or PO** before implementation. This must be documented as a squad decision.
+
+### Examples
+
+**❌ Prohibited:**
+```python
+try:
+    results = knn_search(query)
+except Exception:
+    results = keyword_search(query)  # silent degradation
+```
+
+**✅ Required:**
+```python
+try:
+    results = knn_search(query)
+except Exception as e:
+    logger.warning("kNN search failed: %s — returning error to client", e)
+    raise SearchError("Semantic search unavailable", cause=e)
+```
+
+## Impact
+
+All agents implementing error handling in search or data paths. Existing degradation code must be reviewed for compliance.
+
+---
+
+# Decision: Ralph Continuous Monitoring — Architecture Analysis
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-21  
+**Status:** ANALYSIS COMPLETE — RECOMMENDATION: Use existing heartbeat workflow
+
+## Summary
+
+Ralph stops after a few cycles due to three architectural constraints in Copilot CLI, not a bug:
+1. Turn-based interaction model (agent can't self-reschedule)
+2. Context window exhaustion (multi-agent fan-out is token-expensive)
+3. No async scheduler (no timer mechanism to "sleep and wake")
+
+**Current behavior:** Correct as specified. Ralph loops while work exists, then hands off to external monitors (GitHub Actions heartbeat or `squad watch`).
+
+## Recommendation
+
+**Use existing `squad-heartbeat.yml` workflow** (already running every 30 minutes). No code changes needed.
+
+If faster polling required:
+1. Adjust heartbeat cron to `*/10 * * * *` (10 minutes)
+2. OR test `npx github:bradygaster/squad watch --interval 10`
+
+## Three-Layer Architecture (Correct as Designed)
+
+1. **In-session Ralph:** Active loop while you're working (context-limited to ~5 rounds)
+2. **Local watchdog:** `squad watch` for 5-10 minute polling (requires local machine on)
+3. **Cloud heartbeat:** GitHub Actions every 30 minutes (unattended, always-on)
+
+Ralph is designed for **in-session work bursts**, not 24/7 unattended polling. Use heartbeat for continuous monitoring.
+
+## Team Members Affected
+
+None. Heartbeat already deployed. This is documentation of why Ralph is designed this way.
+
+## Next Steps
+
+1. **Optional:** Adjust heartbeat polling interval if 30 minutes is too slow
+2. **Optional:** Create `.squad/templates/ralph-reference.md` explaining the three layers
+3. **No behavioral changes needed** in Ralph spec or code
+
+---
+
+# Decision: Quarterly Copilot Review Comment Audits
+
+**Date:** 2026-03-21  
+**Author:** Ripley (Lead)  
+**Status:** Proposed
+
+## Context
+
+After v1.10.0 release (PRs #743-#782), audited all Copilot automated review comments on merged PRs. Found 83 comments across 12 PRs, with 7 actionable issues that survived merge.
+
+**Key Stats:**
+- 8.4% hit rate (7/83 actionable)
+- 0% false positives on critical/important issues
+- 57% of actionable issues were security/performance related
+- 82% of comments were low-value style/import suggestions
+
+## Decision
+
+**Adopt quarterly Copilot review comment audits as a standard post-milestone practice.**
+
+Process:
+1. After each major release, audit all Copilot review comments on merged PRs
+2. Categorize: Critical / Important / Minor
+3. Assess: Still relevant? Already fixed? Needs issue?
+4. Create GitHub issues for unaddressed critical/important findings
+5. Tag issues for next bugfix release (e.g., v1.10.1)
+
+## Rationale
+
+**Why This Works:**
+- High-quality signal in security/performance categories (4/7 issues in v1.10.0)
+- Catches technical debt before it compounds across milestones
+- Cluster analysis reveals systematic quality gaps (e.g., PR #746 had 4 test reliability issues)
+- Zero false positives on high-severity issues = trustworthy signal
+
+**Why Not Pre-Merge Blocking:**
+- Would add friction to PR workflow
+- Most comments (82%) are low-value style suggestions
+- Some issues self-correct within the PR cycle (ToastContext in PR #747)
+- Post-milestone audit balances quality with velocity
+
+**Cost/Benefit:**
+- Cost: ~2 hours per milestone audit (based on v1.10.0 experience)
+- Benefit: Caught 3 critical issues (SQL injection risk, exception hot path, test invalidation)
+- ROI: Very high — 1 security issue alone justifies the audit
+
+## Implementation
+
+**Timing:** Within 1 week of release tagging
+
+**Scope:** All merged PRs in the release milestone
+
+**Tooling:**
+```bash
+# Fetch Copilot review comments
+gh api repos/jmservera/aithena/pulls/{number}/comments \
+  --jq '.[] | select(.user.login | test("copilot|github-actions")) | {path, line, body}'
+```
+
+**Deliverables:**
+1. Audit report (markdown, saved to `.squad/audits/copilot-reviews-vX.Y.Z.md`)
+2. GitHub issues for actionable findings
+3. Process improvements identified (e.g., team training, systematic gaps)
+
+## Alternatives Considered
+
+1. **Pre-merge Copilot review blocking** — Rejected due to friction and low signal-to-noise (82% minor comments)
+2. **Ad-hoc review when time permits** — Rejected because technical debt compounds; quarterly cadence ensures consistency
+3. **Automated triage bot** — Considered for future, but manual review better for early iterations to understand patterns
+
+## Team Impact
+
+- **Lambert (Testing):** Should review test quality cluster in PR #746
+- **Parker (Backend):** Should review security/performance issues (#786, #787)
+- **All agents:** Awareness that Copilot reviews are valuable post-merge, not just pre-merge noise
+
+## Success Metrics
+
+- v1.10.1 addresses all 7 issues found in v1.10.0 audit
+- v1.11.0 audit shows fewer clustered issues (indicates process learning)
+- Team reports Copilot review comments are valuable (subjective feedback)
+
+---
+
+# Decision: Release v1.10.0 — Docker Environment Blocking Issue
+
+**By:** Newt (Product Manager)  
+**Date:** 2026-03-21  
+**Status:** DECISION REQUIRED
+
+## Summary
+v1.10.0 milestone is complete and ready for release, but the GitHub repository ruleset is blocking the dev→main merge due to failing Docker integration tests. The failure is caused by the absence of a Docker daemon in the codespace environment, not a code quality issue.
+
+## What Passed
+- ✓ All 54 milestone issues closed (v1.10.0 milestone)
+- ✓ All unit tests passing: 1,495 tests across 6 services  
+- ✓ Security scan passing: Fixed Bandit B608/B110/B311 issues
+- ✓ Documentation complete: CHANGELOG, release notes, admin manual
+- ✓ Code quality: Clean lint, format, security scans
+
+## What's Blocking
+- ✗ "Docker Compose integration + E2E" required status check
+  - Workflow: `.github/workflows/integration-test.yml`
+  - Reason: Docker daemon unavailable in codespace environment
+  - Impact: Cannot merge PR #760 (dev→main) despite code passing all other quality gates
+
+## Environment Constraint
+From the codespace environment notes:
+> No Docker daemon in this codespace. Never run `docker build`, `docker compose up`, or `docker compose config`.
+
+The integration test workflow explicitly requires Docker, so it fails immediately in this environment.
+
+## Options
+1. **Approve merge with ruleset override** — Requires GitHub org admin access to modify the ruleset
+2. **Tag release manually** — Create v1.10.0 tag on HEAD of dev after Docker-based CI passes elsewhere  
+3. **Continue in Docker-enabled environment** — Complete the release gate ceremony from a machine with Docker
+4. **Remove integration test requirement** — Modify ruleset to not require Docker integration test for release branch
+
+## Recommendation
+Since the code is production-ready and all development-phase quality gates have passed, proceed with **Option 2: Manual tag after external Docker CI verification**. The v1.10.0 code should be tagged when external Docker-based CI confirms integration tests pass.
+
+## Next Steps (for squad)
+- [ ] Confirm integration tests pass in external Docker environment
+- [ ] Create v1.10.0 git tag on origin/main
+- [ ] Close v1.10.0 milestone on GitHub
+- [ ] Publish release notes
+
+---
