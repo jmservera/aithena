@@ -5,11 +5,13 @@ import {
   useBatchMetadataEdit,
   BatchField,
   validateBatchField,
+  BatchQueryContext,
 } from '../hooks/useBatchMetadataEdit';
 import './BatchEditPanel.css';
 
 interface BatchEditPanelProps {
   documentIds: string[];
+  queryContext?: BatchQueryContext;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -323,11 +325,13 @@ function BatchResultDisplay({ result }: BatchResultDisplayProps) {
 
 const BatchEditPanel = memo(function BatchEditPanel({
   documentIds,
+  queryContext,
   onClose,
   onSaved,
 }: BatchEditPanelProps) {
   const intl = useIntl();
   const panelRef = useRef<HTMLDivElement>(null);
+  const documentCount = queryContext ? queryContext.total : documentIds.length;
   const {
     values,
     toggles,
@@ -341,7 +345,7 @@ const BatchEditPanel = memo(function BatchEditPanel({
     setField,
     setToggle,
     save,
-  } = useBatchMetadataEdit(documentIds);
+  } = useBatchMetadataEdit(documentIds, queryContext);
 
   // Focus trap
   useEffect(() => {
@@ -424,11 +428,11 @@ const BatchEditPanel = memo(function BatchEditPanel({
         className="batch-panel"
         role="dialog"
         aria-modal="true"
-        aria-label={intl.formatMessage({ id: 'batchEdit.title' }, { count: documentIds.length })}
+        aria-label={intl.formatMessage({ id: 'batchEdit.title' }, { count: documentCount })}
       >
         <header className="batch-panel-header">
           <h2 className="batch-panel-title">
-            {intl.formatMessage({ id: 'batchEdit.title' }, { count: documentIds.length })}
+            {intl.formatMessage({ id: 'batchEdit.title' }, { count: documentCount })}
           </h2>
           <button
             type="button"
@@ -495,7 +499,7 @@ const BatchEditPanel = memo(function BatchEditPanel({
             onChange={(v) => setField('series', v)}
           />
 
-          <PreviewSection toggles={toggles} values={values} documentCount={documentIds.length} />
+          <PreviewSection toggles={toggles} values={values} documentCount={documentCount} />
 
           {apiError && (
             <div className="batch-result batch-result--error" role="alert">

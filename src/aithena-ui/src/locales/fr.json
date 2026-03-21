@@ -142,6 +142,7 @@
   "batchEdit.previewClear": "(sera effacé)",
   "batchEdit.previewSummary": "Modification de {fieldCount, plural, one {# champ} other {# champs}} sur {documentCount, plural, one {# document} other {# documents}}",
   "batchEdit.selectAll": "Tout sélectionner",
+  "batchEdit.selectAllMatching": "Sélectionner {count, plural, one {# résultat correspondant} other {les # résultats correspondants}}",
   "batchEdit.selectMode": "Sélectionner",
   "batchEdit.selectModeTitle": "Basculer le mode de sélection pour l'édition par lot",
   "batchEdit.selectedCount": "{count, plural, one {# sélectionné} other {# sélectionnés}}",
