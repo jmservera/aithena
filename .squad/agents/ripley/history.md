@@ -200,3 +200,20 @@ Active decisions in `.squad/decisions.md`:
 - **Performance observation:** Sequential batch updates (up to 5000 docs) could take ~100s at max load. Acceptable for admin-only scope in v1.10.1; recommend async chunking for v1.11+.
 
 **Pattern reinforced:** Gate reviews catch the subtle things — the S608 suppressions required careful reading to confirm they're justified (dynamic column names vs user data). Automated linting alone would either flag false positives or miss the distinction.
+### PDF Text Extraction Pipeline Analysis (2026-03-21)
+
+**Session:** Deep investigation of the two-tool extraction pipeline for hierarchical chunking feasibility.
+
+**Key findings:**
+- **Dual extraction is intentional:** Tika (embedded in Solr via `SOLR_MODULES: extraction`) handles full-text + metadata for keyword search. pdfplumber handles per-page text for chunk-based semantic search. Tika doesn't expose per-page boundaries; pdfplumber doesn't reliably extract metadata.
+- **Neither tool currently extracts document structure.** Tika flattens everything to `_text_` via `fmap.content`. pdfplumber uses only `page.extract_text()` — no font metadata analyzed.
+- **Tika COULD provide XHTML with heading tags** if called directly (not via Solr's ExtractingRequestHandler). This is the most practical path to hierarchical chunking.
+- **Current chunker is purely word-count based** — no sentence, paragraph, or section awareness. 400-word window, 50-word overlap.
+- **Short-term fix exists:** Sentence boundary awareness in `chunker.py` is a small change that significantly improves preview readability without requiring structure extraction.
+
+**Deliverables:**
+- PRD updated with Section 5 (PDF Text Extraction Pipeline) — PR #803
+- Issue #796 commented with structure extraction analysis and recommendations
+- Open Questions updated with hierarchical chunking questions for PO and Ash
+
+**Pattern reinforced:** "Document the data model before anyone touches it" — the dual-extraction architecture had no documentation. Without reading `__main__.py` end-to-end, you'd assume Tika and pdfplumber were redundant. They're complementary by design.
