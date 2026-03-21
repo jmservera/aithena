@@ -110,3 +110,12 @@
 - Post-restore verification in `restore-high.sh` was using `EXIT_CODE=2` (warning) for failures — changed to `return 1` (fatal)
 - Added `verify_search_api()` to test `/v1/search` endpoint after Solr restore, not just CLUSTERSTATUS
 - Stress test venv at `tests/stress/.venv` — system Python has namespace package conflicts (gevent/zope)
+
+### Wave 1 Test Coverage (PR #839 for #813, #817)
+- Added 38 new tests across 4 files (solr-search, document-indexer, aithena-ui)
+- **Key pattern:** Before writing new tests, audited existing coverage from Parker (#807/#808/#812) and Dallas (#809/#814/#815/#816) to avoid duplication
+- **BookCard UI type gap:** `BookResult` in the UI does NOT have `is_chunk` or `chunk_text` fields — chunks are handled at the API/normalization layer. Tested page range display (`book.pages`) and highlights instead
+- **PdfViewer focus trap:** The iframe is a focusable element in the panel, so it's the last element in the Tab order (not the close button). Forward Tab wraps from iframe → fullscreen button; backward Shift+Tab wraps from fullscreen → iframe
+- **Chunker abbreviation handling:** The sentence boundary heuristic (`.!?`) treats abbreviations (e.g., "Dr.") as sentence boundaries — documented as a known limitation in tests
+- **solr-search coverage:** 91.20% (up from 91.77% on the search_service module alone — now 97% on that file)
+- Total test counts after PR: solr-search ~805, document-indexer ~141, aithena-ui ~510
