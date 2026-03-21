@@ -45,6 +45,7 @@
 #   scripts/restore-high.sh      — Tier 2
 #   scripts/restore-medium.sh    — Tier 3
 #   scripts/backup.sh            — Backup orchestrator
+#   scripts/verify-backup.sh     — Backup integrity verification
 #   docs/prd/bcdr-plan.md        — BCDR plan
 # =============================================================================
 set -euo pipefail
@@ -235,6 +236,49 @@ validate_backup_dir() {
 }
 
 # ---------------------------------------------------------------------------
+# verify_backup_integrity — run verify-backup.sh before restoring
+# ---------------------------------------------------------------------------
+verify_backup_integrity() {
+    local verify_script="${SCRIPT_DIR}/verify-backup.sh"
+
+    if [[ ! -x "$verify_script" ]]; then
+        log_warn "Verification script not found: ${verify_script} — skipping integrity check"
+        return 0
+    fi
+
+    log_info "Running backup integrity verification..."
+
+    local verify_env=()
+    verify_env+=("LOG_FILE=${LOG_FILE}")
+    verify_env+=("PROJECT_ROOT=${PROJECT_ROOT}")
+    if [[ -n "${BACKUP_KEY:-}" ]]; then
+        verify_env+=("BACKUP_KEY=${BACKUP_KEY}")
+    fi
+    if [[ "$DRY_RUN" == "1" ]]; then
+        verify_env+=("DRY_RUN=1")
+    fi
+
+    local verify_args=("--latest")
+    if [[ -n "$TIER" && "$TIER" != "all" ]]; then
+        verify_args+=("--tier" "$TIER")
+    fi
+    verify_args+=("$RESTORE_FROM")
+
+    local verify_rc=0
+    env "${verify_env[@]}" bash "$verify_script" "${verify_args[@]}" || verify_rc=$?
+
+    case "$verify_rc" in
+        0) log_info "Backup integrity verification PASSED" ;;
+        2) log_warn "Backup integrity verification completed with warnings (exit ${verify_rc})" ;;
+        *)
+            log_error "Backup integrity verification FAILED (exit ${verify_rc}) — aborting restore"
+            log_error "Fix integrity issues or use a different backup. Run: ${verify_script} ${RESTORE_FROM}"
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # safety_backup — create a backup of current state before restoring
 # ---------------------------------------------------------------------------
 safety_backup() {
@@ -354,6 +398,9 @@ main() {
 
     # --- Pre-flight: validate backup directory ---
     validate_backup_dir
+
+    # --- Pre-flight: verify backup integrity ---
+    verify_backup_integrity || exit 1
 
     # --- Safety backup before restore ---
     safety_backup || exit 1
