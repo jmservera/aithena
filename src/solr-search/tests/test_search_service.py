@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from search_service import (  # noqa: E402
+    SOLR_FIELD_LIST,
     build_filter_queries,
     build_inline_content_disposition,
     build_pagination,
@@ -259,6 +260,10 @@ def test_normalize_book_collects_fields_and_highlights() -> None:
         "page_count": 320,
         "file_size": 4096,
         "pages": None,
+        "is_chunk": False,
+        "chunk_text": None,
+        "page_start": None,
+        "page_end": None,
         "score": 12.5,
         "highlights": ["<em>folk</em> story", "second snippet"],
         "document_url": "/documents/token",
@@ -787,6 +792,12 @@ def test_facet_fields_includes_folder_mapping() -> None:
     assert FACET_FIELDS["folder"] == ("folder_path_s",)
 
 
+def test_solr_field_list_includes_chunk_fields() -> None:
+    """SOLR_FIELD_LIST must include chunk_text_t and parent_id_s for chunk support."""
+    assert "chunk_text_t" in SOLR_FIELD_LIST
+    assert "parent_id_s" in SOLR_FIELD_LIST
+
+
 def test_normalize_book_includes_folder_path() -> None:
     """normalize_book extracts folder_path from folder_path_s."""
     book = normalize_book(
@@ -816,6 +827,71 @@ def test_normalize_book_folder_path_none_when_absent() -> None:
         None,
     )
     assert book["folder_path"] is None
+
+
+def test_normalize_book_chunk_document_has_is_chunk_and_text() -> None:
+    """Chunk documents (with parent_id_s) set is_chunk=True and extract chunk_text."""
+    book = normalize_book(
+        {
+            "id": "chunk_abc",
+            "title_s": "My Book",
+            "author_s": "Author",
+            "file_path_s": "books/my_book.pdf",
+            "parent_id_s": "parent_abc",
+            "chunk_text_t": "This is the chunk text content from pages 5 to 6.",
+            "page_start_i": 5,
+            "page_end_i": 6,
+            "score": 9.0,
+        },
+        {},
+        "/documents/token",
+    )
+    assert book["is_chunk"] is True
+    assert book["chunk_text"] == "This is the chunk text content from pages 5 to 6."
+    assert book["page_start"] == 5
+    assert book["page_end"] == 6
+    assert book["pages"] == [5, 6]
+
+
+def test_normalize_book_parent_document_has_is_chunk_false() -> None:
+    """Parent documents (no parent_id_s) set is_chunk=False and chunk_text=None."""
+    book = normalize_book(
+        {
+            "id": "parent_doc",
+            "title_s": "Full Book",
+            "author_s": "Author",
+            "file_path_s": "books/full.pdf",
+            "page_count_i": 200,
+            "score": 5.0,
+        },
+        {},
+        "/documents/token",
+    )
+    assert book["is_chunk"] is False
+    assert book["chunk_text"] is None
+    assert book["page_start"] is None
+    assert book["page_end"] is None
+
+
+def test_normalize_book_chunk_without_chunk_text() -> None:
+    """Chunk with parent_id_s but missing chunk_text_t still sets is_chunk=True."""
+    book = normalize_book(
+        {
+            "id": "chunk_no_text",
+            "title_s": "My Book",
+            "file_path_s": "books/my_book.pdf",
+            "parent_id_s": "parent_xyz",
+            "page_start_i": 10,
+            "page_end_i": 11,
+            "score": 3.0,
+        },
+        {},
+        None,
+    )
+    assert book["is_chunk"] is True
+    assert book["chunk_text"] is None
+    assert book["page_start"] == 10
+    assert book["page_end"] == 11
 
 
 # ---------------------------------------------------------------------------
