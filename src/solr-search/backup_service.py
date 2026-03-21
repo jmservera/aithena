@@ -419,12 +419,12 @@ async def run_test_restore(dry_run: bool = True) -> OperationRecord:
         tier=latest.tier,
         status=OperationStatus.in_progress,
         started_at=now,
-        dry_run=True,
+        dry_run=dry_run,
         backup_id=latest.id,
     )
     _record_operation(record)
 
-    asyncio.create_task(_execute_restore(operation_id, latest, dry_run=True))
+    asyncio.create_task(_execute_restore(operation_id, latest, dry_run=dry_run))
     return record
 
 

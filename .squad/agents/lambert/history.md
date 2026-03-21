@@ -96,3 +96,17 @@
 - 2 duplicate entries removed (screenshot spec)
 - 2 redundant release validations collapsed into deliverables table
 - Outdated v0.4-v0.5 test counts removed (superseded by latest)
+
+## Learnings
+
+### Locust Auth Pattern (PR for #788)
+- Aithena uses JWT Bearer tokens via `/v1/auth/login` for regular endpoints
+- Admin endpoints additionally require `X-API-Key` header (from `ADMIN_API_KEY` env var)
+- Created `AithenaUser(HttpUser)` abstract base class to handle auth centrally for all Locust personas
+- Auth env vars: `STRESS_TEST_USERNAME`, `STRESS_TEST_PASSWORD`, `STRESS_TEST_API_KEY`
+
+### Restore Verification (PR for #790, #792)
+- Restore scripts are tiered: critical (auth/secrets), high (Solr/ZK), medium (Redis/RabbitMQ)
+- Post-restore verification in `restore-high.sh` was using `EXIT_CODE=2` (warning) for failures — changed to `return 1` (fatal)
+- Added `verify_search_api()` to test `/v1/search` endpoint after Solr restore, not just CLUSTERSTATUS
+- Stress test venv at `tests/stress/.venv` — system Python has namespace package conflicts (gevent/zope)

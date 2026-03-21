@@ -47,7 +47,12 @@ def require_admin_auth(request: Request) -> None:
         raise HTTPException(
             status_code=401,
             detail="Admin API key required — provide via X-API-Key header",
+            headers={"WWW-Authenticate": "ApiKey"},
         )
 
     if not hmac.compare_digest(provided, admin_api_key):
-        raise HTTPException(status_code=401, detail="Invalid admin API key")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid admin API key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
