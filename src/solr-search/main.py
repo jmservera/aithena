@@ -2387,6 +2387,51 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
+    """Enrich collection items with document metadata from Solr."""
+    doc_ids = [item["document_id"] for item in items if item.get("document_id")]
+    if not doc_ids:
+        return
+
+    try:
+        id_query = " OR ".join(f"id:{solr_escape(did)}" for did in doc_ids)
+        result = query_solr({
+            "q": f"({id_query})",
+            "fl": "id,title_s,author_s,year_i,file_path_s",
+            "rows": len(doc_ids),
+            "wt": "json",
+        })
+
+        docs = result.get("response", {}).get("docs", [])
+        metadata_map: dict[str, dict[str, Any]] = {}
+        for doc in docs:
+            doc_id = doc.get("id")
+            if doc_id:
+                metadata_map[doc_id] = doc
+
+        for item in items:
+            doc = metadata_map.get(item["document_id"], {})
+            item["title"] = doc.get("title_s") or Path(doc.get("file_path_s", "")).stem or None
+            item["author"] = doc.get("author_s") or None
+            item["year"] = doc.get("year_i")
+            item["cover_url"] = None
+    except Exception:
+        logger.warning("Failed to enrich collection items with Solr metadata", exc_info=True)
+        for item in items:
+            item.setdefault("title", None)
+            item.setdefault("author", None)
+            item.setdefault("year", None)
+            item.setdefault("cover_url", None)
+
+
+def _prepare_collection_detail(result: dict[str, Any]) -> dict[str, Any]:
+    """Enrich items and add item_count to a collection detail response."""
+    items = result.get("items", [])
+    _enrich_collection_items(items)
+    result["item_count"] = len(items)
+    return result
+
+
 @app.post("/v1/collections", response_model=CollectionResponse, status_code=201)
 def create_collection(body: CreateCollectionRequest, request: Request):
     user = _get_current_user(request)
@@ -2406,7 +2451,7 @@ def get_collection(collection_id: str, request: Request):
     result = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
     if result is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    return result
+    return _prepare_collection_detail(result)
 
 
 @app.put("/v1/collections/{collection_id}", response_model=CollectionDetailResponse)
@@ -2419,7 +2464,7 @@ def update_collection(collection_id: str, body: UpdateCollectionRequest, request
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    return result
+    return _prepare_collection_detail(result)
 
 
 @app.delete("/v1/collections/{collection_id}", status_code=204)
