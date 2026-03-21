@@ -587,12 +587,22 @@ def _get_current_user(request: Request) -> AuthenticatedUser:
     current_user = getattr(request.state, "auth_user", None)
     if isinstance(current_user, AuthenticatedUser):
         return current_user
-    return _authenticate_request(request)
+    try:
+        return _authenticate_request(request)
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 @app.middleware("http")
 async def require_authentication(request: Request, call_next):
     if request.method == "OPTIONS" or _is_public_path(request.url.path):
+        return await call_next(request)
+
+    # Admin endpoints with X-API-Key: attempt user auth but don't block on failure.
+    # Routes that need a logged-in user use require_role() which will reject if missing.
+    if request.headers.get("X-API-Key") and request.url.path.startswith("/v1/admin/"):
+        with contextlib.suppress(AuthenticationError):
+            request.state.auth_user = _authenticate_request(request)
         return await call_next(request)
 
     try:
