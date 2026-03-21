@@ -497,3 +497,20 @@ Chunk Document (text segment)
 ├── page_start_i, page_end_i (page range)
 └── Inherited: title_s, author_s, category_s, year_i, file_path_s, folder_path_s
 ```
+
+
+## Appendix C: Answers to open questions
+
+Questions That Need Decisions
+
+Are the current defaults (400 words / 50 overlap) appropriate? We need to move to 90 words 15/20 overlap as the current embeddings model has a 128 token window that allows to an average of 96 words.
+
+Should chunk boundaries respect sentence/paragraph boundaries? Ideally yes, but take into consideration the small token winow.
+
+Should overlapping text be deduplicated in previews? yes
+
+One chunk per book or multiple? When multiple chunks from the same parent match a query, should search results show the single best-matching chunk per book, or allow multiple entries? allow multiple
+
+Chunk text preview length? We can keep the 90 words.
+
+Re-chunking migration: If we change chunk size/overlap, all existing documents need re-indexing. What's the migration strategy? Force reindexing when upgrade is detected.
