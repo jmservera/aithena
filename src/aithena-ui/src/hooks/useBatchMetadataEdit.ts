@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch, buildApiUrl } from '../api';
-import { FacetValue } from './search';
+import { FacetValue, SearchFilters } from './search';
 
 export interface BatchMetadataValues {
   title: string;
@@ -31,6 +31,13 @@ export interface BatchResult {
 export interface FacetOptions {
   category: string[];
   series: string[];
+}
+
+/** When set, the batch edit uses the query-based endpoint instead of IDs. */
+export interface BatchQueryContext {
+  query: string;
+  filters: SearchFilters;
+  total: number;
 }
 
 const TITLE_MAX = 255;
@@ -90,7 +97,7 @@ export function validateBatchField(field: BatchField, value: string): string | u
   return undefined;
 }
 
-export function useBatchMetadataEdit(documentIds: string[]) {
+export function useBatchMetadataEdit(documentIds: string[], queryContext?: BatchQueryContext) {
   const [values, setValues] = useState<BatchMetadataValues>({ ...INITIAL_VALUES });
   const [toggles, setToggles] = useState<BatchFieldToggles>({ ...INITIAL_TOGGLES });
   const [errors, setErrors] = useState<Partial<Record<BatchField, string>>>({});
@@ -160,10 +167,29 @@ export function useBatchMetadataEdit(documentIds: string[]) {
 
     setSaving(true);
     try {
-      const response = await apiFetch(buildApiUrl('/v1/admin/documents/batch/metadata'), {
+      let url: string;
+      let body: Record<string, unknown>;
+
+      if (queryContext) {
+        url = buildApiUrl('/v1/admin/documents/batch/metadata-by-query');
+        const filters: Record<string, string> = {};
+        for (const [key, value] of Object.entries(queryContext.filters)) {
+          if (value) filters[key] = value;
+        }
+        body = {
+          query: queryContext.query,
+          filters: Object.keys(filters).length > 0 ? filters : undefined,
+          updates,
+        };
+      } else {
+        url = buildApiUrl('/v1/admin/documents/batch/metadata');
+        body = { document_ids: documentIds, updates };
+      }
+
+      const response = await apiFetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document_ids: documentIds, updates }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -181,7 +207,7 @@ export function useBatchMetadataEdit(documentIds: string[]) {
     } finally {
       setSaving(false);
     }
-  }, [documentIds, enabledFields, values]);
+  }, [documentIds, queryContext, enabledFields, values]);
 
   const reset = useCallback(() => {
     setValues({ ...INITIAL_VALUES });

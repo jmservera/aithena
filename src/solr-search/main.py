@@ -854,6 +854,7 @@ def search(
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
     mode: str = Query(
         settings.default_search_mode,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
@@ -886,6 +887,7 @@ def search(
         language=fq_language,
         year=fq_year,
         series=fq_series,
+        folder=fq_folder,
     )
 
     with _track_search_metrics(mode):
@@ -1128,6 +1130,7 @@ def facets(
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -1143,6 +1146,7 @@ def facets(
                 language=fq_language,
                 year=fq_year,
                 series=fq_series,
+                folder=fq_folder,
             ),
             facet_limit=settings.facet_limit,
             rows=0,
@@ -1256,12 +1260,13 @@ def list_books(
     fq_language: str | None = Query(None, description="Filter by language."),
     fq_year: str | None = Query(None, description="Filter by publication year."),
     fq_series: str | None = Query(None, description="Filter by series name."),
+    fq_folder: str | None = Query(None, description="Filter by folder path."),
 ) -> dict[str, Any]:
     """Browse the complete library of indexed books with pagination and filtering.
 
     Returns all books sorted by title (default) or other fields. Supports the same
     filter query parameters as the search endpoint (``fq_author``, ``fq_category``,
-    ``fq_language``, ``fq_year``, ``fq_series``).
+    ``fq_language``, ``fq_year``, ``fq_series``, ``fq_folder``).
 
     This endpoint uses a wildcard ``*:*`` query to match all documents, making it
     suitable for library browsing and discovery.
@@ -1272,6 +1277,7 @@ def list_books(
         language=fq_language,
         year=fq_year,
         series=fq_series,
+        folder=fq_folder,
     )
 
     payload = query_solr(
@@ -2084,9 +2090,10 @@ class BatchMetadataEditRequest(BaseModel):
 
 
 class BatchMetadataByQueryRequest(BaseModel):
-    """Batch metadata edit by Solr query."""
+    """Batch metadata edit by Solr query with optional filters."""
 
     query: str
+    filters: dict[str, str] | None = None
     updates: MetadataEditRequest
 
     model_config = {"str_strip_whitespace": True}
@@ -2131,7 +2138,11 @@ def _batch_apply_updates(
     }
 
 
-def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[str]:
+def _solr_query_document_ids(
+    query: str,
+    filter_queries: list[str] | None = None,
+    page_size: int | None = None,
+) -> list[str]:
     """Execute a Solr query and return all matching document IDs, paginated."""
     if page_size is None:
         page_size = _BATCH_PAGE_SIZE
@@ -2146,6 +2157,8 @@ def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[s
             "start": start,
             "wt": "json",
         }
+        if filter_queries:
+            params["fq"] = filter_queries
         result = query_solr(params)
         docs = result.get("response", {}).get("docs", [])
         if not docs:
@@ -2192,14 +2205,24 @@ def admin_batch_edit_metadata_by_query(body: BatchMetadataByQueryRequest) -> dic
     """Edit metadata for documents matching a Solr query.
 
     Resolves matching document IDs via Solr search, then applies updates
-    in pages.  Requires both admin API key and admin JWT role (defense-in-depth).
+    in pages.  Supports optional filters (folder, author, category, etc.)
+    to narrow the query scope.  Requires both admin API key and admin JWT
+    role (defense-in-depth).
     """
     query = body.query.strip()
     if not query:
         raise HTTPException(status_code=422, detail="query must not be empty")
 
     fields = body.updates.validate_non_empty()
-    doc_ids = _solr_query_document_ids(query)
+
+    filter_queries: list[str] | None = None
+    if body.filters:
+        try:
+            filter_queries = build_filter_queries(body.filters) or None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    doc_ids = _solr_query_document_ids(query, filter_queries=filter_queries)
 
     if not doc_ids:
         return {"matched": 0, "updated": 0, "failed": 0, "errors": []}

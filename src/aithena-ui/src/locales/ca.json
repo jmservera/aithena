@@ -142,6 +142,7 @@
   "batchEdit.previewClear": "(s'esborrarà)",
   "batchEdit.previewSummary": "Canviant {fieldCount, plural, one {# camp} other {# camps}} en {documentCount, plural, one {# document} other {# documents}}",
   "batchEdit.selectAll": "Seleccionar tot",
+  "batchEdit.selectAllMatching": "Seleccionar els {count, plural, one {# resultat} other {# resultats}}",
   "batchEdit.selectMode": "Seleccionar",
   "batchEdit.selectModeTitle": "Alternar el mode de selecció per a l'edició per lot",
   "batchEdit.selectedCount": "{count, plural, one {# seleccionat} other {# seleccionats}}",

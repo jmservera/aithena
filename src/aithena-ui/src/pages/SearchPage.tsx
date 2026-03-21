@@ -235,6 +235,7 @@ function SearchPage() {
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [allMatchingSelected, setAllMatchingSelected] = useState(false);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
 
   // Keep the text input in sync with the committed query from the URL so
@@ -313,7 +314,10 @@ function SearchPage() {
 
   const handleToggleSelectionMode = useCallback(() => {
     setSelectionMode((prev) => {
-      if (prev) setCheckedIds(new Set());
+      if (prev) {
+        setCheckedIds(new Set());
+        setAllMatchingSelected(false);
+      }
       return !prev;
     });
   }, []);
@@ -328,14 +332,22 @@ function SearchPage() {
       }
       return next;
     });
+    setAllMatchingSelected(false);
   }, []);
 
   const handleSelectAll = useCallback(() => {
     setCheckedIds(new Set(results.map((b) => b.id)));
+    setAllMatchingSelected(false);
+  }, [results]);
+
+  const handleSelectAllMatching = useCallback(() => {
+    setCheckedIds(new Set(results.map((b) => b.id)));
+    setAllMatchingSelected(true);
   }, [results]);
 
   const handleDeselectAll = useCallback(() => {
     setCheckedIds(new Set());
+    setAllMatchingSelected(false);
   }, []);
 
   const handleSaveToCollection = useCallback((book: BookResult) => {
@@ -377,6 +389,7 @@ function SearchPage() {
   const handleBatchEditSaved = useCallback(() => {
     setBatchEditOpen(false);
     setCheckedIds(new Set());
+    setAllMatchingSelected(false);
     setSelectionMode(false);
   }, []);
 
@@ -540,6 +553,15 @@ function SearchPage() {
                   <button type="button" className="batch-select-all-btn" onClick={handleSelectAll}>
                     {intl.formatMessage({ id: 'batchEdit.selectAll' })}
                   </button>
+                  {total > results.length && (
+                    <button
+                      type="button"
+                      className={`batch-select-all-btn${allMatchingSelected ? ' batch-select-all-btn--active' : ''}`}
+                      onClick={handleSelectAllMatching}
+                    >
+                      {intl.formatMessage({ id: 'batchEdit.selectAllMatching' }, { count: total })}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="batch-select-all-btn"
@@ -600,7 +622,7 @@ function SearchPage() {
 
       {isAdmin && selectionMode && (
         <BatchSelectionToolbar
-          selectedCount={checkedIds.size}
+          selectedCount={allMatchingSelected ? total : checkedIds.size}
           onEdit={handleOpenBatchEdit}
           onClearSelection={handleDeselectAll}
         />
@@ -609,6 +631,11 @@ function SearchPage() {
       {batchEditOpen && (
         <BatchEditPanel
           documentIds={[...checkedIds]}
+          queryContext={
+            allMatchingSelected
+              ? { query: searchState.query, filters: searchState.filters, total }
+              : undefined
+          }
           onClose={handleBatchEditClose}
           onSaved={handleBatchEditSaved}
         />

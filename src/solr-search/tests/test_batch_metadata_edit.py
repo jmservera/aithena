@@ -515,3 +515,163 @@ def test_query_batch_partial_failure(mock_post: MagicMock, mock_pool: MagicMock)
     assert data["updated"] == 1  # noqa: S101
     assert data["failed"] == 1  # noqa: S101
     assert data["errors"][0]["document_id"] == "qf-fail"  # noqa: S101
+
+
+# ===========================================================================
+# PATCH /v1/admin/documents/batch/metadata-by-query — filter support
+# ===========================================================================
+
+
+@patch("main._get_redis_pool")
+@patch("main.requests.post")
+def test_query_batch_edit_with_folder_filter(mock_post: MagicMock, mock_pool: MagicMock) -> None:
+    """Query-based batch edit passes folder filter to Solr."""
+    mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    redis_mock = MagicMock()
+
+    solr_response = {
+        "response": {
+            "numFound": 2,
+            "docs": [{"id": "folder-1"}, {"id": "folder-2"}],
+        }
+    }
+
+    with (
+        patch("main._raw_solr_query", return_value=solr_response) as mock_solr,
+        patch("main._get_admin_redis_client", return_value=redis_mock),
+    ):
+        client = get_client()
+        response = client.patch(
+            QUERY_ENDPOINT,
+            json={
+                "query": "*:*",
+                "filters": {"folder": "en/Science"},
+                "updates": {"category": "Science"},
+            },
+        )
+
+    assert response.status_code == 200  # noqa: S101
+    data = response.json()
+    assert data["matched"] == 2  # noqa: S101
+    assert data["updated"] == 2  # noqa: S101
+
+    # Verify the filter query was passed to Solr in the initial query call
+    first_solr_call_params = mock_solr.call_args_list[0][0][0]
+    assert "fq" in first_solr_call_params  # noqa: S101
+    assert r"folder_path_s:en\/Science" in first_solr_call_params["fq"]  # noqa: S101
+
+
+@patch("main._get_redis_pool")
+@patch("main.requests.post")
+def test_query_batch_edit_with_multiple_filters(mock_post: MagicMock, mock_pool: MagicMock) -> None:
+    """Query-based batch edit supports multiple filters simultaneously."""
+    mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    redis_mock = MagicMock()
+
+    solr_response = {
+        "response": {
+            "numFound": 1,
+            "docs": [{"id": "multi-1"}],
+        }
+    }
+
+    with (
+        patch("main._raw_solr_query", return_value=solr_response) as mock_solr,
+        patch("main._get_admin_redis_client", return_value=redis_mock),
+    ):
+        client = get_client()
+        response = client.patch(
+            QUERY_ENDPOINT,
+            json={
+                "query": "*:*",
+                "filters": {"folder": "en/Science", "author": "Asimov"},
+                "updates": {"series": "Foundation"},
+            },
+        )
+
+    assert response.status_code == 200  # noqa: S101
+    data = response.json()
+    assert data["matched"] == 1  # noqa: S101
+
+    first_solr_call_params = mock_solr.call_args_list[0][0][0]
+    fq_list = first_solr_call_params["fq"]
+    assert len(fq_list) == 2  # noqa: S101
+
+
+@patch("main._get_redis_pool")
+@patch("main.requests.post")
+def test_query_batch_edit_with_empty_filters(mock_post: MagicMock, mock_pool: MagicMock) -> None:
+    """Empty filters dict is treated same as no filters."""
+    mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    redis_mock = MagicMock()
+
+    solr_response = {
+        "response": {
+            "numFound": 1,
+            "docs": [{"id": "empty-filt-1"}],
+        }
+    }
+
+    with (
+        patch("main._raw_solr_query", return_value=solr_response) as mock_solr,
+        patch("main._get_admin_redis_client", return_value=redis_mock),
+    ):
+        client = get_client()
+        response = client.patch(
+            QUERY_ENDPOINT,
+            json={
+                "query": "author_s:Asimov",
+                "filters": {},
+                "updates": {"series": "Foundation"},
+            },
+        )
+
+    assert response.status_code == 200  # noqa: S101
+    first_solr_call_params = mock_solr.call_args_list[0][0][0]
+    assert "fq" not in first_solr_call_params  # noqa: S101
+
+
+def test_query_batch_edit_unsupported_filter_returns_422() -> None:
+    """Unsupported filter field returns 422."""
+    client = get_client()
+    response = client.patch(
+        QUERY_ENDPOINT,
+        json={
+            "query": "author_s:Asimov",
+            "filters": {"unknown_field": "value"},
+            "updates": {"title": "Test"},
+        },
+    )
+    assert response.status_code == 422  # noqa: S101
+    assert "unsupported" in response.json()["detail"].lower()  # noqa: S101
+
+
+@patch("main._get_redis_pool")
+@patch("main.requests.post")
+def test_query_batch_edit_without_filters_still_works(mock_post: MagicMock, mock_pool: MagicMock) -> None:
+    """Query-based batch edit still works without filters (backward compatible)."""
+    mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    redis_mock = MagicMock()
+
+    solr_response = {
+        "response": {
+            "numFound": 1,
+            "docs": [{"id": "no-filt-1"}],
+        }
+    }
+
+    with (
+        patch("main._raw_solr_query", return_value=solr_response),
+        patch("main._get_admin_redis_client", return_value=redis_mock),
+    ):
+        client = get_client()
+        response = client.patch(
+            QUERY_ENDPOINT,
+            json={
+                "query": "author_s:Asimov",
+                "updates": {"series": "Foundation"},
+            },
+        )
+
+    assert response.status_code == 200  # noqa: S101
+    assert response.json()["matched"] == 1  # noqa: S101
