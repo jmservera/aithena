@@ -23,7 +23,7 @@ Apply this skill when modifying Solr queries, adding schema fields, changing sea
 - **No `parent_id_s` field** — this is how you identify a parent
 
 **Chunk documents (text fragments):**
-- `id` = `{parent_id}-chunk-{index}`
+- `id` = `{parent_id}_chunk_{index}` (index is zero-padded, e.g. `{parent_id}_chunk_0000`)
 - `parent_id_s` = parent book's `id` (foreign key)
 - `chunk_text_t` = extracted text (400 words, 50-word overlap, page-aware)
 - `embedding_v` = 512D dense vector (HNSW cosine) — **primary kNN search field**
