@@ -97,6 +97,16 @@
 
 <!-- Append learnings below this line -->
 
+### Backend Security & Correctness Batch (#786, #787, #789, #793)
+
+**#786 — Static SQL in collections_service:** Both `update_collection` and `update_item` used f-string SQL with `', '.join(sets)`. Replaced with explicit static SQL branches per field combination. When column combos are small and bounded, prefer explicit SQL over dynamic construction.
+
+**#787 — If-guards in auth middleware:** `require_authentication` middleware and `_get_current_user` used try/except for expected conditions (no token). Refactored to extract token first with `get_token_from_sources()`, then use `if None` guard. Exceptions now only fire for malformed/expired tokens.
+
+**#789 — WWW-Authenticate headers:** Added `WWW-Authenticate: Bearer` to JWT 401s (via existing `_unauthorized_exception` helper) and `WWW-Authenticate: ApiKey` to admin API key 401s in `admin_auth.py`. RFC 7235 compliance.
+
+**#793 — run_test_restore dry_run forwarding:** Both `OperationRecord` and `_execute_restore` dispatch were hardcoded to `dry_run=True`, ignoring the function parameter. Changed to forward the parameter through.
+
 ### v1.10.0 Wave 0 Bugs (2026-03-20)
 
 **#646 -- Semantic 502:** Default `EMBEDDINGS_URL` port mismatch (8001 vs 8080) + Solr kNN failures not wrapped in degradation logic. Fix: try/except + fallback to keyword in both semantic and hybrid modes.
