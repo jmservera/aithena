@@ -9246,3 +9246,79 @@ No PR should be opened for a bug fix without this evidence.
 - **Ripley:** Will enforce reproduction evidence requirement on Wave 2 bug fixes
 - **Brett:** Will document merge chain workflow (R7 action item)
 
+
+# Decision: CI Workflow Design for BCDR and Stress Tests
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-07-25  
+**Context:** Issues #682, #684 / PR #799  
+**Status:** PROPOSED  
+
+## Decision
+
+Two new CI workflows designed for environments **without Docker daemon access**:
+
+1. **monthly-restore-drill.yml** — Validates restore scripts via `bash -n` syntax checking + `DRY_RUN=1` orchestrator execution. Creates a GitHub issue on failure. Exit codes: 0=pass, 2=warnings, 1=fail.
+2. **stress-tests.yml** — `--collect-only` dry-run validates test infrastructure; always runs Locust smoke tests. Full tests require `dry_run: false` on self-hosted runners. Nightly schedule commented out per PRD §10.
+
+Both use `workflow_dispatch` for on-demand validation. Neither blocks PRs (manual/scheduled only).
+
+## Impact
+
+- Lambert: stress test CI surfaces collection errors early.
+- Brett: restore drill catches script regressions monthly.
+
+---
+
+# Decision: Search Results Redesign PRD — Phasing & Scope
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-21  
+**Context:** Issues #796, #797 / PR #798  
+**PRD:** `docs/prd/search-results-redesign.md`  
+**Status:** PROPOSED — Awaiting PO approval  
+
+## Decision
+
+v1.11.0 search improvements split into 3 waves:
+
+- **Wave 1 (S+M):** R1 (chunk text preview — nearly complete, chunk text already in Solr) + R2 (PDF viewer improvements). No backend architecture changes.
+- **Wave 2 (L):** R3 (similar books + BookDetailView). Decoupled from PDF viewer state to fix z-index/overlay issues.
+- **Wave 3 or v1.12.0 (XL):** R4 (thumbnails) — deferred due to infrastructure dependencies.
+
+Chunking strategy (issue #796) requires PO decision before R1 — current 400-word/50-overlap defaults may exceed embedding model token limit.
+
+## Impact
+
+- Dallas: BookDetailView is a new component — design review needed.
+- Parker/Ash: R1 is small (add field to Solr response, update normalizer). R4 needs architecture discussion.
+- Newt: v1.11.0 milestone created with 4 requirements across 3 waves.
+
+---
+
+# Decision: v1.10.1 Security & Performance Gate Review — Approved
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-21  
+**Milestone:** v1.10.1 (13 issues)  
+**Status:** APPROVED  
+
+## Decision
+
+All 13 v1.10.1 issues pass security and performance review. **Release approved.**
+
+Key findings:
+- **SQL injection (collections_service):** All queries parameterized. Two `S608` suppressions justified (whitelist column names, placeholder expansion).
+- **Auth hardening:** All 401 responses include `WWW-Authenticate` headers (RFC 7235). If-guard refactor eliminates exception-driven control flow from middleware hot path.
+- **Shell scripts (verify-backup.sh):** `set -euo pipefail`, `umask 077`, no `eval`/`exec`, input validation via whitelist. No injection vectors.
+- **CI workflows:** Both `monthly-restore-drill.yml` and `stress-tests.yml` use SHA-pinned actions, minimal permissions, `persist-credentials: false`.
+- **Batch operations:** Admin-only with defense-in-depth auth, `solr_escape()` on all filter values, hard cap at 5000 docs.
+
+One performance note: sequential batch updates for large document sets (~100s for 5000 docs) — acceptable for admin-only scope, optimize in v1.11+.
+
+## Impact
+
+- All agents: v1.10.1 is clear to ship.
+- Future: consider chunked async execution for batch operations in v1.11+.
+
+---
