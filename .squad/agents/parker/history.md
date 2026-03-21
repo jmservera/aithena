@@ -152,6 +152,24 @@
 
 **Knowledge improvement:** ~25% -- consolidated sprawling 692-line history into focused reference; extracted auth patterns to a new skill; surfaced tech debt as trackable items.
 
+### Chunk Size Reduction (#811, v1.11.0)
+
+**Defaults changed:** CHUNK_SIZE 400→90, CHUNK_OVERLAP 50→10 (stride 350→80). Updated in both `__init__.py` (env var defaults) and `chunker.py` (function param defaults). Docker-compose doesn't set these explicitly — defaults propagate from code.
+
+**Test impact:** Zero — all chunker tests use explicit `chunk_size`/`overlap` params, and indexer tests mock `chunk_text_with_pages`. No test modifications needed for default changes.
+
+**Key lesson:** When changing config defaults, check three layers: (1) env var defaults in `__init__.py`, (2) function parameter defaults in implementation, (3) docker-compose explicit env vars. Only layers that hardcode the old value need updating.
+
+### Chunk Text API (#807 + #808, v1.11.0)
+
+**SOLR_FIELD_LIST extended:** Added `chunk_text_t` and `parent_id_s` so Solr returns chunk text and parent linkage in query responses.
+
+**normalize_book() new fields:** `is_chunk` (bool, True when `parent_id_s` present), `chunk_text` (str|None, from `chunk_text_t`), `page_start`/`page_end` (int|None, individual fields alongside existing `pages` list). Parent docs unaffected — is_chunk=False, chunk_text=None.
+
+**Backward compatibility:** New fields are additive. EXCLUDE_CHUNKS_FQ still filters chunks from keyword search. Semantic/hybrid paths return chunks with the new fields populated. No Pydantic response model existed to update — API returns raw dicts.
+
+**Key lesson:** When adding Solr fields to the API, check both SOLR_FIELD_LIST (fl parameter) and normalize_book() (extraction). The fl parameter controls what Solr returns; normalize_book controls what the API returns. Both must be updated together.
+
 ### Folder Batch Integration (#656, 2026-03-21)
 
 **Missing fq_folder on search endpoints:** The search, facets, and books endpoints all lacked `fq_folder` as a declared parameter. The frontend sent it, but FastAPI silently dropped undeclared query params. Fix: add `fq_folder: str | None = Query(None)` and include `folder=fq_folder` in `collect_search_filters()` on all three endpoints.
