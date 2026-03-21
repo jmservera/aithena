@@ -187,3 +187,15 @@ src/aithena-ui/src/
 **Conditional rendering:** Download and external-link buttons only render when `pdfUrl` is truthy — avoids broken links when no document URL exists. Fullscreen and close always render.
 
 **CSS fullscreen mode:** Separate modifier classes (`--fullscreen`) on both overlay and panel. Panel goes `width: 100vw; height: 100vh`, overlay background becomes transparent. No JS DOM manipulation needed — pure CSS class toggling.
+
+### Chunk Text Display (#809, 2026-07-17)
+
+**Feature:** Display vector search chunk text snippets in BookCard.
+
+**Implementation:** Added `is_chunk`, `chunk_text`, `page_start`, `page_end` to `BookResult` type. When `is_chunk=true` and `chunk_text` is present, a visually distinct panel renders above keyword highlights with a left accent border and subtle blue background (`.book-chunk-text` CSS class). Page range shown when available (singular/plural).
+
+**Learnings:**
+- Used `book.*` i18n key prefix to stay consistent with existing BookCard keys rather than introducing a new `bookCard.*` domain prefix.
+- Chunk text is plain text (no HTML sanitization needed) — unlike keyword highlights which come with `<em>` tags from Solr.
+- Added `book.chunkPage` (singular) and `book.chunkPages` (plural) for page display — follows existing `book.foundOnPage`/`book.foundOnPages` pattern.
+- 8 tests cover all edge cases: presence/absence of chunk, single vs. multi page, empty string, missing page range, coexistence with keyword highlights.

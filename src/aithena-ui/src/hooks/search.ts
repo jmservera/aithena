@@ -21,6 +21,10 @@ export interface BookResult {
   highlights?: string[];
   document_url?: string | null;
   in_collections?: number;
+  is_chunk?: boolean;
+  chunk_text?: string;
+  page_start?: number;
+  page_end?: number;
 }
 
 export interface FacetValue {
