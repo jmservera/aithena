@@ -57,7 +57,7 @@ Each chunk is indexed as a separate Solr document with:
 
 **Bottom line:** The infrastructure to show chunk text previews is 80% built. The chunk text is stored, the page ranges are tracked, we just don't retrieve it or display it.
 
-**Important change:** The default chunk size will be reduced from 400 words to 90 words in v1.11.0 to better fit the context window of the `distiluse-base-multilingual-cased-v2` model and improve embedding relevance. This means chunk text previews will be shorter by default, but we can show the full chunk without truncation. The 90-word chunk size is a sweet spot for semantic search relevance while still providing meaningful previews.
+**Important change (proposal for v1.11.0):** We will change the document-indexer configuration so that the default `CHUNK_SIZE` (currently 400 words) is reduced to **90 words** to better fit the context window of the `distiluse-base-multilingual-cased-v2` model and improve embedding relevance. This change will be implemented by updating the `CHUNK_SIZE` env var default in the document-indexer service, and **existing documents will need to be reindexed** for the new chunk size to take effect in search results. With 90-word chunks, previews will be shorter by default, but we can show the full chunk without truncation; this is a sweet spot for semantic search relevance while still providing meaningful previews.
 
 ### 2.2 PDF Viewer
 
