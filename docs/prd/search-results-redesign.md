@@ -57,6 +57,8 @@ Each chunk is indexed as a separate Solr document with:
 
 **Bottom line:** The infrastructure to show chunk text previews is 80% built. The chunk text is stored, the page ranges are tracked, we just don't retrieve it or display it.
 
+**Important change (proposal for v1.11.0):** We will change the document-indexer configuration so that the default `CHUNK_SIZE` (currently 400 words) is reduced to **90 words** to better fit the context window of the `distiluse-base-multilingual-cased-v2` model and improve embedding relevance. This change will be implemented by updating the `CHUNK_SIZE` env var default in the document-indexer service, and **existing documents will need to be reindexed** for the new chunk size to take effect in search results. With 90-word chunks, previews will be shorter by default, but we can show the full chunk without truncation; this is a sweet spot for semantic search relevance while still providing meaningful previews.
+
 ### 2.2 PDF Viewer
 
 **Current implementation** (`src/aithena-ui/src/Components/PdfViewer.tsx`):
@@ -394,12 +396,12 @@ These fields would enable **section-scoped search** (e.g., "find matches in chap
 
 ### For Juanma (PO)
 
-1. **Book detail view design:** Should it be a side panel, separate page, or modal? (Affects R3 routing and navigation)
-2. **Thumbnail priority:** Is R4 (thumbnails) a must-have for v1.11.0 or can it be deferred to v1.12.0? It's the largest effort and has infrastructure dependencies.
-3. **Thumbnail storage location:** Filesystem alongside PDFs, or a separate thumbnails directory?
-4. **Chunk text preview length:** How many characters should be shown by default? (Suggestion: 300 chars with "show more")
-5. **Similar books without PDF:** When the user clicks a book card (not "Open PDF"), should we show a quick preview with similar books, or navigate to a full detail page?
-6. **Hierarchical chunking priority:** Should structure-aware chunking (section 5.4) be explored in v1.11.0 or deferred? The short-term fix (sentence-boundary awareness) is low effort; the full hierarchical approach is medium-high effort and may warrant a spike.
+1. **Book detail view design:** Should it be a side panel, separate page, or modal? (Affects R3 routing and navigation): I would do it modal, with the possibility to navigate to a full page if the user wants to edit metadata or see more details. This keeps the user in context of their search results while exploring similar books and metadata.
+2. **Thumbnail priority:** Is R4 (thumbnails) a must-have for v1.11.0 or can it be deferred to v1.12.0? It's the largest effort and has infrastructure dependencies. Defer to v1.12.0.
+3. **Thumbnail storage location:** Filesystem alongside PDFs, or a separate thumbnails directory? Alongside PDFs is simpler for indexing and serving via nginx, but a dedicated directory could be cleaner. Let's do alongside PDFs for simplicity.
+4. **Chunk text preview length:** How many characters should be shown by default? (Suggestion: 300 chars with "show more") We will reduce the default chunk to 90 words due to limitations of the embeddings model, so we can keep the whole chunk visible.
+5. **Similar books without PDF:** When the user clicks a book card (not "Open PDF"), should we show a quick preview with similar books, or navigate to a full detail page? Quick preview first, with option to go to full detail page for more metadata and editing.
+6. **Hierarchical chunking priority:** Should structure-aware chunking (section 5.4) be explored in v1.11.0 or deferred? The short-term fix (sentence-boundary awareness) is low effort; the full hierarchical approach is medium-high effort and may warrant a spike. Do the sentence-boundary fix in v1.11.0, and defer full hierarchical chunking to v2.0 after evaluating Tika direct extraction feasibility, as we may need to refactor the chunking pipeline and find a new embeddings model with a bigger context to support it.
 
 ### For Ash (Search Engineering)
 
@@ -424,6 +426,7 @@ See the linked chunking strategy issue (#796) for in-depth questions about:
 
 | # | Requirement | Rationale |
 |---|-------------|-----------|
+| R0 | Reduce default chunk size to 90 words | Improves embedding relevance with current model; allows showing full chunk text without truncation |
 | R1 | Vector search text preview | Infrastructure is 80% done. Small backend + frontend change. Highest user impact per effort. |
 | R2 | PDF viewer improvements | Self-contained frontend work. No backend changes. No dependencies. |
 
@@ -494,3 +497,20 @@ Chunk Document (text segment)
 ├── page_start_i, page_end_i (page range)
 └── Inherited: title_s, author_s, category_s, year_i, file_path_s, folder_path_s
 ```
+
+
+## Appendix C: Answers to open questions
+
+Questions That Need Decisions
+
+Are the current defaults (400 words / 50 overlap) appropriate? We need to move to 90 words 15/20 overlap as the current embeddings model has a 128 token window that allows to an average of 96 words.
+
+Should chunk boundaries respect sentence/paragraph boundaries? Ideally yes, but take into consideration the small token winow.
+
+Should overlapping text be deduplicated in previews? yes
+
+One chunk per book or multiple? When multiple chunks from the same parent match a query, should search results show the single best-matching chunk per book, or allow multiple entries? allow multiple
+
+Chunk text preview length? We can keep the 90 words.
+
+Re-chunking migration: If we change chunk size/overlap, all existing documents need re-indexing. What's the migration strategy? Force reindexing when upgrade is detected.
