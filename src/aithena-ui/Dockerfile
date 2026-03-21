@@ -14,7 +14,8 @@ RUN npm ci
 
 COPY . .
 
-ENV VERSION=${VERSION}
+ENV VERSION=${VERSION} \
+    VITE_COLLECTIONS_API=real
 RUN npm run build
 
 # ---------- runtime stage ----------
