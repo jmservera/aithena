@@ -190,7 +190,7 @@ def update_collection(
             sets.append("updated_at = ?")
             params.append(now)
             params.append(collection_id)
-            conn.execute(f"UPDATE collections SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608  # nosec B608
+            conn.execute(f"UPDATE collections SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
             conn.commit()
 
     return get_collection(db_path, collection_id, user_id)
@@ -310,7 +310,7 @@ def update_item(
             sets.append("updated_at = ?")
             params.append(now)
             params.append(item_id)
-            conn.execute(f"UPDATE collection_items SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608  # nosec B608
+            conn.execute(f"UPDATE collection_items SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
             conn.commit()
 
         updated = conn.execute(
@@ -369,7 +369,7 @@ def get_collection_ids_for_documents(
     with _connect(db_path) as conn:
         placeholders = ",".join("?" for _ in document_ids)
         rows = conn.execute(
-            f"SELECT ci.document_id, ci.collection_id "  # noqa: S608  # nosec B608
+            f"SELECT ci.document_id, ci.collection_id "  # noqa: S608
             f"FROM collection_items ci "
             f"JOIN collections c ON ci.collection_id = c.id "
             f"WHERE c.user_id = ? AND ci.document_id IN ({placeholders})",
