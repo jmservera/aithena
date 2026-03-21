@@ -414,3 +414,83 @@ class TestSentenceBoundaryWithPages:
             result = chunk_text_with_pages(pages, chunk_size=cs, overlap=0)
             for text, _, _ in result:
                 assert len(text.split()) <= cs
+
+
+# ---------------------------------------------------------------------------
+# Wave 1 — Additional chunker edge cases (#813)
+# ---------------------------------------------------------------------------
+
+
+class TestChunkerEdgeCases:
+    """Extra edge-case coverage for the sentence-boundary chunker."""
+
+    def test_default_chunk_size_is_90_words(self):
+        """90-word default: text of exactly 90 words produces one chunk."""
+        text = " ".join(f"word{i}" for i in range(90))
+        chunks = chunk_text(text)
+        assert len(chunks) == 1
+        assert len(chunks[0].split()) == 90
+
+    def test_default_chunk_size_splits_at_91_words(self):
+        """91 words with 90-word default should produce two chunks."""
+        text = " ".join(f"w{i}" for i in range(91))
+        chunks = chunk_text(text)
+        assert len(chunks) == 2
+
+    def test_tabs_and_newlines_normalised(self):
+        """Tabs, newlines, and multiple spaces are collapsed to single spaces."""
+        text = "Hello\tworld.\nHow\n\nare  you?"
+        chunks = chunk_text(text, chunk_size=10, overlap=0)
+        assert chunks == ["Hello world. How are you?"]
+
+    def test_abbreviation_is_false_positive_boundary(self):
+        """Abbreviations ending in period (e.g. 'Dr.') trigger boundary detection.
+
+        This is a known limitation of the simple '.!?' heuristic — document it.
+        """
+        text = "Dr. Smith went to the store. He bought milk."
+        chunks = chunk_text(text, chunk_size=5, overlap=0)
+        # "Dr." counts as a sentence boundary, so the first chunk should be "Dr."
+        # rather than grouping with "Smith went to the store."
+        # Verify chunks are valid (all words present, no exceeds chunk_size).
+        all_words = []
+        for c in chunks:
+            words = c.split()
+            assert len(words) <= 5
+            all_words.extend(words)
+        assert " ".join(all_words) == text
+
+    def test_trailing_whitespace_only_text(self):
+        """Text with content followed by trailing whitespace."""
+        text = "Hello world.   \n\n  "
+        chunks = chunk_text(text, chunk_size=10, overlap=0)
+        assert chunks == ["Hello world."]
+
+    def test_single_period_sentence(self):
+        """Edge case: a 'sentence' that is just a period."""
+        text = ". . ."
+        chunks = chunk_text(text, chunk_size=2, overlap=0)
+        assert len(chunks) >= 1
+        all_words = []
+        for c in chunks:
+            all_words.extend(c.split())
+        assert all_words == [".", ".", "."]
+
+
+class TestChunkerWithPagesEdgeCases:
+    """Extra page-tracking edge cases."""
+
+    def test_single_word_per_page(self):
+        """Each page has exactly one word — chunks span multiple pages."""
+        pages = [(i, f"word{i}") for i in range(1, 6)]
+        result = chunk_text_with_pages(pages, chunk_size=2, overlap=0)
+        assert result[0] == ("word1 word2", 1, 2)
+        assert result[1] == ("word3 word4", 3, 4)
+        assert result[2] == ("word5", 5, 5)
+
+    def test_empty_page_in_middle(self):
+        """An empty page between content pages should not break chunking."""
+        pages = [(1, "Hello world."), (2, ""), (3, "Goodbye world.")]
+        result = chunk_text_with_pages(pages, chunk_size=10, overlap=0)
+        assert len(result) == 1
+        assert result[0] == ("Hello world. Goodbye world.", 1, 3)
