@@ -50,7 +50,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(getVersion()),
   },
   plugins: [react({ fastRefresh: false })],
-  base: '',
+  base: '/',
   server: {
     proxy: {
       '/documents': {
