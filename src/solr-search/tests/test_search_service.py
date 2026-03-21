@@ -987,3 +987,95 @@ def test_rrf_chunk_dedup_scenario() -> None:
     assert fused[0]["id"] == "parent_1"
     # Keyword highlights are preserved for shared docs
     assert fused[0]["highlights"] == ["folk"]
+
+
+# ---------------------------------------------------------------------------
+# Wave 1 — Additional chunk text preview edge cases (#813)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_book_empty_chunk_text_returns_empty_string() -> None:
+    """Chunk document where chunk_text_t is an empty string (not missing)."""
+    book = normalize_book(
+        {
+            "id": "chunk_empty",
+            "title_s": "My Book",
+            "file_path_s": "books/my_book.pdf",
+            "parent_id_s": "parent_xyz",
+            "chunk_text_t": "",
+            "page_start_i": 1,
+            "page_end_i": 1,
+            "score": 2.0,
+        },
+        {},
+        None,
+    )
+    assert book["is_chunk"] is True
+    assert book["chunk_text"] == ""
+
+
+def test_normalize_book_very_short_chunk_text() -> None:
+    """Chunk with a single-word chunk_text_t."""
+    book = normalize_book(
+        {
+            "id": "chunk_short",
+            "title_s": "Tiny Chunk Book",
+            "file_path_s": "books/tiny.pdf",
+            "parent_id_s": "parent_short",
+            "chunk_text_t": "Hello",
+            "page_start_i": 3,
+            "page_end_i": 3,
+            "score": 1.0,
+        },
+        {},
+        "/documents/tok",
+    )
+    assert book["is_chunk"] is True
+    assert book["chunk_text"] == "Hello"
+    assert book["pages"] == [3, 3]
+
+
+def test_normalize_book_minimal_document_no_fields() -> None:
+    """Document with only 'id' set — all optional fields fall back to defaults."""
+    book = normalize_book({"id": "bare_doc", "score": 0.5}, {}, None)
+    assert book["id"] == "bare_doc"
+    assert book["title"] == ""  # Path("").stem
+    assert book["author"] == "Unknown"
+    assert book["year"] is None
+    assert book["category"] is None
+    assert book["language"] is None
+    assert book["series"] is None
+    assert book["pages"] is None
+    assert book["is_chunk"] is False
+    assert book["chunk_text"] is None
+    assert book["page_start"] is None
+    assert book["page_end"] is None
+    assert book["document_url"] is None
+
+
+def test_normalize_book_parent_id_ignores_chunk_text() -> None:
+    """Parent doc with stray chunk_text_t should NOT return chunk_text."""
+    book = normalize_book(
+        {
+            "id": "parent_stray",
+            "title_s": "Stray Fields",
+            "file_path_s": "books/stray.pdf",
+            "chunk_text_t": "should be ignored",
+            "score": 1.0,
+        },
+        {},
+        None,
+    )
+    assert book["is_chunk"] is False
+    assert book["chunk_text"] is None
+
+
+def test_solr_field_list_includes_page_range_fields() -> None:
+    """SOLR_FIELD_LIST must include page_start_i and page_end_i for chunk page support."""
+    assert "page_start_i" in SOLR_FIELD_LIST
+    assert "page_end_i" in SOLR_FIELD_LIST
+
+
+def test_solr_field_list_includes_score() -> None:
+    """SOLR_FIELD_LIST must include 'score' for relevance ranking."""
+    assert "score" in SOLR_FIELD_LIST

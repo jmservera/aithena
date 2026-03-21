@@ -234,3 +234,178 @@ describe('PdfViewer', () => {
     expect(screen.getByText(/no document url available/i)).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave 1 — PDF viewer accessibility & functionality (#817)
+// ---------------------------------------------------------------------------
+
+describe('PdfViewer – accessibility', () => {
+  it('dialog has role="dialog" and aria-modal="true"', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('dialog is labelled by the title element via aria-labelledby', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    const labelledBy = dialog.getAttribute('aria-labelledby');
+    expect(labelledBy).toBeTruthy();
+
+    const titleEl = document.getElementById(labelledBy!);
+    expect(titleEl).not.toBeNull();
+    expect(titleEl!.textContent).toBe('Learning React');
+  });
+
+  it('all interactive toolbar elements have aria-labels', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const buttons = screen.getAllByRole('button');
+    const links = screen.getAllByRole('link');
+
+    for (const el of [...buttons, ...links]) {
+      expect(el).toHaveAttribute('aria-label');
+      expect(el.getAttribute('aria-label')!.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('iframe has a descriptive title attribute', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const iframe = screen.getByTitle(/learning react/i);
+    expect(iframe).toBeInTheDocument();
+  });
+});
+
+describe('PdfViewer – focus management', () => {
+  it('moves focus to the close button on mount', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const closeBtn = screen.getByRole('button', { name: /close pdf viewer/i });
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it('traps forward Tab from the last focusable element to the first', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    // The iframe is the last focusable element inside the panel.
+    // Focus it, then Tab should wrap to the first (fullscreen button).
+    const iframe = screen.getByTitle(/learning react/i);
+    (iframe as HTMLElement).focus();
+    expect(document.activeElement).toBe(iframe);
+
+    await user.tab();
+    const fullscreenBtn = screen.getByRole('button', { name: /enter fullscreen/i });
+    expect(document.activeElement).toBe(fullscreenBtn);
+  });
+
+  it('traps backward Shift+Tab from the first focusable element to the last', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    // Fullscreen button is the first focusable element in the panel.
+    const fullscreenBtn = screen.getByRole('button', { name: /enter fullscreen/i });
+    fullscreenBtn.focus();
+    expect(document.activeElement).toBe(fullscreenBtn);
+
+    // Shift+Tab from the first element should wrap to the last (iframe)
+    await user.tab({ shift: true });
+    const iframe = screen.getByTitle(/learning react/i);
+    expect(document.activeElement).toBe(iframe);
+  });
+});
+
+describe('PdfViewer – fullscreen CSS', () => {
+  it('applies fullscreen CSS class when in fullscreen mode', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).not.toContain('fullscreen');
+
+    await user.click(screen.getByRole('button', { name: /enter fullscreen/i }));
+    expect(dialog.className).toContain('fullscreen');
+  });
+
+  it('removes fullscreen CSS class when exiting fullscreen', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    await user.click(screen.getByRole('button', { name: /enter fullscreen/i }));
+    expect(screen.getByRole('dialog').className).toContain('fullscreen');
+
+    await user.click(screen.getByRole('button', { name: /exit fullscreen/i }));
+    expect(screen.getByRole('dialog').className).not.toContain('fullscreen');
+  });
+});
+
+describe('PdfViewer – title fallback', () => {
+  it('shows fallback text when title is empty string', () => {
+    const bookNoTitle: BookResult = {
+      id: 'book-no-title',
+      title: '',
+      document_url: '/documents/notitle.pdf',
+    };
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookNoTitle} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    // When title is empty, the component falls back to intl message 'pdf.document'
+    const dialog = screen.getByRole('dialog');
+    const titleEl = dialog.querySelector('strong');
+    expect(titleEl).not.toBeNull();
+    // Fallback text should not be empty
+    expect(titleEl!.textContent!.length).toBeGreaterThan(0);
+  });
+});
