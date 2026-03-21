@@ -51,7 +51,7 @@ describe('PdfViewer', () => {
     expect(screen.getByText('Learning React')).toBeInTheDocument();
   });
 
-  it('renders the author name', () => {
+  it('renders toolbar action buttons when PDF URL is available', () => {
     const onClose = vi.fn();
     render(
       <IntlWrapper>
@@ -59,7 +59,89 @@ describe('PdfViewer', () => {
       </IntlWrapper>
     );
 
-    expect(screen.getByText(/jane doe/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /enter fullscreen/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /download pdf/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open in new window/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /close pdf viewer/i })).toBeInTheDocument();
+  });
+
+  it('download link has download attribute', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const downloadLink = screen.getByRole('link', { name: /download pdf/i });
+    expect(downloadLink).toHaveAttribute('download');
+    expect(downloadLink).toHaveAttribute('href', expect.stringContaining('/documents/react.pdf'));
+  });
+
+  it('external link opens in new window with security attributes', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const externalLink = screen.getByRole('link', { name: /open in new window/i });
+    expect(externalLink).toHaveAttribute('target', '_blank');
+    expect(externalLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('toggles fullscreen mode', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const fullscreenBtn = screen.getByRole('button', { name: /enter fullscreen/i });
+    await user.click(fullscreenBtn);
+
+    expect(screen.getByRole('button', { name: /exit fullscreen/i })).toBeInTheDocument();
+  });
+
+  it('ESC exits fullscreen first, then closes viewer', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    // Enter fullscreen
+    await user.click(screen.getByRole('button', { name: /enter fullscreen/i }));
+    expect(screen.getByRole('button', { name: /exit fullscreen/i })).toBeInTheDocument();
+
+    // First ESC exits fullscreen
+    await user.keyboard('{Escape}');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /enter fullscreen/i })).toBeInTheDocument();
+
+    // Second ESC closes the viewer
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides download and external link buttons when no PDF URL', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithoutPdf} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    expect(screen.queryByRole('link', { name: /download pdf/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /open in new window/i })).not.toBeInTheDocument();
+    // Fullscreen and close should still be present
+    expect(screen.getByRole('button', { name: /enter fullscreen/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /close pdf viewer/i })).toBeInTheDocument();
   });
 
   it('closes when the close button is clicked', async () => {

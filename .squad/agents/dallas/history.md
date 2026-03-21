@@ -176,3 +176,14 @@ src/aithena-ui/src/
 - The VERSION file at repo root is the single source of truth; always prefer reading it over env vars.
 - Docker build context for aithena-ui is `./src/aithena-ui/`, so the repo-root VERSION file is not in context. Must write it from the build arg in the Dockerfile.
 - `.env.example` files contain stale VERSION values (0.8.0, 1.4.0) — operators copying these to `.env` get wrong versions. Flagged for infra team to fix.
+### PDF Viewer Toolbar Redesign (#814, #815, #816 — PR #836)
+
+**Toolbar pattern:** Replaced the old header/close-button layout with a horizontal toolbar: title on left (truncated), grouped action buttons on right. BEM naming: `.pdf-viewer-toolbar`, `.pdf-viewer-toolbar__title`, `.pdf-viewer-toolbar__actions`, `.pdf-viewer-toolbar__btn`. This pattern is reusable for future panel/modal headers.
+
+**Fullscreen toggle:** Uses `useState(isFullscreen)` + `useCallback(toggleFullscreen)`. ESC key handler checks `isFullscreen` before calling `onClose` — exits fullscreen first, then closes on second ESC. The `isFullscreen` dependency was added to the keydown `useEffect` deps array.
+
+**Toolbar buttons as links:** Download and external-link use `<a>` elements styled as toolbar buttons (`.pdf-viewer-toolbar__btn` class on both `<button>` and `<a>`). Download uses native `download` attribute. External link uses `target="_blank" rel="noopener noreferrer"`.
+
+**Conditional rendering:** Download and external-link buttons only render when `pdfUrl` is truthy — avoids broken links when no document URL exists. Fullscreen and close always render.
+
+**CSS fullscreen mode:** Separate modifier classes (`--fullscreen`) on both overlay and panel. Panel goes `width: 100vw; height: 100vh`, overlay background becomes transparent. No JS DOM manipulation needed — pure CSS class toggling.

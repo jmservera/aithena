@@ -1002,6 +1002,10 @@ select:focus-visible,
   z-index: 1000;
 }
 
+.pdf-viewer-overlay--fullscreen {
+  background-color: transparent;
+}
+
 .pdf-viewer-panel {
   background-color: var(--color-bg-deeper);
   width: min(740px, 90vw);
@@ -1011,21 +1015,30 @@ select:focus-visible,
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
 }
 
-.pdf-viewer-header {
+.pdf-viewer-panel--fullscreen {
+  width: 100vw;
+  height: 100vh;
+  border-left: none;
+  box-shadow: none;
+}
+
+.pdf-viewer-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background-color: var(--color-bg-abyss);
   gap: 12px;
+  min-height: 48px;
 }
 
-.pdf-viewer-title {
+.pdf-viewer-toolbar__title {
   display: flex;
   align-items: center;
   gap: 10px;
   overflow: hidden;
+  min-width: 0;
 }
 
 .pdf-viewer-icon {
@@ -1034,7 +1047,7 @@ select:focus-visible,
   flex-shrink: 0;
 }
 
-.pdf-viewer-title strong {
+.pdf-viewer-toolbar__title strong {
   font-size: 0.95rem;
   color: var(--color-text-secondary);
   white-space: nowrap;
@@ -1042,28 +1055,43 @@ select:focus-visible,
   text-overflow: ellipsis;
 }
 
-.pdf-viewer-author {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.72);
+.pdf-viewer-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
-.pdf-viewer-close {
+.pdf-viewer-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 1.2rem;
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.55);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  flex-shrink: 0;
+  padding: 6px;
+  border-radius: 6px;
   transition:
     color 0.15s,
-    background-color 0.15s;
+    background-color 0.15s,
+    border-color 0.15s;
+  text-decoration: none;
 }
 
-.pdf-viewer-close:hover {
+.pdf-viewer-toolbar__btn:hover {
   color: var(--color-text-primary);
   background-color: rgba(255, 255, 255, 0.1);
+}
+
+.pdf-viewer-toolbar__btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.pdf-viewer-toolbar__btn--close:hover {
+  color: var(--color-error-light);
+  background-color: rgba(255, 80, 80, 0.12);
 }
 
 .pdf-viewer-body {
