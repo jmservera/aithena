@@ -10,8 +10,8 @@ def _split_words(text: str) -> list[str]:
 
 def chunk_text_with_pages(
     pages: list[tuple[int, str]],
-    chunk_size: int = 400,
-    overlap: int = 50,
+    chunk_size: int = 90,
+    overlap: int = 10,
 ) -> list[tuple[str, int, int]]:
     """Split page-aware text into overlapping word-based chunks.
 
@@ -69,7 +69,7 @@ def chunk_text_with_pages(
     return result
 
 
-def chunk_text(text: str, chunk_size: int = 400, overlap: int = 50) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 90, overlap: int = 10) -> list[str]:
     """Split *text* into overlapping word-based chunks.
 
     The chunking is fully deterministic: given the same ``text``,
