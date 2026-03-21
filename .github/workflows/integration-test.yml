@@ -199,6 +199,8 @@ jobs:
             build
 
       - name: Start full stack
+        env:
+          ADMIN_API_KEY: ci-admin-api-key
         run: |
           docker compose \
             -f docker-compose.yml \
