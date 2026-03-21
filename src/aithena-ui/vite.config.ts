@@ -11,22 +11,17 @@ const apiProxyTarget =
   !rawApiUrl || rawApiUrl === '.' ? 'http://localhost:8080' : rawApiUrl.replace(/\/+$/, '');
 
 /**
- * Resolve the application version from environment or VERSION file.
+ * Resolve the application version.
  *
- * Priority:
- *   1. VERSION env var (set by Docker build arg or manual export)
- *   2. VERSION file in the build working directory (Docker build stage)
- *   3. VERSION file at repo root (local development)
+ * The VERSION file is the single source of truth.  Priority:
+ *   1. VERSION file in the build working directory (Docker build stage)
+ *   2. VERSION file at repo root (local development)
+ *   3. VERSION env var (fallback for builds without the file)
  *   4. Fallback to "dev"
  */
 function getVersion(): string {
-  const envVersion = process.env.VERSION;
-  if (envVersion && envVersion !== 'dev') {
-    return envVersion;
-  }
-
   const candidates = [
-    resolve(__dirname, 'VERSION'), // Docker build: VERSION copied into WORKDIR
+    resolve(__dirname, 'VERSION'), // Docker build: written by Dockerfile
     resolve(__dirname, '..', '..', 'VERSION'), // Local dev: repo root
   ];
 
@@ -41,7 +36,12 @@ function getVersion(): string {
     }
   }
 
-  return envVersion || 'dev';
+  const envVersion = process.env.VERSION;
+  if (envVersion && envVersion !== 'dev') {
+    return envVersion;
+  }
+
+  return 'dev';
 }
 
 // https://vitejs.dev/config/
