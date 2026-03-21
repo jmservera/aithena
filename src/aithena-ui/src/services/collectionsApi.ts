@@ -122,6 +122,34 @@ function delay(ms = 120): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Normalize raw API item to match the CollectionItem interface. */
+function normalizeItem(raw: Record<string, unknown>): CollectionItem {
+  return {
+    id: String(raw.id ?? ''),
+    document_id: String(raw.document_id ?? ''),
+    title: String(raw.title ?? 'Untitled'),
+    author: raw.author != null ? String(raw.author) : undefined,
+    year: typeof raw.year === 'number' ? raw.year : undefined,
+    cover_url: raw.cover_url != null ? String(raw.cover_url) : null,
+    note: raw.note != null ? String(raw.note) : '',
+    added_at: String(raw.added_at ?? ''),
+  };
+}
+
+/** Normalize raw API detail to match the CollectionDetail interface. */
+function normalizeDetail(raw: Record<string, unknown>): CollectionDetail {
+  const items = Array.isArray(raw.items) ? raw.items.map(normalizeItem) : [];
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? ''),
+    description: String(raw.description ?? ''),
+    item_count: typeof raw.item_count === 'number' ? raw.item_count : items.length,
+    created_at: String(raw.created_at ?? ''),
+    updated_at: String(raw.updated_at ?? ''),
+    items,
+  };
+}
+
 // ── API functions ─────────────────────────────────────────────────
 // Each function contains the real `apiFetch` call (commented out) and a
 // mock fallback.  Uncomment the real call and remove the mock block when
@@ -143,7 +171,7 @@ export async function fetchCollectionDetail(id: string): Promise<CollectionDetai
   if (import.meta.env.VITE_COLLECTIONS_API === 'real') {
     const res = await apiFetch(`/v1/collections/${id}`);
     if (!res.ok) throw new Error('Collection not found');
-    return (await res.json()) as CollectionDetail;
+    return normalizeDetail(await res.json());
   }
   await delay();
   const col = collections.find((c) => c.id === id);
@@ -184,7 +212,7 @@ export async function updateCollection(
   /* istanbul ignore next -- real endpoint */
   if (import.meta.env.VITE_COLLECTIONS_API === 'real') {
     const res = await apiFetch(`/v1/collections/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
@@ -240,7 +268,7 @@ export async function updateItemNote(
 ): Promise<void> {
   /* istanbul ignore next -- real endpoint */
   if (import.meta.env.VITE_COLLECTIONS_API === 'real') {
-    const res = await apiFetch(`/v1/collections/${collectionId}/items/${itemId}/note`, {
+    const res = await apiFetch(`/v1/collections/${collectionId}/items/${itemId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note }),
@@ -265,10 +293,12 @@ export async function addItemToCollection(
     const res = await apiFetch(`/v1/collections/${collectionId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ document_id: documentId }),
+      body: JSON.stringify({ document_ids: [documentId] }),
     });
     if (!res.ok) throw new Error('Failed to add item');
-    return (await res.json()) as CollectionItem;
+    const body = (await res.json()) as { added: Record<string, unknown>[]; added_count: number };
+    if (!body.added || body.added.length === 0) throw new Error('No item was added');
+    return normalizeItem(body.added[0]);
   }
   await delay();
   const items = itemsByCollection[collectionId];
@@ -301,7 +331,8 @@ export async function addItemsToCollection(
       body: JSON.stringify({ document_ids: documentIds }),
     });
     if (!res.ok) throw new Error('Failed to add items');
-    return (await res.json()) as CollectionItem[];
+    const body = (await res.json()) as { added: Record<string, unknown>[]; added_count: number };
+    return (body.added ?? []).map(normalizeItem);
   }
   await delay();
   const items = itemsByCollection[collectionId];

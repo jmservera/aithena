@@ -32,6 +32,10 @@ class CollectionItemResponse(BaseModel):
     id: str
     collection_id: str
     document_id: str
+    title: str | None = None
+    author: str | None = None
+    year: int | None = None
+    cover_url: str | None = None
     position: int | None
     note: str | None
     added_at: str
@@ -53,6 +57,7 @@ class CollectionDetailResponse(BaseModel):
     user_id: str
     name: str
     description: str | None
+    item_count: int = 0
     created_at: str
     updated_at: str
     items: list[CollectionItemResponse]

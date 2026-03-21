@@ -12,7 +12,7 @@ interface NoteEditorProps {
 
 function NoteEditor({ itemId, initialNote, onSave, saving }: NoteEditorProps) {
   const intl = useIntl();
-  const [note, setNote] = useState(initialNote);
+  const [note, setNote] = useState(initialNote ?? '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleChange = useCallback(
