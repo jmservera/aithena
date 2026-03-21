@@ -174,7 +174,7 @@ class TestCorrelationIdMiddleware:
     def test_correlation_id_on_authenticated_endpoint(self):
         """Verify correlation ID is returned even for auth-protected endpoints."""
         client = self._get_client()
-        with patch("main.requests.get") as mock_solr:
+        with patch("main.requests.post") as mock_solr:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {

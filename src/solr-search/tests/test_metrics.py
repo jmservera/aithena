@@ -86,7 +86,7 @@ def test_metrics_endpoint_returns_prometheus_format(
     return_value=({"total_discovered": 0, "indexed": 0, "failed": 0, "pending": 0}, set()),
 )
 @patch("main._get_solr_status", return_value={"status": "ok", "nodes": 3, "docs_indexed": 0})
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_search_requests_counter_increments(
     mock_solr_get: MagicMock,
     _mock_solr_status: MagicMock,

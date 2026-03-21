@@ -1,13 +1,20 @@
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { FileText } from 'lucide-react';
 
 import { BookResult } from '../hooks/search';
+import CollectionBadge from './CollectionBadge';
 
 interface BookCardProps {
   book: BookResult;
   onOpenPdf?: (book: BookResult) => void;
   isSelected?: boolean;
+  isAdmin?: boolean;
+  onEditMetadata?: (book: BookResult) => void;
+  onSaveToCollection?: (book: BookResult) => void;
+  selectionMode?: boolean;
+  isChecked?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function sanitizeHighlight(raw: string): string {
@@ -19,8 +26,51 @@ function sanitizeHighlight(raw: string): string {
     .replace(/&lt;\/em&gt;/g, '</em>');
 }
 
-const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }: BookCardProps) {
+const BookCard = memo(function BookCard({
+  book,
+  onOpenPdf,
+  isSelected = false,
+  isAdmin = false,
+  onEditMetadata,
+  onSaveToCollection,
+  selectionMode = false,
+  isChecked = false,
+  onToggleSelect,
+}: BookCardProps) {
   const intl = useIntl();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const showMenu = Boolean((isAdmin && onEditMetadata) || onSaveToCollection);
+
+  const handleToggleSelect = useCallback(() => {
+    onToggleSelect?.(book.id);
+  }, [book.id, onToggleSelect]);
+
+  const handleToggleMenu = useCallback(() => {
+    setMenuOpen((prev) => !prev);
+  }, []);
+
+  const handleEditMetadata = useCallback(() => {
+    setMenuOpen(false);
+    onEditMetadata?.(book);
+  }, [book, onEditMetadata]);
+
+  const handleSaveToCollection = useCallback(() => {
+    setMenuOpen(false);
+    onSaveToCollection?.(book);
+  }, [book, onSaveToCollection]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
 
   const foundPagesLabel = useMemo(() => {
     if (!book.pages) return null;
@@ -44,8 +94,67 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
   }, [book, onOpenPdf]);
 
   return (
-    <article className={`book-card${isSelected ? ' book-card--active' : ''}`}>
-      <h2 className="book-title">{book.title}</h2>
+    <article
+      className={`book-card${isSelected ? ' book-card--active' : ''}${isChecked ? ' book-card--checked' : ''}`}
+    >
+      <div className="book-card-header">
+        {selectionMode && (
+          <div className="book-card-select-checkbox">
+            <input
+              type="checkbox"
+              checked={isChecked}
+              onChange={handleToggleSelect}
+              aria-label={intl.formatMessage({ id: 'book.selectBook' }, { title: book.title })}
+            />
+          </div>
+        )}
+        <h2 className="book-title">{book.title}</h2>
+        {book.in_collections != null && book.in_collections > 0 && (
+          <CollectionBadge count={book.in_collections} />
+        )}
+        {showMenu && (
+          <div className="book-card-menu-wrapper" ref={menuRef}>
+            <button
+              type="button"
+              className="book-card-menu-btn"
+              onClick={handleToggleMenu}
+              aria-label={intl.formatMessage({ id: 'book.menuToggle' }, { title: book.title })}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              ⋮
+            </button>
+            {menuOpen && (
+              <ul className="book-card-menu" role="menu">
+                {isAdmin && onEditMetadata && (
+                  <li role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="book-card-menu-item"
+                      onClick={handleEditMetadata}
+                    >
+                      {intl.formatMessage({ id: 'book.editMetadata' })}
+                    </button>
+                  </li>
+                )}
+                {onSaveToCollection && (
+                  <li role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="book-card-menu-item"
+                      onClick={handleSaveToCollection}
+                    >
+                      {intl.formatMessage({ id: 'collections.saveToCollection' })}
+                    </button>
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
       <div className="book-meta">
         {book.author && (
           <span className="book-meta-item">
@@ -73,6 +182,12 @@ const BookCard = memo(function BookCard({ book, onOpenPdf, isSelected = false }:
               {intl.formatMessage({ id: 'book.metaLanguage' })}
             </span>{' '}
             {book.language}
+          </span>
+        )}
+        {book.series && (
+          <span className="book-meta-item">
+            <span className="book-meta-label">{intl.formatMessage({ id: 'book.metaSeries' })}</span>{' '}
+            {book.series}
           </span>
         )}
         {book.page_count !== undefined && (

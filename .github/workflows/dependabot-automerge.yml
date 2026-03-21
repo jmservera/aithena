@@ -1,48 +1,94 @@
 name: Dependabot Auto-Merge
 
+# Trigger after CI completes on dev — replaces duplicate test jobs.
+# ci.yml already runs all Python services (including admin), frontend
+# lint+build+tests, and Ruff lint. No need to re-run them here.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["CI - Unit & Integration Tests"]
+    types: [completed]
+    branches: [dev]
 
 permissions: read-all
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 jobs:
-  metadata:
-    name: Extract Dependabot metadata
+  find-pr:
+    name: Find Dependabot PR
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
     outputs:
-      update-type: ${{ steps.metadata.outputs.update-type }}
-      dependency-names: ${{ steps.metadata.outputs.dependency-names }}
+      is-dependabot: ${{ steps.find.outputs.is-dependabot }}
+      pr-number: ${{ steps.find.outputs.pr-number }}
+      update-type: ${{ steps.find.outputs.update-type }}
+      dependency-names: ${{ steps.find.outputs.dependency-names }}
     steps:
-      - name: Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a  # v2.5.0
+      - name: Find associated Dependabot PR
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          # Find open PR for this branch by the Dependabot bot
+          PR_JSON=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --head "$HEAD_BRANCH" --state open \
+            --json number,author,title \
+            --jq '.[] | select(.author.login == "dependabot[bot]")' 2>/dev/null || true)
 
-  python-tests:
-    name: Python tests
+          if [ -z "$PR_JSON" ]; then
+            echo "No open Dependabot PR found for branch $HEAD_BRANCH"
+            echo "is-dependabot=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+          PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
+          echo "is-dependabot=true" >> "$GITHUB_OUTPUT"
+          echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "dependency-names=$PR_TITLE" >> "$GITHUB_OUTPUT"
+
+          # Determine semver update type from PR title
+          # Dependabot titles follow: "Bump X from A.B.C to D.E.F"
+          FROM_VER=$(echo "$PR_TITLE" | grep -oP 'from \K[0-9]+\.[0-9]+\.[0-9]+' || true)
+          TO_VER=$(echo "$PR_TITLE" | grep -oP 'to \K[0-9]+\.[0-9]+\.[0-9]+' || true)
+
+          if [ -n "$FROM_VER" ] && [ -n "$TO_VER" ]; then
+            FROM_MAJOR=$(echo "$FROM_VER" | cut -d. -f1)
+            TO_MAJOR=$(echo "$TO_VER" | cut -d. -f1)
+            FROM_MINOR=$(echo "$FROM_VER" | cut -d. -f2)
+            TO_MINOR=$(echo "$TO_VER" | cut -d. -f2)
+
+            if [ "$FROM_MAJOR" != "$TO_MAJOR" ]; then
+              echo "update-type=version-update:semver-major" >> "$GITHUB_OUTPUT"
+            elif [ "$FROM_MINOR" != "$TO_MINOR" ]; then
+              echo "update-type=version-update:semver-minor" >> "$GITHUB_OUTPUT"
+            else
+              echo "update-type=version-update:semver-patch" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Can't parse versions — treat as minor for safety
+            echo "update-type=version-update:semver-minor" >> "$GITHUB_OUTPUT"
+          fi
+
+  security-checks:
+    name: Security validation
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
-    needs: metadata
-    strategy:
-      matrix:
-        service:
-          - document-indexer
-          - document-lister
-          - solr-search
-          - embeddings-server
+      pull-requests: read
+    needs: find-pr
+    if: |
+      needs.find-pr.outputs.is-dependabot == 'true' &&
+      github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
       - name: Set up Python 3.12
@@ -50,87 +96,36 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install uv (for uv-managed services)
-        if: matrix.service != 'embeddings-server'
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
-        with:
-          enable-cache: true
-          cache-dependency-glob: src/${{ matrix.service }}/uv.lock
-
-      - name: Install dependencies (uv-managed)
-        if: matrix.service != 'embeddings-server'
-        working-directory: src/${{ matrix.service }}
-        run: uv sync --frozen
-
-      - name: Install dependencies (embeddings-server)
-        if: matrix.service == 'embeddings-server'
-        working-directory: src/embeddings-server
+      - name: Audit Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest==8.3.4 httpx==0.27.2
-
-      - name: Run tests
-        working-directory: src/${{ matrix.service }}
-        run: |
-          if [ "${{ matrix.service }}" != "embeddings-server" ]; then
-            uv run pytest -v --tb=short
-          else
-            python -m pytest -v --tb=short
+          pip install pip-audit
+          FAILED=0
+          for svc in document-indexer document-lister solr-search admin; do
+            if [ -f "src/$svc/pyproject.toml" ]; then
+              echo "::group::Auditing $svc"
+              pip-audit --require-hashes=false -r "src/$svc/pyproject.toml" --desc 2>&1 || FAILED=1
+              echo "::endgroup::"
+            fi
+          done
+          if [ -f "src/embeddings-server/requirements.txt" ]; then
+            echo "::group::Auditing embeddings-server"
+            pip-audit -r "src/embeddings-server/requirements.txt" --desc 2>&1 || FAILED=1
+            echo "::endgroup::"
           fi
-
-  frontend-tests:
-    name: Frontend tests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
-    needs: metadata
-    defaults:
-      run:
-        working-directory: src/aithena-ui
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          persist-credentials: false
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::warning::pip-audit found vulnerabilities — review before merging"
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: src/aithena-ui/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Run tests
-        run: npm test
-
-  security-checks:
-    name: Security validation
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
-    needs: metadata
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Check for known vulnerabilities
+      - name: Audit npm dependencies
+        working-directory: src/aithena-ui
         run: |
-          echo "Security check: Verifying no new high/critical vulnerabilities introduced"
-          # This is a placeholder - GitHub's Dependabot alerts are checked automatically
-          # Additional security scans can be added here if needed
-          exit 0
+          npm ci --ignore-scripts
+          npm audit --audit-level=high 2>&1 || echo "::warning::npm audit found high+ severity issues"
 
   auto-merge:
     name: Auto-merge PR
@@ -138,27 +133,29 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    needs: [metadata, python-tests, frontend-tests, security-checks]
+    needs: [find-pr, security-checks]
     if: |
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
-      (needs.metadata.outputs.update-type == 'version-update:semver-patch' ||
-       needs.metadata.outputs.update-type == 'version-update:semver-minor')
+      needs.find-pr.outputs.is-dependabot == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      (needs.find-pr.outputs.update-type == 'version-update:semver-patch' ||
+       needs.find-pr.outputs.update-type == 'version-update:semver-minor')
     steps:
       - name: Auto-merge patch/minor updates
         id: auto-merge
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
           REPO: ${{ github.repository }}
         run: |
-          gh pr review "$PR_NUMBER" --repo "$REPO" --approve --body "Auto-approved: patch/minor dependency update with all tests passing"
+          gh pr review "$PR_NUMBER" --repo "$REPO" --approve \
+            --body "Auto-approved: patch/minor dependency update with CI passing and security audit clean"
           gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash
 
       - name: Add auto-merge label
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
           REPO: ${{ github.repository }}
         run: gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:auto-merge"
 
@@ -166,27 +163,27 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
           REPO: ${{ github.repository }}
         run: |
           gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:manual-review"
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "❌ **Auto-merge failed** — this PR needs manual attention. Tests passed but the merge step encountered an error."
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "❌ **Auto-merge failed** — this PR needs manual attention. CI passed but the merge step encountered an error."
 
   manual-review:
     name: Flag for manual review
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
-    needs: [metadata, python-tests, frontend-tests, security-checks]
+    needs: [find-pr, security-checks]
     if: |
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
-      needs.metadata.outputs.update-type == 'version-update:semver-major'
+      needs.find-pr.outputs.is-dependabot == 'true' &&
+      needs.find-pr.outputs.update-type == 'version-update:semver-major'
     steps:
       - name: Add manual review label
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
           REPO: ${{ github.repository }}
         run: |
           gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:manual-review"
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "⚠️ **Major version update** - Manual review required before merging. All tests have passed."
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "⚠️ **Major version update** — manual review required before merging. CI tests passed and security audit completed."

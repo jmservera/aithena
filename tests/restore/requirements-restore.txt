@@ -1,0 +1,4 @@
+# Post-restore verification test dependencies
+pytest>=8.0,<9.0
+pytest-timeout>=2.2,<3.0
+requests>=2.31,<3.0

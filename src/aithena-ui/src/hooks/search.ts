@@ -14,11 +14,13 @@ export interface BookResult {
   category?: string;
   year?: number;
   language?: string;
+  series?: string;
   page_count?: number;
   pages?: [number, number] | null;
   file_path?: string;
   highlights?: string[];
   document_url?: string | null;
+  in_collections?: number;
 }
 
 export interface FacetValue {
@@ -31,6 +33,8 @@ export interface FacetGroups {
   category?: FacetValue[];
   language?: FacetValue[];
   year?: FacetValue[];
+  series?: FacetValue[];
+  folder?: FacetValue[];
 }
 
 export interface SearchFilters {
@@ -38,6 +42,8 @@ export interface SearchFilters {
   category?: string;
   language?: string;
   year?: string;
+  series?: string;
+  folder?: string;
 }
 
 export interface SearchResponse {
@@ -93,6 +99,8 @@ export function useSearch() {
       if (state.filters.category) params.set('fq_category', state.filters.category);
       if (state.filters.language) params.set('fq_language', state.filters.language);
       if (state.filters.year) params.set('fq_year', state.filters.year);
+      if (state.filters.series) params.set('fq_series', state.filters.series);
+      if (state.filters.folder) params.set('fq_folder', state.filters.folder);
 
       const response = await apiFetch(`${searchBaseURL}?${params.toString()}`);
       if (!response.ok) {

@@ -121,6 +121,7 @@ ADMIN_ENDPOINTS = [
     ("POST", "/v1/admin/documents/requeue-failed"),
     ("DELETE", "/v1/admin/documents/processed"),
     ("POST", "/v1/admin/documents/placeholder-id/requeue"),
+    ("PATCH", "/v1/admin/documents/placeholder-id/metadata"),
 ]
 
 

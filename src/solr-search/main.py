@@ -33,13 +33,74 @@ from auth import (
     decode_access_token,
     delete_user,
     get_token_from_sources,
+    get_token_remember_me,
     get_user_by_id,
     init_auth_db,
     list_users,
     set_auth_cookie,
     update_user,
 )
+from backup_service import (
+    BackupConfigRequest,
+    BackupInfo,
+    BackupListResponse,
+    BackupRequest,
+    BackupStatusResponse,
+    OperationRecord,
+    RestoreRequest,
+    get_backup_by_id,
+    get_tier_status,
+    run_backup,
+    run_restore,
+    run_test_restore,
+    scan_backups,
+)
+from backup_service import (
+    get_config as get_backup_config,
+)
+from backup_service import (
+    update_config as update_backup_config,
+)
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
+from collections_models import (
+    AddItemsRequest,
+    CollectionDetailResponse,
+    CollectionResponse,
+    CreateCollectionRequest,
+    ReorderItemsRequest,
+    UpdateCollectionRequest,
+    UpdateItemRequest,
+)
+from collections_service import (
+    add_items as svc_add_items,
+)
+from collections_service import (
+    create_collection as svc_create_collection,
+)
+from collections_service import (
+    delete_collection as svc_delete_collection,
+)
+from collections_service import (
+    get_collection as svc_get_collection,
+)
+from collections_service import (
+    get_collection_ids_for_documents as svc_get_collection_ids_for_documents,
+)
+from collections_service import (
+    list_collections as svc_list_collections,
+)
+from collections_service import (
+    remove_item as svc_remove_item,
+)
+from collections_service import (
+    reorder_items as svc_reorder_items,
+)
+from collections_service import (
+    update_collection as svc_update_collection,
+)
+from collections_service import (
+    update_item as svc_update_item,
+)
 from config import settings
 from correlation import CorrelationIdMiddleware, get_correlation_id
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
@@ -88,6 +149,9 @@ async def lifespan(_app: FastAPI):
             "Set a strong random secret via the AUTH_JWT_SECRET environment variable."
         )
     init_auth_db(settings.auth_db_path)
+    from collections_service import init_collections_db
+
+    init_collections_db(settings.collections_db_path)
     logger.info("solr-search started", extra={"version": settings.version, "port": settings.port})
     yield
     logger.info("solr-search shutting down")
@@ -148,6 +212,7 @@ PUBLIC_PATH_PREFIXES = ("/docs", "/redoc", "/openapi.json")
 class LoginRequest(BaseModel):
     username: str
     password: str
+    remember_me: bool = False
 
 
 class ChangePasswordRequest(BaseModel):
@@ -366,7 +431,7 @@ async def request_logging_middleware(request: Request, call_next):
 
 def _raw_solr_query(params: dict[str, Any]) -> dict[str, Any]:
     """Execute a Solr HTTP request.  Raised exceptions feed the circuit breaker."""
-    response = requests.get(settings.select_url, params=params, timeout=settings.request_timeout)
+    response = requests.post(settings.select_url, data=params, timeout=settings.request_timeout)
     response.raise_for_status()
     return response.json()
 
@@ -430,6 +495,38 @@ def collect_search_filters(**filters: str | None) -> dict[str, str]:
     return {name: value.strip() for name, value in filters.items() if value and value.strip()}
 
 
+def _enrich_with_collections(
+    results: list[dict[str, Any]],
+    request: Request,
+) -> None:
+    """Annotate each result dict with ``in_collections`` for authenticated users.
+
+    Mutates *results* in place.  If the request has no authenticated user the
+    results are left untouched (field omitted entirely).
+    """
+    user: AuthenticatedUser | None = getattr(request.state, "auth_user", None)
+    if user is None or not results:
+        return
+
+    doc_ids = [r["id"] for r in results if r.get("id")]
+    if not doc_ids:
+        return
+
+    try:
+        membership = svc_get_collection_ids_for_documents(
+            settings.collections_db_path,
+            str(user.id),
+            doc_ids,
+        )
+    except Exception:
+        logger.warning("Failed to fetch collection membership; skipping enrichment", exc_info=True)
+        return
+
+    for result in results:
+        doc_id = result.get("id", "")
+        result["in_collections"] = membership.get(doc_id, [])
+
+
 @contextlib.contextmanager
 def _track_search_metrics(mode: str) -> Generator[None, None, None]:
     started = time.perf_counter()
@@ -475,16 +572,37 @@ def _authenticate_request(request: Request) -> AuthenticatedUser:
     return decode_access_token(token, settings.auth_jwt_secret)
 
 
+def _authenticate_request_with_token(request: Request) -> tuple[AuthenticatedUser, str]:
+    """Like ``_authenticate_request`` but also returns the raw token for cookie refresh."""
+    token = get_token_from_sources(
+        request.headers.get("Authorization"),
+        request.cookies.get(settings.auth_cookie_name),
+    )
+    if token is None:
+        raise AuthenticationError("Not authenticated")
+    return decode_access_token(token, settings.auth_jwt_secret), token
+
+
 def _get_current_user(request: Request) -> AuthenticatedUser:
     current_user = getattr(request.state, "auth_user", None)
     if isinstance(current_user, AuthenticatedUser):
         return current_user
-    return _authenticate_request(request)
+    try:
+        return _authenticate_request(request)
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 @app.middleware("http")
 async def require_authentication(request: Request, call_next):
     if request.method == "OPTIONS" or _is_public_path(request.url.path):
+        return await call_next(request)
+
+    # Admin endpoints with X-API-Key: attempt user auth but don't block on failure.
+    # Routes that need a logged-in user use require_role() which will reject if missing.
+    if request.headers.get("X-API-Key") and request.url.path.startswith("/v1/admin/"):
+        with contextlib.suppress(AuthenticationError):
+            request.state.auth_user = _authenticate_request(request)
         return await call_next(request)
 
     try:
@@ -548,12 +666,15 @@ def auth_login(credentials: LoginRequest, request: Request, response: Response) 
     if user is None:
         raise _unauthorized_exception("Invalid username or password")
 
-    token = create_access_token(user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
+    token = create_access_token(
+        user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds, remember_me=credentials.remember_me
+    )
+    cookie_max_age = settings.auth_jwt_ttl_seconds if credentials.remember_me else None
     set_auth_cookie(
         response,
         token,
         settings.auth_cookie_name,
-        settings.auth_jwt_ttl_seconds,
+        cookie_max_age,
         secure=_request_uses_https(request),
     )
     return {
@@ -566,11 +687,22 @@ def auth_login(credentials: LoginRequest, request: Request, response: Response) 
 
 @app.get("/v1/auth/validate/", include_in_schema=False, name="auth_validate_v1_slash")
 @app.get("/v1/auth/validate", name="auth_validate_v1")
-def auth_validate(request: Request) -> dict[str, Any]:
+def auth_validate(request: Request, response: Response) -> dict[str, Any]:
     try:
-        user = _authenticate_request(request)
+        user, token = _authenticate_request_with_token(request)
     except AuthenticationError as exc:
         raise _unauthorized_exception(str(exc)) from exc
+    # Refresh the auth cookie so nginx auth_request subrequests keep working.
+    # Respect the original remember_me choice: only set max_age for persistent sessions.
+    remember_me = get_token_remember_me(token, settings.auth_jwt_secret)
+    cookie_max_age = settings.auth_jwt_ttl_seconds if remember_me else None
+    set_auth_cookie(
+        response,
+        token,
+        settings.auth_cookie_name,
+        cookie_max_age,
+        secure=_request_uses_https(request),
+    )
     return {"authenticated": True, "user": user.to_dict()}
 
 
@@ -712,6 +844,7 @@ def search(
     fq_category: str | None = Query(None),
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
+    fq_series: str | None = Query(None),
     mode: str = Query(
         settings.default_search_mode,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
@@ -722,7 +855,7 @@ def search(
     """Search for books.
 
     - **keyword** (default): BM25 full-text search via Solr edismax.
-    - **semantic**: Dense vector kNN search using Solr HNSW (``book_embedding`` field).
+    - **semantic**: Dense vector kNN search using Solr HNSW (``embedding_v`` field).
     - **hybrid**: Reciprocal Rank Fusion of the BM25 and kNN legs.
 
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
@@ -743,15 +876,19 @@ def search(
         category=fq_category,
         language=fq_language,
         year=fq_year,
+        series=fq_series,
     )
 
     with _track_search_metrics(mode):
         if mode == "keyword":
-            return _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-        if mode == "semantic":
-            return _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-        # hybrid
-        return _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+            response = _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+        elif mode == "semantic":
+            response = _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+        else:
+            response = _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+
+    _enrich_with_collections(response.get("results", []), request)
+    return response
 
 
 def _search_keyword(
@@ -818,7 +955,7 @@ def _search_semantic(
     sort: str | None,
     filters: dict[str, str],
 ) -> dict[str, Any]:
-    """Execute a Solr kNN semantic search using the ``book_embedding`` field.
+    """Execute a Solr kNN semantic search using the ``embedding_v`` field.
 
     Facets and highlights degrade to empty because the kNN query path does not
     produce Solr facet counts or highlight snippets.
@@ -981,6 +1118,7 @@ def facets(
     fq_category: str | None = Query(None),
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
+    fq_series: str | None = Query(None),
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -995,6 +1133,7 @@ def facets(
                 category=fq_category,
                 language=fq_language,
                 year=fq_year,
+                series=fq_series,
             ),
             facet_limit=settings.facet_limit,
             rows=0,
@@ -1034,7 +1173,7 @@ def similar_books(
     """Return books semantically similar to the one identified by *document_id*.
 
     The source document is always excluded from results. Similarity is computed
-    using Solr's kNN query against the ``book_embedding`` DenseVectorField.
+    using Solr's kNN query against the ``embedding_v`` DenseVectorField.
     """
     embedding_field = settings.book_embedding_field
 
@@ -1107,12 +1246,13 @@ def list_books(
     fq_category: str | None = Query(None, description="Filter by category."),
     fq_language: str | None = Query(None, description="Filter by language."),
     fq_year: str | None = Query(None, description="Filter by publication year."),
+    fq_series: str | None = Query(None, description="Filter by series name."),
 ) -> dict[str, Any]:
     """Browse the complete library of indexed books with pagination and filtering.
 
     Returns all books sorted by title (default) or other fields. Supports the same
     filter query parameters as the search endpoint (``fq_author``, ``fq_category``,
-    ``fq_language``, ``fq_year``).
+    ``fq_language``, ``fq_year``, ``fq_series``).
 
     This endpoint uses a wildcard ``*:*`` query to match all documents, making it
     suitable for library browsing and discovery.
@@ -1122,6 +1262,7 @@ def list_books(
         category=fq_category,
         language=fq_language,
         year=fq_year,
+        series=fq_series,
     )
 
     payload = query_solr(
@@ -1794,6 +1935,305 @@ def admin_requeue_document(doc_id: str) -> dict[str, Any]:
     return {"requeued": 1, "id": doc_id}
 
 
+
+# ---------------------------------------------------------------------------
+# Metadata edit — PATCH /v1/admin/documents/{doc_id}/metadata
+# ---------------------------------------------------------------------------
+
+# Field mapping: request field → list of Solr fields to update atomically
+_METADATA_FIELD_MAP: dict[str, list[str]] = {
+    "title": ["title_s", "title_t"],
+    "author": ["author_s", "author_t"],
+    "year": ["year_i"],
+    "category": ["category_s"],
+    "series": ["series_s"],
+}
+
+
+class MetadataEditRequest(BaseModel):
+    """Pydantic model for single-document metadata edit."""
+
+    title: str | None = None
+    author: str | None = None
+    year: int | None = None
+    category: str | None = None
+    series: str | None = None
+
+    model_config = {"str_strip_whitespace": True}
+
+    def non_empty_fields(self) -> dict[str, str | int]:
+        """Return only supplied, non-empty fields."""
+        result: dict[str, str | int] = {}
+        for field_name in _METADATA_FIELD_MAP:
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            if isinstance(value, str) and not value:
+                continue
+            result[field_name] = value
+        return result
+
+    def validate_non_empty(self) -> dict[str, str | int]:
+        """Return non-empty fields or raise HTTPException(422) if none."""
+        fields = self.non_empty_fields()
+        if not fields:
+            raise HTTPException(status_code=422, detail="At least one metadata field must be provided")
+        if "title" in fields and len(str(fields["title"])) > 255:
+            raise HTTPException(status_code=422, detail="title must be 255 characters or fewer")
+        if "author" in fields and len(str(fields["author"])) > 255:
+            raise HTTPException(status_code=422, detail="author must be 255 characters or fewer")
+        if "category" in fields and len(str(fields["category"])) > 100:
+            raise HTTPException(status_code=422, detail="category must be 100 characters or fewer")
+        if "series" in fields and len(str(fields["series"])) > 100:
+            raise HTTPException(status_code=422, detail="series must be 100 characters or fewer")
+        if "year" in fields:
+            year_val = int(fields["year"])
+            if year_val < 1000 or year_val > 2099:
+                raise HTTPException(status_code=422, detail="year must be between 1000 and 2099")
+        return fields
+
+
+def _solr_document_exists(doc_id: str) -> bool:
+    """Check if a document exists in Solr by its ID."""
+    params = {
+        "q": f"id:{solr_escape(doc_id)}",
+        "rows": 0,
+        "wt": "json",
+    }
+    result = query_solr(params)
+    return result.get("response", {}).get("numFound", 0) > 0
+
+
+def _solr_atomic_update(doc_id: str, fields: dict[str, str | int]) -> None:
+    """Send an atomic update to Solr for the given fields."""
+    update_doc: dict[str, Any] = {"id": doc_id}
+    for field_name, value in fields.items():
+        for solr_field in _METADATA_FIELD_MAP[field_name]:
+            update_doc[solr_field] = {"set": value}
+
+    update_url = f"{settings.solr_url}/{settings.solr_collection}/update/json"
+    try:
+        response = solr_circuit.call(
+            requests.post,
+            update_url,
+            json=[update_doc],
+            params={"commit": "true"},
+            timeout=settings.request_timeout,
+        )
+        response.raise_for_status()
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Search service temporarily unavailable — Solr circuit breaker is open",
+        ) from exc
+    except requests.Timeout as exc:
+        raise HTTPException(status_code=504, detail="Timed out waiting for Solr update") from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Solr update request failed: {exc}") from exc
+
+
+def _store_metadata_override(doc_id: str, fields: dict[str, str | int], edited_by: str) -> None:
+    """Persist metadata override in Redis so re-indexing preserves manual edits."""
+    override_key = f"aithena:metadata-override:{doc_id}"
+    override_data: dict[str, Any] = {}
+    for field_name, value in fields.items():
+        for sf in _METADATA_FIELD_MAP[field_name]:
+            override_data[sf] = value
+    override_data["edited_by"] = edited_by
+    override_data["edited_at"] = datetime.now(UTC).isoformat()
+
+    try:
+        client = _get_admin_redis_client()
+        _redis_call(client.set, override_key, json.dumps(override_data))
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Redis circuit breaker is open — override store temporarily unavailable",
+        ) from exc
+    except Exception as exc:
+        logger.warning("metadata_override_store_failed", extra={"doc_id": doc_id, "error": str(exc)})
+        raise HTTPException(status_code=503, detail="Cannot store metadata override in Redis") from exc
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Batch metadata edit endpoints (defined before single-doc route
+# so that FastAPI does not match "/batch/metadata" as {doc_id}="batch")
+# ---------------------------------------------------------------------------
+
+_BATCH_MAX_DOCUMENT_IDS = 1000
+_BATCH_PAGE_SIZE = 100
+_BATCH_MAX_QUERY_RESULTS = 5000
+
+
+class BatchMetadataEditRequest(BaseModel):
+    """Batch metadata edit by explicit document IDs."""
+
+    document_ids: list[str]
+    updates: MetadataEditRequest
+
+    model_config = {"str_strip_whitespace": True}
+
+
+class BatchMetadataByQueryRequest(BaseModel):
+    """Batch metadata edit by Solr query."""
+
+    query: str
+    updates: MetadataEditRequest
+
+    model_config = {"str_strip_whitespace": True}
+
+
+def _batch_apply_updates(
+    doc_ids: list[str],
+    fields: dict[str, str | int],
+) -> dict[str, Any]:
+    """Apply metadata updates to a list of document IDs.
+
+    Returns a batch result dict with matched/updated/failed/errors counts.
+    Continues on individual document failures (partial failure handling).
+    """
+    matched = len(doc_ids)
+    updated = 0
+    failed = 0
+    errors: list[dict[str, str]] = []
+
+    for doc_id in doc_ids:
+        try:
+            if not _solr_document_exists(doc_id):
+                failed += 1
+                errors.append({"document_id": doc_id, "error": "Document does not exist"})
+                continue
+            _solr_atomic_update(doc_id, fields)
+            _store_metadata_override(doc_id, fields, edited_by="admin")
+            updated += 1
+        except HTTPException as exc:
+            failed += 1
+            errors.append({"document_id": doc_id, "error": exc.detail})
+        except Exception as exc:
+            failed += 1
+            logger.error("batch_update_error", extra={"doc_id": doc_id, "error": str(exc)})
+            errors.append({"document_id": doc_id, "error": "Internal error updating document"})
+
+    return {
+        "matched": matched,
+        "updated": updated,
+        "failed": failed,
+        "errors": errors,
+    }
+
+
+def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[str]:
+    """Execute a Solr query and return all matching document IDs, paginated."""
+    if page_size is None:
+        page_size = _BATCH_PAGE_SIZE
+    all_ids: list[str] = []
+    start = 0
+
+    while True:
+        params: dict[str, Any] = {
+            "q": query,
+            "fl": "id",
+            "rows": page_size,
+            "start": start,
+            "wt": "json",
+        }
+        result = query_solr(params)
+        docs = result.get("response", {}).get("docs", [])
+        if not docs:
+            break
+        all_ids.extend(doc["id"] for doc in docs if "id" in doc)
+        num_found = result.get("response", {}).get("numFound", 0)
+        start += page_size
+        if start >= num_found:
+            break
+
+    return all_ids
+
+
+@app.patch(
+    "/v1/admin/documents/batch/metadata",
+    name="admin_batch_edit_metadata_v1",
+    dependencies=[Depends(require_admin_auth), require_role("admin")],
+)
+def admin_batch_edit_metadata(body: BatchMetadataEditRequest) -> dict[str, Any]:
+    """Edit metadata for multiple documents by ID.
+
+    Applies the same field updates to every document in the list.
+    Continues on individual failures and reports partial results.
+    Requires both admin API key and admin JWT role (defense-in-depth).
+    """
+    if not body.document_ids:
+        raise HTTPException(status_code=422, detail="document_ids must not be empty")
+    if len(body.document_ids) > _BATCH_MAX_DOCUMENT_IDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Too many document IDs — maximum is {_BATCH_MAX_DOCUMENT_IDS}",
+        )
+
+    fields = body.updates.validate_non_empty()
+    return _batch_apply_updates(body.document_ids, fields)
+
+
+@app.patch(
+    "/v1/admin/documents/batch/metadata-by-query",
+    name="admin_batch_edit_metadata_by_query_v1",
+    dependencies=[Depends(require_admin_auth), require_role("admin")],
+)
+def admin_batch_edit_metadata_by_query(body: BatchMetadataByQueryRequest) -> dict[str, Any]:
+    """Edit metadata for documents matching a Solr query.
+
+    Resolves matching document IDs via Solr search, then applies updates
+    in pages.  Requires both admin API key and admin JWT role (defense-in-depth).
+    """
+    query = body.query.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="query must not be empty")
+
+    fields = body.updates.validate_non_empty()
+    doc_ids = _solr_query_document_ids(query)
+
+    if not doc_ids:
+        return {"matched": 0, "updated": 0, "failed": 0, "errors": []}
+
+    if len(doc_ids) > _BATCH_MAX_QUERY_RESULTS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Query matched {len(doc_ids)} documents — maximum is {_BATCH_MAX_QUERY_RESULTS}. "
+            "Use a more specific query.",
+        )
+
+    return _batch_apply_updates(doc_ids, fields)
+
+
+@app.patch(
+    "/v1/admin/documents/{doc_id}/metadata",
+    name="admin_edit_document_metadata_v1",
+    dependencies=[Depends(require_admin_auth), require_role("admin")],
+)
+def admin_edit_document_metadata(doc_id: str, body: MetadataEditRequest) -> dict[str, Any]:
+    """Edit metadata for a single document.
+
+    Performs a Solr atomic update and stores the override in Redis so that
+    manual edits survive re-indexing.  Requires both admin API key and
+    admin JWT role (defense-in-depth).
+    """
+    fields = body.validate_non_empty()
+
+    if not _solr_document_exists(doc_id):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    _solr_atomic_update(doc_id, fields)
+    _store_metadata_override(doc_id, fields, edited_by="admin")
+
+    return {
+        "id": doc_id,
+        "updated_fields": sorted(fields.keys()),
+        "status": "ok",
+        "message": "Metadata updated in Solr and override store",
+    }
+
+
+
 # ---------------------------------------------------------------------------
 # Phase 4 — /v1/upload endpoint
 # ---------------------------------------------------------------------------
@@ -1940,6 +2380,308 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
         "status": "accepted",
         "message": "File uploaded and queued for indexing",
     }
+
+
+# ---------------------------------------------------------------------------
+# Collections CRUD endpoints
+# ---------------------------------------------------------------------------
+
+
+def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
+    """Enrich collection items with document metadata from Solr."""
+    doc_ids = [item["document_id"] for item in items if item.get("document_id")]
+    if not doc_ids:
+        return
+
+    try:
+        id_query = " OR ".join(f"id:{solr_escape(did)}" for did in doc_ids)
+        result = query_solr({
+            "q": f"({id_query})",
+            "fl": "id,title_s,author_s,year_i,file_path_s",
+            "rows": len(doc_ids),
+            "wt": "json",
+        })
+
+        docs = result.get("response", {}).get("docs", [])
+        metadata_map: dict[str, dict[str, Any]] = {}
+        for doc in docs:
+            doc_id = doc.get("id")
+            if doc_id:
+                metadata_map[doc_id] = doc
+
+        for item in items:
+            doc = metadata_map.get(item["document_id"], {})
+            item["title"] = doc.get("title_s") or Path(doc.get("file_path_s", "")).stem or None
+            item["author"] = doc.get("author_s") or None
+            item["year"] = doc.get("year_i")
+            item["cover_url"] = None
+    except Exception:
+        logger.warning("Failed to enrich collection items with Solr metadata", exc_info=True)
+        for item in items:
+            item.setdefault("title", None)
+            item.setdefault("author", None)
+            item.setdefault("year", None)
+            item.setdefault("cover_url", None)
+
+
+def _prepare_collection_detail(result: dict[str, Any]) -> dict[str, Any]:
+    """Enrich items and add item_count to a collection detail response."""
+    items = result.get("items", [])
+    _enrich_collection_items(items)
+    result["item_count"] = len(items)
+    return result
+
+
+@app.post("/v1/collections", response_model=CollectionResponse, status_code=201)
+def create_collection(body: CreateCollectionRequest, request: Request):
+    user = _get_current_user(request)
+    result = svc_create_collection(settings.collections_db_path, str(user.id), body.name, body.description)
+    return result
+
+
+@app.get("/v1/collections", response_model=list[CollectionResponse])
+def list_collections(request: Request):
+    user = _get_current_user(request)
+    return svc_list_collections(settings.collections_db_path, str(user.id))
+
+
+@app.get("/v1/collections/{collection_id}", response_model=CollectionDetailResponse)
+def get_collection(collection_id: str, request: Request):
+    user = _get_current_user(request)
+    result = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return _prepare_collection_detail(result)
+
+
+@app.put("/v1/collections/{collection_id}", response_model=CollectionDetailResponse)
+def update_collection(collection_id: str, body: UpdateCollectionRequest, request: Request):
+    user = _get_current_user(request)
+    if body.name is None and body.description is None:
+        raise HTTPException(status_code=422, detail="At least one of name or description must be provided")
+    result = svc_update_collection(
+        settings.collections_db_path, collection_id, str(user.id), name=body.name, description=body.description
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return _prepare_collection_detail(result)
+
+
+@app.delete("/v1/collections/{collection_id}", status_code=204)
+def delete_collection(collection_id: str, request: Request):
+    user = _get_current_user(request)
+    deleted = svc_delete_collection(settings.collections_db_path, collection_id, str(user.id))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return Response(status_code=204)
+
+
+@app.post("/v1/collections/{collection_id}/items", status_code=201)
+def add_collection_items(collection_id: str, body: AddItemsRequest, request: Request):
+    user = _get_current_user(request)
+    # Verify the collection exists and is owned by user
+    col = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
+    if col is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    added = svc_add_items(settings.collections_db_path, collection_id, str(user.id), body.document_ids)
+    return {"added": added, "added_count": len(added)}
+
+
+@app.put("/v1/collections/{collection_id}/items/reorder")
+def reorder_collection_items(collection_id: str, body: ReorderItemsRequest, request: Request):
+    user = _get_current_user(request)
+    col = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
+    if col is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    svc_reorder_items(settings.collections_db_path, collection_id, str(user.id), body.item_ids)
+    return {"status": "reordered"}
+
+
+@app.put("/v1/collections/{collection_id}/items/{item_id}")
+def update_collection_item(collection_id: str, item_id: str, body: UpdateItemRequest, request: Request):
+    user = _get_current_user(request)
+    if body.note is not None and len(body.note) > settings.collections_note_max_length:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Note exceeds maximum length of {settings.collections_note_max_length} characters",
+        )
+    result = svc_update_item(
+        settings.collections_db_path,
+        collection_id,
+        str(user.id),
+        item_id,
+        note=body.note,
+        position=body.position,
+        note_max_length=settings.collections_note_max_length,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return result
+
+
+@app.delete("/v1/collections/{collection_id}/items/{item_id}", status_code=204)
+def delete_collection_item(collection_id: str, item_id: str, request: Request):
+    user = _get_current_user(request)
+    removed = svc_remove_item(settings.collections_db_path, collection_id, str(user.id), item_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Backup / Restore Admin Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/v1/admin/backups/",
+    include_in_schema=False,
+    name="admin_backups_list_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups",
+    include_in_schema=False,
+    name="admin_backups_list_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_list_backups() -> BackupListResponse:
+    """List all available backups across tiers."""
+    backups = scan_backups()
+    return BackupListResponse(backups=backups, total=len(backups))
+
+
+@app.post(
+    "/v1/admin/backups/",
+    include_in_schema=False,
+    name="admin_backups_trigger_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups",
+    include_in_schema=False,
+    name="admin_backups_trigger_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_trigger_backup(body: BackupRequest) -> OperationRecord:
+    """Trigger an immediate backup of the specified tier."""
+    record = await run_backup(tier=body.tier, dry_run=body.dry_run)
+    return record
+
+
+@app.get(
+    "/v1/admin/backups/status/",
+    include_in_schema=False,
+    name="admin_backups_status_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/status",
+    include_in_schema=False,
+    name="admin_backups_status_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_backup_status() -> BackupStatusResponse:
+    """Return per-tier backup status summary."""
+    return BackupStatusResponse(tiers=get_tier_status())
+
+
+@app.get(
+    "/v1/admin/backups/config/",
+    include_in_schema=False,
+    name="admin_backups_config_get_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/config",
+    include_in_schema=False,
+    name="admin_backups_config_get_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_get_backup_config() -> dict[str, Any]:
+    """Return current backup configuration."""
+    return get_backup_config().model_dump()
+
+
+@app.put(
+    "/v1/admin/backups/config/",
+    include_in_schema=False,
+    name="admin_backups_config_update_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.put(
+    "/v1/admin/backups/config",
+    include_in_schema=False,
+    name="admin_backups_config_update_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_update_backup_config(body: BackupConfigRequest) -> dict[str, Any]:
+    """Update backup schedule/retention settings."""
+    updated = update_backup_config(body)
+    return updated.model_dump()
+
+
+@app.post(
+    "/v1/admin/backups/test-restore/",
+    include_in_schema=False,
+    name="admin_backups_test_restore_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups/test-restore",
+    include_in_schema=False,
+    name="admin_backups_test_restore_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_test_restore() -> OperationRecord:
+    """Run an automated restore drill using the most recent backup."""
+    try:
+        record = await run_test_restore()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record
+
+
+@app.get(
+    "/v1/admin/backups/{backup_id}/",
+    include_in_schema=False,
+    name="admin_backup_detail_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/backups/{backup_id}",
+    include_in_schema=False,
+    name="admin_backup_detail_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_backup_detail(backup_id: str) -> BackupInfo:
+    """Return details for a specific backup."""
+    backup = get_backup_by_id(backup_id)
+    if backup is None:
+        raise HTTPException(status_code=404, detail=f"Backup not found: {backup_id}")
+    return backup
+
+
+@app.post(
+    "/v1/admin/backups/{backup_id}/restore/",
+    include_in_schema=False,
+    name="admin_backup_restore_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/backups/{backup_id}/restore",
+    include_in_schema=False,
+    name="admin_backup_restore_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+async def admin_restore_backup(backup_id: str, body: RestoreRequest | None = None) -> OperationRecord:
+    """Start a restore for the specified backup."""
+    dry_run = body.dry_run if body else False
+    try:
+        record = await run_restore(backup_id=backup_id, dry_run=dry_run)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record
 
 
 if __name__ == "__main__":

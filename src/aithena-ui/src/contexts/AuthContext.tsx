@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(getStoredToken());
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(getStoredToken()));
+  const [isLoading, setIsLoading] = useState(true);
 
   const clearAuthState = useCallback(() => {
     clearStoredToken();
@@ -60,14 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => registerAuthFailureHandler(clearAuthState), [clearAuthState]);
 
-  // Initialize auth state from stored token on mount
+  // Validate session on mount — works with both localStorage tokens and
+  // cookie-only sessions (e.g. new tabs where localStorage is empty but the
+  // auth cookie is still valid).
   useEffect(() => {
     const storedToken = getStoredToken();
-    if (!storedToken) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsLoading(false);
-      return;
-    }
 
     let cancelled = false;
 
@@ -87,16 +84,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const data = (await response.json()) as AuthValidateResponse;
         if (!cancelled && data.authenticated && data.user) {
-          setToken(storedToken);
+          if (storedToken) {
+            setToken(storedToken);
+          }
           setUser(data.user);
           setError(null);
         } else if (!cancelled) {
           clearAuthState();
         }
-      } catch (err) {
+      } catch {
+        // When there is no stored token the validate call is a best-effort
+        // cookie recovery attempt — suppress errors so the user simply sees
+        // the login page.
         if (!cancelled) {
           clearAuthState();
-          setError(err instanceof Error ? err.message : 'Failed to validate session');
         }
       } finally {
         if (!cancelled) {
@@ -172,7 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       token,
-      isAuthenticated: Boolean(token && user),
+      isAuthenticated: Boolean(user),
       isLoading,
       error,
       login,

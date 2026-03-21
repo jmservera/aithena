@@ -23,10 +23,10 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=search_service --cov=main --cov=auth --cov=admin_auth --cov=config --cov=metrics --cov=correlation --cov=logging_config --cov=reset_password --cov=password_policy --cov-report=term-missing --cov-report=html -ra"
+addopts = "--cov=search_service --cov=main --cov=auth --cov=admin_auth --cov=config --cov=metrics --cov=correlation --cov=logging_config --cov=reset_password --cov=password_policy --cov=collections_service --cov=collections_models --cov=backup_service --cov-report=term-missing --cov-report=html -ra"
 
 [tool.coverage.run]
-source = ["search_service", "main", "auth", "admin_auth", "config", "metrics", "correlation", "logging_config", "reset_password", "password_policy"]
+source = ["search_service", "main", "auth", "admin_auth", "config", "metrics", "correlation", "logging_config", "reset_password", "password_policy", "collections_service", "collections_models", "backup_service"]
 omit = ["tests/*", "__pycache__/*"]
 
 [tool.coverage.report]

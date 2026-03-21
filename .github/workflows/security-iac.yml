@@ -1,0 +1,118 @@
+# Consolidated IaC Security Scanning
+#
+# This workflow combines two complementary security tools:
+#   - Checkov: Scans Dockerfiles and GitHub Actions workflows for IaC
+#     misconfigurations (CIS benchmarks, best practices, supply-chain policies).
+#   - zizmor: Focuses on GitHub Actions-specific supply-chain risks such as
+#     template injection and dangerous triggers.
+#
+# Both jobs run in parallel and upload SARIF results to GitHub Code Scanning.
+# All findings are advisory (non-blocking) — they will not fail the pipeline.
+
+name: Security - IaC Scanning (Checkov + zizmor)
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # Checkov – IaC misconfiguration scanner
+  # Covers: Dockerfiles, GitHub Actions workflows (CIS benchmarks)
+  # ──────────────────────────────────────────────────────────────────────
+  checkov-scan:
+    name: Checkov IaC Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov on Dockerfiles
+        id: checkov-dockerfiles
+        run: |
+          checkov --framework dockerfile \
+            --directory . \
+            --config-file .checkov.yml \
+            --output cli \
+            --output sarif \
+            --output-file-path . \
+            --soft-fail
+        continue-on-error: true
+
+      - name: Run Checkov on GitHub Actions workflows
+        id: checkov-actions
+        run: |
+          checkov --framework github_actions \
+            --directory .github/workflows \
+            --config-file .checkov.yml \
+            --output cli \
+            --output sarif \
+            --output-file-path . \
+            --soft-fail
+        continue-on-error: true
+
+      - name: Upload Checkov SARIF results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@820e3160e279568db735cee8ed8f8e77a6da7818  # v3.32.6
+        with:
+          sarif_file: results_sarif.sarif
+          category: checkov-iac
+        continue-on-error: true
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Checkov IaC Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Scan completed (non-blocking mode)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed results in the Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** This scan runs with \`soft_fail: true\` and will not block CI/CD pipelines." >> $GITHUB_STEP_SUMMARY
+
+  # ──────────────────────────────────────────────────────────────────────
+  # zizmor – GitHub Actions supply-chain security scanner
+  # Covers: template injection, dangerous triggers, unpinned actions
+  # ──────────────────────────────────────────────────────────────────────
+  zizmor-scan:
+    name: GitHub Actions Security Scan (zizmor)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor security scan
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8  # v0.5.2
+        with:
+          # SARIF output automatically uploaded to GitHub Code Scanning
+          # Focuses on P0 findings: template-injection and dangerous-triggers
+          advanced-security: true
+          config: .zizmor.yml

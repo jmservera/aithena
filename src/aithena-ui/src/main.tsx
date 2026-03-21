@@ -7,6 +7,7 @@ import App from './App.tsx';
 import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { I18nProvider } from './contexts/I18nContext';
+import { ToastProvider } from './contexts/ToastContext';
 
 async function bootstrap() {
   if (import.meta.env.DEV) {
@@ -28,9 +29,11 @@ async function bootstrap() {
       <I18nProvider>
         <BrowserRouter>
           <AuthProvider>
-            <RouteErrorBoundary>
-              <App />
-            </RouteErrorBoundary>
+            <ToastProvider>
+              <RouteErrorBoundary>
+                <App />
+              </RouteErrorBoundary>
+            </ToastProvider>
           </AuthProvider>
         </BrowserRouter>
       </I18nProvider>

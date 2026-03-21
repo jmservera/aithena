@@ -50,7 +50,7 @@ ENV SOLR_COLLECTION="books"
 ENV BASE_PATH="/data/documents"
 ENV CORS_ORIGINS="http://localhost:5173"
 
-RUN mkdir -p /data/documents/uploads /data/auth && chown -R app:app /data
+RUN mkdir -p /data/documents/uploads /data/auth /data/collections && chown -R app:app /data
 
 COPY src/solr-search/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

@@ -67,6 +67,8 @@ class Settings:
     zookeeper_hosts: str
     auth_default_admin_username: str
     auth_default_admin_password: str | None
+    collections_db_path: Path
+    collections_note_max_length: int
 
     @property
     def select_url(self) -> str:
@@ -95,12 +97,12 @@ settings = Settings(
     cors_origins=parsed_cors_origins,
     allow_credentials=allow_credentials,
     document_url_base=os.environ.get("DOCUMENT_URL_BASE", "").rstrip("/") or None,
-    embeddings_url=os.environ.get("EMBEDDINGS_URL", "http://embeddings-server:8001/v1/embeddings/"),
+    embeddings_url=os.environ.get("EMBEDDINGS_URL", "http://embeddings-server:8080/v1/embeddings/"),
     embeddings_timeout=float(os.environ.get("EMBEDDINGS_TIMEOUT", "120")),
     default_search_mode=os.environ.get("DEFAULT_SEARCH_MODE", "keyword"),
     rrf_k=int(os.environ.get("RRF_K", "60")),
-    knn_field=os.environ.get("KNN_FIELD", "book_embedding"),
-    book_embedding_field=os.environ.get("BOOK_EMBEDDING_FIELD", "book_embedding"),
+    knn_field=os.environ.get("KNN_FIELD", "embedding_v"),
+    book_embedding_field=os.environ.get("BOOK_EMBEDDING_FIELD", "embedding_v"),
     redis_host=os.environ.get("REDIS_HOST", "redis"),
     redis_port=int(os.environ.get("REDIS_PORT", "6379")),
     redis_password=os.environ.get("REDIS_PASSWORD") or None,
@@ -129,4 +131,6 @@ settings = Settings(
     zookeeper_hosts=os.environ.get("ZOOKEEPER_HOSTS", "zoo1:2181"),
     auth_default_admin_username=os.environ.get("AUTH_DEFAULT_ADMIN_USERNAME", "admin").strip() or "admin",
     auth_default_admin_password=os.environ.get("AUTH_DEFAULT_ADMIN_PASSWORD") or None,
+    collections_db_path=Path(os.environ.get("COLLECTIONS_DB_PATH", "/data/collections/collections.db")).resolve(),
+    collections_note_max_length=int(os.environ.get("COLLECTIONS_NOTE_MAX_LENGTH", "1000")),
 )

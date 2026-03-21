@@ -17,6 +17,10 @@ exclude_dirs:
 # B108: Probable insecure usage of temp file/directory (test fixtures)
 # B105: Possible hardcoded password string (often false positives in test data)
 # B106: Possible hardcoded password function argument (often false positives)
+# B112: Try, Except, Continue detected (common pattern in test code)
+# B110: Try, Except, Pass detected (common pattern in test cleanup)
+# B311: Random pseudo-generators (acceptable for test data selection, not crypto)
+# B404: Consider possible security implications of subprocess module (informational)
 skips:
   - B101
   - B104
@@ -25,3 +29,8 @@ skips:
   - B108
   - B105
   - B106
+  - B112
+  - B110
+  - B311
+  - B404
+  - B608

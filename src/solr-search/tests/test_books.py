@@ -83,7 +83,7 @@ def _mock_solr_ok(mock_get: MagicMock, payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_returns_results(mock_get: MagicMock) -> None:
     docs = [_make_book_doc(i) for i in range(3)]
     _mock_solr_ok(mock_get, _solr_response(docs))
@@ -101,7 +101,7 @@ def test_books_returns_results(mock_get: MagicMock) -> None:
     assert data["results"][0]["author"] == "Author 0"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_trailing_slash_alias(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
@@ -112,7 +112,7 @@ def test_books_trailing_slash_alias(mock_get: MagicMock) -> None:
     assert response.json()["total"] == 0
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_canonical_endpoint(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([_make_book_doc(0)]))
 
@@ -128,7 +128,7 @@ def test_books_canonical_endpoint(mock_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_response_structure(mock_get: MagicMock) -> None:
     docs = [_make_book_doc(0)]
     _mock_solr_ok(mock_get, _solr_response(docs))
@@ -148,7 +148,7 @@ def test_books_response_structure(mock_get: MagicMock) -> None:
     assert "facets" in data
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_result_fields(mock_get: MagicMock) -> None:
     docs = [_make_book_doc(0)]
     _mock_solr_ok(mock_get, _solr_response(docs))
@@ -174,7 +174,7 @@ def test_books_result_fields(mock_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_default_pagination(mock_get: MagicMock) -> None:
     docs = [_make_book_doc(i) for i in range(5)]
     _mock_solr_ok(mock_get, _solr_response(docs, num_found=50))
@@ -186,12 +186,12 @@ def test_books_default_pagination(mock_get: MagicMock) -> None:
     assert data["page_size"] == settings.default_page_size
     assert data["total"] == 50
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["start"] == 0
     assert params["rows"] == settings.default_page_size
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_custom_page_and_page_size(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([], num_found=100))
 
@@ -202,23 +202,23 @@ def test_books_custom_page_and_page_size(mock_get: MagicMock) -> None:
     assert data["page_size"] == 25
     assert data["total_pages"] == 4
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["start"] == 50
     assert params["rows"] == 25
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_page_1_starts_at_zero(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([], num_found=10))
 
     client = get_client()
     client.get("/v1/books", params={"page": 1, "page_size": 10})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["start"] == 0
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_total_pages_calculated(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([], num_found=51))
 
@@ -257,7 +257,7 @@ def test_books_page_size_exceeds_max_returns_422() -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_default_sort_is_title_asc(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
@@ -265,11 +265,11 @@ def test_books_default_sort_is_title_asc(mock_get: MagicMock) -> None:
     data = client.get("/v1/books").json()
 
     assert data["sort"] == {"by": "title", "order": "asc"}
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["sort"] == "title_s asc"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_sort_by_year_desc(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
@@ -277,29 +277,29 @@ def test_books_sort_by_year_desc(mock_get: MagicMock) -> None:
     data = client.get("/v1/books", params={"sort_by": "year", "sort_order": "desc"}).json()
 
     assert data["sort"] == {"by": "year", "order": "desc"}
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["sort"] == "year_i desc"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_sort_by_author_asc(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books", params={"sort_by": "author", "sort_order": "asc"})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["sort"] == "author_s asc"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_sort_by_category(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books", params={"sort_by": "category"})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["sort"] == "category_s asc"
 
 
@@ -320,75 +320,78 @@ def test_books_invalid_sort_order_returns_422() -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_filter_by_author(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books", params={"fq_author": "Joan Amades"})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert any("author_s:" in fq for fq in params["fq"])
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_filter_by_category(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books", params={"fq_category": "Folklore"})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert any("category_s:" in fq for fq in params["fq"])
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_filter_by_language(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books", params={"fq_language": "ca"})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     fq_list = params["fq"]
     assert any("language_detected_s:ca" in fq or "language_s:ca" in fq for fq in fq_list)
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_filter_by_year(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books", params={"fq_year": "1950"})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert any("year_i:" in fq for fq in params["fq"])
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_multiple_filters(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books", params={"fq_author": "Amades", "fq_category": "Folklore"})
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     fq_list = params["fq"]
-    assert len(fq_list) == 2
+    assert "author_s:Amades" in fq_list
+    assert "category_s:Folklore" in fq_list
+    assert "-parent_id_s:[* TO *]" in fq_list
+    assert len(fq_list) == 3
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_no_filters_sends_no_fq(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([]))
 
     client = get_client()
     client.get("/v1/books")
 
-    params = mock_get.call_args[1]["params"]
-    assert "fq" not in params or params.get("fq") == [] or params.get("fq") is None
+    params = mock_get.call_args[1]["data"]
+    assert params["fq"] == ["-parent_id_s:[* TO *]"]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_uses_wildcard_query(mock_get: MagicMock) -> None:
     """The books endpoint must query Solr with *:* to match all documents."""
     _mock_solr_ok(mock_get, _solr_response([]))
@@ -396,7 +399,7 @@ def test_books_uses_wildcard_query(mock_get: MagicMock) -> None:
     client = get_client()
     client.get("/v1/books")
 
-    params = mock_get.call_args[1]["params"]
+    params = mock_get.call_args[1]["data"]
     assert params["q"] == "*:*"
 
 
@@ -405,7 +408,7 @@ def test_books_uses_wildcard_query(mock_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_returns_facets(mock_get: MagicMock) -> None:
     facets = {
         "author_s": ["Author A", 3, "Author B", 2],
@@ -435,7 +438,7 @@ def test_books_returns_facets(mock_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_solr_timeout_returns_504(mock_get: MagicMock) -> None:
     mock_get.side_effect = req_lib.Timeout("Connection timeout")
 
@@ -446,7 +449,7 @@ def test_books_solr_timeout_returns_504(mock_get: MagicMock) -> None:
     assert "Timed out" in response.json()["detail"]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_solr_connection_error_returns_502(mock_get: MagicMock) -> None:
     mock_get.side_effect = req_lib.ConnectionError("Cannot connect to Solr")
 
@@ -457,7 +460,7 @@ def test_books_solr_connection_error_returns_502(mock_get: MagicMock) -> None:
     assert "failed" in response.json()["detail"]
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_solr_invalid_json_returns_502(mock_get: MagicMock) -> None:
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -476,7 +479,7 @@ def test_books_solr_invalid_json_returns_502(mock_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_empty_results(mock_get: MagicMock) -> None:
     _mock_solr_ok(mock_get, _solr_response([], num_found=0))
 
@@ -489,7 +492,7 @@ def test_books_empty_results(mock_get: MagicMock) -> None:
     assert data["results"] == []
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_single_result(mock_get: MagicMock) -> None:
     docs = [_make_book_doc(0, title="Only Book", author="Solo Author")]
     _mock_solr_ok(mock_get, _solr_response(docs, num_found=1))
@@ -504,7 +507,7 @@ def test_books_single_result(mock_get: MagicMock) -> None:
     assert data["results"][0]["author"] == "Solo Author"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_missing_title_falls_back_to_filename(mock_get: MagicMock) -> None:
     doc = _make_book_doc(0)
     doc["title_s"] = None
@@ -516,7 +519,7 @@ def test_books_missing_title_falls_back_to_filename(mock_get: MagicMock) -> None
     assert result["title"] == "book0"  # stem of file_path_s
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_missing_author_falls_back_to_unknown(mock_get: MagicMock) -> None:
     doc = _make_book_doc(0)
     doc["author_s"] = None
@@ -528,7 +531,7 @@ def test_books_missing_author_falls_back_to_unknown(mock_get: MagicMock) -> None
     assert result["author"] == "Unknown"
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_document_url_present(mock_get: MagicMock) -> None:
     docs = [_make_book_doc(0)]
     _mock_solr_ok(mock_get, _solr_response(docs))
@@ -540,7 +543,7 @@ def test_books_document_url_present(mock_get: MagicMock) -> None:
     assert isinstance(result["document_url"], str)
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_missing_file_path_returns_null_url(mock_get: MagicMock) -> None:
     doc = _make_book_doc(0)
     doc["file_path_s"] = None
@@ -552,7 +555,7 @@ def test_books_missing_file_path_returns_null_url(mock_get: MagicMock) -> None:
     assert result["document_url"] is None
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_large_page_beyond_results(mock_get: MagicMock) -> None:
     """Requesting a page beyond available results returns empty results."""
     _mock_solr_ok(mock_get, _solr_response([], num_found=5))
@@ -565,7 +568,7 @@ def test_books_large_page_beyond_results(mock_get: MagicMock) -> None:
     assert data["page"] == 100
 
 
-@patch("main.requests.get")
+@patch("main.requests.post")
 def test_books_highlighting_empty_dict(mock_get: MagicMock) -> None:
     """Highlighting should always be an empty list for books (no query)."""
     docs = [_make_book_doc(0)]

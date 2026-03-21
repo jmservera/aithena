@@ -16,6 +16,10 @@ const facets: FacetGroups = {
     { value: '2020', count: 2 },
     { value: '2021', count: 1 },
   ],
+  series: [
+    { value: 'Foundation', count: 5 },
+    { value: 'Discworld', count: 2 },
+  ],
 };
 
 describe('FacetPanel', () => {
@@ -30,9 +34,12 @@ describe('FacetPanel', () => {
     expect(screen.getByText('Author')).toBeInTheDocument();
     expect(screen.getByText('Category')).toBeInTheDocument();
     expect(screen.getByText('Year')).toBeInTheDocument();
+    expect(screen.getByText('Series')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText('John Smith')).toBeInTheDocument();
     expect(screen.getByText('Programming')).toBeInTheDocument();
+    expect(screen.getByText('Foundation')).toBeInTheDocument();
+    expect(screen.getByText('Discworld')).toBeInTheDocument();
   });
 
   it('does not render a facet group when it has no values', () => {
@@ -126,6 +133,7 @@ describe('FacetPanel', () => {
 
     expect(screen.queryByText('Author')).not.toBeInTheDocument();
     expect(screen.queryByText('Category')).not.toBeInTheDocument();
+    expect(screen.queryByText('Series')).not.toBeInTheDocument();
   });
 
   it('does not show the semantic message when mode is keyword', () => {
@@ -161,5 +169,75 @@ describe('FacetPanel', () => {
     );
 
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('renders series facet with counts', () => {
+    const onFilterChange = vi.fn();
+    render(
+      <IntlWrapper>
+        <FacetPanel facets={facets} filters={{}} onFilterChange={onFilterChange} />
+      </IntlWrapper>
+    );
+
+    expect(screen.getByText('Series')).toBeInTheDocument();
+    expect(screen.getByText('Foundation')).toBeInTheDocument();
+    expect(screen.getByText('(5)')).toBeInTheDocument();
+    expect(screen.getByText('Discworld')).toBeInTheDocument();
+  });
+
+  it('calls onFilterChange with series value when a series checkbox is clicked', async () => {
+    const onFilterChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <IntlWrapper>
+        <FacetPanel facets={facets} filters={{}} onFilterChange={onFilterChange} />
+      </IntlWrapper>
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: /foundation/i });
+    await user.click(checkbox);
+
+    expect(onFilterChange).toHaveBeenCalledWith('series', 'Foundation');
+  });
+
+  it('marks series checkbox as checked when the series filter is active', () => {
+    const onFilterChange = vi.fn();
+    const filters: SearchFilters = { series: 'Foundation' };
+    render(
+      <IntlWrapper>
+        <FacetPanel facets={facets} filters={filters} onFilterChange={onFilterChange} />
+      </IntlWrapper>
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: /foundation/i });
+    expect(checkbox).toBeChecked();
+  });
+
+  it('deselects series when an active series facet is clicked', async () => {
+    const onFilterChange = vi.fn();
+    const user = userEvent.setup();
+    const filters: SearchFilters = { series: 'Foundation' };
+    render(
+      <IntlWrapper>
+        <FacetPanel facets={facets} filters={filters} onFilterChange={onFilterChange} />
+      </IntlWrapper>
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: /foundation/i });
+    await user.click(checkbox);
+
+    expect(onFilterChange).toHaveBeenCalledWith('series', undefined);
+  });
+
+  it('does not render series facet when it has no values', () => {
+    const onFilterChange = vi.fn();
+    const facetsNoSeries: FacetGroups = { ...facets, series: [] };
+    render(
+      <IntlWrapper>
+        <FacetPanel facets={facetsNoSeries} filters={{}} onFilterChange={onFilterChange} />
+      </IntlWrapper>
+    );
+
+    expect(screen.queryByText('Series')).not.toBeInTheDocument();
   });
 });

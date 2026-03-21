@@ -67,6 +67,17 @@ export function resolveDocumentUrl(documentUrl?: string | null): string | null {
   }
 
   if (/^https?:\/\//i.test(documentUrl)) {
+    // Backend-generated /documents/ URLs may use an internal hostname or
+    // wrong scheme (http behind a reverse proxy).  Normalise them to a
+    // relative path so the browser routes through the same origin.
+    try {
+      const parsed = new URL(documentUrl);
+      if (parsed.pathname.startsWith('/documents/')) {
+        return buildApiUrl(parsed.pathname);
+      }
+    } catch {
+      // Malformed URL — fall through and return as-is
+    }
     return documentUrl;
   }
 
@@ -114,6 +125,7 @@ export async function apiFetch(input: string, options: ApiFetchOptions = {}): Pr
   const { skipAuth = false, skipUnauthorizedHandler = false, headers, ...rest } = options;
   const response = await fetch(createRequestUrl(input), {
     ...rest,
+    credentials: 'include',
     headers: withAuthorization(headers, skipAuth),
   });
 

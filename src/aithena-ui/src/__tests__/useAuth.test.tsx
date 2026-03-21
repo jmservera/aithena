@@ -77,10 +77,17 @@ describe('useAuth', () => {
   });
 
   it('logs in successfully and persists the token', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(mockJsonResponse(loginResponse));
+    vi.mocked(fetch)
+      // Mount: cookie recovery attempt (no stored token → 401)
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      // Login call
+      .mockResolvedValueOnce(mockJsonResponse(loginResponse));
     const user = userEvent.setup();
 
     renderAuthHarness();
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
+    });
     await user.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
@@ -97,12 +104,17 @@ describe('useAuth', () => {
   });
 
   it('surfaces login failures without persisting a token', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      mockJsonResponse({ detail: 'Invalid credentials' }, 401)
-    );
+    vi.mocked(fetch)
+      // Mount: cookie recovery attempt
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      // Login attempt
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Invalid credentials' }, 401));
     const user = userEvent.setup();
 
     renderAuthHarness();
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
+    });
     await user.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
@@ -134,11 +146,18 @@ describe('useAuth', () => {
 
   it('includes the stored token in Authorization headers for protected requests', async () => {
     vi.mocked(fetch)
+      // Mount: cookie recovery attempt
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      // Login call
       .mockResolvedValueOnce(mockJsonResponse(loginResponse))
+      // Protected request
       .mockResolvedValueOnce(mockJsonResponse({ ok: true }, 200));
     const user = userEvent.setup();
 
     renderAuthHarness();
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
+    });
     await user.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
@@ -151,7 +170,7 @@ describe('useAuth', () => {
       expect(screen.getByTestId('request-status')).toHaveTextContent('200');
     });
 
-    const protectedRequest = vi.mocked(fetch).mock.calls[1]?.[1];
+    const protectedRequest = vi.mocked(fetch).mock.calls[2]?.[1];
     expect(
       new Headers((protectedRequest as RequestInit | undefined)?.headers).get('Authorization')
     ).toBe('Bearer jwt-123');
@@ -178,5 +197,23 @@ describe('useAuth', () => {
 
     expect(screen.getByTestId('request-status')).toHaveTextContent('401');
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+  });
+
+  it('recovers session from cookie when localStorage is empty', async () => {
+    // No localStorage token — validate succeeds via an auth cookie sent by the browser.
+    vi.mocked(fetch).mockResolvedValueOnce(
+      mockJsonResponse({ authenticated: true, user: loginResponse.user })
+    );
+
+    renderAuthHarness();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('authenticated');
+    });
+
+    expect(screen.getByTestId('user-name')).toHaveTextContent('dallas');
+    // No token in localStorage — session relies solely on the cookie.
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(screen.getByTestId('token')).toHaveTextContent('');
   });
 });

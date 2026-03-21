@@ -1,0 +1,26 @@
+# Stress test dependencies for Aithena
+# Install: pip install -r tests/stress/requirements-stress.txt
+
+# Load testing
+locust>=2.29,<3.0
+
+# Test framework
+pytest>=8.0,<9.0
+pytest-timeout>=2.2,<3.0
+
+# HTTP client
+requests>=2.31,<3.0
+
+# Test data generation
+faker>=28.0,<30.0
+fpdf2>=2.8,<3.0
+ebooklib>=0.18,<1.0
+
+# Results visualisation
+matplotlib>=3.9,<4.0
+
+# Docker SDK for resource monitoring
+docker>=7.0,<8.0
+
+# Async HTTP for service-specific metrics
+httpx>=0.27,<1.0

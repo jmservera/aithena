@@ -19,6 +19,13 @@ const bookWithAbsolutePdfUrl: BookResult = {
   document_url: 'https://example.com/advanced.pdf',
 };
 
+const bookWithInternalDocUrl: BookResult = {
+  id: 'book-5',
+  title: 'Internal Host Book',
+  author: 'Tester',
+  document_url: 'http://solr-search:8080/documents/aW50ZXJuYWwucGRm',
+};
+
 const bookWithPage: BookResult = {
   id: 'book-3',
   title: 'React Deep Dive',
@@ -118,6 +125,19 @@ describe('PdfViewer', () => {
 
     const iframe = screen.getByTitle(/advanced patterns/i);
     expect(iframe).toHaveAttribute('src', 'https://example.com/advanced.pdf');
+  });
+
+  it('normalises internal-hostname /documents/ URLs to relative paths', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithInternalDocUrl} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const iframe = screen.getByTitle(/internal host book/i);
+    expect(iframe).toHaveAttribute('src', expect.stringContaining('/documents/aW50ZXJuYWwucGRm'));
+    expect(iframe.getAttribute('src')).not.toMatch(/solr-search/);
   });
 
   it('shows an error state when no document URL is available', () => {

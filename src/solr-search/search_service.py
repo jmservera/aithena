@@ -12,6 +12,8 @@ FACET_FIELDS: dict[str, tuple[str, ...]] = {
     "category": ("category_s",),
     "year": ("year_i",),
     "language": ("language_detected_s", "language_s"),
+    "series": ("series_s",),
+    "folder": ("folder_path_s",),
 }
 
 SOLR_FIELD_LIST = [
@@ -22,6 +24,7 @@ SOLR_FIELD_LIST = [
     "category_s",
     "language_detected_s",
     "language_s",
+    "series_s",
     "file_path_s",
     "folder_path_s",
     "page_count_i",
@@ -47,6 +50,10 @@ SORT_FIELDS = {
 }
 
 HIGHLIGHT_FIELDS = ("content", "_text_")
+
+# Filter to exclude chunk-level documents from search results.
+# Chunks always have parent_id_s set; parent (book-level) documents do not.
+EXCLUDE_CHUNKS_FQ = "-parent_id_s:[* TO *]"
 
 
 def build_sort_clause(
@@ -136,8 +143,8 @@ def build_solr_params(
         "f._text_.hl.maxAlternateFieldLength": 300,
     }
     filter_queries = build_filter_queries(filters)
-    if filter_queries:
-        params["fq"] = filter_queries
+    filter_queries.append(EXCLUDE_CHUNKS_FQ)
+    params["fq"] = filter_queries
     return params
 
 
@@ -224,6 +231,7 @@ def normalize_book(
         "year": document.get("year_i"),
         "category": document.get("category_s"),
         "language": document.get("language_detected_s") or document.get("language_s"),
+        "series": document.get("series_s"),
         "file_path": document.get("file_path_s"),
         "folder_path": document.get("folder_path_s"),
         "page_count": document.get("page_count_i"),
@@ -260,7 +268,7 @@ def build_knn_params(
     """Build Solr parameters for a kNN (dense vector) query.
 
     Uses the Solr ``{!knn}`` local-parameter syntax with the pre-existing
-    ``book_embedding`` DenseVectorField (HNSW, cosine similarity, 512-dim).
+    ``embedding_v`` DenseVectorField (HNSW, cosine similarity, 512-dim).
     """
     vector_str = "[" + ",".join(str(v) for v in vector) + "]"
     params = {
@@ -269,8 +277,13 @@ def build_knn_params(
         "fl": ",".join(SOLR_FIELD_LIST),
         "wt": "json",
     }
+    # NOTE: Do NOT add EXCLUDE_CHUNKS_FQ here.  Embedding vectors live on
+    # chunk documents (they carry parent_id_s), so filtering them out would
+    # eliminate all kNN candidates and break semantic/hybrid search.
+    # Chunk de-duplication is handled by reciprocal_rank_fusion at the
+    # book level and by EXCLUDE_CHUNKS_FQ on the keyword leg.
     if filters:
-        params["fq"] = filters
+        params["fq"] = list(filters)
     return params
 
 
