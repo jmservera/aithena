@@ -176,21 +176,24 @@ def update_collection(
         if row is None or row["user_id"] != user_id:
             return None
 
-        sets: list[str] = []
-        params: list[str] = []
-        if name is not None:
-            sets.append("name = ?")
-            params.append(name)
-        if description is not None:
-            sets.append("description = ?")
-            params.append(description)
-
-        if sets:
-            now = _utcnow()
-            sets.append("updated_at = ?")
-            params.append(now)
-            params.append(collection_id)
-            conn.execute(f"UPDATE collections SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
+        now = _utcnow()
+        if name is not None and description is not None:
+            conn.execute(
+                "UPDATE collections SET name = ?, description = ?, updated_at = ? WHERE id = ?",
+                (name, description, now, collection_id),
+            )
+            conn.commit()
+        elif name is not None:
+            conn.execute(
+                "UPDATE collections SET name = ?, updated_at = ? WHERE id = ?",
+                (name, now, collection_id),
+            )
+            conn.commit()
+        elif description is not None:
+            conn.execute(
+                "UPDATE collections SET description = ?, updated_at = ? WHERE id = ?",
+                (description, now, collection_id),
+            )
             conn.commit()
 
     return get_collection(db_path, collection_id, user_id)
@@ -294,23 +297,27 @@ def update_item(
         if row is None:
             return None
 
-        sets: list[str] = []
-        params: list = []
-        if note is not None:
-            if len(note) > note_max_length:
-                raise ValueError(f"Note exceeds maximum length of {note_max_length} characters")
-            sets.append("note = ?")
-            params.append(note)
-        if position is not None:
-            sets.append("position = ?")
-            params.append(position)
+        if note is not None and len(note) > note_max_length:
+            raise ValueError(f"Note exceeds maximum length of {note_max_length} characters")
 
-        if sets:
-            now = _utcnow()
-            sets.append("updated_at = ?")
-            params.append(now)
-            params.append(item_id)
-            conn.execute(f"UPDATE collection_items SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
+        now = _utcnow()
+        if note is not None and position is not None:
+            conn.execute(
+                "UPDATE collection_items SET note = ?, position = ?, updated_at = ? WHERE id = ?",
+                (note, position, now, item_id),
+            )
+            conn.commit()
+        elif note is not None:
+            conn.execute(
+                "UPDATE collection_items SET note = ?, updated_at = ? WHERE id = ?",
+                (note, now, item_id),
+            )
+            conn.commit()
+        elif position is not None:
+            conn.execute(
+                "UPDATE collection_items SET position = ?, updated_at = ? WHERE id = ?",
+                (position, now, item_id),
+            )
             conn.commit()
 
         updated = conn.execute(

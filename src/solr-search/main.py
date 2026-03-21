@@ -587,10 +587,16 @@ def _get_current_user(request: Request) -> AuthenticatedUser:
     current_user = getattr(request.state, "auth_user", None)
     if isinstance(current_user, AuthenticatedUser):
         return current_user
+    token = get_token_from_sources(
+        request.headers.get("Authorization"),
+        request.cookies.get(settings.auth_cookie_name),
+    )
+    if token is None:
+        raise _unauthorized_exception("Not authenticated")
     try:
-        return _authenticate_request(request)
+        return decode_access_token(token, settings.auth_jwt_secret)
     except AuthenticationError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        raise _unauthorized_exception(str(exc)) from exc
 
 
 @app.middleware("http")
@@ -601,12 +607,23 @@ async def require_authentication(request: Request, call_next):
     # Admin endpoints with X-API-Key: attempt user auth but don't block on failure.
     # Routes that need a logged-in user use require_role() which will reject if missing.
     if request.headers.get("X-API-Key") and request.url.path.startswith("/v1/admin/"):
-        with contextlib.suppress(AuthenticationError):
-            request.state.auth_user = _authenticate_request(request)
+        token = get_token_from_sources(
+            request.headers.get("Authorization"),
+            request.cookies.get(settings.auth_cookie_name),
+        )
+        if token is not None:
+            with contextlib.suppress(AuthenticationError):
+                request.state.auth_user = decode_access_token(token, settings.auth_jwt_secret)
         return await call_next(request)
 
+    token = get_token_from_sources(
+        request.headers.get("Authorization"),
+        request.cookies.get(settings.auth_cookie_name),
+    )
+    if token is None:
+        return _unauthorized_response("Not authenticated")
     try:
-        request.state.auth_user = _authenticate_request(request)
+        request.state.auth_user = decode_access_token(token, settings.auth_jwt_secret)
     except AuthenticationError as exc:
         return _unauthorized_response(str(exc))
 
