@@ -601,10 +601,8 @@ async def require_authentication(request: Request, call_next):
     # Admin endpoints with X-API-Key: attempt user auth but don't block on failure.
     # Routes that need a logged-in user use require_role() which will reject if missing.
     if request.headers.get("X-API-Key") and request.url.path.startswith("/v1/admin/"):
-        try:
+        with contextlib.suppress(AuthenticationError):
             request.state.auth_user = _authenticate_request(request)
-        except AuthenticationError:
-            pass
         return await call_next(request)
 
     try:
