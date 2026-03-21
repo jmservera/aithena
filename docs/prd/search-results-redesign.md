@@ -285,7 +285,112 @@ No thumbnail generation, storage, or display exists anywhere in the pipeline. Th
 
 ---
 
-## 5. Open Questions
+## 5. PDF Text Extraction Pipeline
+
+### 5.1 Architecture: Why Two Tools?
+
+The indexing pipeline uses **two separate extraction tools** at different stages for different purposes:
+
+| Phase | Tool | Method | Purpose |
+|-------|------|--------|---------|
+| **Phase 1** | Apache Tika (embedded in Solr) | Solr `/update/extract` endpoint → `ExtractingRequestHandler` | Full-text indexing for **keyword search** (BM25) |
+| **Phase 2** | pdfplumber (Python library) | `pdfplumber.open(path)` → per-page `extract_text()` | Per-page text for **chunk-based semantic search** (kNN) |
+
+**Why not use one tool for both?**
+
+- **Tika** runs inside Solr as a module (`SOLR_MODULES: extraction,langid` in docker-compose). The binary PDF is POSTed directly to Solr, which internally invokes Tika to extract text, metadata, and language — all in a single HTTP call. This is efficient for full-document indexing but provides **no per-page boundaries**, which the chunker needs to track `page_start_i`/`page_end_i`.
+
+- **pdfplumber** runs in the document-indexer Python process. It extracts text **page-by-page** (`pdf.pages` iterable), giving the chunker page-level granularity that Tika's Solr integration doesn't expose. However, pdfplumber doesn't extract metadata (title, author, etc.) as reliably as Tika.
+
+The dual-extraction design is intentional: Tika handles the "store everything for keyword search" job; pdfplumber handles the "split by page for embedding chunks" job.
+
+### 5.2 What Each Tool Extracts
+
+#### Tika (via Solr ExtractingRequestHandler)
+
+**Configured in:** `src/solr/config.json` — `/update/extract` handler with `fmap.content=_text_`, `captureAttr=true`, `lowernames=true`, langid update chain.
+
+**Extracts:**
+- ✅ Full document text (concatenated into `content`/`_text_` fields)
+- ✅ PDF metadata: producer, version, encryption, XMP dates, page count, access permissions (70+ fields in `managed-schema.xml`)
+- ✅ Language detection (via Solr's `LangDetectLanguageIdentifierUpdateProcessorFactory` → `language_detected_s`)
+- ❌ **No document structure** — the current configuration maps all extracted content to a single `_text_` field as plain text. No heading hierarchy, no paragraph boundaries, no section markers.
+
+**Could Tika provide structure?** Yes — Tika can output XHTML with semantic tags (`<h1>`, `<h2>`, `<p>`, `<table>`, etc.) via its `XMLResult` or `RichTextContent` parsers. However, Solr's `ExtractingRequestHandler` is configured to flatten everything into a text field (`fmap.content=_text_`). To get structured output, we would need to either:
+1. Call Tika directly as a library or microservice (outside Solr) and parse the XHTML response, or
+2. Configure Solr to capture rich content in a separate field (e.g., `content_html_t`).
+
+**Important caveat:** Tika's XHTML output quality depends entirely on the PDF's internal structure. Many PDFs (especially scanned or older documents) have no logical structure tags. Tika will still wrap text in `<p>` tags, but heading detection relies on PDF metadata that many documents lack.
+
+#### pdfplumber (Python library in document-indexer)
+
+**Used in:** `src/document-indexer/document_indexer/__main__.py` → `extract_pdf_text()` function.
+
+**Extracts:**
+- ✅ Per-page plain text (`page.extract_text()`)
+- ✅ Page boundaries (1-based page numbers)
+- ❌ **No document structure** — `extract_text()` returns concatenated text with no heading, paragraph, or section information.
+
+**Could pdfplumber provide structure?** Partially — pdfplumber exposes `page.chars` (individual characters with font name, size, and position) and `page.lines`/`page.rects` (geometric elements). In theory, one could:
+1. Analyze font sizes to heuristically identify headings (large font → heading)
+2. Use vertical spacing gaps to detect paragraph breaks
+3. Use horizontal position to detect indentation/list items
+
+However, this is fragile and requires significant heuristic tuning per document corpus. pdfplumber was not designed as a structure extraction tool — it's a text and table extraction tool.
+
+### 5.3 Current Chunking: No Structure Awareness
+
+**Chunker location:** `src/document-indexer/document_indexer/chunker.py`
+
+The current chunking algorithm is a **pure word-count sliding window**:
+1. All pages' text is concatenated (whitespace-normalized)
+2. Split into words on whitespace
+3. Sliding window: 400 words per chunk, 50-word overlap, 350-word stride
+4. Each chunk tracks which pages it spans
+
+**What this means:**
+- Chunks can **split mid-sentence**, mid-paragraph, even mid-heading
+- A chapter title might end up at the tail of one chunk and the chapter body in the next
+- No awareness of section boundaries, paragraph breaks, or any document structure
+- The 50-word overlap partially mitigates boundary issues, but doesn't solve them
+
+### 5.4 Feasibility of Hierarchical Chunking
+
+Hierarchical (structure-aware) chunking would split text along document boundaries (chapters → sections → paragraphs) rather than by word count. This produces more semantically coherent chunks and better embedding quality.
+
+**Assessment with current tools:**
+
+| Approach | Feasibility | Effort | Quality |
+|----------|------------|--------|---------|
+| **Tika XHTML parsing** — Call Tika directly (not via Solr) and parse heading tags | ✅ Feasible | Medium | Medium — depends on PDF structure quality |
+| **pdfplumber font analysis** — Heuristic heading detection via font size/weight | ⚠️ Fragile | High | Low-Medium — requires per-corpus tuning |
+| **PyMuPDF (fitz)** — Extract text blocks with font metadata and bounding boxes | ✅ Feasible | Medium | Medium-High — better font metadata than pdfplumber |
+| **Marker or Docling** — ML-based PDF structure extraction (headings, paragraphs, tables) | ✅ Feasible | Medium-High | High — but adds significant dependencies and GPU preference |
+
+**Recommendation:**
+
+1. **Short-term (v1.11.0):** Keep the current word-count chunker but add **sentence boundary awareness**. Use Python's `nltk.sent_tokenize()` or a regex-based sentence splitter to avoid breaking mid-sentence. This is a small change to `chunker.py` that improves preview readability without requiring structure extraction. Also see issue #796, question 2.
+
+2. **Medium-term (v1.12.0):** Add Tika-direct extraction as an optional Phase 1.5 step. Call Tika's REST API (add a Tika server container) or use the `tika-python` library to get XHTML output. Parse `<h1>`–`<h6>` and `<p>` tags to create a document outline. Use section boundaries as primary chunk boundaries with word-count as fallback for long sections.
+
+3. **Long-term:** Evaluate ML-based extraction tools (e.g., Marker, Docling, or LayoutParser) for the highest-quality structure extraction. These handle complex layouts (multi-column, tables, sidebars) that rule-based approaches miss, but require more infrastructure (GPU-accelerated inference, larger Docker images).
+
+### 5.5 Solr Schema: Structure Fields
+
+The current schema (`src/solr/books/managed-schema.xml`) stores **no structural information** on chunk documents. If hierarchical chunking is implemented, new fields would be needed:
+
+| Proposed Field | Type | Purpose |
+|----------------|------|---------|
+| `section_title_s` | string | Heading text for the chunk's parent section |
+| `section_level_i` | pint | Heading depth (1 = chapter, 2 = section, 3 = subsection) |
+| `section_path_ss` | string (multiValued) | Full section path, e.g., `["Chapter 3", "3.1 Methods", "3.1.2 Analysis"]` |
+| `chunk_type_s` | string | Content type: `heading`, `paragraph`, `table`, `list` |
+
+These fields would enable **section-scoped search** (e.g., "find matches in chapter introductions") and **hierarchical result grouping** (group chunks by section within a book).
+
+---
+
+## 6. Open Questions
 
 ### For Juanma (PO)
 
@@ -294,23 +399,26 @@ No thumbnail generation, storage, or display exists anywhere in the pipeline. Th
 3. **Thumbnail storage location:** Filesystem alongside PDFs, or a separate thumbnails directory?
 4. **Chunk text preview length:** How many characters should be shown by default? (Suggestion: 300 chars with "show more")
 5. **Similar books without PDF:** When the user clicks a book card (not "Open PDF"), should we show a quick preview with similar books, or navigate to a full detail page?
+6. **Hierarchical chunking priority:** Should structure-aware chunking (section 5.4) be explored in v1.11.0 or deferred? The short-term fix (sentence-boundary awareness) is low effort; the full hierarchical approach is medium-high effort and may warrant a spike.
 
 ### For Ash (Search Engineering)
 
-6. **Chunk deduplication in semantic results:** When multiple chunks from the same parent match, should we show the best-matching chunk per book, or allow multiple entries?
-7. **Chunk text highlighting:** Should we apply the search query as highlight markup within the chunk text preview?
+7. **Chunk deduplication in semantic results:** When multiple chunks from the same parent match, should we show the best-matching chunk per book, or allow multiple entries?
+8. **Chunk text highlighting:** Should we apply the search query as highlight markup within the chunk text preview?
+9. **Tika structured extraction:** Should we evaluate calling Tika directly (outside Solr) to get XHTML output with heading tags? This would enable section-aware chunking without adding new dependencies. See section 5.4.
 
 ### Chunking Strategy (Separate Issue)
 
-See the linked chunking strategy issue for in-depth questions about:
+See the linked chunking strategy issue (#796) for in-depth questions about:
 - Current 400-word/50-word-overlap defaults — are they optimal?
 - Whether chunk boundaries should respect paragraph/sentence boundaries
 - Whether overlapping chunks cause confusing duplicate text in previews
 - Impact on embedding quality and search relevance
+- **NEW:** Whether current tools support document structure extraction for hierarchical chunking (analysis in section 5)
 
 ---
 
-## 6. Phasing Suggestion
+## 7. Phasing Suggestion
 
 ### Phase 1: Quick Wins (v1.11.0 Wave 1) — 1-2 weeks
 
@@ -335,7 +443,7 @@ See the linked chunking strategy issue for in-depth questions about:
 
 ---
 
-## 7. Risk Assessment
+## 8. Risk Assessment
 
 | Risk | Severity | Likelihood | Mitigation |
 |------|----------|------------|------------|
