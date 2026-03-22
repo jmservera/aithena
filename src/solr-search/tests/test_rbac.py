@@ -413,12 +413,12 @@ class TestRbacResponseShape:
 
 
 class TestAdminApiKeyBackwardCompat:
-    """Phase 1 RBAC: /v1/admin/* endpoints still use X-API-Key, not JWT RBAC."""
+    """Admin endpoints accept both X-API-Key and admin JWT sessions."""
 
-    def test_admin_containers_uses_api_key_not_rbac(
+    def test_admin_containers_rejects_non_admin_jwt(
         self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]
     ) -> None:
-        admin = seeded_users["admin"]
-        headers = _auth_header(admin)
+        user = seeded_users["user"]
+        headers = _auth_header(user)
         resp = client.get("/v1/admin/containers", headers=headers)
         assert resp.status_code in (401, 403)

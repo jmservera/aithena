@@ -97,6 +97,18 @@
 
 <!-- Append learnings below this line -->
 
+### Admin Login Loop (#887, v1.12.0)
+
+**Root cause (dual):** `require_admin_auth` only accepted X-API-Key, blocking browser JWT sessions. Nginx `location = /admin/` served a static HTML page, intercepting React SPA routes on page refresh.
+
+**Fix:** `require_admin_auth` now accepts either X-API-Key (machine-to-machine) or JWT session with admin role (browser). Removed static nginx locations for `/admin` and `/admin/` — React SPA now handles them via catch-all.
+
+**Key lesson:** When adding defense-in-depth auth (API keys), always test browser-based access paths too. The frontend sends JWT Bearer tokens, not API keys. A dependency that blocks requests before `require_role()` runs will cause auth loops because the frontend's 401/403 handler clears session state.
+
+**Pattern:** `apiFetch` treats both 401 and 403 as auth failures → clears token → redirect to login → re-authenticate → same 401 → infinite loop. Any new auth gate must either accept JWT or return a non-auth error code.
+
+**Recurring pattern update:** Added to watch-for list: auth gates that only check one credential type (API key) while frontend uses another (JWT). Always verify both code paths.
+
 ### v1.10.0 Wave 0 Bugs (2026-03-20)
 
 **#646 -- Semantic 502:** Default `EMBEDDINGS_URL` port mismatch (8001 vs 8080) + Solr kNN failures not wrapped in degradation logic. Fix: try/except + fallback to keyword in both semantic and hybrid modes.
