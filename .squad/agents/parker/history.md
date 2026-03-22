@@ -173,3 +173,19 @@
 **Testing pattern:** All 28 original tests pass unchanged (backward compat). 24 new tests cover sentence boundaries, long sentences, overlap, non-Latin text (CJK, Arabic), mixed punctuation, and page tracking. Total: 52 chunker tests, 133 service tests.
 
 **Limitation (accepted for v1):** Abbreviations like "Dr." are treated as sentence boundaries. Acceptable per task spec; can be improved with a more sophisticated regex or abbreviation list in a future iteration.
+
+### Book Detail Endpoint (#818, v1.11.0)
+
+**Approach:** Added `GET /v1/books/{book_id}` endpoint for single book lookup by Solr document ID (SHA256 hash). Reuses `normalize_book()` and `SOLR_FIELD_LIST` for consistent response shape with the `/v1/books` listing endpoint.
+
+**Key decisions:**
+- SHA256 validation via compiled regex (`^[0-9a-fA-F]{64}$`) — rejects malformed IDs at 422 before hitting Solr.
+- Uses `EXCLUDE_CHUNKS_FQ` filter to ensure only parent-level documents are returned (not chunks).
+- Route placed after `/v1/books/{id}/similar` and before `/v1/books` listing — order matters for FastAPI path matching.
+- No additional auth beyond the existing middleware (consistent with other read endpoints like `/v1/books`, `/v1/search`).
+- `include_in_schema=True` (default) — endpoint visible in OpenAPI, unlike internal/legacy aliases.
+
+**Testing:** 18 unit tests covering happy path, 404 (not found), 422 (invalid ID formats), Solr error propagation (502/504), and OpenAPI schema visibility. Total: 817 tests, 91.25% coverage.
+
+**Imported new symbols:** `SOLR_FIELD_LIST` and `EXCLUDE_CHUNKS_FQ` from `search_service.py` into `main.py` — previously only used internally by `build_solr_params()`.
+

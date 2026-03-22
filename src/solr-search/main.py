@@ -110,6 +110,8 @@ from logging_config import setup_logging
 from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from pydantic import BaseModel
 from search_service import (
+    EXCLUDE_CHUNKS_FQ,
+    SOLR_FIELD_LIST,
     build_filter_queries,
     build_inline_content_disposition,
     build_knn_params,
@@ -136,6 +138,8 @@ SortOrder = Literal["asc", "desc"]
 
 VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
 EMBEDDINGS_DEGRADED_MESSAGE = "Embeddings unavailable — showing keyword results"
+
+SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 _INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme", "secret"})
@@ -1242,6 +1246,47 @@ def similar_books(
         )
 
     return {"results": results}
+
+
+@app.get("/v1/books/{book_id}", name="get_book_detail")
+def get_book_detail(
+    request: Request,
+    book_id: str,
+) -> dict[str, Any]:
+    """Return full metadata for a single book by its Solr document ID (SHA256 hash).
+
+    The response includes all parent-level fields: title, author, year, category,
+    language, series, page_count, file_size, file_path, folder_path, and document_url.
+    """
+    if not SHA256_PATTERN.match(book_id):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid book ID format — expected 64-character hex string (SHA256)",
+        )
+
+    payload = query_solr(
+        {
+            "q": f"id:{book_id}",
+            "fl": ",".join(SOLR_FIELD_LIST),
+            "rows": 1,
+            "wt": "json",
+            "fq": EXCLUDE_CHUNKS_FQ,
+        }
+    )
+
+    docs = payload.get("response", {}).get("docs", [])
+    if not docs:
+        raise HTTPException(status_code=404, detail=f"Book not found: {book_id!r}")
+
+    document = docs[0]
+    highlighting = payload.get("highlighting", {})
+    book = normalize_book(
+        document,
+        highlighting,
+        build_document_url(request, document.get("file_path_s")),
+    )
+
+    return book
 
 
 @app.get("/v1/books/", include_in_schema=False, name="books_v1")
