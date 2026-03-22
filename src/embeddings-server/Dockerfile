@@ -27,7 +27,7 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # Pre-download the model so it is baked into the image
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
 
-COPY main.py ./
+COPY main.py model_utils.py ./
 COPY config ./config
 
 # ---------- runtime stage ----------
@@ -64,6 +64,7 @@ RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /models /models
 COPY --from=builder /app/main.py /app/main.py
+COPY --from=builder /app/model_utils.py /app/model_utils.py
 COPY --from=builder /app/config /app/config
 
 RUN chown -R app:app /app /models
