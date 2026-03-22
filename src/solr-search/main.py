@@ -108,6 +108,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from logging_config import setup_logging
 from metrics import METRICS_CONTENT_TYPE, metrics_registry
+from perf_metrics import perf_metrics
 from pydantic import BaseModel
 from search_service import (
     EXCLUDE_CHUNKS_FQ,
@@ -441,7 +442,20 @@ def _raw_solr_query(params: dict[str, Any], *, collection: str | None = None) ->
     return response.json()
 
 
+# Thread-local accumulators for per-request perf_metrics breakdown.
+_perf_locals = threading.local()
+
+
+def _perf_get(attr: str) -> float | None:
+    return getattr(_perf_locals, attr, None)
+
+
+def _perf_set(attr: str, value: float | None) -> None:
+    setattr(_perf_locals, attr, value)
+
+
 def query_solr(params: dict[str, Any], *, collection: str | None = None) -> dict[str, Any]:
+    solr_started = time.perf_counter()
     try:
         return solr_circuit.call(_raw_solr_query, params, collection=collection)
     except CircuitOpenError as exc:
@@ -455,6 +469,8 @@ def query_solr(params: dict[str, Any], *, collection: str | None = None) -> dict
         raise HTTPException(status_code=502, detail="Solr search request failed") from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="Solr returned invalid JSON") from exc
+    finally:
+        _perf_set("solr_latency", time.perf_counter() - solr_started)
 
 
 def _fetch_embedding(text: str, *, collection: str | None = None) -> list[float]:
@@ -462,6 +478,7 @@ def _fetch_embedding(text: str, *, collection: str | None = None) -> list[float]
     resolved_collection = collection or settings.default_collection
     emb_url = settings.embeddings_url_for(resolved_collection)
     input_type = "query" if settings.is_e5_collection(resolved_collection) else None
+    emb_started = time.perf_counter()
     try:
         return embeddings_circuit.call(
             get_query_embedding, emb_url, text, settings.embeddings_timeout, input_type=input_type
@@ -479,6 +496,8 @@ def _fetch_embedding(text: str, *, collection: str | None = None) -> list[float]
     except Exception as exc:
         logger.exception("Unexpected error fetching embedding")
         raise HTTPException(status_code=502, detail="Unexpected error from embeddings server") from exc
+    finally:
+        _perf_set("embedding_latency", time.perf_counter() - emb_started)
 
 
 def _should_degrade_to_keyword(exc: HTTPException) -> bool:
@@ -923,22 +942,41 @@ def search(
         folder=fq_folder,
     )
 
-    with _track_search_metrics(mode):
-        if mode == "keyword":
-            response = _search_keyword(
-                request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
-                collection=resolved_collection,
-            )
-        elif mode == "semantic":
-            response = _search_semantic(
-                request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
-                collection=resolved_collection,
-            )
-        else:
-            response = _search_hybrid(
-                request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
-                collection=resolved_collection,
-            )
+    search_started = time.perf_counter()
+    is_error = False
+    try:
+        with _track_search_metrics(mode):
+            if mode == "keyword":
+                response = _search_keyword(
+                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    collection=resolved_collection,
+                )
+            elif mode == "semantic":
+                response = _search_semantic(
+                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    collection=resolved_collection,
+                )
+            else:
+                response = _search_hybrid(
+                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    collection=resolved_collection,
+                )
+    except Exception:
+        is_error = True
+        raise
+    finally:
+        total_latency = time.perf_counter() - search_started
+        solr_latency = _perf_get("solr_latency")
+        embedding_latency = _perf_get("embedding_latency")
+        perf_metrics.record_request(
+            resolved_collection,
+            total_latency,
+            solr_latency_s=solr_latency,
+            embedding_latency_s=embedding_latency,
+            error=is_error,
+        )
+        _perf_set("solr_latency", None)
+        _perf_set("embedding_latency", None)
 
     _enrich_with_collections(response.get("results", []), request)
     return response
@@ -1966,6 +2004,46 @@ def admin_containers() -> dict[str, Any]:
         "total": len(containers),
         "healthy": healthy,
     }
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/metrics endpoints (Phase 2 performance evaluation)
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/v1/admin/metrics/",
+    include_in_schema=False,
+    name="admin_metrics_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/metrics",
+    include_in_schema=False,
+    name="admin_metrics_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_metrics() -> dict[str, Any]:
+    """Return rolling-window performance metrics for A/B evaluation."""
+    return perf_metrics.snapshot()
+
+
+@app.post(
+    "/v1/admin/metrics/reset/",
+    include_in_schema=False,
+    name="admin_metrics_reset_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/metrics/reset",
+    include_in_schema=False,
+    name="admin_metrics_reset_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_metrics_reset() -> dict[str, str]:
+    """Clear all performance metrics and restart the uptime clock."""
+    perf_metrics.reset()
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------
