@@ -4,6 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Load .env if it exists
+if [[ -f .env ]]; then
+  set +a
+  source .env
+  set -a
+fi
+
 VERSION_FILE="$SCRIPT_DIR/VERSION"
 
 if git_tag="$(git describe --tags --exact-match 2>/dev/null)"; then

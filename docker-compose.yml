@@ -91,6 +91,7 @@ services:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        HF_TOKEN: ${HF_TOKEN:-}
     expose:
       - "8080"
     healthcheck:

@@ -74,6 +74,7 @@ jobs:
       FALLBACK_BASE_URL: http://localhost
       SEARCH_API_URL: http://localhost:8080
       SOLR_URL: http://localhost:8983/solr/books
+      HF_TOKEN: ${{ secrets.HF_TOKEN || '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
