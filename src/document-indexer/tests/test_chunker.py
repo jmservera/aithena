@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from document_indexer.chunker import chunk_text, chunk_text_with_pages
 
 # ---------------------------------------------------------------------------

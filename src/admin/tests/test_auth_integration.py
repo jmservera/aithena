@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
+
 from auth import (
     JWT_ALGORITHM,
     AuthenticatedUser,

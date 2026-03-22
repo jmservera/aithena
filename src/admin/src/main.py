@@ -2,9 +2,10 @@ import json
 import logging
 import os
 
-import redis
 import requests
 import streamlit as st
+
+import redis
 from auth import AuthSettings, logout, require_auth
 from logging_config import setup_logging
 from pages.shared.config import (

@@ -1,8 +1,9 @@
 import json
 
 import pandas as pd
-import redis
 import streamlit as st
+
+import redis
 from pages.shared.config import AUTH_ENABLED, QUEUE_NAME, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
 
 if AUTH_ENABLED:

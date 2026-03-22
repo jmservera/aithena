@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
-import document_indexer.__main__ as indexer_module
 import pytest
 import requests
+
+import document_indexer.__main__ as indexer_module
 from document_indexer.__main__ import (
     build_chunk_doc,
     build_literal_params,

@@ -37,9 +37,10 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from fastapi.testclient import TestClient  # noqa: E402
+
 from auth import AuthenticatedUser, create_access_token, hash_password, init_auth_db  # noqa: E402
 from config import settings  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
 from main import app  # noqa: E402
 
 # Password compliant with policy: uppercase + lowercase + digit, 8-128 chars

@@ -16,10 +16,10 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import pytest  # noqa: E402
-from config import settings  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from main import _decode_admin_key, _encode_admin_key  # noqa: E402
 
+from config import settings  # noqa: E402
+from main import _decode_admin_key, _encode_admin_key  # noqa: E402
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 _TEST_ADMIN_KEY = "test-admin-documents-key"

@@ -10,8 +10,9 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from auth import SCHEMA_VERSION, get_schema_version, init_auth_db  # noqa: E402
 from migrations import _discover_migrations, apply_pending_migrations  # noqa: E402
+
+from auth import SCHEMA_VERSION, get_schema_version, init_auth_db  # noqa: E402
 
 
 def test_init_auth_db_creates_schema_version_table(tmp_path: Path) -> None:

@@ -18,6 +18,12 @@ from urllib.parse import urlparse
 
 import pika
 import requests
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
+
+import redis as redis_lib
 from admin_auth import require_admin_auth
 from auth import (
     AuthenticatedUser,
@@ -102,13 +108,9 @@ from collections_service import (
 )
 from config import settings
 from correlation import CorrelationIdMiddleware, get_correlation_id
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
 from logging_config import setup_logging
 from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from perf_metrics import perf_metrics
-from pydantic import BaseModel
 from search_service import (
     EXCLUDE_CHUNKS_FQ,
     SOLR_FIELD_LIST,
@@ -127,8 +129,6 @@ from search_service import (
     resolve_document_path,
     solr_escape,
 )
-
-import redis as redis_lib
 
 setup_logging(service_name="solr-search")
 logger = logging.getLogger(__name__)
@@ -1711,6 +1711,7 @@ def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
             cluster_url,
             params={"action": "CLUSTERSTATUS", "wt": "json"},
             timeout=timeout,
+            auth=settings.solr_auth,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -1873,7 +1874,8 @@ def _get_http_container_status(
     timeout: float = CONTAINER_VERSION_TIMEOUT,
 ) -> dict[str, str]:
     try:
-        response = requests.get(version_url, timeout=timeout)
+        auth = settings.solr_auth if "solr" in version_url.lower() else None
+        response = requests.get(version_url, timeout=timeout, auth=auth)
         response.raise_for_status()
         payload = response.json()
         return _build_container_entry(

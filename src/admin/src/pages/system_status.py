@@ -5,6 +5,7 @@ from typing import Any
 
 import requests
 import streamlit as st
+
 from pages.shared.config import AUTH_ENABLED, SOLR_SEARCH_URL
 
 if AUTH_ENABLED:

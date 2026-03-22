@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from document_indexer.__main__ import (
     apply_metadata_override,
     load_metadata_override,

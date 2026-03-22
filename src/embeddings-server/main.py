@@ -4,11 +4,12 @@ import logging
 import sys
 from typing import Literal
 
-from config import BUILD_DATE, GIT_COMMIT, MODEL_NAME, PORT, VERSION
 from fastapi import FastAPI
-from model_utils import apply_prefix, detect_model_family
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
+
+from config import BUILD_DATE, GIT_COMMIT, MODEL_NAME, PORT, VERSION
+from model_utils import apply_prefix, detect_model_family
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
