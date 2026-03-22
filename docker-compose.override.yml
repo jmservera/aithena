@@ -12,6 +12,10 @@ services:
     ports:
       - "8085:8080" # Host access for embedding API debugging and external local tools
 
+  embeddings-server-e5:
+    ports:
+      - "8086:8080" # Host access for e5-base embedding API debugging
+
   solr-search:
     ports:
       - "8080:8080" # Direct FastAPI access without going through nginx
