@@ -637,6 +637,7 @@ services:
         condition: service_healthy
     volumes:
       - ./src/solr/books:/configsets/books:ro
+      - ./src/solr/books_e5base:/configsets/books_e5base:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
     entrypoint:
       - /bin/bash
@@ -654,6 +655,7 @@ services:
             sleep 2
           done
 
+          # --- books collection (distiluse, 512D) ---
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
@@ -663,6 +665,17 @@ services:
           fi
 
           SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" sh /scripts/add-conf-overlay.sh
+
+          # --- books_e5base collection (multilingual-e5-base, 768D) ---
+          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books_e5base'; then
+            solr zk upconfig -z "$$ZK_HOST" -n books_e5base -d /configsets/books_e5base
+          fi
+
+          if ! curl -fsS "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books_e5base"'; then
+            curl -fsS "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books_e5base&collection.configName=books_e5base&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
+          fi
+
+          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books_e5base" sh /scripts/add-conf-overlay.sh
 
           echo "Solr init complete"
     networks:
