@@ -4,13 +4,10 @@ services:
     # https://github.com/nextcloud/all-in-one/discussions/1731
     # run this in your VM:
     # echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/nextcloud-aio-memory-overcommit.conf
-    image: redis
+    image: redis:7.4-alpine
     command: >-
-      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
-        exec redis-server --save 20 1 --loglevel warning --requirepass "$$REDIS_PASSWORD";
-      else
-        exec redis-server --save 20 1 --loglevel warning;
-      fi'
+      sh -c 'exec redis-server /usr/local/etc/redis/redis.conf
+      --requirepass "$$REDIS_PASSWORD"'
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - REDISCLI_AUTH=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
@@ -40,6 +37,7 @@ services:
           - redis
     volumes:
       - redis-data:/data
+      - ./src/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
   rabbitmq:
     image: rabbitmq:4.0-management
     entrypoint: /etc/rabbitmq/init-definitions.sh
@@ -748,15 +746,28 @@ services:
         condition: service_healthy
       solr3:
         condition: service_healthy
+    environment:
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:-SolrZkPass_dev}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:-SolrZkPass_dev}"
+      SOLR_OPTS: "-Djava.security.auth.login.config=/opt/solr/server/etc/solr-jaas.conf"
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/books_e5base:/configsets/books_e5base:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+      - ./src/solr/solr-jaas.conf:/opt/solr/server/etc/solr-jaas-template.conf:ro
     entrypoint:
       - /bin/bash
       - -ceu
       - |
           set -o pipefail
+
+          # Generate JAAS config from template for solr zk commands
+          sed \
+            -e "s|\$${ZK_SASL_USER}|$${ZK_SASL_USER}|g" \
+            -e "s|\$${ZK_SASL_PASS}|$${ZK_SASL_PASS}|g" \
+            /opt/solr/server/etc/solr-jaas-template.conf > /opt/solr/server/etc/solr-jaas.conf
+
           ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
           SOLR_URL="http://solr:8983"
 
