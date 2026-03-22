@@ -100,15 +100,6 @@ class Settings:
     ascii_folding: bool = True
 
     @property
-    def solr_auth(self) -> tuple[str, str] | None:
-        """Return Solr BasicAuth credentials if configured, else None."""
-        user = os.environ.get("SOLR_AUTH_USER", "")
-        password = os.environ.get("SOLR_AUTH_PASSWORD", "")
-        if user and password:
-            return (user, password)
-        return None
-
-    @property
     def select_url(self) -> str:
         return f"{self.solr_url}/{self.solr_collection}/select"
 

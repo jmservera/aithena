@@ -14,7 +14,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 — trusted local schema files only
 from pathlib import Path
 from unittest.mock import patch
 
