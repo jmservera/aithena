@@ -278,3 +278,25 @@ Active decisions in `.squad/decisions.md`:
 
 **Pattern reinforced:** "Reskill after every milestone" — v1.10.1 yielded 6 new skills + 1 update. Without dedicated reskill time, these patterns would have been lost. The wins report captures team morale, process improvements, and lessons learned in a shareable format for Juanma.
 
+### Embedding Model A/B Test PRD (2026-03-22)
+
+**Session:** PRD creation for in-repo A/B test of multilingual-e5-base vs distiluse.
+
+**Key findings from code research:**
+- **Embeddings server is model-agnostic:** `MODEL_NAME` env var + runtime dimension detection means zero code changes to swap models. Only gap: e5 models require query/passage prefixes not currently supported.
+- **Document indexer is fully configurable:** `CHUNK_SIZE`, `CHUNK_OVERLAP`, `SOLR_COLLECTION`, `EMBEDDINGS_HOST` all env-var driven. Dual indexing = dual Docker services, no code changes needed.
+- **RabbitMQ competing consumers is a trap:** Both indexers on the same queue (`shortembeddings`) means messages go to only ONE consumer. Dual indexing requires fanout exchange or separate queues. Flagged as OQ-1 (blocking).
+- **Solr schema is the only hardcoded bottleneck:** `knn_vector_512` field type has dimension baked in. New collection needs a new configset with `knn_vector_768`. This is the one piece that can't be env-var switched.
+- **Chunking recalculation follows PO's proportional logic:** 90 words for 128 tokens → 300 words for 512 tokens (same ~75% utilization target).
+
+**Decisions made:**
+- Dual-collection architecture (not dual-field in one collection)
+- Docker Compose overlay (not inline in production compose)
+- Prefix handling centralized in embeddings server (not scattered across indexer + search)
+- 3-phase execution with PO decision gate between Phase 2 and Phase 3
+- Decision: `.squad/decisions/inbox/ripley-embedding-prd.md`
+
+**Pattern reinforced:** "Research before implementation" — 20 minutes of codebase reading revealed the RabbitMQ competing-consumer issue that would have silently caused missing documents in one collection. Without reading the actual queue topology, this would have been discovered only during testing.
+
+**Pattern new:** "A/B testing as compose overlay" — Keeping experimental services in a separate compose file prevents production config drift and makes cleanup trivial. Should become the standard pattern for future model experiments.
+
