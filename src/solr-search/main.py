@@ -433,16 +433,17 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 
-def _raw_solr_query(params: dict[str, Any]) -> dict[str, Any]:
+def _raw_solr_query(params: dict[str, Any], *, collection: str | None = None) -> dict[str, Any]:
     """Execute a Solr HTTP request.  Raised exceptions feed the circuit breaker."""
-    response = requests.post(settings.select_url, data=params, timeout=settings.request_timeout)
+    url = settings.select_url if collection is None else settings.select_url_for(collection)
+    response = requests.post(url, data=params, timeout=settings.request_timeout)
     response.raise_for_status()
     return response.json()
 
 
-def query_solr(params: dict[str, Any]) -> dict[str, Any]:
+def query_solr(params: dict[str, Any], *, collection: str | None = None) -> dict[str, Any]:
     try:
-        return solr_circuit.call(_raw_solr_query, params)
+        return solr_circuit.call(_raw_solr_query, params, collection=collection)
     except CircuitOpenError as exc:
         raise HTTPException(
             status_code=503,
@@ -456,11 +457,14 @@ def query_solr(params: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="Solr returned invalid JSON") from exc
 
 
-def _fetch_embedding(text: str) -> list[float]:
+def _fetch_embedding(text: str, *, collection: str | None = None) -> list[float]:
     """Call the embeddings server through the circuit breaker; wrap errors as HTTP 502/503/504."""
+    resolved_collection = collection or settings.default_collection
+    emb_url = settings.embeddings_url_for(resolved_collection)
+    input_type = "query" if settings.is_e5_collection(resolved_collection) else None
     try:
         return embeddings_circuit.call(
-            get_query_embedding, settings.embeddings_url, text, settings.embeddings_timeout
+            get_query_embedding, emb_url, text, settings.embeddings_timeout, input_type=input_type
         )
     except CircuitOpenError as exc:
         raise HTTPException(
@@ -497,6 +501,25 @@ def resolve_page_size(limit: int | None, page_size: int) -> int:
 
 def collect_search_filters(**filters: str | None) -> dict[str, str]:
     return {name: value.strip() for name, value in filters.items() if value and value.strip()}
+
+
+def resolve_collection(collection: str | None) -> str:
+    """Validate and return the Solr collection name.
+
+    Returns the default collection when *collection* is ``None``.
+    Raises HTTP 400 if the requested collection is not in the allowlist.
+    """
+    if collection is None:
+        return settings.default_collection
+    if collection not in settings.allowed_collections:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid collection: {collection!r}. "
+                f"Allowed collections: {sorted(settings.allowed_collections)}"
+            ),
+        )
+    return collection
 
 
 def _enrich_with_collections(
@@ -864,6 +887,7 @@ def search(
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
         enum=list(VALID_SEARCH_MODES),
     ),
+    collection: str | None = Query(None, description="Solr collection to query (default: books)."),
     _rate_limit: None = Depends(check_search_rate_limit),
 ) -> dict[str, Any]:
     """Search for books.
@@ -875,9 +899,14 @@ def search(
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
 
+    An optional ``collection`` parameter routes the query to a specific Solr
+    collection (e.g. ``books_e5base`` for the e5-base A/B test).
+
     **Rate Limit:** Configurable via ``RATE_LIMIT_REQUESTS_PER_MINUTE`` (default: 100).
     Set to 0 to disable rate limiting (e.g., for E2E testing).
     """
+    resolved_collection = resolve_collection(collection)
+
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
             status_code=400,
@@ -896,11 +925,20 @@ def search(
 
     with _track_search_metrics(mode):
         if mode == "keyword":
-            response = _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+            response = _search_keyword(
+                request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                collection=resolved_collection,
+            )
         elif mode == "semantic":
-            response = _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+            response = _search_semantic(
+                request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                collection=resolved_collection,
+            )
         else:
-            response = _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+            response = _search_hybrid(
+                request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                collection=resolved_collection,
+            )
 
     _enrich_with_collections(response.get("results", []), request)
     return response
@@ -919,6 +957,7 @@ def _search_keyword(
     degraded: bool = False,
     message: str | None = None,
     requested_mode: str | None = None,
+    collection: str | None = None,
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -930,7 +969,8 @@ def _search_keyword(
             sort=sort,
             filters=filters,
             facet_limit=settings.facet_limit,
-        )
+        ),
+        collection=collection,
     )
 
     response = payload.get("response", {})
@@ -969,6 +1009,8 @@ def _search_semantic(
     sort_order: str,
     sort: str | None,
     filters: dict[str, str],
+    *,
+    collection: str | None = None,
 ) -> dict[str, Any]:
     """Execute a Solr kNN semantic search using the ``embedding_v`` field.
 
@@ -981,7 +1023,7 @@ def _search_semantic(
         raise HTTPException(status_code=400, detail="Query cannot be empty for semantic search")
 
     try:
-        vector = _fetch_embedding(q)
+        vector = _fetch_embedding(q, collection=collection)
     except HTTPException as exc:
         if _should_degrade_to_keyword(exc):
             return _search_keyword(
@@ -996,10 +1038,14 @@ def _search_semantic(
                 degraded=True,
                 message=EMBEDDINGS_DEGRADED_MESSAGE,
                 requested_mode="semantic",
+                collection=collection,
             )
         raise
 
-    payload = query_solr(build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)))
+    payload = query_solr(
+        build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)),
+        collection=collection,
+    )
 
     response = payload.get("response", {})
     results = [
@@ -1031,6 +1077,8 @@ def _search_hybrid(
     sort_order: str,
     sort: str | None,
     filters: dict[str, str],
+    *,
+    collection: str | None = None,
 ) -> dict[str, Any]:
     """Execute BM25 and kNN searches in parallel, then fuse with RRF.
 
@@ -1058,8 +1106,8 @@ def _search_hybrid(
 
     # Run BM25 query and embedding fetch concurrently
     with ThreadPoolExecutor(max_workers=2) as pool:
-        kw_future = pool.submit(query_solr, kw_params)
-        emb_future = pool.submit(_fetch_embedding, q)
+        kw_future = pool.submit(query_solr, kw_params, collection=collection)
+        emb_future = pool.submit(_fetch_embedding, q, collection=collection)
 
         kw_future_result = kw_future.result()
         try:
@@ -1078,13 +1126,15 @@ def _search_hybrid(
                     degraded=True,
                     message=EMBEDDINGS_DEGRADED_MESSAGE,
                     requested_mode="hybrid",
+                    collection=collection,
                 )
             raise
 
         kw_payload = kw_future_result
 
     knn_payload = query_solr(
-        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
+        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters)),
+        collection=collection,
     )
 
     kw_response = kw_payload.get("response", {})
@@ -1135,7 +1185,9 @@ def facets(
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
     fq_folder: str | None = Query(None),
+    collection: str | None = Query(None, description="Solr collection to query (default: books)."),
 ) -> dict[str, Any]:
+    resolved_collection = resolve_collection(collection)
     payload = query_solr(
         build_params_or_400(
             query=q,
@@ -1154,7 +1206,8 @@ def facets(
             ),
             facet_limit=settings.facet_limit,
             rows=0,
-        )
+        ),
+        collection=resolved_collection,
     )
     return {"query": q, "facets": parse_facet_counts(payload)}
 
@@ -1306,6 +1359,7 @@ def list_books(
     fq_year: str | None = Query(None, description="Filter by publication year."),
     fq_series: str | None = Query(None, description="Filter by series name."),
     fq_folder: str | None = Query(None, description="Filter by folder path."),
+    collection: str | None = Query(None, description="Solr collection to query (default: books)."),
 ) -> dict[str, Any]:
     """Browse the complete library of indexed books with pagination and filtering.
 
@@ -1316,6 +1370,7 @@ def list_books(
     This endpoint uses a wildcard ``*:*`` query to match all documents, making it
     suitable for library browsing and discovery.
     """
+    resolved_collection = resolve_collection(collection)
     filters = collect_search_filters(
         author=fq_author,
         category=fq_category,
@@ -1335,7 +1390,8 @@ def list_books(
             sort=None,
             filters=filters,
             facet_limit=settings.facet_limit,
-        )
+        ),
+        collection=resolved_collection,
     )
 
     response = payload.get("response", {})

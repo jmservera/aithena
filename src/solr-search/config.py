@@ -16,6 +16,26 @@ def _parse_origins(raw_value: str) -> list[str]:
     return [origin.strip() for origin in raw_value.split(",") if origin.strip()]
 
 
+def _parse_collection_set(raw_value: str) -> frozenset[str]:
+    """Parse a comma-separated string into a frozenset of collection names."""
+    return frozenset(name.strip() for name in raw_value.split(",") if name.strip())
+
+
+def _parse_embeddings_url_overrides(allowed: frozenset[str]) -> tuple[tuple[str, str], ...]:
+    """Build a collection→embeddings-URL map from per-collection env vars.
+
+    For each collection in *allowed*, check for an env var named
+    ``EMBEDDINGS_URL_{UPPER_NAME}`` (dots and hyphens replaced with underscores).
+    """
+    overrides: list[tuple[str, str]] = []
+    for name in sorted(allowed):
+        env_key = f"EMBEDDINGS_URL_{name.upper().replace('-', '_').replace('.', '_')}"
+        url = os.environ.get(env_key)
+        if url:
+            overrides.append((name, url))
+    return tuple(overrides)
+
+
 @dataclass(frozen=True)
 class Settings:
     title: str
@@ -69,10 +89,27 @@ class Settings:
     auth_default_admin_password: str | None
     collections_db_path: Path
     collections_note_max_length: int
+    allowed_collections: frozenset[str]
+    default_collection: str
+    e5_collections: frozenset[str]
+    collection_embeddings_urls: tuple[tuple[str, str], ...]
 
     @property
     def select_url(self) -> str:
         return f"{self.solr_url}/{self.solr_collection}/select"
+
+    def select_url_for(self, collection: str) -> str:
+        """Return the Solr select URL for a specific collection."""
+        return f"{self.solr_url}/{collection}/select"
+
+    def embeddings_url_for(self, collection: str) -> str:
+        """Return the embeddings URL for a collection (falls back to default)."""
+        overrides = dict(self.collection_embeddings_urls)
+        return overrides.get(collection, self.embeddings_url)
+
+    def is_e5_collection(self, collection: str) -> bool:
+        """Return True if the collection uses an e5 model (needs input_type)."""
+        return collection in self.e5_collections
 
 
 raw_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173")
@@ -80,6 +117,8 @@ parsed_cors_origins = _parse_origins(raw_cors_origins)
 allow_credentials = (
     os.environ.get("CORS_ALLOW_CREDENTIALS", "true").lower() == "true" and "*" not in parsed_cors_origins
 )
+
+_allowed_collections = _parse_collection_set(os.environ.get("ALLOWED_COLLECTIONS", "books"))
 
 settings = Settings(
     title=os.environ.get("TITLE", TITLE),
@@ -133,4 +172,8 @@ settings = Settings(
     auth_default_admin_password=os.environ.get("AUTH_DEFAULT_ADMIN_PASSWORD") or None,
     collections_db_path=Path(os.environ.get("COLLECTIONS_DB_PATH", "/data/collections/collections.db")).resolve(),
     collections_note_max_length=int(os.environ.get("COLLECTIONS_NOTE_MAX_LENGTH", "1000")),
+    allowed_collections=_allowed_collections,
+    default_collection=os.environ.get("DEFAULT_COLLECTION", "books"),
+    e5_collections=_parse_collection_set(os.environ.get("E5_COLLECTIONS", "")),
+    collection_embeddings_urls=_parse_embeddings_url_overrides(_allowed_collections),
 )

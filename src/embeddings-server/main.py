@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from typing import Literal
 
 from config import BUILD_DATE, GIT_COMMIT, MODEL_NAME, PORT, VERSION
 from fastapi import FastAPI
@@ -11,7 +12,34 @@ from sentence_transformers import SentenceTransformer
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-logger.info("Loading embedding model: %s", MODEL_NAME)
+
+def detect_model_family(model_name: str) -> str:
+    """Return the model family string based on the model name.
+
+    E5-family models require query/passage prefixes; others do not.
+    """
+    name_lower = model_name.lower()
+    if "e5" in name_lower:
+        return "e5"
+    return "generic"
+
+
+def apply_prefix(texts: list[str], model_family: str, input_type: str) -> list[str]:
+    """Prepend the appropriate prefix for e5-family models.
+
+    For e5 models: ``"query: "`` when *input_type* is ``"query"``,
+    ``"passage: "`` when *input_type* is ``"passage"``.
+    For other model families the texts are returned unchanged.
+    """
+    if model_family != "e5":
+        return texts
+    prefix = "query: " if input_type == "query" else "passage: "
+    return [prefix + t for t in texts]
+
+
+model_family = detect_model_family(MODEL_NAME)
+logger.info("Loading embedding model: %s (family=%s)", MODEL_NAME, model_family)
+
 try:
     model = SentenceTransformer(MODEL_NAME)
     embedding_dim = model.get_sentence_embedding_dimension()
@@ -28,6 +56,7 @@ class EmbeddingsInput(BaseModel):
     """Input definition for embeddings endpoint. Takes a list of strings or a single string."""
 
     input: str | list[str]
+    input_type: Literal["query", "passage"] = "passage"
 
 
 class EmbeddingsOutput(BaseModel):
@@ -56,6 +85,8 @@ class ModelInfo(BaseModel):
 
     model: str
     embedding_dim: int
+    model_family: str
+    requires_prefix: bool
 
 
 @app.head("/health")
@@ -66,9 +97,14 @@ async def health():
 
 
 @app.get("/v1/embeddings/model")
-async def model_info() -> ModelInfo:
+async def model_info_endpoint() -> ModelInfo:
     """Returns the active embedding model name and its output dimension."""
-    return ModelInfo(model=MODEL_NAME, embedding_dim=embedding_dim)
+    return ModelInfo(
+        model=MODEL_NAME,
+        embedding_dim=embedding_dim,
+        model_family=model_family,
+        requires_prefix=model_family == "e5",
+    )
 
 
 @app.get("/version", include_in_schema=False)
@@ -79,6 +115,7 @@ async def version() -> dict[str, str]:
         "version": VERSION,
         "commit": GIT_COMMIT,
         "built": BUILD_DATE,
+        "model": MODEL_NAME,
     }
 
 
@@ -86,16 +123,15 @@ async def version() -> dict[str, str]:
 async def embeddings(sentences: EmbeddingsInput):
     """Generates embeddings for a list of sentences."""
     result = EmbeddingsOutput()
-    if isinstance(sentences.input, str):
-        sentences.input = [sentences.input]
-    embeddings = model.encode(sentences.input)
-    for r in embeddings:
+    texts = sentences.input if isinstance(sentences.input, list) else [sentences.input]
+    texts = apply_prefix(texts, model_family, sentences.input_type)
+    encoded = model.encode(texts)
+    for r in encoded:
         result.data.append(EmbeddingsOutput.EmbeddingsList(embedding=list(r)))
     return result
 
 
 if __name__ == "__main__":
-    # run flask app for debugging
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=PORT)
