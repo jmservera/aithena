@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-03-22
+
+### Added
+
+- **Chunk text preview in search results** — vector search results now display the matching chunk text, with `chunk_text_t` and `parent_id_s` added to Solr field list (#807, #808, #809)
+- **Sentence-boundary aware chunking** — document chunker uses regex sentence splitter for cleaner chunk boundaries (#812)
+- **PDF viewer toolbar** — fullscreen mode, PDF download button, and open-in-new-window link for the document viewer (#814, #815, #816)
+- **Book detail view** — new modal component showing book metadata, similar books, file size, and editable metadata fields (#818, #819, #821, #822)
+- **Decoupled similar books** — similar books panel now works independently from PDF viewer via separate `focusedBookId` state (#820)
+- **Thumbnail generation** — first-page thumbnails generated during document indexing using PyMuPDF, served via nginx with auth and 24h cache headers (#824, #826, #827)
+- **Thumbnail display** — BookCard and BookDetailView show cover thumbnails with lazy loading and graceful fallback (#827)
+- **Thumbnail Solr schema** — `thumbnail_url_s` field added to Solr schema and search response (#825)
+
+### Changed
+
+- **Chunk size reduced** — CHUNK_SIZE changed from 400 to 90 words, CHUNK_OVERLAP from 50 to 10 words, optimized for distiluse-base-multilingual-cased-v2 128-token window (#811)
+
+### Fixed
+
+- **Nginx admin upstream removed** — dead `admin` upstream block that caused nginx crashes on startup removed (#828)
+- **Version display** — VERSION file now takes priority over environment variable, fixing stuck "v1.0.0" display (#810)
+
+### Security
+
+- Security review completed with no critical/high findings; 2 medium defense-in-depth items noted for follow-up (#830)
+
+### Performance
+
+- Performance review completed — search payload increase acceptable (+5.3KB worst case), chunker overhead <1ms (#831)
+
+### Tests
+
+- Wave 1 tests: 38 integration and accessibility tests across solr-search, document-indexer, and aithena-ui (#813, #817)
+- Wave 2 tests: 17 gap-filling tests for book detail and similar books features (#823)
+- Wave 3 tests: 12 thumbnail generation and display tests (#829)
+
+## [1.10.1] — 2026-03-21
+
+### Fixed
+
+- **Folder path and batch edit integration** — resolved merge conflicts and race conditions in folder hierarchy and batch metadata editing workflows (#801)
+
 ## [1.10.0] — 2026-03-21
 
 ### Added
