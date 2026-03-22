@@ -57,6 +57,11 @@ function renderWithProviders(
   );
 }
 
+const adminAuth = createAuthValue({
+  user: { id: 1, username: 'admin', role: 'admin' },
+  isAuthenticated: true,
+});
+
 describe('BookDetailView', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
@@ -310,10 +315,359 @@ describe('BookDetailView', () => {
           onOpenPdf={vi.fn()}
           onSelectSimilarBook={vi.fn()}
         />,
-        createAuthValue({ user: { id: 1, username: 'admin', role: 'admin' } })
+        adminAuth
       );
 
       expect(screen.getByLabelText(/edit metadata/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('inline edit mode', () => {
+    it('enters edit mode when admin clicks edit metadata button', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      const editBtn = screen.getByLabelText(/edit metadata/i);
+      await user.click(editBtn);
+
+      // Edit form fields should appear
+      expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/author/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/year/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/category/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/series/i)).toBeInTheDocument();
+    });
+
+    it('hides edit metadata button while in edit mode', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      const editBtn = screen.getByLabelText(/edit metadata/i);
+      await user.click(editBtn);
+
+      expect(screen.queryByLabelText(/edit metadata/i)).not.toBeInTheDocument();
+    });
+
+    it('hides read-only metadata in edit mode', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+
+      // Read-only header section should be hidden
+      expect(screen.queryByText('Alice Smith')).not.toBeInTheDocument();
+      // Read-only metadata grid items are hidden
+      expect(screen.queryByText('English')).not.toBeInTheDocument();
+    });
+
+    it('populates edit fields with current book data', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+
+      expect(screen.getByLabelText(/title/i)).toHaveValue('Advanced Systems Design');
+      expect(screen.getByLabelText(/author/i)).toHaveValue('Alice Smith');
+      expect(screen.getByLabelText(/year/i)).toHaveValue(2023);
+      expect(screen.getByLabelText(/category/i)).toHaveValue('Engineering');
+      expect(screen.getByLabelText(/series/i)).toHaveValue('Tech Library');
+    });
+
+    it('renders Save and Cancel buttons in edit mode', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+
+      expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    });
+
+    it('exits edit mode when Cancel is clicked', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+      expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+      // Should be back in read-only mode
+      expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument();
+      expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+      expect(screen.getByLabelText(/edit metadata/i)).toBeInTheDocument();
+    });
+
+    it('exits edit mode on ESC without closing modal', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={onClose}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+      expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+
+      await user.keyboard('{Escape}');
+
+      // Should exit edit mode but NOT close the modal
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument();
+      expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+    });
+
+    it('disables Save button when no changes made', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+
+      expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+    });
+
+    it('enables Save button after editing a field', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+      await user.clear(screen.getByLabelText(/title/i));
+      await user.type(screen.getByLabelText(/title/i), 'Updated Title');
+
+      expect(screen.getByRole('button', { name: /save/i })).not.toBeDisabled();
+    });
+
+    it('saves changes and shows success toast', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        const url = typeof input === 'string' ? input : input instanceof Request ? input.url : '';
+        if (url.includes('/metadata')) {
+          return { ok: true, json: async () => ({}) } as Response;
+        }
+        if (url.includes('/v1/books/book-123') && !url.includes('/similar')) {
+          return {
+            ok: true,
+            json: async () => ({ ...mockBook, title: 'Updated Title' }),
+          } as Response;
+        }
+        return { ok: true, json: async () => ({ results: [], facets: {} }) } as Response;
+      });
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+      await user.clear(screen.getByLabelText(/title/i));
+      await user.type(screen.getByLabelText(/title/i), 'Updated Title');
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      // Toast should appear
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toBeInTheDocument();
+      });
+    });
+
+    it('shows API error when save fails', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        const url = typeof input === 'string' ? input : input instanceof Request ? input.url : '';
+        if (url.includes('/metadata')) {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ detail: 'Server error' }),
+          } as Response;
+        }
+        return { ok: true, json: async () => ({ results: [], facets: {} }) } as Response;
+      });
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+      await user.clear(screen.getByLabelText(/title/i));
+      await user.type(screen.getByLabelText(/title/i), 'Changed');
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByText('Server error')).toBeInTheDocument();
+      });
+    });
+
+    it('keeps Open PDF and external link visible in edit mode', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [], facets: {} }),
+      } as Response);
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />,
+        adminAuth
+      );
+
+      await user.click(screen.getByLabelText(/edit metadata/i));
+
+      expect(screen.getByRole('button', { name: /open pdf/i })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /open in new tab/i })).toBeInTheDocument();
     });
   });
 
