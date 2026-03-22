@@ -143,6 +143,16 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 
 ## Learnings
 
+### Release Security Requirement Enforcement (2026-03-22)
+Security fixes are MANDATORY for every release. Updated release-checklist.md and .github/ISSUE_TEMPLATE/release.md with PO directive that a release CANNOT ship with known unresolved critical/high security issues. Releases now require:
+- Bandit/Checkov/Zizmor/CodeQL scanning with no critical/high findings
+- Dependabot alerts reviewed (critical/high fixed, medium/low documented)
+- Threat assessment if significant new features added
+- Performance benchmarks to verify no regressions
+- GitHub Actions supply chain risk review (pinned actions, no script injection, token permissions)
+- Input validation review on all new/modified API endpoints
+PR #899 targeting dev; expected to land with next release milestone.
+
 ### CI Workflow Patterns for BCDR Validation (2026-07-25)
 - Restore scripts support `DRY_RUN=1` and `--dry-run` flags — CI can validate orchestrator logic without Docker or real backup data by creating a mock backup directory structure with placeholder files.
 - `restore.sh` exit code 2 = warnings (e.g., missing files in a tier) — acceptable in CI mock environments. Only exit code 1 is fatal.
@@ -238,3 +248,21 @@ Created comprehensive rollback plan for the embedding model A/B test.
 **Decision status:** Ready for PR review. Integrates with P2-4 (metrics) and P3-2 (prod deployment deferral).
 
 **PR:** #893
+
+### 2026-03-22T13:49Z: Spawned for release checklist hardening
+
+**Scope:** Update release process to make security & performance review mandatory
+
+**Changes Required:**
+- Add "Security Review Sign-Off" step (before version tag)
+- Add "Performance Review Sign-Off" step (new requirement)
+- Update PR template to reference threat assessment requirement
+- Integrate Kane's threat assessment v1.12 into release gate
+
+**User Directives:**
+- Security fixes mandatory in releases (non-optional)
+- Threat assessment required before each release
+- Performance metrics baseline required before release
+
+**Timeline:** Complete before next release cycle.
+

@@ -241,3 +241,23 @@
 - Config via `COMPARISON_BASELINE_COLLECTION` (default: `books`) and `COMPARISON_CANDIDATE_COLLECTION` (default: `books_e5base`) env vars added to frozen Settings dataclass.
 
 **Testing:** 25 tests — 9 overlap metrics unit tests, 10 endpoint integration tests (keyword, semantic, hybrid, filters, empty results, latency, OpenAPI exclusion), 3 config tests, 1 parallel execution test, 2 edge cases. All 885 tests pass, 91.5% coverage.
+
+### 2026-03-22T13:49Z: PR #895 merged — admin login loop fixed
+
+**PR:** #895 (Closes #887)  
+**Root Causes:** Admin endpoints only accepted X-API-Key (not JWT), nginx blocking React SPA
+
+**Solution Implemented:** Dual-path auth on admin endpoints:
+- X-API-Key first (machine-to-machine, validated immediately)
+- JWT session fallback (browser access from React SPA)
+
+**Decision Captured:** .squad/decisions.md — "Admin endpoints accept JWT sessions alongside API keys"
+
+**Follow-up Issues Created:**
+- #894 — Thumbnail bug
+- #896 — Text preview truncation
+- #897 — Collections enablement
+- #898 — Remember-me checkbox
+
+**Team Coordination:** All team members should test both auth paths when adding auth gates.
+

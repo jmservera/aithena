@@ -10258,3 +10258,70 @@ Total stack memory increase: ~3.5GB. Hosts running the full A/B stack need at le
 ### 5. Dev-only scope
 
 A/B services are in `docker-compose.yml` (base) and `docker-compose.override.yml` (dev ports). `docker-compose.prod.yml` is intentionally NOT modified — production A/B deployment deferred to P3-2.
+
+---
+
+# Decision: Admin endpoints accept JWT sessions alongside API keys
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-22  
+**Status:** IMPLEMENTED  
+**PR:** #895 (Closes #887)
+
+## Context
+
+Admin API endpoints (`/v1/admin/*`) used `require_admin_auth` which only accepted `X-API-Key` headers. The React admin dashboard sends JWT Bearer tokens, not API keys. This caused 401/403 responses that triggered the frontend's auth failure handler, creating an infinite login loop.
+
+## Decision
+
+`require_admin_auth` now accepts **either**:
+1. `X-API-Key` header (machine-to-machine, validated against `ADMIN_API_KEY` env var)
+2. JWT session with `role == "admin"` (browser access, validated by auth middleware)
+
+If an X-API-Key is present and ADMIN_API_KEY is configured, the key is checked first. A wrong key fails immediately (no JWT fallback). If no API key is present, the JWT session is checked.
+
+## Impact
+
+- **Frontend (Dallas):** Admin page now works without X-API-Key. No frontend changes needed.
+- **Scripts/CI:** X-API-Key flow unchanged. Existing scripts continue to work.
+- **Security:** Non-admin JWT users are explicitly rejected (401). Defense-in-depth is maintained.
+- **All team members:** When adding new auth gates to endpoints, always test both API-key and JWT browser paths.
+
+---
+
+# Decision: Security & Performance Review Mandatory in Releases
+
+**Author:** Ripley (Project Lead) + User directive  
+**Date:** 2026-03-22  
+**Status:** CAPTURED (Implementation via Brett release checklist updates)
+
+## Context
+
+User (jmservera) directive on 2026-03-22T13:49Z: Security fixes must be mandatory in releases, not optional. For next releases, comprehensive security & performance review before shipping.
+
+## Directive Details
+
+**Security fixes are mandatory:**
+- All CRITICAL/HIGH CVEs must be fixed or have documented exceptions before release
+- Security fixes must be in release notes
+
+**Security review before each release (new requirement):**
+- Full threat assessment reviewing previous assessments
+- CI/CD security (GitHub Actions supply chain, prompt injection on issue_comment handlers)
+- Input sanitization (SQL/Solr injection through UI, XSS, CSRF)
+- All attack vectors documented
+
+**Performance review before each release (new requirement):**
+- Baseline performance metrics vs. previous release
+- Resource usage (Docker memory/CPU limits)
+- Search latency (solr-search API p95/p99)
+
+## Impact
+
+- **Release gate (Brett):** Threat assessment must be complete and approved before version tag
+- **Release checklist:** Add mandatory "Security & Performance Review Sign-Off" step
+- **Kane:** Threat assessment v1.12 required for next release
+- **All team members:** Release process is now more rigorous; plan extra time for security review
+
+---
+
