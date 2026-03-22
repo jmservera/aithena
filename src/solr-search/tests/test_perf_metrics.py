@@ -19,7 +19,6 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from perf_metrics import PerfMetricsStore, TimedSample, _percentile, _summarize  # noqa: E402
-
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 _TEST_ADMIN_KEY = "test-perf-metrics-key"

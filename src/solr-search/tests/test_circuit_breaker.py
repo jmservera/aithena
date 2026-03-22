@@ -13,8 +13,9 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import redis as redis_lib
 import requests
+
+import redis as redis_lib
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -24,7 +25,6 @@ os.environ.setdefault("AUTH_JWT_TTL", "24h")
 os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 from circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState  # noqa: E402
-
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 

@@ -15,10 +15,10 @@ os.environ.setdefault("RATE_LIMIT_REQUESTS_PER_MINUTE", "5")  # Low limit for te
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-import redis as redis_lib  # noqa: E402
 from fastapi import Request  # noqa: E402
-from main import RedisRateLimiter, get_client_ip  # noqa: E402
 
+import redis as redis_lib  # noqa: E402
+from main import RedisRateLimiter, get_client_ip  # noqa: E402
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 
@@ -266,6 +266,7 @@ def test_login_rate_limiter_uses_forwarded_ip(mock_auth: MagicMock, mock_limiter
     mock_auth.return_value = None  # auth will fail, but we only care about rate limiter call
 
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -287,6 +288,7 @@ def test_login_rate_limiter_falls_back_to_client_host(mock_auth: MagicMock, mock
     mock_auth.return_value = None
 
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)
@@ -307,6 +309,7 @@ def test_login_returns_429_when_rate_limited(mock_limiter: MagicMock) -> None:
     mock_limiter.is_allowed.return_value = False
 
     from fastapi.testclient import TestClient
+
     from main import app
 
     client = TestClient(app)

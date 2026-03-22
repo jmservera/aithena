@@ -14,8 +14,9 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-import backup_service  # noqa: E402
 import pytest  # noqa: E402
+
+import backup_service  # noqa: E402
 from backup_service import (  # noqa: E402
     BackupConfig,
     BackupConfigRequest,
@@ -30,7 +31,6 @@ from backup_service import (  # noqa: E402
     scan_backups,
     update_config,
 )
-
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 ADMIN_API_KEY = "test-backup-admin-key"

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
+
 from auth import (
     AUTH_COOKIE_NAME_DEFAULT,
     JWT_ALGORITHM,

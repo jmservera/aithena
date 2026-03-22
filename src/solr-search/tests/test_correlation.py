@@ -18,6 +18,8 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402, F401
+
 from correlation import (  # noqa: E402
     CORRELATION_ID_HEADER,
     CorrelationIdFilter,
@@ -26,9 +28,7 @@ from correlation import (  # noqa: E402
     get_correlation_id,
     set_correlation_id,
 )
-from fastapi.testclient import TestClient  # noqa: E402, F401
 from main import app  # noqa: E402, F401
-
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 
