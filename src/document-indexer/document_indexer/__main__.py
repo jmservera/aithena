@@ -38,6 +38,7 @@ from .chunker import chunk_text_with_pages
 from .embeddings import get_embeddings
 from .logging_config import setup_logging
 from .metadata import extract_metadata
+from .thumbnail import generate_thumbnail
 
 setup_logging(service_name="document-indexer")
 logger = logging.getLogger(__name__)
@@ -199,7 +200,11 @@ def extract_pdf_text(path: Path) -> list[tuple[int, str]]:
     return pages
 
 
-def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, str]:
+def build_literal_params(
+    metadata: dict,
+    page_count: int | None,
+    thumbnail_url: str | None = None,
+) -> dict[str, str]:
     doc_id = hashlib.sha256(metadata["file_path"].encode("utf-8")).hexdigest()
     params = {
         "resource.name": Path(metadata["file_path"]).name,
@@ -220,6 +225,8 @@ def build_literal_params(metadata: dict, page_count: int | None) -> dict[str, st
         params["literal.language_s"] = metadata["language"]
     if page_count is not None:
         params["literal.page_count_i"] = str(page_count)
+    if thumbnail_url:
+        params["literal.thumbnail_url_s"] = thumbnail_url
 
     return params
 
@@ -373,7 +380,16 @@ def index_document(path: Path) -> dict:
             extra={"doc_id": doc_id, "override_fields": list(override.keys())},
         )
 
-    params = build_literal_params(metadata, page_count)
+    # ── Thumbnail generation (best-effort) ───────────────────────────────
+    thumbnail_url: str | None = None
+    thumb_path = Path(f"{path}.thumb.jpg")
+    if generate_thumbnail(str(path), str(thumb_path)):
+        try:
+            thumbnail_url = str(thumb_path.relative_to(BASE_PATH))
+        except ValueError:
+            thumbnail_url = thumb_path.name
+
+    params = build_literal_params(metadata, page_count, thumbnail_url=thumbnail_url)
     solr_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update/extract"
 
     # ── Phase 1: full-text indexing via Solr Tika ──────────────────────────
