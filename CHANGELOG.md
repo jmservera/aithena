@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.2] — 2026-03-24
+
+### Fixed
+
+- **embeddings-server Docker image** — added missing model_utils.py file (#949)
+- **Container startup gate** — added to release checklist for infrastructure validation (#950)
+
 ## [1.12.1] — 2026-03-23
 
 ### Fixed
