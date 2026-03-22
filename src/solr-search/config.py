@@ -93,6 +93,8 @@ class Settings:
     default_collection: str
     e5_collections: frozenset[str]
     collection_embeddings_urls: tuple[tuple[str, str], ...]
+    comparison_baseline_collection: str
+    comparison_candidate_collection: str
 
     @property
     def select_url(self) -> str:
@@ -176,4 +178,6 @@ settings = Settings(
     default_collection=os.environ.get("DEFAULT_COLLECTION", "books"),
     e5_collections=_parse_collection_set(os.environ.get("E5_COLLECTIONS", "")),
     collection_embeddings_urls=_parse_embeddings_url_overrides(_allowed_collections),
+    comparison_baseline_collection=os.environ.get("COMPARISON_BASELINE_COLLECTION", "books"),
+    comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books_e5base"),
 )
