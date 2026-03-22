@@ -55,14 +55,47 @@ cd src/embeddings-server && uv run pytest -v --tb=short && uv run ruff check .
 # Check the "Docker Compose integration + E2E" job in the main branch CI
 ```
 
-### [ ] Verify Security Reviews Completed
+### [ ] Security Review (MANDATORY)
 
-Review the security checklist:
-- [ ] All CVEs in the milestone have been triaged (check `docs/security/baseline-exceptions.md`)
-- [ ] Code scanning results (Bandit, CodeQL, checkov, zizmor) all pass on `dev`
-- [ ] No new security alerts introduced in this release
+⚠️ **CRITICAL:** A release CANNOT ship with known unresolved critical or high security issues. Security fixes are MANDATORY in every release.
 
-Check GitHub Security tab for any open alerts blocking the release.
+- [ ] Run security scanning suite on `dev`:
+  ```bash
+  cd src/solr-search && uv run bandit -r . -ll
+  cd src/document-indexer && uv run bandit -r . -ll
+  cd src/document-lister && uv run bandit -r . -ll
+  cd src/embeddings-server && uv run bandit -r . -ll
+  python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))" && python3 -c "import yaml; yaml.safe_load(open('docker-compose.prod.yml'))"
+  # For Checkov and Zizmor, check GitHub Security tab
+  ```
+- [ ] Review and resolve ALL open Dependabot/security alerts (critical and high MUST be fixed; medium/low documented in `docs/security/baseline-exceptions.md`)
+- [ ] Verify no new security regressions since last release (compare vulnerability reports to previous milestone)
+- [ ] Run threat assessment session if significant new features were added (review `docs/security/` for previous assessments)
+- [ ] Verify all security fixes from previous releases are still in place (check CHANGELOG.md)
+- [ ] Check GitHub Actions workflows for supply chain risks:
+  - [ ] All actions are SHA-pinned (no `@v1` or `@main`)
+  - [ ] No script injection in `run:` blocks (Zizmor compliant)
+  - [ ] No excessive token permissions in `with:` parameters
+- [ ] Review input validation and sanitization on all new/modified API endpoints
+- [ ] Document any accepted security risks in `docs/security/baseline-exceptions.md`
+
+### [ ] Performance Review (MANDATORY)
+
+- [ ] Run benchmark suite against dev deployment:
+  ```bash
+  # E2E tests include performance benchmarks
+  # Check integration test logs for latency metrics
+  ```
+- [ ] Compare latency metrics (p50/p95/p99) against previous release baseline
+- [ ] Verify no performance regressions in:
+  - [ ] Search query latency
+  - [ ] Document indexing throughput
+  - [ ] Embedding generation speed
+- [ ] Check resource utilization (memory, CPU, disk) under expected load:
+  ```bash
+  # Run stress tests during E2E if available
+  # Monitor container stats in integration-test logs
+  ```
 
 ### [ ] Update VERSION File
 
