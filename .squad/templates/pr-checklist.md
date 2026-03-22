@@ -14,6 +14,8 @@ Run through this checklist before opening any PR. Copy into your PR description.
 - [ ] Security implications reviewed (auth flows, input validation, permissions)
 - [ ] No secrets, credentials, or API keys in the diff
 - [ ] File operations use safe patterns (streaming reads, path validation)
+- [ ] No new security warnings introduced (Bandit, CodeQL)
+- [ ] Input validation on new API parameters (check request bodies and query strings)
 
 ## Data Model
 

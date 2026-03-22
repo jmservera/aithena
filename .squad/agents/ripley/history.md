@@ -300,3 +300,16 @@ Active decisions in `.squad/decisions.md`:
 
 **Pattern new:** "A/B testing as compose overlay" — Keeping experimental services in a separate compose file prevents production config drift and makes cleanup trivial. Should become the standard pattern for future model experiments.
 
+
+### 2026-03-22T13:49Z: Spawned for A/B testing evaluation PRD
+
+**Scope:** Create PRD for A/B testing evaluation framework + decompose into GitHub issues
+
+**Deliverable:** docs/prd/ab-testing-evaluation.md
+
+**Impact:** Enables user research validation post-v1.11. Will feed issues into upcoming milestones.
+
+**Related Directives:**
+- Release process now mandatory: security + performance review before shipping
+- Release checklist updated with sign-off requirements
+
