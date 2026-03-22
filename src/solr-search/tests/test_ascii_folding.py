@@ -47,7 +47,7 @@ def _get_field_type_filters(schema_path: Path, field_type_name: str) -> list[tup
     For field types with index/query analyzers, returns [("index", [...]), ("query", [...])].
     For non-TextField types (e.g. StrField), returns [].
     """
-    tree = ET.parse(schema_path)
+    tree = ET.parse(schema_path)  # nosec B314 — trusted local schema file
     root = tree.getroot()
 
     for ft in root.findall(".//fieldType"):
