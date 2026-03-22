@@ -58,6 +58,7 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./src/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
       - ./src/rabbitmq/init-definitions.sh:/etc/rabbitmq/init-definitions.sh:ro
+
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
       interval: 10s
