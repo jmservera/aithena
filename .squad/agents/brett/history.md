@@ -304,3 +304,39 @@ Created comprehensive rollback plan for the embedding model A/B test.
 - 2026-03-22T14:41:02Z-brett-offline-installer.md (#921, PR #925)
 - 2026-03-22T14:41:02Z-ripley-offline-audit.md (offline audit confirmation)
 
+---
+
+## 2026-03-22 — Security Hardening Sprint Complete
+
+**Sprint:** Infrastructure Security Hardening  
+**Issues Closed:** #913 (ZK AdminServer), #912 (non-root containers), #917 (HSTS + headers)  
+**PRs Merged:** #928, #930, #932  
+**Status:** COMPLETE
+
+### 1. ZooKeeper AdminServer Hardening (Issue #913, PR #928)
+- **What:** Disabled AdminServer via `ZOO_CFG_EXTRA: "admin.enableServer=false"` on all 3 ZK nodes
+- **Where:** docker-compose.yml + docker-compose.prod.yml
+- **Rationale:** AdminServer exposes cluster topology; not needed for SolrCloud operations
+- **Decision:** Recorded in `.squad/decisions.md`
+
+### 2. Non-Root Container Standard (Issue #912, PR #930)
+- **What:** Implemented container security hardening across custom Dockerfiles
+- **Pattern (Alpine):** `addgroup -S -g 1000 app && adduser -S -u 1000 -G app app` + `USER app`
+- **Pattern (Debian):** `groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app` + `USER app`
+- **Services:** document-indexer, document-lister, aithena-ui; solr-search already using gosu
+- **Rationale:** D-2 audit finding; reduces attack surface per container security best practices
+- **Decision:** Standardized patterns recorded in `.squad/decisions.md` for future work
+
+### 3. HSTS and Security Headers (Issue #917, PR #932)
+- **What:** New `ssl.conf.template` with hardened TLS configuration
+- **Headers:** Strict-Transport-Security (HSTS), X-Content-Type-Options, X-Frame-Options, Referrer-Policy
+- **Implementation:** HSTS only over HTTPS; all location blocks re-declare headers; `server_tokens off`
+- **Requirement:** NGINX_HOST env var required when using SSL overlay
+- **Rationale:** Prevents SSL stripping attacks; hardens response headers per infrastructure audit
+- **Decision:** Recorded in `.squad/decisions.md`
+
+### Key Standardizations Established
+1. **Container UIDs:** Python services UID 1000 standard across Alpine + Debian
+2. **nginx:** Built-in nginx user + non-privileged port (8080)
+3. **TLS Configuration:** Dedicated HTTPS server block; HSTS enforcement; security header re-declaration in location blocks
+
