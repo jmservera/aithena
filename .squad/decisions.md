@@ -1,5 +1,216 @@
 # Squad Decisions
 
+# Decision: Offline Installer Architecture
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-22  
+**Status:** IMPLEMENTED  
+**PR:** #925 (Closes #921)  
+**References:** Issue #921 — air-gapped offline deployment
+
+## Context
+
+Aithena needs to support deployment on disconnected machines (air-gapped networks). This requires a portable package containing all Docker images, compose files, and deployment scripts.
+
+## Decision
+
+Implemented a three-stage offline deployment architecture:
+
+### 1. Export Stage (Connected Machine)
+- **Tool:** `scripts/offline/export-images.sh`
+- **Input:** Running Aithena instance or docker-compose setup
+- **Output:** Single `.tar.gz` file containing:
+  - 11 Docker image tarballs (solr, redis, rabbitmq, postgres, embeddings-server, solr-search, document-indexer, document-lister, admin, aithena-ui, nginx)
+  - docker-compose.yml (production overlay)
+  - Configuration files
+  - Scripts (install-offline.sh, verify.sh)
+  - Installation guide
+
+### 2. Install Stage (Disconnected Machine)
+- **Tool:** `scripts/offline/install-offline.sh`
+- **Input:** `.tar.gz` package
+- **Actions:**
+  - Extracts package to `/opt/aithena/`
+  - Loads all Docker images from tarballs
+  - Generates `.env` with random secrets (if not present)
+  - Preserves existing `.env` on updates
+  - Starts services via docker-compose
+  - Creates bind-mount volumes at `/source/volumes/`
+
+### 3. Validation Stage
+- **Tool:** `scripts/offline/verify.sh`
+- **Checks:** All service health endpoints, image integrity, volume mounts
+
+## Architecture Rationale
+
+- **Convention alignment:** Follows existing patterns:
+  - VERSION file export (like buildall.sh)
+  - Backup/restore script conventions (umask, dry-run flags)
+  - `.env` management (preserve on update)
+- **Single package:** One `.tar.gz` simplifies distribution and verification
+- **No new dependencies:** Uses existing Docker, compose, bash — no Python, no Go, no special tooling
+- **Safety:** Secrets generated with `openssl rand`, volumes use bind-mounts (standard Docker)
+
+## Installation Flow
+
+1. Administrator downloads `.tar.gz` on connected machine
+2. Transfers to disconnected machine (USB, internal network segment, manual transfer)
+3. Runs `install-offline.sh /path/to/package.tar.gz`
+4. Runs `verify.sh` to confirm all services healthy
+5. Aithena is ready for use (no internet required)
+
+## Impact
+
+- **Deployment:** Aithena can now be deployed in air-gapped/disconnected networks
+- **Compliance:** Enables on-premises-only deployments for sensitive data environments
+- **Cost:** No cloud dependencies = no recurring cloud bills
+- **Portability:** Single package supports different target architectures (if CPU-compatible)
+
+---
+
+# Decision: Mandatory Security Review in Release Checklist
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-22  
+**Status:** IMPLEMENTED  
+**PR:** #899  
+**References:** PO directive from Juanma  
+
+## Context
+
+The Product Owner issued two mandatory directives:
+1. "New releases should always fix security issues" — security fixes are MANDATORY in every release
+2. "For next releases, run a thorough security and performance review" — threat assessment before each release
+
+## Decision
+
+Implemented comprehensive security and performance review sections in the release checklist and templates:
+
+### 1. Release Checklist (`docs/deployment/release-checklist.md`)
+
+Added **Security Review (MANDATORY)** with 8 checkpoints after "Verify All Tests Pass":
+- Run security scanning suite (Bandit, Checkov, Zizmor, CodeQL) on `dev`
+- Review and resolve ALL open Dependabot/security alerts (critical/high MUST be fixed; medium/low documented)
+- Verify no new security regressions since last release
+- Run threat assessment session if significant new features were added
+- Verify all security fixes from previous releases are still in place
+- Check GitHub Actions workflows for supply chain risks (unpinned actions, script injection, excessive token permissions)
+- Review input validation and sanitization on all new/modified API endpoints
+- Document any accepted security risks in `docs/security/baseline-exceptions.md`
+
+Added explicit note: **"A release CANNOT ship with known unresolved critical or high security issues. Security fixes are MANDATORY in every release."**
+
+Added **Performance Review (MANDATORY)** with 4 checkpoints:
+- Run benchmark suite against dev deployment
+- Compare latency metrics (p50/p95/p99) against previous release baseline
+- Verify no performance regressions in search, indexing, or embedding generation
+- Check resource utilization (memory, CPU, disk) under expected load
+
+### 2. Release Issue Template (`.github/ISSUE_TEMPLATE/release.md`)
+
+Added to Pre-release section:
+- [ ] Security scan clean (Bandit, Checkov, Zizmor, CodeQL — no critical/high)
+- [ ] Dependabot alerts reviewed (critical/high fixed, medium/low documented)
+- [ ] Threat assessment completed (if significant new features)
+- [ ] Performance benchmarks show no regressions
+
+### 3. PR Checklist (`.squad/templates/pr-checklist.md`)
+
+Enhanced Security section:
+- [ ] No new security warnings introduced (Bandit, CodeQL)
+- [ ] Input validation on new API parameters
+
+## Impact
+
+**All team members:**
+- Releases now have explicit security and performance gates
+- No release can proceed without resolving critical/high findings
+- New features trigger automatic threat assessment requirement
+
+**Newt (Release Documentation):**
+- Release issue template now includes security/performance checkpoints
+- Release docs must include security verification status
+
+**Security & QA:**
+- Clear, auditable trail of security reviews before every release
+- Documented accepted risks in baseline-exceptions.md
+
+## Rationale
+
+- **Security first:** Enforces PO directive that security is non-negotiable
+- **Consistency:** Same checklist used across all releases
+- **Transparency:** Threat assessments for new features prevent regression
+- **Risk management:** Supply chain risks (GitHub Actions) explicitly reviewed
+- **Performance:** Prevents silent latency/resource degradation between releases
+
+---
+
+# Decision: A/B Testing Human Evaluation UI — Architecture & Scope
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-22  
+**Status:** PROPOSED — Awaiting PO Review  
+**PRD:** `docs/prd/ab-testing-evaluation.md`  
+**Issues:** #900–#918 (11 issues)
+
+## Context
+
+The v1.12.0 milestone delivered A/B embedding test infrastructure (dual indexers, dual embeddings servers, comparison API, benchmark tools). The PO requested a human evaluation UI to let evaluators compare search results from both models side-by-side and record preferences, enabling a data-driven model migration decision.
+
+## Decisions
+
+### 1. Environment Gate Pattern
+
+All A/B evaluation features are gated behind `ENABLE_AB_TEST=true`. When unset, routes are **never registered** (not just hidden) — this means zero code paths execute, zero endpoints exist, zero attack surface. This is stronger than a runtime `if` check per request.
+
+**Rationale:** Production safety. The feature is experimental and evaluator-only. A compile-time-like gate (route registration) is safer than runtime middleware. Follows the principle of least privilege.
+
+### 2. Public `/v1/config` Endpoint
+
+A new `GET /v1/config` endpoint (always registered, no auth) returns `{ ab_test_enabled: bool, version: str }`. The frontend uses this to conditionally mount evaluation routes.
+
+**Rationale:** The frontend needs to know the gate state before rendering. This must be unauthenticated because the routing decision happens before login. Exposing only a boolean flag and version string has negligible security impact.
+
+### 3. SQLite for Feedback Storage
+
+Evaluation feedback is stored in `ab_evaluation.db` (new SQLite file), following the existing pattern of `auth.db` and `collections.db`.
+
+**Rationale:** Consistency with existing data storage patterns. SQLite is appropriate for this use case (low write volume, single-server deployment, no cloud dependencies). The evaluation data volume is small (dozens to hundreds of evaluations, not millions).
+
+### 4. Blinded Evaluation with Per-Session Randomization
+
+The A↔B mapping (which collection is "Model A" vs "Model B") is randomized per evaluator session and stored in sessionStorage. This prevents positional bias.
+
+**Rationale:** Standard practice in evaluation studies. Without blinding, evaluators may develop unconscious preferences for the left/right panel. Per-session randomization is simpler than per-query randomization and sufficient for our small evaluator pool.
+
+### 5. nDCG@10 + MRR as Primary Metrics
+
+We compute nDCG@10 (from star ratings) and MRR (from preference data) server-side. These are standard IR evaluation metrics.
+
+**Rationale:** nDCG captures graded relevance (star ratings map naturally to gain values). MRR captures the "first good result" signal. Together they give complementary views: nDCG measures overall result quality, MRR measures top-result quality. Statistical significance testing is out of scope — can be done offline with exported data.
+
+### 6. Pre-loaded Query Queue from Benchmark Suite
+
+Evaluators work through the existing 30 benchmark queries (from `scripts/benchmark/queries.json`) plus optional custom queries.
+
+**Rationale:** The benchmark suite already has a well-designed query distribution (5 categories, 4 languages). Using it ensures consistent coverage across evaluators. The "add custom query" option allows exploring cases the benchmark doesn't cover.
+
+## Impact
+
+- **Parker:** 3 backend issues (#900, #901, #902) — gate mechanism, feedback storage, metrics
+- **Dallas:** 5 frontend issues (#903, #905, #907, #909, #911) — config, comparison page, preference UI, dashboard, queue
+- **Lambert:** 3 test issues (#914, #916, #918) — backend tests, frontend tests, integration test
+- **Brett:** No infra changes needed (existing compose overlay sufficient)
+- **Production:** Zero impact when `ENABLE_AB_TEST` is not set
+
+## Risks
+
+1. **Evaluator fatigue:** 30 queries × 3 modes = 90 evaluations is a lot. Mitigated by making mode cycling optional and allowing skip.
+2. **Small evaluator pool:** With 2-3 evaluators, statistical significance is hard to achieve. Mitigated by collecting detailed per-result ratings (not just A/B preference) to increase signal density.
+3. **Blinding leakage:** If evaluators know which model has more Spanish results (e5-base with longer chunks), they could infer the mapping. Mitigated by randomization per session.
+
+---
+
 # Decision: Screenshot Spec Expansion to 11 Pages
 
 **Author:** Lambert (Tester)  

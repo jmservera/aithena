@@ -313,3 +313,41 @@ Active decisions in `.squad/decisions.md`:
 - Release process now mandatory: security + performance review before shipping
 - Release checklist updated with sign-off requirements
 
+## Session 2026-03-22T14:41Z — Completed Spawn Work Summary & Offline Audit
+
+### Offline Audit Confirmation
+
+Conducted comprehensive audit of all inter-service communication paths. **Confirmed:** Aithena is fully on-premises with zero runtime internet dependencies.
+
+**Findings:**
+- ✅ All inter-service calls through internal Docker network (Solr, Redis, RabbitMQ, embedding endpoints)
+- ✅ Zero cloud API calls (AWS, Azure, GCP SDKs) — no boto3, azure-identity, google-cloud imports
+- ✅ HuggingFace embeddings models (e5-base, e5-multilingual-e15-small) pre-downloaded at build time
+- ✅ No external telemetry (Sentry, New Relic, DataDog)
+- ✅ No external auth (OAuth, JWT issuers beyond internal Aithena)
+- ✅ Pure Docker Compose, zero cloud service dependencies
+
+**Impact:** Aithena meets on-premises compliance requirements; verified compatible with offline installer (#921); confirmed air-gapped deployment scenario in production.
+
+### Decisions Created/Merged
+
+1. **A/B Testing Human Evaluation UI** — PROPOSED (awaiting PO review)
+   - 11 issues (#900–#918) decomposed
+   - Environment-gated (`ENABLE_AB_TEST=true`)
+   - Public `/v1/config` endpoint for frontend detection
+   - SQLite storage for feedback (`ab_evaluation.db`)
+   - Per-session blinding (A↔B randomization in sessionStorage)
+   - nDCG@10 + MRR metrics computed server-side
+   - Pre-loaded 30-query benchmark suite + custom queries
+
+2. **Offline Installer Architecture** — IMPLEMENTED (PR #925)
+   - 3-script pattern: export-images.sh → install-offline.sh → verify.sh
+   - Single .tar.gz package (11 Docker image tarballs + compose files + scripts + docs)
+   - Convention alignment (VERSION file, .env management, backup script patterns)
+
+3. **Mandatory Security Review in Release Checklist** — IMPLEMENTED (PR #899)
+   - 8-checkpoint security review (Bandit, Checkov, Zizmor, CodeQL, Dependabot, threat assessment, supply chain, input validation)
+   - 4-checkpoint performance review (benchmarks, latency p50/p95/p99, regression check, resource utilization)
+   - Release CANNOT ship with critical/high security issues
+   - Threat assessment required for significant features
+

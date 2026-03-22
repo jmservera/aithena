@@ -249,6 +249,15 @@ Created comprehensive rollback plan for the embedding model A/B test.
 
 **PR:** #893
 
+### Air-Gapped Offline Installer (2026-07-25, #921/PR#925)
+- Created 3-script offline deployment system: `scripts/export-images.sh` (build+export), `installer/install-offline.sh` (load+deploy), `installer/verify.sh` (health check)
+- **11 unique Docker images** identified from compose files: 5 custom (GHCR) + 6 official (redis, rabbitmq, redis-commander, nginx, zookeeper, solr). Multiple compose services share the same base image (3× zookeeper, 4× solr including solr-init)
+- **Package structure**: images/, compose/, config/ (solr, nginx, rabbitmq), install.sh, verify.sh, VERSION, README.md — all bundled into `staging/aithena-offline-v{VERSION}.tar.gz`
+- **Install script**: validates Docker ≥24.0 + Compose v2, loads images via `gunzip | docker load`, generates `.env` with `openssl rand` secrets, creates bind-mount dirs with correct UIDs (Solr=8983, Redis=999, RabbitMQ=100, ZK=1000), preserves existing `.env` on updates
+- **Verify script**: checks all 15 services + solr-init, probes HTTP health endpoints through nginx, uses internal connectivity checks via `docker exec`
+- **Script conventions**: `set -euo pipefail`, `umask 077`, colors, `--dry-run`, `--help`, consistent with backup scripts pattern
+- **Documentation**: `docs/deployment/offline-deployment.md` covers full lifecycle (build → transfer → install → verify → update → troubleshoot)
+
 ### 2026-03-22T13:49Z: Spawned for release checklist hardening
 
 **Scope:** Update release process to make security & performance review mandatory
@@ -265,4 +274,33 @@ Created comprehensive rollback plan for the embedding model A/B test.
 - Performance metrics baseline required before release
 
 **Timeline:** Complete before next release cycle.
+
+## Session 2026-03-22T14:41Z — Completed Spawn Work Summary
+
+### Issues Closed This Batch
+
+1. **#894 — Thumbnail libstdc++ fix** (PR #920)
+   - Root cause: Alpine document-indexer Dockerfile missing libstdc++, libgomp, libgcc
+   - Symptom: Silent crashes during PDF page number extraction
+   - Fix: Added missing libraries to apk dependencies
+   - Impact: 178 tests pass; thumbnail page extraction reliable
+
+2. **#921 — Offline installer** (PR #925)
+   - 3-script architecture: export-images.sh → install-offline.sh → verify.sh
+   - Single .tar.gz package (11 Docker image tarballs + scripts + docs)
+   - Install target: /opt/aithena/ with bind-mount volumes at /source/volumes/
+   - Enables deployment on air-gapped/disconnected networks
+   - Docs: offline-deployment.md (422 lines, comprehensive guide)
+
+### Decisions Merged to .squad/decisions.md
+
+1. **Offline Installer Architecture** — 3-stage pattern, convention alignment (VERSION, .env management), single package design
+2. **Mandatory Security Review in Release Checklist** — Implements PO directives: security fixes mandatory; threat assessment for significant features; supply chain checks (GitHub Actions); release cannot ship with critical/high security issues
+3. **A/B Testing Human Evaluation UI** — Awaiting PO review; environment-gated; SQLite storage; nDCG@10+MRR metrics; per-session blinding
+
+### Orchestration Logs Created
+
+- 2026-03-22T14:41:02Z-brett-thumbnail-libstdc.md (#894, PR #920)
+- 2026-03-22T14:41:02Z-brett-offline-installer.md (#921, PR #925)
+- 2026-03-22T14:41:02Z-ripley-offline-audit.md (offline audit confirmation)
 
