@@ -9,6 +9,7 @@ import requests
 from document_indexer.__main__ import (
     build_chunk_doc,
     build_literal_params,
+    get_queue,
     index_chunks,
     index_document,
     mark_failure,
@@ -557,3 +558,258 @@ class TestBuildLiteralParams:
         meta = self._base_metadata()
         params = build_literal_params(meta, page_count=None, thumbnail_url="")
         assert "literal.thumbnail_url_s" not in params
+
+
+# ---------------------------------------------------------------------------
+# Exchange declaration and queue binding
+# ---------------------------------------------------------------------------
+
+
+class TestExchangeBinding:
+    def test_get_queue_declares_fanout_exchange(self):
+        """get_queue declares the fanout exchange on the channel."""
+        indexer_module.queue = None
+        channel = MagicMock()
+        channel.queue_declare.return_value = MagicMock()
+
+        get_queue(channel)
+
+        channel.exchange_declare.assert_called_once_with(
+            exchange="documents",
+            exchange_type="fanout",
+            durable=True,
+        )
+
+    def test_get_queue_binds_queue_to_exchange_on_first_call(self):
+        """On the first call, the queue is bound to the fanout exchange."""
+        indexer_module.queue = None
+        channel = MagicMock()
+        channel.queue_declare.return_value = MagicMock()
+
+        get_queue(channel)
+
+        channel.queue_bind.assert_called_once_with(
+            queue="new_documents",
+            exchange="documents",
+        )
+
+    def test_get_queue_does_not_rebind_on_subsequent_calls(self):
+        """On subsequent calls, the queue is not re-bound (passive check only)."""
+        indexer_module.queue = MagicMock()  # simulate prior call
+        channel = MagicMock()
+        channel.queue_declare.return_value = MagicMock()
+
+        get_queue(channel)
+
+        channel.queue_bind.assert_not_called()
+        # Reset for other tests
+        indexer_module.queue = None
+
+    def test_get_queue_sets_prefetch_count(self):
+        """get_queue sets QoS prefetch_count=1 for backpressure."""
+        indexer_module.queue = None
+        channel = MagicMock()
+        channel.queue_declare.return_value = MagicMock()
+
+        get_queue(channel)
+
+        channel.basic_qos.assert_called_once_with(prefetch_count=1)
+
+    def test_get_queue_declares_durable_queue(self):
+        """get_queue declares a durable, non-auto-delete queue."""
+        indexer_module.queue = None
+        channel = MagicMock()
+        channel.queue_declare.return_value = MagicMock()
+
+        get_queue(channel)
+
+        channel.queue_declare.assert_called_once_with(
+            queue="new_documents",
+            durable=True,
+            auto_delete=False,
+            passive=False,
+        )
+
+    def test_get_queue_uses_passive_on_subsequent_calls(self):
+        """On subsequent calls, queue_declare uses passive=True."""
+        indexer_module.queue = MagicMock()  # simulate prior call
+        channel = MagicMock()
+        channel.queue_declare.return_value = MagicMock()
+
+        get_queue(channel)
+
+        channel.queue_declare.assert_called_once_with(
+            queue="new_documents",
+            durable=True,
+            auto_delete=False,
+            passive=True,
+        )
+        # Reset for other tests
+        indexer_module.queue = None
+
+
+# ---------------------------------------------------------------------------
+# Queue name and collection configurability
+# ---------------------------------------------------------------------------
+
+
+class TestQueueNameConfig:
+    def test_default_queue_name(self):
+        """QUEUE_NAME defaults to 'new_documents'."""
+        import importlib
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "QUEUE_NAME"}
+        with patch.dict(os.environ, env, clear=True):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.QUEUE_NAME == "new_documents"
+
+    def test_custom_queue_name(self):
+        """QUEUE_NAME can be overridden via env var."""
+        import importlib
+        import os
+
+        with patch.dict(os.environ, {"QUEUE_NAME": "e5base_chunks"}):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.QUEUE_NAME == "e5base_chunks"
+
+    def test_default_exchange_name(self):
+        """EXCHANGE_NAME defaults to 'documents'."""
+        import importlib
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "EXCHANGE_NAME"}
+        with patch.dict(os.environ, env, clear=True):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.EXCHANGE_NAME == "documents"
+
+    def test_custom_exchange_name(self):
+        """EXCHANGE_NAME can be overridden via env var."""
+        import importlib
+        import os
+
+        with patch.dict(os.environ, {"EXCHANGE_NAME": "custom_exchange"}):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.EXCHANGE_NAME == "custom_exchange"
+
+
+class TestCollectionRouting:
+    def test_default_solr_collection(self):
+        """SOLR_COLLECTION defaults to 'books'."""
+        import importlib
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "SOLR_COLLECTION"}
+        with patch.dict(os.environ, env, clear=True):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.SOLR_COLLECTION == "books"
+
+    def test_custom_solr_collection(self):
+        """SOLR_COLLECTION can be overridden for dual-model routing."""
+        import importlib
+        import os
+
+        with patch.dict(os.environ, {"SOLR_COLLECTION": "books_e5base"}):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.SOLR_COLLECTION == "books_e5base"
+
+    @patch("document_indexer.__main__.requests.post")
+    @patch("document_indexer.__main__.get_embeddings")
+    @patch("document_indexer.__main__.extract_pdf_text")
+    def test_index_chunks_uses_configured_collection(
+        self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub
+    ):
+        """index_chunks posts to the correct Solr collection URL."""
+        mock_extract_text.return_value = FAKE_PAGES
+        mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        mock_post.return_value = resp
+
+        with (
+            patch("document_indexer.__main__.chunk_text_with_pages", return_value=FAKE_PAGE_CHUNKS),
+            patch("document_indexer.__main__.SOLR_COLLECTION", "books_e5base"),
+            patch("document_indexer.__main__.SOLR_HOST", "solr"),
+            patch("document_indexer.__main__.SOLR_PORT", 8983),
+        ):
+            index_chunks(pdf_file, "parent_id", metadata_stub)
+
+        solr_url = mock_post.call_args[0][0]
+        assert "books_e5base" in solr_url
+        assert "/solr/books_e5base/update" in solr_url
+
+
+# ---------------------------------------------------------------------------
+# Chunk size configuration
+# ---------------------------------------------------------------------------
+
+
+class TestChunkSizeConfig:
+    def test_default_chunk_size(self):
+        """CHUNK_SIZE defaults to 90."""
+        import importlib
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "CHUNK_SIZE"}
+        with patch.dict(os.environ, env, clear=True):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.CHUNK_SIZE == 90
+
+    def test_custom_chunk_size(self):
+        """CHUNK_SIZE can be overridden for different models (e.g. e5: 300)."""
+        import importlib
+        import os
+
+        with patch.dict(os.environ, {"CHUNK_SIZE": "300"}):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.CHUNK_SIZE == 300
+
+    def test_default_chunk_overlap(self):
+        """CHUNK_OVERLAP defaults to 10."""
+        import importlib
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "CHUNK_OVERLAP"}
+        with patch.dict(os.environ, env, clear=True):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.CHUNK_OVERLAP == 10
+
+    def test_custom_chunk_overlap(self):
+        """CHUNK_OVERLAP can be overridden for different models (e.g. e5: 50)."""
+        import importlib
+        import os
+
+        with patch.dict(os.environ, {"CHUNK_OVERLAP": "50"}):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert document_indexer.CHUNK_OVERLAP == 50
+
+    def test_chunk_size_is_integer(self):
+        """CHUNK_SIZE is parsed as an integer."""
+        import importlib
+        import os
+
+        with patch.dict(os.environ, {"CHUNK_SIZE": "200"}):
+            import document_indexer
+
+            importlib.reload(document_indexer)
+            assert isinstance(document_indexer.CHUNK_SIZE, int)
