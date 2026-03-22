@@ -7,7 +7,13 @@ server {
     listen 80;
     server_name _;
 
+    server_tokens off;
+
     client_max_body_size 64m;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -180,15 +186,19 @@ server {
         default_type image/jpeg;
 
         add_header Cache-Control "public, max-age=86400" always;
-        add_header X-Content-Type-Options nosniff always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 
     location /documents/ {
         auth_request /_auth;
         error_page 401 = @auth_error;
-        # Allow same-origin iframe embedding for the PDF viewer
-        add_header X-Frame-Options SAMEORIGIN always;
-        add_header X-Content-Type-Options nosniff always;
+        # Allow same-origin iframe embedding for the PDF viewer.
+        # Overrides the server-level DENY; re-declare other headers since
+        # location-level add_header suppresses server-level directives.
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $remote_addr;

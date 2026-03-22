@@ -1,33 +1,47 @@
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    '' close;
-}
+# SSL/TLS server block — loaded only when docker-compose.ssl.yml overlay is active.
+#
+# The NGINX_HOST environment variable must be set to the domain name matching
+# your Let's Encrypt certificate (e.g., NGINX_HOST=aithena.example.com).
+#
+# This file is an envsubst template: the nginx Docker image processes it at
+# container start, substituting ${NGINX_HOST} and writing the result to
+# /etc/nginx/conf.d/ssl.conf.  All other $variables (nginx internals like
+# $host, $scheme, etc.) are left untouched because NGINX_ENVSUBST_FILTER
+# restricts substitution to ${NGINX_HOST} only.
 
 server {
-    listen 80;
-    server_name _;
+    listen 443 ssl;
+    http2 on;
+    server_name ${NGINX_HOST};
 
     server_tokens off;
 
-    client_max_body_size 64m;
+    # --- TLS certificates (Let's Encrypt / certbot) -------------------------
+    ssl_certificate /etc/letsencrypt/live/${NGINX_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${NGINX_HOST}/privkey.pem;
 
+    # --- TLS protocol and cipher hardening -----------------------------------
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # --- Security headers (HTTPS only) ---------------------------------------
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
+    client_max_body_size 64m;
+
+    # --- Locations (mirrors default.conf for HTTPS traffic) ------------------
 
     location /health {
         access_log off;
         default_type text/plain;
         return 200 "healthy\n";
     }
-
-    # /admin and sub-paths are handled by the React SPA (catch-all location /)
-    # except for /admin/solr, /admin/rabbitmq, /admin/redis which proxy to
-    # their respective infrastructure services below.
 
     location = /admin/solr {
         return 301 /admin/solr/;
@@ -184,7 +198,10 @@ server {
         types { }
         default_type image/jpeg;
 
+        # Location-level add_header suppresses server-level directives;
+        # re-declare security headers alongside Cache-Control.
         add_header Cache-Control "public, max-age=86400" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
@@ -195,6 +212,7 @@ server {
         # Allow same-origin iframe embedding for the PDF viewer.
         # Overrides the server-level DENY; re-declare other headers since
         # location-level add_header suppresses server-level directives.
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -208,6 +226,7 @@ server {
 
     location / {
         add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
