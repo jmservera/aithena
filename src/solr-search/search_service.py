@@ -29,6 +29,7 @@ SOLR_FIELD_LIST = [
     "folder_path_s",
     "page_count_i",
     "file_size_l",
+    "thumbnail_url_s",
     "page_start_i",
     "page_end_i",
     "chunk_text_t",
@@ -250,6 +251,7 @@ def normalize_book(
         "score": document.get("score"),
         "highlights": collect_highlights(document_id, highlighting),
         "document_url": document_url,
+        "thumbnail_url": document.get("thumbnail_url_s"),
     }
 
 
