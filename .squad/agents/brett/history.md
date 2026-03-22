@@ -155,6 +155,16 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Both `docker-compose.yml` and `docker-compose.prod.yml` need volume mounts updated in parallel — prod compose is a separate file, not an overlay of the dev one.
 - The `document-data` volume was previously only mounted in application services (solr-search, document-lister, document-indexer, admin); adding it to nginx enables direct static serving without proxy overhead.
 
+### Production Migration Planning (2026-03-26, #876)
+- Created comprehensive **production migration plan** for e5-base embedding model deployment (`docs/prd/production-migration-plan.md`)
+- Plan defines 7-step sequential process: Prepare Compose → Deploy Dual Indexing → Re-Index → Verify Parity → Benchmark → Switch Collection → Monitor 48h
+- **Blue/green strategy:** Baseline (books) collection remains queryable during re-indexing; e5-base indexed in parallel via RabbitMQ fanout. Cutover is single config change to SOLR_COLLECTION env var.
+- **Timeline:** 9–26 hours (Steps 1-6, mostly re-indexing time) + 48h monitoring = 2–4 days total
+- **Rollback:** Instant (<5 min); change SOLR_COLLECTION back to "books" and restart solr-search
+- **Key risk mitigation:** Collection parity verification script, benchmark baseline from Step 5, 48h monitoring window with clear alert thresholds
+- **Approval gates:** PO (A/B results), Infra Lead (readiness), Search Lead (config review), QA Lead (rollback testing)
+- PR #892 targeting dev; awaiting PO approval of A/B test results (issue #877) before implementation
+
 ### Release Strategy Asymmetry Analysis (2026-03-26, #860)
 - **Change frequency is highly asymmetric** across services: in v1.8.0→v1.11.0 (4 releases), 78% of commits touched only 2 services (aithena-ui: 30, solr-search: 38), while 3 services had 0-2 commits total.
 - **embeddings-server is a rebuild bottleneck:** 9GB image with ML model, 8-12 min build time, but only 1 commit in 4 releases — rebuilt 3 times unnecessarily.
