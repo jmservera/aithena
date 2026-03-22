@@ -97,6 +97,7 @@ class Settings:
     collection_embeddings_urls: tuple[tuple[str, str], ...]
     comparison_baseline_collection: str
     comparison_candidate_collection: str
+    ascii_folding: bool = True
 
     @property
     def select_url(self) -> str:
@@ -191,4 +192,5 @@ settings = Settings(
     collection_embeddings_urls=_parse_embeddings_url_overrides(_allowed_collections),
     comparison_baseline_collection=os.environ.get("COMPARISON_BASELINE_COLLECTION", "books"),
     comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books_e5base"),
+    ascii_folding=os.environ.get("SOLR_ASCII_FOLDING", "true").lower() == "true",
 )

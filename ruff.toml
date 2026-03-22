@@ -35,7 +35,7 @@ known-first-party = [
 ]
 
 [lint.per-file-ignores]
-"**/tests/*.py" = ["S101", "S105", "S106", "S107"]
+"**/tests/*.py" = ["S101", "S105", "S106", "S107", "S314"]
 "tests/stress/*.py" = ["S101", "S105", "S106", "S107"]
 "e2e/*.py" = ["S101"]
 "e2e/conftest.py" = ["S108"]
