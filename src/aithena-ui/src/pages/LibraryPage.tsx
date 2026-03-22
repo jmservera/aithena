@@ -37,6 +37,7 @@ function LibraryPage() {
   } = useLibrary();
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const [focusedBookId, setFocusedBookId] = useState<string | null>(null);
   const resultsRegionRef = useRef<HTMLElement | null>(null);
   const lastLoadingStateRef = useRef(false);
   const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
@@ -64,6 +65,7 @@ function LibraryPage() {
       lastPdfTriggerRef.current = activeElement;
     }
     setSelectedBook(book);
+    setFocusedBookId(book.id);
   }, []);
 
   const handleClosePdf = useCallback(() => {
@@ -84,9 +86,14 @@ function LibraryPage() {
       const searchResult = results.find((book) => book.id === bookId);
 
       setSelectedBook((currentBook) => similarBook ?? searchResult ?? currentBook);
+      setFocusedBookId(bookId);
     },
     [results]
   );
+
+  const handleSelectBook = useCallback((book: BookResult) => {
+    setFocusedBookId(book.id);
+  }, []);
 
   const totalPages = Math.ceil(total / libraryState.limit);
   const resultsHeadingId = `${resultsRegionId}-heading`;
@@ -195,7 +202,8 @@ function LibraryPage() {
                   <BookCard
                     book={book}
                     onOpenPdf={handleOpenPdf}
-                    isSelected={selectedBook?.id === book.id}
+                    onSelect={handleSelectBook}
+                    isSelected={focusedBookId === book.id}
                   />
                 </li>
               ))}
@@ -203,8 +211,8 @@ function LibraryPage() {
           )}
         </section>
 
-        {selectedBook && (
-          <SimilarBooks documentId={selectedBook.id} onSelectBook={handleSelectSimilarBook} />
+        {focusedBookId && (
+          <SimilarBooks documentId={focusedBookId} onSelectBook={handleSelectSimilarBook} />
         )}
 
         {total > 0 && (

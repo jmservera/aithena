@@ -8,6 +8,7 @@ import CollectionBadge from './CollectionBadge';
 interface BookCardProps {
   book: BookResult;
   onOpenPdf?: (book: BookResult) => void;
+  onSelect?: (book: BookResult) => void;
   isSelected?: boolean;
   isAdmin?: boolean;
   onEditMetadata?: (book: BookResult) => void;
@@ -29,6 +30,7 @@ function sanitizeHighlight(raw: string): string {
 const BookCard = memo(function BookCard({
   book,
   onOpenPdf,
+  onSelect,
   isSelected = false,
   isAdmin = false,
   onEditMetadata,
@@ -104,13 +106,36 @@ const BookCard = memo(function BookCard({
     onOpenPdf?.(book);
   }, [book, onOpenPdf]);
 
+  const handleSelect = useCallback(() => {
+    onSelect?.(book);
+  }, [book, onSelect]);
+
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- role="button" is conditionally applied when onSelect is provided
     <article
-      className={`book-card${isSelected ? ' book-card--active' : ''}${isChecked ? ' book-card--checked' : ''}`}
+      className={`book-card${isSelected ? ' book-card--active' : ''}${isChecked ? ' book-card--checked' : ''}${onSelect ? ' book-card--selectable' : ''}`}
+      onClick={handleSelect}
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleSelect();
+              }
+            }
+          : undefined
+      }
     >
       <div className="book-card-header">
         {selectionMode && (
-          <div className="book-card-select-checkbox">
+          <div
+            className="book-card-select-checkbox"
+            role="presentation"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
             <input
               type="checkbox"
               checked={isChecked}
@@ -124,7 +149,13 @@ const BookCard = memo(function BookCard({
           <CollectionBadge count={book.in_collections} />
         )}
         {showMenu && (
-          <div className="book-card-menu-wrapper" ref={menuRef}>
+          <div
+            className="book-card-menu-wrapper"
+            ref={menuRef}
+            role="presentation"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               className="book-card-menu-btn"
@@ -241,7 +272,10 @@ const BookCard = memo(function BookCard({
           <button
             type="button"
             className="open-pdf-btn"
-            onClick={handleOpenPdf}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenPdf();
+            }}
             aria-label={intl.formatMessage({ id: 'book.openPdfFor' }, { title: book.title })}
             aria-haspopup="dialog"
             aria-expanded={isSelected}

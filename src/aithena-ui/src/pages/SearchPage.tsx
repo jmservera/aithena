@@ -61,6 +61,7 @@ interface SearchResultsSectionProps {
   resultsRegionRef: RefObject<HTMLElement | null>;
   resultsSummaryId: string;
   selectedBook: BookResult | null;
+  focusedBookId: string | null;
   total: number;
   selectionMode?: boolean;
   checkedIds?: Set<string>;
@@ -68,6 +69,7 @@ interface SearchResultsSectionProps {
   onToggleSelect?: (bookId: string) => void;
   onEditMetadata?: (book: BookResult) => void;
   onOpenPdf: (book: BookResult) => void;
+  onSelectBook: (book: BookResult) => void;
   onPageChange: (page: number) => void;
   onPdfClose: () => void;
   onSelectSimilarBook: (bookId: string) => void;
@@ -111,6 +113,7 @@ function SearchResultsSection({
   resultsRegionRef,
   resultsSummaryId,
   selectedBook,
+  focusedBookId,
   total,
   selectionMode = false,
   checkedIds,
@@ -118,6 +121,7 @@ function SearchResultsSection({
   onToggleSelect,
   onEditMetadata,
   onOpenPdf,
+  onSelectBook,
   onPageChange,
   onPdfClose,
   onSelectSimilarBook,
@@ -173,7 +177,8 @@ function SearchResultsSection({
                 <BookCard
                   book={book}
                   onOpenPdf={onOpenPdf}
-                  isSelected={selectedBook?.id === book.id}
+                  onSelect={onSelectBook}
+                  isSelected={focusedBookId === book.id}
                   selectionMode={selectionMode}
                   isChecked={checkedIds?.has(book.id) ?? false}
                   onToggleSelect={onToggleSelect}
@@ -187,8 +192,8 @@ function SearchResultsSection({
         )}
       </section>
 
-      {selectedBook && (
-        <SimilarBooks documentId={selectedBook.id} onSelectBook={onSelectSimilarBook} />
+      {focusedBookId && (
+        <SimilarBooks documentId={focusedBookId} onSelectBook={onSelectSimilarBook} />
       )}
 
       {total > 0 && (
@@ -250,6 +255,7 @@ function SearchPage() {
   }, [searchState.query]);
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const [focusedBookId, setFocusedBookId] = useState<string | null>(null);
   const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
   const [addToCollectionDocIds, setAddToCollectionDocIds] = useState<string[]>([]);
   const resultsRegionRef = useRef<HTMLElement>(null);
@@ -287,6 +293,7 @@ function SearchPage() {
     }
 
     setSelectedBook(book);
+    setFocusedBookId(book.id);
   }, []);
 
   const handleClosePdf = useCallback(() => {
@@ -308,9 +315,14 @@ function SearchPage() {
       const searchResult = results.find((book) => book.id === bookId);
 
       setSelectedBook((currentBook) => similarBook ?? searchResult ?? currentBook);
+      setFocusedBookId(bookId);
     },
     [results]
   );
+
+  const handleSelectBook = useCallback((book: BookResult) => {
+    setFocusedBookId(book.id);
+  }, []);
 
   const handleToggleSelectionMode = useCallback(() => {
     setSelectionMode((prev) => {
@@ -597,6 +609,7 @@ function SearchPage() {
               resultsRegionRef={resultsRegionRef}
               resultsSummaryId={resultsSummaryId}
               selectedBook={selectedBook}
+              focusedBookId={focusedBookId}
               total={total}
               selectionMode={selectionMode}
               checkedIds={checkedIds}
@@ -604,6 +617,7 @@ function SearchPage() {
               onToggleSelect={handleToggleSelect}
               onEditMetadata={handleOpenBatchEdit}
               onOpenPdf={handleOpenPdf}
+              onSelectBook={handleSelectBook}
               onPageChange={setPage}
               onPdfClose={handleClosePdf}
               onSelectSimilarBook={handleSelectSimilarBook}
