@@ -3,6 +3,7 @@ import { useIntl } from 'react-intl';
 import { FileText } from 'lucide-react';
 
 import { BookResult } from '../hooks/search';
+import { truncateChunkText } from '../utils/truncateChunkText';
 import CollectionBadge from './CollectionBadge';
 
 function BookThumbnail({ src, alt }: { src: string; alt: string }) {
@@ -289,7 +290,7 @@ const BookCard = memo(function BookCard({
                   <span className="book-chunk-text__pages"> · {chunkPagesLabel}</span>
                 )}
               </span>
-              <p className="book-chunk-text__content">{book.chunk_text}</p>
+              <p className="book-chunk-text__content">{truncateChunkText(book.chunk_text)}</p>
             </div>
           )}
           {highlightMarkup.length > 0 && (
