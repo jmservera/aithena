@@ -122,6 +122,21 @@ Implemented multilingual-e5-base support in the embeddings server (issue #874, m
 ### E5 Prefix Design (P1-1)
 Keeping prefix logic inside the embeddings-server was the right call — it prevents every caller from needing to know model-specific prefixes. The `input_type` field is the stable API contract; prefix strings are an implementation detail. This pattern should be preserved if additional model families are added.
 
+## Session 2026-07-21 — PR (P2-1: Index Test Corpus, #877)
+
+Created scripts for indexing test corpus through both pipelines and verifying collection parity.
+
+**Changes delivered:**
+- `scripts/index_test_corpus.py` — Publishes document paths to the `documents` fanout exchange so both indexers process them. Supports `--dry-run`, `--limit`, `--status-only`, custom `--base-path`.
+- `scripts/verify_collections.py` — Verifies both Solr collections: parent doc count match, ID parity, embedding dimensionality (512D vs 768D). Exits 0/1 for CI integration. JSON output mode.
+- 33 new tests in `scripts/benchmark/tests/` covering discovery, publishing, Solr queries, verification logic, report formatting, serialization.
+- Updated `scripts/benchmark/README.md` with end-to-end A/B test workflow documentation.
+
+**Learnings:**
+- The fanout exchange pattern makes test corpus indexing trivial — a single publish to the `documents` exchange reaches both indexers without any routing logic. The idempotency comes from Solr's unique key dedup, not from the scripts.
+- The parent/chunk distinction matters for verification: parent docs have no `parent_id_s` field, chunks do. Filtering with `-parent_id_s:[* TO *]` is the reliable way to count only parent documents across collections.
+- When scripts import dependencies lazily (inside functions), `unittest.mock.patch` can't find the attribute on the module. Top-level imports are required for mockability.
+
 ## Session 2026-07-21 — PR #TBD (P2-2: Benchmark Query Suite)
 
 Created benchmark query suite and runner for A/B testing distiluse vs e5-base (#879).
