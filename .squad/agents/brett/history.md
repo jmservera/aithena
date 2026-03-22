@@ -219,6 +219,7 @@ Implemented Docker Compose configuration for dual-indexer A/B testing (distiluse
 - **Dockerfile MODEL_NAME as build arg:** The embeddings-server uses `HF_HUB_OFFLINE=1` so models MUST be pre-baked at build time. Making `MODEL_NAME` an ARG (not just ENV) is required for multi-model builds from the same Dockerfile. The runtime ENV inherits the ARG value for the health endpoint's model name reporting.
 - **solr-init dependency:** `service_completed_successfully` is the correct condition for one-shot init containers. Using `service_healthy` would fail since solr-init has no healthcheck and exits after completion.
 - **Fanout exchange pattern:** No RabbitMQ static definitions needed — each indexer declares its own queue and binding on startup. This is more resilient than static definitions because queues are created by the consumers that need them.
+- **ZK SASL DIGEST-MD5 pattern:** JAAS config in dedicated files (zk-server-jaas.conf, solr-jaas.conf) + entrypoint wrappers (entrypoint-sasl.sh) that source env credentials at runtime. Separate configs for dev (docker-compose.yml) and prod (docker-compose.prod.yml) to match deployment tiers. Credentials externalized to environment; entrypoint handles injection to avoid hardcoding secrets in image layers.
 
 ## Session 2026-03-22T13:20Z — #878/PR#893: Rollback Plan for A/B Test (P3-3)
 
