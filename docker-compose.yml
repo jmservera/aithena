@@ -40,17 +40,26 @@ services:
       - ./src/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
   rabbitmq:
     image: rabbitmq:4.0-management
+    entrypoint: /etc/rabbitmq/init-definitions.sh
     command: rabbitmq-server
     hostname: rabbitmq
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      # Admin user created on first Mnesia init (replaces default guest user)
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_ADMIN_USER:-admin}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_ADMIN_PASS:-admin_dev_pass}
+      # Per-service passwords --- init-definitions.sh reads these to generate
+      # /etc/rabbitmq/definitions.json at startup (see load_definitions in rabbitmq.conf)
+      - RABBITMQ_LISTER_PASS=${RABBITMQ_LISTER_PASS:-lister_dev_pass}
+      - RABBITMQ_INDEXER_PASS=${RABBITMQ_INDEXER_PASS:-indexer_dev_pass}
+      - RABBITMQ_SEARCH_PASS=${RABBITMQ_SEARCH_PASS:-search_dev_pass}
+      - RABBITMQ_ADMIN_PASS=${RABBITMQ_ADMIN_PASS:-admin_dev_pass}
     expose:
       - 5672
       - 15672
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./src/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./src/rabbitmq/init-definitions.sh:/etc/rabbitmq/init-definitions.sh:ro
 
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
@@ -154,8 +163,8 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - RABBITMQ_USER=${RABBITMQ_LISTER_USER:-lister}
+      - RABBITMQ_PASS=${RABBITMQ_LISTER_PASS:-lister_dev_pass}
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
@@ -201,8 +210,8 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - RABBITMQ_USER=${RABBITMQ_INDEXER_USER:-indexer}
+      - RABBITMQ_PASS=${RABBITMQ_INDEXER_PASS:-indexer_dev_pass}
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
@@ -259,8 +268,8 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - RABBITMQ_USER=${RABBITMQ_INDEXER_USER:-indexer}
+      - RABBITMQ_PASS=${RABBITMQ_INDEXER_PASS:-indexer_dev_pass}
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings_e5base
@@ -361,8 +370,8 @@ services:
       - MAX_UPLOAD_SIZE_MB=50
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - RABBITMQ_USER=${RABBITMQ_SEARCH_USER:-search}
+      - RABBITMQ_PASS=${RABBITMQ_SEARCH_PASS:-search_dev_pass}
       - RABBITMQ_QUEUE_NAME=shortembeddings
       - REDIS_HOST=redis
       - REDIS_PORT=6379
