@@ -110,6 +110,8 @@ from logging_config import setup_logging
 from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from pydantic import BaseModel
 from search_service import (
+    EXCLUDE_CHUNKS_FQ,
+    SOLR_FIELD_LIST,
     build_filter_queries,
     build_inline_content_disposition,
     build_knn_params,
@@ -136,6 +138,8 @@ SortOrder = Literal["asc", "desc"]
 
 VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
 EMBEDDINGS_DEGRADED_MESSAGE = "Embeddings unavailable — showing keyword results"
+
+SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 _INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme", "secret"})
@@ -590,7 +594,7 @@ def _get_current_user(request: Request) -> AuthenticatedUser:
     try:
         return _authenticate_request(request)
     except AuthenticationError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        raise _unauthorized_exception(str(exc)) from exc
 
 
 @app.middleware("http")
@@ -598,15 +602,24 @@ async def require_authentication(request: Request, call_next):
     if request.method == "OPTIONS" or _is_public_path(request.url.path):
         return await call_next(request)
 
+    token = get_token_from_sources(
+        request.headers.get("Authorization"),
+        request.cookies.get(settings.auth_cookie_name),
+    )
+
     # Admin endpoints with X-API-Key: attempt user auth but don't block on failure.
     # Routes that need a logged-in user use require_role() which will reject if missing.
     if request.headers.get("X-API-Key") and request.url.path.startswith("/v1/admin/"):
-        with contextlib.suppress(AuthenticationError):
-            request.state.auth_user = _authenticate_request(request)
+        if token is not None:
+            with contextlib.suppress(AuthenticationError):
+                request.state.auth_user = decode_access_token(token, settings.auth_jwt_secret)
         return await call_next(request)
 
+    if token is None:
+        return _unauthorized_response("Not authenticated")
+
     try:
-        request.state.auth_user = _authenticate_request(request)
+        request.state.auth_user = decode_access_token(token, settings.auth_jwt_secret)
     except AuthenticationError as exc:
         return _unauthorized_response(str(exc))
 
@@ -845,6 +858,7 @@ def search(
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
     mode: str = Query(
         settings.default_search_mode,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
@@ -877,6 +891,7 @@ def search(
         language=fq_language,
         year=fq_year,
         series=fq_series,
+        folder=fq_folder,
     )
 
     with _track_search_metrics(mode):
@@ -1119,6 +1134,7 @@ def facets(
     fq_language: str | None = Query(None),
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -1134,6 +1150,7 @@ def facets(
                 language=fq_language,
                 year=fq_year,
                 series=fq_series,
+                folder=fq_folder,
             ),
             facet_limit=settings.facet_limit,
             rows=0,
@@ -1231,6 +1248,47 @@ def similar_books(
     return {"results": results}
 
 
+@app.get("/v1/books/{book_id}", name="get_book_detail")
+def get_book_detail(
+    request: Request,
+    book_id: str,
+) -> dict[str, Any]:
+    """Return full metadata for a single book by its Solr document ID (SHA256 hash).
+
+    The response includes all parent-level fields: title, author, year, category,
+    language, series, page_count, file_size, file_path, folder_path, and document_url.
+    """
+    if not SHA256_PATTERN.match(book_id):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid book ID format — expected 64-character hex string (SHA256)",
+        )
+
+    payload = query_solr(
+        {
+            "q": f"id:{book_id}",
+            "fl": ",".join(SOLR_FIELD_LIST),
+            "rows": 1,
+            "wt": "json",
+            "fq": EXCLUDE_CHUNKS_FQ,
+        }
+    )
+
+    docs = payload.get("response", {}).get("docs", [])
+    if not docs:
+        raise HTTPException(status_code=404, detail=f"Book not found: {book_id!r}")
+
+    document = docs[0]
+    highlighting = payload.get("highlighting", {})
+    book = normalize_book(
+        document,
+        highlighting,
+        build_document_url(request, document.get("file_path_s")),
+    )
+
+    return book
+
+
 @app.get("/v1/books/", include_in_schema=False, name="books_v1")
 @app.get("/v1/books", include_in_schema=False, name="books_v1_no_slash")
 @app.get("/books")
@@ -1247,12 +1305,13 @@ def list_books(
     fq_language: str | None = Query(None, description="Filter by language."),
     fq_year: str | None = Query(None, description="Filter by publication year."),
     fq_series: str | None = Query(None, description="Filter by series name."),
+    fq_folder: str | None = Query(None, description="Filter by folder path."),
 ) -> dict[str, Any]:
     """Browse the complete library of indexed books with pagination and filtering.
 
     Returns all books sorted by title (default) or other fields. Supports the same
     filter query parameters as the search endpoint (``fq_author``, ``fq_category``,
-    ``fq_language``, ``fq_year``, ``fq_series``).
+    ``fq_language``, ``fq_year``, ``fq_series``, ``fq_folder``).
 
     This endpoint uses a wildcard ``*:*`` query to match all documents, making it
     suitable for library browsing and discovery.
@@ -1263,6 +1322,7 @@ def list_books(
         language=fq_language,
         year=fq_year,
         series=fq_series,
+        folder=fq_folder,
     )
 
     payload = query_solr(
@@ -2075,9 +2135,10 @@ class BatchMetadataEditRequest(BaseModel):
 
 
 class BatchMetadataByQueryRequest(BaseModel):
-    """Batch metadata edit by Solr query."""
+    """Batch metadata edit by Solr query with optional filters."""
 
     query: str
+    filters: dict[str, str] | None = None
     updates: MetadataEditRequest
 
     model_config = {"str_strip_whitespace": True}
@@ -2122,7 +2183,11 @@ def _batch_apply_updates(
     }
 
 
-def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[str]:
+def _solr_query_document_ids(
+    query: str,
+    filter_queries: list[str] | None = None,
+    page_size: int | None = None,
+) -> list[str]:
     """Execute a Solr query and return all matching document IDs, paginated."""
     if page_size is None:
         page_size = _BATCH_PAGE_SIZE
@@ -2137,6 +2202,8 @@ def _solr_query_document_ids(query: str, page_size: int | None = None) -> list[s
             "start": start,
             "wt": "json",
         }
+        if filter_queries:
+            params["fq"] = filter_queries
         result = query_solr(params)
         docs = result.get("response", {}).get("docs", [])
         if not docs:
@@ -2183,14 +2250,24 @@ def admin_batch_edit_metadata_by_query(body: BatchMetadataByQueryRequest) -> dic
     """Edit metadata for documents matching a Solr query.
 
     Resolves matching document IDs via Solr search, then applies updates
-    in pages.  Requires both admin API key and admin JWT role (defense-in-depth).
+    in pages.  Supports optional filters (folder, author, category, etc.)
+    to narrow the query scope.  Requires both admin API key and admin JWT
+    role (defense-in-depth).
     """
     query = body.query.strip()
     if not query:
         raise HTTPException(status_code=422, detail="query must not be empty")
 
     fields = body.updates.validate_non_empty()
-    doc_ids = _solr_query_document_ids(query)
+
+    filter_queries: list[str] | None = None
+    if body.filters:
+        try:
+            filter_queries = build_filter_queries(body.filters) or None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    doc_ids = _solr_query_document_ids(query, filter_queries=filter_queries)
 
     if not doc_ids:
         return {"matched": 0, "updated": 0, "failed": 0, "errors": []}

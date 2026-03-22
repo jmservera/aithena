@@ -162,3 +162,87 @@ Active decisions in `.squad/decisions.md`:
 3. **Process fixes beat training.** Branch hygiene, PR checklists, bug templates — mechanical guardrails work better than verbal instructions for agents.
 4. **Wave retrospectives are non-negotiable for milestones over 15 issues.** The learning velocity between Wave 0 and Wave 1 proved this.
 5. **Document the data model before anyone touches it.** The single most dangerous knowledge gap is always in the data model.
+
+---
+
+## Learnings
+
+### v1.11.0 PRD: Search Results Redesign (2026-03-21)
+
+**Session:** Research + PRD authoring for 4 requirements from Juanma.
+
+**Key findings from code research:**
+- **Chunk text is already stored** — `chunk_text_t` in Solr schema is `stored="true"`, but `SOLR_FIELD_LIST` in `search_service.py` doesn't include it. The vector search text preview (R1) is a genuinely small change.
+- **Similar books aren't grayed out** — they're rendered below results but visually obscured by the PDF viewer's overlay (z-index 1000 with 65% black overlay). The fix is architectural: decouple similar books from PDF state.
+- **Parent vs chunk search gap** — keyword search returns parents (chunks excluded via `-parent_id_s:[* TO *]`), semantic returns chunks (with embeddings). Hybrid RRF merges both. This means chunk text previews only apply to semantic/hybrid results.
+- **Thumbnail generation is the largest risk** — no PDF rendering capability exists in the indexer today. Needs new dependencies (pymupdf or pdf2image), Docker changes, and storage decisions. Recommended deferral to Phase 3 or v1.12.0.
+
+**Decisions made:**
+- Created milestone v1.11.0 (GitHub milestone #29)
+- Separated chunking strategy into its own issue (#796) — PO decision needed before R1 implementation
+- PRD issue #797, PR #798 for review
+- Phasing: R1+R2 (quick wins) → R3 (main deliverable) → R4 (deferred)
+
+**Pattern reinforced:** "Research before implementation" — 30 minutes of code reading revealed that R1 is 80% done (chunk text stored but not retrieved), which completely changes the scoping estimate from what it would have been without research.
+
+### v1.10.1 Security & Performance Gate Review (2026-03-21)
+
+**Session:** Milestone gate review for all 13 v1.10.1 issues before release.
+
+**Verdict:** APPROVE — no blockers.
+
+**Key findings:**
+- **SQL injection surface clean.** `collections_service.py` uses parameterized queries throughout. Two `# noqa: S608` remain but are justified false positives (dynamic column names and placeholder counts, not user data).
+- **Auth hardening solid.** All four 401 paths include WWW-Authenticate headers (RFC 7235). Auth middleware uses if-guards, not exception-driven flow. JWT decode still uses try/except (correct — crypto parsing should use exceptions).
+- **Shell scripts safe.** `verify-backup.sh` uses `set -euo pipefail`, whitelist validation for tier names, `umask 077`, `flock` concurrency guard. No `eval` or command injection vectors.
+- **GitHub Actions workflows well-secured.** Both `monthly-restore-drill.yml` and `stress-tests.yml` use SHA-pinned actions, `persist-credentials: false`, minimal permissions.
+- **Batch operations scoped correctly.** Admin-only (API key + JWT role), filter whitelist, value escaping via `solr_escape()`, query caps (1000 IDs / 5000 query results).
+- **Performance observation:** Sequential batch updates (up to 5000 docs) could take ~100s at max load. Acceptable for admin-only scope in v1.10.1; recommend async chunking for v1.11+.
+
+**Pattern reinforced:** Gate reviews catch the subtle things — the S608 suppressions required careful reading to confirm they're justified (dynamic column names vs user data). Automated linting alone would either flag false positives or miss the distinction.
+
+### PDF Text Extraction Pipeline Analysis (2026-03-21)
+
+**Session:** Deep investigation of the two-tool extraction pipeline for hierarchical chunking feasibility.
+
+**Key findings:**
+- **Dual extraction is intentional:** Tika (embedded in Solr via `SOLR_MODULES: extraction`) handles full-text + metadata for keyword search. pdfplumber handles per-page text for chunk-based semantic search. Tika doesn't expose per-page boundaries; pdfplumber doesn't reliably extract metadata.
+- **Neither tool currently extracts document structure.** Tika flattens everything to `_text_` via `fmap.content`. pdfplumber uses only `page.extract_text()` — no font metadata analyzed.
+- **Tika COULD provide XHTML with heading tags** if called directly (not via Solr's ExtractingRequestHandler). This is the most practical path to hierarchical chunking.
+- **Current chunker is purely word-count based** — no sentence, paragraph, or section awareness. 400-word window, 50-word overlap.
+- **Short-term fix exists:** Sentence boundary awareness in `chunker.py` is a small change that significantly improves preview readability without requiring structure extraction.
+
+**Deliverables:**
+- PRD updated with Section 5 (PDF Text Extraction Pipeline) — PR #803
+- Issue #796 commented with structure extraction analysis and recommendations
+- Open Questions updated with hierarchical chunking questions for PO and Ash
+
+**Pattern reinforced:** "Document the data model before anyone touches it" — the dual-extraction architecture had no documentation. Without reading `__main__.py` end-to-end, you'd assume Tika and pdfplumber were redundant. They're complementary by design.
+
+### Reskill + Wins Report for v1.10.1 (2026-03-21)
+
+**Session:** Extract skills from v1.10.1 work and write wins report.
+
+**Skills created:**
+1. **branch-protection-strict-mode** — Sequential PR merges with GitHub strict branch protection (use `gh pr merge --admin` to bypass BEHIND states when status checks pass)
+2. **milestone-gate-review** — Security/performance/architecture audit before closing any milestone (first enforced in v1.10.1, 13 issues reviewed, 0 blockers)
+3. **milestone-branching-strategy** — Using `milestone/v{X.Y.Z}` branches for parallel milestone work (planned for v1.11.0, confidence: medium, not yet validated)
+4. **copilot-review-to-issues** — Triage Copilot PR review comments into GitHub issues (P0–P2 get issues, P3 deferred). v1.10.1 had 7 issues from Copilot review → all fixed.
+5. **fastapi-query-params** — FastAPI silently ignores undeclared query params (different from Flask/Express). Bug found in #656: `fq_folder` sent but not received.
+6. **pdf-extraction-dual-tool** — Tika (Solr, full-text + metadata) vs pdfplumber (indexer, per-page chunks) — complementary tools, not redundant.
+
+**Skill updated:**
+- **fastapi-auth-patterns** — Confirmed in v1.10.1 auth hardening (WWW-Authenticate headers, no exception-driven flow, role checks enforced)
+
+**Wins report highlights:**
+- 13 issues closed, 7 PRs merged, 0 blockers
+- Security hardening (SQL injection prevention, auth RFC compliance, exception flow elimination)
+- BCDR workflows (monthly restore drills, stress test CI, backup checksums)
+- 4 new processes established (gate review, Copilot → issues, strict branch protection, milestone branching)
+- 5 lessons learned (Parker direct-push, cascading BEHIND states, docs-only PR gaps, FastAPI silent params, dual PDF extraction confusion)
+- Team performance: Parker+Lambert consolidated 7 issues into 1 PR, Brett took over infrastructure from Dallas
+
+**PR #805 created** — reskill + wins report to dev (pending CI checks)
+
+**Pattern reinforced:** "Reskill after every milestone" — v1.10.1 yielded 6 new skills + 1 update. Without dedicated reskill time, these patterns would have been lost. The wins report captures team morale, process improvements, and lessons learned in a shareable format for Juanma.
+

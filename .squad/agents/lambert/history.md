@@ -96,3 +96,43 @@
 - 2 duplicate entries removed (screenshot spec)
 - 2 redundant release validations collapsed into deliverables table
 - Outdated v0.4-v0.5 test counts removed (superseded by latest)
+
+## Learnings
+
+### Locust Auth Pattern (PR for #788)
+- Aithena uses JWT Bearer tokens via `/v1/auth/login` for regular endpoints
+- Admin endpoints additionally require `X-API-Key` header (from `ADMIN_API_KEY` env var)
+- Created `AithenaUser(HttpUser)` abstract base class to handle auth centrally for all Locust personas
+- Auth env vars: `STRESS_TEST_USERNAME`, `STRESS_TEST_PASSWORD`, `STRESS_TEST_API_KEY`
+
+### Restore Verification (PR for #790, #792)
+- Restore scripts are tiered: critical (auth/secrets), high (Solr/ZK), medium (Redis/RabbitMQ)
+- Post-restore verification in `restore-high.sh` was using `EXIT_CODE=2` (warning) for failures — changed to `return 1` (fatal)
+- Added `verify_search_api()` to test `/v1/search` endpoint after Solr restore, not just CLUSTERSTATUS
+- Stress test venv at `tests/stress/.venv` — system Python has namespace package conflicts (gevent/zope)
+
+### Wave 1 Test Coverage (PR #839 for #813, #817)
+- Added 38 new tests across 4 files (solr-search, document-indexer, aithena-ui)
+- **Key pattern:** Before writing new tests, audited existing coverage from Parker (#807/#808/#812) and Dallas (#809/#814/#815/#816) to avoid duplication
+- **BookCard UI type gap:** `BookResult` in the UI does NOT have `is_chunk` or `chunk_text` fields — chunks are handled at the API/normalization layer. Tested page range display (`book.pages`) and highlights instead
+- **PdfViewer focus trap:** The iframe is a focusable element in the panel, so it's the last element in the Tab order (not the close button). Forward Tab wraps from iframe → fullscreen button; backward Shift+Tab wraps from fullscreen → iframe
+- **Chunker abbreviation handling:** The sentence boundary heuristic (`.!?`) treats abbreviations (e.g., "Dr.") as sentence boundaries — documented as a known limitation in tests
+- **solr-search coverage:** 91.20% (up from 91.77% on the search_service module alone — now 97% on that file)
+- Total test counts after PR: solr-search ~805, document-indexer ~141, aithena-ui ~510
+
+### Wave 2 Test Coverage (PR #845 for #823)
+- Added 17 new tests across 4 files (solr-search, aithena-ui) filling gaps left by Parker (#819) and Dallas (#820/#821/#822)
+- **Audit-first pattern confirmed:** Comprehensive audit of all 12+ existing Wave 2 test files before writing a single line prevented duplication
+- **CircuitOpenError constructor:** Requires `(name, remaining_seconds)` — can't instantiate with just a message string. For endpoint tests, mock at `query_solr` level with `HTTPException(503)` instead
+- **CollectionBadge uses i18n:** Don't assert on raw count text (e.g., `getByText('3')`) — the badge renders via `intl.formatMessage`. Use `.collection-badge` class selector instead
+- **BookDetailView focus management:** `useId()` generates the aria-labelledby target; initial focus goes to close button ref on mount; body overflow is saved/restored in useEffect cleanup
+- **solr-search coverage:** 91.25%, 828 tests passing
+- **aithena-ui:** 574 tests passing
+
+### Wave 3 Test Coverage (PR #850 for #829)
+- Added 12 new tests across 5 files (document-indexer, solr-search, aithena-ui) filling gaps left by Parker (#848) and Dallas (thumbnail UI)
+- **Audit-first pattern confirmed again:** dev branch pull revealed Dallas's 5 BookCard thumbnail tests and 2 BookDetailView tests already existed — avoided duplication
+- **PIL for dimension assertion:** Used `PIL.Image.open()` to verify landscape PDF thumbnail fits within 200×280 bounds — validates PyMuPDF aspect ratio scaling
+- **test_book_detail expected_keys gap:** The existing `test_book_detail_response_contains_all_expected_keys` was missing `thumbnail_url` in its expected_keys set — would have silently passed without it
+- **BookThumbnail error state:** Both BookCard and BookDetailView use an internal `error` state (useState) with `onError` handler — `fireEvent.error(img)` triggers the fallback, then the `<img>` is removed from DOM entirely (not just hidden)
+- **Test counts after PR:** document-indexer 160 passed, solr-search 833 passed, aithena-ui 584 passed

@@ -6,6 +6,7 @@ import { BookResult, SearchFilters } from '../hooks/search';
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
 import BookCard from '../Components/BookCard';
+import BookDetailView from '../Components/BookDetailView';
 import Pagination from '../Components/Pagination';
 import PdfViewer from '../Components/PdfViewer';
 import SimilarBooks from '../Components/SimilarBooks';
@@ -37,6 +38,9 @@ function LibraryPage() {
   } = useLibrary();
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const [focusedBookId, setFocusedBookId] = useState<string | null>(null);
+  const [detailBookId, setDetailBookId] = useState<string | null>(null);
+  const [detailInitialData, setDetailInitialData] = useState<BookResult | undefined>(undefined);
   const resultsRegionRef = useRef<HTMLElement | null>(null);
   const lastLoadingStateRef = useRef(false);
   const lastPdfTriggerRef = useRef<HTMLElement | null>(null);
@@ -64,6 +68,7 @@ function LibraryPage() {
       lastPdfTriggerRef.current = activeElement;
     }
     setSelectedBook(book);
+    setFocusedBookId(book.id);
   }, []);
 
   const handleClosePdf = useCallback(() => {
@@ -84,6 +89,36 @@ function LibraryPage() {
       const searchResult = results.find((book) => book.id === bookId);
 
       setSelectedBook((currentBook) => similarBook ?? searchResult ?? currentBook);
+      setFocusedBookId(bookId);
+    },
+    [results]
+  );
+
+  const handleSelectBook = useCallback((book: BookResult) => {
+    setFocusedBookId(book.id);
+    setDetailBookId(book.id);
+    setDetailInitialData(book);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setDetailBookId(null);
+    setDetailInitialData(undefined);
+  }, []);
+
+  const handleDetailOpenPdf = useCallback(
+    (book: BookResult) => {
+      handleOpenPdf(book);
+    },
+    [handleOpenPdf]
+  );
+
+  const handleDetailSelectSimilarBook = useCallback(
+    (bookId: string) => {
+      const cached = getCachedSimilarBook(bookId);
+      const searchResult = results.find((b) => b.id === bookId);
+      setDetailBookId(bookId);
+      setDetailInitialData(cached ?? searchResult ?? undefined);
+      setFocusedBookId(bookId);
     },
     [results]
   );
@@ -195,7 +230,8 @@ function LibraryPage() {
                   <BookCard
                     book={book}
                     onOpenPdf={handleOpenPdf}
-                    isSelected={selectedBook?.id === book.id}
+                    onSelect={handleSelectBook}
+                    isSelected={focusedBookId === book.id}
                   />
                 </li>
               ))}
@@ -203,8 +239,8 @@ function LibraryPage() {
           )}
         </section>
 
-        {selectedBook && (
-          <SimilarBooks documentId={selectedBook.id} onSelectBook={handleSelectSimilarBook} />
+        {focusedBookId && (
+          <SimilarBooks documentId={focusedBookId} onSelectBook={handleSelectSimilarBook} />
         )}
 
         {total > 0 && (
@@ -227,6 +263,16 @@ function LibraryPage() {
 
         {selectedBook && <PdfViewer result={selectedBook} onClose={handleClosePdf} />}
       </main>
+
+      {detailBookId && (
+        <BookDetailView
+          bookId={detailBookId}
+          initialData={detailInitialData}
+          onClose={handleCloseDetail}
+          onOpenPdf={handleDetailOpenPdf}
+          onSelectSimilarBook={handleDetailSelectSimilarBook}
+        />
+      )}
     </div>
   );
 }

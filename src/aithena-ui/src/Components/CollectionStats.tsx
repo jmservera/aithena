@@ -49,30 +49,6 @@ function CollectionStats() {
   const intl = useIntl();
   const { stats, loading, error } = useStats();
 
-  if (loading) {
-    return (
-      <main className="stats-main">
-        <p className="stats-loading">{intl.formatMessage({ id: 'stats.loading' })}</p>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="stats-main">
-        <div className="search-error" role="alert">
-          <AlertTriangle size={20} aria-hidden="true" /> {error}
-        </div>
-      </main>
-    );
-  }
-
-  if (!stats) {
-    return null;
-  }
-
-  const { total_books, by_language, by_author, by_year, by_category, page_stats } = stats;
-
   return (
     <main className="stats-main">
       <header className="stats-header">
@@ -81,47 +57,65 @@ function CollectionStats() {
         </h2>
       </header>
 
-      <section className="stats-summary-row">
-        <div className="stats-big-number">
-          <span className="stats-big-value">{total_books.toLocaleString()}</span>
-          <span className="stats-big-label">
-            {intl.formatMessage({ id: 'stats.booksIndexed' })}
-          </span>
-        </div>
+      {loading && <p className="stats-loading">{intl.formatMessage({ id: 'stats.loading' })}</p>}
 
-        <div className="stats-page-summary">
-          <h3 className="stats-table-title">{intl.formatMessage({ id: 'stats.pageStats' })}</h3>
-          <dl className="stats-dl">
-            <div className="stats-dl-row">
-              <dt className="stats-dt">{intl.formatMessage({ id: 'stats.totalPages' })}</dt>
-              <dd className="stats-dd">{page_stats.total.toLocaleString()}</dd>
-            </div>
-            <div className="stats-dl-row">
-              <dt className="stats-dt">{intl.formatMessage({ id: 'stats.average' })}</dt>
-              <dd className="stats-dd">{page_stats.avg.toLocaleString()}</dd>
-            </div>
-            <div className="stats-dl-row">
-              <dt className="stats-dt">{intl.formatMessage({ id: 'stats.min' })}</dt>
-              <dd className="stats-dd">{page_stats.min.toLocaleString()}</dd>
-            </div>
-            <div className="stats-dl-row">
-              <dt className="stats-dt">{intl.formatMessage({ id: 'stats.max' })}</dt>
-              <dd className="stats-dd">{page_stats.max.toLocaleString()}</dd>
-            </div>
-          </dl>
+      {error && !loading && (
+        <div className="search-error" role="alert">
+          <AlertTriangle size={20} aria-hidden="true" /> {error}
         </div>
-      </section>
+      )}
 
-      <section className="stats-tables-grid">
-        <FacetTable title={intl.formatMessage({ id: 'stats.byLanguage' })} rows={by_language} />
-        <FacetTable
-          title={intl.formatMessage({ id: 'stats.byAuthorTop' }, { count: TOP_AUTHORS })}
-          rows={by_author}
-          limit={TOP_AUTHORS}
-        />
-        <FacetTable title={intl.formatMessage({ id: 'stats.byYear' })} rows={by_year} />
-        <FacetTable title={intl.formatMessage({ id: 'stats.byCategory' })} rows={by_category} />
-      </section>
+      {stats && !loading && !error && (
+        <>
+          <section className="stats-summary-row">
+            <div className="stats-big-number">
+              <span className="stats-big-value">{stats.total_books.toLocaleString()}</span>
+              <span className="stats-big-label">
+                {intl.formatMessage({ id: 'stats.booksIndexed' })}
+              </span>
+            </div>
+
+            <div className="stats-page-summary">
+              <h3 className="stats-table-title">{intl.formatMessage({ id: 'stats.pageStats' })}</h3>
+              <dl className="stats-dl">
+                <div className="stats-dl-row">
+                  <dt className="stats-dt">{intl.formatMessage({ id: 'stats.totalPages' })}</dt>
+                  <dd className="stats-dd">{stats.page_stats.total.toLocaleString()}</dd>
+                </div>
+                <div className="stats-dl-row">
+                  <dt className="stats-dt">{intl.formatMessage({ id: 'stats.average' })}</dt>
+                  <dd className="stats-dd">{stats.page_stats.avg.toLocaleString()}</dd>
+                </div>
+                <div className="stats-dl-row">
+                  <dt className="stats-dt">{intl.formatMessage({ id: 'stats.min' })}</dt>
+                  <dd className="stats-dd">{stats.page_stats.min.toLocaleString()}</dd>
+                </div>
+                <div className="stats-dl-row">
+                  <dt className="stats-dt">{intl.formatMessage({ id: 'stats.max' })}</dt>
+                  <dd className="stats-dd">{stats.page_stats.max.toLocaleString()}</dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+
+          <section className="stats-tables-grid">
+            <FacetTable
+              title={intl.formatMessage({ id: 'stats.byLanguage' })}
+              rows={stats.by_language}
+            />
+            <FacetTable
+              title={intl.formatMessage({ id: 'stats.byAuthorTop' }, { count: TOP_AUTHORS })}
+              rows={stats.by_author}
+              limit={TOP_AUTHORS}
+            />
+            <FacetTable title={intl.formatMessage({ id: 'stats.byYear' })} rows={stats.by_year} />
+            <FacetTable
+              title={intl.formatMessage({ id: 'stats.byCategory' })}
+              rows={stats.by_category}
+            />
+          </section>
+        </>
+      )}
     </main>
   );
 }

@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.9.1 Release Notes](release-notes/v1.9.1.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.10.0 Release Notes](release-notes/v1.10.0.md).
 
 ## System architecture overview
 
@@ -2542,5 +2542,474 @@ Whitespace is trimmed automatically. Whitespace-only strings are rejected (422).
 | 404 on single edit | Document ID not in Solr | Verify the document was indexed; check `doc_id` spelling |
 | 503 on single edit | Redis unavailable | Check Redis health; the Solr update may still have succeeded |
 | 504 on single edit | Solr timeout | Check Solr health and load |
+
+## Deployment Updates for v1.10.0 (Book Collections, Metadata Editing, Backup & Restore)
+
+v1.10.0 is a major feature release introducing **user document collections** (personal bookshelves with notes), **admin book metadata editing** (single and batch mode), **folder path faceting** for better navigation, **series field** support for magazine/newspaper grouping, and foundational **backup and restore infrastructure**. This section covers operator-relevant infrastructure changes, new environment variables, and deployment validation.
+
+### New Feature Overview
+
+v1.10.0 adds four significant user-facing features and infrastructure improvements:
+
+1. **User Collections** — Users can create personal reading lists and add notes to books
+2. **Book Metadata Editing** — Admins can correct/edit document metadata (title, author, year, category, series)
+3. **Folder Path Faceting** — Users can browse and filter by the document library folder structure
+4. **Series/Collection Field** — New Solr field for grouping books into series, magazines, and newspapers
+5. **BCDR Foundation** — Backup scripts and restore orchestration for critical infrastructure
+
+### Collections Infrastructure: New Volume & Database
+
+v1.10.0 introduces a dedicated SQLite database for user collections at `/data/collections/collections.db`.
+
+#### Docker Compose Changes
+
+The `docker-compose.yml` now includes:
+
+```yaml
+volumes:
+  collections-db:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${COLLECTIONS_DB_DIR:-/source/volumes/collections-db}"
+
+services:
+  solr-search:
+    volumes:
+      - collections-db:/data/collections  # New mount
+    environment:
+      - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}  # New env var
+```
+
+#### Environment Variables (New in v1.10.0)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `COLLECTIONS_DB_PATH` | `/data/collections/collections.db` | Path to SQLite collections database inside container |
+| `COLLECTIONS_DB_DIR` | `/source/volumes/collections-db` | Host bind-mount directory for collections database (production deployments) |
+| `COLLECTIONS_NOTE_MAX_LENGTH` | `1000` | Maximum character length for per-document notes in collections |
+
+#### Collections Database Schema
+
+The collections database includes two tables:
+
+```sql
+CREATE TABLE collections (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE collection_items (
+    id TEXT PRIMARY KEY,
+    collection_id TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    position INTEGER DEFAULT 0,
+    note TEXT DEFAULT '',
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+    UNIQUE(collection_id, document_id)
+);
+```
+
+The schema is automatically initialized on first `solr-search` startup via a migration system (no manual SQL required).
+
+### Solr Schema Changes: New `series_s` Field
+
+v1.10.0 adds a new `series_s` field to the Solr schema to support grouping documents into series, magazine runs, and newspaper titles.
+
+#### Field Definition
+
+```xml
+<field name="series_s" type="string" multiValued="false" indexed="true" stored="true"/>
+```
+
+This field is:
+- **Indexed**: Can be searched and faceted
+- **Stored**: Returned in search results
+- **Single-valued**: One series per document
+
+#### Facet Configuration
+
+The `series_s` field is automatically configured as a facet in the search API. Users can filter by series alongside existing facets (author, category, language, folder).
+
+#### Populating the Series Field
+
+- **During indexing**: The `document-indexer` can populate `series_s` from folder structure or filename patterns (if configured)
+- **Via metadata edit API**: Admins can manually set or correct the series for individual documents or batches
+- **Re-index safety**: Manual series edits persist via Redis overrides (see Metadata Override Persistence below)
+
+### Folder Path Facet
+
+v1.10.0 exposes the existing `folder_path_s` field as a first-class facet in the search UI and API.
+
+#### API Changes
+
+The `/v1/search` and `/v1/facets` endpoints now return folder facet data:
+
+```json
+{
+  "facets": {
+    "folder": [
+      {"value": "en/Science Fiction", "count": 125},
+      {"value": "en/History", "count": 89},
+      {"value": "es/Ciencia Ficción", "count": 47}
+    ]
+  }
+}
+```
+
+#### Frontend Behavior
+
+- **Hierarchical tree display**: Folders are shown as an expandable/collapsible tree in the sidebar
+- **Multi-select**: Users can select multiple folders to filter results (AND logic)
+- **Batch operations**: Admins can select all documents in a folder for batch metadata editing
+
+### Book Metadata Editing: New API & Persistence
+
+v1.10.0 adds admin-only APIs for editing document metadata with Solr atomic updates and Redis override persistence.
+
+#### Single Document Edit Endpoint
+
+```
+PATCH /v1/admin/documents/{doc_id}/metadata
+```
+
+Request body (all fields optional; at least one required):
+
+```json
+{
+  "title": "Corrected Title",
+  "author": "Author Name",
+  "year": 1984,
+  "category": "Science Fiction",
+  "series": "Foundation"
+}
+```
+
+Response:
+
+```json
+{
+  "id": "doc_id",
+  "updated_fields": ["title", "year"],
+  "status": "ok"
+}
+```
+
+#### Batch Edit by Document IDs
+
+```
+PATCH /v1/admin/documents/batch/metadata
+```
+
+Request body:
+
+```json
+{
+  "document_ids": ["id1", "id2", "id3"],
+  "updates": {
+    "year": 2023,
+    "series": "Nature Magazine"
+  }
+}
+```
+
+#### Batch Edit by Solr Query
+
+```
+PATCH /v1/admin/documents/batch/metadata-by-query
+```
+
+Request body:
+
+```json
+{
+  "query": "folder_path_s:\"en/Science Fiction\"",
+  "updates": {
+    "category": "Science Fiction"
+  }
+}
+```
+
+#### Environment Variables
+
+Metadata override persistence uses Redis and is permanently enabled. No environment variables control it.
+
+#### How Metadata Overrides Work
+
+1. **Immediate Solr Update**: When an admin edits a document, a Solr atomic update is applied immediately using the `set` operation. The updated metadata is returned in search results within milliseconds.
+
+2. **Redis Override Persistence**: A JSON record is stored at `aithena:metadata-override:{doc_id}` containing:
+   - All updated field values
+   - `edited_by` — the admin user who made the edit
+   - `edited_at` — timestamp of the edit
+
+3. **Re-index Survival**: When the document is re-indexed (e.g., after re-scanning the library folder), the `document-indexer` checks for Redis overrides and applies them on top of auto-detected metadata. This ensures manual edits survive document reprocessing.
+
+4. **Field Mapping**: The API accepts friendly field names (title, author, year, category, series) which are mapped to Solr fields:
+   - `title` → `title_s`, `title_t`
+   - `author` → `author_s`, `author_t`
+   - `year` → `year_i`
+   - `category` → `category_s`
+   - `series` → `series_s` (new in v1.10.0)
+
+### Redis Configuration for Metadata Overrides
+
+Metadata overrides use Redis keys with the pattern `aithena:metadata-override:{document_id}`. Ensure Redis is configured with:
+
+- **Memory policy**: `maxmemory-policy=noeviction` (or `allkeys-lru`) — overrides should not be evicted
+- **Persistence**: Enabled (RDB snapshots or AOF)
+- **No TTL**: Overrides are stored permanently (TTL=0) unless explicitly configured otherwise
+
+Check Redis memory usage for large libraries:
+
+```bash
+docker compose exec redis redis-cli INFO memory
+
+# Expected overhead: ~1 KB per override (assuming ~100 bytes per metadata override JSON)
+# For a 50,000-document library with 10% edited: ~5 MB
+```
+
+### Backup & Restore Foundation (v1.10.0 BCDR Phase 1)
+
+v1.10.0 introduces the foundational **Backup & Restore** infrastructure with three-tier backup scripts and a restore orchestrator.
+
+#### What's Being Backed Up
+
+| Tier | What | Frequency | Retention | RPO |
+|------|------|-----------|-----------|-----|
+| **Critical** | Auth DB (`users.db`), Collections DB (`collections.db`), .env secrets | Every 30 min | 7 days | < 1 hour |
+| **High** | Solr index, ZooKeeper state | Daily (2 AM UTC) | 30 days | < 24 hours |
+| **Medium** | Redis RDB dump, RabbitMQ definitions | Daily (3 AM UTC) | 14 days | < 4 hours |
+
+#### Backup Scripts
+
+v1.10.0 includes three executable scripts in `scripts/`:
+
+```bash
+./scripts/backup-critical.sh   # Tier 1: Auth + Collections DBs + secrets (encrypted)
+./scripts/backup-high.sh       # Tier 2: Solr + ZooKeeper volumes
+./scripts/backup-medium.sh     # Tier 3: Redis + RabbitMQ state
+./scripts/backup.sh            # Orchestrator: runs all three tiers
+```
+
+The orchestrator script includes a cron-friendly interface:
+
+```bash
+# Backup all tiers to default location
+./scripts/backup.sh
+
+# Backup only critical tier
+./scripts/backup.sh --tier critical
+
+# Dry-run (log actions without writing files)
+./scripts/backup.sh --dry-run
+
+# Custom destination
+./scripts/backup.sh --dest /mnt/backup-storage
+```
+
+#### Restore Orchestrator
+
+A new `./scripts/restore.sh` script orchestrates the restore process:
+
+```bash
+# Restore all components from latest backup
+./scripts/restore.sh --from /path/to/backup/critical-latest.db
+
+# Restore specific component
+./scripts/restore.sh --from /path/to/backup --component auth
+
+# Dry-run (show what would be restored)
+./scripts/restore.sh --from /path/to/backup --dry-run
+```
+
+#### Post-Restore Verification
+
+Backup/restore operations run the `./tests/verify-restore.sh` verification suite to ensure:
+- All services report healthy
+- Admin UI loads
+- Authentication works
+- Search queries return results
+- Redis and RabbitMQ are accessible
+- Solr collection status shows healthy replicas
+
+#### Backup Directory Structure
+
+Backups are organized by tier:
+
+```
+/source/backups/
+├── critical/            # Auth DB, Collections DB, .env (encrypted)
+│   ├── auth-20260321-0230.db.gpg
+│   ├── auth-20260321-0230.db.gpg.sha256
+│   ├── collections-20260321-0230.db.gpg
+│   └── env-20260321-0230.gpg
+├── high/                # Solr snapshot metadata
+│   ├── books-20260321-0200.snap
+│   └── books-20260321-0200.snap.sha256
+├── zookeeper/           # ZooKeeper tar archives
+│   └── zoo-data-20260321-0200.tar.gz
+└── medium/              # Redis + RabbitMQ backups
+    ├── redis-20260321-0300.rdb
+    └── rabbitmq-defs-20260321-0300.json
+```
+
+#### Encryption
+
+Critical-tier backups (auth, collections, .env) are encrypted with GPG using AES256:
+
+```bash
+# Encryption happens automatically during backup
+# Decryption requires the encryption key:
+gpg --batch --passphrase-file /etc/aithena/backup.key --output restore.db \
+    --decrypt auth-20260321-0230.db.gpg
+```
+
+The encryption key file (`/etc/aithena/backup.key`) should be:
+- Generated during initial setup (not committed to git)
+- Backed up to a secure vault separate from backup files
+
+#### Scheduled Backups (Cron)
+
+To enable automated backups, add cron entries:
+
+```bash
+# Run as the aithena or root user
+*/30 * * * *  /path/to/aithena/scripts/backup-critical.sh   # Every 30 min
+0 2 * * *     /path/to/aithena/scripts/backup-high.sh        # Daily 2 AM UTC
+0 3 * * *     /path/to/aithena/scripts/backup-medium.sh      # Daily 3 AM UTC
+```
+
+Logs are written to `/var/log/aithena-backup-*.log`.
+
+### Deployment Checklist for v1.10.0
+
+1. **Backup existing data (recommended):**
+   ```bash
+   # Backup critical databases using the new backup script
+   ./scripts/backup-critical.sh
+   ```
+
+2. **Update to v1.10.0:**
+   ```bash
+   git fetch origin
+   git checkout v1.10.0
+   docker compose pull
+   docker compose up -d
+   ```
+
+3. **Verify collections database initialized:**
+   ```bash
+   docker compose logs solr-search | grep -i "collections.*migration\|collections.*initialized"
+   ```
+
+4. **Test metadata edit endpoint:**
+   ```bash
+   # Find a document ID from a search result
+   curl -X PATCH "http://localhost/v1/admin/documents/{doc_id}/metadata" \
+     -H "X-API-Key: $ADMIN_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"year": 1984}'
+   ```
+
+5. **Verify folder facet in search:**
+   - Open http://localhost and run a search
+   - Look for "📁 Folder" facet in the sidebar alongside Author, Category, etc.
+   - Expand a folder and verify document counts
+
+6. **Test user collections:**
+   - Search for documents
+   - Click "Save to collection" on a book card
+   - Create a new collection and add documents
+   - Navigate to `/collections` and verify the collection appears
+
+7. **Verify series field populated:**
+   ```bash
+   # Check if any documents have series_s populated
+   curl "http://localhost/v1/search?q=*&rows=1" | jq '.results[0].series'
+   ```
+
+8. **Test metadata override persistence:**
+   - Edit a document's metadata via the UI or API
+   - Manually trigger a document re-index (admin panel)
+   - Verify the metadata edit persists
+
+9. **Set up automated backups (optional):**
+   ```bash
+   sudo bash -c 'crontab -e'
+   # Add cron entries for backup scripts (see Scheduled Backups section above)
+   ```
+
+10. **Run backup test:**
+    ```bash
+    ./scripts/backup.sh --dry-run
+    ./scripts/backup.sh --tier critical
+    ls -la /source/backups/critical/
+    ```
+
+### Configuration Changes Summary
+
+#### New Environment Variables
+
+| Variable | Service | Default | Notes |
+|----------|---------|---------|-------|
+| `COLLECTIONS_DB_PATH` | solr-search | `/data/collections/collections.db` | Path inside container |
+| `COLLECTIONS_DB_DIR` | docker-compose | `/source/volumes/collections-db` | Host bind-mount directory |
+| `COLLECTIONS_NOTE_MAX_LENGTH` | solr-search | `1000` | Max characters per note |
+
+#### Updated Solr Schema
+
+- **New field**: `series_s` (string, indexed, stored)
+- **New facet**: `folder_path_s` (already existed in schema, now exposed as facet)
+- **Updated facet configuration**: `/facets` and `/search` endpoints now return folder and series facets
+
+### Migration & Backward Compatibility
+
+v1.10.0 is **fully backward-compatible** with v1.9.0:
+
+- Existing documents are unaffected (series_s is optional)
+- Collections database is created on first startup (no data loss)
+- Metadata edit endpoints are new — no existing workflows break
+- Folder faceting is additive — existing facets unchanged
+
+### Troubleshooting
+
+#### Collections Database Issues
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| 503 on collection API | Collections DB not initialized | Check logs: `docker compose logs solr-search | grep collections` |
+| Collections persist but metadata doesn't | Redis unavailable | Verify Redis health: `docker compose exec redis redis-cli ping` |
+| "Cannot access /data/collections" | Volume mount permission denied | Check file permissions: `ls -la /source/volumes/collections-db/` |
+
+#### Metadata Editing Issues
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| 422 Unprocessable Entity | Field value too long or invalid format | Check field constraints (title ≤255, year 1000-2099) |
+| Edit succeeds but Solr still has old value | Atomic update failed silently | Check Solr logs: `docker compose logs solr` |
+| Edit survives single request but lost on re-index | Redis override not applied | Verify Redis key: `docker compose exec redis redis-cli GET "aithena:metadata-override:doc_id"` |
+
+#### Folder Facet Issues
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| Folder facet not appearing | Field not in facet configuration | Redeploy with updated solr-search code |
+| Folder counts incorrect | Stale Solr index | Re-index documents: trigger from admin UI or `document-lister` re-scan |
+
+#### Backup & Restore Issues
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| Backup script not found | v1.10.0 not checked out | Verify: `git rev-parse --short HEAD` shows v1.10.0 commit |
+| "Permission denied" on backup script | Script not executable | Fix: `chmod +x scripts/backup*.sh scripts/restore.sh` |
+| Restore fails with "Backup integrity check failed" | Corrupted backup file | Re-run backup with `--tier critical` to create a fresh copy |
 
 ---

@@ -151,3 +151,54 @@
 5. Exception handling that masks errors (bare `except Exception:`)
 
 **Knowledge improvement:** ~25% -- consolidated sprawling 692-line history into focused reference; extracted auth patterns to a new skill; surfaced tech debt as trackable items.
+
+### Folder Batch Integration (#656, 2026-03-21)
+
+**Missing fq_folder on search endpoints:** The search, facets, and books endpoints all lacked `fq_folder` as a declared parameter. The frontend sent it, but FastAPI silently dropped undeclared query params. Fix: add `fq_folder: str | None = Query(None)` and include `folder=fq_folder` in `collect_search_filters()` on all three endpoints.
+
+**Batch-by-query filter support:** `BatchMetadataByQueryRequest` only accepted `query` + `updates`. Added optional `filters: dict[str, str] | None` field. `_solr_query_document_ids` now accepts `filter_queries: list[str] | None` and passes them as `fq` to Solr. The endpoint uses existing `build_filter_queries()` to convert the filters dict — same validation/escaping as search.
+
+**Recurring pattern — silent param drops:** FastAPI ignores undeclared query params without errors. When adding frontend filter params, always verify the backend endpoint declares them. Added to watch-for list.
+
+### Sentence-Boundary Chunker (#812, v1.11.0)
+
+**Approach:** Instead of regex-splitting the full text into sentences, detect sentence ends by checking each word's trailing character (`.!?`). This is equivalent to `r'(?<=[.!?])\s+'` on normalized text but avoids re-splitting.
+
+**Key design decisions:**
+- Shared `_sentence_aware_ranges()` helper returns `(start, end)` word-index pairs — both `chunk_text()` and `chunk_text_with_pages()` delegate to it, avoiding logic duplication.
+- Backward compatibility: text without `.!?` punctuation (numbers, bullet points, CJK without ASCII punctuation) automatically falls back to the original word-based algorithm because `_find_sentence_ends()` returns only the end-of-text sentinel.
+- Overlap is sentence-aligned: the next chunk starts at a sentence boundary ≤ `overlap` words from the previous chunk's end. If no sentence fits within the overlap budget, the overlap is skipped (no mid-sentence breaks).
+- Long sentences (>chunk_size) fall back to word-based splitting WITH word-level overlap within that sentence.
+
+**Testing pattern:** All 28 original tests pass unchanged (backward compat). 24 new tests cover sentence boundaries, long sentences, overlap, non-Latin text (CJK, Arabic), mixed punctuation, and page tracking. Total: 52 chunker tests, 133 service tests.
+
+**Limitation (accepted for v1):** Abbreviations like "Dr." are treated as sentence boundaries. Acceptable per task spec; can be improved with a more sophisticated regex or abbreviation list in a future iteration.
+
+### Book Detail Endpoint (#818, v1.11.0)
+
+**Approach:** Added `GET /v1/books/{book_id}` endpoint for single book lookup by Solr document ID (SHA256 hash). Reuses `normalize_book()` and `SOLR_FIELD_LIST` for consistent response shape with the `/v1/books` listing endpoint.
+
+**Key decisions:**
+- SHA256 validation via compiled regex (`^[0-9a-fA-F]{64}$`) — rejects malformed IDs at 422 before hitting Solr.
+- Uses `EXCLUDE_CHUNKS_FQ` filter to ensure only parent-level documents are returned (not chunks).
+- Route placed after `/v1/books/{id}/similar` and before `/v1/books` listing — order matters for FastAPI path matching.
+- No additional auth beyond the existing middleware (consistent with other read endpoints like `/v1/books`, `/v1/search`).
+- `include_in_schema=True` (default) — endpoint visible in OpenAPI, unlike internal/legacy aliases.
+
+**Testing:** 18 unit tests covering happy path, 404 (not found), 422 (invalid ID formats), Solr error propagation (502/504), and OpenAPI schema visibility. Total: 817 tests, 91.25% coverage.
+
+**Imported new symbols:** `SOLR_FIELD_LIST` and `EXCLUDE_CHUNKS_FQ` from `search_service.py` into `main.py` — previously only used internally by `build_solr_params()`.
+
+### Thumbnail Generation (#824, v1.11.0)
+
+**Approach:** Added PyMuPDF (`pymupdf`) to document-indexer for rendering the first PDF page as a 200×280px JPEG thumbnail during indexing. New `thumbnail.py` module with `generate_thumbnail()` — opens PDF, scales first page to fit within target dimensions (aspect-ratio-preserving via `min(scale_x, scale_y)`), saves as JPEG.
+
+**Key design decisions:**
+- Best-effort / non-blocking: `generate_thumbnail()` returns `bool`, never raises. Failures log a warning and indexing continues uninterrupted.
+- Thumbnail path convention: `{pdf_path}.thumb.jpg` — lives alongside the PDF, easy to find by appending suffix.
+- `thumbnail_url_s` Solr field: relative path from `BASE_PATH`, added as optional param to `build_literal_params()` (backward compatible — defaults to `None`).
+- Doc is opened and closed explicitly with try/finally to avoid resource leaks on partial failures.
+
+**Testing:** 13 new tests — 5 success cases (JPEG creation, header validation, custom dimensions, multi-page), 6 failure cases (nonexistent, corrupt, empty, zero-page, unwritable output, warning logging), 2 integration tests (Solr param inclusion, indexing continues on failure). 100% coverage on thumbnail.py. Total: 154 tests, 85% service coverage.
+
+**PyMuPDF note:** `fitz.open()` cannot save zero-page PDFs, so the zero-page test uses mock. Alpine Docker image doesn't need extra system deps — pymupdf ships self-contained wheels.

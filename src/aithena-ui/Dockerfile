@@ -14,6 +14,9 @@ RUN npm ci
 
 COPY . .
 
+# Write VERSION file so vite.config.ts can read it directly
+RUN printf '%s\n' "${VERSION}" > VERSION
+
 ENV VERSION=${VERSION} \
     VITE_COLLECTIONS_API=real
 RUN npm run build

@@ -28,7 +28,6 @@ echo "Git commit: ${GIT_COMMIT}"
 echo "Build date: ${BUILD_DATE}"
 
 python_service_dirs=(
-  "src/admin"
   "src/document-indexer"
   "src/document-lister"
   "src/embeddings-server"

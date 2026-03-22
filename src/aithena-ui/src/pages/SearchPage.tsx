@@ -14,6 +14,7 @@ import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBo
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
 import BookCard from '../Components/BookCard';
+import BookDetailView from '../Components/BookDetailView';
 import Pagination from '../Components/Pagination';
 import PdfViewer from '../Components/PdfViewer';
 import SimilarBooks from '../Components/SimilarBooks';
@@ -61,6 +62,7 @@ interface SearchResultsSectionProps {
   resultsRegionRef: RefObject<HTMLElement | null>;
   resultsSummaryId: string;
   selectedBook: BookResult | null;
+  focusedBookId: string | null;
   total: number;
   selectionMode?: boolean;
   checkedIds?: Set<string>;
@@ -68,6 +70,7 @@ interface SearchResultsSectionProps {
   onToggleSelect?: (bookId: string) => void;
   onEditMetadata?: (book: BookResult) => void;
   onOpenPdf: (book: BookResult) => void;
+  onSelectBook: (book: BookResult) => void;
   onPageChange: (page: number) => void;
   onPdfClose: () => void;
   onSelectSimilarBook: (bookId: string) => void;
@@ -111,6 +114,7 @@ function SearchResultsSection({
   resultsRegionRef,
   resultsSummaryId,
   selectedBook,
+  focusedBookId,
   total,
   selectionMode = false,
   checkedIds,
@@ -118,6 +122,7 @@ function SearchResultsSection({
   onToggleSelect,
   onEditMetadata,
   onOpenPdf,
+  onSelectBook,
   onPageChange,
   onPdfClose,
   onSelectSimilarBook,
@@ -173,7 +178,8 @@ function SearchResultsSection({
                 <BookCard
                   book={book}
                   onOpenPdf={onOpenPdf}
-                  isSelected={selectedBook?.id === book.id}
+                  onSelect={onSelectBook}
+                  isSelected={focusedBookId === book.id}
                   selectionMode={selectionMode}
                   isChecked={checkedIds?.has(book.id) ?? false}
                   onToggleSelect={onToggleSelect}
@@ -187,8 +193,8 @@ function SearchResultsSection({
         )}
       </section>
 
-      {selectedBook && (
-        <SimilarBooks documentId={selectedBook.id} onSelectBook={onSelectSimilarBook} />
+      {focusedBookId && (
+        <SimilarBooks documentId={focusedBookId} onSelectBook={onSelectSimilarBook} />
       )}
 
       {total > 0 && (
@@ -235,6 +241,7 @@ function SearchPage() {
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [allMatchingSelected, setAllMatchingSelected] = useState(false);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
 
   // Keep the text input in sync with the committed query from the URL so
@@ -249,6 +256,9 @@ function SearchPage() {
   }, [searchState.query]);
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
+  const [focusedBookId, setFocusedBookId] = useState<string | null>(null);
+  const [detailBookId, setDetailBookId] = useState<string | null>(null);
+  const [detailInitialData, setDetailInitialData] = useState<BookResult | undefined>(undefined);
   const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
   const [addToCollectionDocIds, setAddToCollectionDocIds] = useState<string[]>([]);
   const resultsRegionRef = useRef<HTMLElement>(null);
@@ -286,6 +296,7 @@ function SearchPage() {
     }
 
     setSelectedBook(book);
+    setFocusedBookId(book.id);
   }, []);
 
   const handleClosePdf = useCallback(() => {
@@ -307,13 +318,46 @@ function SearchPage() {
       const searchResult = results.find((book) => book.id === bookId);
 
       setSelectedBook((currentBook) => similarBook ?? searchResult ?? currentBook);
+      setFocusedBookId(bookId);
+    },
+    [results]
+  );
+
+  const handleSelectBook = useCallback((book: BookResult) => {
+    setFocusedBookId(book.id);
+    setDetailBookId(book.id);
+    setDetailInitialData(book);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setDetailBookId(null);
+    setDetailInitialData(undefined);
+  }, []);
+
+  const handleDetailOpenPdf = useCallback(
+    (book: BookResult) => {
+      handleOpenPdf(book);
+    },
+    [handleOpenPdf]
+  );
+
+  const handleDetailSelectSimilarBook = useCallback(
+    (bookId: string) => {
+      const cached = getCachedSimilarBook(bookId);
+      const searchResult = results.find((b) => b.id === bookId);
+      setDetailBookId(bookId);
+      setDetailInitialData(cached ?? searchResult ?? undefined);
+      setFocusedBookId(bookId);
     },
     [results]
   );
 
   const handleToggleSelectionMode = useCallback(() => {
     setSelectionMode((prev) => {
-      if (prev) setCheckedIds(new Set());
+      if (prev) {
+        setCheckedIds(new Set());
+        setAllMatchingSelected(false);
+      }
       return !prev;
     });
   }, []);
@@ -328,14 +372,22 @@ function SearchPage() {
       }
       return next;
     });
+    setAllMatchingSelected(false);
   }, []);
 
   const handleSelectAll = useCallback(() => {
     setCheckedIds(new Set(results.map((b) => b.id)));
+    setAllMatchingSelected(false);
+  }, [results]);
+
+  const handleSelectAllMatching = useCallback(() => {
+    setCheckedIds(new Set(results.map((b) => b.id)));
+    setAllMatchingSelected(true);
   }, [results]);
 
   const handleDeselectAll = useCallback(() => {
     setCheckedIds(new Set());
+    setAllMatchingSelected(false);
   }, []);
 
   const handleSaveToCollection = useCallback((book: BookResult) => {
@@ -377,6 +429,7 @@ function SearchPage() {
   const handleBatchEditSaved = useCallback(() => {
     setBatchEditOpen(false);
     setCheckedIds(new Set());
+    setAllMatchingSelected(false);
     setSelectionMode(false);
   }, []);
 
@@ -540,6 +593,15 @@ function SearchPage() {
                   <button type="button" className="batch-select-all-btn" onClick={handleSelectAll}>
                     {intl.formatMessage({ id: 'batchEdit.selectAll' })}
                   </button>
+                  {total > results.length && (
+                    <button
+                      type="button"
+                      className={`batch-select-all-btn${allMatchingSelected ? ' batch-select-all-btn--active' : ''}`}
+                      onClick={handleSelectAllMatching}
+                    >
+                      {intl.formatMessage({ id: 'batchEdit.selectAllMatching' }, { count: total })}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="batch-select-all-btn"
@@ -575,6 +637,7 @@ function SearchPage() {
               resultsRegionRef={resultsRegionRef}
               resultsSummaryId={resultsSummaryId}
               selectedBook={selectedBook}
+              focusedBookId={focusedBookId}
               total={total}
               selectionMode={selectionMode}
               checkedIds={checkedIds}
@@ -582,6 +645,7 @@ function SearchPage() {
               onToggleSelect={handleToggleSelect}
               onEditMetadata={handleOpenBatchEdit}
               onOpenPdf={handleOpenPdf}
+              onSelectBook={handleSelectBook}
               onPageChange={setPage}
               onPdfClose={handleClosePdf}
               onSelectSimilarBook={handleSelectSimilarBook}
@@ -600,7 +664,7 @@ function SearchPage() {
 
       {isAdmin && selectionMode && (
         <BatchSelectionToolbar
-          selectedCount={checkedIds.size}
+          selectedCount={allMatchingSelected ? total : checkedIds.size}
           onEdit={handleOpenBatchEdit}
           onClearSelection={handleDeselectAll}
         />
@@ -609,8 +673,23 @@ function SearchPage() {
       {batchEditOpen && (
         <BatchEditPanel
           documentIds={[...checkedIds]}
+          queryContext={
+            allMatchingSelected
+              ? { query: searchState.query, filters: searchState.filters, total }
+              : undefined
+          }
           onClose={handleBatchEditClose}
           onSaved={handleBatchEditSaved}
+        />
+      )}
+
+      {detailBookId && (
+        <BookDetailView
+          bookId={detailBookId}
+          initialData={detailInitialData}
+          onClose={handleCloseDetail}
+          onOpenPdf={handleDetailOpenPdf}
+          onSelectSimilarBook={handleDetailSelectSimilarBook}
         />
       )}
     </div>
