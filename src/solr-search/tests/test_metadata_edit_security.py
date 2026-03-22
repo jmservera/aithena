@@ -77,10 +77,19 @@ class TestAdminAuthRequired:
         resp = client.patch(ENDPOINT, json={"title": "Blocked"})
         assert resp.status_code == 403  # noqa: S101
 
-    def test_admin_without_api_key_gets_401(self):
-        """Admin user without API key → 401."""
-        client = _client_for(ADMIN_USER, api_key=None)
-        resp = client.patch(ENDPOINT, json={"title": "No Key"})
+    def test_admin_jwt_user_succeeds_without_api_key(self):
+        """Admin JWT session grants access even without X-API-Key."""
+        with patch("admin_auth._get_admin_api_key", return_value=None):
+            client = _client_for(ADMIN_USER, api_key=None)
+            resp = client.patch(ENDPOINT, json={"title": "Updated"})
+        # Should pass admin auth (JWT) — may fail later on missing Solr/Redis
+        assert resp.status_code != 401  # noqa: S101
+
+    def test_non_admin_without_api_key_gets_401(self):
+        """Non-admin user without API key → 401."""
+        non_admin = AuthenticatedUser(id=3, username="reader", role="user")
+        client = _client_for(non_admin, api_key=None)
+        resp = client.patch(ENDPOINT, json={"title": "No Access"})
         assert resp.status_code == 401  # noqa: S101
 
     def test_wrong_api_key_gets_401(self):
@@ -95,12 +104,13 @@ class TestAdminAuthRequired:
         resp = client.patch(ENDPOINT, json={"title": "No Auth"})
         assert resp.status_code == 401  # noqa: S101
 
-    def test_api_key_disabled_returns_403(self):
-        """When ADMIN_API_KEY not configured → 403."""
+    def test_non_admin_rejected_when_api_key_disabled(self):
+        """Non-admin user gets 401 when ADMIN_API_KEY not configured."""
         with patch("admin_auth._get_admin_api_key", return_value=None):
-            client = _client_for(ADMIN_USER)
+            non_admin = AuthenticatedUser(id=3, username="reader", role="user")
+            client = _client_for(non_admin, api_key=None)
             resp = client.patch(ENDPOINT, json={"title": "Disabled"})
-        assert resp.status_code == 403  # noqa: S101
+        assert resp.status_code == 401  # noqa: S101
 
     def test_expired_token_returns_401(self):
         """Expired JWT → 401."""

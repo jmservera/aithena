@@ -19,14 +19,9 @@ server {
         add_header Content-Type text/plain;
     }
 
-    location = /admin {
-        return 301 /admin/;
-    }
-
-    location = /admin/ {
-        root /usr/share/nginx/html;
-        try_files /admin/index.html =404;
-    }
+    # /admin and sub-paths are handled by the React SPA (catch-all location /)
+    # except for /admin/solr, /admin/rabbitmq, /admin/redis which proxy to
+    # their respective infrastructure services below.
 
     location = /admin/solr {
         return 301 /admin/solr/;

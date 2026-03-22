@@ -381,17 +381,20 @@ def test_admin_metrics_reset_clears_data(
 )
 @patch("main._get_solr_status", return_value={"status": "ok", "nodes": 3, "docs_indexed": 0})
 @patch("main.requests.post")
-def test_admin_metrics_requires_admin_auth(
+def test_admin_metrics_rejects_non_admin_jwt(
     mock_solr_post: MagicMock,
     _s: MagicMock,
     _i: MagicMock,
     _q: MagicMock,
     _e: MagicMock,
 ) -> None:
-    # Non-admin client (no X-API-Key header)
-    client = create_authenticated_client()
+    # Non-admin JWT user should be rejected
+    from auth import AuthenticatedUser
+
+    non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+    client = create_authenticated_client(user=non_admin)
     response = client.get("/v1/admin/metrics")
-    assert response.status_code in {401, 403}
+    assert response.status_code == 401
 
 
 @patch("main._embeddings_available", return_value=True)

@@ -1,16 +1,24 @@
-"""API-key authentication for admin endpoints (defense-in-depth).
+"""Authentication for admin endpoints (defense-in-depth).
 
-If ``ADMIN_API_KEY`` is configured, requests to admin endpoints must include
-a matching key via the ``X-API-Key`` header.
-If the environment variable is **not** set, admin endpoints are disabled and
-return *403 Forbidden* to prevent unauthenticated access.
+Admin endpoints accept **either** of two authentication methods:
+
+1. **API key** — ``X-API-Key`` header matching ``ADMIN_API_KEY`` env var.
+   Intended for machine-to-machine / scripted access.
+2. **JWT session** — a valid JWT (via ``Authorization: Bearer`` header or the
+   auth cookie) whose ``role`` claim is ``"admin"``.
+   Intended for browser-based access from the React admin UI.
+
+If neither method succeeds the request is rejected with *401 Unauthorized*.
 """
 
 from __future__ import annotations
 
 import hmac
+import logging
 
 from fastapi import HTTPException, Request
+
+_logger = logging.getLogger(__name__)
 
 
 def _get_admin_api_key() -> str | None:
@@ -28,31 +36,45 @@ def _extract_api_key(request: Request) -> str | None:
     return None
 
 
+def _is_authenticated_admin(request: Request) -> bool:
+    """Return ``True`` if the middleware already authenticated an admin user."""
+    from main import AuthenticatedUser
+
+    user = getattr(request.state, "auth_user", None)
+    return isinstance(user, AuthenticatedUser) and user.role == "admin"
+
+
 def require_admin_auth(request: Request) -> None:
-    """FastAPI dependency that enforces API-key auth on admin endpoints.
+    """FastAPI dependency that enforces auth on admin endpoints.
 
-    * Key not configured → *403 Forbidden* (admin endpoints disabled).
-    * Key configured but missing/wrong in request → *401 Unauthorized*.
-    * Key matches → request proceeds.
+    Accepts either a valid ``X-API-Key`` header **or** a JWT session with
+    admin role (set by the authentication middleware).
     """
+    # Path 1: API-key authentication (machine-to-machine).
     admin_api_key = _get_admin_api_key()
-    if admin_api_key is None:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin endpoints are disabled — ADMIN_API_KEY is not configured",
-        )
+    provided_key = _extract_api_key(request)
 
-    provided = _extract_api_key(request)
-    if provided is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Admin API key required — provide via X-API-Key header",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
-
-    if not hmac.compare_digest(provided, admin_api_key):
+    if provided_key is not None and admin_api_key is not None:
+        if hmac.compare_digest(provided_key, admin_api_key):
+            return  # valid API key
         raise HTTPException(
             status_code=401,
             detail="Invalid admin API key",
             headers={"WWW-Authenticate": "ApiKey"},
         )
+
+    # Path 2: JWT session — the auth middleware has already validated the
+    # token and stored the user on request.state.auth_user.
+    if _is_authenticated_admin(request):
+        return
+
+    # Neither method succeeded.
+    if provided_key is not None:
+        # An API key was provided but ADMIN_API_KEY is not configured.
+        _logger.warning("X-API-Key provided but ADMIN_API_KEY is not configured")
+
+    raise HTTPException(
+        status_code=401,
+        detail="Admin access required — authenticate via API key or admin session",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
