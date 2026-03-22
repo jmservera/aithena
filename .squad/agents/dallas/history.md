@@ -212,6 +212,18 @@ src/aithena-ui/src/
 - Added `book.chunkPage` (singular) and `book.chunkPages` (plural) for page display — follows existing `book.foundOnPage`/`book.foundOnPages` pattern.
 - 8 tests cover all edge cases: presence/absence of chunk, single vs. multi page, empty string, missing page range, coexistence with keyword highlights.
 
+### BookCard → BookDetailView Navigation (#821 — PR #843)
+
+**Pattern:** Repurposed the existing `onSelect` prop on BookCard (from #820's SimilarBooks decoupling) to open BookDetailView instead of just setting `focusedBookId`. No changes to BookCard.tsx were needed — all click, keyboard (Enter/Space), role="button", tabIndex, and stopPropagation on Open PDF were already wired from #820.
+
+**State pattern:** Two state variables — `detailBookId: string | null` and `detailInitialData: BookResult | undefined` — cleanly separate "which book to show" from "what data we already have." Passing full BookResult as `initialData` to `useBookDetail` avoids a refetch for card clicks. For similar book navigation within the detail view, `getCachedSimilarBook()` provides cached data when available.
+
+**Learnings:**
+- When `onSelect` infrastructure already exists on a component, wiring a new feature is a page-level state change only — no component modifications needed.
+- Two-variable state (`detailBookId` + `detailInitialData`) is cleaner than a single `BookResult | null` when the hook (`useBookDetail`) needs to distinguish "has initial data, skip fetch" vs. "no initial data, fetch by ID."
+- BookDetailView embeds SimilarBooks, so the standalone SimilarBooks panel (from #820) and the detail view coexist — `focusedBookId` drives the standalone panel, `detailBookId` drives the modal.
+- Shared environment risk: another session switched branches mid-work. Always verify `git branch --show-current` after any pause.
+
 ### BookDetailView Modal (#819, PR #842)
 
 **Feature:** Modal overlay component showing full book metadata, similar books, and action buttons.

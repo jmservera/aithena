@@ -14,6 +14,7 @@ import ErrorBoundary, { ErrorBoundaryFallbackProps } from '../Components/ErrorBo
 import FacetPanel from '../Components/FacetPanel';
 import ActiveFilters from '../Components/ActiveFilters';
 import BookCard from '../Components/BookCard';
+import BookDetailView from '../Components/BookDetailView';
 import Pagination from '../Components/Pagination';
 import PdfViewer from '../Components/PdfViewer';
 import SimilarBooks from '../Components/SimilarBooks';
@@ -256,6 +257,8 @@ function SearchPage() {
 
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
   const [focusedBookId, setFocusedBookId] = useState<string | null>(null);
+  const [detailBookId, setDetailBookId] = useState<string | null>(null);
+  const [detailInitialData, setDetailInitialData] = useState<BookResult | undefined>(undefined);
   const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
   const [addToCollectionDocIds, setAddToCollectionDocIds] = useState<string[]>([]);
   const resultsRegionRef = useRef<HTMLElement>(null);
@@ -322,7 +325,32 @@ function SearchPage() {
 
   const handleSelectBook = useCallback((book: BookResult) => {
     setFocusedBookId(book.id);
+    setDetailBookId(book.id);
+    setDetailInitialData(book);
   }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setDetailBookId(null);
+    setDetailInitialData(undefined);
+  }, []);
+
+  const handleDetailOpenPdf = useCallback(
+    (book: BookResult) => {
+      handleOpenPdf(book);
+    },
+    [handleOpenPdf]
+  );
+
+  const handleDetailSelectSimilarBook = useCallback(
+    (bookId: string) => {
+      const cached = getCachedSimilarBook(bookId);
+      const searchResult = results.find((b) => b.id === bookId);
+      setDetailBookId(bookId);
+      setDetailInitialData(cached ?? searchResult ?? undefined);
+      setFocusedBookId(bookId);
+    },
+    [results]
+  );
 
   const handleToggleSelectionMode = useCallback(() => {
     setSelectionMode((prev) => {
@@ -652,6 +680,16 @@ function SearchPage() {
           }
           onClose={handleBatchEditClose}
           onSaved={handleBatchEditSaved}
+        />
+      )}
+
+      {detailBookId && (
+        <BookDetailView
+          bookId={detailBookId}
+          initialData={detailInitialData}
+          onClose={handleCloseDetail}
+          onOpenPdf={handleDetailOpenPdf}
+          onSelectSimilarBook={handleDetailSelectSimilarBook}
         />
       )}
     </div>
