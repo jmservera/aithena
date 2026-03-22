@@ -55,7 +55,7 @@ All non-vector fields are identical to `books`; only the vector field type and d
 | `folder_path_s` | string | Yes | Yes | Folder path (e.g., `amades`) |
 | `category_s` | string | Yes | Yes | Inferred category/series |
 | `language_detected_s` | string | Yes | Yes | Auto-detected language code |
-| `book_embedding` | knn_vector_512 | Yes | Yes | 512-dim embedding for semantic kNN search (Phase 3) |
+| `book_embedding` | knn_vector_512 / knn_vector_768 | Yes | Yes | Dense embedding for semantic kNN search — 512-dim in `books`, 768-dim in `books_e5base` |
 | `_text_` | text | Yes | No | Default query field (copyField from title_t, author_t) |
 
 ### Analyzers

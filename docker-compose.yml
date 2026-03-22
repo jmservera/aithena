@@ -656,7 +656,7 @@ services:
           done
 
           # --- books collection (distiluse, 512D) ---
-          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
+          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -qx 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
 
