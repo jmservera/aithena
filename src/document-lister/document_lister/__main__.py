@@ -13,6 +13,7 @@ from retry import retry
 from . import (
     BASE_PATH,
     DOCUMENT_WILDCARD,
+    EXCHANGE_NAME,
     GIT_COMMIT,
     POLL_INTERVAL,
     QUEUE_NAME,
@@ -120,8 +121,8 @@ def push_file_to_queue(channel, file):
         extra={"file_path": str(file), "correlation_id": correlation_id},
     )
     channel.basic_publish(
-        exchange="",
-        routing_key=QUEUE_NAME,
+        exchange=EXCHANGE_NAME,
+        routing_key="",
         body=f"{file}",
         properties=pika.BasicProperties(
             delivery_mode=2,
@@ -148,8 +149,8 @@ def produce():
 
     connection = pika.BlockingConnection(_rabbitmq_connection_parameters())
     channel = connection.channel()
-    logger.info("Declaring queue %s", QUEUE_NAME)
-    channel.queue_declare(queue=QUEUE_NAME, durable=True, auto_delete=False)
+    logger.info("Declaring fanout exchange %s", EXCHANGE_NAME)
+    channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type="fanout", durable=True)
 
     try:
         # recursively list all files in folder '/data'

@@ -202,3 +202,17 @@
 **Testing:** 13 new tests — 5 success cases (JPEG creation, header validation, custom dimensions, multi-page), 6 failure cases (nonexistent, corrupt, empty, zero-page, unwritable output, warning logging), 2 integration tests (Solr param inclusion, indexing continues on failure). 100% coverage on thumbnail.py. Total: 154 tests, 85% service coverage.
 
 **PyMuPDF note:** `fitz.open()` cannot save zero-page PDFs, so the zero-page test uses mock. Alpine Docker image doesn't need extra system deps — pymupdf ships self-contained wheels.
+
+### Dual-Model Fanout Exchange (#871, v1.12.0)
+
+**Approach:** Migrated from RabbitMQ default exchange (direct routing) to a fanout exchange named `documents`. The lister publishes once; the exchange broadcasts to all bound indexer queues. Each indexer declares its own queue and binds it to the exchange.
+
+**Key design decisions:**
+- `EXCHANGE_NAME` env var (default: `"documents"`) added to both services for configurability.
+- Lister no longer declares a queue — only declares the fanout exchange and publishes to it with `routing_key=""`.
+- Each indexer instance declares the exchange (idempotent), declares its own queue (via `QUEUE_NAME`), and binds it to the exchange on first call only (`first_call` guard avoids rebinding on subsequent `get_queue()` calls).
+- Backward compatibility preserved: all existing env var defaults unchanged (`QUEUE_NAME="new_documents"`, `SOLR_COLLECTION="books"`, `CHUNK_SIZE=90`, `CHUNK_OVERLAP=10`). Docker-compose overrides remain authoritative.
+
+**Testing:** 7 new lister tests (exchange config, fanout publishing, persistent delivery, correlation IDs). 18 new indexer tests (exchange declaration, queue binding, passive mode on subsequent calls, QoS, queue/collection/chunk configurability). All existing tests pass unchanged.
+
+**Pattern note:** RabbitMQ `exchange_declare` is idempotent — both producer and consumers can declare the same exchange safely. The fanout type ignores routing keys entirely.
