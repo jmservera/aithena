@@ -438,7 +438,7 @@ async def request_logging_middleware(request: Request, call_next):
 def _raw_solr_query(params: dict[str, Any], *, collection: str | None = None) -> dict[str, Any]:
     """Execute a Solr HTTP request.  Raised exceptions feed the circuit breaker."""
     url = settings.select_url if collection is None else settings.select_url_for(collection)
-    response = requests.post(url, data=params, timeout=settings.request_timeout)
+    response = requests.post(url, data=params, timeout=settings.request_timeout, auth=settings.solr_auth)
     response.raise_for_status()
     return response.json()
 
@@ -2360,6 +2360,7 @@ def _solr_atomic_update(doc_id: str, fields: dict[str, str | int]) -> None:
             json=[update_doc],
             params={"commit": "true"},
             timeout=settings.request_timeout,
+            auth=settings.solr_auth,
         )
         response.raise_for_status()
     except CircuitOpenError as exc:

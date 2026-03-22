@@ -264,10 +264,12 @@ class TestWaitForSolrCollection:
                 "http://solr:8983/solr/admin/collections",
                 params={"action": "LIST", "wt": "json"},
                 timeout=indexer_module.SOLR_STARTUP_TIMEOUT,
+                auth=None,
             ),
             call(
                 "http://solr:8983/api/collections/books/config",
                 timeout=indexer_module.SOLR_STARTUP_TIMEOUT,
+                auth=None,
             ),
         ]
 
