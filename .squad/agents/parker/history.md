@@ -189,3 +189,16 @@
 
 **Imported new symbols:** `SOLR_FIELD_LIST` and `EXCLUDE_CHUNKS_FQ` from `search_service.py` into `main.py` — previously only used internally by `build_solr_params()`.
 
+### Thumbnail Generation (#824, v1.11.0)
+
+**Approach:** Added PyMuPDF (`pymupdf`) to document-indexer for rendering the first PDF page as a 200×280px JPEG thumbnail during indexing. New `thumbnail.py` module with `generate_thumbnail()` — opens PDF, scales first page to fit within target dimensions (aspect-ratio-preserving via `min(scale_x, scale_y)`), saves as JPEG.
+
+**Key design decisions:**
+- Best-effort / non-blocking: `generate_thumbnail()` returns `bool`, never raises. Failures log a warning and indexing continues uninterrupted.
+- Thumbnail path convention: `{pdf_path}.thumb.jpg` — lives alongside the PDF, easy to find by appending suffix.
+- `thumbnail_url_s` Solr field: relative path from `BASE_PATH`, added as optional param to `build_literal_params()` (backward compatible — defaults to `None`).
+- Doc is opened and closed explicitly with try/finally to avoid resource leaks on partial failures.
+
+**Testing:** 13 new tests — 5 success cases (JPEG creation, header validation, custom dimensions, multi-page), 6 failure cases (nonexistent, corrupt, empty, zero-page, unwritable output, warning logging), 2 integration tests (Solr param inclusion, indexing continues on failure). 100% coverage on thumbnail.py. Total: 154 tests, 85% service coverage.
+
+**PyMuPDF note:** `fitz.open()` cannot save zero-page PDFs, so the zero-page test uses mock. Alpine Docker image doesn't need extra system deps — pymupdf ships self-contained wheels.
