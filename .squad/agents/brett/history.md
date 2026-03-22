@@ -340,3 +340,15 @@ Created comprehensive rollback plan for the embedding model A/B test.
 2. **nginx:** Built-in nginx user + non-privileged port (8080)
 3. **TLS Configuration:** Dedicated HTTPS server block; HSTS enforcement; security header re-declaration in location blocks
 
+
+### 4. ZooKeeper SASL DIGEST-MD5 Authentication (Issue #904)
+- **What:** Implemented SASL authentication between ZooKeeper ensemble and SolrCloud nodes
+- **Pattern:** JAAS template files with `${ZK_SASL_USER}`/`${ZK_SASL_PASS}` placeholders, substituted at container startup via entrypoint wrapper scripts using `sed`
+- **ZK Config:** QuorumServer + QuorumLearner (inter-node auth) + Server (client auth); `ZOO_CFG_EXTRA` for quorum SASL settings; `SERVER_JVMFLAGS` for JAAS config path
+- **Solr Config:** Client JAAS section + `SOLR_ZK_CREDS_AND_ACLS` for DigestZkCredentialsProvider/DigestZkACLProvider + `SOLR_OPTS` for JAAS path
+- **solr-init:** Inline JAAS generation in entrypoint script before `solr zk` commands
+- **Credentials:** `ZK_SASL_USER` (default: `solr`) and `ZK_SASL_PASS` (default: `SolrZkPass_dev`); prod overrides via .env
+- **Key Files:** `src/zookeeper/zk-server-jaas.conf`, `src/zookeeper/entrypoint-sasl.sh`, `src/solr/solr-jaas.conf`, `src/solr/entrypoint-sasl.sh`
+- **Health Checks:** Unaffected — ZK `ruok` 4LW doesn't require SASL; Solr health checks use HTTP
+- **Decision:** Recorded in `.squad/decisions/inbox/brett-zk-sasl-impl.md`
+

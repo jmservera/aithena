@@ -507,20 +507,27 @@ services:
       - document-data:/data/documents:ro
   zoo1:
     image: zookeeper:3.9
+    entrypoint: /entrypoint-sasl.sh
+    command: []
     expose:
       - "2181"
     networks:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
-      ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_CFG_EXTRA: "admin.enableServer=false quorum.auth.enableSasl=true quorum.auth.learnerRequireSasl=true quorum.auth.serverRequireSasl=true authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider requireClientAuthScheme=sasl"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:-SolrZkPass_dev}
+      SERVER_JVMFLAGS: "-Djava.security.auth.login.config=/conf/jaas.conf -Dzookeeper.requireClientAuthScheme=sasl"
     volumes:
       - zoo-data1_logs:/logs
       - zoo-data1_data:/data
       - zoo-data1_datalog:/datalog
       - zoo-backup:/backup
+      - ./src/zookeeper/zk-server-jaas.conf:/conf/jaas-template.conf:ro
+      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       # ruok is the canonical ZK liveness check; the previous mntr-based
       # leader/follower test caused broken-pipe noise because grep exits
@@ -546,20 +553,27 @@ services:
         max-file: "3"
   zoo2:
     image: zookeeper:3.9
+    entrypoint: /entrypoint-sasl.sh
+    command: []
     expose:
       - "2181"
     networks:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
-      ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_CFG_EXTRA: "admin.enableServer=false quorum.auth.enableSasl=true quorum.auth.learnerRequireSasl=true quorum.auth.serverRequireSasl=true authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider requireClientAuthScheme=sasl"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:-SolrZkPass_dev}
+      SERVER_JVMFLAGS: "-Djava.security.auth.login.config=/conf/jaas.conf -Dzookeeper.requireClientAuthScheme=sasl"
     volumes:
       - zoo-data2_logs:/logs
       - zoo-data2_data:/data
       - zoo-data2_datalog:/datalog
       - zoo-backup:/backup
+      - ./src/zookeeper/zk-server-jaas.conf:/conf/jaas-template.conf:ro
+      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -581,20 +595,27 @@ services:
         max-file: "3"
   zoo3:
     image: zookeeper:3.9
+    entrypoint: /entrypoint-sasl.sh
+    command: []
     expose:
       - "2181"
     networks:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
-      ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_CFG_EXTRA: "admin.enableServer=false quorum.auth.enableSasl=true quorum.auth.learnerRequireSasl=true quorum.auth.serverRequireSasl=true authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider requireClientAuthScheme=sasl"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:-SolrZkPass_dev}
+      SERVER_JVMFLAGS: "-Djava.security.auth.login.config=/conf/jaas.conf -Dzookeeper.requireClientAuthScheme=sasl"
     volumes:
       - zoo-data3_logs:/logs
       - zoo-data3_data:/data
       - zoo-data3_datalog:/datalog
       - zoo-backup:/backup
+      - ./src/zookeeper/zk-server-jaas.conf:/conf/jaas-template.conf:ro
+      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -619,14 +640,22 @@ services:
     # build:
     #   context: .
     #   dockerfile: ./src/solr/Dockerfile
+    entrypoint: /entrypoint-sasl.sh
+    command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data:/var/solr/data
       - document-data:/data/documents:ro
+      - ./src/solr/solr-jaas.conf:/opt/solr/server/etc/solr-jaas-template.conf:ro
+      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:-SolrZkPass_dev}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:-SolrZkPass_dev}"
+      SOLR_OPTS: "-Djava.security.auth.login.config=/opt/solr/server/etc/solr-jaas.conf"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
@@ -665,14 +694,22 @@ services:
     # build:
     #   context: .
     #   dockerfile: ./src/solr/Dockerfile
+    entrypoint: /entrypoint-sasl.sh
+    command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data2:/var/solr/data
       - document-data:/data/documents:ro
+      - ./src/solr/solr-jaas.conf:/opt/solr/server/etc/solr-jaas-template.conf:ro
+      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:-SolrZkPass_dev}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:-SolrZkPass_dev}"
+      SOLR_OPTS: "-Djava.security.auth.login.config=/opt/solr/server/etc/solr-jaas.conf"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
@@ -710,14 +747,22 @@ services:
     # build:
     #   context: .
     #   dockerfile: ./src/solr/Dockerfile
+    entrypoint: /entrypoint-sasl.sh
+    command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data3:/var/solr/data
       - document-data:/data/documents:ro
+      - ./src/solr/solr-jaas.conf:/opt/solr/server/etc/solr-jaas-template.conf:ro
+      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:-SolrZkPass_dev}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:-SolrZkPass_dev}"
+      SOLR_OPTS: "-Djava.security.auth.login.config=/opt/solr/server/etc/solr-jaas.conf"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
