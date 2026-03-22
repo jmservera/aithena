@@ -231,3 +231,68 @@ describe('BookCard onSelect prop', () => {
     expect(onSelect).toHaveBeenCalledWith(mockBook);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SimilarBooks – error, empty, and loading states (#823 gap-fill)
+// ---------------------------------------------------------------------------
+
+describe('SimilarBooks – loading, error, and empty states', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('shows loading skeletons while API is pending', () => {
+    vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
+
+    render(
+      <IntlWrapper>
+        <SimilarBooks documentId="book-42" onSelectBook={vi.fn()} />
+      </IntlWrapper>
+    );
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    const skeletons = document.querySelectorAll('.similar-book-card--loading');
+    expect(skeletons.length).toBe(3);
+  });
+
+  it('shows error alert when API call fails', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    } as Response);
+
+    render(
+      <IntlWrapper>
+        <SimilarBooks documentId="book-42" onSelectBook={vi.fn()} />
+      </IntlWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  it('shows empty state message when no similar books found', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: [] }),
+    } as Response);
+
+    render(
+      <IntlWrapper>
+        <SimilarBooks documentId="book-42" onSelectBook={vi.fn()} />
+      </IntlWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    // Should show "no similar books" message, no book cards
+    expect(screen.queryByRole('button', { name: /open similar book/i })).not.toBeInTheDocument();
+  });
+});

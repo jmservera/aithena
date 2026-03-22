@@ -779,6 +779,63 @@ describe('BookDetailView', () => {
     });
   });
 
+  describe('accessibility – focus trap and ARIA', () => {
+    it('dialog has aria-labelledby pointing to the title', () => {
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      const dialog = screen.getByRole('dialog');
+      const labelledById = dialog.getAttribute('aria-labelledby');
+      expect(labelledById).toBeTruthy();
+      // The referenced element should contain the book title
+      const labelEl = document.getElementById(labelledById!);
+      expect(labelEl).not.toBeNull();
+      expect(labelEl!.textContent).toContain('Advanced Systems Design');
+    });
+
+    it('restores body scroll overflow on unmount', () => {
+      document.body.style.overflow = 'auto';
+
+      const { unmount } = renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      expect(document.body.style.overflow).toBe('hidden');
+
+      unmount();
+
+      expect(document.body.style.overflow).toBe('auto');
+    });
+
+    it('sets initial focus to the close button on mount', () => {
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      const closeBtn = screen.getByLabelText(/close book details/i);
+      expect(document.activeElement).toBe(closeBtn);
+    });
+  });
+
   describe('optional metadata', () => {
     it('hides metadata fields that are not present', () => {
       const minimalBook: BookResult = {

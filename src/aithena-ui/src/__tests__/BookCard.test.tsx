@@ -249,3 +249,85 @@ describe('BookCard – metadata display', () => {
     expect(metaItems.length).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Selection mode (#823 gap-fill)
+// ---------------------------------------------------------------------------
+
+describe('BookCard – selection mode', () => {
+  it('renders checkbox when selectionMode is true', () => {
+    render(
+      <IntlWrapper>
+        <BookCard book={baseBook} selectionMode={true} onToggleSelect={vi.fn()} />
+      </IntlWrapper>
+    );
+
+    const checkbox = screen.getByRole('checkbox');
+    expect(checkbox).toBeInTheDocument();
+  });
+
+  it('calls onToggleSelect with book id when checkbox is clicked', async () => {
+    const user = userEvent.setup();
+    const onToggleSelect = vi.fn();
+
+    render(
+      <IntlWrapper>
+        <BookCard book={baseBook} selectionMode={true} onToggleSelect={onToggleSelect} />
+      </IntlWrapper>
+    );
+
+    await user.click(screen.getByRole('checkbox'));
+    expect(onToggleSelect).toHaveBeenCalledWith('doc-1');
+  });
+
+  it('checkbox reflects isChecked prop', () => {
+    render(
+      <IntlWrapper>
+        <BookCard book={baseBook} selectionMode={true} isChecked={true} onToggleSelect={vi.fn()} />
+      </IntlWrapper>
+    );
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+  });
+
+  it('does not render checkbox when selectionMode is false', () => {
+    render(
+      <IntlWrapper>
+        <BookCard book={baseBook} selectionMode={false} />
+      </IntlWrapper>
+    );
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Collection badge (#823 gap-fill)
+// ---------------------------------------------------------------------------
+
+describe('BookCard – collection badge', () => {
+  it('renders collection badge when in_collections > 0', () => {
+    const bookWithCollections: BookResult = { ...baseBook, in_collections: 3 };
+
+    render(
+      <IntlWrapper>
+        <BookCard book={bookWithCollections} />
+      </IntlWrapper>
+    );
+
+    const badge = document.querySelector('.collection-badge');
+    expect(badge).not.toBeNull();
+  });
+
+  it('does not render collection badge when in_collections is 0', () => {
+    const bookZero: BookResult = { ...baseBook, in_collections: 0 };
+
+    render(
+      <IntlWrapper>
+        <BookCard book={bookZero} />
+      </IntlWrapper>
+    );
+
+    expect(document.querySelector('.collection-badge')).toBeNull();
+  });
+});

@@ -292,3 +292,86 @@ def test_book_detail_in_openapi_schema() -> None:
     assert "/v1/books/{book_id}" in schema["paths"]
     path_item = schema["paths"]["/v1/books/{book_id}"]
     assert "get" in path_item
+
+
+# ---------------------------------------------------------------------------
+# Gap-fill: mixed-case IDs, response contract, circuit breaker, Solr HTTP error
+# ---------------------------------------------------------------------------
+
+
+@patch("main.requests.post")
+def test_book_detail_mixed_case_sha256_accepted(mock_post: MagicMock) -> None:
+    """SHA256 IDs with mixed-case hex characters should be accepted."""
+    mixed_id = "aAbBcCdD" * 8  # 64 chars, mixed case
+    doc = _make_book_doc(mixed_id)
+    _mock_solr_ok(mock_post, _solr_response([doc]))
+
+    client = get_client()
+    response = client.get(f"/v1/books/{mixed_id}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == mixed_id
+
+
+@patch("main.requests.post")
+def test_book_detail_response_contains_all_expected_keys(mock_post: MagicMock) -> None:
+    """The response JSON must include every key defined by normalize_book."""
+    _mock_solr_ok(mock_post, _solr_response([_make_book_doc()]))
+
+    client = get_client()
+    data = client.get(f"/v1/books/{VALID_SHA256}").json()
+
+    expected_keys = {
+        "id", "title", "author", "year", "category", "language",
+        "series", "file_path", "folder_path", "page_count", "file_size",
+        "pages", "is_chunk", "chunk_text", "page_start", "page_end",
+        "score", "highlights", "document_url",
+    }
+    assert expected_keys.issubset(data.keys()), f"Missing keys: {expected_keys - data.keys()}"
+
+
+@patch("main.requests.post")
+def test_book_detail_special_chars_preserved(mock_post: MagicMock) -> None:
+    """Unicode and special characters in metadata survive normalization."""
+    doc = _make_book_doc()
+    doc["title_s"] = "L'Étranger — A Novel (2nd ed.)"
+    doc["author_s"] = "José García Márquez"
+    _mock_solr_ok(mock_post, _solr_response([doc]))
+
+    client = get_client()
+    data = client.get(f"/v1/books/{VALID_SHA256}").json()
+
+    assert data["title"] == "L'Étranger — A Novel (2nd ed.)"
+    assert data["author"] == "José García Márquez"
+
+
+@patch("main.query_solr")
+def test_book_detail_circuit_breaker_open_returns_503(mock_query: MagicMock) -> None:
+    """When the circuit breaker is open, query_solr raises HTTPException 503."""
+    from fastapi import HTTPException
+
+    mock_query.side_effect = HTTPException(
+        status_code=503,
+        detail="Search service temporarily unavailable — Solr circuit breaker is open",
+    )
+
+    client = get_client()
+    response = client.get(f"/v1/books/{VALID_SHA256}")
+
+    assert response.status_code == 503
+    assert "circuit breaker" in response.json()["detail"]
+
+
+@patch("main.requests.post")
+def test_book_detail_solr_http_error_returns_502(mock_post: MagicMock) -> None:
+    """A non-200 Solr HTTP response (e.g. 500) should yield 502."""
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+    mock_response.raise_for_status.side_effect = req_lib.HTTPError("500 Server Error")
+    mock_post.return_value = mock_response
+
+    client = get_client()
+    response = client.get(f"/v1/books/{VALID_SHA256}")
+
+    assert response.status_code == 502
+    assert "failed" in response.json()["detail"]
