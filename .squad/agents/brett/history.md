@@ -154,3 +154,9 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - `auth_request` works inside regex location blocks — can gate static file access with the same subrequest auth used for proxy locations.
 - Both `docker-compose.yml` and `docker-compose.prod.yml` need volume mounts updated in parallel — prod compose is a separate file, not an overlay of the dev one.
 - The `document-data` volume was previously only mounted in application services (solr-search, document-lister, document-indexer, admin); adding it to nginx enables direct static serving without proxy overhead.
+
+### v1.11.0 Release (2026-03-22)
+- Released v1.11.0 "Search Results Redesign" — 27 issues, 17 PRs merged to dev
+- VERSION bumped 1.10.1 → 1.11.0, CHANGELOG updated with full release notes including new v1.10.1 section
+- Annotated tag v1.11.0 created and pushed; GitHub release published with changelog and feature summary
+- Branch protection blocked direct dev/main pushes (status checks pending + scanning). Tag and release created successfully; branches pending check completion before merge to main
