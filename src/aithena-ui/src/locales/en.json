@@ -353,6 +353,7 @@
   "loading.usersMessage": "Getting the user management view ready.",
   "login.description": "Use your account to access search, upload, and admin tools.",
   "login.password": "Password",
+  "login.rememberMe": "Remember me",
   "login.signIn": "Sign in",
   "login.signingIn": "Signing in…",
   "login.title": "Sign in to Aithena",
