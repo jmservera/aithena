@@ -119,3 +119,12 @@
 - **Chunker abbreviation handling:** The sentence boundary heuristic (`.!?`) treats abbreviations (e.g., "Dr.") as sentence boundaries — documented as a known limitation in tests
 - **solr-search coverage:** 91.20% (up from 91.77% on the search_service module alone — now 97% on that file)
 - Total test counts after PR: solr-search ~805, document-indexer ~141, aithena-ui ~510
+
+### Wave 2 Test Coverage (PR #845 for #823)
+- Added 17 new tests across 4 files (solr-search, aithena-ui) filling gaps left by Parker (#819) and Dallas (#820/#821/#822)
+- **Audit-first pattern confirmed:** Comprehensive audit of all 12+ existing Wave 2 test files before writing a single line prevented duplication
+- **CircuitOpenError constructor:** Requires `(name, remaining_seconds)` — can't instantiate with just a message string. For endpoint tests, mock at `query_solr` level with `HTTPException(503)` instead
+- **CollectionBadge uses i18n:** Don't assert on raw count text (e.g., `getByText('3')`) — the badge renders via `intl.formatMessage`. Use `.collection-badge` class selector instead
+- **BookDetailView focus management:** `useId()` generates the aria-labelledby target; initial focus goes to close button ref on mount; body overflow is saved/restored in useEffect cleanup
+- **solr-search coverage:** 91.25%, 828 tests passing
+- **aithena-ui:** 574 tests passing
