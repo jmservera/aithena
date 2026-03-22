@@ -169,6 +169,42 @@ v1.14.0 is **ON HOLD** pending embeddings evaluation results.
 
 ---
 
+## Decision: Security Re-Review — ZooKeeper SASL DIGEST-MD5 Implementation
+
+**Reviewer:** Kane (Security Engineer)  
+**Date:** 2026-03-22  
+**Commit:** 891df48  
+**Branch:** squad/904-zk-sasl-clean  
+**Status:** APPROVED ✅  
+**PR:** #955 (Closes #904)
+
+### Context
+ZooKeeper SASL DIGEST-MD5 authentication implementation (Issue #904) underwent initial review and found 5 security findings (1 CRITICAL, 4 MEDIUM). The team remediated all findings. This is the post-remediation re-review.
+
+### Original Findings — All Remediated
+
+1. **Shell Injection via Unquoted sed Substitution (CRITICAL)** → Fixed via `printf` replacement with safe format specifiers
+2. **World-Readable JAAS Config Files (CRITICAL)** → Fixed via explicit `chmod 600` immediately after generation
+3. **solr-init Inline sed Injection (CRITICAL)** → Fixed via injection-safe `printf` in both compose files
+4. **Redundant JVM Flag (MEDIUM)** → Fixed via removal of duplicate `requireClientAuthScheme=sasl` from `SERVER_JVMFLAGS`
+5. **Dev Default Password Allowed in Prod (MEDIUM)** → Fixed via mandatory validation using `${VAR:?error message}` syntax in production compose
+
+### New Security Assessment
+
+- **Entrypoint Scripts:** Reviewed for additional vulnerabilities. Both use `set -euo pipefail` for strict error handling and `: "${VAR:?error message}"` for variable validation. No injection points identified.
+- **JAAS Template Files:** Both files marked "DOCUMENTATION ONLY" — safe, serve as reference only. Runtime generation eliminates stale template risks.
+- **Compose Configuration:** No new vulnerabilities. Services use read-only mounts, minimal port exposure, and health checks.
+
+### Verdict
+**✅ APPROVED** — All 5 findings comprehensively remediated. Implementation demonstrates industry best practices (injection-safe string handling, principle of least privilege, fail-secure defaults, defense in depth). Recommended for merge to dev and next release.
+
+### Notes for Future
+- Team's choice to eliminate template files in favor of runtime generation is superior (prevents stale templates).
+- Consider documenting JAAS structure in markdown instead of `.conf` templates to avoid confusion.
+- Add integration test verifying SASL authentication actually works (not just service startup).
+
+---
+
 ## Process Notes
 
 - Decisions are recorded by the Scribe (silent archive, no user communication)
