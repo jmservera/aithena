@@ -17,7 +17,6 @@ from typing import Annotated, Any, Literal, TypeVar
 from urllib.parse import urlparse
 
 import pika
-import redis as redis_lib
 import requests
 from admin_auth import require_admin_auth
 from auth import (
@@ -128,6 +127,8 @@ from search_service import (
     resolve_document_path,
     solr_escape,
 )
+
+import redis as redis_lib
 
 setup_logging(service_name="solr-search")
 logger = logging.getLogger(__name__)

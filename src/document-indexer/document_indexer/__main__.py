@@ -9,10 +9,11 @@ from pathlib import Path
 
 import pdfplumber
 import pika
-import redis
 import requests
 from pika.adapters.blocking_connection import BlockingChannel
 from retry import retry
+
+import redis
 
 from . import (
     BASE_PATH,
