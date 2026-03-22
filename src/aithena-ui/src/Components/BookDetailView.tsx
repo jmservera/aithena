@@ -8,6 +8,31 @@ import { BookResult } from '../hooks/search';
 import { useMetadataEdit, MetadataFormValues } from '../hooks/useMetadataEdit';
 import SimilarBooks from './SimilarBooks';
 
+function DetailThumbnail({ src, alt }: { src: string; alt: string }) {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return (
+      <div
+        className="book-detail-header__thumbnail book-detail-header__thumbnail--placeholder"
+        aria-hidden="true"
+      >
+        <FileText size={64} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      className="book-detail-header__thumbnail"
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => setError(true)}
+    />
+  );
+}
+
 interface BookDetailViewProps {
   bookId: string;
   initialData?: BookResult;
@@ -513,11 +538,23 @@ function BookDetailView({
                 <>
                   {/* Header section */}
                   <div className="book-detail-header">
-                    <h2 className="book-detail-header__title">{book.title}</h2>
-                    <p className="book-detail-header__author">
-                      {book.author || intl.formatMessage({ id: 'book.unknownAuthor' })}
-                    </p>
-                    {book.year && <span className="book-detail-header__year">{book.year}</span>}
+                    {book.thumbnail_url ? (
+                      <DetailThumbnail src={book.thumbnail_url} alt={book.title} />
+                    ) : (
+                      <div
+                        className="book-detail-header__thumbnail book-detail-header__thumbnail--placeholder"
+                        aria-hidden="true"
+                      >
+                        <FileText size={64} />
+                      </div>
+                    )}
+                    <div className="book-detail-header__info">
+                      <h2 className="book-detail-header__title">{book.title}</h2>
+                      <p className="book-detail-header__author">
+                        {book.author || intl.formatMessage({ id: 'book.unknownAuthor' })}
+                      </p>
+                      {book.year && <span className="book-detail-header__year">{book.year}</span>}
+                    </div>
                   </div>
 
                   {/* Metadata grid */}
