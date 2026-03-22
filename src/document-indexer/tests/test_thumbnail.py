@@ -78,6 +78,42 @@ class TestGenerateThumbnailSuccess:
         assert result is True
         assert out.exists()
 
+    def test_overwrites_existing_thumbnail(self, tmp_path: Path):
+        """Re-indexing should silently overwrite an existing thumbnail."""
+        pdf = _make_pdf(tmp_path / "book.pdf")
+        out = tmp_path / "thumb.jpg"
+
+        generate_thumbnail(str(pdf), str(out))
+        first_size = out.stat().st_size
+
+        # Regenerate — should succeed and overwrite
+        result = generate_thumbnail(str(pdf), str(out))
+
+        assert result is True
+        assert out.stat().st_size == first_size  # same content, no corruption
+
+    def test_landscape_pdf_fits_within_bounds(self, tmp_path: Path):
+        """A landscape-oriented PDF should scale to fit within width×height."""
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page(width=792, height=612)  # landscape
+        page.insert_text((72, 72), "Landscape")
+        landscape_path = tmp_path / "landscape.pdf"
+        doc.save(str(landscape_path))
+        doc.close()
+
+        out = tmp_path / "thumb.jpg"
+        result = generate_thumbnail(str(landscape_path), str(out), width=200, height=280)
+
+        assert result is True
+        # Verify the output image doesn't exceed bounds
+        from PIL import Image
+
+        img = Image.open(out)
+        assert img.width <= 200
+        assert img.height <= 280
+
 
 # ---------------------------------------------------------------------------
 # Failure / graceful degradation
@@ -131,6 +167,19 @@ class TestGenerateThumbnailFailure:
         result = generate_thumbnail(str(pdf), out)
 
         assert result is False
+
+    def test_read_protected_pdf_returns_false(self, tmp_path: Path):
+        """Source PDF exists but is not readable (permission error)."""
+        pdf = _make_pdf(tmp_path / "protected.pdf")
+        pdf.chmod(0o000)
+        out = tmp_path / "thumb.jpg"
+
+        result = generate_thumbnail(str(pdf), str(out))
+
+        assert result is False
+        assert not out.exists()
+        # Restore permissions for tmp_path cleanup
+        pdf.chmod(0o644)
 
     def test_logs_warning_on_failure(self, tmp_path: Path, caplog):
         out = tmp_path / "thumb.jpg"

@@ -128,3 +128,11 @@
 - **BookDetailView focus management:** `useId()` generates the aria-labelledby target; initial focus goes to close button ref on mount; body overflow is saved/restored in useEffect cleanup
 - **solr-search coverage:** 91.25%, 828 tests passing
 - **aithena-ui:** 574 tests passing
+
+### Wave 3 Test Coverage (PR #850 for #829)
+- Added 12 new tests across 5 files (document-indexer, solr-search, aithena-ui) filling gaps left by Parker (#848) and Dallas (thumbnail UI)
+- **Audit-first pattern confirmed again:** dev branch pull revealed Dallas's 5 BookCard thumbnail tests and 2 BookDetailView tests already existed — avoided duplication
+- **PIL for dimension assertion:** Used `PIL.Image.open()` to verify landscape PDF thumbnail fits within 200×280 bounds — validates PyMuPDF aspect ratio scaling
+- **test_book_detail expected_keys gap:** The existing `test_book_detail_response_contains_all_expected_keys` was missing `thumbnail_url` in its expected_keys set — would have silently passed without it
+- **BookThumbnail error state:** Both BookCard and BookDetailView use an internal `error` state (useState) with `onError` handler — `fireEvent.error(img)` triggers the fallback, then the `<img>` is removed from DOM entirely (not just hidden)
+- **Test counts after PR:** document-indexer 160 passed, solr-search 833 passed, aithena-ui 584 passed
