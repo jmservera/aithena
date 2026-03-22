@@ -173,6 +173,21 @@ server {
         proxy_pass http://solr-search:8080/v1/;
     }
 
+    # Serve thumbnail images directly from the documents volume.
+    # Only .thumb.jpg files are matched; all other paths return 404.
+    location ~ ^/thumbnails/(.+\.thumb\.jpg)$ {
+        auth_request /_auth;
+        error_page 401 = @auth_error;
+
+        alias /data/documents/$1;
+
+        types { }
+        default_type image/jpeg;
+
+        add_header Cache-Control "public, max-age=86400" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
     location /documents/ {
         auth_request /_auth;
         error_page 401 = @auth_error;
