@@ -1,0 +1,239 @@
+# SSL/TLS server block — loaded only when docker-compose.ssl.yml overlay is active.
+#
+# The NGINX_HOST environment variable must be set to the domain name matching
+# your Let's Encrypt certificate (e.g., NGINX_HOST=aithena.example.com).
+#
+# This file is an envsubst template: the nginx Docker image processes it at
+# container start, substituting ${NGINX_HOST} and writing the result to
+# /etc/nginx/conf.d/ssl.conf.  All other $variables (nginx internals like
+# $host, $scheme, etc.) are left untouched because NGINX_ENVSUBST_FILTER
+# restricts substitution to ${NGINX_HOST} only.
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${NGINX_HOST};
+
+    server_tokens off;
+
+    # --- TLS certificates (Let's Encrypt / certbot) -------------------------
+    ssl_certificate /etc/letsencrypt/live/${NGINX_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${NGINX_HOST}/privkey.pem;
+
+    # --- TLS protocol and cipher hardening -----------------------------------
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # --- Security headers (HTTPS only) ---------------------------------------
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 64m;
+
+    # --- Locations (mirrors default.conf for HTTPS traffic) ------------------
+
+    location /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "healthy\n";
+    }
+
+    location = /admin/solr {
+        return 301 /admin/solr/;
+    }
+
+    location /admin/solr/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /admin/solr;
+        proxy_set_header Accept-Encoding "";
+        proxy_pass http://solr:8983/solr/;
+        proxy_redirect /solr/ /admin/solr/;
+        sub_filter_once off;
+        sub_filter_types text/css application/javascript;
+        sub_filter '"/solr/' '"/admin/solr/';
+        sub_filter "'/solr/" "'/admin/solr/";
+        sub_filter 'href="/solr/' 'href="/admin/solr/';
+        sub_filter 'src="/solr/' 'src="/admin/solr/';
+    }
+
+    location /solr/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr:8983;
+    }
+
+    location = /admin/rabbitmq {
+        return 301 /admin/rabbitmq/;
+    }
+
+    location /admin/rabbitmq/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /admin/rabbitmq;
+        proxy_pass http://rabbitmq:15672;
+    }
+
+    location /admin/streamlit {
+        return 301 /admin/;
+    }
+
+    location = /admin/redis {
+        return 301 /admin/redis/;
+    }
+
+    location /admin/redis/ {
+        auth_request /_auth;
+        error_page 401 = @auth_redirect;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /admin/redis;
+        proxy_pass http://redis-commander:8081;
+    }
+
+    location = /_auth {
+        internal;
+        proxy_pass http://solr-search:8080/v1/auth/validate;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Authorization $http_authorization;
+    }
+
+    location @auth_error {
+        default_type application/json;
+        return 401 '{"detail":"Not authenticated"}';
+    }
+
+    location @auth_redirect {
+        return 302 /?redirect=$request_uri;
+    }
+
+    location = /v1/auth/login {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_pass http://solr-search:8080/v1/auth/login;
+    }
+
+    location = /v1/auth/validate {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/auth/validate;
+    }
+
+    location = /v1/health {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/health;
+    }
+
+    location = /v1/info {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/info;
+    }
+
+    location = /v1/version {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://solr-search:8080/v1/version;
+    }
+
+    location /v1/ {
+        auth_request /_auth;
+        error_page 401 = @auth_error;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_read_timeout 180s;
+        proxy_connect_timeout 10s;
+        proxy_pass http://solr-search:8080/v1/;
+    }
+
+    # Serve thumbnail images directly from the documents volume.
+    # Only .thumb.jpg files are matched; all other paths return 404.
+    location ~ ^/thumbnails/(.+\.thumb\.jpg)$ {
+        auth_request /_auth;
+        error_page 401 = @auth_error;
+
+        alias /data/documents/$1;
+
+        types { }
+        default_type image/jpeg;
+
+        # Location-level add_header suppresses server-level directives;
+        # re-declare security headers alongside Cache-Control.
+        add_header Cache-Control "public, max-age=86400" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    }
+
+    location /documents/ {
+        auth_request /_auth;
+        error_page 401 = @auth_error;
+        # Allow same-origin iframe embedding for the PDF viewer.
+        # Overrides the server-level DENY; re-declare other headers since
+        # location-level add_header suppresses server-level directives.
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_pass http://solr-search:8080/documents/;
+    }
+
+    location / {
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://aithena-ui:80;
+    }
+}
