@@ -194,9 +194,29 @@ If a check fails:
 
 **Do NOT merge with failing checks.** Branch protection enforces this.
 
+### [ ] Resolve All PR Comments
+
+**⚠️ MANDATORY: No PR may be merged with unresolved comments.**
+
+Before merging, review every comment on the PR. For each comment, take ONE of these actions:
+
+1. **Apply it** — make the requested change, reply confirming it's done
+2. **Postpone it** — create a new GitHub issue for follow-up, reply with the issue link
+3. **Do not apply** — reply with the reasoning for not applying, then resolve the thread
+
+Every comment thread must be resolved before proceeding to merge. This applies to:
+- Review comments (inline code comments)
+- PR-level review comments
+- Conversation comments
+
+```bash
+# Check for unresolved review threads
+gh api "repos/{owner}/{repo}/pulls/{number}/reviews" --jq '[.[] | select(.state == "CHANGES_REQUESTED")] | length'
+```
+
 ### [ ] Merge the Release PR
 
-Once all CI checks pass:
+Once all CI checks pass AND all comments are resolved:
 
 ```bash
 gh pr merge <number> --merge
