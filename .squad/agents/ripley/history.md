@@ -167,6 +167,38 @@ Active decisions in `.squad/decisions.md`:
 
 ## Learnings
 
+### Skills Database Pruning: 49 → 34 High-Confidence Skills (2026-03-21)
+
+**Session:** Comprehensive audit and aggressive pruning of the skills database.
+
+**Findings:**
+- **Starting point:** 49 skills accumulated across v1.0–v1.11 with low barrier to creation
+- **Problem:** Skills without clear ownership, one-time process docs, deprecated content (Streamlit admin), and overlapping documentation created noise
+- **Strategy:** Aggressive pruning targeting skills that either:
+  1. Were never validated or are low-confidence ("planned for v1.11.0, not yet validated")
+  2. Document one-time processes (i18n extraction for v1.6.0–v1.7.0)
+  3. Are too generic (project conventions, TDD/Clean Code, "reskill" meta-skill)
+  4. Refer to removed systems (admin coverage setup, smoke testing)
+  5. Overlap with other high-value skills (2 hybrid search skills consolidated into solr parent-chunk model)
+
+**Changes:**
+- **Removed 15 skills:** ci-coverage-setup, ralph-dependency-check, milestone-branching-strategy, smoke-testing, i18n-extraction-workflow, reskill, project-conventions, tdd-clean-code, lead-retrospective, dependabot-triage-routing, copilot-review-to-issues, squad-pr-workflow, docker-health-checks, hybrid-search-parent-chunk, hybrid-search-patterns
+- **Consolidated:** hybrid-search patterns (RRF, embedding integration, timeout handling) merged into solr-parent-chunk-model
+- **Result:** 34 high-confidence, team-wide, battlefield-proven skills remaining
+
+**Final Skills by Category:**
+- **Architecture:** phase-gated-execution, solr-parent-chunk-model (with hybrid search), solr-pdf-indexing, nginx-reverse-proxy, http-wrapper-services
+- **Testing:** pytest-aithena-patterns, vitest-testing-patterns, playwright-e2e-aithena, path-metadata-tdd
+- **Backend:** fastapi-auth-patterns, fastapi-query-params, redis-connection-patterns, pika-rabbitmq-fastapi, logging-security
+- **Frontend:** react-frontend-patterns, accessibility-wcag-react
+- **Infrastructure:** docker-compose-operations, solrcloud-docker-operations, bind-mount-permissions, branch-protection-strict-mode, nginx-reverse-proxy
+- **Security:** security-scanning-baseline, workflow-secrets-security, ci-workflow-security, logging-security
+- **Release/Quality:** release-gate, release-tagging-process, multi-release-orchestration, pr-integration-gate, ci-gate-pattern, milestone-gate-review, milestone-wave-execution, api-contract-alignment, agent-debugging-discipline, pdf-extraction-dual-tool, path-metadata-heuristics
+
+**Pattern Reinforced:** "Aggressive pruning is better than slow accumulation." The 49-skill database had become a burden for onboarding (which skills matter?). Ruthlessly removing unvalidated, one-time, and overlapping content leaves the 34 battle-tested patterns that actually guide team work.
+
+**Next Action:** Squad members should reference these 34 skills in their charters; onboarding should point here, not to the full skills directory.
+
 ### v1.11.0 PRD: Search Results Redesign (2026-03-21)
 
 **Session:** Research + PRD authoring for 4 requirements from Juanma.
