@@ -121,3 +121,17 @@ Implemented multilingual-e5-base support in the embeddings server (issue #874, m
 
 ### E5 Prefix Design (P1-1)
 Keeping prefix logic inside the embeddings-server was the right call — it prevents every caller from needing to know model-specific prefixes. The `input_type` field is the stable API contract; prefix strings are an implementation detail. This pattern should be preserved if additional model families are added.
+
+## Session 2026-07-21 — PR #TBD (P2-2: Benchmark Query Suite)
+
+Created benchmark query suite and runner for A/B testing distiluse vs e5-base (#879).
+
+**Changes delivered:**
+- `scripts/benchmark/queries.json` — 30 queries across 5 categories (simple keyword, natural language, multilingual, long/complex, edge cases)
+- `scripts/benchmark/run_benchmark.py` — CLI runner that executes queries against both `books` and `books_e5base` collections via the solr-search API, collects top-K results/scores/latency, computes Jaccard similarity, outputs JSON + human-readable summary
+- `scripts/benchmark/tests/test_benchmark.py` — 25 tests covering query loading, Jaccard computation, result comparison, API interaction (mocked), summary aggregation, serialization, and report formatting
+
+**Learnings:**
+- The solr-search API's `collection` parameter and automatic `input_type=query` injection for e5 collections (via `is_e5_collection()`) means the benchmark runner needs no special e5 handling — it just passes the collection name and the API handles the rest.
+- Jaccard similarity of top-K is a simple but effective overlap metric for human evaluation. Low-overlap queries (Jaccard < 0.3) are the most interesting for manual review since they show where models disagree most.
+- Catching `OSError` alongside `requests.RequestException` is necessary for robustness — bare `ConnectionError` from mocks or network issues inherits from `OSError`, not `requests.RequestException`.
