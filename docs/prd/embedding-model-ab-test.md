@@ -46,7 +46,7 @@ document-lister → RabbitMQ (shortembeddings) → document-indexer
 
 ### 2.2 Key Integration Points
 
-- **Query prefix:** Current model requires NO prefix. e5-base requires `"query: {text}"` for queries and optionally `"passage: {text}"` for passages. This affects both the embeddings-server (encoding) and solr-search (query encoding).
+- **Query prefix:** Current model requires NO prefix. e5-base requires `"query: {text}"` for queries and optionally `"passage: {text}"` for passages. The embeddings-server handles this internally based on model type (see P1-1) — callers pass `input_type` and the server applies the correct prefix.
 - **Embedding dimension:** Detected dynamically at startup (`model.get_sentence_embedding_dimension()`), but the Solr schema field type is hardcoded to 512D. A new collection needs a new field type.
 - **Parent-chunk hierarchy:** Embeddings live on chunk documents, not parents. kNN queries target chunks, grouped by `parent_id_s` for book-level results. This architecture is preserved in the A/B test.
 
@@ -87,7 +87,7 @@ document-lister → RabbitMQ (shortembeddings) → document-indexer
                     └────────────────────────┘
 ```
 
-Both indexers consume from the same RabbitMQ queue. Each indexes documents into its respective Solr collection with its own model and chunking parameters.
+**⚠️ Open Question (OQ-1 — BLOCKING):** The diagram above shows both indexers consuming from the same RabbitMQ queue. This **will not work as depicted** — RabbitMQ's competing consumers pattern delivers each message to only ONE consumer, so one indexer would miss documents. The queue topology (fanout exchange, separate queues, or sequential indexing) must be resolved before implementing P1-3/P1-4. See OQ-1 in Section 9.
 
 ---
 
@@ -135,18 +135,20 @@ Dependencies: None (all Phase 1 items can start in parallel after P1-1).
 The embeddings-server already loads the model dynamically via `MODEL_NAME` env var and detects dimensions at runtime. However, e5-base requires query/passage prefixes (`"query: {text}"` and `"passage: {text}"`) that the current API does not support. Add prefix handling to the embeddings server.
 
 **Changes required:**
-- `src/embeddings-server/main.py`: Accept optional `prefix` field in `EmbeddingsInput` request body
-- `src/embeddings-server/config/__init__.py`: Add `QUERY_PREFIX` and `PASSAGE_PREFIX` env vars (default empty for backward compatibility with distiluse)
-- When a prefix is configured and no explicit prefix is passed in the request, prepend automatically
-- Ensure `/v1/embeddings/model` endpoint returns prefix configuration so clients know what to use
+- `src/embeddings-server/main.py`: Detect model family at startup (e.g., `"e5"` in model name) and apply prefixes internally
+- `src/embeddings-server/main.py`: For e5-family models, auto-prepend `"query: "` when the request `input_type` is `"query"` and `"passage: "` when `input_type` is `"passage"` (or default to `"passage"` for backward compatibility with indexing callers)
+- `src/embeddings-server/main.py`: Accept optional `input_type` field in `EmbeddingsInput` (`"query"` or `"passage"`, default `"passage"`)
+- Ensure `/v1/embeddings/model` endpoint returns `requires_prefix: true/false` so clients can verify
+- No `QUERY_PREFIX`/`PASSAGE_PREFIX` env vars — prefix logic is internal to the server based on model type
 
 **Acceptance criteria:**
-- [ ] `EmbeddingsInput` model accepts optional `prefix: str` field
-- [ ] `QUERY_PREFIX` and `PASSAGE_PREFIX` env vars are supported (defaults: empty string)
-- [ ] When `MODEL_NAME=intfloat/multilingual-e5-base`, queries work correctly with prefix
-- [ ] Backward compatible: existing distiluse callers unaffected (no prefix = no prefix applied)
-- [ ] `/v1/embeddings/model` response includes `query_prefix` and `passage_prefix` fields
-- [ ] Unit tests cover prefix application and backward compatibility
+- [ ] `EmbeddingsInput` model accepts optional `input_type: str` field (`"query"` | `"passage"`, default `"passage"`)
+- [ ] For e5-family models, prefixes are applied internally (callers send raw text)
+- [ ] For non-e5 models (distiluse), no prefix is applied regardless of `input_type`
+- [ ] When `MODEL_NAME=intfloat/multilingual-e5-base`, queries work correctly with auto-prefix
+- [ ] Backward compatible: existing distiluse callers unaffected
+- [ ] `/v1/embeddings/model` response includes `requires_prefix: bool` and `model_family: str`
+- [ ] Unit tests cover prefix application, backward compatibility, and model family detection
 - [ ] `requirements.txt` unchanged (sentence-transformers already supports e5 models)
 
 ---
@@ -186,20 +188,17 @@ Create a new Solr configset and collection (`books_e5base`) that mirrors the exi
 **Description:**
 Configure a second instance of the document-indexer that targets the e5-base embeddings server and the `books_e5base` Solr collection. The indexer is already fully configurable via environment variables (`EMBEDDINGS_HOST`, `EMBEDDINGS_PORT`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `SOLR_COLLECTION`). No code changes needed in the indexer itself — only Docker Compose configuration.
 
-However, the indexer must handle the e5 model's passage prefix. Two options:
-- **Option A (preferred):** The embeddings-server-e5 auto-prepends `"passage: "` prefix (configured via `PASSAGE_PREFIX` env var from P1-1). Indexer sends raw text as today.
-- **Option B:** Add `EMBEDDING_PREFIX` env var to the indexer to prepend before sending. Requires a small code change.
+The e5 model's passage prefix is handled internally by the embeddings-server (P1-1). The indexer sends raw text as today — no prefix-related changes needed in the indexer.
 
 **Changes required:**
 - Docker Compose: add `document-indexer-e5` service (see P1-4)
-- If Option B: add `EMBEDDING_PREFIX` env var to `src/document-indexer/document_indexer/__init__.py` and apply in `embeddings.py` before sending text
 
 **Acceptance criteria:**
 - [ ] `document-indexer-e5` service definition in docker-compose with correct env vars
 - [ ] `CHUNK_SIZE=300`, `CHUNK_OVERLAP=50`, `SOLR_COLLECTION=books_e5base`
 - [ ] `EMBEDDINGS_HOST=embeddings-server-e5`, `EMBEDDINGS_PORT=8085`
-- [ ] Same RabbitMQ queue (`shortembeddings`) — both indexers consume same documents
-- [ ] Passage prefix is handled (via embeddings-server auto-prefix or indexer env var)
+- [ ] ⚠️ **Depends on OQ-1:** RabbitMQ queue topology must be resolved before this item can be implemented. Competing consumers on a single queue will NOT deliver messages to both indexers. See OQ-1 in Section 9.
+- [ ] Passage prefix handled automatically by embeddings-server-e5 (indexer sends raw text)
 - [ ] Existing `document-indexer` service unchanged
 - [ ] Indexer tests pass with both configurations
 
@@ -222,8 +221,8 @@ embeddings-server-e5:
   environment:
     - MODEL_NAME=intfloat/multilingual-e5-base
     - PORT=8085
-    - QUERY_PREFIX=query:${SPACE}
-    - PASSAGE_PREFIX=passage:${SPACE}
+    # No QUERY_PREFIX/PASSAGE_PREFIX env vars needed — embeddings-server
+    # handles prefixes internally based on model type (see P1-1)
   expose:
     - "8085"
   deploy:
@@ -272,7 +271,7 @@ document-indexer-e5:
 - [ ] Both new services can coexist with existing services (no port conflicts)
 - [ ] YAML validation passes (`python3 -c "import yaml; yaml.safe_load(open('docker-compose.ab-test.yml'))"`)
 - [ ] README or inline comments document how to activate the A/B overlay
-- [ ] Total memory budget documented (existing ~6GB + new ~3.5GB = ~9.5GB)
+- [ ] Total memory budget documented (existing ~13GB + new ~3.5GB = ~16.5GB). Current services from docker-compose.yml: Solr×3 (6GB), ZooKeeper×3 (1.5GB), embeddings-server (2GB), RabbitMQ (1GB), Redis (512MB), document-indexer (512MB), solr-search (512MB), plus UI/nginx/redis-commander/document-lister (~1GB) = ~13GB. Minimum host RAM: 20GB recommended.
 
 ---
 
@@ -290,16 +289,16 @@ Extend the solr-search API to accept an optional `collection` query parameter th
 - Query construction: replace hardcoded collection in Solr URL with parameter value
 - **Security:** Allowlist validation only — never pass user-provided collection names directly to Solr
 
-**Also needed:** When querying the e5-base collection, the search service must prepend `"query: "` to the text before sending to the embeddings server for vector encoding. The embeddings server's `/v1/embeddings/model` endpoint (enhanced in P1-1) exposes the `query_prefix` — the search service should fetch and cache this at startup.
+**Query prefix handling:** The embeddings-server handles prefixes internally (P1-1). When solr-search encodes a query vector, it passes `input_type: "query"` to the embeddings API. The embeddings-server auto-prepends the correct prefix based on model type. No prefix logic needed in solr-search itself.
 
 **Acceptance criteria:**
 - [ ] `/v1/search?q=...&collection=books_e5base` routes to the correct Solr collection
 - [ ] Collection parameter validated against `ALLOWED_COLLECTIONS` allowlist
 - [ ] Default remains `books` when no parameter provided
-- [ ] Query prefix (`"query: "`) applied when targeting e5-base collection
+- [ ] Embedding requests include `input_type: "query"` so the embeddings-server applies the correct prefix
 - [ ] Error response (400) for invalid collection names
 - [ ] Existing search behavior unchanged when parameter is omitted
-- [ ] Unit tests cover collection routing, validation, and prefix application
+- [ ] Unit tests cover collection routing, validation, and input_type passthrough
 
 ---
 
@@ -593,9 +592,9 @@ P1-2 (Solr schema) ──→ P1-4 (docker compose)
 | R3 | **Query latency unacceptable** | Poor UX for users | Low | Research estimates +15ms. Monitor during P2-4. If >50ms: tune HNSW params (efConstruction, maxConnections), reduce topK. |
 | R4 | **Relevance improvement marginal (<3%)** | Wasted effort on A/B infrastructure | Medium | A/B infrastructure is reusable for future model tests (e5-large, BGE-M3). The overlay pattern and benchmark suite are permanent assets. |
 | R5 | **RabbitMQ dual-consumer contention** | Missing documents in one collection | Medium | Both indexers on same queue means each message goes to ONE consumer (competing consumers pattern). **Must use separate queues or topic exchange.** See Open Question OQ-1. |
-| R6 | **Model download on first container start** | Long startup, timeout in health check | Low | `start_period: 120s` in health check. Pre-pull model in Docker build (add to Dockerfile `RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-base'"`). |
-| R7 | **Memory budget exceeded** | OOM kills, service instability | Medium | Current services ~6GB. A/B adds ~3.5GB (embeddings 3GB + indexer 0.5GB). Total ~9.5GB. Document minimum host RAM requirement (12GB recommended). |
-| R8 | **Query prefix mismatch** | Silent relevance degradation | High | E5 models REQUIRE `"query: "` prefix for queries. If solr-search forgets the prefix, results will be poor but no error is raised. **Must test prefix application explicitly** (Lambert: add to P2-4 test plan). |
+| R6 | **Model download on first container start** | Long startup, timeout in health check | Low | `start_period: 120s` in health check. Pre-pull model in Docker build (add to Dockerfile `RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-base')"`). |
+| R7 | **Memory budget exceeded** | OOM kills, service instability | Medium | Current services ~13GB (from docker-compose.yml: Solr×3 6GB, ZK×3 1.5GB, embeddings 2GB, RabbitMQ 1GB, Redis 512MB, indexer 512MB, solr-search 512MB, others ~1GB). A/B adds ~3.5GB (embeddings 3GB + indexer 0.5GB). Total ~16.5GB. Document minimum host RAM requirement (20GB recommended). |
+| R8 | **Query prefix mismatch** | Silent relevance degradation | High | E5 models REQUIRE `"query: "` prefix for queries. The embeddings-server handles this internally (P1-1), but callers must pass `input_type: "query"` for search requests. If the wrong `input_type` is used, results will be poor but no error is raised. **Must test prefix application explicitly** (Lambert: add to P2-4 test plan). |
 
 ---
 
