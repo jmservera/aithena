@@ -9344,3 +9344,147 @@ One performance note: sequential batch updates for large document sets (~100s fo
 - Future: consider chunked async execution for batch operations in v1.11+.
 
 ---
+
+# Decision: Release Process — PR-to-Main Workflow Required
+
+**Date:** 2026-03-22  
+**Author:** Ripley (Lead)  
+**Status:** Approved and Implemented  
+**Reference:** Validation in v1.11.0 release workflow
+
+## Context
+
+v1.11.0 release workflow had an initial failure: a local merge commit was created and tagged before the PR merged to main. The Release workflow correctly rejected the tag because it was not reachable from main. This failure prompted clarification of the release process.
+
+## Decision
+
+**All releases MUST follow this workflow:**
+
+1. **Preparation (on `dev`):** Update VERSION + CHANGELOG, commit to dev
+2. **Create PR:** `dev` → `main` with all CI checks required (unit tests, lint, security, integration E2E)
+3. **Merge PR:** After all checks pass, merge as a regular merge commit (not squash)
+4. **Tag on main:** Create annotated tag ON the main branch after PR merges
+5. **Publish:** Release workflow automatically builds, packages, and publishes GitHub release
+
+**Critical constraint:** Tags must only be created on commits reachable from `main`. Never tag `dev` before the PR merges.
+
+## Rationale
+
+### The v1.11.0 Failure
+
+1. A merge commit was created locally: `git merge dev` (on developer's machine)
+2. A tag was created: `git tag vX.Y.Z` (on the merge commit, not yet on main)
+3. The tag was pushed: `git push origin vX.Y.Z`
+4. **Release workflow ran and FAILED:** The tag commit was not reachable from main (still ahead of main by the merge commit)
+5. **Consequence:** Tag had to be deleted, GitHub release deleted, and PR #854 created to properly merge to main
+
+### Root Cause
+
+Main branch has protected rules requiring:
+- PR required (not direct push)
+- All CI checks must pass
+- No force push
+
+These rules ensure quality, but they mean the tag must come AFTER the PR merges, when the commit becomes reachable from main.
+
+### Why This Matters
+
+The Release workflow validates that tags point to commits reachable from main. This is correct because:
+1. It prevents tagging development code
+2. It ensures all CI checks passed before the release
+3. It guarantees the release was properly reviewed via a PR
+
+## Implementation
+
+See `docs/deployment/release-checklist.md` for step-by-step instructions.
+
+**Tag on Main (correct approach):**
+```bash
+git fetch origin main
+git tag -a vX.Y.Z -m "Release vX.Y.Z" origin/main
+git push origin vX.Y.Z
+```
+
+## Impact
+
+- **Ripley (Lead):** Owns release decisions
+- **Brett (CI/CD):** Maintains Release workflow and branch protection rules
+- **Newt (Docs):** Documents release process
+- **All team:** Follows this process for all releases
+
+## Tradeoffs
+
+### Gains
+- **Safety:** Branch protection enforces the process
+- **Traceability:** Release history is clear in git
+- **Automation:** No manual GitHub release creation needed
+- **Consistency:** Same process every time
+
+### Costs
+- **Speed:** One extra approval cycle (the PR review)
+- **Flexibility:** Cannot tag arbitrary commits
+
+**Tradeoff is acceptable:** Release safety > release speed.
+
+## Validation
+
+v1.11.0 release successfully validated this process:
+- All PRs created with dev as head, main as base
+- All CI checks passed before merging
+- Tag created on main post-merge
+- Release workflow published successfully
+
+---
+
+# Decision: Always Render Page Titles Unconditionally
+
+**By:** Dallas (Frontend Dev)  
+**Date:** 2026-03-22  
+**Context:** PR #856 (E2E Stats Page Fix)  
+**Status:** Implemented  
+
+## Decision
+
+Page title elements (`.page-title`, `.status-title`, `.stats-page-title`, etc.) that serve as E2E test selectors **must always be rendered**, even during loading and error states.
+
+Components should follow the `LibraryPage` pattern:
+1. Render the header with the title unconditionally
+2. Conditionally render loading/error/data content below it
+
+## Rationale
+
+`CollectionStats` used early returns for loading/error states that skipped the title element entirely. This caused the Playwright E2E navigation test to fail when the stats API was slow in the Docker Compose environment. 
+
+By making the title always present, E2E selectors remain stable regardless of backend latency. The test can find the title before data is loaded.
+
+## Impact
+
+- `CollectionStats.tsx` fixed in PR #856 ✅
+- `IndexingStatus.tsx` has the same pattern and should be updated proactively (`.status-title` is also a test selector)
+- Future page components should follow this pattern
+
+## Pattern Example
+
+```tsx
+// ✅ CORRECT: Always render title
+export function MyPage() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadData().then(setData).catch(setError).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <div className="page-title">My Page</div>
+      {loading && <p>Loading...</p>}
+      {error && <p>Error: {error}</p>}
+      {data && <DataDisplay data={data} />}
+    </div>
+  );
+}
+```
+
+---
