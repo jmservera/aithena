@@ -494,12 +494,12 @@ services:
   zoo1:
     image: zookeeper:3.9
     expose:
-      - "8080"
       - "2181"
     networks:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
@@ -538,6 +538,7 @@ services:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
@@ -572,6 +573,7 @@ services:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
+      ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
