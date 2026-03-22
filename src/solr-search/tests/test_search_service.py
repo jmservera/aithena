@@ -267,6 +267,7 @@ def test_normalize_book_collects_fields_and_highlights() -> None:
         "score": 12.5,
         "highlights": ["<em>folk</em> story", "second snippet"],
         "document_url": "/documents/token",
+        "thumbnail_url": None,
     }
 
 
@@ -1051,6 +1052,37 @@ def test_normalize_book_minimal_document_no_fields() -> None:
     assert book["page_start"] is None
     assert book["page_end"] is None
     assert book["document_url"] is None
+
+
+def test_normalize_book_thumbnail_url_present() -> None:
+    """normalize_book extracts thumbnail_url from thumbnail_url_s."""
+    book = normalize_book(
+        {
+            "id": "thumb1",
+            "title_s": "With Thumb",
+            "file_path_s": "books/thumb.pdf",
+            "thumbnail_url_s": "https://covers.example.com/thumb.jpg",
+            "score": 1.0,
+        },
+        {},
+        None,
+    )
+    assert book["thumbnail_url"] == "https://covers.example.com/thumb.jpg"
+
+
+def test_normalize_book_thumbnail_url_none_when_absent() -> None:
+    """normalize_book returns None for thumbnail_url when field is missing."""
+    book = normalize_book(
+        {
+            "id": "no_thumb",
+            "title_s": "No Thumb",
+            "file_path_s": "books/nothumb.pdf",
+            "score": 1.0,
+        },
+        {},
+        None,
+    )
+    assert book["thumbnail_url"] is None
 
 
 def test_normalize_book_parent_id_ignores_chunk_text() -> None:
