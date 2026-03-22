@@ -55,6 +55,56 @@ cd src/embeddings-server && uv run pytest -v --tb=short && uv run ruff check .
 # Check the "Docker Compose integration + E2E" job in the main branch CI
 ```
 
+### [ ] Container Startup Verification (MANDATORY)
+
+⚠️ **CRITICAL:** A release MUST NOT ship with containers that fail to start. This gate was added after v1.12.1 shipped with a broken embeddings-server (missing `model_utils.py` in the Docker image).
+
+Build and start the full Docker Compose stack, then verify every container reaches a healthy/running state:
+
+```bash
+# 1. Build all images from the release branch
+./buildall.sh
+
+# 2. Start the full stack
+docker compose up -d
+
+# 3. Wait for health checks (up to 5 minutes)
+echo "Waiting for containers to stabilize..."
+sleep 60
+
+# 4. Verify ALL containers are healthy or running
+docker compose ps --format json | python3 -c "
+import json, sys
+lines = sys.stdin.read().strip().split('\n')
+failed = []
+for line in lines:
+    c = json.loads(line)
+    name, state, health = c['Name'], c['State'], c.get('Health', '')
+    status = f'{state}/{health}' if health else state
+    icon = '✅' if state == 'running' and health != 'unhealthy' else '❌'
+    print(f'  {icon} {name}: {status}')
+    if state != 'running' or health == 'unhealthy':
+        failed.append(name)
+if failed:
+    print(f'\n❌ RELEASE BLOCKED: {len(failed)} container(s) failed to start')
+    sys.exit(1)
+print('\n✅ All containers running and healthy')
+"
+
+# 5. Quick smoke test — verify key endpoints respond
+curl -sf http://localhost:8080/health && echo " ✅ solr-search healthy"
+curl -sf http://localhost:8085/health && echo " ✅ embeddings-server healthy"
+
+# 6. Check container logs for startup errors
+for svc in embeddings-server embeddings-server-e5 solr-search document-indexer document-lister admin; do
+  if docker compose logs "$svc" 2>&1 | grep -qi "error\|traceback\|failed\|ModuleNotFoundError"; then
+    echo "❌ $svc has errors in startup logs — investigate before releasing"
+  fi
+done
+```
+
+**If any container fails to start, DO NOT proceed with the release.** Fix the issue on `dev` first.
+
 ### [ ] Security Review (MANDATORY)
 
 ⚠️ **CRITICAL:** A release CANNOT ship with known unresolved critical or high security issues. Security fixes are MANDATORY in every release.
@@ -361,6 +411,23 @@ Look for:
 
 Or view them in the GitHub UI: https://github.com/organizations/jmservera/packages?repo_name=aithena&ecosystem=container
 
+### [ ] Clean Up Old Container Images (Periodic)
+
+After several releases, GHCR accumulates old and untagged images. Run the cleanup script periodically:
+
+```bash
+# Requires read:packages + delete:packages scopes
+gh auth refresh -s read:packages,delete:packages
+
+# Dry run first (default)
+./scripts/cleanup-ghcr.sh --keep 5
+
+# Execute cleanup
+./scripts/cleanup-ghcr.sh --keep 5 --execute
+```
+
+This removes all untagged versions and keeps only the 5 most recent semver-tagged releases per package. The current VERSION and `latest` tags are always preserved.
+
 ### [ ] Close the Milestone
 
 Mark the milestone as released:
@@ -552,6 +619,7 @@ git push origin vX.Y.Z
 
 | Date | Release | Release Lead | Notes |
 |------|---------|--------------|-------|
+| 2026-03-22 | v1.12.1 | Newt | **POST-MORTEM:** Shipped broken embeddings-server; added container startup gate |
 | 2026-03-22 | v1.10.1 | Ripley | Added gate review; BCDR + metadata editing |
 | 2026-03-21 | v1.10.0 | Ripley | User collections + book metadata; 4-wave execution |
 | 2026-03-20 | v1.9.0 | Newt | User management + RBAC |
