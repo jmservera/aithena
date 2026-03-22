@@ -76,3 +76,15 @@ PR #701 nearly broke semantic search — implementer didn't know embeddings live
 - 🔴 Production performance tuning, advanced relevance engineering
 
 **Skills referenced:** `solr-pdf-indexing`, `solrcloud-docker-operations`, `hybrid-search-parent-chunk` (new)
+
+## Session 2026-03-22T10:50Z — PR #863 Merged (Embedding Research)
+
+Embedding model research for issue #861 completed and merged to dev. Recommendation: **multilingual-e5-base** (512-token window, 768D, MTEB 61.5) as primary candidate for A/B testing. Report includes:
+- Model selection rationale and competitive analysis
+- In-repo dual-collection A/B testing strategy (5 phases, 2-3 weeks)
+- Success criteria: ≥5% nDCG@10, ≤50ms latency increase, ≤2× index growth
+- Detailed team impact breakdown and risk mitigation
+
+**Decision status:** Awaiting PO approval for infrastructure setup phase. Prepared for collaboration with Brett (infrastructure) in Phase 1 setup.
+
+**Next:** Phase 1 kickoff when approved — Solr collection setup and schema design for 768D vectors.

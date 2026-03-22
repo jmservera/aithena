@@ -163,3 +163,20 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - **Independent service versioning** (Strategy A) is the long-term architecture for scaling beyond 10+ services, but requires API contract testing and version compatibility management — migration effort 2-3 weeks, high complexity.
 - **Tiered releases** (Strategy B) are a middle ground: classify services as Fast/Stable/Infrastructure tracks with different release cadences — reduces complexity vs full independent versioning but still requires track management.
 - **Short-term recommendation:** Change-detection CI + embeddings-server base image (pre-bake ML model) for immediate 40% build time savings with minimal risk.
+
+## Session 2026-03-22T10:50Z — PR #862 Merged (Release Strategy Analysis)
+
+Release strategy analysis for issue #860 completed and merged to dev. Findings:
+- Current approach rebuilds all 6 services despite asymmetric change frequency
+- embeddings-server (9GB, 1 commit/4 releases) rebuilt unnecessarily 3 times
+- document-lister (0 commits/4 releases) always rebuilt
+- Current waste: 40-60% of build time on unchanged services
+
+**Phased recommendation:**
+1. **v1.12.0 (short-term):** Change-detection CI — skip unchanged services, retag images (40% savings, 1 week effort, low risk)
+2. **v1.13.0 (mid-term):** Hybrid versioning for stable services (60% savings, 2-3 weeks, medium risk)
+3. **v2.0.0+ (long-term):** Full independent versioning (60-80% savings, 4-6 weeks, high complexity)
+
+**Decision status:** Awaiting PO decision on phase prioritization. Ready to implement short-term change-detection CI immediately if approved.
+
+**Next:** Phase 1 implementation when approved — `git diff`-based change detection, image retagging logic, `--skip-unchanged` flag for buildall.sh.
