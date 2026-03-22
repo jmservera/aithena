@@ -258,3 +258,19 @@ src/aithena-ui/src/
 - Backdrop click handler on `role="dialog"` triggers `jsx-a11y/click-events-have-key-events` — suppressed with eslint-disable since ESC is the keyboard equivalent.
 - CSS: centered modal with `max-width: 800px`, responsive at 600px breakpoint (full-width, stacked layout). BEM naming `.book-detail-*`.
 
+
+### BookCard Thumbnails (#827, PR #849)
+
+**Feature:** Thumbnail image display in BookCard and BookDetailView with lazy loading and graceful fallback.
+
+**Architecture:** Added `thumbnail_url?: string | null` to `BookResult` type. Created small `BookThumbnail` and `DetailThumbnail` components that manage image error state internally — on load error they swap to a FileText placeholder icon. Used `loading="lazy"` on `<img>` tags for performance.
+
+**Layout:** BookCard body is now a flex row: thumbnail (80×112px) on the left, content on the right. Wrapped existing card content in `book-card-body > book-card-thumbnail + book-card-content` divs. BookDetailView header similarly shows a larger thumbnail (200×280px) beside the title/author info.
+
+**Learnings:**
+- When wrapping existing JSX in new container divs, carefully count opening/closing tags — prettier will catch syntax errors but the nesting must be correct.
+- Placeholder thumbnails use `aria-hidden="true"` since they're decorative; actual images use book title as alt text.
+- The `onError` handler on `<img>` is the cleanest way to handle broken image URLs — simpler than intersection observer approaches.
+- BEM naming: `book-card-body`, `book-card-thumbnail`, `book-card-thumbnail--placeholder`, `book-card-content`, `book-detail-header__thumbnail`, `book-detail-header__thumbnail--placeholder`, `book-detail-header__info`.
+- `fireEvent.error(img)` in tests simulates image load failure for fallback testing.
+- 7 new tests added; all 581 tests pass.
