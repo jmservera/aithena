@@ -33,7 +33,7 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-RUN apk add --no-cache procps
+RUN apk add --no-cache procps libstdc++ libgomp libgcc
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 COPY --from=builder /app/.venv /app/.venv
