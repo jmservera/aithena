@@ -75,27 +75,27 @@ def e5_client():
 
 class TestModelFamilyDetection:
     def test_distiluse_is_generic(self):
-        from main import detect_model_family
+        from model_utils import detect_model_family
 
         assert detect_model_family(DEFAULT_MODEL) == "generic"
 
     def test_e5_base_is_e5(self):
-        from main import detect_model_family
+        from model_utils import detect_model_family
 
         assert detect_model_family(E5_MODEL) == "e5"
 
     def test_e5_large_is_e5(self):
-        from main import detect_model_family
+        from model_utils import detect_model_family
 
         assert detect_model_family("intfloat/multilingual-e5-large") == "e5"
 
     def test_case_insensitive(self):
-        from main import detect_model_family
+        from model_utils import detect_model_family
 
         assert detect_model_family("intfloat/Multilingual-E5-Base") == "e5"
 
     def test_unknown_model_is_generic(self):
-        from main import detect_model_family
+        from model_utils import detect_model_family
 
         assert detect_model_family("some-other/model") == "generic"
 
@@ -107,31 +107,31 @@ class TestModelFamilyDetection:
 
 class TestApplyPrefix:
     def test_e5_query_prefix(self):
-        from main import apply_prefix
+        from model_utils import apply_prefix
 
         result = apply_prefix(["find books"], "e5", "query")
         assert result == ["query: find books"]
 
     def test_e5_passage_prefix(self):
-        from main import apply_prefix
+        from model_utils import apply_prefix
 
         result = apply_prefix(["some passage text"], "e5", "passage")
         assert result == ["passage: some passage text"]
 
     def test_generic_no_prefix_for_query(self):
-        from main import apply_prefix
+        from model_utils import apply_prefix
 
         result = apply_prefix(["hello"], "generic", "query")
         assert result == ["hello"]
 
     def test_generic_no_prefix_for_passage(self):
-        from main import apply_prefix
+        from model_utils import apply_prefix
 
         result = apply_prefix(["hello"], "generic", "passage")
         assert result == ["hello"]
 
     def test_multiple_texts_prefixed(self):
-        from main import apply_prefix
+        from model_utils import apply_prefix
 
         texts = ["first", "second", "third"]
         result = apply_prefix(texts, "e5", "query")
