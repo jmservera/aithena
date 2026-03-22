@@ -5,9 +5,11 @@ ARG BUILD_DATE=unknown
 # ---------- build stage ----------
 FROM python:3.12-slim AS builder
 
+ARG MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2 \
+    MODEL_NAME=${MODEL_NAME} \
     HF_HOME=/models/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
 
@@ -34,6 +36,7 @@ FROM python:3.12-slim AS runtime
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
+ARG MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2
 
 LABEL org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/jmservera/aithena" \
@@ -46,7 +49,7 @@ ENV VERSION=${VERSION} \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8080 \
-    MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2 \
+    MODEL_NAME=${MODEL_NAME} \
     HF_HOME=/models/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
     HF_HUB_OFFLINE=1 \

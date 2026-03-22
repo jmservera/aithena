@@ -47,5 +47,6 @@ ENV REDIS_HOST="localhost"
 ENV REDIS_PORT=6379
 ENV DOCUMENT_WILDCARD="*.pdf"
 ENV QUEUE_NAME="new_documents"
+ENV EXCHANGE_NAME="documents"
 
 CMD ["uv", "run", "python", "-m", "document_lister"]

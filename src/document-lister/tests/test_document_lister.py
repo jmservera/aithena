@@ -124,6 +124,20 @@ class TestHandleDocument:
         channel_mock.basic_publish.assert_called_once()
         redis_mock.set.assert_called_once()
 
+    def test_new_document_published_to_fanout_exchange(self, tmp_path, redis_mock, channel_mock):
+        """A new document is published to the fanout exchange, not the default exchange."""
+        handle_document, _ = _import_handle_document()
+        pdf = tmp_path / "book.pdf"
+        pdf.write_bytes(b"pdf content")
+
+        redis_mock.get.return_value = None
+
+        handle_document(pdf, redis_mock, channel_mock)
+
+        call_kwargs = channel_mock.basic_publish.call_args
+        assert call_kwargs[1]["exchange"] == "documents"
+        assert call_kwargs[1]["routing_key"] == ""
+
     def test_unchanged_processed_document_is_not_requeued(self, tmp_path, redis_mock, channel_mock):
         """A processed document whose mtime has not changed is not re-queued."""
         handle_document, _ = _import_handle_document()
@@ -214,3 +228,59 @@ class TestHandleDocument:
         channel_mock.basic_publish.assert_not_called()
         # But Redis entry is updated with new mtime
         redis_mock.set.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Exchange configuration and fanout publishing tests
+# ---------------------------------------------------------------------------
+
+
+class TestExchangeConfig:
+    def test_default_exchange_name_is_documents(self):
+        """EXCHANGE_NAME defaults to 'documents' when env var is not set."""
+        env = {k: v for k, v in os.environ.items() if k != "EXCHANGE_NAME"}
+        env.pop("EXCHANGE_NAME", None)
+        module = reload_init(env)
+        assert module.EXCHANGE_NAME == "documents"
+
+    def test_custom_exchange_name_is_respected(self):
+        """EXCHANGE_NAME is read from the environment variable."""
+        module = reload_init({"EXCHANGE_NAME": "custom_exchange"})
+        assert module.EXCHANGE_NAME == "custom_exchange"
+
+
+class TestFanoutPublishing:
+    def test_push_file_uses_fanout_exchange(self, channel_mock):
+        """push_file_to_queue publishes to the fanout exchange with empty routing key."""
+        main_mod = _import_main_module()
+        with patch.object(main_mod, "EXCHANGE_NAME", "documents"):
+            main_mod.push_file_to_queue(channel_mock, "/data/documents/test.pdf")
+
+        call_kwargs = channel_mock.basic_publish.call_args[1]
+        assert call_kwargs["exchange"] == "documents"
+        assert call_kwargs["routing_key"] == ""
+
+    def test_push_file_with_custom_exchange(self, channel_mock):
+        """push_file_to_queue uses the configured EXCHANGE_NAME."""
+        main_mod = _import_main_module()
+        with patch.object(main_mod, "EXCHANGE_NAME", "my_exchange"):
+            main_mod.push_file_to_queue(channel_mock, "/data/documents/test.pdf")
+
+        call_kwargs = channel_mock.basic_publish.call_args[1]
+        assert call_kwargs["exchange"] == "my_exchange"
+
+    def test_push_file_sets_persistent_delivery_mode(self, channel_mock):
+        """Messages are published with delivery_mode=2 (persistent)."""
+        main_mod = _import_main_module()
+        main_mod.push_file_to_queue(channel_mock, "/data/documents/test.pdf")
+
+        call_kwargs = channel_mock.basic_publish.call_args[1]
+        assert call_kwargs["properties"].delivery_mode == 2
+
+    def test_push_file_includes_correlation_id_header(self, channel_mock):
+        """Messages include an X-Correlation-ID header."""
+        main_mod = _import_main_module()
+        main_mod.push_file_to_queue(channel_mock, "/data/documents/test.pdf")
+
+        call_kwargs = channel_mock.basic_publish.call_args[1]
+        assert "X-Correlation-ID" in call_kwargs["properties"].headers

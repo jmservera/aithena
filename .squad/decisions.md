@@ -9812,3 +9812,144 @@ PO to decide which phase(s) to prioritize. Recommend starting with short-term (v
 1. Should we pin embeddings-server version in v1.12.0 or wait for v1.13.0?
 2. Do we need a staging environment to validate change-detection CI before prod?
 3. Should API contract tests block releases or just warn?
+
+---
+
+# Decision: E5 Prefix Handling Internal to Embeddings Server
+
+**Author:** Ash (Search Engineer)
+**Date:** 2026-03-22
+**Issue:** #874 (P1-1)
+**PR:** #883
+
+## Context
+
+E5-family models require `"query: "` prefix for search queries and `"passage: "` prefix for documents to achieve optimal relevance. Two approaches were considered:
+
+1. **Caller-side prefixes:** Each caller (solr-search, document-indexer) applies the prefix based on its own knowledge of the model.
+2. **Server-side prefixes:** The embeddings-server detects model family and applies prefixes internally; callers pass `input_type`.
+
+## Decision
+
+**Server-side prefixes (option 2)** — aligned with PRD section P1-1.
+
+Callers send `input_type: "query" | "passage"` (default `"passage"`) in the `/v1/embeddings/` request body. The server auto-prepends the correct prefix for e5-family models. For non-e5 models (distiluse), `input_type` is accepted but ignored.
+
+## Rationale
+
+- Single point of prefix logic — avoids duplication across solr-search and document-indexer
+- Backward compatible — existing callers omitting `input_type` get `"passage"` default (correct for indexing)
+- Model-agnostic API — if we switch models again, only the server needs updating
+- `/v1/embeddings/model` returns `requires_prefix` and `model_family` for client-side verification
+
+## Impact
+
+- **solr-search:** Must pass `input_type: "query"` when encoding search queries (P1-5)
+- **document-indexer:** No changes needed — default `"passage"` is correct for indexing
+- **Future models:** Add detection logic to `detect_model_family()` only
+
+---
+
+# Decision: books_e5base configset is a full copy of books
+
+**Author:** Ash (Search Engineer)
+**Date:** 2026-03-22
+**Context:** P1-2, PR #882, Issue #873
+
+## Decision
+
+The `books_e5base` configset is a full independent copy of the `books` configset directory, not a symlink or overlay. Only the vector field type and dimension differ.
+
+## Rationale
+
+- Full copy allows independent evolution (e.g., different HNSW tuning parameters for 768D vectors)
+- Avoids symlink complexity in Docker volume mounts
+- The `solr-init` script treats each configset identically — upload to ZK, create collection, apply overlay
+- If the A/B test succeeds and books_e5base replaces books, the old configset can be removed cleanly
+
+## Impact
+
+- Any future schema changes to non-vector fields (new metadata fields, analyzer tweaks) must be applied to BOTH configsets
+- Parker and Brett should be aware that `SOLR_COLLECTION=books_e5base` is now a valid target for document-indexer-e5
+
+## Alternatives Considered
+
+- **Shared configset with parameterized vector dimension:** Solr doesn't support schema parameterization at configset level
+- **Symlinks for shared files:** Would complicate Docker volume mounts and ZooKeeper uploads
+
+---
+
+# Decision: Collection Parameter Config Design (P1-5)
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-22
+**Context:** Issue #875 / PR #884
+**Status:** IMPLEMENTED
+
+## Decision
+
+For the A/B test collection routing, use a config-driven allowlist approach with three env vars:
+
+1. `ALLOWED_COLLECTIONS` — comma-separated allowlist (default: `"books"`)
+2. `DEFAULT_COLLECTION` — default when param omitted (default: `"books"`)
+3. `E5_COLLECTIONS` — collections needing `input_type="query"` for embeddings (default: `""`)
+4. `EMBEDDINGS_URL_{UPPER_NAME}` — per-collection embeddings server URL override
+
+## Rationale
+
+- **Allowlist over enum:** Collections may be added/removed without code changes. Env-var-driven allowlist is consistent with existing config patterns in solr-search.
+- **Separate e5_collections set:** Cleaner than checking collection name for "e5" substring. Explicitly config-driven, no magic string matching.
+- **Per-collection embeddings URL:** The A/B architecture uses separate embeddings servers per model. URL overrides keep this flexible without hardcoding port mappings.
+- **Keyword-only `collection` param on internals:** Ensures backward compat — existing callers of `query_solr()` / `_fetch_embedding()` don't need changes.
+
+## Impact
+
+- **Dallas (Frontend):** Can add `collection` query param to search/facets/books API calls when implementing the A/B UI toggle.
+- **Brett (Infra):** Docker Compose env vars `ALLOWED_COLLECTIONS`, `E5_COLLECTIONS`, `EMBEDDINGS_URL_BOOKS_E5BASE` needed in the A/B overlay.
+- **Ash (Search):** No Solr schema changes needed — collection name maps directly to Solr collection.
+
+---
+
+# Decision: Embedding Model A/B Test PRD — Architecture & Work Plan
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-22
+**Status:** PROPOSED — Awaiting PO Review
+**PRD:** `docs/prd/embedding-model-ab-test.md`
+
+## Context
+
+Ash completed research on embedding model alternatives (#861). The PO requested a PRD for an in-repo A/B test of `multilingual-e5-base` (512 tokens, 768D) vs the current `distiluse-base-multilingual-cased-v2` (128 tokens, 512D). This decision documents the architectural approach and key trade-offs.
+
+## Decisions Made
+
+### 1. Dual-Collection Architecture (not dual-schema)
+Two separate Solr collections (`books` and `books_e5base`) rather than two vector fields in one collection. Rationale: cleaner separation, independent schema evolution, easier cleanup after test, no risk to production data.
+
+### 2. Docker Compose Overlay for A/B Services
+New services (`embeddings-server-e5`, `document-indexer-e5`) defined in a compose overlay file, not inline in the production `docker-compose.yml`. Keeps production config clean; overlay activated only during testing.
+
+### 3. Embeddings Server Handles Prefix Internally (not Indexer, not Search)
+E5 models require `"query: "` / `"passage: "` prefixes. The embeddings-server detects the model family at startup (e.g., `"e5"` in model name) and applies prefixes internally. Callers pass `input_type: "query"` or `"passage"` — the server does the rest. No `QUERY_PREFIX`/`PASSAGE_PREFIX` env vars needed. Centralizes all model-specific behavior in the model-serving layer.
+
+### 4. Chunking Recalculation: 300 words / 50 overlap
+Proportional scaling from PO's 90/10 decision for 128-token window → 300/50 for 512-token window. 300 words ≈ 390 tokens, safely within 512-token budget. PO to confirm.
+
+### 5. Phase-Gated Execution (3 phases)
+Phase 1 (infra setup) → Phase 2 (indexing & benchmarking) → Phase 3 (evaluation & migration). PO decision gate between Phase 2 and Phase 3. Consistent with team's proven phase-gated pattern.
+
+## Open / Blocking Questions
+
+- **OQ-1 (BLOCKING):** RabbitMQ competing consumers means only one indexer gets each message. Need fanout exchange or separate queues for dual indexing. Ash + Brett must resolve before P1-3/P1-4.
+- **OQ-2:** Final CHUNK_SIZE confirmation from PO (300/50 recommended).
+- **OQ-5:** Whether Dallas builds a comparison UI or API/CLI is sufficient.
+
+## Impact
+
+- **Ash:** Primary on search/Solr items (12 pts across 5 work items)
+- **Parker:** Backend API changes (8 pts across 3 items)
+- **Brett:** Infrastructure/Docker (7 pts across 3 items)
+- **Lambert:** Metrics collection (2 pts, 1 item)
+- **Dallas:** No assignment in this PRD (stretch goal only)
+- **Total resource cost:** ~31 pts, ~16.5GB host RAM during A/B test (20GB recommended)
+

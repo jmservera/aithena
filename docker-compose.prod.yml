@@ -110,6 +110,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
+      - EXCHANGE_NAME=documents
       - BASE_PATH=/data/documents/
       - DOCUMENT_WILDCARD=*.pdf
       - POLL_INTERVAL=60
@@ -150,6 +151,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
+      - EXCHANGE_NAME=documents
       - BASE_PATH=/data/documents/
       - SOLR_HOST=solr
       - SOLR_PORT=8983

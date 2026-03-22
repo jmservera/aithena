@@ -8,6 +8,7 @@ REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD") or None
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "new_documents")
+EXCHANGE_NAME = os.environ.get("EXCHANGE_NAME", "documents")
 BASE_PATH = os.environ.get("BASE_PATH", "/data/documents/")
 SOLR_HOST = os.environ.get("SOLR_HOST", "solr")
 SOLR_PORT = int(os.environ.get("SOLR_PORT", 8983))

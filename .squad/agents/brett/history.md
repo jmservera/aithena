@@ -180,3 +180,22 @@ Release strategy analysis for issue #860 completed and merged to dev. Findings:
 **Decision status:** Awaiting PO decision on phase prioritization. Ready to implement short-term change-detection CI immediately if approved.
 
 **Next:** Phase 1 implementation when approved — `git diff`-based change detection, image retagging logic, `--skip-unchanged` flag for buildall.sh.
+
+## Session 2026-03-26 — #870/PR: Docker Compose A/B Setup (P1-4)
+
+Implemented Docker Compose configuration for dual-indexer A/B testing (distiluse vs e5-base).
+
+**Changes:**
+- **docker-compose.yml:** Added `embeddings-server-e5` (3GB limit, e5-base model baked via build arg) and `document-indexer-e5` (512MB, reads from `shortembeddings_e5base` queue, writes to `books_e5base` collection). Both indexers now depend on `solr-init` (service_completed_successfully) to avoid racing collection creation.
+- **docker-compose.override.yml:** Dev port 8086 for embeddings-server-e5 API debugging.
+- **embeddings-server Dockerfile:** Made `MODEL_NAME` a build ARG (was hardcoded ENV). Enables building separate images with different models pre-baked while keeping `HF_HUB_OFFLINE=1` for air-gapped production.
+- **rabbitmq.conf:** Documented expected fanout exchange topology (exchange=documents → queues shortembeddings + shortembeddings_e5base). Definitions are declared dynamically by application code, not static JSON.
+- **docker-compose.prod.yml:** Intentionally NOT modified — A/B test is dev/staging only per P3-2 deferral.
+
+**Memory budget:** embeddings-server-e5 ~3GB + document-indexer-e5 ~0.5GB = ~3.5GB total addition.
+
+### Learnings
+
+- **Dockerfile MODEL_NAME as build arg:** The embeddings-server uses `HF_HUB_OFFLINE=1` so models MUST be pre-baked at build time. Making `MODEL_NAME` an ARG (not just ENV) is required for multi-model builds from the same Dockerfile. The runtime ENV inherits the ARG value for the health endpoint's model name reporting.
+- **solr-init dependency:** `service_completed_successfully` is the correct condition for one-shot init containers. Using `service_healthy` would fail since solr-init has no healthcheck and exits after completion.
+- **Fanout exchange pattern:** No RabbitMQ static definitions needed — each indexer declares its own queue and binding on startup. This is more resilient than static definitions because queues are created by the consumers that need them.

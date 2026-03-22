@@ -110,6 +110,43 @@ services:
       default:
         aliases:
           - embeddings-server
+  # A/B test: e5-base embeddings instance (~3GB RAM for model loading)
+  embeddings-server-e5:
+    build:
+      context: ./src/embeddings-server
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+        MODEL_NAME: intfloat/multilingual-e5-base
+    environment:
+      - MODEL_NAME=intfloat/multilingual-e5-base
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+        reservations:
+          memory: 2g
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      default:
+        aliases:
+          - embeddings-server-e5
   document-lister:
     build:
       context: ./src/document-lister
@@ -124,6 +161,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
+      - EXCHANGE_NAME=documents
       - BASE_PATH=/data/documents/
       - DOCUMENT_WILDCARD=*.pdf
       - POLL_INTERVAL=60  # seconds between library scans (default: 60)
@@ -155,6 +193,7 @@ services:
       - document-data:/data/documents
     networks:
       - default
+  # Baseline indexer: distiluse embeddings → books collection
   document-indexer:
     build:
       context: ./src/document-indexer
@@ -169,6 +208,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
+      - EXCHANGE_NAME=documents
       - BASE_PATH=/data/documents/
       - SOLR_HOST=solr
       - SOLR_PORT=8983
@@ -198,6 +238,68 @@ services:
         condition: service_healthy
       solr:
         condition: service_healthy
+      solr-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - document-data:/data/documents:ro
+    networks:
+      - default
+  # A/B test: e5-base indexer → books_e5base collection (~0.5GB RAM)
+  # Memory budget: embeddings-server-e5 ~3GB + document-indexer-e5 ~0.5GB = ~3.5GB total addition
+  document-indexer-e5:
+    build:
+      context: ./src/document-indexer
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      - QUEUE_NAME=shortembeddings_e5base
+      - EXCHANGE_NAME=documents
+      - BASE_PATH=/data/documents/
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_COLLECTION=books_e5base
+      - EMBEDDINGS_HOST=embeddings-server-e5
+      - EMBEDDINGS_PORT=8080
+      - CHUNK_SIZE=300
+      - CHUNK_OVERLAP=50
+    restart: on-failure
+    stop_grace_period: 10s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      embeddings-server-e5:
+        condition: service_healthy
+      solr:
+        condition: service_healthy
+      solr-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "pgrep", "-f", "python"]
       interval: 30s
