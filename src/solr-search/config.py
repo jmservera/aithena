@@ -45,8 +45,6 @@ class Settings:
     port: int
     solr_url: str
     solr_collection: str
-    solr_auth_user: str | None
-    solr_auth_pass: str | None
     base_path: Path
     request_timeout: float
     default_page_size: int
@@ -97,6 +95,8 @@ class Settings:
     collection_embeddings_urls: tuple[tuple[str, str], ...]
     comparison_baseline_collection: str
     comparison_candidate_collection: str
+    solr_auth_user: str | None = None
+    solr_auth_pass: str | None = None
     ascii_folding: bool = True
 
     @property

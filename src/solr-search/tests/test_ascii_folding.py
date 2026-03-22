@@ -85,6 +85,15 @@ class TestASCIIFoldingConfig:
         importlib.reload(config)
         return config
 
+    @pytest.fixture(autouse=True)
+    def _restore_config_settings(self):
+        """Restore config.settings after reload to avoid polluting other tests."""
+        import config
+
+        original_settings = config.settings
+        yield
+        config.settings = original_settings
+
     def test_ascii_folding_enabled_by_default(self):
         """Unset SOLR_ASCII_FOLDING defaults to True."""
         env = os.environ.copy()
