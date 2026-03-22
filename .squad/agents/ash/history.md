@@ -76,3 +76,77 @@ PR #701 nearly broke semantic search — implementer didn't know embeddings live
 - 🔴 Production performance tuning, advanced relevance engineering
 
 **Skills referenced:** `solr-pdf-indexing`, `solrcloud-docker-operations`, `hybrid-search-parent-chunk` (new)
+
+## Session 2026-03-22T10:50Z — PR #863 Merged (Embedding Research)
+
+Embedding model research for issue #861 completed and merged to dev. Recommendation: **multilingual-e5-base** (512-token window, 768D, MTEB 61.5) as primary candidate for A/B testing. Report includes:
+- Model selection rationale and competitive analysis
+- In-repo dual-collection A/B testing strategy (5 phases, 2-3 weeks)
+- Success criteria: ≥5% nDCG@10, ≤50ms latency increase, ≤2× index growth
+- Detailed team impact breakdown and risk mitigation
+
+**Decision status:** Awaiting PO approval for infrastructure setup phase. Prepared for collaboration with Brett (infrastructure) in Phase 1 setup.
+
+**Next:** Phase 1 kickoff when approved — Solr collection setup and schema design for 768D vectors.
+
+## Session 2026-07-21 — PR #882 (P1-2: Solr 768D Schema)
+
+Created `books_e5base` configset and collection for the embedding model A/B test.
+
+**Changes delivered:**
+- New configset `src/solr/books_e5base/` with `knn_vector_768` field type (768D, HNSW, cosine)
+- `embedding_v` and `book_embedding` fields updated to 768D in new configset
+- `solr-init` container creates both `books` and `books_e5base` collections on startup
+- README updated to document dual configsets
+
+**Learnings:**
+- The configset copy approach (full directory copy + targeted edits) keeps the two schemas independently versionable while ensuring all non-vector config (analyzers, stopwords, synonyms, update chains) stays in sync.
+- The `add-conf-overlay.sh` script is collection-agnostic (parameterized by `SOLR_COLLECTION` env var), so it works for both collections without modification.
+- The `grep -q` idempotency pattern in solr-init is critical — it prevents duplicate configset uploads or collection creates on container restarts.
+
+**PR:** #882 → dev (branch: `squad/873-solr-768d-schema`)
+## Session 2026-03-22 — PR #883 (P1-1: E5-Base Embeddings Support)
+
+Implemented multilingual-e5-base support in the embeddings server (issue #874, milestone v1.12.0).
+
+**Key decisions:**
+- Model family detection via simple substring match (`"e5"` in model name, case-insensitive) — extensible if new model families are added later
+- Prefix handling fully internal: callers pass `input_type: "query"|"passage"` (default `"passage"` for backward compat with indexing callers), server applies `"query: "` or `"passage: "` prefix for e5-family only
+- `/v1/embeddings/model` now returns `model_family` and `requires_prefix` so downstream services (solr-search, document-indexer) can verify configuration
+- `/version` includes `model` field for operational visibility
+
+**Test coverage:** 33 tests (was 9), covering both distiluse and e5 paths with mocked models.
+
+## Learnings
+
+### E5 Prefix Design (P1-1)
+Keeping prefix logic inside the embeddings-server was the right call — it prevents every caller from needing to know model-specific prefixes. The `input_type` field is the stable API contract; prefix strings are an implementation detail. This pattern should be preserved if additional model families are added.
+
+## Session 2026-07-21 — PR (P2-1: Index Test Corpus, #877)
+
+Created scripts for indexing test corpus through both pipelines and verifying collection parity.
+
+**Changes delivered:**
+- `scripts/index_test_corpus.py` — Publishes document paths to the `documents` fanout exchange so both indexers process them. Supports `--dry-run`, `--limit`, `--status-only`, custom `--base-path`.
+- `scripts/verify_collections.py` — Verifies both Solr collections: parent doc count match, ID parity, embedding dimensionality (512D vs 768D). Exits 0/1 for CI integration. JSON output mode.
+- 33 new tests in `scripts/benchmark/tests/` covering discovery, publishing, Solr queries, verification logic, report formatting, serialization.
+- Updated `scripts/benchmark/README.md` with end-to-end A/B test workflow documentation.
+
+**Learnings:**
+- The fanout exchange pattern makes test corpus indexing trivial — a single publish to the `documents` exchange reaches both indexers without any routing logic. The idempotency comes from Solr's unique key dedup, not from the scripts.
+- The parent/chunk distinction matters for verification: parent docs have no `parent_id_s` field, chunks do. Filtering with `-parent_id_s:[* TO *]` is the reliable way to count only parent documents across collections.
+- When scripts import dependencies lazily (inside functions), `unittest.mock.patch` can't find the attribute on the module. Top-level imports are required for mockability.
+
+## Session 2026-07-21 — PR #TBD (P2-2: Benchmark Query Suite)
+
+Created benchmark query suite and runner for A/B testing distiluse vs e5-base (#879).
+
+**Changes delivered:**
+- `scripts/benchmark/queries.json` — 30 queries across 5 categories (simple keyword, natural language, multilingual, long/complex, edge cases)
+- `scripts/benchmark/run_benchmark.py` — CLI runner that executes queries against both `books` and `books_e5base` collections via the solr-search API, collects top-K results/scores/latency, computes Jaccard similarity, outputs JSON + human-readable summary
+- `scripts/benchmark/tests/test_benchmark.py` — 25 tests covering query loading, Jaccard computation, result comparison, API interaction (mocked), summary aggregation, serialization, and report formatting
+
+**Learnings:**
+- The solr-search API's `collection` parameter and automatic `input_type=query` injection for e5 collections (via `is_e5_collection()`) means the benchmark runner needs no special e5 handling — it just passes the collection name and the API handles the rest.
+- Jaccard similarity of top-K is a simple but effective overlap metric for human evaluation. Low-overlap queries (Jaccard < 0.3) are the most interesting for manual review since they show where models disagree most.
+- Catching `OSError` alongside `requests.RequestException` is necessary for robustness — bare `ConnectionError` from mocks or network issues inherits from `OSError`, not `requests.RequestException`.

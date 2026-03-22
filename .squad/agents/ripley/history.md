@@ -167,6 +167,38 @@ Active decisions in `.squad/decisions.md`:
 
 ## Learnings
 
+### Skills Database Pruning: 49 → 34 High-Confidence Skills (2026-03-21)
+
+**Session:** Comprehensive audit and aggressive pruning of the skills database.
+
+**Findings:**
+- **Starting point:** 49 skills accumulated across v1.0–v1.11 with low barrier to creation
+- **Problem:** Skills without clear ownership, one-time process docs, deprecated content (Streamlit admin), and overlapping documentation created noise
+- **Strategy:** Aggressive pruning targeting skills that either:
+  1. Were never validated or are low-confidence ("planned for v1.11.0, not yet validated")
+  2. Document one-time processes (i18n extraction for v1.6.0–v1.7.0)
+  3. Are too generic (project conventions, TDD/Clean Code, "reskill" meta-skill)
+  4. Refer to removed systems (admin coverage setup, smoke testing)
+  5. Overlap with other high-value skills (2 hybrid search skills consolidated into solr parent-chunk model)
+
+**Changes:**
+- **Removed 15 skills:** ci-coverage-setup, ralph-dependency-check, milestone-branching-strategy, smoke-testing, i18n-extraction-workflow, reskill, project-conventions, tdd-clean-code, lead-retrospective, dependabot-triage-routing, copilot-review-to-issues, squad-pr-workflow, docker-health-checks, hybrid-search-parent-chunk, hybrid-search-patterns
+- **Consolidated:** hybrid-search patterns (RRF, embedding integration, timeout handling) merged into solr-parent-chunk-model
+- **Result:** 34 high-confidence, team-wide, battlefield-proven skills remaining
+
+**Final Skills by Category:**
+- **Architecture:** phase-gated-execution, solr-parent-chunk-model (with hybrid search), solr-pdf-indexing, nginx-reverse-proxy, http-wrapper-services
+- **Testing:** pytest-aithena-patterns, vitest-testing-patterns, playwright-e2e-aithena, path-metadata-tdd
+- **Backend:** fastapi-auth-patterns, fastapi-query-params, redis-connection-patterns, pika-rabbitmq-fastapi, logging-security
+- **Frontend:** react-frontend-patterns, accessibility-wcag-react
+- **Infrastructure:** docker-compose-operations, solrcloud-docker-operations, bind-mount-permissions, branch-protection-strict-mode, nginx-reverse-proxy
+- **Security:** security-scanning-baseline, workflow-secrets-security, ci-workflow-security, logging-security
+- **Release/Quality:** release-gate, release-tagging-process, multi-release-orchestration, pr-integration-gate, ci-gate-pattern, milestone-gate-review, milestone-wave-execution, api-contract-alignment, agent-debugging-discipline, pdf-extraction-dual-tool, path-metadata-heuristics
+
+**Pattern Reinforced:** "Aggressive pruning is better than slow accumulation." The 49-skill database had become a burden for onboarding (which skills matter?). Ruthlessly removing unvalidated, one-time, and overlapping content leaves the 34 battle-tested patterns that actually guide team work.
+
+**Next Action:** Squad members should reference these 34 skills in their charters; onboarding should point here, not to the full skills directory.
+
 ### v1.11.0 PRD: Search Results Redesign (2026-03-21)
 
 **Session:** Research + PRD authoring for 4 requirements from Juanma.
@@ -245,4 +277,77 @@ Active decisions in `.squad/decisions.md`:
 **PR #805 created** — reskill + wins report to dev (pending CI checks)
 
 **Pattern reinforced:** "Reskill after every milestone" — v1.10.1 yielded 6 new skills + 1 update. Without dedicated reskill time, these patterns would have been lost. The wins report captures team morale, process improvements, and lessons learned in a shareable format for Juanma.
+
+### Embedding Model A/B Test PRD (2026-03-22)
+
+**Session:** PRD creation for in-repo A/B test of multilingual-e5-base vs distiluse.
+
+**Key findings from code research:**
+- **Embeddings server is model-agnostic:** `MODEL_NAME` env var + runtime dimension detection means zero code changes to swap models. Only gap: e5 models require query/passage prefixes not currently supported.
+- **Document indexer is fully configurable:** `CHUNK_SIZE`, `CHUNK_OVERLAP`, `SOLR_COLLECTION`, `EMBEDDINGS_HOST` all env-var driven. Dual indexing = dual Docker services, no code changes needed.
+- **RabbitMQ competing consumers is a trap:** Both indexers on the same queue (`shortembeddings`) means messages go to only ONE consumer. Dual indexing requires fanout exchange or separate queues. Flagged as OQ-1 (blocking).
+- **Solr schema is the only hardcoded bottleneck:** `knn_vector_512` field type has dimension baked in. New collection needs a new configset with `knn_vector_768`. This is the one piece that can't be env-var switched.
+- **Chunking recalculation follows PO's proportional logic:** 90 words for 128 tokens → 300 words for 512 tokens (same ~75% utilization target).
+
+**Decisions made:**
+- Dual-collection architecture (not dual-field in one collection)
+- Docker Compose overlay (not inline in production compose)
+- Prefix handling centralized in embeddings server (not scattered across indexer + search)
+- 3-phase execution with PO decision gate between Phase 2 and Phase 3
+- Decision: `.squad/decisions/inbox/ripley-embedding-prd.md`
+
+**Pattern reinforced:** "Research before implementation" — 20 minutes of codebase reading revealed the RabbitMQ competing-consumer issue that would have silently caused missing documents in one collection. Without reading the actual queue topology, this would have been discovered only during testing.
+
+**Pattern new:** "A/B testing as compose overlay" — Keeping experimental services in a separate compose file prevents production config drift and makes cleanup trivial. Should become the standard pattern for future model experiments.
+
+
+### 2026-03-22T13:49Z: Spawned for A/B testing evaluation PRD
+
+**Scope:** Create PRD for A/B testing evaluation framework + decompose into GitHub issues
+
+**Deliverable:** docs/prd/ab-testing-evaluation.md
+
+**Impact:** Enables user research validation post-v1.11. Will feed issues into upcoming milestones.
+
+**Related Directives:**
+- Release process now mandatory: security + performance review before shipping
+- Release checklist updated with sign-off requirements
+
+## Session 2026-03-22T14:41Z — Completed Spawn Work Summary & Offline Audit
+
+### Offline Audit Confirmation
+
+Conducted comprehensive audit of all inter-service communication paths. **Confirmed:** Aithena is fully on-premises with zero runtime internet dependencies.
+
+**Findings:**
+- ✅ All inter-service calls through internal Docker network (Solr, Redis, RabbitMQ, embedding endpoints)
+- ✅ Zero cloud API calls (AWS, Azure, GCP SDKs) — no boto3, azure-identity, google-cloud imports
+- ✅ HuggingFace embeddings models (e5-base, e5-multilingual-e15-small) pre-downloaded at build time
+- ✅ No external telemetry (Sentry, New Relic, DataDog)
+- ✅ No external auth (OAuth, JWT issuers beyond internal Aithena)
+- ✅ Pure Docker Compose, zero cloud service dependencies
+
+**Impact:** Aithena meets on-premises compliance requirements; verified compatible with offline installer (#921); confirmed air-gapped deployment scenario in production.
+
+### Decisions Created/Merged
+
+1. **A/B Testing Human Evaluation UI** — PROPOSED (awaiting PO review)
+   - 11 issues (#900–#918) decomposed
+   - Environment-gated (`ENABLE_AB_TEST=true`)
+   - Public `/v1/config` endpoint for frontend detection
+   - SQLite storage for feedback (`ab_evaluation.db`)
+   - Per-session blinding (A↔B randomization in sessionStorage)
+   - nDCG@10 + MRR metrics computed server-side
+   - Pre-loaded 30-query benchmark suite + custom queries
+
+2. **Offline Installer Architecture** — IMPLEMENTED (PR #925)
+   - 3-script pattern: export-images.sh → install-offline.sh → verify.sh
+   - Single .tar.gz package (11 Docker image tarballs + compose files + scripts + docs)
+   - Convention alignment (VERSION file, .env management, backup script patterns)
+
+3. **Mandatory Security Review in Release Checklist** — IMPLEMENTED (PR #899)
+   - 8-checkpoint security review (Bandit, Checkov, Zizmor, CodeQL, Dependabot, threat assessment, supply chain, input validation)
+   - 4-checkpoint performance review (benchmarks, latency p50/p95/p99, regression check, resource utilization)
+   - Release CANNOT ship with critical/high security issues
+   - Threat assessment required for significant features
 

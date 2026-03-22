@@ -143,6 +143,16 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 
 ## Learnings
 
+### Release Security Requirement Enforcement (2026-03-22)
+Security fixes are MANDATORY for every release. Updated release-checklist.md and .github/ISSUE_TEMPLATE/release.md with PO directive that a release CANNOT ship with known unresolved critical/high security issues. Releases now require:
+- Bandit/Checkov/Zizmor/CodeQL scanning with no critical/high findings
+- Dependabot alerts reviewed (critical/high fixed, medium/low documented)
+- Threat assessment if significant new features added
+- Performance benchmarks to verify no regressions
+- GitHub Actions supply chain risk review (pinned actions, no script injection, token permissions)
+- Input validation review on all new/modified API endpoints
+PR #899 targeting dev; expected to land with next release milestone.
+
 ### CI Workflow Patterns for BCDR Validation (2026-07-25)
 - Restore scripts support `DRY_RUN=1` and `--dry-run` flags — CI can validate orchestrator logic without Docker or real backup data by creating a mock backup directory structure with placeholder files.
 - `restore.sh` exit code 2 = warnings (e.g., missing files in a tier) — acceptable in CI mock environments. Only exit code 1 is fatal.
@@ -154,3 +164,143 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - `auth_request` works inside regex location blocks — can gate static file access with the same subrequest auth used for proxy locations.
 - Both `docker-compose.yml` and `docker-compose.prod.yml` need volume mounts updated in parallel — prod compose is a separate file, not an overlay of the dev one.
 - The `document-data` volume was previously only mounted in application services (solr-search, document-lister, document-indexer, admin); adding it to nginx enables direct static serving without proxy overhead.
+
+### Production Migration Planning (2026-03-26, #876)
+- Created comprehensive **production migration plan** for e5-base embedding model deployment (`docs/prd/production-migration-plan.md`)
+- Plan defines 7-step sequential process: Prepare Compose → Deploy Dual Indexing → Re-Index → Verify Parity → Benchmark → Switch Collection → Monitor 48h
+- **Blue/green strategy:** Baseline (books) collection remains queryable during re-indexing; e5-base indexed in parallel via RabbitMQ fanout. Cutover is single config change to SOLR_COLLECTION env var.
+- **Timeline:** 9–26 hours (Steps 1-6, mostly re-indexing time) + 48h monitoring = 2–4 days total
+- **Rollback:** Instant (<5 min); change SOLR_COLLECTION back to "books" and restart solr-search
+- **Key risk mitigation:** Collection parity verification script, benchmark baseline from Step 5, 48h monitoring window with clear alert thresholds
+- **Approval gates:** PO (A/B results), Infra Lead (readiness), Search Lead (config review), QA Lead (rollback testing)
+- PR #892 targeting dev; awaiting PO approval of A/B test results (issue #877) before implementation
+
+### Release Strategy Asymmetry Analysis (2026-03-26, #860)
+- **Change frequency is highly asymmetric** across services: in v1.8.0→v1.11.0 (4 releases), 78% of commits touched only 2 services (aithena-ui: 30, solr-search: 38), while 3 services had 0-2 commits total.
+- **embeddings-server is a rebuild bottleneck:** 9GB image with ML model, 8-12 min build time, but only 1 commit in 4 releases — rebuilt 3 times unnecessarily.
+- **Current unified versioning** (all services share version) is simple but wastes ~40-60% of build time on unchanged services.
+- **Change-detection CI** (Strategy C) is the lowest-risk improvement: detect changed services via `git diff`, skip builds for unchanged ones, retag previous images — reduces build time by 40% with 1 week migration effort.
+- **Independent service versioning** (Strategy A) is the long-term architecture for scaling beyond 10+ services, but requires API contract testing and version compatibility management — migration effort 2-3 weeks, high complexity.
+- **Tiered releases** (Strategy B) are a middle ground: classify services as Fast/Stable/Infrastructure tracks with different release cadences — reduces complexity vs full independent versioning but still requires track management.
+- **Short-term recommendation:** Change-detection CI + embeddings-server base image (pre-bake ML model) for immediate 40% build time savings with minimal risk.
+
+## Session 2026-03-22T10:50Z — PR #862 Merged (Release Strategy Analysis)
+
+Release strategy analysis for issue #860 completed and merged to dev. Findings:
+- Current approach rebuilds all 6 services despite asymmetric change frequency
+- embeddings-server (9GB, 1 commit/4 releases) rebuilt unnecessarily 3 times
+- document-lister (0 commits/4 releases) always rebuilt
+- Current waste: 40-60% of build time on unchanged services
+
+**Phased recommendation:**
+1. **v1.12.0 (short-term):** Change-detection CI — skip unchanged services, retag images (40% savings, 1 week effort, low risk)
+2. **v1.13.0 (mid-term):** Hybrid versioning for stable services (60% savings, 2-3 weeks, medium risk)
+3. **v2.0.0+ (long-term):** Full independent versioning (60-80% savings, 4-6 weeks, high complexity)
+
+**Decision status:** Awaiting PO decision on phase prioritization. Ready to implement short-term change-detection CI immediately if approved.
+
+**Next:** Phase 1 implementation when approved — `git diff`-based change detection, image retagging logic, `--skip-unchanged` flag for buildall.sh.
+
+## Session 2026-03-26 — #870/PR: Docker Compose A/B Setup (P1-4)
+
+Implemented Docker Compose configuration for dual-indexer A/B testing (distiluse vs e5-base).
+
+**Changes:**
+- **docker-compose.yml:** Added `embeddings-server-e5` (3GB limit, e5-base model baked via build arg) and `document-indexer-e5` (512MB, reads from `shortembeddings_e5base` queue, writes to `books_e5base` collection). Both indexers now depend on `solr-init` (service_completed_successfully) to avoid racing collection creation.
+- **docker-compose.override.yml:** Dev port 8086 for embeddings-server-e5 API debugging.
+- **embeddings-server Dockerfile:** Made `MODEL_NAME` a build ARG (was hardcoded ENV). Enables building separate images with different models pre-baked while keeping `HF_HUB_OFFLINE=1` for air-gapped production.
+- **rabbitmq.conf:** Documented expected fanout exchange topology (exchange=documents → queues shortembeddings + shortembeddings_e5base). Definitions are declared dynamically by application code, not static JSON.
+- **docker-compose.prod.yml:** Intentionally NOT modified — A/B test is dev/staging only per P3-2 deferral.
+
+**Memory budget:** embeddings-server-e5 ~3GB + document-indexer-e5 ~0.5GB = ~3.5GB total addition.
+
+### Learnings
+
+- **Dockerfile MODEL_NAME as build arg:** The embeddings-server uses `HF_HUB_OFFLINE=1` so models MUST be pre-baked at build time. Making `MODEL_NAME` an ARG (not just ENV) is required for multi-model builds from the same Dockerfile. The runtime ENV inherits the ARG value for the health endpoint's model name reporting.
+- **solr-init dependency:** `service_completed_successfully` is the correct condition for one-shot init containers. Using `service_healthy` would fail since solr-init has no healthcheck and exits after completion.
+- **Fanout exchange pattern:** No RabbitMQ static definitions needed — each indexer declares its own queue and binding on startup. This is more resilient than static definitions because queues are created by the consumers that need them.
+
+## Session 2026-03-22T13:20Z — #878/PR#893: Rollback Plan for A/B Test (P3-3)
+
+Created comprehensive rollback plan for the embedding model A/B test.
+
+**Document:** `docs/prd/rollback-plan.md` (584 lines)
+
+**Sections:**
+1. **Rollback triggers:** 5 conditions (quality degradation nDCG@10 -5%, latency p95 >500ms, indexing failures >10 consecutive, resource exhaustion, PO decision)
+2. **Dev/staging quick kill:** Stop e5 services, verify baseline continues, cleanup stale data (< 5 min, 0 downtime)
+3. **Production rollback:** Revert config to baseline collection, restart solr-search, stop e5 services, verify serving (~15 min, ~2 min downtime)
+4. **Data preservation:** Baseline 'books' never deleted; e5-base 'books_e5base' droppable; Redis cache keys collection-prefixed
+5. **Verification:** 5-step checklist (collection status, benchmark suite, metrics endpoint, search quality, health check)
+6. **Runbooks:** 2 copy-paste bash scripts (quick kill and production rollback) with error handling
+7. **Decision tree:** Select procedure based on test phase (A/B test vs post-migration)
+8. **Escalation:** 4-level path (on-call → team lead → PO → architect) with communication template
+9. **Post-rollback RCA:** Root cause analysis, decision to retry/abandon/pivot
+
+**Learnings:**
+- **Two-mode rollback:** Quick kill for dev (stop services, baseline auto-serves) vs full for prod (config + restart cycle)
+- **Collection naming convention:** Baseline='books', candidate='books_{model}' ensures no collision across multiple A/B tests
+- **Redis cache isolation:** Per-collection cache keys prevent cross-contamination on rollback
+- **Verification sequence:** Collection → benchmark → metrics → spot-checks → health covers all layers
+- **RabbitMQ queue handling:** Queues naturally drain once indexers stop; optional manual purge depends on monitoring setup
+- **Runbook automation:** Bash scripts include waiting loops and health checks rather than fixed delays
+
+**Decision status:** Ready for PR review. Integrates with P2-4 (metrics) and P3-2 (prod deployment deferral).
+
+**PR:** #893
+
+### Air-Gapped Offline Installer (2026-07-25, #921/PR#925)
+- Created 3-script offline deployment system: `scripts/export-images.sh` (build+export), `installer/install-offline.sh` (load+deploy), `installer/verify.sh` (health check)
+- **11 unique Docker images** identified from compose files: 5 custom (GHCR) + 6 official (redis, rabbitmq, redis-commander, nginx, zookeeper, solr). Multiple compose services share the same base image (3× zookeeper, 4× solr including solr-init)
+- **Package structure**: images/, compose/, config/ (solr, nginx, rabbitmq), install.sh, verify.sh, VERSION, README.md — all bundled into `staging/aithena-offline-v{VERSION}.tar.gz`
+- **Install script**: validates Docker ≥24.0 + Compose v2, loads images via `gunzip | docker load`, generates `.env` with `openssl rand` secrets, creates bind-mount dirs with correct UIDs (Solr=8983, Redis=999, RabbitMQ=100, ZK=1000), preserves existing `.env` on updates
+- **Verify script**: checks all 15 services + solr-init, probes HTTP health endpoints through nginx, uses internal connectivity checks via `docker exec`
+- **Script conventions**: `set -euo pipefail`, `umask 077`, colors, `--dry-run`, `--help`, consistent with backup scripts pattern
+- **Documentation**: `docs/deployment/offline-deployment.md` covers full lifecycle (build → transfer → install → verify → update → troubleshoot)
+
+### 2026-03-22T13:49Z: Spawned for release checklist hardening
+
+**Scope:** Update release process to make security & performance review mandatory
+
+**Changes Required:**
+- Add "Security Review Sign-Off" step (before version tag)
+- Add "Performance Review Sign-Off" step (new requirement)
+- Update PR template to reference threat assessment requirement
+- Integrate Kane's threat assessment v1.12 into release gate
+
+**User Directives:**
+- Security fixes mandatory in releases (non-optional)
+- Threat assessment required before each release
+- Performance metrics baseline required before release
+
+**Timeline:** Complete before next release cycle.
+
+## Session 2026-03-22T14:41Z — Completed Spawn Work Summary
+
+### Issues Closed This Batch
+
+1. **#894 — Thumbnail libstdc++ fix** (PR #920)
+   - Root cause: Alpine document-indexer Dockerfile missing libstdc++, libgomp, libgcc
+   - Symptom: Silent crashes during PDF page number extraction
+   - Fix: Added missing libraries to apk dependencies
+   - Impact: 178 tests pass; thumbnail page extraction reliable
+
+2. **#921 — Offline installer** (PR #925)
+   - 3-script architecture: export-images.sh → install-offline.sh → verify.sh
+   - Single .tar.gz package (11 Docker image tarballs + scripts + docs)
+   - Install target: /opt/aithena/ with bind-mount volumes at /source/volumes/
+   - Enables deployment on air-gapped/disconnected networks
+   - Docs: offline-deployment.md (422 lines, comprehensive guide)
+
+### Decisions Merged to .squad/decisions.md
+
+1. **Offline Installer Architecture** — 3-stage pattern, convention alignment (VERSION, .env management), single package design
+2. **Mandatory Security Review in Release Checklist** — Implements PO directives: security fixes mandatory; threat assessment for significant features; supply chain checks (GitHub Actions); release cannot ship with critical/high security issues
+3. **A/B Testing Human Evaluation UI** — Awaiting PO review; environment-gated; SQLite storage; nDCG@10+MRR metrics; per-session blinding
+
+### Orchestration Logs Created
+
+- 2026-03-22T14:41:02Z-brett-thumbnail-libstdc.md (#894, PR #920)
+- 2026-03-22T14:41:02Z-brett-offline-installer.md (#921, PR #925)
+- 2026-03-22T14:41:02Z-ripley-offline-audit.md (offline audit confirmation)
+

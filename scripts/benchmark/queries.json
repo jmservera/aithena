@@ -1,0 +1,184 @@
+{
+  "version": "1.0.0",
+  "description": "Benchmark query suite for A/B testing distiluse (512D) vs e5-base (768D) embedding models",
+  "categories": {
+    "simple_keyword": {
+      "description": "Simple keyword queries typical of basic catalog searches",
+      "queries": [
+        {
+          "id": "sk-01",
+          "query": "machine learning",
+          "notes": "Common technical topic, broad match expected"
+        },
+        {
+          "id": "sk-02",
+          "query": "python programming",
+          "notes": "High-frequency programming topic"
+        },
+        {
+          "id": "sk-03",
+          "query": "historia medieval",
+          "notes": "Spanish keyword query for medieval history"
+        },
+        {
+          "id": "sk-04",
+          "query": "recetas cocina",
+          "notes": "Spanish query for cooking recipes"
+        },
+        {
+          "id": "sk-05",
+          "query": "Shakespeare sonnets",
+          "notes": "Specific author + work type"
+        }
+      ]
+    },
+    "natural_language": {
+      "description": "Natural language questions that benefit from semantic understanding",
+      "queries": [
+        {
+          "id": "nl-01",
+          "query": "how does neural network training work?",
+          "notes": "Explanatory question, semantic search should outperform keyword"
+        },
+        {
+          "id": "nl-02",
+          "query": "what are the best practices for software architecture?",
+          "notes": "Conceptual question requiring semantic matching"
+        },
+        {
+          "id": "nl-03",
+          "query": "explain the theory of relativity in simple terms",
+          "notes": "Physics concept, tests paraphrase understanding"
+        },
+        {
+          "id": "nl-04",
+          "query": "books about raising children with emotional intelligence",
+          "notes": "Complex topic combining parenting and psychology"
+        },
+        {
+          "id": "nl-05",
+          "query": "introduction to quantum computing for beginners",
+          "notes": "Level-specific query, tests audience matching"
+        },
+        {
+          "id": "nl-06",
+          "query": "what is the difference between machine learning and deep learning?",
+          "notes": "Comparative question, tests nuanced semantic understanding"
+        }
+      ]
+    },
+    "multilingual": {
+      "description": "Queries in Spanish, Catalan, French, and cross-language searches",
+      "queries": [
+        {
+          "id": "ml-01",
+          "query": "cómo funciona la inteligencia artificial",
+          "notes": "Spanish: how does artificial intelligence work"
+        },
+        {
+          "id": "ml-02",
+          "query": "la revolución francesa y sus consecuencias",
+          "notes": "Spanish: French revolution and its consequences"
+        },
+        {
+          "id": "ml-03",
+          "query": "introducció a la programació en català",
+          "notes": "Catalan: introduction to programming in Catalan"
+        },
+        {
+          "id": "ml-04",
+          "query": "les techniques de cuisine française moderne",
+          "notes": "French: modern French cooking techniques"
+        },
+        {
+          "id": "ml-05",
+          "query": "història de la literatura catalana medieval",
+          "notes": "Catalan: history of medieval Catalan literature"
+        },
+        {
+          "id": "ml-06",
+          "query": "philosophie des sciences naturelles",
+          "notes": "French: philosophy of natural sciences"
+        }
+      ]
+    },
+    "long_complex": {
+      "description": "Long queries that benefit from 512-token context window of e5-base",
+      "queries": [
+        {
+          "id": "lc-01",
+          "query": "I'm looking for a comprehensive textbook that covers both the theoretical foundations of machine learning algorithms including support vector machines, decision trees, and neural networks, as well as practical implementations with Python code examples",
+          "notes": "Very specific multi-concept query, tests long context window"
+        },
+        {
+          "id": "lc-02",
+          "query": "a historical analysis of how the industrial revolution in 19th century Europe transformed agricultural societies into urban industrial economies and its lasting impact on modern social structures and labor movements",
+          "notes": "Long historical query with causal chain"
+        },
+        {
+          "id": "lc-03",
+          "query": "comparative study of Mediterranean cooking traditions across Spain, France, Italy, and Greece focusing on shared ingredients, cooking methods, and the influence of trade routes on culinary evolution",
+          "notes": "Multi-region comparative query"
+        },
+        {
+          "id": "lc-04",
+          "query": "un libro que explique las diferencias entre las distintas corrientes filosóficas del siglo XX incluyendo existencialismo, estructuralismo, posmodernismo y filosofía analítica con ejemplos prácticos de cada corriente",
+          "notes": "Long Spanish query about 20th century philosophical movements"
+        }
+      ]
+    },
+    "edge_cases": {
+      "description": "Edge cases: short queries, special characters, expected empty results, ambiguous terms",
+      "queries": [
+        {
+          "id": "ec-01",
+          "query": "a",
+          "notes": "Single character query — minimal input"
+        },
+        {
+          "id": "ec-02",
+          "query": "the",
+          "notes": "Common stopword only"
+        },
+        {
+          "id": "ec-03",
+          "query": "C++",
+          "notes": "Special characters in programming language name"
+        },
+        {
+          "id": "ec-04",
+          "query": "O'Brien",
+          "notes": "Apostrophe in author name"
+        },
+        {
+          "id": "ec-05",
+          "query": "xyzzyplugh42",
+          "notes": "Nonsense query — should return empty or near-empty results"
+        },
+        {
+          "id": "ec-06",
+          "query": "\"exact phrase matching\" test",
+          "notes": "Quoted phrase within query"
+        },
+        {
+          "id": "ec-07",
+          "query": "   spaces   around   words   ",
+          "notes": "Excessive whitespace"
+        },
+        {
+          "id": "ec-08",
+          "query": "élève café résumé naïve",
+          "notes": "Accented characters (French diacritics)"
+        },
+        {
+          "id": "ec-09",
+          "query": "data science AND visualization OR analytics",
+          "notes": "Boolean-like operators in natural query"
+        }
+      ]
+    }
+  },
+  "search_modes": ["keyword", "semantic", "hybrid"],
+  "collections": ["books", "books_e5base"],
+  "default_top_k": 10
+}

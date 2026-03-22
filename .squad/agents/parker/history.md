@@ -97,6 +97,18 @@
 
 <!-- Append learnings below this line -->
 
+### Admin Login Loop (#887, v1.12.0)
+
+**Root cause (dual):** `require_admin_auth` only accepted X-API-Key, blocking browser JWT sessions. Nginx `location = /admin/` served a static HTML page, intercepting React SPA routes on page refresh.
+
+**Fix:** `require_admin_auth` now accepts either X-API-Key (machine-to-machine) or JWT session with admin role (browser). Removed static nginx locations for `/admin` and `/admin/` — React SPA now handles them via catch-all.
+
+**Key lesson:** When adding defense-in-depth auth (API keys), always test browser-based access paths too. The frontend sends JWT Bearer tokens, not API keys. A dependency that blocks requests before `require_role()` runs will cause auth loops because the frontend's 401/403 handler clears session state.
+
+**Pattern:** `apiFetch` treats both 401 and 403 as auth failures → clears token → redirect to login → re-authenticate → same 401 → infinite loop. Any new auth gate must either accept JWT or return a non-auth error code.
+
+**Recurring pattern update:** Added to watch-for list: auth gates that only check one credential type (API key) while frontend uses another (JWT). Always verify both code paths.
+
 ### v1.10.0 Wave 0 Bugs (2026-03-20)
 
 **#646 -- Semantic 502:** Default `EMBEDDINGS_URL` port mismatch (8001 vs 8080) + Solr kNN failures not wrapped in degradation logic. Fix: try/except + fallback to keyword in both semantic and hybrid modes.
@@ -202,3 +214,50 @@
 **Testing:** 13 new tests — 5 success cases (JPEG creation, header validation, custom dimensions, multi-page), 6 failure cases (nonexistent, corrupt, empty, zero-page, unwritable output, warning logging), 2 integration tests (Solr param inclusion, indexing continues on failure). 100% coverage on thumbnail.py. Total: 154 tests, 85% service coverage.
 
 **PyMuPDF note:** `fitz.open()` cannot save zero-page PDFs, so the zero-page test uses mock. Alpine Docker image doesn't need extra system deps — pymupdf ships self-contained wheels.
+
+### Dual-Model Fanout Exchange (#871, v1.12.0)
+
+**Approach:** Migrated from RabbitMQ default exchange (direct routing) to a fanout exchange named `documents`. The lister publishes once; the exchange broadcasts to all bound indexer queues. Each indexer declares its own queue and binds it to the exchange.
+
+**Key design decisions:**
+- `EXCHANGE_NAME` env var (default: `"documents"`) added to both services for configurability.
+- Lister no longer declares a queue — only declares the fanout exchange and publishes to it with `routing_key=""`.
+- Each indexer instance declares the exchange (idempotent), declares its own queue (via `QUEUE_NAME`), and binds it to the exchange on first call only (`first_call` guard avoids rebinding on subsequent `get_queue()` calls).
+- Backward compatibility preserved: all existing env var defaults unchanged (`QUEUE_NAME="new_documents"`, `SOLR_COLLECTION="books"`, `CHUNK_SIZE=90`, `CHUNK_OVERLAP=10`). Docker-compose overrides remain authoritative.
+
+**Testing:** 7 new lister tests (exchange config, fanout publishing, persistent delivery, correlation IDs). 18 new indexer tests (exchange declaration, queue binding, passive mode on subsequent calls, QoS, queue/collection/chunk configurability). All existing tests pass unchanged.
+
+**Pattern note:** RabbitMQ `exchange_declare` is idempotent — both producer and consumers can declare the same exchange safely. The fanout type ignores routing keys entirely.
+
+### Comparison API (P2-3, #880, v1.12.0)
+
+**Approach:** Added `GET /v1/search/compare` endpoint that runs the same query against two Solr collections in parallel (via `ThreadPoolExecutor`) and returns results side-by-side with overlap metrics.
+
+**Key design decisions:**
+- Reuses existing `_search_keyword`, `_search_semantic`, and `_search_hybrid` helpers through a new `_execute_search_for_compare` dispatcher — no duplication of search logic.
+- Parallel execution: both collections queried concurrently via `ThreadPoolExecutor(max_workers=2)`.
+- `_compute_overlap_metrics` calculates `overlap_at_10` (Jaccard-like ratio at top-N), plus `baseline_only` and `candidate_only` ID lists preserving ranked order.
+- `include_in_schema=False` — endpoint is internal/API-only per PRD decision (no UI toggle).
+- Config via `COMPARISON_BASELINE_COLLECTION` (default: `books`) and `COMPARISON_CANDIDATE_COLLECTION` (default: `books_e5base`) env vars added to frozen Settings dataclass.
+
+**Testing:** 25 tests — 9 overlap metrics unit tests, 10 endpoint integration tests (keyword, semantic, hybrid, filters, empty results, latency, OpenAPI exclusion), 3 config tests, 1 parallel execution test, 2 edge cases. All 885 tests pass, 91.5% coverage.
+
+### 2026-03-22T13:49Z: PR #895 merged — admin login loop fixed
+
+**PR:** #895 (Closes #887)  
+**Root Causes:** Admin endpoints only accepted X-API-Key (not JWT), nginx blocking React SPA
+
+**Solution Implemented:** Dual-path auth on admin endpoints:
+- X-API-Key first (machine-to-machine, validated immediately)
+- JWT session fallback (browser access from React SPA)
+
+**Decision Captured:** .squad/decisions.md — "Admin endpoints accept JWT sessions alongside API keys"
+
+**Follow-up Issues Created:**
+- #894 — Thumbnail bug
+- #896 — Text preview truncation
+- #897 — Collections enablement
+- #898 — Remember-me checkbox
+
+**Team Coordination:** All team members should test both auth paths when adding auth gates.
+

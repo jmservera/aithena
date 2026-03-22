@@ -274,3 +274,31 @@ src/aithena-ui/src/
 - BEM naming: `book-card-body`, `book-card-thumbnail`, `book-card-thumbnail--placeholder`, `book-card-content`, `book-detail-header__thumbnail`, `book-detail-header__thumbnail--placeholder`, `book-detail-header__info`.
 - `fireEvent.error(img)` in tests simulates image load failure for fallback testing.
 - 7 new tests added; all 581 tests pass.
+
+## Session 2026-03-22T14:41Z — Completed Spawn Work Summary
+
+### Issues Closed This Batch
+
+1. **#897 — Collections API enablement** (PR #922)
+   - Removed 242 lines of hardcoded mock collection data from collectionsApi.ts
+   - Real API calls now default for all collection list operations
+   - Frontend now pulls live collections from backend
+
+2. **#898 — Remember-me checkbox** (PR #923)
+   - Added checkbox UI to LoginPage
+   - Updated AuthContext with rememberMe parameter
+   - Implemented sessionStorage/localStorage toggle
+   - Added i18n labels for English, Spanish, French, and German
+   - All 600 tests pass
+
+3. **#896 — Text preview truncation** (PR #924)
+   - Created truncateChunkText utility with smart truncation logic
+   - Keeps matched keywords centered and visible in truncated text
+   - Proper em-tag handling for highlighting
+   - 13 new tests added and passing
+
+### Orchestration Logs Created
+
+- 2026-03-22T14:41:02Z-dallas-collections-api.md (#897, PR #922)
+- 2026-03-22T14:41:02Z-dallas-remember-me.md (#898, PR #923)
+- 2026-03-22T14:41:02Z-dallas-text-preview.md (#896, PR #924)

@@ -1,5 +1,216 @@
 # Squad Decisions
 
+# Decision: Offline Installer Architecture
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-22  
+**Status:** IMPLEMENTED  
+**PR:** #925 (Closes #921)  
+**References:** Issue #921 — air-gapped offline deployment
+
+## Context
+
+Aithena needs to support deployment on disconnected machines (air-gapped networks). This requires a portable package containing all Docker images, compose files, and deployment scripts.
+
+## Decision
+
+Implemented a three-stage offline deployment architecture:
+
+### 1. Export Stage (Connected Machine)
+- **Tool:** `scripts/offline/export-images.sh`
+- **Input:** Running Aithena instance or docker-compose setup
+- **Output:** Single `.tar.gz` file containing:
+  - 11 Docker image tarballs (solr, redis, rabbitmq, postgres, embeddings-server, solr-search, document-indexer, document-lister, admin, aithena-ui, nginx)
+  - docker-compose.yml (production overlay)
+  - Configuration files
+  - Scripts (install-offline.sh, verify.sh)
+  - Installation guide
+
+### 2. Install Stage (Disconnected Machine)
+- **Tool:** `scripts/offline/install-offline.sh`
+- **Input:** `.tar.gz` package
+- **Actions:**
+  - Extracts package to `/opt/aithena/`
+  - Loads all Docker images from tarballs
+  - Generates `.env` with random secrets (if not present)
+  - Preserves existing `.env` on updates
+  - Starts services via docker-compose
+  - Creates bind-mount volumes at `/source/volumes/`
+
+### 3. Validation Stage
+- **Tool:** `scripts/offline/verify.sh`
+- **Checks:** All service health endpoints, image integrity, volume mounts
+
+## Architecture Rationale
+
+- **Convention alignment:** Follows existing patterns:
+  - VERSION file export (like buildall.sh)
+  - Backup/restore script conventions (umask, dry-run flags)
+  - `.env` management (preserve on update)
+- **Single package:** One `.tar.gz` simplifies distribution and verification
+- **No new dependencies:** Uses existing Docker, compose, bash — no Python, no Go, no special tooling
+- **Safety:** Secrets generated with `openssl rand`, volumes use bind-mounts (standard Docker)
+
+## Installation Flow
+
+1. Administrator downloads `.tar.gz` on connected machine
+2. Transfers to disconnected machine (USB, internal network segment, manual transfer)
+3. Runs `install-offline.sh /path/to/package.tar.gz`
+4. Runs `verify.sh` to confirm all services healthy
+5. Aithena is ready for use (no internet required)
+
+## Impact
+
+- **Deployment:** Aithena can now be deployed in air-gapped/disconnected networks
+- **Compliance:** Enables on-premises-only deployments for sensitive data environments
+- **Cost:** No cloud dependencies = no recurring cloud bills
+- **Portability:** Single package supports different target architectures (if CPU-compatible)
+
+---
+
+# Decision: Mandatory Security Review in Release Checklist
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-03-22  
+**Status:** IMPLEMENTED  
+**PR:** #899  
+**References:** PO directive from Juanma  
+
+## Context
+
+The Product Owner issued two mandatory directives:
+1. "New releases should always fix security issues" — security fixes are MANDATORY in every release
+2. "For next releases, run a thorough security and performance review" — threat assessment before each release
+
+## Decision
+
+Implemented comprehensive security and performance review sections in the release checklist and templates:
+
+### 1. Release Checklist (`docs/deployment/release-checklist.md`)
+
+Added **Security Review (MANDATORY)** with 8 checkpoints after "Verify All Tests Pass":
+- Run security scanning suite (Bandit, Checkov, Zizmor, CodeQL) on `dev`
+- Review and resolve ALL open Dependabot/security alerts (critical/high MUST be fixed; medium/low documented)
+- Verify no new security regressions since last release
+- Run threat assessment session if significant new features were added
+- Verify all security fixes from previous releases are still in place
+- Check GitHub Actions workflows for supply chain risks (unpinned actions, script injection, excessive token permissions)
+- Review input validation and sanitization on all new/modified API endpoints
+- Document any accepted security risks in `docs/security/baseline-exceptions.md`
+
+Added explicit note: **"A release CANNOT ship with known unresolved critical or high security issues. Security fixes are MANDATORY in every release."**
+
+Added **Performance Review (MANDATORY)** with 4 checkpoints:
+- Run benchmark suite against dev deployment
+- Compare latency metrics (p50/p95/p99) against previous release baseline
+- Verify no performance regressions in search, indexing, or embedding generation
+- Check resource utilization (memory, CPU, disk) under expected load
+
+### 2. Release Issue Template (`.github/ISSUE_TEMPLATE/release.md`)
+
+Added to Pre-release section:
+- [ ] Security scan clean (Bandit, Checkov, Zizmor, CodeQL — no critical/high)
+- [ ] Dependabot alerts reviewed (critical/high fixed, medium/low documented)
+- [ ] Threat assessment completed (if significant new features)
+- [ ] Performance benchmarks show no regressions
+
+### 3. PR Checklist (`.squad/templates/pr-checklist.md`)
+
+Enhanced Security section:
+- [ ] No new security warnings introduced (Bandit, CodeQL)
+- [ ] Input validation on new API parameters
+
+## Impact
+
+**All team members:**
+- Releases now have explicit security and performance gates
+- No release can proceed without resolving critical/high findings
+- New features trigger automatic threat assessment requirement
+
+**Newt (Release Documentation):**
+- Release issue template now includes security/performance checkpoints
+- Release docs must include security verification status
+
+**Security & QA:**
+- Clear, auditable trail of security reviews before every release
+- Documented accepted risks in baseline-exceptions.md
+
+## Rationale
+
+- **Security first:** Enforces PO directive that security is non-negotiable
+- **Consistency:** Same checklist used across all releases
+- **Transparency:** Threat assessments for new features prevent regression
+- **Risk management:** Supply chain risks (GitHub Actions) explicitly reviewed
+- **Performance:** Prevents silent latency/resource degradation between releases
+
+---
+
+# Decision: A/B Testing Human Evaluation UI — Architecture & Scope
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-22  
+**Status:** PROPOSED — Awaiting PO Review  
+**PRD:** `docs/prd/ab-testing-evaluation.md`  
+**Issues:** #900–#918 (11 issues)
+
+## Context
+
+The v1.12.0 milestone delivered A/B embedding test infrastructure (dual indexers, dual embeddings servers, comparison API, benchmark tools). The PO requested a human evaluation UI to let evaluators compare search results from both models side-by-side and record preferences, enabling a data-driven model migration decision.
+
+## Decisions
+
+### 1. Environment Gate Pattern
+
+All A/B evaluation features are gated behind `ENABLE_AB_TEST=true`. When unset, routes are **never registered** (not just hidden) — this means zero code paths execute, zero endpoints exist, zero attack surface. This is stronger than a runtime `if` check per request.
+
+**Rationale:** Production safety. The feature is experimental and evaluator-only. A compile-time-like gate (route registration) is safer than runtime middleware. Follows the principle of least privilege.
+
+### 2. Public `/v1/config` Endpoint
+
+A new `GET /v1/config` endpoint (always registered, no auth) returns `{ ab_test_enabled: bool, version: str }`. The frontend uses this to conditionally mount evaluation routes.
+
+**Rationale:** The frontend needs to know the gate state before rendering. This must be unauthenticated because the routing decision happens before login. Exposing only a boolean flag and version string has negligible security impact.
+
+### 3. SQLite for Feedback Storage
+
+Evaluation feedback is stored in `ab_evaluation.db` (new SQLite file), following the existing pattern of `auth.db` and `collections.db`.
+
+**Rationale:** Consistency with existing data storage patterns. SQLite is appropriate for this use case (low write volume, single-server deployment, no cloud dependencies). The evaluation data volume is small (dozens to hundreds of evaluations, not millions).
+
+### 4. Blinded Evaluation with Per-Session Randomization
+
+The A↔B mapping (which collection is "Model A" vs "Model B") is randomized per evaluator session and stored in sessionStorage. This prevents positional bias.
+
+**Rationale:** Standard practice in evaluation studies. Without blinding, evaluators may develop unconscious preferences for the left/right panel. Per-session randomization is simpler than per-query randomization and sufficient for our small evaluator pool.
+
+### 5. nDCG@10 + MRR as Primary Metrics
+
+We compute nDCG@10 (from star ratings) and MRR (from preference data) server-side. These are standard IR evaluation metrics.
+
+**Rationale:** nDCG captures graded relevance (star ratings map naturally to gain values). MRR captures the "first good result" signal. Together they give complementary views: nDCG measures overall result quality, MRR measures top-result quality. Statistical significance testing is out of scope — can be done offline with exported data.
+
+### 6. Pre-loaded Query Queue from Benchmark Suite
+
+Evaluators work through the existing 30 benchmark queries (from `scripts/benchmark/queries.json`) plus optional custom queries.
+
+**Rationale:** The benchmark suite already has a well-designed query distribution (5 categories, 4 languages). Using it ensures consistent coverage across evaluators. The "add custom query" option allows exploring cases the benchmark doesn't cover.
+
+## Impact
+
+- **Parker:** 3 backend issues (#900, #901, #902) — gate mechanism, feedback storage, metrics
+- **Dallas:** 5 frontend issues (#903, #905, #907, #909, #911) — config, comparison page, preference UI, dashboard, queue
+- **Lambert:** 3 test issues (#914, #916, #918) — backend tests, frontend tests, integration test
+- **Brett:** No infra changes needed (existing compose overlay sufficient)
+- **Production:** Zero impact when `ENABLE_AB_TEST` is not set
+
+## Risks
+
+1. **Evaluator fatigue:** 30 queries × 3 modes = 90 evaluations is a lot. Mitigated by making mode cycling optional and allowing skip.
+2. **Small evaluator pool:** With 2-3 evaluators, statistical significance is hard to achieve. Mitigated by collecting detailed per-result ratings (not just A/B preference) to increase signal density.
+3. **Blinding leakage:** If evaluators know which model has more Spanish results (e5-base with longer chunks), they could infer the mapping. Mitigated by randomization per session.
+
+---
+
 # Decision: Screenshot Spec Expansion to 11 Pages
 
 **Author:** Lambert (Tester)  
@@ -9344,3 +9555,984 @@ One performance note: sequential batch updates for large document sets (~100s fo
 - Future: consider chunked async execution for batch operations in v1.11+.
 
 ---
+
+# Decision: Release Process — PR-to-Main Workflow Required
+
+**Date:** 2026-03-22  
+**Author:** Ripley (Lead)  
+**Status:** Approved and Implemented  
+**Reference:** Validation in v1.11.0 release workflow
+
+## Context
+
+v1.11.0 release workflow had an initial failure: a local merge commit was created and tagged before the PR merged to main. The Release workflow correctly rejected the tag because it was not reachable from main. This failure prompted clarification of the release process.
+
+## Decision
+
+**All releases MUST follow this workflow:**
+
+1. **Preparation (on `dev`):** Update VERSION + CHANGELOG, commit to dev
+2. **Create PR:** `dev` → `main` with all CI checks required (unit tests, lint, security, integration E2E)
+3. **Merge PR:** After all checks pass, merge as a regular merge commit (not squash)
+4. **Tag on main:** Create annotated tag ON the main branch after PR merges
+5. **Publish:** Release workflow automatically builds, packages, and publishes GitHub release
+
+**Critical constraint:** Tags must only be created on commits reachable from `main`. Never tag `dev` before the PR merges.
+
+## Rationale
+
+### The v1.11.0 Failure
+
+1. A merge commit was created locally: `git merge dev` (on developer's machine)
+2. A tag was created: `git tag vX.Y.Z` (on the merge commit, not yet on main)
+3. The tag was pushed: `git push origin vX.Y.Z`
+4. **Release workflow ran and FAILED:** The tag commit was not reachable from main (still ahead of main by the merge commit)
+5. **Consequence:** Tag had to be deleted, GitHub release deleted, and PR #854 created to properly merge to main
+
+### Root Cause
+
+Main branch has protected rules requiring:
+- PR required (not direct push)
+- All CI checks must pass
+- No force push
+
+These rules ensure quality, but they mean the tag must come AFTER the PR merges, when the commit becomes reachable from main.
+
+### Why This Matters
+
+The Release workflow validates that tags point to commits reachable from main. This is correct because:
+1. It prevents tagging development code
+2. It ensures all CI checks passed before the release
+3. It guarantees the release was properly reviewed via a PR
+
+## Implementation
+
+See `docs/deployment/release-checklist.md` for step-by-step instructions.
+
+**Tag on Main (correct approach):**
+```bash
+git fetch origin main
+git tag -a vX.Y.Z -m "Release vX.Y.Z" origin/main
+git push origin vX.Y.Z
+```
+
+## Impact
+
+- **Ripley (Lead):** Owns release decisions
+- **Brett (CI/CD):** Maintains Release workflow and branch protection rules
+- **Newt (Docs):** Documents release process
+- **All team:** Follows this process for all releases
+
+## Tradeoffs
+
+### Gains
+- **Safety:** Branch protection enforces the process
+- **Traceability:** Release history is clear in git
+- **Automation:** No manual GitHub release creation needed
+- **Consistency:** Same process every time
+
+### Costs
+- **Speed:** One extra approval cycle (the PR review)
+- **Flexibility:** Cannot tag arbitrary commits
+
+**Tradeoff is acceptable:** Release safety > release speed.
+
+## Validation
+
+v1.11.0 release successfully validated this process:
+- All PRs created with dev as head, main as base
+- All CI checks passed before merging
+- Tag created on main post-merge
+- Release workflow published successfully
+
+---
+
+# Decision: Always Render Page Titles Unconditionally
+
+**By:** Dallas (Frontend Dev)  
+**Date:** 2026-03-22  
+**Context:** PR #856 (E2E Stats Page Fix)  
+**Status:** Implemented  
+
+## Decision
+
+Page title elements (`.page-title`, `.status-title`, `.stats-page-title`, etc.) that serve as E2E test selectors **must always be rendered**, even during loading and error states.
+
+Components should follow the `LibraryPage` pattern:
+1. Render the header with the title unconditionally
+2. Conditionally render loading/error/data content below it
+
+## Rationale
+
+`CollectionStats` used early returns for loading/error states that skipped the title element entirely. This caused the Playwright E2E navigation test to fail when the stats API was slow in the Docker Compose environment. 
+
+By making the title always present, E2E selectors remain stable regardless of backend latency. The test can find the title before data is loaded.
+
+## Impact
+
+- `CollectionStats.tsx` fixed in PR #856 ✅
+- `IndexingStatus.tsx` has the same pattern and should be updated proactively (`.status-title` is also a test selector)
+- Future page components should follow this pattern
+
+## Pattern Example
+
+```tsx
+// ✅ CORRECT: Always render title
+export function MyPage() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadData().then(setData).catch(setError).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <div className="page-title">My Page</div>
+      {loading && <p>Loading...</p>}
+      {error && <p>Error: {error}</p>}
+      {data && <DataDisplay data={data} />}
+    </div>
+  );
+}
+```
+
+---
+# Decision: Skills Database Pruning (49 → 34)
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-21  
+**Status:** IMPLEMENTED  
+**Commit:** e66feff (chore: prune skills database from 49 to 34 high-value skills)
+
+## Context
+
+The skills database had grown to 49 entries across v1.0–v1.11 releases. Many skills were:
+- **Unvalidated:** "confidence: medium, not yet validated" (e.g., milestone-branching-strategy)
+- **One-time processes:** Process docs that won't recur (e.g., i18n-extraction-workflow for v1.6.0–v1.7.0)
+- **Deprecated:** Refer to removed systems (e.g., ci-coverage-setup referenced removed admin service)
+- **Too generic:** Software engineering first principles, not aithena-specific (e.g., tdd-clean-code, project-conventions)
+- **Overlapping:** Duplicate/near-duplicate patterns (e.g., 2 hybrid-search skills vs. 1 definitive pattern)
+
+Skills database had become a burden for onboarding: which 49 skills matter?
+
+**Request:** Prune aggressively to keep only high-value, battle-tested patterns. Target: ~20–25 skills.
+
+## Decision
+
+**Prune from 49 → 34 skills. Aggressive strategy: if a skill is marginal, remove it.**
+
+### Skills Removed (15 total)
+
+**Unvalidated strategies (3):**
+- `milestone-branching-strategy` — planned for v1.11.0 but never executed; team still uses dev branch
+- `smoke-testing` — low-confidence local dev pattern; rarely used
+- `ci-coverage-setup` — config reference table is stale (references removed admin service)
+
+**One-time process docs (4):**
+- `i18n-extraction-workflow` — v1.6.0–v1.7.0 specific; i18n now mature, won't recur
+- `lead-retrospective` — Ripley-only procedural skill; belongs in charter, not team skills
+- `copilot-review-to-issues` — v1.10.1 triage process for Copilot PRs; one-time issue conversion
+- `reskill` — meta-skill about reskilling itself; too self-referential
+
+**Too generic (2):**
+- `project-conventions` — belongs in team.md/README, not a skill
+- `tdd-clean-code` — generic software engineering, not aithena-specific
+
+**Removed system references (2):**
+- `dependabot-triage-routing` — operational routing for Brett alone; belongs in Brett's charter
+- `ralph-dependency-check` — trivial coordinator rule; belongs in Ralph's charter
+
+**Generic conventions (1):**
+- `squad-pr-workflow` — squad branching conventions belong in squad root docs or team.md
+
+**Consolidated skills (3):**
+- `docker-health-checks` — subsumed by docker-compose-operations and solrcloud-docker-operations
+- `hybrid-search-parent-chunk` — merged into solr-parent-chunk-model
+- `hybrid-search-patterns` → merged into solr-parent-chunk-model
+
+### Consolidation Details
+
+**solr-parent-chunk-model** (expanded):
+- Now includes parent-chunk data model (existing)
+- PLUS hybrid search implementation (RRF fusion, kNN rules, embedding integration, timeout alignment)
+- PLUS fallback degradation patterns
+- Unified skill: "Parent/chunk document architecture and hybrid search implementation"
+- Authors: Ash (model) + Ash (implementation patterns)
+
+**Result: 34 remaining skills**
+
+## Impact
+
+### Team (onboarding perspective)
+- **Clearer signal:** 34 battlefield-proven skills vs. 49 mixed-confidence patterns
+- **Faster onboarding:** Agents read the 34 skills that matter, not 49 with unclear status
+- **Ownership clarity:** Every remaining skill has clear ownership (Parker, Dallas, Lambert, Ash, Brett, Kane, Ripley)
+
+### Removed content ownership
+- Skills removed from team-wide docs → migrated to agent charters (Ripley, Ralph, Brett, Kane)
+- No knowledge loss; more appropriate home
+
+## Final Skill Inventory (34)
+
+**Core architecture & patterns (6):**
+- phase-gated-execution
+- solr-parent-chunk-model (hybrid search + parent-chunk)
+- solr-pdf-indexing
+- http-wrapper-services
+- api-contract-alignment
+- pdf-extraction-dual-tool
+
+**Search & embeddings (1):**
+- solr-parent-chunk-model (covers all)
+
+**Testing (4):**
+- pytest-aithena-patterns
+- vitest-testing-patterns
+- playwright-e2e-aithena
+- path-metadata-tdd
+
+**Backend APIs & infrastructure (5):**
+- fastapi-auth-patterns
+- fastapi-query-params
+- redis-connection-patterns
+- pika-rabbitmq-fastapi
+- logging-security
+
+**Frontend (2):**
+- react-frontend-patterns
+- accessibility-wcag-react
+
+**Docker & infrastructure (3):**
+- docker-compose-operations
+- solrcloud-docker-operations
+- bind-mount-permissions
+
+**Git & release (6):**
+- branch-protection-strict-mode
+- release-gate
+- release-tagging-process
+- multi-release-orchestration
+- pr-integration-gate
+- ci-gate-pattern
+
+**Quality & process (3):**
+- milestone-gate-review
+- milestone-wave-execution
+- agent-debugging-discipline
+
+**Security & scanning (2):**
+- security-scanning-baseline
+- workflow-secrets-security
+- ci-workflow-security
+
+**Metadata extraction (2):**
+- path-metadata-heuristics
+- solr-pdf-indexing
+
+**Infrastructure (1):**
+- nginx-reverse-proxy
+
+## Acceptance Criteria
+
+- [x] Identified 15 skills for removal with clear justification
+- [x] Consolidated overlapping patterns into unified skills
+- [x] Removed all skills; consolidated solr-parent-chunk-model
+- [x] Committed changes (commit e66feff)
+- [x] Updated Ripley history.md with session learnings
+- [x] Final count: 34 high-confidence, team-wide skills
+
+## Rationale
+
+Aggressive pruning is better than slow accumulation. A 49-skill database created decision fatigue on onboarding. The 34 remaining skills are:
+- **Validated:** Every skill has been proven in at least one release cycle
+- **Owned:** Each skill has a clear author/maintainer
+- **Actionable:** Every skill answers "how do we do this in aithena?" not "what's a general best practice?"
+- **Distinct:** No overlaps; consolidated patterns into single, authoritative skills
+
+## References
+
+- `.squad/skills/` — 34 remaining skill directories
+- `.squad/agents/ripley/history.md` — Full session notes
+
+## Follow-Up Actions
+
+- Squad members should review the 34 skills in context of their charters
+- Onboarding guide should link to the 34-skill set, not the full directory
+- Next reskill cycle: apply same aggressive pruning (remove any skill that hasn't been cited in 2+ releases)
+# Decision: Embedding Model Evaluation and A/B Testing Strategy
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2026-03-22  
+**Issue:** #861  
+**PR:** #863  
+**Status:** Proposed (awaiting PO approval)
+
+## Context
+
+The current embedding model (`distiluse-base-multilingual-cased-v2`) is constrained by a 128-token window, resulting in 90-word chunks that are too small for hierarchical chunking strategies and advanced retrieval techniques. This research spike evaluated alternatives and designed an A/B testing framework to validate improvements.
+
+## Decision
+
+**Primary recommendation:** Adopt **multilingual-e5-base** as the next-generation embedding model, contingent on A/B testing validation showing ≥5% nDCG@10 improvement with acceptable resource costs.
+
+### Model Selection Rationale
+
+- **512-token window:** Enables 300-word chunks (3.3× current context)
+- **768 dimensions:** Balanced increase (+50% vs. current 512D)
+- **MTEB score 61.5:** Proven multilingual retrieval leader
+- **CPU-compatible:** No GPU infrastructure required
+- **Active maintenance:** Microsoft-backed (intfloat/MSR-affiliated)
+
+### A/B Testing Strategy
+
+**In-repo dual-collection approach:**
+- Parallel Solr collections: `books` (baseline) + `books_e5base` (test)
+- Two document-indexer instances with different CHUNK_SIZE (90 vs 300)
+- Two embeddings-server instances (port 8080 vs 8085)
+- 5-phase experiment: setup → index → query → human-eval → cost-analysis
+- Timeline: 2-3 weeks (10-15 days effort)
+
+**Success criteria:**
+- Relevance: ≥5% nDCG@10 improvement (statistically significant)
+- Latency: ≤50ms query latency increase at p95
+- Resources: ≤2× index size increase, ≥80% indexing throughput
+
+## Implications for Team
+
+### Ash (Search Engineer)
+- **Phase 1:** Solr collection setup, schema design for 768D vectors
+- **Phase 3:** Query benchmark execution, latency profiling
+- **Phase 5:** Resource cost analysis, HNSW tuning if needed
+
+### Brett (DevOps/Infra)
+- **Phase 1:** Docker Compose modifications (two new services)
+- **Phase 2:** Monitor cluster health during parallel indexing
+- **Phase 5:** Disk/memory usage tracking, capacity planning
+
+### Parker (Backend Engineer)
+- **Phase 1:** Document-indexer configuration for 300-word chunks
+- **Phase 2:** Batch indexing coordination, error handling
+- **Optionally:** solr-search API extension (`?collection=books_e5base` parameter)
+
+### Juanma (PO)
+- **Phase 4:** Human relevance judgments (50 queries, 4-6 hours)
+- **Decision gate:** Approve production migration or explore alternatives
+
+### Dallas (Frontend Engineer)
+- **No immediate work required** — A/B test is backend-only
+- **Post-migration:** May highlight larger chunk text in UI (300 words vs 90)
+
+## Alternatives Considered
+
+1. **multilingual-e5-small** (384D) — Lower quality, use if resource constraints tighten
+2. **multilingual-e5-large** (1024D) — Best quality, defer until e5-base validation complete
+3. **BGE-M3** (8192 tok, 1024D) — Experimental, Chinese-centric training is risk for Latin languages
+4. **Separate repo for testing** — Rejected per PO preference for in-repo validation
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|-----------|
+| e5-base encoding too slow | Indexing backlog | Optimize batching, consider GPU if needed |
+| 768D index too large | Disk exhaustion | Quantize to int8 (Solr 9.4+), prune test collection |
+| Query latency unacceptable | Poor UX | Tune HNSW efConstruction, reduce topK |
+| Relevance improvement marginal | Wasted effort | Escalate to e5-large or BGE-M3 |
+
+## Next Actions
+
+1. **PO review and approval** — Allocate 2-3 sprints for A/B test
+2. **Phase 1 kickoff** — Ash + Brett: infrastructure setup (3-5 days)
+3. **Test corpus selection** — 100-200 books, balanced language distribution
+4. **Human evaluation scheduling** — Block 4-6 hours for Juanma or delegate
+
+## References
+
+- Research report: `docs/research/embedding-model-research.md`
+- MTEB leaderboard: https://huggingface.co/spaces/mteb/leaderboard
+- e5-base model card: https://huggingface.co/intfloat/multilingual-e5-base
+- Current config: `src/embeddings-server/config/__init__.py` (ADR-004)
+
+---
+
+**Decision Status:** Awaiting PO approval to proceed with A/B testing infrastructure setup.
+# Decision: Release Strategy Analysis Findings
+
+**Date:** 2026-03-26  
+**Author:** Brett (Infrastructure Architect)  
+**Context:** #860 research spike  
+**Status:** Recommendation (awaiting PO decision)
+
+## Problem
+
+The current release strategy rebuilds all 6 services on every release with unified versioning, despite highly asymmetric change frequency:
+- embeddings-server: 9GB image, 1 commit in 4 releases (v1.8.0→v1.11.0) → 3 unnecessary 10-minute rebuilds
+- document-lister: 0 commits in 4 releases → rebuilt every time
+- aithena-ui + solr-search: 68 commits (78% of all service changes) → always need rebuilds
+
+Current approach wastes ~40-60% of build time on unchanged services.
+
+## Analysis
+
+Evaluated 4 strategies:
+1. **Status Quo** — always rebuild all (current, simple but inefficient)
+2. **Change-Detection CI** — skip unchanged services, retag images (40% time savings, 1 week effort)
+3. **Tiered Releases** — fast/stable/infra tracks (50-70% savings, 2-4 weeks effort)
+4. **Independent Versioning** — per-service versions (60-80% savings, high complexity, 2-3 weeks effort)
+
+Full analysis: `docs/research/release-strategy-analysis.md`
+
+## Recommendation
+
+**Phased approach:**
+
+### Short-term (v1.12.0) — Change-Detection CI
+- Detect changed services via `git diff $PREV_TAG..$NEW_TAG -- src/{service}`
+- Skip builds for unchanged services, retag previous images
+- Create embeddings-server base image (pre-bake ML model)
+- Add `--skip-unchanged` flag to buildall.sh
+- **Effort:** 1 week | **Risk:** Low | **Savings:** 40% build time
+
+### Mid-term (v1.13.0) — Hybrid Versioning
+- Independent versioning for stable services (embeddings-server, document-lister, admin)
+- Keep unified versioning for active services (aithena-ui, solr-search, document-indexer)
+- API contract testing for solr-search ↔ embeddings-server
+- **Effort:** 2-3 weeks | **Risk:** Medium | **Savings:** 60% build time
+
+### Long-term (v2.0.0+) — Full Independence
+- All 6 services get independent versions
+- Service mesh or API gateway for version routing
+- Required if scaling to 10+ microservices
+- **Effort:** 4-6 weeks | **Risk:** High (requires API versioning strategy)
+
+## Decision Needed
+
+PO to decide which phase(s) to prioritize. Recommend starting with short-term (v1.12.0) for quick wins.
+
+## Team Impact
+
+- **Parker, Dallas** (backend devs) — faster local builds with `--skip-unchanged`, API contract tests in mid-term
+- **Quinn** (frontend dev) — unaffected (aithena-ui always rebuilds anyway)
+- **Lambert** (QA) — must verify change-detection CI doesn't break releases
+- **Brett** (infra) — owns implementation of all phases
+- **Ash** (Solr/search) — API contract tests affect solr-search ↔ embeddings-server integration
+
+## Open Questions
+
+1. Should we pin embeddings-server version in v1.12.0 or wait for v1.13.0?
+2. Do we need a staging environment to validate change-detection CI before prod?
+3. Should API contract tests block releases or just warn?
+
+---
+
+# Decision: E5 Prefix Handling Internal to Embeddings Server
+
+**Author:** Ash (Search Engineer)
+**Date:** 2026-03-22
+**Issue:** #874 (P1-1)
+**PR:** #883
+
+## Context
+
+E5-family models require `"query: "` prefix for search queries and `"passage: "` prefix for documents to achieve optimal relevance. Two approaches were considered:
+
+1. **Caller-side prefixes:** Each caller (solr-search, document-indexer) applies the prefix based on its own knowledge of the model.
+2. **Server-side prefixes:** The embeddings-server detects model family and applies prefixes internally; callers pass `input_type`.
+
+## Decision
+
+**Server-side prefixes (option 2)** — aligned with PRD section P1-1.
+
+Callers send `input_type: "query" | "passage"` (default `"passage"`) in the `/v1/embeddings/` request body. The server auto-prepends the correct prefix for e5-family models. For non-e5 models (distiluse), `input_type` is accepted but ignored.
+
+## Rationale
+
+- Single point of prefix logic — avoids duplication across solr-search and document-indexer
+- Backward compatible — existing callers omitting `input_type` get `"passage"` default (correct for indexing)
+- Model-agnostic API — if we switch models again, only the server needs updating
+- `/v1/embeddings/model` returns `requires_prefix` and `model_family` for client-side verification
+
+## Impact
+
+- **solr-search:** Must pass `input_type: "query"` when encoding search queries (P1-5)
+- **document-indexer:** No changes needed — default `"passage"` is correct for indexing
+- **Future models:** Add detection logic to `detect_model_family()` only
+
+---
+
+# Decision: books_e5base configset is a full copy of books
+
+**Author:** Ash (Search Engineer)
+**Date:** 2026-03-22
+**Context:** P1-2, PR #882, Issue #873
+
+## Decision
+
+The `books_e5base` configset is a full independent copy of the `books` configset directory, not a symlink or overlay. Only the vector field type and dimension differ.
+
+## Rationale
+
+- Full copy allows independent evolution (e.g., different HNSW tuning parameters for 768D vectors)
+- Avoids symlink complexity in Docker volume mounts
+- The `solr-init` script treats each configset identically — upload to ZK, create collection, apply overlay
+- If the A/B test succeeds and books_e5base replaces books, the old configset can be removed cleanly
+
+## Impact
+
+- Any future schema changes to non-vector fields (new metadata fields, analyzer tweaks) must be applied to BOTH configsets
+- Parker and Brett should be aware that `SOLR_COLLECTION=books_e5base` is now a valid target for document-indexer-e5
+
+## Alternatives Considered
+
+- **Shared configset with parameterized vector dimension:** Solr doesn't support schema parameterization at configset level
+- **Symlinks for shared files:** Would complicate Docker volume mounts and ZooKeeper uploads
+
+---
+
+# Decision: Collection Parameter Config Design (P1-5)
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-22
+**Context:** Issue #875 / PR #884
+**Status:** IMPLEMENTED
+
+## Decision
+
+For the A/B test collection routing, use a config-driven allowlist approach with three env vars:
+
+1. `ALLOWED_COLLECTIONS` — comma-separated allowlist (default: `"books"`)
+2. `DEFAULT_COLLECTION` — default when param omitted (default: `"books"`)
+3. `E5_COLLECTIONS` — collections needing `input_type="query"` for embeddings (default: `""`)
+4. `EMBEDDINGS_URL_{UPPER_NAME}` — per-collection embeddings server URL override
+
+## Rationale
+
+- **Allowlist over enum:** Collections may be added/removed without code changes. Env-var-driven allowlist is consistent with existing config patterns in solr-search.
+- **Separate e5_collections set:** Cleaner than checking collection name for "e5" substring. Explicitly config-driven, no magic string matching.
+- **Per-collection embeddings URL:** The A/B architecture uses separate embeddings servers per model. URL overrides keep this flexible without hardcoding port mappings.
+- **Keyword-only `collection` param on internals:** Ensures backward compat — existing callers of `query_solr()` / `_fetch_embedding()` don't need changes.
+
+## Impact
+
+- **Dallas (Frontend):** Can add `collection` query param to search/facets/books API calls when implementing the A/B UI toggle.
+- **Brett (Infra):** Docker Compose env vars `ALLOWED_COLLECTIONS`, `E5_COLLECTIONS`, `EMBEDDINGS_URL_BOOKS_E5BASE` needed in the A/B overlay.
+- **Ash (Search):** No Solr schema changes needed — collection name maps directly to Solr collection.
+
+---
+
+# Decision: Embedding Model A/B Test PRD — Architecture & Work Plan
+
+**Author:** Ripley (Lead)
+**Date:** 2026-03-22
+**Status:** PROPOSED — Awaiting PO Review
+**PRD:** `docs/prd/embedding-model-ab-test.md`
+
+## Context
+
+Ash completed research on embedding model alternatives (#861). The PO requested a PRD for an in-repo A/B test of `multilingual-e5-base` (512 tokens, 768D) vs the current `distiluse-base-multilingual-cased-v2` (128 tokens, 512D). This decision documents the architectural approach and key trade-offs.
+
+## Decisions Made
+
+### 1. Dual-Collection Architecture (not dual-schema)
+Two separate Solr collections (`books` and `books_e5base`) rather than two vector fields in one collection. Rationale: cleaner separation, independent schema evolution, easier cleanup after test, no risk to production data.
+
+### 2. Docker Compose Overlay for A/B Services
+New services (`embeddings-server-e5`, `document-indexer-e5`) defined in a compose overlay file, not inline in the production `docker-compose.yml`. Keeps production config clean; overlay activated only during testing.
+
+### 3. Embeddings Server Handles Prefix Internally (not Indexer, not Search)
+E5 models require `"query: "` / `"passage: "` prefixes. The embeddings-server detects the model family at startup (e.g., `"e5"` in model name) and applies prefixes internally. Callers pass `input_type: "query"` or `"passage"` — the server does the rest. No `QUERY_PREFIX`/`PASSAGE_PREFIX` env vars needed. Centralizes all model-specific behavior in the model-serving layer.
+
+### 4. Chunking Recalculation: 300 words / 50 overlap
+Proportional scaling from PO's 90/10 decision for 128-token window → 300/50 for 512-token window. 300 words ≈ 390 tokens, safely within 512-token budget. PO to confirm.
+
+### 5. Phase-Gated Execution (3 phases)
+Phase 1 (infra setup) → Phase 2 (indexing & benchmarking) → Phase 3 (evaluation & migration). PO decision gate between Phase 2 and Phase 3. Consistent with team's proven phase-gated pattern.
+
+## Open / Blocking Questions
+
+- **OQ-1 (BLOCKING):** RabbitMQ competing consumers means only one indexer gets each message. Need fanout exchange or separate queues for dual indexing. Ash + Brett must resolve before P1-3/P1-4.
+- **OQ-2:** Final CHUNK_SIZE confirmation from PO (300/50 recommended).
+- **OQ-5:** Whether Dallas builds a comparison UI or API/CLI is sufficient.
+
+## Impact
+
+- **Ash:** Primary on search/Solr items (12 pts across 5 work items)
+- **Parker:** Backend API changes (8 pts across 3 items)
+- **Brett:** Infrastructure/Docker (7 pts across 3 items)
+- **Lambert:** Metrics collection (2 pts, 1 item)
+- **Dallas:** No assignment in this PRD (stretch goal only)
+- **Total resource cost:** ~31 pts, ~16.5GB host RAM during A/B test (20GB recommended)
+
+# OQ-1 Decision: RabbitMQ Queue Topology for A/B Test
+
+**Decision:** Use a **fanout exchange** (Option A) to deliver every document message to both indexers.
+
+**Authors:** Ash (Search Engineer) + Brett (Infrastructure)
+**Date:** 2025-01-XX
+**Status:** DECIDED
+**Blocks:** P1-3 (Parker), P1-4 (Brett)
+
+---
+
+## Context
+
+The A/B embedding model test requires two `document-indexer` instances:
+
+| Service | Collection | Embedding Model | Chunk Config |
+|---------|-----------|----------------|-------------|
+| `document-indexer` (baseline) | `books` | distiluse 512D | 90w / 10w overlap |
+| `document-indexer-e5` (new) | `books_e5base` | e5-base 768D | 300w / 50w overlap |
+
+Both must process **every** document. Today, `document-lister` publishes directly to the `shortembeddings` queue (`exchange=""`). If two consumers share one queue, RabbitMQ round-robins — each document reaches only ONE indexer.
+
+## Options Evaluated
+
+### Option A: Fanout Exchange ✅ CHOSEN
+
+Publisher sends to a **fanout exchange** (`documents`). The exchange copies every message to all bound queues. Each indexer consumes from its own dedicated queue.
+
+```
+document-lister
+      │
+      ▼
+ ┌─────────────────────┐
+ │  exchange: documents │  (type: fanout)
+ │  (fanout)            │
+ └──┬──────────────┬────┘
+    │              │
+    ▼              ▼
+┌────────┐   ┌──────────────┐
+│indexer_ │   │indexer_       │
+│baseline │   │e5base         │
+└───┬────┘   └───┬───────────┘
+    │            │
+    ▼            ▼
+document-    document-
+indexer      indexer-e5
+```
+
+**Pros:**
+- Textbook RabbitMQ pattern for "one message → many consumers"
+- Guaranteed delivery to every bound queue (atomic at the exchange level)
+- Each consumer has independent acknowledgment, backpressure, and retry
+- Adding a third model later = bind one more queue (zero producer changes)
+- Rollback = remove the e5 queue binding; baseline continues unchanged
+
+**Cons:**
+- Two copies of each message stored in RabbitMQ (trivial — messages are ~100 byte file paths)
+- Requires a small change to the producer's publish call
+
+### Option B: Publish Twice ❌ REJECTED
+
+Producer publishes to two separate queues explicitly.
+
+**Why rejected:**
+- **Tight coupling:** Producer must know about every consumer. Adding/removing a model means changing `document-lister`.
+- **Partial failure risk:** If publish #1 succeeds and #2 fails, collections diverge silently. No transactional guarantee across two publishes without publisher confirms + manual compensation.
+- **Rollback pain:** Removing the A/B test means editing the producer again.
+- **Scaling:** Every new consumer = more producer code, more failure modes.
+
+### Option C: Sequential Indexing ❌ REJECTED
+
+A single indexer processes both collections in sequence.
+
+**Why rejected:**
+- **Doubles latency:** Each document takes 2× as long (sequential embedding calls to two different servers with different chunk configs).
+- **Complexity explosion:** One indexer must carry two chunk configs, two embedding endpoints, two Solr collections. Violates single-responsibility.
+- **Blast radius:** A bug in e5 indexing path crashes the baseline indexer too.
+- **Rollback pain:** Must surgically remove e5 code paths from the indexer codebase.
+- **No parallelism:** Wastes the fact that we have two separate embedding servers.
+
+## Decision Details
+
+### 1. New Exchange
+
+| Property | Value |
+|----------|-------|
+| Name | `documents` |
+| Type | `fanout` |
+| Durable | `true` |
+| Auto-delete | `false` |
+
+The exchange is declared by `document-lister` at startup (idempotent `exchange_declare`). Using a generic name (`documents`) rather than `shortembeddings_fanout` so it remains useful beyond the A/B test.
+
+### 2. New Queues
+
+| Queue | Bound To | Consumer |
+|-------|----------|----------|
+| `indexer_baseline` | `documents` exchange | `document-indexer` |
+| `indexer_e5base` | `documents` exchange | `document-indexer-e5` |
+
+Each queue is declared and bound by its consumer at startup (idempotent `queue_declare` + `queue_bind`). This follows the same self-declaring pattern the codebase already uses.
+
+### 3. Deprecate Direct Queue Publishing
+
+The old `shortembeddings` queue becomes unused. It can be deleted manually via the RabbitMQ management UI after confirming the new topology works, or left to drain.
+
+### 4. Redis Key Isolation
+
+The indexer already uses `/{QUEUE_NAME}/{file_path}` as its Redis key pattern. Since each indexer will have a different `QUEUE_NAME`, their processing state is automatically isolated. No Redis changes needed.
+
+---
+
+## Implementation Plan
+
+### Files to Modify
+
+#### A. `src/document-lister/document_lister/__init__.py`
+Add a new config variable:
+```python
+EXCHANGE_NAME = os.environ.get("EXCHANGE_NAME", "documents")
+```
+
+#### B. `src/document-lister/document_lister/__main__.py`
+1. Import `EXCHANGE_NAME`
+2. In `list_files()` (~line 152): After queue_declare, add exchange declaration and binding:
+   ```python
+   channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type="fanout", durable=True)
+   ```
+3. In `push_file_to_queue()` (~line 122): Change the publish call:
+   ```python
+   channel.basic_publish(
+       exchange=EXCHANGE_NAME,    # was: ""
+       routing_key="",            # was: QUEUE_NAME  (fanout ignores routing key)
+       body=f"{file}",
+       properties=pika.BasicProperties(
+           delivery_mode=2,
+           headers={"X-Correlation-ID": correlation_id},
+       ),
+   )
+   ```
+4. **Keep** the `queue_declare` for backward compatibility during rolling deploys, but it's no longer the primary delivery target.
+
+#### C. `src/document-indexer/document_indexer/__init__.py`
+Add a new config variable:
+```python
+EXCHANGE_NAME = os.environ.get("EXCHANGE_NAME", "documents")
+```
+
+#### D. `src/document-indexer/document_indexer/__main__.py`
+1. Import `EXCHANGE_NAME`
+2. In `get_queue()` (~line 63): After `queue_declare`, add queue-to-exchange binding:
+   ```python
+   channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type="fanout", durable=True)
+   channel.queue_bind(queue=QUEUE_NAME, exchange=EXCHANGE_NAME)
+   ```
+   Both calls are idempotent — safe to call on every reconnect.
+
+#### E. `docker-compose.yml` — Existing Services
+Update environment variables for existing services:
+
+**document-lister:**
+```yaml
+- EXCHANGE_NAME=documents
+# QUEUE_NAME can be removed or kept for Redis key compat
+```
+
+**document-indexer (baseline):**
+```yaml
+- QUEUE_NAME=indexer_baseline
+- EXCHANGE_NAME=documents
+- SOLR_COLLECTION=books
+```
+
+#### F. `docker-compose.yml` — New Services (P1-4 scope, Brett)
+Add `document-indexer-e5` service:
+```yaml
+document-indexer-e5:
+  build:
+    context: ./src/document-indexer
+  environment:
+    - QUEUE_NAME=indexer_e5base
+    - EXCHANGE_NAME=documents
+    - SOLR_COLLECTION=books_e5base
+    - EMBEDDINGS_HOST=embeddings-server-e5
+    - EMBEDDINGS_PORT=8085
+    - CHUNK_SIZE=300
+    - CHUNK_OVERLAP=50
+    # ... (other standard env vars)
+```
+
+This uses the **same Docker image** as the baseline indexer — only env vars differ.
+
+### What Stays Unchanged
+
+- **Consumer callback logic** — `callback()` in document-indexer is untouched
+- **Message format** — still plain file path strings with correlation ID headers
+- **Redis tracking** — automatically isolated by different `QUEUE_NAME` values
+- **Acknowledgment** — still manual `basic_ack` per message
+- **Backpressure** — still `prefetch_count=1` per consumer
+- **Solr indexing** — `SOLR_COLLECTION` env var already parameterizes the target
+
+### Rollback Plan (Post-A/B)
+
+1. Remove `document-indexer-e5` service from docker-compose
+2. Optionally revert producer to `exchange=""` / `routing_key=QUEUE_NAME`
+3. Or simply leave the fanout exchange in place (it works fine with a single bound queue)
+4. Delete the `indexer_e5base` queue via RabbitMQ management UI
+
+### Migration / Deployment Order
+
+1. **Deploy document-lister first** with exchange support (it declares the exchange)
+2. **Deploy updated document-indexer** with `QUEUE_NAME=indexer_baseline` (it declares + binds its queue)
+3. **Deploy document-indexer-e5** with `QUEUE_NAME=indexer_e5base` (it declares + binds its queue)
+4. Messages in the old `shortembeddings` queue drain to zero, then the queue can be deleted
+
+### Testing
+
+- Verify with RabbitMQ management UI (`/admin/rabbitmq`) that:
+  - Exchange `documents` exists (type: fanout, durable)
+  - Queue `indexer_baseline` is bound to `documents`
+  - Queue `indexer_e5base` is bound to `documents`
+- Publish one test message → confirm it appears in BOTH queues
+- Each indexer processes its copy independently
+
+---
+
+## Task Assignment
+
+| Change | Owner | Ticket |
+|--------|-------|--------|
+| Producer changes (document-lister exchange publish) | Parker | P1-3 |
+| Consumer changes (document-indexer queue binding) | Parker | P1-3 |
+| Docker Compose: new services + env vars | Brett | P1-4 |
+| Integration testing | Ash + Brett | P1-4 acceptance |
+# P1-3: Fanout Exchange for Dual-Model Indexing
+
+**Date:** 2026-03-22
+**Author:** Parker (Backend Dev)
+**Issue:** #871
+
+## Decision
+
+Implemented the fanout exchange pattern per OQ-1 resolution:
+
+- **Exchange:** `documents` (type=fanout, durable=true)
+- **Producer (document-lister):** Publishes to `exchange="documents"` with `routing_key=""`. No longer declares or targets a specific queue.
+- **Consumer (document-indexer):** Each instance declares its own queue (`QUEUE_NAME` env var), declares the exchange (idempotent), and binds its queue to the exchange.
+
+## New Environment Variables
+
+| Variable | Service | Default | Purpose |
+|----------|---------|---------|---------|
+| `EXCHANGE_NAME` | document-lister, document-indexer | `documents` | RabbitMQ fanout exchange name |
+
+Pre-existing env vars (`QUEUE_NAME`, `SOLR_COLLECTION`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `EMBEDDINGS_HOST`) were already in the indexer code; no defaults changed.
+
+## Backward Compatibility
+
+Running without any new env vars produces identical behavior to pre-change. The exchange is created automatically; existing queues continue to work once bound.
+
+## Impact
+
+- **Ash:** The `books_e5base` Solr collection (already defined in solr-init) will now receive documents from the `document-indexer-e5` service.
+- **Ripley:** Docker-compose already has both indexer services defined with correct env vars.
+- **All:** RabbitMQ now requires exchange support (standard in all versions).
+# Decision: Docker Compose A/B Infrastructure (P1-4)
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-26
+**Issue:** #870
+
+## Context
+
+P1-4 required Docker Compose configuration for dual-indexer A/B testing (distiluse baseline vs multilingual-e5-base candidate). OQ-1 resolved: use fanout exchange pattern.
+
+## Decisions
+
+### 1. Embeddings Dockerfile MODEL_NAME as build ARG
+
+Made `MODEL_NAME` a build-time ARG in the embeddings-server Dockerfile (previously hardcoded ENV). This allows building separate Docker images with different models pre-baked, which is required because the image runs in `HF_HUB_OFFLINE=1` mode (no runtime model downloads).
+
+**Impact:** Any future embeddings model variant can be built from the same Dockerfile by passing `MODEL_NAME` as a build arg in docker-compose.
+
+### 2. Indexers depend on solr-init (service_completed_successfully)
+
+Both `document-indexer` and `document-indexer-e5` now depend on `solr-init` with `condition: service_completed_successfully`. This prevents indexers from starting before their target Solr collections exist.
+
+**Impact:** Eliminates a startup race condition where indexers could fail if the collection hadn't been created yet.
+
+### 3. No static RabbitMQ definitions
+
+The fanout exchange and queue bindings are declared dynamically by application code (document-lister publishes to exchange, each indexer declares its queue and binds). Topology is documented in `rabbitmq.conf` comments rather than `definitions.json`.
+
+**Rationale:** Dynamic declaration is more resilient — queues are created by the consumers that need them. Static definitions would require coordinating changes in two places.
+
+### 4. Memory budget: 3.5GB addition
+
+- `embeddings-server-e5`: 3GB limit / 2GB reservation (e5-base model ~1.1GB + runtime)
+- `document-indexer-e5`: 512MB limit / 256MB reservation
+
+Total stack memory increase: ~3.5GB. Hosts running the full A/B stack need at least 16GB RAM (was ~12.5GB for baseline).
+
+### 5. Dev-only scope
+
+A/B services are in `docker-compose.yml` (base) and `docker-compose.override.yml` (dev ports). `docker-compose.prod.yml` is intentionally NOT modified — production A/B deployment deferred to P3-2.
+
+---
+
+# Decision: Admin endpoints accept JWT sessions alongside API keys
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-22  
+**Status:** IMPLEMENTED  
+**PR:** #895 (Closes #887)
+
+## Context
+
+Admin API endpoints (`/v1/admin/*`) used `require_admin_auth` which only accepted `X-API-Key` headers. The React admin dashboard sends JWT Bearer tokens, not API keys. This caused 401/403 responses that triggered the frontend's auth failure handler, creating an infinite login loop.
+
+## Decision
+
+`require_admin_auth` now accepts **either**:
+1. `X-API-Key` header (machine-to-machine, validated against `ADMIN_API_KEY` env var)
+2. JWT session with `role == "admin"` (browser access, validated by auth middleware)
+
+If an X-API-Key is present and ADMIN_API_KEY is configured, the key is checked first. A wrong key fails immediately (no JWT fallback). If no API key is present, the JWT session is checked.
+
+## Impact
+
+- **Frontend (Dallas):** Admin page now works without X-API-Key. No frontend changes needed.
+- **Scripts/CI:** X-API-Key flow unchanged. Existing scripts continue to work.
+- **Security:** Non-admin JWT users are explicitly rejected (401). Defense-in-depth is maintained.
+- **All team members:** When adding new auth gates to endpoints, always test both API-key and JWT browser paths.
+
+---
+
+# Decision: Security & Performance Review Mandatory in Releases
+
+**Author:** Ripley (Project Lead) + User directive  
+**Date:** 2026-03-22  
+**Status:** CAPTURED (Implementation via Brett release checklist updates)
+
+## Context
+
+User (jmservera) directive on 2026-03-22T13:49Z: Security fixes must be mandatory in releases, not optional. For next releases, comprehensive security & performance review before shipping.
+
+## Directive Details
+
+**Security fixes are mandatory:**
+- All CRITICAL/HIGH CVEs must be fixed or have documented exceptions before release
+- Security fixes must be in release notes
+
+**Security review before each release (new requirement):**
+- Full threat assessment reviewing previous assessments
+- CI/CD security (GitHub Actions supply chain, prompt injection on issue_comment handlers)
+- Input sanitization (SQL/Solr injection through UI, XSS, CSRF)
+- All attack vectors documented
+
+**Performance review before each release (new requirement):**
+- Baseline performance metrics vs. previous release
+- Resource usage (Docker memory/CPU limits)
+- Search latency (solr-search API p95/p99)
+
+## Impact
+
+- **Release gate (Brett):** Threat assessment must be complete and approved before version tag
+- **Release checklist:** Add mandatory "Security & Performance Review Sign-Off" step
+- **Kane:** Threat assessment v1.12 required for next release
+- **All team members:** Release process is now more rigorous; plan extra time for security review
+
+---
+

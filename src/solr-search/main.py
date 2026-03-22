@@ -108,6 +108,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from logging_config import setup_logging
 from metrics import METRICS_CONTENT_TYPE, metrics_registry
+from perf_metrics import perf_metrics
 from pydantic import BaseModel
 from search_service import (
     EXCLUDE_CHUNKS_FQ,
@@ -433,16 +434,30 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 
-def _raw_solr_query(params: dict[str, Any]) -> dict[str, Any]:
+def _raw_solr_query(params: dict[str, Any], *, collection: str | None = None) -> dict[str, Any]:
     """Execute a Solr HTTP request.  Raised exceptions feed the circuit breaker."""
-    response = requests.post(settings.select_url, data=params, timeout=settings.request_timeout)
+    url = settings.select_url if collection is None else settings.select_url_for(collection)
+    response = requests.post(url, data=params, timeout=settings.request_timeout)
     response.raise_for_status()
     return response.json()
 
 
-def query_solr(params: dict[str, Any]) -> dict[str, Any]:
+# Thread-local accumulators for per-request perf_metrics breakdown.
+_perf_locals = threading.local()
+
+
+def _perf_get(attr: str) -> float | None:
+    return getattr(_perf_locals, attr, None)
+
+
+def _perf_set(attr: str, value: float | None) -> None:
+    setattr(_perf_locals, attr, value)
+
+
+def query_solr(params: dict[str, Any], *, collection: str | None = None) -> dict[str, Any]:
+    solr_started = time.perf_counter()
     try:
-        return solr_circuit.call(_raw_solr_query, params)
+        return solr_circuit.call(_raw_solr_query, params, collection=collection)
     except CircuitOpenError as exc:
         raise HTTPException(
             status_code=503,
@@ -454,13 +469,19 @@ def query_solr(params: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="Solr search request failed") from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="Solr returned invalid JSON") from exc
+    finally:
+        _perf_set("solr_latency", time.perf_counter() - solr_started)
 
 
-def _fetch_embedding(text: str) -> list[float]:
+def _fetch_embedding(text: str, *, collection: str | None = None) -> list[float]:
     """Call the embeddings server through the circuit breaker; wrap errors as HTTP 502/503/504."""
+    resolved_collection = collection or settings.default_collection
+    emb_url = settings.embeddings_url_for(resolved_collection)
+    input_type = "query" if settings.is_e5_collection(resolved_collection) else None
+    emb_started = time.perf_counter()
     try:
         return embeddings_circuit.call(
-            get_query_embedding, settings.embeddings_url, text, settings.embeddings_timeout
+            get_query_embedding, emb_url, text, settings.embeddings_timeout, input_type=input_type
         )
     except CircuitOpenError as exc:
         raise HTTPException(
@@ -475,6 +496,8 @@ def _fetch_embedding(text: str) -> list[float]:
     except Exception as exc:
         logger.exception("Unexpected error fetching embedding")
         raise HTTPException(status_code=502, detail="Unexpected error from embeddings server") from exc
+    finally:
+        _perf_set("embedding_latency", time.perf_counter() - emb_started)
 
 
 def _should_degrade_to_keyword(exc: HTTPException) -> bool:
@@ -497,6 +520,25 @@ def resolve_page_size(limit: int | None, page_size: int) -> int:
 
 def collect_search_filters(**filters: str | None) -> dict[str, str]:
     return {name: value.strip() for name, value in filters.items() if value and value.strip()}
+
+
+def resolve_collection(collection: str | None) -> str:
+    """Validate and return the Solr collection name.
+
+    Returns the default collection when *collection* is ``None``.
+    Raises HTTP 400 if the requested collection is not in the allowlist.
+    """
+    if collection is None:
+        return settings.default_collection
+    if collection not in settings.allowed_collections:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid collection: {collection!r}. "
+                f"Allowed collections: {sorted(settings.allowed_collections)}"
+            ),
+        )
+    return collection
 
 
 def _enrich_with_collections(
@@ -864,6 +906,7 @@ def search(
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
         enum=list(VALID_SEARCH_MODES),
     ),
+    collection: str | None = Query(None, description="Solr collection to query (default: books)."),
     _rate_limit: None = Depends(check_search_rate_limit),
 ) -> dict[str, Any]:
     """Search for books.
@@ -875,9 +918,14 @@ def search(
     Supports both the Phase 2 UI contract (`limit`, `sort`, `fq_*`) and the
     newer FastAPI query parameters (`page_size`, `sort_by`, `sort_order`).
 
+    An optional ``collection`` parameter routes the query to a specific Solr
+    collection (e.g. ``books_e5base`` for the e5-base A/B test).
+
     **Rate Limit:** Configurable via ``RATE_LIMIT_REQUESTS_PER_MINUTE`` (default: 100).
     Set to 0 to disable rate limiting (e.g., for E2E testing).
     """
+    resolved_collection = resolve_collection(collection)
+
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
             status_code=400,
@@ -894,13 +942,41 @@ def search(
         folder=fq_folder,
     )
 
-    with _track_search_metrics(mode):
-        if mode == "keyword":
-            response = _search_keyword(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-        elif mode == "semantic":
-            response = _search_semantic(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
-        else:
-            response = _search_hybrid(request, q, page, resolved_page_size, sort_by, sort_order, sort, filters)
+    search_started = time.perf_counter()
+    is_error = False
+    try:
+        with _track_search_metrics(mode):
+            if mode == "keyword":
+                response = _search_keyword(
+                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    collection=resolved_collection,
+                )
+            elif mode == "semantic":
+                response = _search_semantic(
+                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    collection=resolved_collection,
+                )
+            else:
+                response = _search_hybrid(
+                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    collection=resolved_collection,
+                )
+    except Exception:
+        is_error = True
+        raise
+    finally:
+        total_latency = time.perf_counter() - search_started
+        solr_latency = _perf_get("solr_latency")
+        embedding_latency = _perf_get("embedding_latency")
+        perf_metrics.record_request(
+            resolved_collection,
+            total_latency,
+            solr_latency_s=solr_latency,
+            embedding_latency_s=embedding_latency,
+            error=is_error,
+        )
+        _perf_set("solr_latency", None)
+        _perf_set("embedding_latency", None)
 
     _enrich_with_collections(response.get("results", []), request)
     return response
@@ -919,6 +995,7 @@ def _search_keyword(
     degraded: bool = False,
     message: str | None = None,
     requested_mode: str | None = None,
+    collection: str | None = None,
 ) -> dict[str, Any]:
     payload = query_solr(
         build_params_or_400(
@@ -930,7 +1007,8 @@ def _search_keyword(
             sort=sort,
             filters=filters,
             facet_limit=settings.facet_limit,
-        )
+        ),
+        collection=collection,
     )
 
     response = payload.get("response", {})
@@ -969,6 +1047,8 @@ def _search_semantic(
     sort_order: str,
     sort: str | None,
     filters: dict[str, str],
+    *,
+    collection: str | None = None,
 ) -> dict[str, Any]:
     """Execute a Solr kNN semantic search using the ``embedding_v`` field.
 
@@ -981,7 +1061,7 @@ def _search_semantic(
         raise HTTPException(status_code=400, detail="Query cannot be empty for semantic search")
 
     try:
-        vector = _fetch_embedding(q)
+        vector = _fetch_embedding(q, collection=collection)
     except HTTPException as exc:
         if _should_degrade_to_keyword(exc):
             return _search_keyword(
@@ -996,10 +1076,14 @@ def _search_semantic(
                 degraded=True,
                 message=EMBEDDINGS_DEGRADED_MESSAGE,
                 requested_mode="semantic",
+                collection=collection,
             )
         raise
 
-    payload = query_solr(build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)))
+    payload = query_solr(
+        build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)),
+        collection=collection,
+    )
 
     response = payload.get("response", {})
     results = [
@@ -1031,6 +1115,8 @@ def _search_hybrid(
     sort_order: str,
     sort: str | None,
     filters: dict[str, str],
+    *,
+    collection: str | None = None,
 ) -> dict[str, Any]:
     """Execute BM25 and kNN searches in parallel, then fuse with RRF.
 
@@ -1058,8 +1144,8 @@ def _search_hybrid(
 
     # Run BM25 query and embedding fetch concurrently
     with ThreadPoolExecutor(max_workers=2) as pool:
-        kw_future = pool.submit(query_solr, kw_params)
-        emb_future = pool.submit(_fetch_embedding, q)
+        kw_future = pool.submit(query_solr, kw_params, collection=collection)
+        emb_future = pool.submit(_fetch_embedding, q, collection=collection)
 
         kw_future_result = kw_future.result()
         try:
@@ -1078,13 +1164,15 @@ def _search_hybrid(
                     degraded=True,
                     message=EMBEDDINGS_DEGRADED_MESSAGE,
                     requested_mode="hybrid",
+                    collection=collection,
                 )
             raise
 
         kw_payload = kw_future_result
 
     knn_payload = query_solr(
-        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters))
+        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters)),
+        collection=collection,
     )
 
     kw_response = kw_payload.get("response", {})
@@ -1121,6 +1209,150 @@ def _search_hybrid(
     }
 
 
+# ---------------------------------------------------------------------------
+# Phase 2 — Comparison endpoint (P2-3)
+# ---------------------------------------------------------------------------
+
+
+def _execute_search_for_compare(
+    request: Request,
+    q: str,
+    mode: str,
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
+    collection: str,
+) -> tuple[list[dict[str, Any]], int, float]:
+    """Run a search against a single collection and return (results, total, latency_ms)."""
+    started = time.perf_counter()
+    if mode == "keyword":
+        resp = _search_keyword(
+            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            collection=collection,
+        )
+    elif mode == "semantic":
+        resp = _search_semantic(
+            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            collection=collection,
+        )
+    else:
+        resp = _search_hybrid(
+            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            collection=collection,
+        )
+    latency_ms = round((time.perf_counter() - started) * 1000, 2)
+    results = resp.get("results", [])
+    total = resp.get("total_results", resp.get("total", len(results)))
+    return results, total, latency_ms
+
+
+def _compute_overlap_metrics(
+    baseline_results: list[dict[str, Any]],
+    candidate_results: list[dict[str, Any]],
+    top_n: int = 10,
+) -> dict[str, Any]:
+    """Compute overlap metrics between two ranked result lists."""
+    baseline_ids = [r["id"] for r in baseline_results[:top_n]]
+    candidate_ids = [r["id"] for r in candidate_results[:top_n]]
+
+    baseline_set = set(baseline_ids)
+    candidate_set = set(candidate_ids)
+
+    overlap = baseline_set & candidate_set
+    denominator = max(len(baseline_set), len(candidate_set), 1)
+    overlap_at_n = round(len(overlap) / denominator, 4)
+
+    baseline_only = [doc_id for doc_id in baseline_ids if doc_id not in candidate_set]
+    candidate_only = [doc_id for doc_id in candidate_ids if doc_id not in baseline_set]
+
+    return {
+        "overlap_at_10": overlap_at_n,
+        "baseline_only": baseline_only,
+        "candidate_only": candidate_only,
+    }
+
+
+@app.get("/v1/search/compare", include_in_schema=False, name="search_compare")
+def search_compare(
+    request: Request,
+    q: str = Query("", description="Search query."),
+    page: int = Query(1, ge=1),
+    limit: int | None = Query(None, ge=1, le=settings.max_page_size),
+    page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size),
+    sort: str | None = Query(None, description="Combined sort clause like `score desc`."),
+    sort_by: Annotated[SortBy, Query()] = "score",
+    sort_order: Annotated[SortOrder, Query()] = "desc",
+    fq_author: str | None = Query(None),
+    fq_category: str | None = Query(None),
+    fq_language: str | None = Query(None),
+    fq_year: str | None = Query(None),
+    fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
+    mode: str = Query(
+        settings.default_search_mode,
+        description="Search mode: keyword, semantic, or hybrid.",
+    ),
+    _rate_limit: None = Depends(check_search_rate_limit),
+) -> dict[str, Any]:
+    """Compare search results from baseline and candidate collections side-by-side.
+
+    Executes the same query against both the baseline and candidate collections
+    (configurable via ``COMPARISON_BASELINE_COLLECTION`` and
+    ``COMPARISON_CANDIDATE_COLLECTION`` environment variables) and returns
+    results with overlap metrics.
+    """
+    if mode not in VALID_SEARCH_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid search mode: {mode!r}. Must be one of: keyword, semantic, hybrid.",
+        )
+
+    resolved_page_size = resolve_page_size(limit, page_size)
+    filters = collect_search_filters(
+        author=fq_author,
+        category=fq_category,
+        language=fq_language,
+        year=fq_year,
+        series=fq_series,
+        folder=fq_folder,
+    )
+
+    baseline_col = settings.comparison_baseline_collection
+    candidate_col = settings.comparison_candidate_collection
+
+    search_args = (request, q, mode, page, resolved_page_size, sort_by, sort_order, sort, filters)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        baseline_future = pool.submit(_execute_search_for_compare, *search_args, baseline_col)
+        candidate_future = pool.submit(_execute_search_for_compare, *search_args, candidate_col)
+
+        baseline_results, baseline_total, baseline_latency = baseline_future.result()
+        candidate_results, candidate_total, candidate_latency = candidate_future.result()
+
+    metrics = _compute_overlap_metrics(baseline_results, candidate_results)
+
+    return {
+        "query": q,
+        "mode": mode,
+        "baseline": {
+            "collection": baseline_col,
+            "results": baseline_results,
+            "total": baseline_total,
+            "latency_ms": baseline_latency,
+        },
+        "candidate": {
+            "collection": candidate_col,
+            "results": candidate_results,
+            "total": candidate_total,
+            "latency_ms": candidate_latency,
+        },
+        "metrics": metrics,
+    }
+
+
 @app.get("/v1/facets/", include_in_schema=False, name="facets_v1")
 @app.get("/v1/facets", include_in_schema=False, name="facets_v1_no_slash")
 @app.get("/facets")
@@ -1135,7 +1367,9 @@ def facets(
     fq_year: str | None = Query(None),
     fq_series: str | None = Query(None),
     fq_folder: str | None = Query(None),
+    collection: str | None = Query(None, description="Solr collection to query (default: books)."),
 ) -> dict[str, Any]:
+    resolved_collection = resolve_collection(collection)
     payload = query_solr(
         build_params_or_400(
             query=q,
@@ -1154,7 +1388,8 @@ def facets(
             ),
             facet_limit=settings.facet_limit,
             rows=0,
-        )
+        ),
+        collection=resolved_collection,
     )
     return {"query": q, "facets": parse_facet_counts(payload)}
 
@@ -1306,6 +1541,7 @@ def list_books(
     fq_year: str | None = Query(None, description="Filter by publication year."),
     fq_series: str | None = Query(None, description="Filter by series name."),
     fq_folder: str | None = Query(None, description="Filter by folder path."),
+    collection: str | None = Query(None, description="Solr collection to query (default: books)."),
 ) -> dict[str, Any]:
     """Browse the complete library of indexed books with pagination and filtering.
 
@@ -1316,6 +1552,7 @@ def list_books(
     This endpoint uses a wildcard ``*:*`` query to match all documents, making it
     suitable for library browsing and discovery.
     """
+    resolved_collection = resolve_collection(collection)
     filters = collect_search_filters(
         author=fq_author,
         category=fq_category,
@@ -1335,7 +1572,8 @@ def list_books(
             sort=None,
             filters=filters,
             facet_limit=settings.facet_limit,
-        )
+        ),
+        collection=resolved_collection,
     )
 
     response = payload.get("response", {})
@@ -1766,6 +2004,46 @@ def admin_containers() -> dict[str, Any]:
         "total": len(containers),
         "healthy": healthy,
     }
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/metrics endpoints (Phase 2 performance evaluation)
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/v1/admin/metrics/",
+    include_in_schema=False,
+    name="admin_metrics_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/metrics",
+    include_in_schema=False,
+    name="admin_metrics_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_metrics() -> dict[str, Any]:
+    """Return rolling-window performance metrics for A/B evaluation."""
+    return perf_metrics.snapshot()
+
+
+@app.post(
+    "/v1/admin/metrics/reset/",
+    include_in_schema=False,
+    name="admin_metrics_reset_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.post(
+    "/v1/admin/metrics/reset",
+    include_in_schema=False,
+    name="admin_metrics_reset_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_metrics_reset() -> dict[str, str]:
+    """Clear all performance metrics and restart the uptime clock."""
+    perf_metrics.reset()
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------
@@ -2765,3 +3043,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=settings.port)
+

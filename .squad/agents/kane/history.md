@@ -102,3 +102,17 @@
 **Knowledge rating:** 85% — deep on auth, scanning infrastructure, and triage. Gaps remain in runtime DAST (ZAP guide exists but no automated integration) and container image CVE scanning (trivy/grype not yet integrated).
 
 **Compression:** 678 → ~120 lines. Removed verbose PR narratives, duplicate SEC descriptions, full code snippets (covered by skills), and investigation blow-by-blow details. Retained all security decisions, posture state, and distilled learnings.
+
+### 2026-03-22T13:49Z: Spawned for threat assessment v1.12
+
+**Directive:** User (jmservera) mandated security fixes in all releases + comprehensive security review before next release.
+
+**Scope:** Full threat assessment covering:
+- CI/CD security (GitHub Actions, prompt injection on issue_comment)
+- Input sanitization (SQL/Solr injection, XSS, CSRF)
+- All previous baselines reviewed + new attack vectors
+
+**Deliverable:** docs/security/threat-assessment-v1.12.md
+
+**Release Gate:** This document is now mandatory for version tagging.
+

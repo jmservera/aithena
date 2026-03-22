@@ -16,6 +16,10 @@ labels: release
 - [ ] Review and merge the generated docs PR (release notes, test report, manual updates)
 - [ ] Update user manual and admin manual — Newt reviews with screenshots
 - [ ] Run full test suite — all services pass (`solr-search`, `document-indexer`, `document-lister`, `embeddings-server`, `aithena-ui`, `admin`)
+- [ ] **Security scan clean** — Bandit, Checkov, Zizmor, CodeQL — no critical/high findings
+- [ ] **Dependabot alerts reviewed** — critical/high fixed, medium/low documented in `docs/security/baseline-exceptions.md`
+- [ ] **Threat assessment completed** (if significant new features added in this release)
+- [ ] **Performance benchmarks** — no regressions in search/indexing/embedding latency (p50/p95/p99)
 
 ### Release
 

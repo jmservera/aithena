@@ -299,7 +299,13 @@ def build_knn_params(
     return params
 
 
-def get_query_embedding(embeddings_url: str, text: str, timeout: float) -> list[float]:
+def get_query_embedding(
+    embeddings_url: str,
+    text: str,
+    timeout: float,
+    *,
+    input_type: str | None = None,
+) -> list[float]:
     """Call the embeddings server and return the query vector.
 
     Args:
@@ -307,6 +313,8 @@ def get_query_embedding(embeddings_url: str, text: str, timeout: float) -> list[
                         (e.g. ``http://embeddings-server:8001/v1/embeddings/``).
         text: Query text to embed.
         timeout: HTTP request timeout in seconds.
+        input_type: Optional input type hint for the embeddings server
+                    (e.g. ``"query"`` for e5-family models).
 
     Returns:
         A list of floats representing the query embedding.
@@ -317,9 +325,13 @@ def get_query_embedding(embeddings_url: str, text: str, timeout: float) -> list[
     """
     import requests  # local import to keep search_service import-clean in tests
 
+    body: dict[str, Any] = {"input": text}
+    if input_type is not None:
+        body["input_type"] = input_type
+
     response = requests.post(
         embeddings_url,
-        json={"input": text},
+        json=body,
         timeout=timeout,
     )
     response.raise_for_status()

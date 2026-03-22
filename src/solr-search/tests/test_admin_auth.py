@@ -1,4 +1,7 @@
-"""Tests for admin endpoint API-key authentication (admin_auth.py)."""
+"""Tests for admin endpoint authentication (admin_auth.py).
+
+Admin endpoints accept either X-API-Key or a JWT session with admin role.
+"""
 
 from __future__ import annotations
 
@@ -16,12 +19,14 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import admin_auth  # noqa: E402, F401
 import pytest  # noqa: E402
+from auth import AuthenticatedUser  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 # Representative admin endpoint used for auth tests.
 ADMIN_ENDPOINT = "/v1/admin/documents"
+TEST_KEY = "test-admin-secret-key-12345"
 
 
 # ---------------------------------------------------------------------------
@@ -37,41 +42,27 @@ def _client_with_admin_key(api_key: str | None, *, header: str = "x-api-key") ->
     return client
 
 
+def _mock_redis():
+    """Return a patched Redis client that returns no documents."""
+    redis_mock = MagicMock()
+    redis_mock.scan_iter.return_value = iter([])
+    return redis_mock
+
+
 # ---------------------------------------------------------------------------
-# ADMIN_API_KEY not configured -> 403 (admin disabled)
+# Path 1: API-key authentication
 # ---------------------------------------------------------------------------
 
 
-def test_admin_returns_403_when_api_key_not_configured() -> None:
-    """When ADMIN_API_KEY is unset, admin endpoints respond with 403."""
-    with patch("admin_auth._get_admin_api_key", return_value=None):
-        client = create_authenticated_client()
+@patch("main._get_redis_pool")
+def test_admin_succeeds_with_correct_x_api_key(mock_pool) -> None:
+    """Correct X-API-Key allows the admin request through."""
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY), patch(
+        "main._get_admin_redis_client", return_value=_mock_redis()
+    ):
+        client = _client_with_admin_key(TEST_KEY)
         response = client.get(ADMIN_ENDPOINT)
-    assert response.status_code == 403
-    assert "disabled" in response.json()["detail"].lower()
-
-
-def test_admin_returns_403_even_with_key_header_when_not_configured() -> None:
-    """Sending an X-API-Key when ADMIN_API_KEY is unset still returns 403."""
-    with patch("admin_auth._get_admin_api_key", return_value=None):
-        client = _client_with_admin_key("some-key")
-        response = client.get(ADMIN_ENDPOINT)
-    assert response.status_code == 403
-
-
-# ---------------------------------------------------------------------------
-# ADMIN_API_KEY configured but request missing/wrong key -> 401
-# ---------------------------------------------------------------------------
-
-TEST_KEY = "test-admin-secret-key-12345"
-
-
-def test_admin_returns_401_when_key_missing() -> None:
-    """When ADMIN_API_KEY is set but request has no matching key header -> 401."""
-    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
-        client = create_authenticated_client()
-        response = client.get(ADMIN_ENDPOINT)
-    assert response.status_code == 401
+    assert response.status_code == 200
 
 
 def test_admin_returns_401_when_wrong_key() -> None:
@@ -84,31 +75,73 @@ def test_admin_returns_401_when_wrong_key() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Correct API key -> request proceeds (mocked Redis)
+# Path 2: JWT session authentication (browser-based admin access)
 # ---------------------------------------------------------------------------
 
 
 @patch("main._get_redis_pool")
-def test_admin_succeeds_with_correct_x_api_key(mock_pool) -> None:
-    """Correct X-API-Key allows the admin request through."""
-    redis_mock = MagicMock()
-    redis_mock.scan_iter.return_value = iter([])
+def test_admin_jwt_admin_user_succeeds_without_api_key(mock_pool) -> None:
+    """Admin JWT session grants access even without X-API-Key."""
     with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY), patch(
-        "main._get_admin_redis_client", return_value=redis_mock
+        "main._get_admin_redis_client", return_value=_mock_redis()
+    ):
+        client = create_authenticated_client()  # admin role by default
+        response = client.get(ADMIN_ENDPOINT)
+    assert response.status_code == 200
+
+
+@patch("main._get_redis_pool")
+def test_admin_jwt_admin_user_succeeds_without_api_key_config(mock_pool) -> None:
+    """Admin JWT session works even when ADMIN_API_KEY is not configured."""
+    with patch("admin_auth._get_admin_api_key", return_value=None), patch(
+        "main._get_admin_redis_client", return_value=_mock_redis()
+    ):
+        client = create_authenticated_client()  # admin role by default
+        response = client.get(ADMIN_ENDPOINT)
+    assert response.status_code == 200
+
+
+def test_admin_jwt_non_admin_user_rejected() -> None:
+    """Non-admin JWT user cannot access admin endpoints."""
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
+        non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+        client = create_authenticated_client(user=non_admin)
+        response = client.get(ADMIN_ENDPOINT)
+    assert response.status_code == 401
+
+
+def test_admin_jwt_non_admin_rejected_without_api_key_config() -> None:
+    """Non-admin JWT user rejected even when ADMIN_API_KEY is unset."""
+    with patch("admin_auth._get_admin_api_key", return_value=None):
+        non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+        client = create_authenticated_client(user=non_admin)
+        response = client.get(ADMIN_ENDPOINT)
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+
+@patch("main._get_redis_pool")
+def test_admin_api_key_takes_precedence_over_jwt(mock_pool) -> None:
+    """When both API key and JWT are present, API key is checked first."""
+    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY), patch(
+        "main._get_admin_redis_client", return_value=_mock_redis()
     ):
         client = _client_with_admin_key(TEST_KEY)
         response = client.get(ADMIN_ENDPOINT)
     assert response.status_code == 200
 
 
-@patch("main._get_redis_pool")
-def test_admin_rejects_key_in_wrong_header(mock_pool) -> None:
-    """Key sent via Authorization header instead of X-API-Key is rejected."""
+def test_admin_wrong_api_key_rejected_even_with_admin_jwt() -> None:
+    """A wrong API key fails fast — JWT fallback is not attempted."""
     with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
-        client = create_authenticated_client()
-        # Authorization header is used for JWT, not admin API key
+        client = _client_with_admin_key("wrong-key")
         response = client.get(ADMIN_ENDPOINT)
     assert response.status_code == 401
+    assert "invalid" in response.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -126,18 +159,10 @@ ADMIN_ENDPOINTS = [
 
 
 @pytest.mark.parametrize("method,path", ADMIN_ENDPOINTS, ids=[p for _, p in ADMIN_ENDPOINTS])
-def test_all_admin_endpoints_require_api_key(method: str, path: str) -> None:
-    """Every /v1/admin/* endpoint returns 401 when key is set but not provided."""
-    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY):
-        client = create_authenticated_client()
-        response = client.request(method, path)
-    assert response.status_code == 401, f"{method} {path} should require API key"
-
-
-@pytest.mark.parametrize("method,path", ADMIN_ENDPOINTS, ids=[p for _, p in ADMIN_ENDPOINTS])
-def test_all_admin_endpoints_disabled_without_config(method: str, path: str) -> None:
-    """Every /v1/admin/* endpoint returns 403 when ADMIN_API_KEY is not set."""
+def test_all_admin_endpoints_reject_non_admin_jwt(method: str, path: str) -> None:
+    """Every /v1/admin/* endpoint rejects non-admin JWT users."""
     with patch("admin_auth._get_admin_api_key", return_value=None):
-        client = create_authenticated_client()
+        non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+        client = create_authenticated_client(user=non_admin)
         response = client.request(method, path)
-    assert response.status_code == 403, f"{method} {path} should be disabled"
+    assert response.status_code == 401, f"{method} {path} should reject non-admin"

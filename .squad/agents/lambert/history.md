@@ -136,3 +136,14 @@
 - **test_book_detail expected_keys gap:** The existing `test_book_detail_response_contains_all_expected_keys` was missing `thumbnail_url` in its expected_keys set — would have silently passed without it
 - **BookThumbnail error state:** Both BookCard and BookDetailView use an internal `error` state (useState) with `onError` handler — `fireEvent.error(img)` triggers the fallback, then the `<img>` is removed from DOM entirely (not just hidden)
 - **Test counts after PR:** document-indexer 160 passed, solr-search 833 passed, aithena-ui 584 passed
+
+### P2-4 Performance Metrics (PR for #881)
+- Built `perf_metrics.py` — in-memory rolling-window metrics store for A/B evaluation, no external deps
+- Thread-safe `PerfMetricsStore` with `record_request()`, `snapshot()`, `reset()` — uses `threading.Lock`, `defaultdict`, `TimedSample` dataclass
+- Instrumented `_search_keyword`, `_search_semantic`, `_search_hybrid` with `_timed_solr_query()` and `_timed_fetch_embedding()` timing wrappers
+- Internal `_solr_latency_s` / `_embedding_latency_s` keys flow through search response dicts, stripped before client return
+- `GET /v1/admin/metrics` returns per-collection avg/p50/p95/p99 latency breakdown; `POST /v1/admin/metrics/reset` clears for benchmarking
+- Enhanced structured logging: search requests now emit `event=search_request` with collection, mode, result_count, latency breakdown
+- 28 new tests: unit (store, percentile, summarize), thread-safety (concurrent writes/reads/resets), endpoint integration (auth, schema, reset)
+- Admin endpoints use `require_admin_auth` dependency (X-API-Key) — same pattern as existing `/v1/admin/*` routes
+- solr-search test count: 888 passed (up from ~833)

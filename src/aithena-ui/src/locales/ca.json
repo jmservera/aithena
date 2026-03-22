@@ -353,6 +353,7 @@
   "loading.usersMessage": "Preparant la vista de gestió d’usuaris.",
   "login.description": "Use your account to access search, upload, and admin tools.",
   "login.password": "Password",
+  "login.rememberMe": "Recorda'm",
   "login.signIn": "Sign in",
   "login.signingIn": "Signing in…",
   "login.title": "Sign in to Aithena",

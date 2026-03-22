@@ -31,11 +31,10 @@ describe('BookCard – chunk text display', () => {
     );
 
     expect(screen.getByText(/Matching text/)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /Neural networks learn hierarchical representations of data through multiple layers of nonlinear transformations\./
-      )
-    ).toBeInTheDocument();
+    // chunk_text is truncated to ~20 visible characters with an ellipsis
+    const chunkContent = screen.getByText(/Neural networks lear/);
+    expect(chunkContent).toBeInTheDocument();
+    expect(chunkContent.textContent).toContain('…');
   });
 
   it('shows page range when page_start and page_end differ', () => {
@@ -119,6 +118,8 @@ describe('BookCard – chunk text display', () => {
     );
 
     expect(screen.getByText(/Matching text/)).toBeInTheDocument();
+    // The text is truncated to ~20 chars, so partial match
+    expect(screen.getByText(/Some matching conten/)).toBeInTheDocument();
     expect(screen.queryByText(/Pages/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Page \d/)).not.toBeInTheDocument();
   });

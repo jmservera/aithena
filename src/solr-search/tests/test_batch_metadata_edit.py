@@ -263,11 +263,14 @@ def test_batch_edit_title_too_long_returns_422() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_batch_edit_no_api_key_returns_401() -> None:
-    """Missing API key returns 401."""
+def test_batch_edit_non_admin_returns_401() -> None:
+    """Non-admin JWT user returns 401 for batch edit."""
+    from auth import AuthenticatedUser
+
     from tests.auth_helpers import create_authenticated_client
 
-    client = create_authenticated_client()
+    non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+    client = create_authenticated_client(user=non_admin)
     response = client.patch(
         BATCH_ENDPOINT,
         json={"document_ids": ["doc-1"], "updates": {"title": "Test"}},
@@ -406,11 +409,14 @@ def test_query_batch_edit_validation_applies() -> None:
     assert response.status_code == 422  # noqa: S101
 
 
-def test_query_batch_edit_no_api_key_returns_401() -> None:
-    """Missing API key on query endpoint returns 401."""
+def test_query_batch_edit_non_admin_returns_401() -> None:
+    """Non-admin JWT user returns 401 for query batch edit."""
+    from auth import AuthenticatedUser
+
     from tests.auth_helpers import create_authenticated_client
 
-    client = create_authenticated_client()
+    non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+    client = create_authenticated_client(user=non_admin)
     response = client.patch(
         QUERY_ENDPOINT,
         json={"query": "author_s:Asimov", "updates": {"title": "Test"}},

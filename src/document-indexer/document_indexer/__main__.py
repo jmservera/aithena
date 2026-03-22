@@ -20,6 +20,7 @@ from . import (
     CHUNK_SIZE,
     EMBEDDINGS_HOST,
     EMBEDDINGS_PORT,
+    EXCHANGE_NAME,
     GIT_COMMIT,
     QUEUE_NAME,
     RABBITMQ_HOST,
@@ -61,15 +62,19 @@ def _rabbitmq_connection_parameters() -> pika.ConnectionParameters:
 
 
 def get_queue(channel: BlockingChannel):
-    """Declare the queue and enable backpressure."""
+    """Declare the queue, bind to the fanout exchange, and enable backpressure."""
     global queue
     channel.basic_qos(prefetch_count=1)
+    channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type="fanout", durable=True)
+    first_call = queue is None
     queue = channel.queue_declare(
         queue=QUEUE_NAME,
         durable=True,
         auto_delete=False,
-        passive=queue is not None,
+        passive=not first_call,
     )
+    if first_call:
+        channel.queue_bind(queue=QUEUE_NAME, exchange=EXCHANGE_NAME)
     return queue
 
 

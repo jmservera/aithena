@@ -189,9 +189,12 @@ class TestListBackupsEndpoint:
         assert resp.status_code == 200
         assert resp.json()["total"] == 0
 
-    def test_requires_admin_api_key(self):
+    def test_non_admin_jwt_requires_api_key(self):
         with patch("admin_auth._get_admin_api_key", return_value=ADMIN_API_KEY):
-            c = create_authenticated_client()
+            from auth import AuthenticatedUser
+
+            non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+            c = create_authenticated_client(user=non_admin)
             resp = c.get("/v1/admin/backups")
         assert resp.status_code == 401
 
@@ -335,7 +338,7 @@ class TestTestRestoreEndpoint:
 
 
 class TestAuthRequired:
-    """All backup endpoints require admin API key auth."""
+    """All backup endpoints require admin auth (API key or admin JWT)."""
 
     ENDPOINTS = [
         ("GET", "/v1/admin/backups"),
@@ -349,15 +352,21 @@ class TestAuthRequired:
     ]
 
     @pytest.mark.parametrize("method,path", ENDPOINTS)
-    def test_returns_403_when_api_key_not_configured(self, method, path):
+    def test_non_admin_rejected_when_api_key_not_configured(self, method, path):
+        from auth import AuthenticatedUser
+
         with patch("admin_auth._get_admin_api_key", return_value=None):
-            c = create_authenticated_client()
+            non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+            c = create_authenticated_client(user=non_admin)
             resp = getattr(c, method.lower())(path)
-        assert resp.status_code == 403
+        assert resp.status_code == 401
 
     @pytest.mark.parametrize("method,path", ENDPOINTS)
-    def test_returns_401_without_api_key_header(self, method, path):
+    def test_non_admin_rejected_without_api_key_header(self, method, path):
+        from auth import AuthenticatedUser
+
         with patch("admin_auth._get_admin_api_key", return_value=ADMIN_API_KEY):
-            c = create_authenticated_client()
+            non_admin = AuthenticatedUser(id=2, username="reader", role="user")
+            c = create_authenticated_client(user=non_admin)
             resp = getattr(c, method.lower())(path)
         assert resp.status_code == 401

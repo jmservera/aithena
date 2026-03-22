@@ -33,7 +33,7 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-RUN apk add --no-cache procps
+RUN apk add --no-cache procps libstdc++ libgomp libgcc
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 COPY --from=builder /app/.venv /app/.venv
@@ -46,6 +46,7 @@ ENV RABBITMQ_PORT=5672
 ENV REDIS_HOST="localhost"
 ENV REDIS_PORT=6379
 ENV QUEUE_NAME="new_documents"
+ENV EXCHANGE_NAME="documents"
 ENV BASE_PATH="/data/documents/"
 ENV SOLR_HOST="solr"
 ENV SOLR_PORT=8983
