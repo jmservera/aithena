@@ -1,12 +1,9 @@
 services:
   redis:
-    image: redis
+    image: redis:7.4-alpine
     command: >-
-      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
-        exec redis-server --save 20 1 --loglevel warning --requirepass "$$REDIS_PASSWORD";
-      else
-        exec redis-server --save 20 1 --loglevel warning;
-      fi'
+      sh -c 'exec redis-server /usr/local/etc/redis/redis.conf
+      --requirepass "$$REDIS_PASSWORD"'
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - REDISCLI_AUTH=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
@@ -36,6 +33,7 @@ services:
           - redis
     volumes:
       - redis-data:/data
+      - ./src/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
   rabbitmq:
     image: rabbitmq:4.0-management
     command: rabbitmq-server
