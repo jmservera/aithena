@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.10.0 Release Notes](release-notes/v1.10.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.11.0 Release Notes](release-notes/v1.11.0.md).
 
 ## System architecture overview
 
@@ -3011,5 +3011,58 @@ v1.10.0 is **fully backward-compatible** with v1.9.0:
 | Backup script not found | v1.10.0 not checked out | Verify: `git rev-parse --short HEAD` shows v1.10.0 commit |
 | "Permission denied" on backup script | Script not executable | Fix: `chmod +x scripts/backup*.sh scripts/restore.sh` |
 | Restore fails with "Backup integrity check failed" | Corrupted backup file | Re-run backup with `--tier critical` to create a fresh copy |
+
+---
+
+## Deployment Updates for v1.11.0 (Search Enhancements, Thumbnails, Book Detail Endpoint)
+
+See the full [v1.11.0 release notes](https://github.com/jmservera/aithena/releases/tag/v1.11.0) for additional details.
+
+### Key Changes
+
+v1.11.0 introduces search improvements, thumbnail generation, and a book detail retrieval endpoint:
+
+1. **Sentence-Boundary-Aware Chunking** — Indexing now respects sentence boundaries when breaking text into chunks
+2. **Chunking Parameter Defaults Changed** — Default chunk size reduced from 400 to 90 words, overlap from 50 to 10 words
+3. **Thumbnail Generation** — During indexing, first-page thumbnails are extracted and stored as `.thumb.jpg` alongside PDFs
+4. **Thumbnail Serving** — nginx serves thumbnails at `/thumbnails/...`; the `thumbnail_url` field is indexed in Solr and returned in search results
+5. **Book Detail Endpoint** — New `GET /v1/books/{id}` endpoint retrieves complete book metadata
+6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; `/admin/streamlit` now redirects to `/admin/`
+
+### Critical Upgrade Action: Full Reindex Required
+
+⚠️ **The chunking parameter changes (400/50 → 90/10 words) require a full reindex after upgrading to v1.11.0.**
+
+Without a reindex:
+- Documents indexed before v1.11.0 will retain the old chunking (400/50)
+- Newly indexed documents will use the new chunking (90/10)
+- This creates inconsistent search behavior across your index
+
+**To reindex after upgrade:**
+
+1. Deploy v1.11.0 and confirm all services are healthy
+2. Follow your existing reindex procedure to clear the Solr index and trigger full reindexing via `document-lister`
+3. Monitor `document-indexer` logs to confirm all documents process without errors
+4. Verify the RabbitMQ queue is empty before relying on search results
+
+**Note:** Operators should follow their site-specific reindex procedures. The exact commands depend on your deployment environment and operational practices.
+
+### Thumbnail Storage and Serving
+
+Thumbnails are generated automatically during indexing:
+- Stored alongside PDFs with the naming pattern `{filename}.thumb.jpg`
+- Indexed in Solr's `thumbnail_url` field
+- Served by nginx at `/thumbnails/...`
+- Returned in `/v1/search` responses when available
+
+Documents indexed before v1.11.0 will have `null` for `thumbnail_url` until reindexed. The UI falls back to a placeholder image when thumbnails are unavailable.
+
+### Book Detail Endpoint
+
+The new `GET /v1/books/{id}` endpoint returns full book metadata (title, author, year, category, series, and other indexed fields).
+
+### Admin Routing
+
+The dead `admin` upstream has been removed from nginx configuration. The `/admin/streamlit` path now redirects to `/admin/`. Existing bookmarks will redirect automatically.
 
 ---
