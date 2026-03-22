@@ -48,6 +48,14 @@ function AuthHarness() {
       <button
         type="button"
         onClick={() => {
+          void login('dallas', 'secret', true).catch(() => undefined);
+        }}
+      >
+        Login (remember)
+      </button>
+      <button
+        type="button"
+        onClick={() => {
           void apiFetch('/v1/stats/').then((response) => setRequestStatus(response.status));
         }}
       >
@@ -68,15 +76,17 @@ function renderAuthHarness() {
 describe('useAuth', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.stubGlobal('fetch', vi.fn());
   });
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
-  it('logs in successfully and persists the token', async () => {
+  it('logs in successfully and persists the token in sessionStorage by default', async () => {
     vi.mocked(fetch)
       // Mount: cookie recovery attempt (no stored token → 401)
       .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
@@ -96,10 +106,44 @@ describe('useAuth', () => {
 
     expect(screen.getByTestId('user-name')).toHaveTextContent('dallas');
     expect(screen.getByTestId('token')).toHaveTextContent('jwt-123');
-    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe('jwt-123');
+    // Default (no rememberMe) → sessionStorage
+    expect(sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe('jwt-123');
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/v1/auth/login'),
       expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('logs in with rememberMe=true and persists the token in localStorage', async () => {
+    vi.mocked(fetch)
+      // Mount: cookie recovery attempt
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      // Login call
+      .mockResolvedValueOnce(mockJsonResponse(loginResponse));
+    const user = userEvent.setup();
+
+    renderAuthHarness();
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
+    });
+    await user.click(screen.getByRole('button', { name: 'Login (remember)' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('authenticated');
+    });
+
+    expect(screen.getByTestId('user-name')).toHaveTextContent('dallas');
+    expect(screen.getByTestId('token')).toHaveTextContent('jwt-123');
+    // rememberMe=true → localStorage
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe('jwt-123');
+    expect(sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/auth/login'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ username: 'dallas', password: 'secret', remember_me: true }),
+      })
     );
   });
 
@@ -123,10 +167,30 @@ describe('useAuth', () => {
 
     expect(screen.getByTestId('auth-state')).toHaveTextContent('anonymous');
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
   });
 
   it('restores the session from localStorage and validates it', async () => {
     localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, 'jwt-123');
+    vi.mocked(fetch).mockResolvedValueOnce(
+      mockJsonResponse({ authenticated: true, user: loginResponse.user })
+    );
+
+    renderAuthHarness();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('authenticated');
+    });
+
+    expect(screen.getByTestId('user-name')).toHaveTextContent('dallas');
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/auth/validate'),
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('restores the session from sessionStorage and validates it', async () => {
+    sessionStorage.setItem(AUTH_TOKEN_STORAGE_KEY, 'jwt-456');
     vi.mocked(fetch).mockResolvedValueOnce(
       mockJsonResponse({ authenticated: true, user: loginResponse.user })
     );

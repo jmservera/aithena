@@ -15,6 +15,7 @@ function LoginPage() {
   const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   const destination = useMemo(() => {
     const state = location.state as LoginLocationState | null;
@@ -34,9 +35,7 @@ function LoginPage() {
     clearError();
 
     try {
-      // TODO: Add a "Remember me" checkbox to send remember_me=true for persistent sessions.
-      // Currently defaults to session cookies (remember_me=false), which is the safe default.
-      await login(username, password);
+      await login(username, password, rememberMe);
     } catch {
       // The auth context exposes the error message for the form to render.
     }
@@ -84,6 +83,15 @@ function LoginPage() {
               {error}
             </div>
           )}
+
+          <label className="login-remember">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => setRememberMe(event.target.checked)}
+            />
+            {intl.formatMessage({ id: 'login.rememberMe' })}
+          </label>
 
           <button
             className="login-button"

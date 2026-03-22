@@ -89,18 +89,26 @@ export function getStoredToken(): string | null {
     return null;
   }
 
-  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  return (
+    window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) ??
+    window.sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
+  );
 }
 
-export function storeToken(token: string): void {
+export function storeToken(token: string, persistent = true): void {
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    if (persistent) {
+      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    } else {
+      window.sessionStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    }
   }
 }
 
 export function clearStoredToken(): void {
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    window.sessionStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   }
 }
 
