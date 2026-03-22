@@ -1,10 +1,12 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.10.0 Release Notes](release-notes/v1.10.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.11.0 Release Notes](release-notes/v1.11.0.md).
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
 **v1.10.0 introduces Collections** — personal reading lists where you can organize, annotate, and revisit documents. See [Collections](#collections-v1100) below.
+
+**v1.11.0 introduces richer book discovery:** search results now show chunk text previews with page ranges, book cards open a detailed view with richer metadata and similar books, the PDF viewer toolbar now includes fullscreen and download actions, and both search and library views show document thumbnails.
 
 ## Getting started
 
@@ -12,9 +14,12 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 
 - sign in with the account created during installation (v0.11.0+)
 - search by keyword, semantic meaning, or a hybrid of both
+- see chunk text previews with page ranges in search results (v1.11.0+)
 - narrow results with facets
-- open PDFs directly from search results
-- use Similar Books recommendations after opening a document
+- view document thumbnails in search and library results (v1.11.0+)
+- click a result to open a richer book detail view with metadata and similar books (v1.11.0+)
+- open PDFs directly from search results with improved toolbar actions like fullscreen and download (v1.11.0+)
+- use Similar Books recommendations from the book detail view or PDF viewer (v1.11.0+)
 - upload PDF files via drag-and-drop (v0.6.0+)
 - organize documents into personal collections with notes (v1.10.0+)
 - check the Aithena version in the footer (v0.7.0+)
@@ -180,13 +185,18 @@ Each result card may show:
 - category
 - language
 - page count
-- matching text snippets
+- document thumbnail (v1.11.0+) — lazy-loaded image preview
+- matching text snippets and page ranges (v1.11.0+)
 - file path
 
 If the search engine knows which pages matched, the result also shows a page label such as:
 
 - **Found on page 12**
 - **Found on pages 12–14**
+
+For semantic and hybrid searches, the result displays **chunk text previews** — the exact matching passages from the document with page numbers. This helps you decide whether to open the book without reading the full PDF.
+
+Hover over a result card to see the thumbnail preview more clearly. On slower connections, thumbnails load a moment after the search results appear.
 
 ### Sort and paging controls
 
@@ -255,19 +265,32 @@ You can filter by:
 
 ## Viewing PDFs
 
-When a result includes an attached document link, you can open the PDF directly from the result card.
+When a result includes an attached document link, you can open the PDF directly from the result card or the book detail view.
 
 *New in v1.8.1:* All text on this page, including labels and buttons, is now fully translated to your selected language.
+
+*Updated in v1.11.0:* The PDF viewer toolbar now includes additional actions.
 
 ### Open a PDF
 
 1. Run a search.
-2. Find the result you want.
-3. Click **📄 Open PDF**.
+2. Find the result you want and click on the result card to open the **Book Detail View**.
+3. In the detail view, click **📄 Open PDF** to view the document.
+
+Alternatively, you can click the **📄 Open PDF** button directly on a search result card to open the PDF overlay without the detail view first.
 
 The document opens in an overlay viewer without leaving the search page.
 
 ![PDF viewer with document open](images/pdf-viewer.png)
+
+### PDF viewer toolbar (v1.11.0+)
+
+The PDF viewer toolbar (top-right of the viewer) includes these actions:
+
+- **Fullscreen** — expand the PDF to fill your entire screen for focused reading
+- **Download** — save the PDF file to your computer
+- **Open in new window** — open the PDF in a separate browser tab for side-by-side viewing or independent use
+- **Close** — close the viewer and return to the search results
 
 ### Page navigation from search results
 
@@ -277,7 +300,7 @@ If the search result includes matched page information, Aithena opens the PDF on
 
 You can close the PDF overlay by:
 
-- clicking the **✕** button
+- clicking the **✕** or **Close** button in the toolbar
 - pressing **Escape** on your keyboard
 
 ### If a PDF does not load
@@ -286,30 +309,67 @@ If the embedded viewer cannot display the file, Aithena shows a fallback link so
 
 ## Finding similar books
 
-The **Similar Books** panel appears after you open a book from the search results.
+The **Similar Books** panel helps you discover related documents. You can access it from the book detail view or from the PDF viewer.
 
 ### Where to find it
 
+**Option 1: From the book detail view (recommended)**
+1. Run any search.
+2. Click on a result card to open the **Book Detail View**.
+3. Scroll down in the detail panel to see the **Similar Books** section.
+
+**Option 2: From the PDF viewer**
 1. Run any search.
 2. Click **📄 Open PDF** on a result.
 3. Look below the search results area for the **Similar Books** panel.
 
+*New in v1.11.0:* Similar Books is now decoupled from the PDF viewer and remains fully functional in the book detail view, making it easier to explore related titles without opening a PDF.
+
 ### How it works
 
 - The panel loads up to **5** semantically related books for the document you just opened.
-- Each card shows the title, author, optional year/category, and a rounded match score such as **91% match**.
+- Each card shows the title, author, optional year/category, optional thumbnail preview, and a rounded match score such as **91% match**.
 - While the request is running, the page shows loading text and placeholder cards.
 - If no recommendations are available, the panel says **No similar books found**.
 - If the request fails, the page shows a friendly message instead of breaking the rest of the search UI.
 
 ### How to use recommendations
 
-Click any similar-book card to replace the currently selected PDF with that recommendation. This makes it easy to explore related titles without starting a new search from scratch.
+Click any similar-book card to navigate to that book's detail view or to replace the currently selected PDF with that recommendation. This makes it easy to explore related titles without starting a new search from scratch.
 
 ![Similar Books recommendations](images/similar-books.png)
 
 <!-- TODO: capture screenshot -->
 
+## Book Detail View (v1.11.0+)
+
+When you click on a search result card, Aithena opens a **Book Detail View** modal showing comprehensive information about the document.
+
+### What the detail view shows
+
+The detail view displays:
+
+- **Title and metadata** — full document title, author, year, category, language
+- **Thumbnail preview** — high-quality document cover or first page image (lazy-loaded)
+- **Document summary** — page count, file size, and location path
+- **Collections status** — which of your personal collections contain this document, with a quick "Add to collection" button
+- **Similar Books section** — up to 5 related documents with match scores (see [Finding similar books](#finding-similar-books))
+- **PDF viewer link** — click **📄 View PDF** to open the full document in the overlay viewer
+
+### Admin features in the detail view (Admin only)
+
+If you are an admin user, the detail view also includes:
+
+- **Edit metadata button** — click **Edit** to modify the book's title, author, year, category, or series inline
+- **Inline editing** — save changes instantly; changes appear immediately across the search interface
+
+Regular users will not see the edit option in the detail view.
+
+### Navigating the detail view
+
+- Click anywhere outside the detail view to close it and return to search results
+- Press **Escape** to close the detail view
+- Use the browser back button to return to your previous search
 
 ## Understanding the Status tab
 
@@ -526,16 +586,25 @@ If you have admin privileges, you can correct or enhance book metadata (title, a
 
 ### Edit a single book
 
-1. From search results, click the **⋮** menu on a book card.
-2. Select **Edit metadata**.
-3. In the modal that appears:
+**Option 1: From the book detail view (v1.11.0+, recommended)**
+
+1. Click a search result card to open the **Book Detail View**.
+2. Click the **Edit** button in the detail view.
+3. In the inline editor that appears, modify the fields you want to change:
    - **Title** — The book title (max 255 characters)
    - **Author** — Author name (max 255 characters)
    - **Year** — Publication year (must be between 1000 and 2099)
-   - **Category** — Book category (e.g., "Science Fiction", "History"). The dropdown shows existing categories, but you can also type a new one.
-   - **Series** — The series or magazine name (e.g., "Foundation", "Nature Magazine"). Like category, you can select from existing values or create a new one.
-4. Change only the fields you want to update.
-5. Click **Save**.
+   - **Category** — Book category (e.g., "Science Fiction", "History")
+   - **Series** — The series or magazine name (e.g., "Foundation", "Nature Magazine")
+4. Changes save automatically as you type.
+5. Close the detail view to apply the changes.
+
+**Option 2: From the search result menu**
+
+1. From search results, click the **⋮** menu on a book card.
+2. Select **Edit metadata**.
+3. In the modal that appears, modify the fields you want to change (see option 1 for field descriptions).
+4. Click **Save**.
 
 The metadata updates immediately in Solr search, and you'll see the changes reflected in search results right away.
 
@@ -576,13 +645,15 @@ The Aithena version appears in the footer of the web app as a small version badg
 
 ### What the version means
 
-The version (e.g., **v1.8.1**) tells you which release you are running. This is useful when:
+The version (e.g., **v1.11.0**) tells you which release you are running. This is useful when:
 
 - **Troubleshooting:** Knowing the version helps you search documentation for known issues.
-- **Feature confirmation:** New features appear only in specific versions (e.g., PDF upload in v0.6.0 and later).
+- **Feature confirmation:** New features appear only in specific versions (e.g., PDF upload in v0.6.0 and later, book detail view in v1.11.0 and later).
 - **Support:** When contacting support, mention your version and the commit hash shown in the tooltip.
 
 *New in v1.8.1:* The version now always matches the shipped release value, even after updates. Earlier versions sometimes showed stale version numbers.
+
+*Fixed in v1.11.0:* The version display is now consistently accurate and reflects the version file on every visit.
 
 ### How to find the version
 
