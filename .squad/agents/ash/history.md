@@ -88,3 +88,36 @@ Embedding model research for issue #861 completed and merged to dev. Recommendat
 **Decision status:** Awaiting PO approval for infrastructure setup phase. Prepared for collaboration with Brett (infrastructure) in Phase 1 setup.
 
 **Next:** Phase 1 kickoff when approved — Solr collection setup and schema design for 768D vectors.
+
+## Session 2026-07-21 — PR #882 (P1-2: Solr 768D Schema)
+
+Created `books_e5base` configset and collection for the embedding model A/B test.
+
+**Changes delivered:**
+- New configset `src/solr/books_e5base/` with `knn_vector_768` field type (768D, HNSW, cosine)
+- `embedding_v` and `book_embedding` fields updated to 768D in new configset
+- `solr-init` container creates both `books` and `books_e5base` collections on startup
+- README updated to document dual configsets
+
+**Learnings:**
+- The configset copy approach (full directory copy + targeted edits) keeps the two schemas independently versionable while ensuring all non-vector config (analyzers, stopwords, synonyms, update chains) stays in sync.
+- The `add-conf-overlay.sh` script is collection-agnostic (parameterized by `SOLR_COLLECTION` env var), so it works for both collections without modification.
+- The `grep -q` idempotency pattern in solr-init is critical — it prevents duplicate configset uploads or collection creates on container restarts.
+
+**PR:** #882 → dev (branch: `squad/873-solr-768d-schema`)
+## Session 2026-03-22 — PR #883 (P1-1: E5-Base Embeddings Support)
+
+Implemented multilingual-e5-base support in the embeddings server (issue #874, milestone v1.12.0).
+
+**Key decisions:**
+- Model family detection via simple substring match (`"e5"` in model name, case-insensitive) — extensible if new model families are added later
+- Prefix handling fully internal: callers pass `input_type: "query"|"passage"` (default `"passage"` for backward compat with indexing callers), server applies `"query: "` or `"passage: "` prefix for e5-family only
+- `/v1/embeddings/model` now returns `model_family` and `requires_prefix` so downstream services (solr-search, document-indexer) can verify configuration
+- `/version` includes `model` field for operational visibility
+
+**Test coverage:** 33 tests (was 9), covering both distiluse and e5 paths with mocked models.
+
+## Learnings
+
+### E5 Prefix Design (P1-1)
+Keeping prefix logic inside the embeddings-server was the right call — it prevents every caller from needing to know model-specific prefixes. The `input_type` field is the stable API contract; prefix strings are an implementation detail. This pattern should be preserved if additional model families are added.
