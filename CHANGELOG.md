@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] — 2026-03-23
+
+### Fixed
+
+- **Thumbnail generation** — added libstdc++ to Alpine runtime for PDF thumbnail support (#920)
+- **Collections API** — enabled real collections API by default, removed mock data (#922)
+- **Admin login loop** — accept JWT sessions alongside API key auth (#895)
+
+### Added
+
+- **"Remember me" checkbox** on login form for persistent sessions (#923)
+- **Text preview truncation** in search results for cleaner display (#924)
+- **Air-gapped offline deployment** — export/install/verify scripts for disconnected machines (#925)
+
+### Documentation
+
+- **Mandatory security and performance review** added to release checklist (#899)
+
+## [1.12.0] — 2026-03-23
+
+### Added
+
+- **E5-base multilingual embedding model** support for candidate evaluation (#883)
+- **Solr 768D vector schema** for `books_e5base` collection (#882)
+- **Collection query parameter** for A/B testing — route queries to specific collections (#884)
+- **Fanout exchange** for dual-model indexing via RabbitMQ (#886)
+- **Docker Compose dual-indexer** setup for parallel baseline/candidate indexing (#885)
+- **Benchmark query suite** — 30 queries across 5 categories for A/B evaluation (#888)
+- **Test corpus indexing scripts** for reproducible benchmark datasets (#889)
+- **Comparison API** at `/v1/search/compare` for side-by-side result evaluation (#891)
+- **Per-collection performance metrics** — p50/p95/p99 latency tracking (#890)
+
+### Documentation
+
+- **Production migration plan** for embedding model cutover (#892)
+- **Rollback plan** for safe revert to baseline model (#893)
+- **PRD for Embedding Model A/B Test** — full requirements and success criteria (#869)
+
 ## [1.10.0] — 2026-03-21
 
 ### Added
