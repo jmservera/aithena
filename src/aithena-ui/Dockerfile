@@ -40,4 +40,11 @@ ENV VERSION=${VERSION} \
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/ /usr/share/nginx/html/
 
-EXPOSE 80
+# Configure nginx to run as non-root
+RUN sed -i '/^pid/c\pid /tmp/nginx.pid;' /etc/nginx/nginx.conf && \
+    chown -R nginx:nginx /var/cache/nginx /usr/share/nginx/html && \
+    chmod -R g+w /var/cache/nginx
+
+EXPOSE 8080
+
+USER nginx
