@@ -209,3 +209,32 @@ Implemented Docker Compose configuration for dual-indexer A/B testing (distiluse
 - **Dockerfile MODEL_NAME as build arg:** The embeddings-server uses `HF_HUB_OFFLINE=1` so models MUST be pre-baked at build time. Making `MODEL_NAME` an ARG (not just ENV) is required for multi-model builds from the same Dockerfile. The runtime ENV inherits the ARG value for the health endpoint's model name reporting.
 - **solr-init dependency:** `service_completed_successfully` is the correct condition for one-shot init containers. Using `service_healthy` would fail since solr-init has no healthcheck and exits after completion.
 - **Fanout exchange pattern:** No RabbitMQ static definitions needed — each indexer declares its own queue and binding on startup. This is more resilient than static definitions because queues are created by the consumers that need them.
+
+## Session 2026-03-22T13:20Z — #878/PR#893: Rollback Plan for A/B Test (P3-3)
+
+Created comprehensive rollback plan for the embedding model A/B test.
+
+**Document:** `docs/prd/rollback-plan.md` (584 lines)
+
+**Sections:**
+1. **Rollback triggers:** 5 conditions (quality degradation nDCG@10 -5%, latency p95 >500ms, indexing failures >10 consecutive, resource exhaustion, PO decision)
+2. **Dev/staging quick kill:** Stop e5 services, verify baseline continues, cleanup stale data (< 5 min, 0 downtime)
+3. **Production rollback:** Revert config to baseline collection, restart solr-search, stop e5 services, verify serving (~15 min, ~2 min downtime)
+4. **Data preservation:** Baseline 'books' never deleted; e5-base 'books_e5base' droppable; Redis cache keys collection-prefixed
+5. **Verification:** 5-step checklist (collection status, benchmark suite, metrics endpoint, search quality, health check)
+6. **Runbooks:** 2 copy-paste bash scripts (quick kill and production rollback) with error handling
+7. **Decision tree:** Select procedure based on test phase (A/B test vs post-migration)
+8. **Escalation:** 4-level path (on-call → team lead → PO → architect) with communication template
+9. **Post-rollback RCA:** Root cause analysis, decision to retry/abandon/pivot
+
+**Learnings:**
+- **Two-mode rollback:** Quick kill for dev (stop services, baseline auto-serves) vs full for prod (config + restart cycle)
+- **Collection naming convention:** Baseline='books', candidate='books_{model}' ensures no collision across multiple A/B tests
+- **Redis cache isolation:** Per-collection cache keys prevent cross-contamination on rollback
+- **Verification sequence:** Collection → benchmark → metrics → spot-checks → health covers all layers
+- **RabbitMQ queue handling:** Queues naturally drain once indexers stop; optional manual purge depends on monitoring setup
+- **Runbook automation:** Bash scripts include waiting loops and health checks rather than fixed delays
+
+**Decision status:** Ready for PR review. Integrates with P2-4 (metrics) and P3-2 (prod deployment deferral).
+
+**PR:** #893
