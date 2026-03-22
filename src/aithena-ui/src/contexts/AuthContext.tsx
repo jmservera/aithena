@@ -20,7 +20,7 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [clearAuthState]);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string, rememberMe = false) => {
     setIsLoading(true);
     setError(null);
 
@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, remember_me: rememberMe }),
         skipAuth: true,
         skipUnauthorizedHandler: true,
       });
@@ -135,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = (await response.json()) as AuthSession;
-      storeToken(data.access_token);
+      storeToken(data.access_token, rememberMe);
       setToken(data.access_token);
       setUser(data.user);
     } catch (err) {
