@@ -1171,6 +1171,150 @@ def _search_hybrid(
     }
 
 
+# ---------------------------------------------------------------------------
+# Phase 2 — Comparison endpoint (P2-3)
+# ---------------------------------------------------------------------------
+
+
+def _execute_search_for_compare(
+    request: Request,
+    q: str,
+    mode: str,
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
+    collection: str,
+) -> tuple[list[dict[str, Any]], int, float]:
+    """Run a search against a single collection and return (results, total, latency_ms)."""
+    started = time.perf_counter()
+    if mode == "keyword":
+        resp = _search_keyword(
+            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            collection=collection,
+        )
+    elif mode == "semantic":
+        resp = _search_semantic(
+            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            collection=collection,
+        )
+    else:
+        resp = _search_hybrid(
+            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            collection=collection,
+        )
+    latency_ms = round((time.perf_counter() - started) * 1000, 2)
+    results = resp.get("results", [])
+    total = resp.get("total_results", resp.get("total", len(results)))
+    return results, total, latency_ms
+
+
+def _compute_overlap_metrics(
+    baseline_results: list[dict[str, Any]],
+    candidate_results: list[dict[str, Any]],
+    top_n: int = 10,
+) -> dict[str, Any]:
+    """Compute overlap metrics between two ranked result lists."""
+    baseline_ids = [r["id"] for r in baseline_results[:top_n]]
+    candidate_ids = [r["id"] for r in candidate_results[:top_n]]
+
+    baseline_set = set(baseline_ids)
+    candidate_set = set(candidate_ids)
+
+    overlap = baseline_set & candidate_set
+    denominator = max(len(baseline_set), len(candidate_set), 1)
+    overlap_at_n = round(len(overlap) / denominator, 4)
+
+    baseline_only = [doc_id for doc_id in baseline_ids if doc_id not in candidate_set]
+    candidate_only = [doc_id for doc_id in candidate_ids if doc_id not in baseline_set]
+
+    return {
+        "overlap_at_10": overlap_at_n,
+        "baseline_only": baseline_only,
+        "candidate_only": candidate_only,
+    }
+
+
+@app.get("/v1/search/compare", include_in_schema=False, name="search_compare")
+def search_compare(
+    request: Request,
+    q: str = Query("", description="Search query."),
+    page: int = Query(1, ge=1),
+    limit: int | None = Query(None, ge=1, le=settings.max_page_size),
+    page_size: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size),
+    sort: str | None = Query(None, description="Combined sort clause like `score desc`."),
+    sort_by: Annotated[SortBy, Query()] = "score",
+    sort_order: Annotated[SortOrder, Query()] = "desc",
+    fq_author: str | None = Query(None),
+    fq_category: str | None = Query(None),
+    fq_language: str | None = Query(None),
+    fq_year: str | None = Query(None),
+    fq_series: str | None = Query(None),
+    fq_folder: str | None = Query(None),
+    mode: str = Query(
+        settings.default_search_mode,
+        description="Search mode: keyword, semantic, or hybrid.",
+    ),
+    _rate_limit: None = Depends(check_search_rate_limit),
+) -> dict[str, Any]:
+    """Compare search results from baseline and candidate collections side-by-side.
+
+    Executes the same query against both the baseline and candidate collections
+    (configurable via ``COMPARISON_BASELINE_COLLECTION`` and
+    ``COMPARISON_CANDIDATE_COLLECTION`` environment variables) and returns
+    results with overlap metrics.
+    """
+    if mode not in VALID_SEARCH_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid search mode: {mode!r}. Must be one of: keyword, semantic, hybrid.",
+        )
+
+    resolved_page_size = resolve_page_size(limit, page_size)
+    filters = collect_search_filters(
+        author=fq_author,
+        category=fq_category,
+        language=fq_language,
+        year=fq_year,
+        series=fq_series,
+        folder=fq_folder,
+    )
+
+    baseline_col = settings.comparison_baseline_collection
+    candidate_col = settings.comparison_candidate_collection
+
+    search_args = (request, q, mode, page, resolved_page_size, sort_by, sort_order, sort, filters)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        baseline_future = pool.submit(_execute_search_for_compare, *search_args, baseline_col)
+        candidate_future = pool.submit(_execute_search_for_compare, *search_args, candidate_col)
+
+        baseline_results, baseline_total, baseline_latency = baseline_future.result()
+        candidate_results, candidate_total, candidate_latency = candidate_future.result()
+
+    metrics = _compute_overlap_metrics(baseline_results, candidate_results)
+
+    return {
+        "query": q,
+        "mode": mode,
+        "baseline": {
+            "collection": baseline_col,
+            "results": baseline_results,
+            "total": baseline_total,
+            "latency_ms": baseline_latency,
+        },
+        "candidate": {
+            "collection": candidate_col,
+            "results": candidate_results,
+            "total": candidate_total,
+            "latency_ms": candidate_latency,
+        },
+        "metrics": metrics,
+    }
+
+
 @app.get("/v1/facets/", include_in_schema=False, name="facets_v1")
 @app.get("/v1/facets", include_in_schema=False, name="facets_v1_no_slash")
 @app.get("/facets")

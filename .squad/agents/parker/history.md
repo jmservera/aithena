@@ -216,3 +216,16 @@
 **Testing:** 7 new lister tests (exchange config, fanout publishing, persistent delivery, correlation IDs). 18 new indexer tests (exchange declaration, queue binding, passive mode on subsequent calls, QoS, queue/collection/chunk configurability). All existing tests pass unchanged.
 
 **Pattern note:** RabbitMQ `exchange_declare` is idempotent — both producer and consumers can declare the same exchange safely. The fanout type ignores routing keys entirely.
+
+### Comparison API (P2-3, #880, v1.12.0)
+
+**Approach:** Added `GET /v1/search/compare` endpoint that runs the same query against two Solr collections in parallel (via `ThreadPoolExecutor`) and returns results side-by-side with overlap metrics.
+
+**Key design decisions:**
+- Reuses existing `_search_keyword`, `_search_semantic`, and `_search_hybrid` helpers through a new `_execute_search_for_compare` dispatcher — no duplication of search logic.
+- Parallel execution: both collections queried concurrently via `ThreadPoolExecutor(max_workers=2)`.
+- `_compute_overlap_metrics` calculates `overlap_at_10` (Jaccard-like ratio at top-N), plus `baseline_only` and `candidate_only` ID lists preserving ranked order.
+- `include_in_schema=False` — endpoint is internal/API-only per PRD decision (no UI toggle).
+- Config via `COMPARISON_BASELINE_COLLECTION` (default: `books`) and `COMPARISON_CANDIDATE_COLLECTION` (default: `books_e5base`) env vars added to frozen Settings dataclass.
+
+**Testing:** 25 tests — 9 overlap metrics unit tests, 10 endpoint integration tests (keyword, semantic, hybrid, filters, empty results, latency, OpenAPI exclusion), 3 config tests, 1 parallel execution test, 2 edge cases. All 885 tests pass, 91.5% coverage.
