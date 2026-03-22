@@ -45,6 +45,8 @@ class Settings:
     port: int
     solr_url: str
     solr_collection: str
+    solr_auth_user: str | None
+    solr_auth_pass: str | None
     base_path: Path
     request_timeout: float
     default_page_size: int
@@ -100,6 +102,13 @@ class Settings:
     def select_url(self) -> str:
         return f"{self.solr_url}/{self.solr_collection}/select"
 
+    @property
+    def solr_auth(self) -> tuple[str, str] | None:
+        """Return (user, pass) tuple for HTTP Basic Auth, or None."""
+        if self.solr_auth_user and self.solr_auth_pass:
+            return (self.solr_auth_user, self.solr_auth_pass)
+        return None
+
     def select_url_for(self, collection: str) -> str:
         """Return the Solr select URL for a specific collection."""
         return f"{self.solr_url}/{collection}/select"
@@ -130,6 +139,8 @@ settings = Settings(
     port=int(os.environ.get("PORT", "8080")),
     solr_url=os.environ.get("SOLR_URL", "http://solr:8983/solr").rstrip("/"),
     solr_collection=os.environ.get("SOLR_COLLECTION", "books"),
+    solr_auth_user=os.environ.get("SOLR_AUTH_USER") or None,
+    solr_auth_pass=os.environ.get("SOLR_AUTH_PASS") or None,
     base_path=Path(os.environ.get("BASE_PATH", "/data/documents")).resolve(),
     request_timeout=float(os.environ.get("SOLR_TIMEOUT", "30")),
     default_page_size=int(os.environ.get("DEFAULT_PAGE_SIZE", "20")),

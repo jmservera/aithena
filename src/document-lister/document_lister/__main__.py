@@ -7,8 +7,9 @@ from datetime import datetime
 from pathlib import Path
 
 import pika
-import redis
 from retry import retry
+
+import redis
 
 from . import (
     BASE_PATH,

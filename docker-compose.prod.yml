@@ -165,6 +165,8 @@ services:
       - SOLR_COLLECTION=books
       - EMBEDDINGS_HOST=embeddings-server
       - EMBEDDINGS_PORT=8080
+      - SOLR_AUTH_USER=${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      - SOLR_AUTH_PASS=${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
     restart: on-failure
     stop_grace_period: 10s
     deploy:
@@ -254,6 +256,8 @@ services:
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
       - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}
+      - SOLR_AUTH_USER=${SOLR_READONLY_USER:?Set SOLR_READONLY_USER}
+      - SOLR_AUTH_PASS=${SOLR_READONLY_PASS:?Set SOLR_READONLY_PASS}
     volumes:
       - document-data:/data/documents
       - collections-db:/data/collections
@@ -482,12 +486,14 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
     expose:
       - "8983"
     networks:
       - default
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS} http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -521,10 +527,12 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
     expose:
       - "8983"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS} http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -560,10 +568,12 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
     expose:
       - "8983"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS} http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -601,6 +611,14 @@ services:
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+      - ./src/solr/security.json:/scripts/security.json:ro
+    environment:
+      SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      SOLR_READONLY_USER: ${SOLR_READONLY_USER:?Set SOLR_READONLY_USER}
+      SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:?Set SOLR_READONLY_PASS}
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
     entrypoint:
       - /bin/bash
       - -ceu
@@ -609,7 +627,7 @@ services:
           ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
           SOLR_URL="http://solr:8983"
 
-          until curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null; do
+          until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1 || curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
             sleep 2
           done
 
@@ -617,15 +635,42 @@ services:
             sleep 2
           done
 
+          # --- Security: Bootstrap BasicAuth + RBAC ---
+          echo "Uploading security.json to ZooKeeper..."
+          solr zk cp file:/scripts/security.json zk:/security.json -z "$$ZK_HOST"
+
+          echo "Creating Solr users via Authentication API..."
+          curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/authentication" \
+            -H 'Content-Type: application/json' \
+            -d '{"set-user": {"'"$$SOLR_ADMIN_USER"'": "'"$$SOLR_ADMIN_PASS"'", "'"$$SOLR_READONLY_USER"'": "'"$$SOLR_READONLY_PASS"'"}}' || \
+          curl -fsS "$$SOLR_URL/solr/admin/authentication" \
+            -H 'Content-Type: application/json' \
+            -d '{"set-user": {"'"$$SOLR_ADMIN_USER"'": "'"$$SOLR_ADMIN_PASS"'", "'"$$SOLR_READONLY_USER"'": "'"$$SOLR_READONLY_PASS"'"}}'
+
+          echo "Assigning roles via Authorization API..."
+          curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/authorization" \
+            -H 'Content-Type: application/json' \
+            -d '{"set-user-role": {"'"$$SOLR_ADMIN_USER"'": "admin", "'"$$SOLR_READONLY_USER"'": "readonly"}}' || \
+          curl -fsS "$$SOLR_URL/solr/admin/authorization" \
+            -H 'Content-Type: application/json' \
+            -d '{"set-user-role": {"'"$$SOLR_ADMIN_USER"'": "admin", "'"$$SOLR_READONLY_USER"'": "readonly"}}'
+
+          echo "Enabling blockUnknown..."
+          curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/authentication" \
+            -H 'Content-Type: application/json' \
+            -d '{"set-property": {"blockUnknown": true}}'
+
+          echo "Security bootstrap complete."
+
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
 
-          if ! curl -fsS "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
-            curl -fsS "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
+          if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
+            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
           fi
 
-          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" sh /scripts/add-conf-overlay.sh
+          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh
 
           echo "Solr init complete"
     networks:
