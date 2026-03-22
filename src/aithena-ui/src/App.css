@@ -774,6 +774,14 @@ select:focus-visible,
   box-shadow: 0 0 0 2px rgba(126, 200, 227, 0.2);
 }
 
+.book-card--selectable {
+  cursor: pointer;
+}
+
+.book-card--selectable:hover {
+  border-color: rgba(126, 200, 227, 0.4);
+}
+
 .book-card-footer {
   display: flex;
   align-items: center;
@@ -811,6 +819,8 @@ select:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
+  z-index: 1001;
 }
 
 .similar-books-header {
