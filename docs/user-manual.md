@@ -1,12 +1,14 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.11.0 Release Notes](release-notes/v1.11.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.12.1 Release Notes](release-notes/v1.12.1.md).
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
 **v1.10.0 introduces Collections** — personal reading lists where you can organize, annotate, and revisit documents. See [Collections](#collections-v1100) below.
 
 **v1.11.0 introduces richer book discovery:** search results now show chunk text previews with page ranges, book cards open a detailed view with richer metadata and similar books, the PDF viewer toolbar now includes fullscreen and download actions, and both search and library views show document thumbnails.
+
+**v1.12.1 refines UX:** collections now use real backend data by default, login form adds "Remember me" checkbox for session persistence, search result text previews are truncated for improved readability, and thumbnail generation is fixed in Alpine containers.
 
 ## Getting started
 
@@ -45,8 +47,9 @@ With the v0.11.0 auth flow enabled, visiting protected pages redirects you to `/
 
 1. Open the main Aithena URL.
 2. Enter the username and password created by the installer.
-3. Submit the login form.
-4. After login, Aithena keeps your browser session active and automatically attaches auth to protected requests until you log out or the session expires.
+3. **(Optional, v1.12.1+)** Check the "Remember me" box if you want to stay logged in even after closing the browser. Leave unchecked for a session-only login that expires when you close the browser.
+4. Submit the login form.
+5. After login, Aithena keeps your browser session active and automatically attaches auth to protected requests until you log out or the session expires.
 
 ![Aithena login page](images/login-page.png)
 
@@ -185,8 +188,8 @@ Each result card may show:
 - category
 - language
 - page count
-- document thumbnail (v1.11.0+) — lazy-loaded image preview
-- matching text snippets and page ranges (v1.11.0+)
+- document thumbnail (v1.11.0+, fixed in v1.12.1) — lazy-loaded image preview
+- matching text snippets and page ranges (v1.11.0+), truncated for readability (v1.12.1+)
 - file path
 
 If the search engine knows which pages matched, the result also shows a page label such as:
@@ -501,6 +504,8 @@ The **Upload** tab lets authenticated users add PDFs to the library without dire
 | "Upload failed. Please try again." | Server error during upload | Try again; if it persists, contact your administrator |
 
 ## Collections (v1.10.0+)
+
+*Updated in v1.12.1:* Collections now use real backend data by default, with persistent storage and full CRUD support.
 
 Collections let you organize, annotate, and revisit documents you find interesting. Think of them as personal reading lists within Aithena.
 

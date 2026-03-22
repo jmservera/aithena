@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.11.0 Release Notes](release-notes/v1.11.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.12.1 Release Notes](release-notes/v1.12.1.md).
 
 ## System architecture overview
 
@@ -3064,5 +3064,70 @@ The new `GET /v1/books/{id}` endpoint returns full book metadata (title, author,
 ### Admin Routing
 
 The dead `admin` upstream has been removed from nginx configuration. The `/admin/streamlit` path now redirects to `/admin/`. Existing bookmarks will redirect automatically.
+
+---
+
+## Deployment Updates for v1.12.1 (Bug Fixes & UX Refinements)
+
+v1.12.1 is a maintenance release addressing critical bug fixes and UX refinements from v1.11.0:
+
+### What's Fixed in v1.12.1
+
+1. **Collections API (Issue #897)** — Collections API now uses real backend data by default. The mock data fallback has been removed.
+2. **Remember Me Checkbox (Issue #898)** — Login form now includes "Remember me" checkbox for persistent session support.
+3. **Text Preview Truncation (Issue #896)** — Search result chunk text is truncated to ~15-20 characters for better readability.
+4. **Thumbnail Generation (Issue #894)** — Alpine container now includes missing `libstdc++` library; PyMuPDF thumbnail generation works correctly.
+
+### Key Changes
+
+#### Collections API — Real Data By Default
+
+- `VITE_COLLECTIONS_API` environment variable is no longer required
+- Frontend API service calls real backend by default
+- No configuration changes needed for operators
+
+#### Container Build Fix
+
+The `src/document-indexer/Dockerfile` now includes C++ runtime libraries:
+
+```dockerfile
+RUN apk add --no-cache libstdc++ libgomp libgcc
+```
+
+This resolves PyMuPDF import errors and enables thumbnail generation on Alpine Linux.
+
+#### Login Form Update
+
+The login form now includes an optional "Remember me" checkbox:
+- **Checked:** Session persists for 30 days
+- **Unchecked (default):** Session ends when browser closes
+
+No operator configuration required.
+
+### Backward Compatibility
+
+v1.12.1 is **fully backward-compatible** with v1.11.0:
+- Existing collections data is preserved
+- No Solr schema changes
+- No database migrations required
+- No new environment variables required
+
+### Upgrade Procedure
+
+```bash
+git fetch origin
+git checkout v1.12.1
+docker compose pull
+docker compose up -d
+```
+
+### Deployment Validation Checklist
+
+- [ ] All services start: `docker compose ps`
+- [ ] No startup errors in logs: `docker compose logs | grep -i error`
+- [ ] Collections feature works with real backend data
+- [ ] New documents generate thumbnails during indexing
+- [ ] Login form displays "Remember me" checkbox
+- [ ] Test collections persistence (create → reload → verify)
 
 ---
