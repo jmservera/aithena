@@ -1,8 +1,26 @@
-# Solr Configuration for Aithena Books Collection
+# Solr Configuration for Aithena Books Collections
 
-This directory contains the SolrCloud configset for the `books` collection.
+This directory contains the SolrCloud configsets for the Aithena book search collections.
 
-## Files
+## Configsets
+
+### `books` (baseline)
+The original configset using `distiluse-base-multilingual-cased-v2` with 512-dimensional vectors.
+
+### `books_e5base` (A/B test candidate)
+A copy of the `books` configset modified for `multilingual-e5-base` with 768-dimensional vectors.
+Created as part of the embedding model A/B test (PRD: `docs/prd/embedding-model-ab-test.md`, P1-2).
+All non-vector fields are identical to `books`; only the vector field type and dimension differ.
+
+| Property | `books` | `books_e5base` |
+|----------|---------|----------------|
+| Embedding model | distiluse-base-multilingual-cased-v2 | multilingual-e5-base |
+| Vector dimensions | 512 | 768 |
+| Field type | `knn_vector_512` | `knn_vector_768` |
+| Similarity | cosine (HNSW) | cosine (HNSW) |
+| Collection name | `books` | `books_e5base` |
+
+## Files (per configset)
 
 - `managed-schema.xml` — Solr schema with field definitions and analyzers
 - `solrconfig.xml` — Request handlers, indexing settings, Tika extraction config
@@ -16,7 +34,8 @@ This directory contains the SolrCloud configset for the `books` collection.
 - **String fields** (`*_s`): Exact-match, not tokenized. Use for author, category, language codes.
 - **Text fields** (`*_t`): Analyzed, tokenized. Use for title, content. Supports multilingual analyzers.
 - **Integer/Long fields** (`*_i`, `*_l`): Year, page count, file size.
-- **`knn_vector_512`**: Dense 512-dimensional vector field (HNSW, cosine similarity). Used for Phase 3 embedding search.
+- **`knn_vector_512`**: Dense 512-dimensional vector field (HNSW, cosine similarity). Used for Phase 3 embedding search in the `books` collection.
+- **`knn_vector_768`**: Dense 768-dimensional vector field (HNSW, cosine similarity). Used for A/B test embedding search in the `books_e5base` collection.
 - **_text_** (default field): Catch-all for full-text search. Fed by `copyField` from `title_t`, `author_t`, `content`.
 
 ### Book-Specific Fields
@@ -36,7 +55,7 @@ This directory contains the SolrCloud configset for the `books` collection.
 | `folder_path_s` | string | Yes | Yes | Folder path (e.g., `amades`) |
 | `category_s` | string | Yes | Yes | Inferred category/series |
 | `language_detected_s` | string | Yes | Yes | Auto-detected language code |
-| `book_embedding` | knn_vector_512 | Yes | Yes | 512-dim embedding for semantic kNN search (Phase 3) |
+| `book_embedding` | knn_vector_512 / knn_vector_768 | Yes | Yes | Dense embedding for semantic kNN search — 512-dim in `books`, 768-dim in `books_e5base` |
 | `_text_` | text | Yes | No | Default query field (copyField from title_t, author_t) |
 
 ### Analyzers
