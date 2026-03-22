@@ -325,7 +325,7 @@ def test_book_detail_response_contains_all_expected_keys(mock_post: MagicMock) -
         "id", "title", "author", "year", "category", "language",
         "series", "file_path", "folder_path", "page_count", "file_size",
         "pages", "is_chunk", "chunk_text", "page_start", "page_end",
-        "score", "highlights", "document_url",
+        "score", "highlights", "document_url", "thumbnail_url",
     }
     assert expected_keys.issubset(data.keys()), f"Missing keys: {expected_keys - data.keys()}"
 
@@ -375,3 +375,34 @@ def test_book_detail_solr_http_error_returns_502(mock_post: MagicMock) -> None:
 
     assert response.status_code == 502
     assert "failed" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Thumbnail URL in book detail (#829 gap-fill)
+# ---------------------------------------------------------------------------
+
+
+@patch("main.requests.post")
+def test_book_detail_includes_thumbnail_url_when_present(mock_post: MagicMock) -> None:
+    """Book detail response should include thumbnail_url when Solr doc has it."""
+    doc = _make_book_doc()
+    doc["thumbnail_url_s"] = "library/test-book.pdf.thumb.jpg"
+    _mock_solr_ok(mock_post, _solr_response([doc]))
+
+    client = get_client()
+    data = client.get(f"/v1/books/{VALID_SHA256}").json()
+
+    assert data["thumbnail_url"] == "library/test-book.pdf.thumb.jpg"
+
+
+@patch("main.requests.post")
+def test_book_detail_thumbnail_url_null_when_absent(mock_post: MagicMock) -> None:
+    """Book detail response should return null thumbnail_url when field is missing."""
+    doc = _make_book_doc()
+    assert "thumbnail_url_s" not in doc  # baseline: helper has no thumbnail
+    _mock_solr_ok(mock_post, _solr_response([doc]))
+
+    client = get_client()
+    data = client.get(f"/v1/books/{VALID_SHA256}").json()
+
+    assert data["thumbnail_url"] is None

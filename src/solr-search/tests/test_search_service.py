@@ -1111,3 +1111,8 @@ def test_solr_field_list_includes_page_range_fields() -> None:
 def test_solr_field_list_includes_score() -> None:
     """SOLR_FIELD_LIST must include 'score' for relevance ranking."""
     assert "score" in SOLR_FIELD_LIST
+
+
+def test_solr_field_list_includes_thumbnail_url() -> None:
+    """SOLR_FIELD_LIST must include thumbnail_url_s for thumbnail support."""
+    assert "thumbnail_url_s" in SOLR_FIELD_LIST

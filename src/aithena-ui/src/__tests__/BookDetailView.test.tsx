@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
 import BookDetailView from '../Components/BookDetailView';
@@ -901,6 +901,57 @@ describe('BookDetailView', () => {
       expect(screen.queryByRole('img', { name: mockBook.title })).not.toBeInTheDocument();
       const placeholder = document.querySelector('.book-detail-header__thumbnail--placeholder');
       expect(placeholder).not.toBeNull();
+    });
+
+    it('falls back to placeholder on image load error', () => {
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={bookWithThumb}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      const img = screen.getByRole('img', { name: bookWithThumb.title });
+      fireEvent.error(img);
+
+      expect(screen.queryByRole('img', { name: bookWithThumb.title })).not.toBeInTheDocument();
+      const placeholder = document.querySelector('.book-detail-header__thumbnail--placeholder');
+      expect(placeholder).not.toBeNull();
+    });
+
+    it('uses book title as alt text for accessibility', () => {
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={bookWithThumb}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      const img = screen.getByRole('img', { name: 'Advanced Systems Design' });
+      expect(img).toHaveAttribute('alt', 'Advanced Systems Design');
+    });
+
+    it('renders placeholder when thumbnail_url is null', () => {
+      const bookNullThumb: BookResult = { ...mockBook, thumbnail_url: null };
+
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={bookNullThumb}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      expect(screen.queryByRole('img', { name: mockBook.title })).not.toBeInTheDocument();
+      expect(document.querySelector('.book-detail-header__thumbnail--placeholder')).not.toBeNull();
     });
   });
 });

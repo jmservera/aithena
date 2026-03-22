@@ -542,3 +542,18 @@ class TestBuildLiteralParams:
         meta["language"] = lang
         params = build_literal_params(meta, page_count=None)
         assert params["literal.language_s"] == lang
+
+    def test_thumbnail_url_included_in_params_when_set(self):
+        meta = self._base_metadata()
+        params = build_literal_params(meta, page_count=None, thumbnail_url="Author/Title.pdf.thumb.jpg")
+        assert params["literal.thumbnail_url_s"] == "Author/Title.pdf.thumb.jpg"
+
+    def test_thumbnail_url_absent_from_params_when_none(self):
+        meta = self._base_metadata()
+        params = build_literal_params(meta, page_count=None, thumbnail_url=None)
+        assert "literal.thumbnail_url_s" not in params
+
+    def test_thumbnail_url_absent_from_params_when_empty_string(self):
+        meta = self._base_metadata()
+        params = build_literal_params(meta, page_count=None, thumbnail_url="")
+        assert "literal.thumbnail_url_s" not in params
