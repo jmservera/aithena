@@ -211,3 +211,21 @@ src/aithena-ui/src/
 - Chunk text is plain text (no HTML sanitization needed) — unlike keyword highlights which come with `<em>` tags from Solr.
 - Added `book.chunkPage` (singular) and `book.chunkPages` (plural) for page display — follows existing `book.foundOnPage`/`book.foundOnPages` pattern.
 - 8 tests cover all edge cases: presence/absence of chunk, single vs. multi page, empty string, missing page range, coexistence with keyword highlights.
+
+### BookDetailView Modal (#819, PR #842)
+
+**Feature:** Modal overlay component showing full book metadata, similar books, and action buttons.
+
+**Architecture:** Followed the established PdfViewer modal pattern — focus trap, ESC dismiss, body scroll lock, `aria-modal` — but adapted for a centered overlay (vs PdfViewer's side panel). Created `useBookDetail` hook with `initialData` prop pattern: when the caller already has `BookResult` from search results, it skips the API fetch entirely, avoiding a redundant `GET /v1/books/{book_id}` call.
+
+**Content sections:** Header (title/author/year), metadata grid (category, language, series, page count, file size, folder path), chunk text preview (reuses existing `book.matchingText`/`book.chunkPage`/`book.chunkPages` i18n keys), action buttons (Open PDF, Open external, Edit metadata for admins), and SimilarBooks component integration.
+
+**Learnings:**
+- Used `bookDetail.*` i18n key prefix for modal-specific labels (close, loading, error, fileSize, folderPath, openExternal, untitled) — keeps them distinct from `book.*` keys used by BookCard.
+- Added `file_size`, `folder_path`, `score` to `BookResult` interface — these fields exist in the backend `normalize_book()` response but were missing from the frontend type.
+- Admin gating uses `useAuth().user?.role === 'admin'` — straightforward role check via AuthContext.
+- Title appears in both toolbar and body header — test queries must use `getAllByText` or role-based selectors to avoid ambiguity.
+- `SimilarBooks` heading text ("Similar Books") overlaps with loading text ("Loading similar books…") for `/similar books/i` regex — use `getByRole('region', { name: /similar books/i })` for the section.
+- Backdrop click handler on `role="dialog"` triggers `jsx-a11y/click-events-have-key-events` — suppressed with eslint-disable since ESC is the keyboard equivalent.
+- CSS: centered modal with `max-width: 800px`, responsive at 600px breakpoint (full-width, stacked layout). BEM naming `.book-detail-*`.
+
