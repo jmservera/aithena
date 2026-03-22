@@ -366,6 +366,7 @@ services:
       - PORT=8080
       - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
+      - SOLR_ASCII_FOLDING=true
       - BASE_PATH=/data/documents
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
       - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/

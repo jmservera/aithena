@@ -95,6 +95,7 @@
       <tokenizer name="standard"/>
       <filter ignoreCase="true" name="elision" articles="lang/contractions_ca.txt"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
       <filter words="lang/stopwords_ca.txt" ignoreCase="true" name="stop"/>
       <filter language="Catalan" name="snowballPorter"/>
     </analyzer>
@@ -145,6 +146,7 @@
       <tokenizer name="standard"/>
       <filter words="lang/stopwords_en.txt" ignoreCase="true" name="stop"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
       <filter name="englishPossessive"/>
       <filter name="keywordMarker" protected="protwords.txt"/>
       <filter name="porterStem"/>
@@ -154,6 +156,7 @@
       <filter synonyms="synonyms.txt" ignoreCase="true" expand="true" name="synonymGraph"/>
       <filter words="lang/stopwords_en.txt" ignoreCase="true" name="stop"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
       <filter name="englishPossessive"/>
       <filter name="keywordMarker" protected="protwords.txt"/>
       <filter name="porterStem"/>
@@ -206,6 +209,7 @@
     <analyzer>
       <tokenizer name="standard"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
       <filter ignoreCase="true" format="snowball" name="stop" words="lang/stopwords_es.txt"/>
       <filter name="spanishLightStem"/>
     </analyzer>
@@ -249,6 +253,7 @@
       <tokenizer name="standard"/>
       <filter ignoreCase="true" name="elision" articles="lang/contractions_fr.txt"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
       <filter ignoreCase="true" format="snowball" name="stop" words="lang/stopwords_fr.txt"/>
       <filter name="frenchLightStem"/>
     </analyzer>
@@ -268,12 +273,14 @@
       <tokenizer name="standard"/>
       <filter words="stopwords.txt" ignoreCase="true" name="stop"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
     </analyzer>
     <analyzer type="query">
       <tokenizer name="standard"/>
       <filter words="stopwords.txt" ignoreCase="true" name="stop"/>
       <filter synonyms="synonyms.txt" ignoreCase="true" expand="true" name="synonymGraph"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
     </analyzer>
   </fieldType>
   <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100" multiValued="true">
@@ -281,12 +288,14 @@
       <tokenizer name="standard"/>
       <filter words="stopwords.txt" ignoreCase="true" name="stop"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
     </analyzer>
     <analyzer type="query">
       <tokenizer name="standard"/>
       <filter words="stopwords.txt" ignoreCase="true" name="stop"/>
       <filter synonyms="synonyms.txt" ignoreCase="true" expand="true" name="synonymGraph"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
     </analyzer>
   </fieldType>
   <fieldType name="text_general_rev" class="solr.TextField" positionIncrementGap="100">
@@ -294,6 +303,7 @@
       <tokenizer name="standard"/>
       <filter words="stopwords.txt" ignoreCase="true" name="stop"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
       <filter maxPosQuestion="2" name="reversedWildcard" maxFractionAsterisk="0.33" maxPosAsterisk="3" withOriginal="true"/>
     </analyzer>
     <analyzer type="query">
@@ -301,6 +311,7 @@
       <filter synonyms="synonyms.txt" ignoreCase="true" expand="true" name="synonymGraph"/>
       <filter words="stopwords.txt" ignoreCase="true" name="stop"/>
       <filter name="lowercase"/>
+      <filter name="asciifolding"/>
     </analyzer>
   </fieldType>
   <fieldType name="text_gl" class="solr.TextField" positionIncrementGap="100">
