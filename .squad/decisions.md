@@ -9344,3 +9344,309 @@ One performance note: sequential batch updates for large document sets (~100s fo
 - Future: consider chunked async execution for batch operations in v1.11+.
 
 ---
+
+# Decision: Release Process — PR-to-Main Workflow Required
+
+**Date:** 2026-03-22  
+**Author:** Ripley (Lead)  
+**Status:** Approved and Implemented  
+**Reference:** Validation in v1.11.0 release workflow
+
+## Context
+
+v1.11.0 release workflow had an initial failure: a local merge commit was created and tagged before the PR merged to main. The Release workflow correctly rejected the tag because it was not reachable from main. This failure prompted clarification of the release process.
+
+## Decision
+
+**All releases MUST follow this workflow:**
+
+1. **Preparation (on `dev`):** Update VERSION + CHANGELOG, commit to dev
+2. **Create PR:** `dev` → `main` with all CI checks required (unit tests, lint, security, integration E2E)
+3. **Merge PR:** After all checks pass, merge as a regular merge commit (not squash)
+4. **Tag on main:** Create annotated tag ON the main branch after PR merges
+5. **Publish:** Release workflow automatically builds, packages, and publishes GitHub release
+
+**Critical constraint:** Tags must only be created on commits reachable from `main`. Never tag `dev` before the PR merges.
+
+## Rationale
+
+### The v1.11.0 Failure
+
+1. A merge commit was created locally: `git merge dev` (on developer's machine)
+2. A tag was created: `git tag vX.Y.Z` (on the merge commit, not yet on main)
+3. The tag was pushed: `git push origin vX.Y.Z`
+4. **Release workflow ran and FAILED:** The tag commit was not reachable from main (still ahead of main by the merge commit)
+5. **Consequence:** Tag had to be deleted, GitHub release deleted, and PR #854 created to properly merge to main
+
+### Root Cause
+
+Main branch has protected rules requiring:
+- PR required (not direct push)
+- All CI checks must pass
+- No force push
+
+These rules ensure quality, but they mean the tag must come AFTER the PR merges, when the commit becomes reachable from main.
+
+### Why This Matters
+
+The Release workflow validates that tags point to commits reachable from main. This is correct because:
+1. It prevents tagging development code
+2. It ensures all CI checks passed before the release
+3. It guarantees the release was properly reviewed via a PR
+
+## Implementation
+
+See `docs/deployment/release-checklist.md` for step-by-step instructions.
+
+**Tag on Main (correct approach):**
+```bash
+git fetch origin main
+git tag -a vX.Y.Z -m "Release vX.Y.Z" origin/main
+git push origin vX.Y.Z
+```
+
+## Impact
+
+- **Ripley (Lead):** Owns release decisions
+- **Brett (CI/CD):** Maintains Release workflow and branch protection rules
+- **Newt (Docs):** Documents release process
+- **All team:** Follows this process for all releases
+
+## Tradeoffs
+
+### Gains
+- **Safety:** Branch protection enforces the process
+- **Traceability:** Release history is clear in git
+- **Automation:** No manual GitHub release creation needed
+- **Consistency:** Same process every time
+
+### Costs
+- **Speed:** One extra approval cycle (the PR review)
+- **Flexibility:** Cannot tag arbitrary commits
+
+**Tradeoff is acceptable:** Release safety > release speed.
+
+## Validation
+
+v1.11.0 release successfully validated this process:
+- All PRs created with dev as head, main as base
+- All CI checks passed before merging
+- Tag created on main post-merge
+- Release workflow published successfully
+
+---
+
+# Decision: Always Render Page Titles Unconditionally
+
+**By:** Dallas (Frontend Dev)  
+**Date:** 2026-03-22  
+**Context:** PR #856 (E2E Stats Page Fix)  
+**Status:** Implemented  
+
+## Decision
+
+Page title elements (`.page-title`, `.status-title`, `.stats-page-title`, etc.) that serve as E2E test selectors **must always be rendered**, even during loading and error states.
+
+Components should follow the `LibraryPage` pattern:
+1. Render the header with the title unconditionally
+2. Conditionally render loading/error/data content below it
+
+## Rationale
+
+`CollectionStats` used early returns for loading/error states that skipped the title element entirely. This caused the Playwright E2E navigation test to fail when the stats API was slow in the Docker Compose environment. 
+
+By making the title always present, E2E selectors remain stable regardless of backend latency. The test can find the title before data is loaded.
+
+## Impact
+
+- `CollectionStats.tsx` fixed in PR #856 ✅
+- `IndexingStatus.tsx` has the same pattern and should be updated proactively (`.status-title` is also a test selector)
+- Future page components should follow this pattern
+
+## Pattern Example
+
+```tsx
+// ✅ CORRECT: Always render title
+export function MyPage() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadData().then(setData).catch(setError).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <div className="page-title">My Page</div>
+      {loading && <p>Loading...</p>}
+      {error && <p>Error: {error}</p>}
+      {data && <DataDisplay data={data} />}
+    </div>
+  );
+}
+```
+
+---
+# Decision: Skills Database Pruning (49 → 34)
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-03-21  
+**Status:** IMPLEMENTED  
+**Commit:** e66feff (chore: prune skills database from 49 to 34 high-value skills)
+
+## Context
+
+The skills database had grown to 49 entries across v1.0–v1.11 releases. Many skills were:
+- **Unvalidated:** "confidence: medium, not yet validated" (e.g., milestone-branching-strategy)
+- **One-time processes:** Process docs that won't recur (e.g., i18n-extraction-workflow for v1.6.0–v1.7.0)
+- **Deprecated:** Refer to removed systems (e.g., ci-coverage-setup referenced removed admin service)
+- **Too generic:** Software engineering first principles, not aithena-specific (e.g., tdd-clean-code, project-conventions)
+- **Overlapping:** Duplicate/near-duplicate patterns (e.g., 2 hybrid-search skills vs. 1 definitive pattern)
+
+Skills database had become a burden for onboarding: which 49 skills matter?
+
+**Request:** Prune aggressively to keep only high-value, battle-tested patterns. Target: ~20–25 skills.
+
+## Decision
+
+**Prune from 49 → 34 skills. Aggressive strategy: if a skill is marginal, remove it.**
+
+### Skills Removed (15 total)
+
+**Unvalidated strategies (3):**
+- `milestone-branching-strategy` — planned for v1.11.0 but never executed; team still uses dev branch
+- `smoke-testing` — low-confidence local dev pattern; rarely used
+- `ci-coverage-setup` — config reference table is stale (references removed admin service)
+
+**One-time process docs (4):**
+- `i18n-extraction-workflow` — v1.6.0–v1.7.0 specific; i18n now mature, won't recur
+- `lead-retrospective` — Ripley-only procedural skill; belongs in charter, not team skills
+- `copilot-review-to-issues` — v1.10.1 triage process for Copilot PRs; one-time issue conversion
+- `reskill` — meta-skill about reskilling itself; too self-referential
+
+**Too generic (2):**
+- `project-conventions` — belongs in team.md/README, not a skill
+- `tdd-clean-code` — generic software engineering, not aithena-specific
+
+**Removed system references (2):**
+- `dependabot-triage-routing` — operational routing for Brett alone; belongs in Brett's charter
+- `ralph-dependency-check` — trivial coordinator rule; belongs in Ralph's charter
+
+**Generic conventions (1):**
+- `squad-pr-workflow` — squad branching conventions belong in squad root docs or team.md
+
+**Consolidated skills (3):**
+- `docker-health-checks` — subsumed by docker-compose-operations and solrcloud-docker-operations
+- `hybrid-search-parent-chunk` — merged into solr-parent-chunk-model
+- `hybrid-search-patterns` → merged into solr-parent-chunk-model
+
+### Consolidation Details
+
+**solr-parent-chunk-model** (expanded):
+- Now includes parent-chunk data model (existing)
+- PLUS hybrid search implementation (RRF fusion, kNN rules, embedding integration, timeout alignment)
+- PLUS fallback degradation patterns
+- Unified skill: "Parent/chunk document architecture and hybrid search implementation"
+- Authors: Ash (model) + Ash (implementation patterns)
+
+**Result: 34 remaining skills**
+
+## Impact
+
+### Team (onboarding perspective)
+- **Clearer signal:** 34 battlefield-proven skills vs. 49 mixed-confidence patterns
+- **Faster onboarding:** Agents read the 34 skills that matter, not 49 with unclear status
+- **Ownership clarity:** Every remaining skill has clear ownership (Parker, Dallas, Lambert, Ash, Brett, Kane, Ripley)
+
+### Removed content ownership
+- Skills removed from team-wide docs → migrated to agent charters (Ripley, Ralph, Brett, Kane)
+- No knowledge loss; more appropriate home
+
+## Final Skill Inventory (34)
+
+**Core architecture & patterns (6):**
+- phase-gated-execution
+- solr-parent-chunk-model (hybrid search + parent-chunk)
+- solr-pdf-indexing
+- http-wrapper-services
+- api-contract-alignment
+- pdf-extraction-dual-tool
+
+**Search & embeddings (1):**
+- solr-parent-chunk-model (covers all)
+
+**Testing (4):**
+- pytest-aithena-patterns
+- vitest-testing-patterns
+- playwright-e2e-aithena
+- path-metadata-tdd
+
+**Backend APIs & infrastructure (5):**
+- fastapi-auth-patterns
+- fastapi-query-params
+- redis-connection-patterns
+- pika-rabbitmq-fastapi
+- logging-security
+
+**Frontend (2):**
+- react-frontend-patterns
+- accessibility-wcag-react
+
+**Docker & infrastructure (3):**
+- docker-compose-operations
+- solrcloud-docker-operations
+- bind-mount-permissions
+
+**Git & release (6):**
+- branch-protection-strict-mode
+- release-gate
+- release-tagging-process
+- multi-release-orchestration
+- pr-integration-gate
+- ci-gate-pattern
+
+**Quality & process (3):**
+- milestone-gate-review
+- milestone-wave-execution
+- agent-debugging-discipline
+
+**Security & scanning (2):**
+- security-scanning-baseline
+- workflow-secrets-security
+- ci-workflow-security
+
+**Metadata extraction (2):**
+- path-metadata-heuristics
+- solr-pdf-indexing
+
+**Infrastructure (1):**
+- nginx-reverse-proxy
+
+## Acceptance Criteria
+
+- [x] Identified 15 skills for removal with clear justification
+- [x] Consolidated overlapping patterns into unified skills
+- [x] Removed all skills; consolidated solr-parent-chunk-model
+- [x] Committed changes (commit e66feff)
+- [x] Updated Ripley history.md with session learnings
+- [x] Final count: 34 high-confidence, team-wide skills
+
+## Rationale
+
+Aggressive pruning is better than slow accumulation. A 49-skill database created decision fatigue on onboarding. The 34 remaining skills are:
+- **Validated:** Every skill has been proven in at least one release cycle
+- **Owned:** Each skill has a clear author/maintainer
+- **Actionable:** Every skill answers "how do we do this in aithena?" not "what's a general best practice?"
+- **Distinct:** No overlaps; consolidated patterns into single, authoritative skills
+
+## References
+
+- `.squad/skills/` — 34 remaining skill directories
+- `.squad/agents/ripley/history.md` — Full session notes
+
+## Follow-Up Actions
+
+- Squad members should review the 34 skills in context of their charters
+- Onboarding guide should link to the 34-skill set, not the full directory
+- Next reskill cycle: apply same aggressive pruning (remove any skill that hasn't been cited in 2+ releases)
