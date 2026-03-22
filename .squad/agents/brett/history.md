@@ -154,3 +154,12 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - `auth_request` works inside regex location blocks — can gate static file access with the same subrequest auth used for proxy locations.
 - Both `docker-compose.yml` and `docker-compose.prod.yml` need volume mounts updated in parallel — prod compose is a separate file, not an overlay of the dev one.
 - The `document-data` volume was previously only mounted in application services (solr-search, document-lister, document-indexer, admin); adding it to nginx enables direct static serving without proxy overhead.
+
+### Release Strategy Asymmetry Analysis (2026-03-26, #860)
+- **Change frequency is highly asymmetric** across services: in v1.8.0→v1.11.0 (4 releases), 78% of commits touched only 2 services (aithena-ui: 30, solr-search: 38), while 3 services had 0-2 commits total.
+- **embeddings-server is a rebuild bottleneck:** 9GB image with ML model, 8-12 min build time, but only 1 commit in 4 releases — rebuilt 3 times unnecessarily.
+- **Current unified versioning** (all services share version) is simple but wastes ~40-60% of build time on unchanged services.
+- **Change-detection CI** (Strategy C) is the lowest-risk improvement: detect changed services via `git diff`, skip builds for unchanged ones, retag previous images — reduces build time by 40% with 1 week migration effort.
+- **Independent service versioning** (Strategy A) is the long-term architecture for scaling beyond 10+ services, but requires API contract testing and version compatibility management — migration effort 2-3 weeks, high complexity.
+- **Tiered releases** (Strategy B) are a middle ground: classify services as Fast/Stable/Infrastructure tracks with different release cadences — reduces complexity vs full independent versioning but still requires track management.
+- **Short-term recommendation:** Change-detection CI + embeddings-server base image (pre-bake ML model) for immediate 40% build time savings with minimal risk.
