@@ -116,6 +116,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | 2026-07-25 | — | Certbot extraction to ssl overlay |
 | 2026-07-25 | — | setupdev.sh expansion (all dev tools) |
 | 2026-03-16 | — | Cleaned 44 stale branches; enabled auto-delete |
+| 2026-03-22 | #826/PR#847 | nginx static thumbnail serving (volume mount + /thumbnails/ location) |
 
 ---
 
@@ -139,3 +140,17 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - `solrcloud-docker-operations` — comprehensive, covers backup/restore/recovery
 - **Gap identified:** nginx patterns scattered across history; build context patterns not in a skill
 - **Gap identified:** Bind-mount permission patterns are the #1 recurring issue but only partially covered in docker-compose-operations
+
+## Learnings
+
+### CI Workflow Patterns for BCDR Validation (2026-07-25)
+- Restore scripts support `DRY_RUN=1` and `--dry-run` flags — CI can validate orchestrator logic without Docker or real backup data by creating a mock backup directory structure with placeholder files.
+- `restore.sh` exit code 2 = warnings (e.g., missing files in a tier) — acceptable in CI mock environments. Only exit code 1 is fatal.
+- Stress tests use pytest markers (`indexing`, `search`, `concurrent`, `docker`) and a `stack_healthy` fixture that gracefully skips when services are unreachable — `--collect-only` validates infrastructure without a live stack.
+- `test_locust_smoke.py` is always safe to run in CI (no stack needed) — useful as a baseline sanity check in the stress workflow.
+
+### nginx Static File Serving from Docker Volumes (2026-03-22)
+- nginx can serve static files directly from named Docker volumes — mount as read-only and use `alias` with regex capture groups to map URL paths to filesystem paths.
+- `auth_request` works inside regex location blocks — can gate static file access with the same subrequest auth used for proxy locations.
+- Both `docker-compose.yml` and `docker-compose.prod.yml` need volume mounts updated in parallel — prod compose is a separate file, not an overlay of the dev one.
+- The `document-data` volume was previously only mounted in application services (solr-search, document-lister, document-indexer, admin); adding it to nginx enables direct static serving without proxy overhead.

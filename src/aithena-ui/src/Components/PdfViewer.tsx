@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
-import { FileText } from 'lucide-react';
+import { Download, ExternalLink, FileText, Maximize2, Minimize2, X } from 'lucide-react';
 
 import { resolveDocumentUrl } from '../api';
 import { BookResult } from '../hooks/search';
@@ -16,9 +16,14 @@ const FOCUSABLE_SELECTOR =
 const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
   const intl = useIntl();
   const [loadError, setLoadError] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => !prev);
+  }, []);
 
   // Reset load error when document URL changes - this is a legitimate
   // sync-with-props pattern for resetting error state on navigation
@@ -41,7 +46,11 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        if (isFullscreen) {
+          setIsFullscreen(false);
+        } else {
+          onClose();
+        }
         return;
       }
 
@@ -81,7 +90,7 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isFullscreen]);
 
   const pdfUrl = resolveDocumentUrl(result.document_url);
   const pageStart = result.pages?.[0];
@@ -91,34 +100,66 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
       : pdfUrl
     : null;
 
+  const overlayClass = `pdf-viewer-overlay${isFullscreen ? ' pdf-viewer-overlay--fullscreen' : ''}`;
+  const panelClass = `pdf-viewer-panel${isFullscreen ? ' pdf-viewer-panel--fullscreen' : ''}`;
+
   return (
-    <div className="pdf-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <div ref={panelRef} className="pdf-viewer-panel" tabIndex={-1}>
-        <div className="pdf-viewer-header">
-          <div className="pdf-viewer-title">
+    <div className={overlayClass} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div ref={panelRef} className={panelClass} tabIndex={-1}>
+        <div className="pdf-viewer-toolbar">
+          <div className="pdf-viewer-toolbar__title">
             <span className="pdf-viewer-icon" aria-hidden="true">
               <FileText size={19} />
             </span>
-            <div>
-              <strong id={titleId}>
-                {result.title || intl.formatMessage({ id: 'pdf.document' })}
-              </strong>
-              {result.author && (
-                <span className="pdf-viewer-author">
-                  {intl.formatMessage({ id: 'pdf.authorSeparator' }, { author: result.author })}
-                </span>
-              )}
-            </div>
+            <strong id={titleId}>
+              {result.title || intl.formatMessage({ id: 'pdf.document' })}
+            </strong>
           </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            className="pdf-viewer-close"
-            onClick={onClose}
-            aria-label={intl.formatMessage({ id: 'pdf.closeViewer' })}
-          >
-            ✕
-          </button>
+
+          <div className="pdf-viewer-toolbar__actions">
+            <button
+              type="button"
+              className="pdf-viewer-toolbar__btn"
+              onClick={toggleFullscreen}
+              aria-label={intl.formatMessage({
+                id: isFullscreen ? 'pdf.exitFullscreen' : 'pdf.enterFullscreen',
+              })}
+            >
+              {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            </button>
+
+            {pdfUrl && (
+              <>
+                <a
+                  href={pdfUrl}
+                  download
+                  className="pdf-viewer-toolbar__btn"
+                  aria-label={intl.formatMessage({ id: 'pdf.download' })}
+                >
+                  <Download size={18} />
+                </a>
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pdf-viewer-toolbar__btn"
+                  aria-label={intl.formatMessage({ id: 'pdf.openInNewWindow' })}
+                >
+                  <ExternalLink size={18} />
+                </a>
+              </>
+            )}
+
+            <button
+              ref={closeButtonRef}
+              type="button"
+              className="pdf-viewer-toolbar__btn pdf-viewer-toolbar__btn--close"
+              onClick={onClose}
+              aria-label={intl.formatMessage({ id: 'pdf.closeViewer' })}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="pdf-viewer-body">

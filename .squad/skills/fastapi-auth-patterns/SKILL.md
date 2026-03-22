@@ -3,10 +3,10 @@ name: "fastapi-auth-patterns"
 description: "JWT authentication, cookie-based SSO, RBAC, rate limiting, and password management patterns for multi-service FastAPI applications"
 domain: "authentication, authorization, security"
 confidence: "high"
-source: "earned — implemented auth module in solr-search, SSO with admin, fixed cookie lifecycle bugs"
+source: "earned — implemented auth module in solr-search, SSO with admin, fixed cookie lifecycle bugs, v1.10.1 auth hardening confirmed"
 author: "Parker"
 created: "2026-Q2"
-last_validated: "2026-03-20"
+last_validated: "2026-03-21"
 ---
 
 ## Context

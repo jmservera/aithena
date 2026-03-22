@@ -29,8 +29,11 @@ SOLR_FIELD_LIST = [
     "folder_path_s",
     "page_count_i",
     "file_size_l",
+    "thumbnail_url_s",
     "page_start_i",
     "page_end_i",
+    "chunk_text_t",
+    "parent_id_s",
     "score",
 ]
 
@@ -224,6 +227,10 @@ def normalize_book(
         start = page_start if page_start is not None else page_end
         end = page_end if page_end is not None else page_start
         pages = [start, end]
+
+    is_chunk = document.get("parent_id_s") is not None
+    chunk_text = document.get("chunk_text_t") if is_chunk else None
+
     return {
         "id": document_id,
         "title": document.get("title_s") or Path(document.get("file_path_s", "")).stem,
@@ -237,9 +244,14 @@ def normalize_book(
         "page_count": document.get("page_count_i"),
         "file_size": document.get("file_size_l"),
         "pages": pages,
+        "is_chunk": is_chunk,
+        "chunk_text": chunk_text,
+        "page_start": page_start,
+        "page_end": page_end,
         "score": document.get("score"),
         "highlights": collect_highlights(document_id, highlighting),
         "document_url": document_url,
+        "thumbnail_url": document.get("thumbnail_url_s"),
     }
 
 
