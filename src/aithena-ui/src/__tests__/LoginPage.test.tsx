@@ -81,10 +81,12 @@ function renderLoginPageWithProvider(
 describe('LoginPage', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
   it('renders the login form', () => {
@@ -93,6 +95,8 @@ describe('LoginPage', () => {
     expect(screen.getByRole('heading', { name: /sign in to aithena/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /remember me/i })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /remember me/i })).not.toBeChecked();
     expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled();
   });
 
@@ -139,7 +143,7 @@ describe('LoginPage', () => {
     });
   });
 
-  it('stores the token when the login form succeeds through the auth provider', async () => {
+  it('stores the token in sessionStorage when the login form succeeds (remember-me unchecked)', async () => {
     const fetchMock = vi
       .fn()
       // Mount: cookie recovery attempt (no cookie in test env → 401)
@@ -158,6 +162,44 @@ describe('LoginPage', () => {
 
     await user.type(screen.getByLabelText(/username/i), 'dallas');
     await user.type(screen.getByLabelText(/password/i), 'secret');
+    // Do NOT check "Remember me" — default is unchecked
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Search page')).toBeInTheDocument();
+    });
+
+    expect(sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe('jwt-123');
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/auth/login'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ username: 'dallas', password: 'secret', remember_me: false }),
+      })
+    );
+  });
+
+  it('stores the token in localStorage when "Remember me" is checked', async () => {
+    const fetchMock = vi
+      .fn()
+      // Mount: cookie recovery attempt (no cookie in test env → 401)
+      .mockResolvedValueOnce(mockJsonResponse({ detail: 'Not authenticated' }, 401))
+      // Login call
+      .mockResolvedValueOnce(mockJsonResponse(loginResponse));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    renderLoginPageWithProvider();
+
+    // Wait for cookie recovery to finish so the login form is interactive
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled();
+    });
+
+    await user.type(screen.getByLabelText(/username/i), 'dallas');
+    await user.type(screen.getByLabelText(/password/i), 'secret');
+    await user.click(screen.getByRole('checkbox', { name: /remember me/i }));
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -165,11 +207,12 @@ describe('LoginPage', () => {
     });
 
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe('jwt-123');
+    expect(sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/v1/auth/login'),
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ username: 'dallas', password: 'secret' }),
+        body: JSON.stringify({ username: 'dallas', password: 'secret', remember_me: true }),
       })
     );
   });
