@@ -28,6 +28,7 @@ export interface BookResult {
   chunk_text?: string;
   page_start?: number;
   page_end?: number;
+  thumbnail_url?: string | null;
 }
 
 export interface FacetValue {

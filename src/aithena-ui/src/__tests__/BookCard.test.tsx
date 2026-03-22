@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect } from 'vitest';
 
@@ -329,5 +329,81 @@ describe('BookCard – collection badge', () => {
     );
 
     expect(document.querySelector('.collection-badge')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Thumbnail display (#827)
+// ---------------------------------------------------------------------------
+
+describe('BookCard – thumbnail', () => {
+  const bookWithThumbnail: BookResult = {
+    ...baseBook,
+    thumbnail_url: '/thumbnails/react.jpg',
+  };
+
+  it('renders thumbnail image when thumbnail_url is present', () => {
+    render(
+      <IntlWrapper>
+        <BookCard book={bookWithThumbnail} />
+      </IntlWrapper>
+    );
+
+    const img = screen.getByRole('img', { name: bookWithThumbnail.title });
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute('src', '/thumbnails/react.jpg');
+    expect(img).toHaveAttribute('loading', 'lazy');
+    expect(img).toHaveClass('book-card-thumbnail');
+  });
+
+  it('renders placeholder when thumbnail_url is absent', () => {
+    render(
+      <IntlWrapper>
+        <BookCard book={baseBook} />
+      </IntlWrapper>
+    );
+
+    expect(screen.queryByRole('img', { name: baseBook.title })).not.toBeInTheDocument();
+    const placeholder = document.querySelector('.book-card-thumbnail--placeholder');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('renders placeholder when thumbnail_url is null', () => {
+    const bookNullThumb: BookResult = { ...baseBook, thumbnail_url: null };
+
+    render(
+      <IntlWrapper>
+        <BookCard book={bookNullThumb} />
+      </IntlWrapper>
+    );
+
+    expect(screen.queryByRole('img', { name: baseBook.title })).not.toBeInTheDocument();
+    expect(document.querySelector('.book-card-thumbnail--placeholder')).not.toBeNull();
+  });
+
+  it('falls back to placeholder on image load error', () => {
+    render(
+      <IntlWrapper>
+        <BookCard book={bookWithThumbnail} />
+      </IntlWrapper>
+    );
+
+    const img = screen.getByRole('img', { name: bookWithThumbnail.title });
+    fireEvent.error(img);
+
+    expect(screen.queryByRole('img', { name: bookWithThumbnail.title })).not.toBeInTheDocument();
+    expect(document.querySelector('.book-card-thumbnail--placeholder')).not.toBeNull();
+  });
+
+  it('uses book title as alt text for accessibility', () => {
+    render(
+      <IntlWrapper>
+        <BookCard book={bookWithThumbnail} />
+      </IntlWrapper>
+    );
+
+    const img = screen.getByRole('img', { name: 'React Patterns' });
+    expect(img).toHaveAttribute('alt', 'React Patterns');
   });
 });

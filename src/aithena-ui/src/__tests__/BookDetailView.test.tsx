@@ -862,4 +862,45 @@ describe('BookDetailView', () => {
       expect(screen.queryByText(/series:/i)).not.toBeInTheDocument();
     });
   });
+
+  describe('thumbnail display (#827)', () => {
+    const bookWithThumb: BookResult = {
+      ...mockBook,
+      thumbnail_url: '/thumbnails/advanced-systems.jpg',
+    };
+
+    it('renders thumbnail image in detail header when thumbnail_url is present', () => {
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={bookWithThumb}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      const img = screen.getByRole('img', { name: bookWithThumb.title });
+      expect(img).toBeInTheDocument();
+      expect(img).toHaveAttribute('src', '/thumbnails/advanced-systems.jpg');
+      expect(img).toHaveClass('book-detail-header__thumbnail');
+      expect(img).toHaveAttribute('loading', 'lazy');
+    });
+
+    it('renders placeholder when no thumbnail_url', () => {
+      renderWithProviders(
+        <BookDetailView
+          bookId="book-123"
+          initialData={mockBook}
+          onClose={vi.fn()}
+          onOpenPdf={vi.fn()}
+          onSelectSimilarBook={vi.fn()}
+        />
+      );
+
+      expect(screen.queryByRole('img', { name: mockBook.title })).not.toBeInTheDocument();
+      const placeholder = document.querySelector('.book-detail-header__thumbnail--placeholder');
+      expect(placeholder).not.toBeNull();
+    });
+  });
 });
