@@ -6,12 +6,14 @@ ARG BUILD_DATE=unknown
 FROM python:3.12-slim AS builder
 
 ARG MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2
+ARG HF_TOKEN
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MODEL_NAME=${MODEL_NAME} \
     HF_HOME=/models/huggingface \
-    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
+    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
+    HF_TOKEN=${HF_TOKEN}
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
