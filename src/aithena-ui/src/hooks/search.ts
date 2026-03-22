@@ -18,6 +18,9 @@ export interface BookResult {
   page_count?: number;
   pages?: [number, number] | null;
   file_path?: string;
+  folder_path?: string;
+  file_size?: number;
+  score?: number;
   highlights?: string[];
   document_url?: string | null;
   in_collections?: number;
