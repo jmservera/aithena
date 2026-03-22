@@ -15,6 +15,8 @@ os.environ.setdefault("AUTH_DB_PATH", "/tmp/test-auth.db")
 os.environ.setdefault("AUTH_JWT_SECRET", "test-auth-secret")
 os.environ.setdefault("AUTH_JWT_TTL", "24h")
 os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
+os.environ.setdefault("COLLECTIONS_DB_PATH", "/tmp/test-collections.db")  # noqa: S108
+os.environ.setdefault("BASE_PATH", "/tmp/test_data")  # noqa: S108
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -48,19 +50,16 @@ def mock_rabbitmq():
 @pytest.fixture
 def upload_dir(tmp_path):
     """Use a temporary upload directory for tests."""
-    from config import settings
-    from main import upload_rate_limiter
+    import main
+
+    # Use main.settings (not config.settings) to survive importlib.reload(config)
+    original = main.settings.upload_dir
     upload_path = tmp_path / "uploads"
     upload_path.mkdir(exist_ok=True)
-    # Replace the upload_dir in settings by using object.__setattr__ on frozen dataclass
-    object.__setattr__(settings, "upload_dir", upload_path)
-    # Reset rate limiter for each test
-    upload_rate_limiter.requests.clear()
+    object.__setattr__(main.settings, "upload_dir", upload_path)
+    main.upload_rate_limiter.requests.clear()
     yield upload_path
-    # Cleanup
-    import shutil
-    if upload_path.exists():
-        shutil.rmtree(upload_path)
+    object.__setattr__(main.settings, "upload_dir", original)
 
 
 def test_upload_valid_pdf(client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir):
@@ -127,10 +126,10 @@ def test_upload_invalid_pdf_content(client: TestClient, upload_dir):
 
 def test_upload_file_too_large(client: TestClient, upload_dir):
     """Test uploading a file exceeding size limit."""
-    from config import settings
-    # Temporarily change the limit
-    original_limit = settings.max_upload_size_mb
-    object.__setattr__(settings, "max_upload_size_mb", 1)
+    import main
+
+    original_limit = main.settings.max_upload_size_mb
+    object.__setattr__(main.settings, "max_upload_size_mb", 1)
 
     try:
         large_content = b"%PDF-1.4\n" + b"X" * (2 * 1024 * 1024)  # 2MB
@@ -143,7 +142,7 @@ def test_upload_file_too_large(client: TestClient, upload_dir):
         assert response.status_code == 413
         assert "exceeds" in response.json()["detail"]
     finally:
-        object.__setattr__(settings, "max_upload_size_mb", original_limit)
+        object.__setattr__(main.settings, "max_upload_size_mb", original_limit)
 
 
 def test_upload_filename_sanitization(
@@ -214,7 +213,7 @@ def test_upload_rabbitmq_failure(client: TestClient, valid_pdf_content: bytes, u
 
 def test_upload_storage_failure(client: TestClient, valid_pdf_content: bytes):
     """Test upload when file write fails."""
-    from config import settings
+    import main
 
     mock_path = Mock()
     mock_path.mkdir = Mock()
@@ -222,9 +221,8 @@ def test_upload_storage_failure(client: TestClient, valid_pdf_content: bytes):
     mock_path.exists.return_value = False
     mock_path.write_bytes.side_effect = OSError("Disk full")
 
-    original_dir = settings.upload_dir
-    object.__setattr__(settings, "upload_dir", mock_path)
-
+    original_dir = main.settings.upload_dir
+    object.__setattr__(main.settings, "upload_dir", mock_path)
     try:
         response = client.post(
             "/v1/upload",
@@ -234,7 +232,7 @@ def test_upload_storage_failure(client: TestClient, valid_pdf_content: bytes):
         assert response.status_code == 500
         assert "Failed to save" in response.json()["detail"]
     finally:
-        object.__setattr__(settings, "upload_dir", original_dir)
+        object.__setattr__(main.settings, "upload_dir", original_dir)
 
 
 def test_upload_special_characters_in_filename(
