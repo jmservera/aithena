@@ -26,9 +26,13 @@ services:
   nginx:
     ports:
       - "443:443"
+    environment:
+      - NGINX_HOST=${NGINX_HOST:?Set NGINX_HOST to your domain for TLS (e.g. NGINX_HOST=aithena.example.com)}
+      - NGINX_ENVSUBST_FILTER=$$NGINX_HOST
     volumes:
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
+      - ./src/nginx/ssl.conf.template:/etc/nginx/templates/ssl.conf.template:ro
     command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
 
   certbot:
@@ -38,6 +42,8 @@ services:
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - frontend
 
 volumes:
   certbot-data-conf:
