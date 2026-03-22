@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.12.1 Release Notes](release-notes/v1.12.1.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.12.2 Release Notes](release-notes/v1.12.2.md).
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
@@ -9,6 +9,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 **v1.11.0 introduces richer book discovery:** search results now show chunk text previews with page ranges, book cards open a detailed view with richer metadata and similar books, the PDF viewer toolbar now includes fullscreen and download actions, and both search and library views show document thumbnails.
 
 **v1.12.1 refines UX:** collections now use real backend data by default, login form adds "Remember me" checkbox for session persistence, search result text previews are truncated for improved readability, and thumbnail generation is fixed in Alpine containers.
+
+**v1.12.2 is a search hotfix:** semantic and hybrid search are restored after the embeddings service packaging regression reported in v1.12.1.
 
 ## Getting started
 
@@ -166,6 +168,7 @@ Important behavior in the shipped UI:
 - **Keyword** is the default mode when the page opens.
 - Switching modes keeps your current query but resets results back to page 1.
 - The current mode is shown again next to the result count as a badge.
+- v1.12.2 restores normal semantic and hybrid search behavior after the v1.12.1 embeddings packaging regression.
 - Semantic and hybrid search require a real query. If embeddings are not ready yet, the page shows an inline error instead of silently failing.
 
 ### What your keywords can match
