@@ -26,7 +26,6 @@ services:
 
   zoo1:
     ports:
-      - "18080:8080" # ZooKeeper AdminServer for node 1
       - "2181:2181" # ZooKeeper client port for node 1
 
   zoo2:
