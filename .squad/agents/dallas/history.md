@@ -188,6 +188,18 @@ src/aithena-ui/src/
 
 **CSS fullscreen mode:** Separate modifier classes (`--fullscreen`) on both overlay and panel. Panel goes `width: 100vw; height: 100vh`, overlay background becomes transparent. No JS DOM manipulation needed — pure CSS class toggling.
 
+### Decouple SimilarBooks from PDF Viewer (#820 — PR #841)
+
+**State separation pattern:** Introduced `focusedBookId` state alongside `selectedBook` in SearchPage and LibraryPage. `selectedBook` controls the PDF viewer; `focusedBookId` controls the SimilarBooks panel. This allows similar books to render independently of the PDF viewer state and persist after closing the viewer.
+
+**BookCard onSelect prop:** Added `onSelect?: (book: BookResult) => void` to BookCard. When provided, the `<article>` element gets `role="button"`, `tabIndex={0}`, keyboard handlers (Enter/Space), and a `.book-card--selectable` CSS class with cursor/hover states. Interactive children (checkbox, menu, Open PDF button) use `stopPropagation` to prevent double-triggering.
+
+**z-index layering:** `.similar-books-panel` gets `position: relative; z-index: 1001` to sit above the PDF viewer overlay (`z-index: 1000`). This ensures the panel is never obscured by the dark overlay when both are visible.
+
+**a11y lint with conditional roles:** ESLint's `jsx-a11y/no-noninteractive-element-interactions` fires on `<article>` with event handlers. Since we conditionally apply `role="button"`, an inline `eslint-disable` comment is appropriate. The `stopPropagation` wrapper divs need `role="presentation"` + `onKeyDown` handler to satisfy `jsx-a11y/click-events-have-key-events` and `jsx-a11y/no-static-element-interactions`.
+
+**Testing decoupled components:** When a parent element has `role="button"` and contains child buttons, `getByRole('button', { name: ... })` may match multiple elements. Use `getByLabelText` for specific child buttons instead.
+
 ### Chunk Text Display (#809, 2026-07-17)
 
 **Feature:** Display vector search chunk text snippets in BookCard.
