@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { BookOpen, ExternalLink, FileText, Pencil, X } from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useBookDetail } from '../hooks/bookDetail';
 import { BookResult } from '../hooks/search';
+import { useMetadataEdit, MetadataFormValues } from '../hooks/useMetadataEdit';
 import SimilarBooks from './SimilarBooks';
 
 interface BookDetailViewProps {
@@ -24,6 +25,330 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/* ── Inline edit form sub-components ───────────────────────────── */
+
+interface InlineTextFieldProps {
+  id: string;
+  label: string;
+  value: string;
+  maxLength: number;
+  error?: string;
+  onChange: (value: string) => void;
+}
+
+function InlineTextField({ id, label, value, maxLength, error, onChange }: InlineTextFieldProps) {
+  return (
+    <div className="meta-edit-field">
+      <label htmlFor={id} className="meta-edit-label">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="text"
+        className={`meta-edit-input${error ? ' meta-edit-input--error' : ''}`}
+        value={value}
+        maxLength={maxLength}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && (
+        <span className="meta-edit-error" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface InlineYearFieldProps {
+  id: string;
+  label: string;
+  value: string;
+  error?: string;
+  onChange: (value: string) => void;
+}
+
+function InlineYearField({ id, label, value, error, onChange }: InlineYearFieldProps) {
+  return (
+    <div className="meta-edit-field">
+      <label htmlFor={id} className="meta-edit-label">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        className={`meta-edit-input meta-edit-input--year${error ? ' meta-edit-input--error' : ''}`}
+        value={value}
+        min={1000}
+        max={2099}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && (
+        <span className="meta-edit-error" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface InlineComboboxFieldProps {
+  id: string;
+  label: string;
+  value: string;
+  options: string[];
+  maxLength: number;
+  error?: string;
+  onChange: (value: string) => void;
+}
+
+function InlineComboboxField({
+  id,
+  label,
+  value,
+  options,
+  maxLength,
+  error,
+  onChange,
+}: InlineComboboxFieldProps) {
+  const [open, setOpen] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const listboxId = `${id}-listbox`;
+
+  const filtered = useMemo(
+    () =>
+      value.trim() ? options.filter((o) => o.toLowerCase().includes(value.toLowerCase())) : options,
+    [options, value]
+  );
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHighlightIndex(-1);
+  }, [filtered.length]);
+
+  const selectOption = useCallback(
+    (option: string) => {
+      onChange(option);
+      setOpen(false);
+    },
+    [onChange]
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        setOpen(true);
+        e.preventDefault();
+        return;
+      }
+      if (!open) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1));
+      } else if ((e.key === 'Enter' || e.key === 'Tab') && highlightIndex >= 0) {
+        e.preventDefault();
+        selectOption(filtered[highlightIndex]);
+      } else if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    },
+    [open, filtered, highlightIndex, selectOption]
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="meta-edit-field" ref={wrapperRef}>
+      <label htmlFor={id} className="meta-edit-label">
+        {label}
+      </label>
+      <div className="meta-edit-combobox-wrapper">
+        <input
+          id={id}
+          type="text"
+          role="combobox"
+          className={`meta-edit-input${error ? ' meta-edit-input--error' : ''}`}
+          value={value}
+          maxLength={maxLength}
+          autoComplete="off"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-activedescendant={highlightIndex >= 0 ? `${id}-option-${highlightIndex}` : undefined}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+        />
+        {open && filtered.length > 0 && (
+          <ul id={listboxId} className="meta-edit-listbox" role="listbox">
+            {filtered.map((option, idx) => (
+              <li
+                key={option}
+                id={`${id}-option-${idx}`}
+                role="option"
+                className={`meta-edit-option${idx === highlightIndex ? ' meta-edit-option--active' : ''}`}
+                aria-selected={idx === highlightIndex}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectOption(option);
+                }}
+                onMouseEnter={() => setHighlightIndex(idx)}
+              >
+                {option}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {error && (
+        <span className="meta-edit-error" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ── Inline edit form ──────────────────────────────────────────── */
+
+interface InlineEditFormProps {
+  book: BookResult;
+  onSaved: (updated: BookResult) => void;
+  onCancel: () => void;
+}
+
+function InlineEditForm({ book, onSaved, onCancel }: InlineEditFormProps) {
+  const intl = useIntl();
+  const [toast, setToast] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const handleSaved = useCallback(
+    (updated: BookResult) => {
+      setToast(true);
+      setTimeout(() => {
+        if (mountedRef.current) {
+          onSaved(updated);
+        }
+      }, 600);
+    },
+    [onSaved]
+  );
+
+  const { values, errors, saving, apiError, changed, facetOptions, setField, save } =
+    useMetadataEdit(book, handleSaved);
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      void save();
+    },
+    [save]
+  );
+
+  return (
+    <div className="book-detail-edit">
+      {toast && (
+        <div className="meta-edit-toast" role="status" aria-live="polite">
+          {intl.formatMessage({ id: 'metadataEdit.success' })}
+        </div>
+      )}
+
+      {apiError && (
+        <div className="meta-edit-api-error" role="alert">
+          {apiError}
+        </div>
+      )}
+
+      <form className="meta-edit-form" onSubmit={handleSubmit} noValidate>
+        <InlineTextField
+          id="book-detail-edit-title"
+          label={intl.formatMessage({ id: 'metadataEdit.fieldTitle' })}
+          value={values.title}
+          maxLength={255}
+          error={errors.title}
+          onChange={(v: string) => setField('title' as keyof MetadataFormValues, v)}
+        />
+        <InlineTextField
+          id="book-detail-edit-author"
+          label={intl.formatMessage({ id: 'metadataEdit.fieldAuthor' })}
+          value={values.author}
+          maxLength={255}
+          error={errors.author}
+          onChange={(v: string) => setField('author' as keyof MetadataFormValues, v)}
+        />
+        <InlineYearField
+          id="book-detail-edit-year"
+          label={intl.formatMessage({ id: 'metadataEdit.fieldYear' })}
+          value={values.year}
+          error={errors.year}
+          onChange={(v: string) => setField('year' as keyof MetadataFormValues, v)}
+        />
+        <InlineComboboxField
+          id="book-detail-edit-category"
+          label={intl.formatMessage({ id: 'metadataEdit.fieldCategory' })}
+          value={values.category}
+          options={facetOptions.category}
+          maxLength={100}
+          error={errors.category}
+          onChange={(v: string) => setField('category' as keyof MetadataFormValues, v)}
+        />
+        <InlineComboboxField
+          id="book-detail-edit-series"
+          label={intl.formatMessage({ id: 'metadataEdit.fieldSeries' })}
+          value={values.series}
+          options={facetOptions.series}
+          maxLength={100}
+          error={errors.series}
+          onChange={(v: string) => setField('series' as keyof MetadataFormValues, v)}
+        />
+
+        <div className="book-detail-edit__actions">
+          <button
+            type="button"
+            className="book-detail-actions__btn book-detail-actions__btn--secondary"
+            onClick={onCancel}
+            disabled={saving}
+          >
+            {intl.formatMessage({ id: 'metadataEdit.cancel' })}
+          </button>
+          <button
+            type="submit"
+            className="book-detail-actions__btn book-detail-actions__btn--primary"
+            disabled={!changed || saving}
+          >
+            {saving
+              ? intl.formatMessage({ id: 'metadataEdit.saving' })
+              : intl.formatMessage({ id: 'metadataEdit.save' })}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ── Main component ────────────────────────────────────────────── */
+
 function BookDetailView({
   bookId,
   initialData,
@@ -33,11 +358,12 @@ function BookDetailView({
 }: BookDetailViewProps) {
   const intl = useIntl();
   const { user } = useAuth();
-  const { book, loading, error } = useBookDetail(bookId, initialData);
+  const { book, loading, error, refresh } = useBookDetail(bookId, initialData);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const isAdmin = user?.role === 'admin';
 
@@ -57,7 +383,11 @@ function BookDetailView({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        if (editMode) {
+          setEditMode(false);
+        } else {
+          onClose();
+        }
         return;
       }
 
@@ -97,7 +427,7 @@ function BookDetailView({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, editMode]);
 
   const handleOpenPdf = useCallback(() => {
     if (book) {
@@ -114,6 +444,19 @@ function BookDetailView({
     },
     [onClose]
   );
+
+  const handleEditClick = useCallback(() => {
+    setEditMode(true);
+  }, []);
+
+  const handleEditCancel = useCallback(() => {
+    setEditMode(false);
+  }, []);
+
+  const handleEditSaved = useCallback(() => {
+    setEditMode(false);
+    refresh();
+  }, [refresh]);
 
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- backdrop dismiss is supplemental; ESC is the keyboard equivalent
@@ -164,89 +507,98 @@ function BookDetailView({
             </div>
           ) : book ? (
             <>
-              {/* Header section */}
-              <div className="book-detail-header">
-                <h2 className="book-detail-header__title">{book.title}</h2>
-                <p className="book-detail-header__author">
-                  {book.author || intl.formatMessage({ id: 'book.unknownAuthor' })}
-                </p>
-                {book.year && <span className="book-detail-header__year">{book.year}</span>}
-              </div>
+              {editMode ? (
+                <InlineEditForm book={book} onSaved={handleEditSaved} onCancel={handleEditCancel} />
+              ) : (
+                <>
+                  {/* Header section */}
+                  <div className="book-detail-header">
+                    <h2 className="book-detail-header__title">{book.title}</h2>
+                    <p className="book-detail-header__author">
+                      {book.author || intl.formatMessage({ id: 'book.unknownAuthor' })}
+                    </p>
+                    {book.year && <span className="book-detail-header__year">{book.year}</span>}
+                  </div>
 
-              {/* Metadata grid */}
-              <div className="book-detail-meta">
-                {book.category && (
-                  <div className="book-detail-meta__item">
-                    <span className="book-detail-meta__label">
-                      {intl.formatMessage({ id: 'book.metaCategory' })}
-                    </span>
-                    <span className="book-detail-meta__value">{book.category}</span>
+                  {/* Metadata grid */}
+                  <div className="book-detail-meta">
+                    {book.category && (
+                      <div className="book-detail-meta__item">
+                        <span className="book-detail-meta__label">
+                          {intl.formatMessage({ id: 'book.metaCategory' })}
+                        </span>
+                        <span className="book-detail-meta__value">{book.category}</span>
+                      </div>
+                    )}
+                    {book.language && (
+                      <div className="book-detail-meta__item">
+                        <span className="book-detail-meta__label">
+                          {intl.formatMessage({ id: 'book.metaLanguage' })}
+                        </span>
+                        <span className="book-detail-meta__value">{book.language}</span>
+                      </div>
+                    )}
+                    {book.series && (
+                      <div className="book-detail-meta__item">
+                        <span className="book-detail-meta__label">
+                          {intl.formatMessage({ id: 'book.metaSeries' })}
+                        </span>
+                        <span className="book-detail-meta__value">{book.series}</span>
+                      </div>
+                    )}
+                    {book.page_count != null && (
+                      <div className="book-detail-meta__item">
+                        <span className="book-detail-meta__label">
+                          {intl.formatMessage({ id: 'book.metaPages' })}
+                        </span>
+                        <span className="book-detail-meta__value">{book.page_count}</span>
+                      </div>
+                    )}
+                    {book.file_size != null && (
+                      <div className="book-detail-meta__item">
+                        <span className="book-detail-meta__label">
+                          {intl.formatMessage({ id: 'bookDetail.fileSize' })}
+                        </span>
+                        <span className="book-detail-meta__value">
+                          {formatFileSize(book.file_size)}
+                        </span>
+                      </div>
+                    )}
+                    {book.folder_path && (
+                      <div className="book-detail-meta__item book-detail-meta__item--full">
+                        <span className="book-detail-meta__label">
+                          {intl.formatMessage({ id: 'bookDetail.folderPath' })}
+                        </span>
+                        <span className="book-detail-meta__value book-detail-meta__value--path">
+                          {book.folder_path}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-                {book.language && (
-                  <div className="book-detail-meta__item">
-                    <span className="book-detail-meta__label">
-                      {intl.formatMessage({ id: 'book.metaLanguage' })}
-                    </span>
-                    <span className="book-detail-meta__value">{book.language}</span>
-                  </div>
-                )}
-                {book.series && (
-                  <div className="book-detail-meta__item">
-                    <span className="book-detail-meta__label">
-                      {intl.formatMessage({ id: 'book.metaSeries' })}
-                    </span>
-                    <span className="book-detail-meta__value">{book.series}</span>
-                  </div>
-                )}
-                {book.page_count != null && (
-                  <div className="book-detail-meta__item">
-                    <span className="book-detail-meta__label">
-                      {intl.formatMessage({ id: 'book.metaPages' })}
-                    </span>
-                    <span className="book-detail-meta__value">{book.page_count}</span>
-                  </div>
-                )}
-                {book.file_size != null && (
-                  <div className="book-detail-meta__item">
-                    <span className="book-detail-meta__label">
-                      {intl.formatMessage({ id: 'bookDetail.fileSize' })}
-                    </span>
-                    <span className="book-detail-meta__value">
-                      {formatFileSize(book.file_size)}
-                    </span>
-                  </div>
-                )}
-                {book.folder_path && (
-                  <div className="book-detail-meta__item book-detail-meta__item--full">
-                    <span className="book-detail-meta__label">
-                      {intl.formatMessage({ id: 'bookDetail.folderPath' })}
-                    </span>
-                    <span className="book-detail-meta__value book-detail-meta__value--path">
-                      {book.folder_path}
-                    </span>
-                  </div>
-                )}
-              </div>
 
-              {/* Chunk text preview */}
-              {book.is_chunk && book.chunk_text && (
-                <div className="book-detail-chunk">
-                  <h3 className="book-detail-chunk__heading">
-                    {intl.formatMessage({ id: 'book.matchingText' })}
-                  </h3>
-                  {book.page_start != null && (
-                    <span className="book-detail-chunk__pages">
-                      {book.page_end != null && book.page_end !== book.page_start
-                        ? intl.formatMessage(
-                            { id: 'book.chunkPages' },
-                            { start: book.page_start, end: book.page_end }
-                          )
-                        : intl.formatMessage({ id: 'book.chunkPage' }, { page: book.page_start })}
-                    </span>
+                  {/* Chunk text preview */}
+                  {book.is_chunk && book.chunk_text && (
+                    <div className="book-detail-chunk">
+                      <h3 className="book-detail-chunk__heading">
+                        {intl.formatMessage({ id: 'book.matchingText' })}
+                      </h3>
+                      {book.page_start != null && (
+                        <span className="book-detail-chunk__pages">
+                          {book.page_end != null && book.page_end !== book.page_start
+                            ? intl.formatMessage(
+                                { id: 'book.chunkPages' },
+                                { start: book.page_start, end: book.page_end }
+                              )
+                            : intl.formatMessage(
+                                { id: 'book.chunkPage' },
+                                { page: book.page_start }
+                              )}
+                        </span>
+                      )}
+                      <p className="book-detail-chunk__text">{book.chunk_text}</p>
+                    </div>
                   )}
-                  <p className="book-detail-chunk__text">{book.chunk_text}</p>
-                </div>
+                </>
               )}
 
               {/* Action buttons */}
@@ -273,10 +625,11 @@ function BookDetailView({
                   </a>
                 )}
 
-                {isAdmin && (
+                {isAdmin && !editMode && (
                   <button
                     type="button"
                     className="book-detail-actions__btn book-detail-actions__btn--secondary"
+                    onClick={handleEditClick}
                     aria-label={intl.formatMessage({ id: 'book.editMetadata' })}
                   >
                     <Pencil size={16} aria-hidden="true" />

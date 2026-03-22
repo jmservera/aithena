@@ -223,6 +223,23 @@ src/aithena-ui/src/
 - Two-variable state (`detailBookId` + `detailInitialData`) is cleaner than a single `BookResult | null` when the hook (`useBookDetail`) needs to distinguish "has initial data, skip fetch" vs. "no initial data, fetch by ID."
 - BookDetailView embeds SimilarBooks, so the standalone SimilarBooks panel (from #820) and the detail view coexist — `focusedBookId` drives the standalone panel, `detailBookId` drives the modal.
 - Shared environment risk: another session switched branches mid-work. Always verify `git branch --show-current` after any pause.
+### Inline Metadata Editing in BookDetailView (#822 — PR #844)
+
+**Inline edit pattern:** Instead of opening a separate MetadataEditModal on top of BookDetailView, the edit form renders inline within the modal body. An `editMode` boolean state toggles between read-only metadata display and the editable form. This avoids stacking two modals and provides a smoother UX.
+
+**Hook reuse:** The `useMetadataEdit` hook (from v1.10.0) is reused directly inside `InlineEditForm` — no changes needed. Form fields (TextInput, YearInput, ComboboxField) are duplicated locally since the originals are non-exported internal components of `MetadataEditModal.tsx`. If a third usage appears, extract to shared `Components/fields/`.
+
+**useBookDetail refresh pattern:** Added `refresh()` to `useBookDetail` using a `refreshCounter` state + `isInitialMount` ref. When `refresh()` is called, the counter increments and the effect re-runs, bypassing the `initialData` early-return. This pattern avoids exposing `setBook` and keeps the hook's API clean.
+
+**ESC key layering:** When `editMode` is true, pressing ESC exits edit mode instead of closing the modal. The keydown handler checks `editMode` first. This required adding `editMode` to the effect's dependency array alongside `onClose`.
+
+**Timer cleanup in InlineEditForm:** The 600ms toast delay (`setTimeout → onSaved`) can leak between tests (or after unmount). Added `mountedRef` guard to prevent `onSaved` from firing after the component unmounts.
+
+**Learnings:**
+- Reusing `meta-edit-*` CSS classes from `MetadataEditModal.css` inside BookDetailView works because the CSS is globally scoped. No duplicate import needed.
+- The `as keyof MetadataFormValues` cast on `setField` calls is needed because the `onChange` callback type is `(value: string) => void` but `setField` expects the field name as a typed key.
+- When BookDetailView's parent branch (squad/819) is already merged to dev, branch from dev directly — don't branch from the feature branch.
+- 12 new tests cover: edit mode entry, field population, Save/Cancel toggle, ESC layering, Save disabled state, API error display, auth gating, and action button persistence in edit mode.
 
 ### BookDetailView Modal (#819, PR #842)
 

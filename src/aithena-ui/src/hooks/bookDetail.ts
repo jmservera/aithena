@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiFetch, buildApiUrl } from '../api';
 import { BookResult } from './search';
@@ -7,6 +7,8 @@ export interface UseBookDetailResult {
   book: BookResult | null;
   loading: boolean;
   error: string | null;
+  /** Re-fetch the book from the API, bypassing initialData cache. */
+  refresh: () => void;
 }
 
 export function useBookDetail(
@@ -16,6 +18,8 @@ export function useBookDetail(
   const [book, setBook] = useState<BookResult | null>(initialData ?? null);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
     if (!bookId) {
@@ -26,12 +30,15 @@ export function useBookDetail(
       return;
     }
 
-    if (initialData) {
+    // Use initialData only on first mount (not after refresh)
+    if (initialData && isInitialMount.current) {
+      isInitialMount.current = false;
       setBook(initialData);
       setLoading(false);
       setError(null);
       return;
     }
+    isInitialMount.current = false;
 
     let cancelled = false;
     const controller = new AbortController();
@@ -70,7 +77,11 @@ export function useBookDetail(
       cancelled = true;
       controller.abort();
     };
-  }, [bookId, initialData]);
+  }, [bookId, initialData, refreshCounter]);
 
-  return { book, loading, error };
+  const refresh = useCallback(() => {
+    setRefreshCounter((c) => c + 1);
+  }, []);
+
+  return { book, loading, error, refresh };
 }
