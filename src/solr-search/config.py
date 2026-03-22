@@ -97,7 +97,16 @@ class Settings:
     collection_embeddings_urls: tuple[tuple[str, str], ...]
     comparison_baseline_collection: str
     comparison_candidate_collection: str
-    ascii_folding: bool
+    ascii_folding: bool = True
+
+    @property
+    def solr_auth(self) -> tuple[str, str] | None:
+        """Return Solr BasicAuth credentials if configured, else None."""
+        user = os.environ.get("SOLR_AUTH_USER", "")
+        password = os.environ.get("SOLR_AUTH_PASSWORD", "")
+        if user and password:
+            return (user, password)
+        return None
 
     @property
     def select_url(self) -> str:
