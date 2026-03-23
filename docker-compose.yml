@@ -99,43 +99,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
-    restart: unless-stopped
-    stop_grace_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-        reservations:
-          memory: 1g
-          cpus: "1.0"
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      default:
-        aliases:
-          - embeddings-server
-  # A/B test: e5-base embeddings instance (~3GB RAM for model loading)
-  embeddings-server-e5:
-    build:
-      context: ./src/embeddings-server
-      args:
-        VERSION: ${VERSION:-dev}
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
-        BUILD_DATE: ${BUILD_DATE:-unknown}
-        MODEL_NAME: intfloat/multilingual-e5-base
-    environment:
-      - MODEL_NAME=intfloat/multilingual-e5-base
-    expose:
-      - "8080"
-    healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
       start_period: 120s
     restart: unless-stopped
     stop_grace_period: 10s
@@ -154,7 +117,7 @@ services:
     networks:
       default:
         aliases:
-          - embeddings-server-e5
+          - embeddings-server
   document-lister:
     build:
       context: ./src/document-lister
@@ -201,7 +164,7 @@ services:
       - document-data:/data/documents
     networks:
       - default
-  # Baseline indexer: distiluse embeddings → books collection
+  # Document indexer: e5-base embeddings → books collection
   document-indexer:
     build:
       context: ./src/document-indexer
@@ -222,66 +185,6 @@ services:
       - SOLR_PORT=8983
       - SOLR_COLLECTION=books
       - EMBEDDINGS_HOST=embeddings-server
-      - EMBEDDINGS_PORT=8080
-      - SOLR_AUTH_USER=${SOLR_ADMIN_USER:-solr_admin}
-      - SOLR_AUTH_PASS=${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
-    restart: on-failure
-    stop_grace_period: 10s
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          memory: 512m
-        reservations:
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      embeddings-server:
-        condition: service_healthy
-      solr:
-        condition: service_healthy
-      solr-init:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "python"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    volumes:
-      - document-data:/data/documents:ro
-    networks:
-      - default
-  # A/B test: e5-base indexer → books_e5base collection (~0.5GB RAM)
-  # Memory budget: embeddings-server-e5 ~3GB + document-indexer-e5 ~0.5GB = ~3.5GB total addition
-  document-indexer-e5:
-    build:
-      context: ./src/document-indexer
-      args:
-        VERSION: ${VERSION:-dev}
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
-        BUILD_DATE: ${BUILD_DATE:-unknown}
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_INDEXER_USER:-indexer}
-      - RABBITMQ_PASS=${RABBITMQ_INDEXER_PASS:-indexer_dev_pass}
-      - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
-      - QUEUE_NAME=shortembeddings_e5base
-      - EXCHANGE_NAME=documents
-      - BASE_PATH=/data/documents/
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
-      - SOLR_COLLECTION=books_e5base
-      - EMBEDDINGS_HOST=embeddings-server-e5
       - EMBEDDINGS_PORT=8080
       - CHUNK_SIZE=300
       - CHUNK_OVERLAP=50
@@ -306,7 +209,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      embeddings-server-e5:
+      embeddings-server:
         condition: service_healthy
       solr:
         condition: service_healthy
@@ -379,6 +282,7 @@ services:
       - RABBITMQ_USER=${RABBITMQ_SEARCH_USER:-search}
       - RABBITMQ_PASS=${RABBITMQ_SEARCH_PASS:-search_dev_pass}
       - RABBITMQ_QUEUE_NAME=shortembeddings
+      - E5_COLLECTIONS=books
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
@@ -806,7 +710,6 @@ services:
       SOLR_OPTS: "-Djava.security.auth.login.config=/opt/solr/server/etc/solr-jaas.conf"
     volumes:
       - ./src/solr/books:/configsets/books:ro
-      - ./src/solr/books_e5base:/configsets/books_e5base:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
       - ./src/solr/security.json:/scripts/security.json:ro
     entrypoint:
@@ -859,7 +762,7 @@ services:
 
           echo "Security bootstrap complete."
 
-          # --- books collection (distiluse, 512D) ---
+          # --- books collection (multilingual-e5-base, 768D) ---
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -qx 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
@@ -869,17 +772,6 @@ services:
           fi
 
           SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh
-
-          # --- books_e5base collection (multilingual-e5-base, 768D) ---
-          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books_e5base'; then
-            solr zk upconfig -z "$$ZK_HOST" -n books_e5base -d /configsets/books_e5base
-          fi
-
-          if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books_e5base"'; then
-            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books_e5base&collection.configName=books_e5base&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
-          fi
-
-          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books_e5base" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh
 
           echo "Solr init complete"
     networks:
