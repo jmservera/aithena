@@ -4,7 +4,7 @@
 
 Aithena has migrated from `sentence-transformers/distiluse-base-multilingual-cased-v2` (512D) to
 `intfloat/multilingual-e5-base` (768D) as the sole embedding model. This change improves semantic
-search quality based on benchmark results (see `results/benchmark_e5base_report.md`).
+search quality based on benchmark results (see [#926](https://github.com/jmservera/aithena/issues/926)).
 
 ## What Changed
 

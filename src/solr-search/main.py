@@ -2266,14 +2266,15 @@ def admin_reindex(collection: str = Query(default="books")) -> dict[str, Any]:
     if collection not in settings.allowed_collections:
         raise HTTPException(status_code=400, detail=f"Collection '{collection}' is not in ALLOWED_COLLECTIONS")
 
-    # Step 1: Clear the Solr collection
+    # Step 1: Clear the Solr collection (use a generous timeout for large collections)
+    reindex_timeout = max(settings.request_timeout, 120)
     solr_update_url = f"{settings.solr_url}/{collection}/update?commit=true"
     try:
         resp = requests.post(
             solr_update_url,
             json={"delete": {"query": "*:*"}},
             auth=settings.solr_auth if settings.solr_auth else None,
-            timeout=settings.request_timeout,
+            timeout=reindex_timeout,
         )
         resp.raise_for_status()
         solr_status = "cleared"
@@ -2284,12 +2285,30 @@ def admin_reindex(collection: str = Query(default="books")) -> dict[str, Any]:
             detail=f"Failed to clear Solr collection '{collection}': {exc}",
         ) from exc
 
-    # Step 2: Clear all Redis tracking keys
+    # Step 2: Clear all Redis tracking keys using scan + pipeline for efficiency
     client = _get_admin_redis_client()
     redis_cleared = 0
-    for key, _state, _doc_status in _iter_admin_docs(client):
-        _delete_admin_key(key)
-        redis_cleared += 1
+    batch: list[str] = []
+    batch_size = 500
+    try:
+        for key in client.scan_iter(match=_admin_key_pattern(), count=100):
+            batch.append(key)
+            if len(batch) >= batch_size:
+                pipe = client.pipeline(transaction=False)
+                for k in batch:
+                    pipe.delete(k)
+                pipe.execute()
+                redis_cleared += len(batch)
+                batch.clear()
+        if batch:
+            pipe = client.pipeline(transaction=False)
+            for k in batch:
+                pipe.delete(k)
+            pipe.execute()
+            redis_cleared += len(batch)
+    except Exception as exc:
+        logger.error("Failed to clear Redis tracking keys: %s", exc)
+        raise HTTPException(status_code=503, detail=f"Failed to clear Redis keys: {exc}") from exc
 
     return {
         "collection": collection,

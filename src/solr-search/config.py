@@ -191,6 +191,6 @@ settings = Settings(
     e5_collections=_parse_collection_set(os.environ.get("E5_COLLECTIONS", "books")),
     collection_embeddings_urls=_parse_embeddings_url_overrides(_allowed_collections),
     comparison_baseline_collection=os.environ.get("COMPARISON_BASELINE_COLLECTION", "books"),
-    comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books_e5base"),
+    comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books"),
     ascii_folding=os.environ.get("SOLR_ASCII_FOLDING", "true").lower() == "true",
 )
