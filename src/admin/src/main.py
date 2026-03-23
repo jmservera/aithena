@@ -107,3 +107,4 @@ except requests.exceptions.RequestException:
 
 st.divider()
 st.info("Use **Document Manager** in the sidebar to inspect documents and trigger requeue or clear actions.")
+st.info("Use **Reindex Library** to re-embed the entire library after changing the embedding model.")

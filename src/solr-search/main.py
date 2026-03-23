@@ -2247,6 +2247,79 @@ def admin_clear_processed() -> dict[str, Any]:
 
 
 @app.post(
+    "/v1/admin/reindex",
+    name="admin_reindex_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_reindex(collection: str = Query(default="books")) -> dict[str, Any]:
+    """Trigger a full reindex of the specified Solr collection.
+
+    1. Deletes **all** documents from the Solr collection via the update handler.
+    2. Clears **all** Redis tracking keys (processed, failed, queued).
+
+    The document-lister will rediscover every file on its next scan and
+    re-enqueue them for indexing with the current embedding model.
+
+    ⚠️ This is a destructive operation — all existing search results will be
+    unavailable until reindexing completes.
+    """
+    if collection not in settings.allowed_collections:
+        raise HTTPException(status_code=400, detail=f"Collection '{collection}' is not in ALLOWED_COLLECTIONS")
+
+    # Step 1: Clear the Solr collection (use a generous timeout for large collections)
+    reindex_timeout = max(settings.request_timeout, 120)
+    solr_update_url = f"{settings.solr_url}/{collection}/update?commit=true"
+    try:
+        resp = requests.post(
+            solr_update_url,
+            json={"delete": {"query": "*:*"}},
+            auth=settings.solr_auth if settings.solr_auth else None,
+            timeout=reindex_timeout,
+        )
+        resp.raise_for_status()
+        solr_status = "cleared"
+    except requests.RequestException as exc:
+        logger.error("Failed to clear Solr collection %s: %s", collection, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to clear Solr collection '{collection}': {exc}",
+        ) from exc
+
+    # Step 2: Clear all Redis tracking keys using scan + pipeline for efficiency
+    client = _get_admin_redis_client()
+    redis_cleared = 0
+    batch: list[str] = []
+    batch_size = 500
+    try:
+        for key in client.scan_iter(match=_admin_key_pattern(), count=100):
+            batch.append(key)
+            if len(batch) >= batch_size:
+                pipe = client.pipeline(transaction=False)
+                for k in batch:
+                    pipe.delete(k)
+                pipe.execute()
+                redis_cleared += len(batch)
+                batch.clear()
+        if batch:
+            pipe = client.pipeline(transaction=False)
+            for k in batch:
+                pipe.delete(k)
+            pipe.execute()
+            redis_cleared += len(batch)
+    except Exception as exc:
+        logger.error("Failed to clear Redis tracking keys: %s", exc)
+        raise HTTPException(status_code=503, detail=f"Failed to clear Redis keys: {exc}") from exc
+
+    return {
+        "collection": collection,
+        "solr": solr_status,
+        "redis_cleared": redis_cleared,
+        "message": f"Cleared {collection} and {redis_cleared} Redis entries. "
+        "Documents will be re-indexed on the next lister scan.",
+    }
+
+
+@app.post(
     "/v1/admin/documents/{doc_id}/requeue",
     name="admin_requeue_document_v1",
     dependencies=[Depends(require_admin_auth)],

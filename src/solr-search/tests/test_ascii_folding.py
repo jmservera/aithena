@@ -6,7 +6,6 @@ Tests verify:
 1. SOLR_ASCII_FOLDING environment variable is correctly parsed
 2. Solr managed schemas have asciifolding filters in the correct field types
 3. Filter ordering is correct (asciifolding after lowercase, before stemmers)
-4. Both books and books_e5base schemas are consistent
 """
 
 from __future__ import annotations
@@ -32,7 +31,6 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 # Schema paths (relative to repo root)
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BOOKS_SCHEMA = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
-E5BASE_SCHEMA = REPO_ROOT / "src" / "solr" / "books_e5base" / "managed-schema.xml"
 
 
 # ---------------------------------------------------------------------------
@@ -191,8 +189,8 @@ class TestBooksSchemaASCIIFolding:
         assert not _has_asciifolding(BOOKS_SCHEMA, "string")
 
     def test_knn_vector_does_not_have_asciifolding(self):
-        """knn_vector_512 should NOT have asciifolding — dense vector field."""
-        assert not _has_asciifolding(BOOKS_SCHEMA, "knn_vector_512")
+        """knn_vector_768 should NOT have asciifolding — dense vector field."""
+        assert not _has_asciifolding(BOOKS_SCHEMA, "knn_vector_768")
 
     def test_text_general_index_filter_ordering(self):
         """In text_general index analyzer: lowercase comes before asciifolding."""
@@ -244,30 +242,5 @@ class TestBooksSchemaASCIIFolding:
 
 
 # ---------------------------------------------------------------------------
-# Cross-configset consistency tests
+# Cross-configset consistency tests (removed — books_e5base no longer exists)
 # ---------------------------------------------------------------------------
-
-
-class TestSchemaConsistency:
-    """Both books and books_e5base should have identical text analyzer chains."""
-
-    @pytest.fixture(autouse=True)
-    def _require_schemas(self):
-        if not BOOKS_SCHEMA.exists():
-            pytest.skip(f"Schema not found: {BOOKS_SCHEMA}")
-        if not E5BASE_SCHEMA.exists():
-            pytest.skip(f"Schema not found: {E5BASE_SCHEMA}")
-
-    @pytest.mark.parametrize(
-        "field_type",
-        ["text_general", "text_en", "text_es", "text_fr", "text_ca", "text_gen_sort", "text_general_rev"],
-    )
-    def test_text_analyzers_match(self, field_type: str):
-        """Text analyzer chains should be identical across both configsets."""
-        books_analyzers = _get_field_type_filters(BOOKS_SCHEMA, field_type)
-        e5base_analyzers = _get_field_type_filters(E5BASE_SCHEMA, field_type)
-        assert books_analyzers == e5base_analyzers, (
-            f"{field_type} analyzers differ between configsets:\n"
-            f"  books:   {books_analyzers}\n"
-            f"  e5base:  {e5base_analyzers}"
-        )
