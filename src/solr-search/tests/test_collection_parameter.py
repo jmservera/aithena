@@ -14,10 +14,10 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from config import settings  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from main import resolve_collection  # noqa: E402
 
+from config import settings  # noqa: E402
+from main import resolve_collection  # noqa: E402
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 
@@ -100,8 +100,8 @@ def test_config_embeddings_url_for_defaults_to_main() -> None:
     assert url == settings.embeddings_url
 
 
-def test_config_is_e5_collection_returns_false_for_books() -> None:
-    assert settings.is_e5_collection("books") is False
+def test_config_is_e5_collection_returns_true_for_books() -> None:
+    assert settings.is_e5_collection("books") is True
 
 
 # ---------------------------------------------------------------------------
@@ -251,11 +251,11 @@ def test_semantic_search_e5_collection_passes_input_type(mock_post: MagicMock) -
 
 
 @patch("main.requests.post")
-def test_semantic_search_default_collection_no_input_type(mock_post: MagicMock) -> None:
-    """Default (non-e5) collection should NOT include input_type in embeddings request."""
+def test_semantic_search_default_collection_sends_input_type(mock_post: MagicMock) -> None:
+    """Default (e5) collection should include input_type='query' in embeddings request."""
     mock_emb_resp = MagicMock()
     mock_emb_resp.status_code = 200
-    mock_emb_resp.json.return_value = {"data": [{"embedding": [0.1] * 512}]}
+    mock_emb_resp.json.return_value = {"data": [{"embedding": [0.1] * 768}]}
     mock_emb_resp.raise_for_status = MagicMock()
 
     mock_solr_resp = MagicMock()
@@ -276,7 +276,7 @@ def test_semantic_search_default_collection_no_input_type(mock_post: MagicMock) 
     emb_calls = [c for c in mock_post.call_args_list if "json" in c.kwargs]
     assert len(emb_calls) == 1
     emb_body = emb_calls[0].kwargs["json"]
-    assert "input_type" not in emb_body
+    assert emb_body.get("input_type") == "query"
 
 
 # ---------------------------------------------------------------------------

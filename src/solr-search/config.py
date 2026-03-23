@@ -95,10 +95,20 @@ class Settings:
     collection_embeddings_urls: tuple[tuple[str, str], ...]
     comparison_baseline_collection: str
     comparison_candidate_collection: str
+    solr_auth_user: str | None = None
+    solr_auth_pass: str | None = None
+    ascii_folding: bool = True
 
     @property
     def select_url(self) -> str:
         return f"{self.solr_url}/{self.solr_collection}/select"
+
+    @property
+    def solr_auth(self) -> tuple[str, str] | None:
+        """Return (user, pass) tuple for HTTP Basic Auth, or None."""
+        if self.solr_auth_user and self.solr_auth_pass:
+            return (self.solr_auth_user, self.solr_auth_pass)
+        return None
 
     def select_url_for(self, collection: str) -> str:
         """Return the Solr select URL for a specific collection."""
@@ -130,6 +140,8 @@ settings = Settings(
     port=int(os.environ.get("PORT", "8080")),
     solr_url=os.environ.get("SOLR_URL", "http://solr:8983/solr").rstrip("/"),
     solr_collection=os.environ.get("SOLR_COLLECTION", "books"),
+    solr_auth_user=os.environ.get("SOLR_AUTH_USER") or None,
+    solr_auth_pass=os.environ.get("SOLR_AUTH_PASS") or None,
     base_path=Path(os.environ.get("BASE_PATH", "/data/documents")).resolve(),
     request_timeout=float(os.environ.get("SOLR_TIMEOUT", "30")),
     default_page_size=int(os.environ.get("DEFAULT_PAGE_SIZE", "20")),
@@ -176,8 +188,9 @@ settings = Settings(
     collections_note_max_length=int(os.environ.get("COLLECTIONS_NOTE_MAX_LENGTH", "1000")),
     allowed_collections=_allowed_collections,
     default_collection=os.environ.get("DEFAULT_COLLECTION", "books"),
-    e5_collections=_parse_collection_set(os.environ.get("E5_COLLECTIONS", "")),
+    e5_collections=_parse_collection_set(os.environ.get("E5_COLLECTIONS", "books")),
     collection_embeddings_urls=_parse_embeddings_url_overrides(_allowed_collections),
     comparison_baseline_collection=os.environ.get("COMPARISON_BASELINE_COLLECTION", "books"),
-    comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books_e5base"),
+    comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books"),
+    ascii_folding=os.environ.get("SOLR_ASCII_FOLDING", "true").lower() == "true",
 )

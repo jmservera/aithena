@@ -1,156 +1,213 @@
 # Squad Decisions
 
-This file records architectural, operational, and technical decisions made by the Aithena squad. Decisions are proposed by squad members, discussed, and merged into this log once finalized.
+## Decision: Disable ZooKeeper AdminServer across all environments
 
-## Phase 2: A/B Testing Infrastructure (2026-03-22)
-
-### Decision: P2-1 — Test Corpus Indexing via Fanout Exchange
-
-**Author:** Ash (Search Engineer)  
+**Author:** Brett (Infrastructure Architect)  
 **Date:** 2026-03-22  
 **Status:** IMPLEMENTED  
-**Issue:** #877  
+**PR:** #928 (Closes #913)
 
-#### Context
+### Context
+ZooKeeper AdminServer exposes cluster topology and operational commands via port 8080, creating unnecessary security risk. Not required for SolrCloud operations.
 
-Phase 1 infrastructure is complete: dual collections (`books` 512D, `books_e5base` 768D), dual indexers, fanout exchange. We need a way to trigger indexing of a test corpus through both pipelines and verify the results.
+### Decision
+ZooKeeper AdminServer disabled via `ZOO_CFG_EXTRA: "admin.enableServer=false"` on all 3 ZK nodes in both docker-compose.yml and docker-compose.prod.yml. Port 8080 expose and host mapping removed.
 
-#### Decision
-
-**Script Architecture**
-
-1. **`scripts/index_test_corpus.py`** publishes document file paths directly to the `documents` fanout exchange (same mechanism as `document-lister`). This is simpler than triggering `document-lister` and more controllable for test scenarios.
-
-2. **`scripts/verify_collections.py`** queries both Solr collections via the `/select` API. Checks: parent doc count parity, ID set equality, embedding dimensionality sampling.
-
-3. Both scripts live in `scripts/` (not inside any service) since they're operational tools that interact with multiple services.
-
-**Idempotency**
-
-Re-publishing the same file paths is safe because:
-- The fanout exchange delivers to both queues regardless
-- Document-indexer uses the file path SHA-256 as Solr's unique key
-- Solr overwrites on duplicate ID (atomic update)
-
-**Verification Approach**
-
-- Dimensionality check samples one chunk embedding per collection (not exhaustive). A full check would require scanning all chunks, which is expensive and unnecessary — wrong dimensions would fail at Solr indexing time.
-- Empty collections pass all checks (nothing to verify yet).
-
-#### Impact
-
-- **Parker (document-indexer):** No changes needed — scripts use the same exchange/queue pattern.
-- **Brett (infra):** Scripts require `pika` and `requests` — already available in service containers.
-- **Lambert (tester):** Verification script can be integrated into CI with `--json` output and exit code checking.
+### Rationale
+- Security hardening — reduces attack surface
+- No operational impact — SolrCloud doesn't depend on AdminServer
+- Consistent across all environments (dev, staging, prod)
 
 ---
 
-### Decision: P2-2 — Benchmark Query Suite Design
+## Decision: Non-Root Container Standard
 
-**Author:** Ash (Search Engineer)  
+**Author:** Brett (Infrastructure Architect)  
 **Date:** 2026-03-22  
 **Status:** IMPLEMENTED  
-**Issue:** #879  
+**PR:** #930 (Closes #912)
+**References:** D-2 security finding from infrastructure audit
 
-#### Context
+### Context
+All custom Dockerfiles must follow container security best practices by running as non-root users. Reduces attack surface significantly.
 
-For A/B testing distiluse (512D) vs e5-base (768D), we need a standardized query suite to evaluate search quality. The benchmark must be reproducible, human-reviewable, and run against a live instance.
+### Decision
+All custom Dockerfiles must implement non-root users with standardized patterns:
 
-#### Decisions
+#### Alpine Linux Pattern
+```dockerfile
+RUN addgroup -S -g 1000 app && \
+    adduser -S -u 1000 -G app app
+USER app
+```
 
-**Query Categories**
+#### Debian-based Pattern
+```dockerfile
+RUN groupadd --system --gid 1000 app && \
+    useradd --system --uid 1000 --gid app --create-home app
+USER app
+```
 
-Five categories chosen to cover the full range of real-world library search patterns:
-1. **Simple keyword** (5) — baseline catalog searches
-2. **Natural language** (6) — questions where semantic search should outperform BM25
-3. **Multilingual** (6) — Spanish, Catalan, French queries matching the library's content mix
-4. **Long/complex** (4) — queries benefiting from e5-base's 512-token context window
-5. **Edge cases** (9) — single chars, stopwords, special characters, nonsense, accented text
+#### Special Cases
+- **nginx:** Use built-in `nginx` user with non-privileged port (8080)
+- **Solr-search:** `gosu` pattern acceptable when bind-mount ownership must be fixed at runtime
 
-**Comparison Metric: Jaccard Similarity of Top-10**
+### Services Updated
+- document-indexer (Alpine)
+- document-lister (Alpine)
+- aithena-ui (Debian-based)
+- solr-search (already using gosu)
 
-Jaccard over document ID sets is the primary overlap metric. It's simple, interpretable, and sufficient for human evaluation. Low-overlap queries (< 0.3) are flagged for manual review. More sophisticated metrics (nDCG, MAP) would require ground-truth relevance labels which we don't have yet.
-
-**No input_type Handling in Benchmark Runner**
-
-The solr-search API handles `input_type=query` injection for e5 collections internally. The benchmark runner just passes the collection name — this keeps the runner simple and avoids duplicating logic.
-
-#### Impact
-
-- **Parker/Brett:** The runner hits `GET /search` with `collection=` parameter. No API changes needed.
-- **Team:** Run `python scripts/benchmark/run_benchmark.py` against a live instance to generate comparison data for Phase 2 evaluation.
+### Rationale
+- Container security hardening per D-2 audit finding
+- UID 1000 chosen as standard for consistency across containers
+- Reduces privilege escalation attack surface
+- Supports bind-mount permission patterns (Solr: 8983, Redis: 999, RabbitMQ: 100, nginx: 101)
 
 ---
 
-### Decision: P2-3 — Comparison API Design
+## Decision: HSTS and Security Headers for nginx TLS
 
-**Author:** Parker (Backend Developer)  
+**Author:** Brett (Infrastructure Architect)  
 **Date:** 2026-03-22  
 **Status:** IMPLEMENTED  
-**Issue:** #880  
+**PR:** #932 (Closes #917)
+**References:** Infrastructure security audit findings
 
-#### Decisions
+### Context
+nginx reverse proxy needs to harden TLS configuration and response headers to prevent SSL stripping attacks and enforce secure browser behavior.
 
-**1. Endpoint is Internal (`include_in_schema=False`)**
+### Decision
+Implemented security headers via new `ssl.conf.template`:
 
-Per PRD Phase 2 decision, comparison is API-only with no UI toggle. Hidden from OpenAPI/Swagger docs. Consumers: benchmark script (P2-2) and future admin dashboard.
+#### HTTPS Server Block (TLS 1.2/1.3)
+- Strict-Transport-Security (HSTS): `max-age=31536000; includeSubDomains` (1 year)
+- X-Content-Type-Options: `nosniff`
+- X-Frame-Options: `DENY`
+- Referrer-Policy: `strict-origin-when-cross-origin`
+- Server-tokens: `off` (hide nginx version)
 
-**2. Reuse Existing Search Mode Helpers**
+#### Critical Implementation Details
+- **HSTS only over HTTPS:** Separate HTTP server block (no HSTS header)
+- **Location block re-declaration:** All location blocks that use `add_header` must re-declare security headers to prevent nginx server-level suppression
+- **Required:** NGINX_HOST environment variable when using SSL overlay
 
-The compare endpoint delegates to `_search_keyword`, `_search_semantic`, and `_search_hybrid` through `_execute_search_for_compare`. Ensures feature parity (degradation, circuit breakers, filters) without code duplication.
+### Services Updated
+- nginx reverse proxy (all HTTPS traffic)
+- All location blocks hardened
 
-**3. Parallel Collection Queries**
-
-Both collections queried concurrently via `ThreadPoolExecutor(max_workers=2)`. Latency = max(baseline, candidate) instead of sum.
-
-**4. Overlap Metric: Jaccard-like at Top-N**
-
-`overlap_at_10` = |intersection| / max(|baseline|, |candidate|). Uses `max` as denominator to avoid inflating overlap when one side returns fewer results.
-
-**5. Config via Env Vars (Not Query Params)**
-
-Baseline/candidate collections are server-side config (`COMPARISON_BASELINE_COLLECTION`, `COMPARISON_CANDIDATE_COLLECTION`), not request parameters. Prevents arbitrary collection comparisons and keeps the API surface simple.
-
-#### Impact
-
-- Ash's benchmark script (P2-2) can call `/v1/search/compare` for side-by-side results with metrics.
-- Dallas: no UI work needed — endpoint is API-only per PRD.
+### Rationale
+- Prevents SSL stripping attacks (HSTS enforcement)
+- Hardens browser security policies (X-Content-Type-Options, X-Frame-Options)
+- Hides infrastructure details (server_tokens off)
+- Prevents referrer data leakage (Referrer-Policy)
 
 ---
 
-### Decision: P2-4 — Performance Metrics Architecture
+## Decision: v1.12.1 Release Shipped
 
-**Author:** Lambert (QA Engineer)  
+**Author:** Newt (Product Manager)  
 **Date:** 2026-03-22  
-**Status:** IMPLEMENTED  
-**Issue:** #881  
+**Status:** SHIPPED  
+**PRs:** #927 (version bump) + #929 (dev→main release merge)
+**GitHub Release:** v1.12.1 published
 
-#### Decision 1: In-Memory Rolling-Window Store Over Prometheus Client
+### Context
+v1.12.1 consolidates all work since v1.11.0 into a single release point.
 
-**Context:** Issue #881 required metrics collection for A/B evaluation with no new infrastructure dependencies.
+### Release Scope
+- **v1.12.0 issues (11):** A/B embedding infrastructure
+- **v1.12.1 issues (7):** Bug fixes and polish
+- **Total:** 18 issues resolved
 
-**Decision:** Built a standalone `PerfMetricsStore` class using `threading.Lock` + `defaultdict` + `TimedSample` dataclass instead of using the existing Prometheus `MetricsRegistry` or adding prometheus-client.
+### Changes
+- VERSION file bumped to 1.12.1
+- CHANGELOG.md updated with all issue descriptions and release notes
+- Git tag `v1.12.1` created on main branch
+- GitHub Release page published with feature guide and test report
 
-**Rationale:**
-- The existing `MetricsRegistry` (metrics.py) is Prometheus exposition-format only — adding per-collection latency percentiles would require significant refactoring
-- This is temporary A/B tooling, not production monitoring — lighter is better
-- Rolling-window pruning keeps memory bounded without external storage
-- JSON response from `/v1/admin/metrics` is immediately consumable by scripts and dashboards
-
-#### Decision 2: Internal Timing Keys in Search Response Dicts
-
-**Decision:** Search mode functions (`_search_keyword`, `_search_semantic`, `_search_hybrid`) return `_solr_latency_s` and `_embedding_latency_s` keys in the response dict, stripped by the caller before returning to the client.
-
-**Rationale:** Avoids changing function signatures or adding a separate return channel. The underscore-prefix convention signals these are internal. The caller (`search()`) pops them after recording metrics.
-
-#### Decision 3: Admin-Auth for Metrics Endpoints
-
-**Decision:** `GET /v1/admin/metrics` and `POST /v1/admin/metrics/reset` use `require_admin_auth` (X-API-Key), consistent with other `/v1/admin/*` endpoints.
-
-**Rationale:** Performance data could reveal usage patterns; reset should be controlled. Follows existing admin endpoint pattern.
+### Process Notes
+- Branch protection on dev requires PRs even for version bump commits
+- Integration tests in CI may be flaky (embeddings-server health check has intermittent timing issues)
+- Main branch merges may need admin override due to branch protection
+- Release documentation (feature guide, test report) required before release merge
 
 ---
 
-## Archive
+## Directive: v1.14.0 Gated on Embeddings Evaluation Results
 
-Decisions from previous phases are available in `archive/` for historical reference.
+**Author:** Juanma (Product Owner, via Copilot)  
+**Date:** 2026-03-22T16:35Z  
+**Status:** ACTIVE  
+**Milestones:** v1.12.2 created for evaluation (#34), v1.14.0 awaits results
+
+### Context
+v1.14.0 (A/B Testing Evaluation UI) was planned to help users choose between embedding models. However, the new e5-base model may render this unnecessary.
+
+### Directive
+v1.14.0 is **ON HOLD** pending embeddings evaluation results.
+
+#### Conditional Outcomes
+
+**If new e5-base model benchmarks show negligible performance loss vs baseline:**
+- Skip v1.14.0 entirely
+- Migrate directly to new e5-base model in a smaller patch release
+- Rationale: Unnecessary UI if model quality is clearly better
+
+**If evaluation shows significant quality differences:**
+- Proceed with v1.14.0 A/B Testing Evaluation UI
+- Rationale: Differences require human judgment to select best model
+
+### Related Issues
+- #926: Embeddings benchmark (in progress under v1.12.2 milestone)
+- #34: v1.12.2 milestone for evaluation work
+
+### Rationale
+- Avoids building unnecessary UI if technical decision is clear
+- Preserves engineering resources for higher-impact work
+- User-driven prioritization based on actual benchmark results
+
+---
+
+## Decision: Security Re-Review — ZooKeeper SASL DIGEST-MD5 Implementation
+
+**Reviewer:** Kane (Security Engineer)  
+**Date:** 2026-03-22  
+**Commit:** 891df48  
+**Branch:** squad/904-zk-sasl-clean  
+**Status:** APPROVED ✅  
+**PR:** #955 (Closes #904)
+
+### Context
+ZooKeeper SASL DIGEST-MD5 authentication implementation (Issue #904) underwent initial review and found 5 security findings (1 CRITICAL, 4 MEDIUM). The team remediated all findings. This is the post-remediation re-review.
+
+### Original Findings — All Remediated
+
+1. **Shell Injection via Unquoted sed Substitution (CRITICAL)** → Fixed via `printf` replacement with safe format specifiers
+2. **World-Readable JAAS Config Files (CRITICAL)** → Fixed via explicit `chmod 600` immediately after generation
+3. **solr-init Inline sed Injection (CRITICAL)** → Fixed via injection-safe `printf` in both compose files
+4. **Redundant JVM Flag (MEDIUM)** → Fixed via removal of duplicate `requireClientAuthScheme=sasl` from `SERVER_JVMFLAGS`
+5. **Dev Default Password Allowed in Prod (MEDIUM)** → Fixed via mandatory validation using `${VAR:?error message}` syntax in production compose
+
+### New Security Assessment
+
+- **Entrypoint Scripts:** Reviewed for additional vulnerabilities. Both use `set -euo pipefail` for strict error handling and `: "${VAR:?error message}"` for variable validation. No injection points identified.
+- **JAAS Template Files:** Both files marked "DOCUMENTATION ONLY" — safe, serve as reference only. Runtime generation eliminates stale template risks.
+- **Compose Configuration:** No new vulnerabilities. Services use read-only mounts, minimal port exposure, and health checks.
+
+### Verdict
+**✅ APPROVED** — All 5 findings comprehensively remediated. Implementation demonstrates industry best practices (injection-safe string handling, principle of least privilege, fail-secure defaults, defense in depth). Recommended for merge to dev and next release.
+
+### Notes for Future
+- Team's choice to eliminate template files in favor of runtime generation is superior (prevents stale templates).
+- Consider documenting JAAS structure in markdown instead of `.conf` templates to avoid confusion.
+- Add integration test verifying SASL authentication actually works (not just service startup).
+
+---
+
+## Process Notes
+
+- Decisions are recorded by the Scribe (silent archive, no user communication)
+- When decisions.md exceeds 20KB, old entries are archived to decisions-archive.md
+- All PRs reference the issues they close (e.g., "Closes #912")
+- All decisions include context, decision, and rationale sections

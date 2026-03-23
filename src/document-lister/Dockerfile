@@ -35,11 +35,15 @@ WORKDIR /app
 
 RUN apk add --no-cache procps
 
+RUN addgroup -S -g 1000 app && adduser -S -u 1000 -G app app
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/document_lister /app/document_lister
 COPY --from=builder /app/pyproject.toml /app/pyproject.toml
 COPY --from=builder /app/uv.lock /app/uv.lock
+
+RUN mkdir -p /data/documents && chown -R app:app /app /data/documents
 
 ENV RABBITMQ_HOST="localhost"
 ENV RABBITMQ_PORT=5672
@@ -48,5 +52,7 @@ ENV REDIS_PORT=6379
 ENV DOCUMENT_WILDCARD="*.pdf"
 ENV QUEUE_NAME="new_documents"
 ENV EXCHANGE_NAME="documents"
+
+USER app
 
 CMD ["uv", "run", "python", "-m", "document_lister"]

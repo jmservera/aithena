@@ -17,11 +17,11 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-import admin_auth  # noqa: E402, F401
 import pytest  # noqa: E402
-from auth import AuthenticatedUser  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+import admin_auth  # noqa: E402, F401
+from auth import AuthenticatedUser  # noqa: E402
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 # Representative admin endpoint used for auth tests.

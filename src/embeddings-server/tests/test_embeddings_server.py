@@ -1,7 +1,7 @@
 """Tests for the embeddings server.
 
 Uses unittest.mock to patch SentenceTransformer so no model download is required.
-Covers both distiluse (generic) and e5-family model paths.
+Covers both the default e5-base model and e5-family model path tests.
 """
 
 from __future__ import annotations
@@ -14,13 +14,13 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-DEFAULT_MODEL = "sentence-transformers/distiluse-base-multilingual-cased-v2"
+DEFAULT_MODEL = "intfloat/multilingual-e5-base"
 E5_MODEL = "intfloat/multilingual-e5-base"
-DISTILUSE_DIM = 512
+DEFAULT_DIM = 768
 E5_DIM = 768
 
 
-def _make_mock_model(embedding_dim: int = DISTILUSE_DIM) -> MagicMock:
+def _make_mock_model(embedding_dim: int = DEFAULT_DIM) -> MagicMock:
     """Build a minimal SentenceTransformer mock."""
     mock = MagicMock()
     mock.get_sentence_embedding_dimension.return_value = embedding_dim
@@ -28,7 +28,7 @@ def _make_mock_model(embedding_dim: int = DISTILUSE_DIM) -> MagicMock:
     return mock
 
 
-def _fresh_import(model_name: str | None = None, embedding_dim: int = DISTILUSE_DIM):
+def _fresh_import(model_name: str | None = None, embedding_dim: int = DEFAULT_DIM):
     """Import main.py with a mocked model, optionally overriding MODEL_NAME.
 
     Returns (TestClient, main_module, mock_model).
@@ -56,7 +56,7 @@ def _fresh_import(model_name: str | None = None, embedding_dim: int = DISTILUSE_
 
 @pytest.fixture()
 def app_client():
-    """Return a TestClient backed by the default distiluse model (mocked)."""
+    """Return a TestClient backed by the default e5-base model (mocked)."""
     client, main_module, _ = _fresh_import()
     yield client, main_module
 
@@ -77,7 +77,12 @@ class TestModelFamilyDetection:
     def test_distiluse_is_generic(self):
         from model_utils import detect_model_family
 
-        assert detect_model_family(DEFAULT_MODEL) == "generic"
+        assert detect_model_family("sentence-transformers/distiluse-base-multilingual-cased-v2") == "generic"
+
+    def test_default_model_is_e5(self):
+        from model_utils import detect_model_family
+
+        assert detect_model_family(DEFAULT_MODEL) == "e5"
 
     def test_e5_base_is_e5(self):
         from model_utils import detect_model_family
@@ -139,13 +144,13 @@ class TestApplyPrefix:
 
 
 # ---------------------------------------------------------------------------
-# Distiluse (default) model — backward compatibility
+# Default model (e5-base) — tests for the primary model path
 # ---------------------------------------------------------------------------
 
 
 class TestModelInfo:
-    def test_model_name_is_distiluse(self, app_client):
-        """The active model must be the ADR-004 standard model."""
+    def test_model_name_is_e5(self, app_client):
+        """The active model must be multilingual-e5-base."""
         client, main_module = app_client
         assert main_module.MODEL_NAME == DEFAULT_MODEL
 
@@ -156,14 +161,14 @@ class TestModelInfo:
         assert response.status_code == 200
         data = response.json()
         assert data["model"] == DEFAULT_MODEL
-        assert data["embedding_dim"] == DISTILUSE_DIM
-        assert data["model_family"] == "generic"
-        assert data["requires_prefix"] is False
+        assert data["embedding_dim"] == DEFAULT_DIM
+        assert data["model_family"] == "e5"
+        assert data["requires_prefix"] is True
 
     def test_embedding_dim_matches_model(self, app_client):
         """The reported embedding_dim must match the value from the loaded model."""
         _, main_module = app_client
-        assert main_module.embedding_dim == DISTILUSE_DIM
+        assert main_module.embedding_dim == DEFAULT_DIM
 
 
 class TestVersionEndpoint:
@@ -191,7 +196,7 @@ class TestEmbeddingsEndpoint:
         data = response.json()
         assert data["object"] == "list"
         assert len(data["data"]) == 1
-        assert len(data["data"][0]["embedding"]) == DISTILUSE_DIM
+        assert len(data["data"][0]["embedding"]) == DEFAULT_DIM
 
     def test_list_input(self, app_client):
         """A list of strings must produce one embedding per item."""
@@ -216,13 +221,13 @@ class TestEmbeddingsEndpoint:
         assert response.json()["data"][0]["object"] == "embedding"
 
     def test_default_input_type_is_passage(self, app_client):
-        """When input_type is omitted, it defaults to 'passage' (backward compat)."""
+        """When input_type is omitted, it defaults to 'passage'."""
         client, _ = app_client
         response = client.post("/v1/embeddings/", json={"input": "test"})
         assert response.status_code == 200
 
-    def test_distiluse_ignores_input_type_query(self, app_client):
-        """For distiluse, passing input_type='query' must not alter behaviour."""
+    def test_e5_default_accepts_input_type_query(self, app_client):
+        """For the default e5 model, passing input_type='query' works correctly."""
         client, _ = app_client
         response = client.post("/v1/embeddings/", json={"input": "test", "input_type": "query"})
         assert response.status_code == 200
@@ -237,7 +242,7 @@ class TestHealthEndpoint:
         data = response.json()
         assert data["status"] == "healthy"
         assert data["model"] == DEFAULT_MODEL
-        assert data["embedding_dim"] == DISTILUSE_DIM
+        assert data["embedding_dim"] == DEFAULT_DIM
 
     def test_health_head(self, app_client):
         client, _ = app_client

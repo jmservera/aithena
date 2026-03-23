@@ -2,9 +2,10 @@ import json
 import logging
 import os
 
-import redis
 import requests
 import streamlit as st
+
+import redis
 from auth import AuthSettings, logout, require_auth
 from logging_config import setup_logging
 from pages.shared.config import (
@@ -106,3 +107,4 @@ except requests.exceptions.RequestException:
 
 st.divider()
 st.info("Use **Document Manager** in the sidebar to inspect documents and trigger requeue or clear actions.")
+st.info("Use **Reindex Library** to re-embed the entire library after changing the embedding model.")

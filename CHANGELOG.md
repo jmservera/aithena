@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] — 2026-03-25
+
+### Added
+
+- **Docker network segmentation** — isolated networks for frontend, backend, data, and cache tiers (#908)
+- **ZooKeeper SASL DIGEST-MD5 authentication** — encrypted password authentication for SolrCloud coordination (#904)
+- **Non-root containers** — run all services with unprivileged users, security context hardening (#912)
+- **HSTS + security headers** — strict transport security, CSP, X-Frame-Options, X-Content-Type-Options via Nginx (#917)
+- **Redis ACLs** — per-user authentication and command whitelisting for Redis access control (#910)
+- **RabbitMQ per-service users** — isolate service credentials, principle of least privilege messaging (#915)
+- **Diacritic-insensitive search** — ASCII folding in Solr for accent-agnostic search queries (#919)
+- **Solr BasicAuth authentication** — HTTP authentication for Solr API and query endpoints (#906)
+
+### Fixed
+
+- **CI test isolation** — resolved test ordering dependencies and environment variable propagation issues (#953)
+
+## [1.12.2] — 2026-03-24
+
+### Fixed
+
+- **embeddings-server Docker image** — added missing model_utils.py file (#949)
+- **Container startup gate** — added to release checklist for infrastructure validation (#950)
+
 ## [1.12.1] — 2026-03-23
 
 ### Fixed

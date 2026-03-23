@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
-import document_indexer.__main__ as indexer_module
 import pytest
 import requests
+
+import document_indexer.__main__ as indexer_module
 from document_indexer.__main__ import (
     build_chunk_doc,
     build_literal_params,
@@ -263,10 +264,12 @@ class TestWaitForSolrCollection:
                 "http://solr:8983/solr/admin/collections",
                 params={"action": "LIST", "wt": "json"},
                 timeout=indexer_module.SOLR_STARTUP_TIMEOUT,
+                auth=None,
             ),
             call(
                 "http://solr:8983/api/collections/books/config",
                 timeout=indexer_module.SOLR_STARTUP_TIMEOUT,
+                auth=None,
             ),
         ]
 

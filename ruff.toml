@@ -4,8 +4,38 @@ line-length = 120
 [lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "S"]
 
+[lint.isort]
+known-first-party = [
+    "admin_auth",
+    "auth",
+    "auth_helpers",
+    "backup_service",
+    "chunker",
+    "circuit_breaker",
+    "collections_models",
+    "collections_service",
+    "config",
+    "correlation",
+    "document_indexer",
+    "document_lister",
+    "embeddings",
+    "logging_config",
+    "login_page",
+    "main",
+    "metadata",
+    "metrics",
+    "model_utils",
+    "pages",
+    "password_policy",
+    "perf_metrics",
+    "reset_password",
+    "search_service",
+    "template",
+    "thumbnail",
+]
+
 [lint.per-file-ignores]
-"**/tests/*.py" = ["S101", "S105", "S106", "S107"]
+"**/tests/*.py" = ["S101", "S105", "S106", "S107", "S314"]
 "tests/stress/*.py" = ["S101", "S105", "S106", "S107"]
 "e2e/*.py" = ["S101"]
 "e2e/conftest.py" = ["S108"]

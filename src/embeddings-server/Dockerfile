@@ -5,13 +5,15 @@ ARG BUILD_DATE=unknown
 # ---------- build stage ----------
 FROM python:3.12-slim AS builder
 
-ARG MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2
+ARG MODEL_NAME=intfloat/multilingual-e5-base
+ARG HF_TOKEN
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MODEL_NAME=${MODEL_NAME} \
     HF_HOME=/models/huggingface \
-    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
+    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
+    HF_TOKEN=${HF_TOKEN}
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -27,7 +29,7 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # Pre-download the model so it is baked into the image
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
 
-COPY main.py ./
+COPY main.py model_utils.py ./
 COPY config ./config
 
 # ---------- runtime stage ----------
@@ -36,7 +38,7 @@ FROM python:3.12-slim AS runtime
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
-ARG MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2
+ARG MODEL_NAME=intfloat/multilingual-e5-base
 
 LABEL org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/jmservera/aithena" \
@@ -64,6 +66,7 @@ RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /models /models
 COPY --from=builder /app/main.py /app/main.py
+COPY --from=builder /app/model_utils.py /app/model_utils.py
 COPY --from=builder /app/config /app/config
 
 RUN chown -R app:app /app /models

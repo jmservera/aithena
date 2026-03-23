@@ -17,8 +17,9 @@ import os
 import sys
 from datetime import UTC, datetime
 
-from correlation import CorrelationIdFilter, get_correlation_id
 from pythonjsonlogger.json import JsonFormatter
+
+from correlation import CorrelationIdFilter, get_correlation_id
 
 
 class AithenaJsonFormatter(JsonFormatter):

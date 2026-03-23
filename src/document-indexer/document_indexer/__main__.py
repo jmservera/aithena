@@ -9,10 +9,11 @@ from pathlib import Path
 
 import pdfplumber
 import pika
-import redis
 import requests
 from pika.adapters.blocking_connection import BlockingChannel
 from retry import retry
+
+import redis
 
 from . import (
     BASE_PATH,
@@ -30,6 +31,7 @@ from . import (
     REDIS_HOST,
     REDIS_PASSWORD,
     REDIS_PORT,
+    SOLR_AUTH,
     SOLR_COLLECTION,
     SOLR_HOST,
     SOLR_PORT,
@@ -96,13 +98,14 @@ def wait_for_solr_collection(
                 collections_url,
                 params={"action": "LIST", "wt": "json"},
                 timeout=SOLR_STARTUP_TIMEOUT,
+                auth=SOLR_AUTH,
             )
             response.raise_for_status()
             collections = response.json().get("collections", [])
             if SOLR_COLLECTION not in collections:
                 raise RuntimeError(f"Solr collection {SOLR_COLLECTION} is not available yet.")
 
-            config_response = requests.get(config_url, timeout=SOLR_STARTUP_TIMEOUT)
+            config_response = requests.get(config_url, timeout=SOLR_STARTUP_TIMEOUT, auth=SOLR_AUTH)
             config_response.raise_for_status()
             if '"/update/extract"' not in config_response.text:
                 raise RuntimeError(f"Solr collection {SOLR_COLLECTION} is missing /update/extract handler.")
@@ -304,6 +307,7 @@ def index_chunks(
         solr_url,
         json=docs,
         timeout=SOLR_TIMEOUT,
+        auth=SOLR_AUTH,
     )
     response.raise_for_status()
     return len(docs)
@@ -405,6 +409,7 @@ def index_document(path: Path) -> dict:
                 params=params,
                 files={"file": (path.name, handle, "application/pdf")},
                 timeout=SOLR_TIMEOUT,
+                auth=SOLR_AUTH,
             )
         response.raise_for_status()
     except Exception as exc:

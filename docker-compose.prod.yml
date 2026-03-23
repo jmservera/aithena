@@ -1,12 +1,9 @@
 services:
   redis:
-    image: redis
+    image: redis:7.4-alpine
     command: >-
-      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
-        exec redis-server --save 20 1 --loglevel warning --requirepass "$$REDIS_PASSWORD";
-      else
-        exec redis-server --save 20 1 --loglevel warning;
-      fi'
+      sh -c 'exec redis-server /usr/local/etc/redis/redis.conf
+      --requirepass "$$REDIS_PASSWORD"'
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - REDISCLI_AUTH=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
@@ -36,19 +33,29 @@ services:
           - redis
     volumes:
       - redis-data:/data
+      - ./src/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
   rabbitmq:
     image: rabbitmq:4.0-management
+    entrypoint: /etc/rabbitmq/init-definitions.sh
     command: rabbitmq-server
     hostname: rabbitmq
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      # Admin user created on first Mnesia init (replaces default guest user)
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_ADMIN_USER:-admin}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_ADMIN_PASS:-admin_dev_pass}
+      # Per-service passwords --- init-definitions.sh reads these to generate
+      # /etc/rabbitmq/definitions.json at startup (see load_definitions in rabbitmq.conf)
+      - RABBITMQ_LISTER_PASS=${RABBITMQ_LISTER_PASS:-lister_dev_pass}
+      - RABBITMQ_INDEXER_PASS=${RABBITMQ_INDEXER_PASS:-indexer_dev_pass}
+      - RABBITMQ_SEARCH_PASS=${RABBITMQ_SEARCH_PASS:-search_dev_pass}
+      - RABBITMQ_ADMIN_PASS=${RABBITMQ_ADMIN_PASS:-admin_dev_pass}
     expose:
       - 5672
       - 15672
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./src/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./src/rabbitmq/init-definitions.sh:/etc/rabbitmq/init-definitions.sh:ro
 
     healthcheck:
       test: ["CMD", "rabbitmqctl", "ping"]
@@ -82,15 +89,15 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
     restart: unless-stopped
     stop_grace_period: 10s
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 3g
         reservations:
-          memory: 1g
+          memory: 2g
           cpus: "1.0"
     logging:
       driver: json-file
@@ -105,8 +112,8 @@ services:
     image: ghcr.io/jmservera/aithena-document-lister:${VERSION:-latest}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - RABBITMQ_USER=${RABBITMQ_LISTER_USER:-lister}
+      - RABBITMQ_PASS=${RABBITMQ_LISTER_PASS:-lister_dev_pass}
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
@@ -146,8 +153,8 @@ services:
     image: ghcr.io/jmservera/aithena-document-indexer:${VERSION:-latest}
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - RABBITMQ_USER=${RABBITMQ_INDEXER_USER:-indexer}
+      - RABBITMQ_PASS=${RABBITMQ_INDEXER_PASS:-indexer_dev_pass}
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
@@ -158,6 +165,10 @@ services:
       - SOLR_COLLECTION=books
       - EMBEDDINGS_HOST=embeddings-server
       - EMBEDDINGS_PORT=8080
+      - CHUNK_SIZE=300
+      - CHUNK_OVERLAP=50
+      - SOLR_AUTH_USER=${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      - SOLR_AUTH_PASS=${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
     restart: on-failure
     stop_grace_period: 10s
     deploy:
@@ -236,9 +247,10 @@ services:
       - MAX_UPLOAD_SIZE_MB=50
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:?Set RABBITMQ_PASS in .env}
+      - RABBITMQ_USER=${RABBITMQ_SEARCH_USER:-search}
+      - RABBITMQ_PASS=${RABBITMQ_SEARCH_PASS:-search_dev_pass}
       - RABBITMQ_QUEUE_NAME=shortembeddings
+      - E5_COLLECTIONS=books
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
@@ -247,6 +259,8 @@ services:
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
       - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}
+      - SOLR_AUTH_USER=${SOLR_READONLY_USER:?Set SOLR_READONLY_USER}
+      - SOLR_AUTH_PASS=${SOLR_READONLY_PASS:?Set SOLR_READONLY_PASS}
     volumes:
       - document-data:/data/documents
       - collections-db:/data/collections
@@ -297,14 +311,14 @@ services:
   aithena-ui:
     image: ghcr.io/jmservera/aithena-aithena-ui:${VERSION:-latest}
     expose:
-      - "80"
+      - "8080"
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
       solr-search:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:80/"]
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -362,6 +376,8 @@ services:
       - document-data:/data/documents:ro
   zoo1:
     image: zookeeper:3.9
+    entrypoint: /entrypoint-sasl.sh
+    command: ["zkServer.sh", "start-foreground"]
     expose:
       - "2181"
     networks:
@@ -371,11 +387,15 @@ services:
       ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
+      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data1_logs:/logs
       - zoo-data1_data:/data
       - zoo-data1_datalog:/datalog
       - zoo-backup:/backup
+      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -397,6 +417,8 @@ services:
         max-file: "3"
   zoo2:
     image: zookeeper:3.9
+    entrypoint: /entrypoint-sasl.sh
+    command: ["zkServer.sh", "start-foreground"]
     expose:
       - "2181"
     networks:
@@ -406,11 +428,15 @@ services:
       ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
+      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data2_logs:/logs
       - zoo-data2_data:/data
       - zoo-data2_datalog:/datalog
       - zoo-backup:/backup
+      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -432,6 +458,8 @@ services:
         max-file: "3"
   zoo3:
     image: zookeeper:3.9
+    entrypoint: /entrypoint-sasl.sh
+    command: ["zkServer.sh", "start-foreground"]
     expose:
       - "2181"
     networks:
@@ -441,11 +469,15 @@ services:
       ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
+      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data3_logs:/logs
       - zoo-data3_data:/data
       - zoo-data3_datalog:/datalog
       - zoo-backup:/backup
+      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -467,20 +499,30 @@ services:
         max-file: "3"
   solr:
     image: solr:9.7
+    entrypoint: /entrypoint-sasl.sh
+    command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data:/var/solr/data
       - document-data:/data/documents:ro
+      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
+      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     expose:
       - "8983"
     networks:
       - default
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS} http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -506,18 +548,28 @@ services:
         condition: service_healthy
   solr2:
     image: solr:9.7
+    entrypoint: /entrypoint-sasl.sh
+    command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data2:/var/solr/data
       - document-data:/data/documents:ro
+      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
+      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     expose:
       - "8983"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS} http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -545,18 +597,28 @@ services:
         condition: service_healthy
   solr3:
     image: solr:9.7
+    entrypoint: /entrypoint-sasl.sh
+    command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data3:/var/solr/data
       - document-data:/data/documents:ro
+      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
+      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     expose:
       - "8983"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/admin/info/system || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS} http://localhost:8983/solr/admin/info/system || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -594,31 +656,84 @@ services:
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
+    environment:
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
+      SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      SOLR_READONLY_USER: ${SOLR_READONLY_USER:?Set SOLR_READONLY_USER}
+      SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:?Set SOLR_READONLY_PASS}
+      SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
+      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
+      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
+      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     entrypoint:
       - /bin/bash
       - -ceu
       - |
           set -o pipefail
+
           ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
           SOLR_URL="http://solr:8983"
 
-          until curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null; do
+          # Wait for Solr to be reachable (with or without auth)
+          until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1 || curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
             sleep 2
           done
 
-          until [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ]; do
+          # Wait for all 3 Solr nodes to join the cluster
+          until [ "$$(curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null || \
+                [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null; do
             sleep 2
           done
+
+          # --- Security: Bootstrap BasicAuth + RBAC ---
+          # Solr 9.7 BasicAuthPlugin requires >=1 user with hashed password
+          # at load time, so we use "solr auth enable" which handles hashing.
+
+          # Check if security is already bootstrapped
+          AUTH_RESP=$$(curl -sS "$$SOLR_URL/solr/admin/authentication" 2>/dev/null || true)
+          if echo "$$AUTH_RESP" | grep -qi 'No authentication'; then
+            echo "Bootstrapping Solr security..."
+            echo '{}' > /tmp/empty-security.json
+            solr zk cp file:/tmp/empty-security.json zk:/security.json -z "$$ZK_HOST"
+            sleep 2
+
+            solr auth enable --type basicAuth \
+              --credentials "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              --block-unknown false \
+              --solr-include-file /dev/null \
+              -z "$$ZK_HOST"
+
+            echo "Waiting for Solr to load security config..."
+            sleep 5
+
+            echo "Adding readonly user..."
+            curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              "$$SOLR_URL/solr/admin/authentication" \
+              -H 'Content-Type: application/json' \
+              -d '{"set-user": {"'"$$SOLR_READONLY_USER"'": "'"$$SOLR_READONLY_PASS"'"}}'
+
+            curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              "$$SOLR_URL/solr/admin/authorization" \
+              -H 'Content-Type: application/json' \
+              -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["search"]}}'
+
+            echo "Security bootstrap complete."
+          else
+            echo "Security already configured, skipping bootstrap."
+          fi
 
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
 
-          if ! curl -fsS "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
-            curl -fsS "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
+          if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
+            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
           fi
 
-          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" sh /scripts/add-conf-overlay.sh
+          SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh
 
           echo "Solr init complete"
     networks:

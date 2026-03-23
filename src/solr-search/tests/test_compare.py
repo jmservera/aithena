@@ -15,10 +15,10 @@ os.environ.setdefault("AUTH_COOKIE_NAME", "aithena_auth")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from config import settings  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from main import _compute_overlap_metrics  # noqa: E402
 
+from config import settings  # noqa: E402
+from main import _compute_overlap_metrics  # noqa: E402
 from tests.auth_helpers import create_authenticated_client  # noqa: E402
 
 
@@ -352,7 +352,7 @@ class TestComparisonConfig:
         assert settings.comparison_baseline_collection == "books"
 
     def test_default_candidate_collection(self) -> None:
-        assert settings.comparison_candidate_collection == "books_e5base"
+        assert settings.comparison_candidate_collection == "books"
 
     @patch.dict(os.environ, {
         "COMPARISON_BASELINE_COLLECTION": "custom_baseline",

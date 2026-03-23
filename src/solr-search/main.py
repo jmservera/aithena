@@ -17,8 +17,13 @@ from typing import Annotated, Any, Literal, TypeVar
 from urllib.parse import urlparse
 
 import pika
-import redis as redis_lib
 import requests
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
+
+import redis as redis_lib
 from admin_auth import require_admin_auth
 from auth import (
     AuthenticatedUser,
@@ -103,13 +108,9 @@ from collections_service import (
 )
 from config import settings
 from correlation import CorrelationIdMiddleware, get_correlation_id
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
 from logging_config import setup_logging
 from metrics import METRICS_CONTENT_TYPE, metrics_registry
 from perf_metrics import perf_metrics
-from pydantic import BaseModel
 from search_service import (
     EXCLUDE_CHUNKS_FQ,
     SOLR_FIELD_LIST,
@@ -437,7 +438,7 @@ async def request_logging_middleware(request: Request, call_next):
 def _raw_solr_query(params: dict[str, Any], *, collection: str | None = None) -> dict[str, Any]:
     """Execute a Solr HTTP request.  Raised exceptions feed the circuit breaker."""
     url = settings.select_url if collection is None else settings.select_url_for(collection)
-    response = requests.post(url, data=params, timeout=settings.request_timeout)
+    response = requests.post(url, data=params, timeout=settings.request_timeout, auth=settings.solr_auth)
     response.raise_for_status()
     return response.json()
 
@@ -1710,6 +1711,7 @@ def _get_solr_status(solr_url: str, timeout: float = 5.0) -> dict[str, Any]:
             cluster_url,
             params={"action": "CLUSTERSTATUS", "wt": "json"},
             timeout=timeout,
+            auth=settings.solr_auth,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -1872,7 +1874,8 @@ def _get_http_container_status(
     timeout: float = CONTAINER_VERSION_TIMEOUT,
 ) -> dict[str, str]:
     try:
-        response = requests.get(version_url, timeout=timeout)
+        auth = settings.solr_auth if "solr" in version_url.lower() else None
+        response = requests.get(version_url, timeout=timeout, auth=auth)
         response.raise_for_status()
         payload = response.json()
         return _build_container_entry(
@@ -2244,6 +2247,79 @@ def admin_clear_processed() -> dict[str, Any]:
 
 
 @app.post(
+    "/v1/admin/reindex",
+    name="admin_reindex_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_reindex(collection: str = Query(default="books")) -> dict[str, Any]:
+    """Trigger a full reindex of the specified Solr collection.
+
+    1. Deletes **all** documents from the Solr collection via the update handler.
+    2. Clears **all** Redis tracking keys (processed, failed, queued).
+
+    The document-lister will rediscover every file on its next scan and
+    re-enqueue them for indexing with the current embedding model.
+
+    ⚠️ This is a destructive operation — all existing search results will be
+    unavailable until reindexing completes.
+    """
+    if collection not in settings.allowed_collections:
+        raise HTTPException(status_code=400, detail=f"Collection '{collection}' is not in ALLOWED_COLLECTIONS")
+
+    # Step 1: Clear the Solr collection (use a generous timeout for large collections)
+    reindex_timeout = max(settings.request_timeout, 120)
+    solr_update_url = f"{settings.solr_url}/{collection}/update?commit=true"
+    try:
+        resp = requests.post(
+            solr_update_url,
+            json={"delete": {"query": "*:*"}},
+            auth=settings.solr_auth if settings.solr_auth else None,
+            timeout=reindex_timeout,
+        )
+        resp.raise_for_status()
+        solr_status = "cleared"
+    except requests.RequestException as exc:
+        logger.error("Failed to clear Solr collection %s: %s", collection, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to clear Solr collection '{collection}': {exc}",
+        ) from exc
+
+    # Step 2: Clear all Redis tracking keys using scan + pipeline for efficiency
+    client = _get_admin_redis_client()
+    redis_cleared = 0
+    batch: list[str] = []
+    batch_size = 500
+    try:
+        for key in client.scan_iter(match=_admin_key_pattern(), count=100):
+            batch.append(key)
+            if len(batch) >= batch_size:
+                pipe = client.pipeline(transaction=False)
+                for k in batch:
+                    pipe.delete(k)
+                pipe.execute()
+                redis_cleared += len(batch)
+                batch.clear()
+        if batch:
+            pipe = client.pipeline(transaction=False)
+            for k in batch:
+                pipe.delete(k)
+            pipe.execute()
+            redis_cleared += len(batch)
+    except Exception as exc:
+        logger.error("Failed to clear Redis tracking keys: %s", exc)
+        raise HTTPException(status_code=503, detail=f"Failed to clear Redis keys: {exc}") from exc
+
+    return {
+        "collection": collection,
+        "solr": solr_status,
+        "redis_cleared": redis_cleared,
+        "message": f"Cleared {collection} and {redis_cleared} Redis entries. "
+        "Documents will be re-indexed on the next lister scan.",
+    }
+
+
+@app.post(
     "/v1/admin/documents/{doc_id}/requeue",
     name="admin_requeue_document_v1",
     dependencies=[Depends(require_admin_auth)],
@@ -2357,6 +2433,7 @@ def _solr_atomic_update(doc_id: str, fields: dict[str, str | int]) -> None:
             json=[update_doc],
             params={"commit": "true"},
             timeout=settings.request_timeout,
+            auth=settings.solr_auth,
         )
         response.raise_for_status()
     except CircuitOpenError as exc:

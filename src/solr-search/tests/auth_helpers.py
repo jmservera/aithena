@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from fastapi.testclient import TestClient
+
 from auth import AuthenticatedUser, create_access_token
 from config import settings
-from fastapi.testclient import TestClient
 from main import app
 
 

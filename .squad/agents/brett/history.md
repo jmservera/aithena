@@ -304,3 +304,72 @@ Created comprehensive rollback plan for the embedding model A/B test.
 - 2026-03-22T14:41:02Z-brett-offline-installer.md (#921, PR #925)
 - 2026-03-22T14:41:02Z-ripley-offline-audit.md (offline audit confirmation)
 
+---
+
+## 2026-03-22 — Security Hardening Sprint Complete
+
+**Sprint:** Infrastructure Security Hardening  
+**Issues Closed:** #913 (ZK AdminServer), #912 (non-root containers), #917 (HSTS + headers)  
+**PRs Merged:** #928, #930, #932  
+**Status:** COMPLETE
+
+### 1. ZooKeeper AdminServer Hardening (Issue #913, PR #928)
+- **What:** Disabled AdminServer via `ZOO_CFG_EXTRA: "admin.enableServer=false"` on all 3 ZK nodes
+- **Where:** docker-compose.yml + docker-compose.prod.yml
+- **Rationale:** AdminServer exposes cluster topology; not needed for SolrCloud operations
+- **Decision:** Recorded in `.squad/decisions.md`
+
+### 2. Non-Root Container Standard (Issue #912, PR #930)
+- **What:** Implemented container security hardening across custom Dockerfiles
+- **Pattern (Alpine):** `addgroup -S -g 1000 app && adduser -S -u 1000 -G app app` + `USER app`
+- **Pattern (Debian):** `groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app` + `USER app`
+- **Services:** document-indexer, document-lister, aithena-ui; solr-search already using gosu
+- **Rationale:** D-2 audit finding; reduces attack surface per container security best practices
+- **Decision:** Standardized patterns recorded in `.squad/decisions.md` for future work
+
+### 3. HSTS and Security Headers (Issue #917, PR #932)
+- **What:** New `ssl.conf.template` with hardened TLS configuration
+- **Headers:** Strict-Transport-Security (HSTS), X-Content-Type-Options, X-Frame-Options, Referrer-Policy
+- **Implementation:** HSTS only over HTTPS; all location blocks re-declare headers; `server_tokens off`
+- **Requirement:** NGINX_HOST env var required when using SSL overlay
+- **Rationale:** Prevents SSL stripping attacks; hardens response headers per infrastructure audit
+- **Decision:** Recorded in `.squad/decisions.md`
+
+### Key Standardizations Established
+1. **Container UIDs:** Python services UID 1000 standard across Alpine + Debian
+2. **nginx:** Built-in nginx user + non-privileged port (8080)
+3. **TLS Configuration:** Dedicated HTTPS server block; HSTS enforcement; security header re-declaration in location blocks
+
+
+## 2026-03-23 — E5 Migration Stack Build & SASL Auth Fixes
+
+**Branch:** squad/e5-migration
+**Status:** Stack builds and runs successfully after 3 critical SASL/JAAS fixes
+
+### Build Results
+- **All 5 custom images built successfully** (~16 min total, embeddings-server dominant at ~1.1GB model download)
+- **Images:** aithena-ui (75MB), document-lister (162MB), solr-search (267MB), document-indexer (500MB), embeddings-server (27.4GB)
+- **All 16 services start and become healthy** including ZK 3-node cluster, SolrCloud 3-node, books collection created
+
+### SASL/JAAS Infrastructure Issues Found & Fixed
+
+1. **ZooKeeper JAAS file permissions** — `entrypoint-sasl.sh` wrote `/conf/jaas.conf` as root with `chmod 600`, but ZK docker-entrypoint.sh re-execs as `zookeeper` user (UID 1000) via gosu, making the file unreadable. **Fix:** Added `chown zookeeper:zookeeper` before chmod.
+
+2. **Solr JAAS file path** — `entrypoint-sasl.sh` wrote to `/opt/solr/server/etc/solr-jaas.conf` which is a root-owned directory. Solr 9.7 runs as `solr` user (UID 8983) and can't write there. **Fix:** Changed path to `/var/solr/solr-jaas.conf`.
+
+3. **Solr 9.7 Java Security Manager blocks SASL** — Solr 9.7's security manager denies `accessClassInPackage.sun.security.provider`, preventing JAAS DigestLoginModule from loading. **Fix:** Set `SOLR_SECURITY_MANAGER_ENABLED=false` on all 4 Solr services.
+
+4. **Solr 9.7 ZK client missing DigestLoginModule** — The ZK client jar bundled with Solr 9.7 does NOT include `org.apache.zookeeper.server.auth.DigestLoginModule`. SASL DIGEST-MD5 auth from Solr to ZK is fundamentally broken. **Fix:** Removed `requireClientAuthScheme=sasl` from ZK config; kept quorum SASL (inter-node) and digest ACLs (Solr → ZK znodes).
+
+### Architecture Decision: ZK Client Auth Model
+- **ZK quorum:** SASL DIGEST-MD5 (inter-node auth) ✅ works
+- **Solr → ZK:** Digest ACL credentials via `DigestZkCredentialsProvider` ✅ works
+- **Solr → ZK SASL:** ❌ NOT possible with Solr 9.7's bundled ZK client
+- **Decision:** Dropped `requireClientAuthScheme=sasl` from ZK; security relies on Docker network isolation + ZK digest ACLs
+
+### Learnings
+- ZK's `requireClientAuthScheme=sasl` is incompatible with Solr 9.7's embedded ZK client
+- The `SOLR_ZK_CREDS_AND_ACLS` env var is only used by `solr zk` CLI commands (line 730 of /opt/solr/bin/solr), NOT by the main Solr JVM startup; ZK creds must go in `SOLR_OPTS`
+- Solr 9.7 security manager defaults to enabled; SASL/JAAS needs it disabled or custom policy grants
+- ZK docker image (zookeeper:3.9) runs initial entrypoint as root then switches to `zookeeper` (UID 1000) via gosu; JAAS file must be owned by zookeeper
+- Solr docker image (solr:9.7) runs entirely as `solr` (UID 8983); writable paths: `/var/solr/`

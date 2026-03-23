@@ -266,7 +266,6 @@ def test_batch_edit_title_too_long_returns_422() -> None:
 def test_batch_edit_non_admin_returns_401() -> None:
     """Non-admin JWT user returns 401 for batch edit."""
     from auth import AuthenticatedUser
-
     from tests.auth_helpers import create_authenticated_client
 
     non_admin = AuthenticatedUser(id=2, username="reader", role="user")
@@ -412,7 +411,6 @@ def test_query_batch_edit_validation_applies() -> None:
 def test_query_batch_edit_non_admin_returns_401() -> None:
     """Non-admin JWT user returns 401 for query batch edit."""
     from auth import AuthenticatedUser
-
     from tests.auth_helpers import create_authenticated_client
 
     non_admin = AuthenticatedUser(id=2, username="reader", role="user")

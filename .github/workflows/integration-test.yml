@@ -74,6 +74,7 @@ jobs:
       FALLBACK_BASE_URL: http://localhost
       SEARCH_API_URL: http://localhost:8080
       SOLR_URL: http://localhost:8983/solr/books
+      HF_TOKEN: ${{ secrets.HF_TOKEN || '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -212,16 +213,28 @@ jobs:
 
       - name: Wait for services to become healthy
         run: |
+          # Solr admin credentials (defaults from docker-compose.yml)
+          SOLR_ADMIN_USER="${SOLR_ADMIN_USER:-solr_admin}"
+          SOLR_ADMIN_PASS="${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}"
+
           wait_for_url() {
             local url="$1"
             local label="$2"
             local attempts="${3:-60}"
             local sleep_seconds="${4:-5}"
+            local auth="${5:-}"
 
             for ((attempt=1; attempt<=attempts; attempt+=1)); do
-              if curl --fail --silent --show-error "$url" >/dev/null; then
-                echo "$label is ready ($url)"
-                return 0
+              if [ -n "$auth" ]; then
+                curl_result=$(curl --fail --silent --show-error -u "$auth" "$url" 2>&1) && {
+                  echo "$label is ready ($url)"
+                  return 0
+                }
+              else
+                curl_result=$(curl --fail --silent --show-error "$url" 2>&1) && {
+                  echo "$label is ready ($url)"
+                  return 0
+                }
               fi
 
               echo "[$attempt/$attempts] Waiting for $label at $url"
@@ -238,6 +251,7 @@ jobs:
 
             for ((attempt=1; attempt<=attempts; attempt+=1)); do
               status=$(curl --fail --silent \
+                -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}" \
                 "http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json" \
                 2>/dev/null) || true
 
@@ -270,8 +284,10 @@ jobs:
             return 1
           }
 
-          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr" 90
-          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection" 90
+          # Solr endpoints require basic auth after security bootstrap
+          SOLR_AUTH="${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}"
+          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr" 90 5 "$SOLR_AUTH"
+          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection" 90 5 "$SOLR_AUTH"
           wait_for_solr_cluster 30 10
           wait_for_url "http://localhost:8080/health" "solr-search API"
           wait_for_url "http://localhost/health" "nginx"

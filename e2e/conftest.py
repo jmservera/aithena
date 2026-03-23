@@ -25,6 +25,8 @@ import requests
 # ---------------------------------------------------------------------------
 
 SOLR_URL: str = os.environ.get("SOLR_URL", "http://localhost:8983/solr/books")
+SOLR_ADMIN_USER: str = os.environ.get("SOLR_ADMIN_USER", "solr_admin")
+SOLR_ADMIN_PASS: str = os.environ.get("SOLR_ADMIN_PASS", "SolrAdmin_dev2024!")
 SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
 E2E_LIBRARY_PATH: str = os.environ.get("E2E_LIBRARY_PATH", "/tmp/aithena-e2e-library")
 
@@ -94,10 +96,21 @@ def solr_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def solr_available(solr_url: str) -> None:
+def solr_auth() -> tuple[str, str]:
+    """Solr basic auth credentials (username, password)."""
+    return (SOLR_ADMIN_USER, SOLR_ADMIN_PASS)
+
+
+@pytest.fixture(scope="session")
+def solr_available(solr_url: str, solr_auth: tuple[str, str]) -> None:
     """Fail fast if the Solr books collection is not reachable."""
     try:
-        resp = requests.get(f"{solr_url}/admin/ping", params={"distrib": "true"}, timeout=5)
+        resp = requests.get(
+            f"{solr_url}/admin/ping",
+            params={"distrib": "true"},
+            auth=solr_auth,
+            timeout=5,
+        )
         resp.raise_for_status()
     except Exception as exc:
         pytest.skip(
@@ -194,18 +207,22 @@ def wait_for_solr_doc(
     doc_id: str,
     timeout: int = 90,
     poll_interval: int = 5,
+    auth: tuple[str, str] | None = None,
 ) -> dict | None:
     """
     Poll Solr until a document with *doc_id* appears or *timeout* seconds pass.
 
     Returns the Solr document dict on success, or None on timeout.
     """
+    if auth is None:
+        auth = (SOLR_ADMIN_USER, SOLR_ADMIN_PASS)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             resp = requests.get(
                 f"{solr_url}/select",
                 params={"q": f"id:{doc_id}", "wt": "json"},
+                auth=auth,
                 timeout=10,
             )
             resp.raise_for_status()

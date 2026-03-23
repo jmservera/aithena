@@ -115,6 +115,7 @@ def execute_query(
     mode: str,
     top_k: int = DEFAULT_TOP_K,
     timeout: float = 30.0,
+    token: str | None = None,
 ) -> QueryResult:
     """Execute a single search query against the solr-search API."""
     params: dict[str, Any] = {
@@ -126,10 +127,13 @@ def execute_query(
     }
 
     url = f"{base_url}/search?{urlencode(params)}"
+    headers: dict[str, str] = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     start = time.perf_counter()
 
     try:
-        response = requests.get(url, timeout=timeout)
+        response = requests.get(url, timeout=timeout, headers=headers)
         latency_ms = (time.perf_counter() - start) * 1000.0
         response.raise_for_status()
         data = response.json()
@@ -384,6 +388,7 @@ def run_benchmark(
     collections: tuple[str, ...] = COLLECTIONS,
     top_k: int = DEFAULT_TOP_K,
     timeout: float = 30.0,
+    token: str | None = None,
 ) -> BenchmarkReport:
     """Execute the full benchmark suite and return a report."""
     queries = load_queries(queries_path)
@@ -407,10 +412,10 @@ def run_benchmark(
             print(f"{progress} {mode:8s} | {q['id']:6s} | {q['query'][:50]}...", flush=True)
 
             baseline = execute_query(
-                base_url, q["query"], q["id"], baseline_col, mode, top_k, timeout,
+                base_url, q["query"], q["id"], baseline_col, mode, top_k, timeout, token=token,
             )
             candidate = execute_query(
-                base_url, q["query"], q["id"], candidate_col, mode, top_k, timeout,
+                base_url, q["query"], q["id"], candidate_col, mode, top_k, timeout, token=token,
             )
 
             comparison = compare_results(baseline, candidate, q["category"])
@@ -459,6 +464,11 @@ def main() -> None:
         type=Path,
         help="Output file for JSON report (default: stdout summary only)",
     )
+    parser.add_argument(
+        "--token",
+        default=None,
+        help="Bearer token for authenticated APIs (default: none)",
+    )
     args = parser.parse_args()
 
     report = run_benchmark(
@@ -467,6 +477,7 @@ def main() -> None:
         modes=tuple(args.modes),
         top_k=args.top_k,
         timeout=args.timeout,
+        token=args.token,
     )
 
     # Human-readable summary to stdout

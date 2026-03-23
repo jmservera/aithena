@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.11.0 Release Notes](release-notes/v1.11.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.13.0 Release Notes](release-notes/v1.13.0.md).
 
 ## System architecture overview
 
@@ -3064,5 +3064,368 @@ The new `GET /v1/books/{id}` endpoint returns full book metadata (title, author,
 ### Admin Routing
 
 The dead `admin` upstream has been removed from nginx configuration. The `/admin/streamlit` path now redirects to `/admin/`. Existing bookmarks will redirect automatically.
+
+---
+
+## Deployment Updates for v1.12.1 (Bug Fixes & UX Refinements)
+
+v1.12.1 is a maintenance release addressing critical bug fixes and UX refinements from v1.11.0:
+
+### What's Fixed in v1.12.1
+
+1. **Collections API (Issue #897)** — Collections API now uses real backend data by default. The mock data fallback has been removed.
+2. **Remember Me Checkbox (Issue #898)** — Login form now includes "Remember me" checkbox for persistent session support.
+3. **Text Preview Truncation (Issue #896)** — Search result chunk text is truncated to ~15-20 characters for better readability.
+4. **Thumbnail Generation (Issue #894)** — Alpine container now includes missing `libstdc++` library; PyMuPDF thumbnail generation works correctly.
+
+### Key Changes
+
+#### Collections API — Real Data By Default
+
+- `VITE_COLLECTIONS_API` environment variable is no longer required
+- Frontend API service calls real backend by default
+- No configuration changes needed for operators
+
+#### Container Build Fix
+
+The `src/document-indexer/Dockerfile` now includes C++ runtime libraries:
+
+```dockerfile
+RUN apk add --no-cache libstdc++ libgomp libgcc
+```
+
+This resolves PyMuPDF import errors and enables thumbnail generation on Alpine Linux.
+
+#### Login Form Update
+
+The login form now includes an optional "Remember me" checkbox:
+- **Checked:** Session persists for 30 days
+- **Unchecked (default):** Session ends when browser closes
+
+No operator configuration required.
+
+### Backward Compatibility
+
+v1.12.1 is **fully backward-compatible** with v1.11.0:
+- Existing collections data is preserved
+- No Solr schema changes
+- No database migrations required
+- No new environment variables required
+
+### Upgrade Procedure
+
+```bash
+git fetch origin
+git checkout v1.12.1
+docker compose pull
+docker compose up -d
+```
+
+### Deployment Validation Checklist
+
+- [ ] All services start: `docker compose ps`
+- [ ] No startup errors in logs: `docker compose logs | grep -i error`
+- [ ] Collections feature works with real backend data
+- [ ] New documents generate thumbnails during indexing
+- [ ] Login form displays "Remember me" checkbox
+- [ ] Test collections persistence (create → reload → verify)
+
+---
+
+## v1.13.0 — Offline Deployment & Security Hardening
+
+v1.13.0 is a major release focusing on offline deployment and comprehensive infrastructure security. This section covers new features and configuration requirements.
+
+### Offline Deployment (Air-Gapped Environments)
+
+*New in v1.13.0:* Aithena now supports fully air-gapped deployment with no external network access.
+
+#### Export Offline Bundle
+
+On a machine with internet access, create an offline bundle:
+
+```bash
+# From the repository root at v1.13.0
+./scripts/export-images.sh
+```
+
+This bundles:
+- All Docker images (solr, redis, rabbitmq, zookeeper, python services, etc.)
+- Python package dependencies
+- Build artifacts
+- Configuration templates
+- Install script and verification utilities
+
+Output: `staging/aithena-offline-v1.13.0.tar.gz`
+
+#### Transfer Bundle
+
+Transfer the bundle to your air-gapped network using approved methods:
+- Physical USB drive
+- Secure air-gap appliance
+- Any non-networked transfer mechanism
+
+#### Deploy from Offline Bundle
+
+On the air-gapped host:
+
+```bash
+# 1. Extract the bundle
+tar xzf aithena-offline-v1.13.0.tar.gz
+cd aithena-offline-v1.13.0
+
+# 2. Install from bundle (requires sudo)
+sudo ./install.sh
+
+# 3. Verify services are healthy
+./verify.sh
+
+# 4. Configure credentials (if needed)
+# Edit .env at /opt/aithena/.env
+# Then restart: docker compose up -d
+
+# 5. Monitor services
+docker compose ps
+docker compose logs -f
+```
+
+**Important:** The installer generates all credentials, secrets, and configuration on the target host. This ensures no credentials are leaked or pre-shared across networks.
+
+### Security Hardening in v1.13.0
+
+v1.13.0 introduces comprehensive authentication and authorization hardening. This is a **major security improvement** but requires careful deployment.
+
+#### Before You Upgrade
+
+1. **Read the release notes** section on breaking changes
+2. **Backup your `.env` file** (old credentials will not work)
+3. **Test in staging first** if possible
+4. **Plan for credential rotation** across your team
+
+#### Authentication & Authorization Overview
+
+All internal services now require authentication:
+
+| Service | Auth Method | User Count | Scope |
+|---------|-------------|-----------|-------|
+| **Solr** | BasicAuth | 3 users | Per-collection ACLs |
+| **ZooKeeper** | SASL Digest | 2 users | Per-znode ACLs |
+| **RabbitMQ** | User/password | Per-service | Per-queue permissions |
+| **Redis** | ACLs | Per-service | Command restrictions |
+| **nginx** | TLS (optional) | — | HSTS headers if TLS enabled |
+
+#### Solr Authentication Setup
+
+Solr now uses BasicAuthPlugin. Three user roles are created:
+
+```
+solr-admin    → Full cluster and collection admin
+solr-indexer  → Index write access
+solr-search   → Read-only search access
+```
+
+Credentials are injected from `.env` at runtime. To view current Solr users:
+
+```bash
+docker compose exec solr-search curl \
+  -u solr-admin:$SOLR_ADMIN_PASSWORD \
+  http://localhost:8983/api/users
+```
+
+#### ZooKeeper SASL Authentication
+
+ZooKeeper cluster nodes authenticate using SASL Digest. This prevents unauthorized config modifications.
+
+Credentials are stored in a JAAS config file injected at startup. No manual configuration needed; the installer handles setup.
+
+#### RabbitMQ Per-Service Credentials
+
+Each service has dedicated RabbitMQ credentials in `.env`:
+
+```
+document-lister   → RABBITMQ_LISTER_USER / RABBITMQ_LISTER_PASS
+document-indexer  → RABBITMQ_INDEXER_USER / RABBITMQ_INDEXER_PASS
+```
+
+These are auto-generated and stored in `.env`. Services authenticate at startup; no manual intervention needed.
+
+#### Redis ACLs
+
+Redis now uses ACLs to restrict dangerous commands. Indexing services can perform safe operations (GET, SET, DEL, LPUSH, RPOP) but cannot:
+- Flush databases (`FLUSHDB`, `FLUSHALL`)
+- Modify configuration (`CONFIG SET`)
+- Shut down Redis (`SHUTDOWN`)
+
+If you use Redis for monitoring or custom integrations, you may need to adjust your ACL rules. Consult the admin manual or release notes.
+
+#### Docker Network Segmentation
+
+*Planned for future releases.* Currently, services run on the default Docker network. Per-service credentials provide logical isolation.
+
+Operators can implement external network policies at the Docker daemon or orchestrator level if needed.
+
+#### Non-Root Container Processes
+
+All custom containers now run as non-root users (UID ≥ 1000):
+
+```bash
+docker compose exec solr-search id
+# uid=1000(solr-search) gid=1000(solr-search) groups=1000(solr-search)
+```
+
+This reduces the blast radius if a container is compromised. Verify file permissions match the new user IDs.
+
+#### Diacritic-Insensitive Search (ASCII Folding)
+
+By default, search is now diacritic-insensitive: "café" matches "cafe". This is an analyzer-level change controlled by the `SOLR_ASCII_FOLDING` environment variable (defaults to true).
+
+After upgrading, test search behavior on your indexed data to validate that the diacritic-insensitive analyzer works as expected for your library.
+
+If you need diacritic-sensitive search, set `SOLR_ASCII_FOLDING=false` in `.env` and restart services.
+
+#### TLS/HSTS Deployment (Optional)
+
+For production deployments, use the provided SSL Compose file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+```
+
+This configuration:
+- Enables TLS on nginx
+- Adds HSTS headers (1-year max-age, includeSubDomains)
+- Automatically renews certificates via Certbot
+
+### Backward Compatibility & Breaking Changes
+
+**v1.13.0 introduces new per-service credentials:**
+
+1. **Credentials Changed:** Services now use per-service credentials for Solr, RabbitMQ, ZooKeeper, and Redis. Run the installer to generate new credentials in `.env`.
+2. **Authentication Required:** Services authenticate with Solr, ZooKeeper, RabbitMQ, and Redis. Direct tooling access may require credentials (see admin sections for CLI examples).
+3. **Search Behavior:** Diacritic-insensitive search is now default (but configurable).
+4. **Network Topology:** Services run on the default Docker network. Per-service credentials provide logical isolation. Network-level segmentation is planned for future releases.
+
+**Migration Path:**
+
+```bash
+# 1. Backup current deployment
+docker compose down
+tar czf backup-v1.12.1.tar.gz docker-compose.*.yml .env
+
+# 2. Upgrade to v1.13.0
+git fetch origin
+git checkout v1.13.0
+
+# 3. Review and update .env (per-service credentials are now required)
+# Compare your current .env with .env.example
+# Add missing per-service credential variables if upgrading from v1.12.x
+
+# 4. Pull new images
+docker compose pull
+
+# 5. Start with new configuration
+docker compose up -d
+
+# 6. Monitor bootstrap
+docker compose ps
+sleep 30 && docker compose logs | grep -i error
+```
+
+If you encounter auth failures during startup:
+1. Check `.env` for missing per-service credentials (RABBITMQ_INDEXER_USER, RABBITMQ_LISTER_USER, etc.)
+2. Verify service health: `docker compose ps`
+3. Review logs: `docker compose logs <service-name>`
+4. If needed, regenerate `.env` from `.env.example` and populate with your settings
+
+### Deployment Validation Checklist
+
+Before declaring v1.13.0 production-ready:
+
+**Infrastructure:**
+- [ ] All services report healthy: `docker compose ps`
+- [ ] No startup errors in logs: `docker compose logs | grep -i error`
+- [ ] Services reach healthy state within 60 seconds
+
+**Authentication:**
+- [ ] Solr requires auth: `curl http://localhost:8983/api/cluster` → 401
+- [ ] Solr allows admin: `curl -u solr-admin:password http://localhost:8983/api/cluster` → 200
+- [ ] Redis rejects dangerous commands (if ACL enabled)
+- [ ] ZooKeeper cluster formed with SASL enabled
+
+**Search & Collections:**
+- [ ] Search for "cafe" → results include "café"
+- [ ] Collections feature works (create, add, delete)
+- [ ] Full-text search works
+- [ ] Semantic search works
+
+**Offline Deployment (if applicable):**
+- [ ] Offline bundle exports without network errors
+- [ ] Bundle verification passes on air-gapped host
+- [ ] Installation completes without external network access
+- [ ] Services start and reach healthy state
+
+**Security:**
+- [ ] Non-root containers verified: `docker compose exec solr-search id`
+- [ ] HSTS headers present (TLS deployments): `curl -I https://... | grep Strict`
+- [ ] Credentials stored in `.env` with restricted permissions (0600)
+
+### Upgrade Procedure
+
+```bash
+# 1. Stop existing services
+git checkout v1.12.2
+docker compose down
+
+# 2. Upgrade to v1.13.0
+git fetch origin
+git checkout v1.13.0
+
+# 3. Update .env with new per-service credentials (if upgrading from < v1.13.0)
+# Review and merge .env.example into your current .env
+# Add new variables: RABBITMQ_INDEXER_USER, RABBITMQ_LISTER_USER, SOLR_ADMIN_PASSWORD, etc.
+
+# 4. Pull new images
+docker compose pull
+
+# 5. Start services
+docker compose up -d
+
+# 6. Verify bootstrap
+docker compose ps
+sleep 30
+docker compose logs | grep -i error
+
+# 7. Run validation checks (see checklist above)
+```
+
+### Troubleshooting v1.13.0 Authentication Failures
+
+**Problem:** Services fail to start with auth errors.
+
+**Solution:**
+```bash
+# 1. Check if credentials are in .env
+grep SOLR_ADMIN_PASSWORD .env
+grep RABBITMQ_INDEXER_USER .env
+grep REDIS_PASSWORD .env
+
+# 2. If missing, add them to .env with unique values
+# Services require per-service credentials to authenticate
+
+# 3. Restart services
+docker compose down
+docker compose up -d
+
+# 4. Monitor logs
+docker compose logs -f
+```
+
+**Problem:** External tools (monitoring, backups) cannot reach services.
+
+**Solution:**
+1. Update tool configurations with new credentials (from `.env`)
+2. Verify network membership: `docker network inspect <network-name>`
+3. Update firewall rules if needed
+4. Test connectivity: `docker compose exec <service> curl -u user:pass http://target:port/...`
 
 ---
