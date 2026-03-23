@@ -384,12 +384,12 @@ services:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
-      ZOO_CFG_EXTRA: "admin.enableServer=false quorum.auth.enableSasl=true quorum.auth.learnerRequireSasl=true quorum.auth.serverRequireSasl=true authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider"
+      ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
       ZK_SASL_USER: ${ZK_SASL_USER:-solr}
       ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SERVER_JVMFLAGS: "-Djava.security.auth.login.config=/conf/jaas.conf"
+      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data1_logs:/logs
       - zoo-data1_data:/data
@@ -425,12 +425,12 @@ services:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
-      ZOO_CFG_EXTRA: "admin.enableServer=false quorum.auth.enableSasl=true quorum.auth.learnerRequireSasl=true quorum.auth.serverRequireSasl=true authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider"
+      ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
       ZK_SASL_USER: ${ZK_SASL_USER:-solr}
       ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SERVER_JVMFLAGS: "-Djava.security.auth.login.config=/conf/jaas.conf"
+      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data2_logs:/logs
       - zoo-data2_data:/data
@@ -466,12 +466,12 @@ services:
       - default
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
-      ZOO_CFG_EXTRA: "admin.enableServer=false quorum.auth.enableSasl=true quorum.auth.learnerRequireSasl=true quorum.auth.serverRequireSasl=true authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider"
+      ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
       ZK_SASL_USER: ${ZK_SASL_USER:-solr}
       ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SERVER_JVMFLAGS: "-Djava.security.auth.login.config=/conf/jaas.conf"
+      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data3_logs:/logs
       - zoo-data3_data:/data
