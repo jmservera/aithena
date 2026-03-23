@@ -33,10 +33,13 @@ from pathlib import Path
 
 import requests
 from conftest import (
+    SOLR_ADMIN_PASS,
+    SOLR_ADMIN_USER,
     wait_for_solr_doc,
 )
 
 SOLR_TIMEOUT = 60  # seconds to wait for a Solr document to appear
+SOLR_AUTH = (SOLR_ADMIN_USER, SOLR_ADMIN_PASS)
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +93,7 @@ def _index_pdf(solr_url: str, pdf_path: Path, base_path: Path) -> requests.Respo
             f"{solr_url}/update/extract",
             params=params,
             files={"file": (pdf_path.name, fh, "application/pdf")},
+            auth=SOLR_AUTH,
             timeout=60,
         )
     return resp
@@ -104,6 +108,7 @@ def _capture_diagnostics(solr_url: str, label: str) -> None:
         info = requests.get(
             f"{solr_url}/select",
             params={"q": "*:*", "rows": "5", "wt": "json", "sort": "id asc"},
+            auth=SOLR_AUTH,
             timeout=10,
         )
         print(f"[Solr recent docs] status={info.status_code}")
@@ -206,6 +211,7 @@ class TestUploadIndexSearchView:
                 "wt": "json",
                 "fl": "id,title_s,author_s,year_i,file_path_s,folder_path_s",
             },
+            auth=SOLR_AUTH,
             timeout=10,
         )
         resp.raise_for_status()
@@ -255,6 +261,7 @@ class TestUploadIndexSearchView:
                 "wt": "json",
                 "fl": "file_path_s",
             },
+            auth=SOLR_AUTH,
             timeout=10,
         )
         resp.raise_for_status()
@@ -288,6 +295,7 @@ class TestUploadIndexSearchView:
             f"{solr_url}/update",
             params={"commitWithin": "2000", "wt": "json"},
             json={"delete": {"id": fixture_solr_id}},
+            auth=SOLR_AUTH,
             timeout=30,
         )
         # A 200 or 404 are both acceptable (document may not exist)
