@@ -22,7 +22,7 @@
 | Brett | Infra Architect | `.squad/agents/brett/charter.md` | Active |
 | Kane | Security Engineer | `.squad/agents/kane/charter.md` | Active |
 | Juanma | Product Owner | — | Human |
-| Copilot | Coding Agent | `.squad/agents/copilot/charter.md` | Active |
+| @copilot | Coding Agent | `.squad/agents/copilot/charter.md` | Active |
 | Newt | Product Manager | `.squad/agents/newt/charter.md` | Active |
 
 <!-- copilot-auto-assign: true -->
@@ -34,5 +34,5 @@
 - **Created:** 2026-03-13
 - **Stack:** Python (backend services), TypeScript/React + Vite (UI), Docker Compose, Apache Solr (search), multilingual embeddings
 - **Description:** A book library database that indexes PDFs using Solr for full-text search. Extracts metadata (author, date, language) from filenames, folder names, and PDF content. Supports multilingual texts (Spanish, Catalan, French, English), including very old documents. Features file watching for new books, PDF upload via UI, search with filtering, and PDF viewing with highlighting. Plans to enhance native Solr word search with local multilingual embedding models.
-- **Book library path:** `/home/jmservera/booklibrary`
+- **Book library path:** Ask user during first run, typically: `~/booklibrary`
 - **Existing services:** Redis, RabbitMQ, Qdrant (being replaced by Solr), LLaMA server, embeddings server, document lister/indexer, qdrant-search API, React UI (aithena-ui)
