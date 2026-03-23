@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.13.0 Release Notes](release-notes/v1.13.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.13.1 Release Notes](release-notes/v1.13.1.md).
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
@@ -11,6 +11,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 **v1.12.1 refines UX:** collections now use real backend data by default, login form adds "Remember me" checkbox for session persistence, search result text previews are truncated for improved readability, and thumbnail generation is fixed in Alpine containers.
 
 **v1.13.0 improves offline deployment and search:** air-gapped offline installer package for disconnected environments, diacritic-insensitive search by default (matches "café" when searching "cafe"), and comprehensive infrastructure security hardening. See [Diacritic-Insensitive Search](#diacritic-insensitive-search-v1130) below.
+
+**v1.13.1 completes embedding evaluation infrastructure:** internal tools for benchmarking and comparing embedding models (no user-facing changes).
 
 ## Getting started
 

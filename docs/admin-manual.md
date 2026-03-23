@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.13.0 Release Notes](release-notes/v1.13.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.13.1 Release Notes](release-notes/v1.13.1.md).
 
 ## System architecture overview
 
@@ -3129,6 +3129,49 @@ docker compose up -d
 - [ ] New documents generate thumbnails during indexing
 - [ ] Login form displays "Remember me" checkbox
 - [ ] Test collections persistence (create → reload → verify)
+
+---
+
+## v1.13.1 — Embedding Evaluation Infrastructure
+
+v1.13.1 is a research and evaluation release focused on the internal benchmarking workflow for comparing embedding models. It does **not** change the default production embedding model, and it does **not** introduce new required credentials, deployment overlays, or mandatory configuration changes beyond v1.13.0.
+
+### What Changed for Operators
+
+The release adds or completes the operational workflow needed to evaluate `multilingual-e5-base` against the current default `distiluse-base-multilingual-cased-v2`:
+
+- dual-collection evaluation workflow using the existing A/B infrastructure
+- side-by-side comparison endpoint at `/v1/search/compare`
+- benchmark process covering exact-match, semantic, multilingual, fuzzy, and complex queries
+- metrics collection workflow for latency, memory usage, and index size
+
+### Deployment and Configuration Impact
+
+For standard deployments, **no new configuration is required** in v1.13.1:
+
+- keep the same `.env` and credential model introduced in v1.13.0
+- keep the same offline installer and security-hardening procedures introduced in v1.13.0
+- continue using the existing default embedding model unless you are intentionally running the evaluation workflow
+
+### Evaluation Workflow
+
+Teams running the embedding comparison should validate the evaluation environment separately from normal production rollout:
+
+1. Build and start the stack: `./buildall.sh && docker compose up -d`
+2. Index the same corpus into both evaluation targets
+3. Run side-by-side comparison queries through `/v1/search/compare`
+4. Collect service metrics and compare p50/p95/p99 latency, memory usage, and index size
+5. Review result quality before deciding whether to migrate directly to e5-base or continue to a later human-evaluation release
+
+### Upgrade Guidance from v1.13.0
+
+If you are already on v1.13.0, upgrading to v1.13.1 should be a routine point release:
+
+- no credential rotation is newly required
+- no new security toggles are introduced
+- no new user-facing deployment path replaces the v1.13.0 offline bundle workflow
+
+Treat v1.13.1 as an internal evaluation-capability release. If you are **not** running embedding benchmarks, you should still perform the normal smoke checks after upgrade, but you do not need extra deployment steps beyond the standard release validation.
 
 ---
 
