@@ -5,7 +5,7 @@ ARG BUILD_DATE=unknown
 # ---------- build stage ----------
 FROM python:3.12-slim AS builder
 
-ARG MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2
+ARG MODEL_NAME=intfloat/multilingual-e5-base
 ARG HF_TOKEN
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -38,7 +38,7 @@ FROM python:3.12-slim AS runtime
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
-ARG MODEL_NAME=sentence-transformers/distiluse-base-multilingual-cased-v2
+ARG MODEL_NAME=intfloat/multilingual-e5-base
 
 LABEL org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/jmservera/aithena" \
