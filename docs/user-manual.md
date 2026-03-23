@@ -168,6 +168,7 @@ Important behavior in the shipped UI:
 - **Keyword** is the default mode when the page opens.
 - Switching modes keeps your current query but resets results back to page 1.
 - The current mode is shown again next to the result count as a badge.
+- v1.12.2 restores normal semantic and hybrid search behavior after the v1.12.1 embeddings packaging regression.
 - Semantic and hybrid search require a real query. If embeddings are not ready yet, the page shows an inline error instead of silently failing.
 
 ### Diacritic-Insensitive Search (v1.13.0+)

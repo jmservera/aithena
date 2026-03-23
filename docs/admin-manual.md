@@ -3132,6 +3132,27 @@ docker compose up -d
 
 ---
 
+## Deployment Updates for v1.12.2 (Embeddings Hotfix)
+
+v1.12.2 is a focused hotfix release for the embeddings stack. The release-specific issue identified in the supplied release context is **Issue #949**, which reports that the v1.12.1 `embeddings-server` image was missing `model_utils.py`. That packaging error causes startup failure and leaves **semantic** and **hybrid** search unavailable until the image is corrected.
+
+### What Changed in v1.12.2
+
+Operators should treat v1.12.2 as a narrow recovery release with this goal:
+
+1. **Restore embeddings container startup**
+2. **Restore semantic search**
+3. **Restore hybrid search**
+4. **Leave keyword search and existing v1.12.1 fixes unaffected**
+
+### Pre-Deployment Requirements
+
+Before deploying v1.12.2, complete the following:
+
+1. **Run the existing automated suites** for `aithena-ui`, `solr-search`, `document-indexer`, `document-lister`, `embeddings-server`, and `admin`
+2. **Prepare runtime validation** for embeddings health and search-mode recovery
+3. **Review release evidence limits** — the supplied release bundle does not include CI execution logs or a merged PR list
+
 ## v1.13.0 — Offline Deployment & Security Hardening
 
 v1.13.0 is a major release focusing on offline deployment and comprehensive infrastructure security. This section covers new features and configuration requirements.
@@ -3372,6 +3393,28 @@ Before declaring v1.13.0 production-ready:
 ### Upgrade Procedure
 
 ```bash
+git fetch origin
+git checkout v1.12.2
+docker compose pull
+docker compose up -d
+```
+
+### Deployment Validation Checklist
+
+- [ ] All test suites pass
+- [ ] Services start: `docker compose ps`
+- [ ] No startup errors: `docker compose logs | grep -i error`
+- [ ] `embeddings-server` health responds: `curl http://localhost:8085/health`
+- [ ] No `ModuleNotFoundError: No module named 'model_utils'` in embeddings logs
+- [ ] Keyword search works
+- [ ] Semantic search works
+- [ ] Hybrid search works
+- [ ] v1.12.1 fixes still behave correctly (collections, remember me, preview truncation, thumbnails)
+
+### Backward Compatibility
+
+No schema or configuration changes are documented for v1.12.2. Treat the release as operationally backward-compatible with v1.12.1, but verify that assumption during deployment because CI evidence was not provided in the release bundle.
+
 # 1. Stop existing services
 git checkout v1.12.2
 docker compose down
