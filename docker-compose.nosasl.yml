@@ -1,4 +1,5 @@
-# Disable SASL authentication for dev/benchmark environments
+# Disable all Solr/SolrCloud/ZooKeeper authentication and security for dev/benchmark environments
+# This removes SASL, ZK ACLs, and Solr security manager — use ONLY in local dev/benchmark.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.nosasl.yml up -d
 services:
   zoo1:
@@ -97,7 +98,7 @@ services:
     environment:
       SOLR_AUTH_USER: ""
       SOLR_AUTH_PASS: ""
-      AUTH_DEFAULT_ADMIN_PASSWORD: "benchmark_admin_2024"
+      AUTH_DEFAULT_ADMIN_PASSWORD: "${AUTH_DEFAULT_ADMIN_PASSWORD:-}"
       ALLOWED_COLLECTIONS: "books,books_e5base"
       EMBEDDINGS_URL_BOOKS_E5BASE: "http://embeddings-server-e5:8080/v1/embeddings/"
   document-indexer:
