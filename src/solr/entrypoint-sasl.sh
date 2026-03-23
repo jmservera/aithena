@@ -9,7 +9,7 @@ set -euo pipefail
 
 printf 'Client {\n    org.apache.zookeeper.server.auth.DigestLoginModule required\n    username="%s"\n    password="%s";\n};\n' \
   "$ZK_SASL_USER" "$ZK_SASL_PASS" \
-  > /opt/solr/server/etc/solr-jaas.conf
-chmod 600 /opt/solr/server/etc/solr-jaas.conf
+  > /var/solr/solr-jaas.conf
+chmod 600 /var/solr/solr-jaas.conf
 
 exec docker-entrypoint.sh "$@"

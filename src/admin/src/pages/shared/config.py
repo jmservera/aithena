@@ -17,6 +17,7 @@ RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "")
 
 SOLR_SEARCH_URL = os.environ.get("SOLR_SEARCH_URL", "http://solr-search:8080").rstrip("/")
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY") or None
 
 # -- Auth --
 _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

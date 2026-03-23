@@ -68,8 +68,8 @@ cat > /etc/rabbitmq/definitions.json << DEFS
       "user": "indexer",
       "vhost": "/",
       "configure": "^(documents|shortembeddings.*)$",
-      "write": "^documents$",
-      "read": "^shortembeddings.*$"
+      "write": "^(documents|shortembeddings.*)$",
+      "read": "^(documents|shortembeddings.*)$"
     },
     {
       "user": "search",
@@ -104,13 +104,6 @@ cat > /etc/rabbitmq/definitions.json << DEFS
       "durable": true,
       "auto_delete": false,
       "arguments": {}
-    },
-    {
-      "name": "shortembeddings_e5base",
-      "vhost": "/",
-      "durable": true,
-      "auto_delete": false,
-      "arguments": {}
     }
   ],
   "bindings": [
@@ -118,14 +111,6 @@ cat > /etc/rabbitmq/definitions.json << DEFS
       "source": "documents",
       "vhost": "/",
       "destination": "shortembeddings",
-      "destination_type": "queue",
-      "routing_key": "",
-      "arguments": {}
-    },
-    {
-      "source": "documents",
-      "vhost": "/",
-      "destination": "shortembeddings_e5base",
       "destination_type": "queue",
       "routing_key": "",
       "arguments": {}

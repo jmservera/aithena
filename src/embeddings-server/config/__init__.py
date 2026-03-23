@@ -13,5 +13,5 @@ PORT = int(os.environ.get("PORT", 8080))
 VERSION = os.environ.get("VERSION", "dev")
 GIT_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
 BUILD_DATE = os.environ.get("BUILD_DATE", "unknown")
-# ADR-004: standardized multilingual embedding model
-MODEL_NAME = os.environ.get("MODEL_NAME", "sentence-transformers/distiluse-base-multilingual-cased-v2")
+# ADR-004 → updated: multilingual-e5-base replaces distiluse (benchmark #926)
+MODEL_NAME = os.environ.get("MODEL_NAME", "intfloat/multilingual-e5-base")
