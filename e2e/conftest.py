@@ -25,6 +25,8 @@ import requests
 # ---------------------------------------------------------------------------
 
 SOLR_URL: str = os.environ.get("SOLR_URL", "http://localhost:8983/solr/books")
+SOLR_ADMIN_USER: str = os.environ.get("SOLR_ADMIN_USER", "solr_admin")
+SOLR_ADMIN_PASS: str = os.environ.get("SOLR_ADMIN_PASS", "SolrAdmin_dev2024!")
 SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
 E2E_LIBRARY_PATH: str = os.environ.get("E2E_LIBRARY_PATH", "/tmp/aithena-e2e-library")
 
@@ -97,7 +99,12 @@ def solr_url() -> str:
 def solr_available(solr_url: str) -> None:
     """Fail fast if the Solr books collection is not reachable."""
     try:
-        resp = requests.get(f"{solr_url}/admin/ping", params={"distrib": "true"}, timeout=5)
+        resp = requests.get(
+            f"{solr_url}/admin/ping",
+            params={"distrib": "true"},
+            auth=(SOLR_ADMIN_USER, SOLR_ADMIN_PASS),
+            timeout=5,
+        )
         resp.raise_for_status()
     except Exception as exc:
         pytest.skip(
