@@ -53,7 +53,7 @@ def _api_headers() -> dict[str, str]:
 def trigger_reindex(collection: str = "books") -> dict:
     """Call the solr-search admin reindex endpoint."""
     url = f"{SOLR_SEARCH_URL}/v1/admin/reindex?collection={collection}"
-    resp = requests.post(url, headers=_api_headers(), timeout=60)
+    resp = requests.post(url, headers=_api_headers(), timeout=180)
     resp.raise_for_status()
     return resp.json()
 

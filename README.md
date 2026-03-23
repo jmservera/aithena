@@ -164,7 +164,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 | **Document Lister** | Scans book library filesystem | Tracks state, queues files to RabbitMQ |
 | **Document Indexer** | Consumes queue, extracts metadata, uploads to Solr | Python service with configurable path heuristics |
 | **Solr Search API** | FastAPI wrapper around the `books` collection | Normalized results, facets, highlights, PDF document URLs |
-| **Embeddings Server** | Semantic search vectors (Phase 3+) | `distiluse-base-multilingual-cased-v2` |
+| **Embeddings Server** | Semantic search vectors | `intfloat/multilingual-e5-base` (768D) |
 | **React/Vite Frontend** | Search UI with faceting, document management | `/` via nginx |
 | **nginx + Certbot** | Reverse proxy, TLS termination, admin entry point | Production-ready |
 
@@ -476,4 +476,4 @@ If a release needs to be rolled back:
 - [Solr Tika Integration](https://solr.apache.org/docs/latest/indexing-and-basic-data-operations.html#indexing-binary-documents)
 - [RabbitMQ](https://www.rabbitmq.com/)
 - [langid.py](https://github.com/saffsd/langid.py)
-- [distiluse-base-multilingual-cased-v2](https://huggingface.co/cross-encoder/distiluse-base-multilingual-cased-v2)
+- [multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base)
