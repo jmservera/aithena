@@ -340,3 +340,36 @@ Created comprehensive rollback plan for the embedding model A/B test.
 2. **nginx:** Built-in nginx user + non-privileged port (8080)
 3. **TLS Configuration:** Dedicated HTTPS server block; HSTS enforcement; security header re-declaration in location blocks
 
+
+## 2026-03-23 — E5 Migration Stack Build & SASL Auth Fixes
+
+**Branch:** squad/e5-migration
+**Status:** Stack builds and runs successfully after 3 critical SASL/JAAS fixes
+
+### Build Results
+- **All 5 custom images built successfully** (~16 min total, embeddings-server dominant at ~1.1GB model download)
+- **Images:** aithena-ui (75MB), document-lister (162MB), solr-search (267MB), document-indexer (500MB), embeddings-server (27.4GB)
+- **All 16 services start and become healthy** including ZK 3-node cluster, SolrCloud 3-node, books collection created
+
+### SASL/JAAS Infrastructure Issues Found & Fixed
+
+1. **ZooKeeper JAAS file permissions** — `entrypoint-sasl.sh` wrote `/conf/jaas.conf` as root with `chmod 600`, but ZK docker-entrypoint.sh re-execs as `zookeeper` user (UID 1000) via gosu, making the file unreadable. **Fix:** Added `chown zookeeper:zookeeper` before chmod.
+
+2. **Solr JAAS file path** — `entrypoint-sasl.sh` wrote to `/opt/solr/server/etc/solr-jaas.conf` which is a root-owned directory. Solr 9.7 runs as `solr` user (UID 8983) and can't write there. **Fix:** Changed path to `/var/solr/solr-jaas.conf`.
+
+3. **Solr 9.7 Java Security Manager blocks SASL** — Solr 9.7's security manager denies `accessClassInPackage.sun.security.provider`, preventing JAAS DigestLoginModule from loading. **Fix:** Set `SOLR_SECURITY_MANAGER_ENABLED=false` on all 4 Solr services.
+
+4. **Solr 9.7 ZK client missing DigestLoginModule** — The ZK client jar bundled with Solr 9.7 does NOT include `org.apache.zookeeper.server.auth.DigestLoginModule`. SASL DIGEST-MD5 auth from Solr to ZK is fundamentally broken. **Fix:** Removed `requireClientAuthScheme=sasl` from ZK config; kept quorum SASL (inter-node) and digest ACLs (Solr → ZK znodes).
+
+### Architecture Decision: ZK Client Auth Model
+- **ZK quorum:** SASL DIGEST-MD5 (inter-node auth) ✅ works
+- **Solr → ZK:** Digest ACL credentials via `DigestZkCredentialsProvider` ✅ works
+- **Solr → ZK SASL:** ❌ NOT possible with Solr 9.7's bundled ZK client
+- **Decision:** Dropped `requireClientAuthScheme=sasl` from ZK; security relies on Docker network isolation + ZK digest ACLs
+
+### Learnings
+- ZK's `requireClientAuthScheme=sasl` is incompatible with Solr 9.7's embedded ZK client
+- The `SOLR_ZK_CREDS_AND_ACLS` env var is only used by `solr zk` CLI commands (line 730 of /opt/solr/bin/solr), NOT by the main Solr JVM startup; ZK creds must go in `SOLR_OPTS`
+- Solr 9.7 security manager defaults to enabled; SASL/JAAS needs it disabled or custom policy grants
+- ZK docker image (zookeeper:3.9) runs initial entrypoint as root then switches to `zookeeper` (UID 1000) via gosu; JAAS file must be owned by zookeeper
+- Solr docker image (solr:9.7) runs entirely as `solr` (UID 8983); writable paths: `/var/solr/`

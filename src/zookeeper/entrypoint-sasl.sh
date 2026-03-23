@@ -12,6 +12,7 @@ printf 'QuorumServer {\n    org.apache.zookeeper.server.auth.DigestLoginModule r
   "$ZK_SASL_USER" "$ZK_SASL_PASS" \
   "$ZK_SASL_USER" "$ZK_SASL_PASS" \
   > /conf/jaas.conf
+chown zookeeper:zookeeper /conf/jaas.conf
 chmod 600 /conf/jaas.conf
 
 exec /docker-entrypoint.sh "$@"
