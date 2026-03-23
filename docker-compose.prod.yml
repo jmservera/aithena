@@ -656,7 +656,6 @@ services:
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
-      - ./src/solr/security.json:/scripts/security.json:ro
     environment:
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -678,40 +677,53 @@ services:
           ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
           SOLR_URL="http://solr:8983"
 
+          # Wait for Solr to be reachable (with or without auth)
           until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1 || curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
             sleep 2
           done
 
-          until [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ]; do
+          # Wait for all 3 Solr nodes to join the cluster
+          until [ "$$(curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null || \
+                [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null; do
             sleep 2
           done
 
           # --- Security: Bootstrap BasicAuth + RBAC ---
-          echo "Uploading security.json to ZooKeeper..."
-          solr zk cp file:/scripts/security.json zk:/security.json -z "$$ZK_HOST"
+          # Solr 9.7 BasicAuthPlugin requires >=1 user with hashed password
+          # at load time, so we use "solr auth enable" which handles hashing.
 
-          echo "Creating Solr users via Authentication API..."
-          curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/authentication" \
-            -H 'Content-Type: application/json' \
-            -d '{"set-user": {"'"$$SOLR_ADMIN_USER"'": "'"$$SOLR_ADMIN_PASS"'", "'"$$SOLR_READONLY_USER"'": "'"$$SOLR_READONLY_PASS"'"}}' || \
-          curl -fsS "$$SOLR_URL/solr/admin/authentication" \
-            -H 'Content-Type: application/json' \
-            -d '{"set-user": {"'"$$SOLR_ADMIN_USER"'": "'"$$SOLR_ADMIN_PASS"'", "'"$$SOLR_READONLY_USER"'": "'"$$SOLR_READONLY_PASS"'"}}'
+          # Check if security is already bootstrapped
+          AUTH_RESP=$$(curl -sS "$$SOLR_URL/solr/admin/authentication" 2>/dev/null || true)
+          if echo "$$AUTH_RESP" | grep -qi 'No authentication'; then
+            echo "Bootstrapping Solr security..."
+            echo '{}' > /tmp/empty-security.json
+            solr zk cp file:/tmp/empty-security.json zk:/security.json -z "$$ZK_HOST"
+            sleep 2
 
-          echo "Assigning roles via Authorization API..."
-          curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/authorization" \
-            -H 'Content-Type: application/json' \
-            -d '{"set-user-role": {"'"$$SOLR_ADMIN_USER"'": "admin", "'"$$SOLR_READONLY_USER"'": "readonly"}}' || \
-          curl -fsS "$$SOLR_URL/solr/admin/authorization" \
-            -H 'Content-Type: application/json' \
-            -d '{"set-user-role": {"'"$$SOLR_ADMIN_USER"'": "admin", "'"$$SOLR_READONLY_USER"'": "readonly"}}'
+            solr auth enable --type basicAuth \
+              --credentials "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              --block-unknown false \
+              --solr-include-file /dev/null \
+              -z "$$ZK_HOST"
 
-          echo "Enabling blockUnknown..."
-          curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/authentication" \
-            -H 'Content-Type: application/json' \
-            -d '{"set-property": {"blockUnknown": true}}'
+            echo "Waiting for Solr to load security config..."
+            sleep 5
 
-          echo "Security bootstrap complete."
+            echo "Adding readonly user..."
+            curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              "$$SOLR_URL/solr/admin/authentication" \
+              -H 'Content-Type: application/json' \
+              -d '{"set-user": {"'"$$SOLR_READONLY_USER"'": "'"$$SOLR_READONLY_PASS"'"}}'
+
+            curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              "$$SOLR_URL/solr/admin/authorization" \
+              -H 'Content-Type: application/json' \
+              -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["search"]}}'
+
+            echo "Security bootstrap complete."
+          else
+            echo "Security already configured, skipping bootstrap."
+          fi
 
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
