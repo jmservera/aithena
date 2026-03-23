@@ -96,13 +96,19 @@ def solr_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def solr_available(solr_url: str) -> None:
+def solr_auth() -> tuple[str, str]:
+    """Solr basic auth credentials (username, password)."""
+    return (SOLR_ADMIN_USER, SOLR_ADMIN_PASS)
+
+
+@pytest.fixture(scope="session")
+def solr_available(solr_url: str, solr_auth: tuple[str, str]) -> None:
     """Fail fast if the Solr books collection is not reachable."""
     try:
         resp = requests.get(
             f"{solr_url}/admin/ping",
             params={"distrib": "true"},
-            auth=(SOLR_ADMIN_USER, SOLR_ADMIN_PASS),
+            auth=solr_auth,
             timeout=5,
         )
         resp.raise_for_status()
@@ -201,18 +207,22 @@ def wait_for_solr_doc(
     doc_id: str,
     timeout: int = 90,
     poll_interval: int = 5,
+    auth: tuple[str, str] | None = None,
 ) -> dict | None:
     """
     Poll Solr until a document with *doc_id* appears or *timeout* seconds pass.
 
     Returns the Solr document dict on success, or None on timeout.
     """
+    if auth is None:
+        auth = (SOLR_ADMIN_USER, SOLR_ADMIN_PASS)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             resp = requests.get(
                 f"{solr_url}/select",
                 params={"q": f"id:{doc_id}", "wt": "json"},
+                auth=auth,
                 timeout=10,
             )
             resp.raise_for_status()
