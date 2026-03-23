@@ -351,3 +351,21 @@ Conducted comprehensive audit of all inter-service communication paths. **Confir
    - Release CANNOT ship with critical/high security issues
    - Threat assessment required for significant features
 
+
+### 2026-03-23T10:00Z: PR #964 Review — e5 Migration for Release Readiness
+
+**Scope:** Full code review of multilingual-e5-base migration PR across embeddings-server, solr-search, admin, Solr schema, and Docker Compose.
+
+**Verdict:** Approve with required follow-ups (see below). Core migration is solid — config changes, schema updates, service removal, and test updates are all correct and consistent. Two blocking issues: timeout mismatch and dangling references in scripts/.
+
+**Key findings:**
+- 10 issues identified (2 medium, 8 low)
+- No critical bugs
+- Auth on reindex endpoint: ✅ (require_admin_auth)
+- Schema 512→768D: ✅ consistent (field type + both fields)
+- Config defaults: ✅ aligned across all services
+- Redis cleanup: ✅ uses scan_iter + pipeline batching
+- Tests: all pass (72 solr-search, 34 embeddings-server)
+- Missing: no tests for the new reindex endpoint or admin reindex page
+
+**Decision:** scripts/benchmark/ is A/B test infrastructure that should be updated or deprecated in a follow-up issue, not this PR.
