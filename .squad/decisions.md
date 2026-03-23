@@ -1,5 +1,76 @@
 # Squad Decisions
 
+---
+
+# Decision: User directive — No A/B comparison for v1.14.0
+
+**Author:** Juanma (Project Owner)  
+**Date:** 2026-03-23T09:05Z  
+**Status:** CLOSED (v1.14.0 milestone)  
+**Impact:** All A/B evaluation issues (#900-918) closed as "not planned"
+
+## Directive
+
+"We are not going to have a side by side comparer as we already decided to move to the new model directly." The e5-base benchmark showed clear superiority. The stack moves directly to multilingual-e5-base via PR #964.
+
+## Context
+
+A/B testing infrastructure was prepared for user-facing comparison of distiluse-base vs multilingual-e5-base embeddings. However, internal benchmarks demonstrated e5-base superiority across all metrics, eliminating the need for end-user A/B evaluation.
+
+## Decision
+
+- Close all v1.14.0 A/B evaluation issues (#900-918) as "not planned"
+- Mark v1.14.0 milestone complete
+- Proceed with e5-base deployment via #964 (no dual-model production stack)
+- Dual-model infrastructure remains available for future testing/rollback scenarios
+
+---
+
+# Decision: HF_TOKEN Build Integration
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2025-03-22  
+**Status:** IMPLEMENTED  
+**PR:** #963 (embeddings-server build optimization)
+
+## Context
+
+The embeddings-server Dockerfile pre-downloads a large SentenceTransformer model (~500MB) during the build stage. Without authentication to HuggingFace Hub, downloads are rate-limited and slow. With HF_TOKEN, authenticated requests get prioritized bandwidth.
+
+## Decision
+
+Wire HuggingFace API token through Docker build for faster model downloads.
+
+## Implementation
+
+1. **Dockerfile** (`src/embeddings-server/Dockerfile`):
+   - Added `ARG HF_TOKEN` to the builder stage
+   - Set `ENV HF_TOKEN=${HF_TOKEN}` in the builder environment
+   - HF_TOKEN is NOT persisted in the runtime stage (multi-stage isolation)
+   - Runtime stage sets `HF_HUB_OFFLINE=1` to prevent runtime downloads
+
+2. **docker-compose.yml**:
+   - Added `HF_TOKEN: ${HF_TOKEN:-}` to embeddings-server build args
+   - Falls back to empty string if not set (prevents build failures)
+
+3. **buildall.sh**:
+   - Added `source .env` at script start to load environment variables
+   - Ensures HF_TOKEN from `.env` is available to docker compose
+
+4. **GitHub Actions** (`.github/workflows/integration-test.yml`):
+   - Added `HF_TOKEN: ${{ secrets.HF_TOKEN || '' }}` to job env
+   - Pulls from GitHub Secrets (must be configured by user/org)
+   - Defaults to empty string if secret is not set
+
+## Security
+
+- HF_TOKEN is only used at build time (builder stage)
+- Not persisted in final image layers (multi-stage benefit)
+- Treated as a secret in CI/CD (GitHub Actions secrets mechanism)
+- Optional: builds continue without token, just slower
+
+---
+
 # Decision: Offline Installer Architecture
 
 **Author:** Brett (Infrastructure Architect)  
