@@ -352,7 +352,7 @@ class TestComparisonConfig:
         assert settings.comparison_baseline_collection == "books"
 
     def test_default_candidate_collection(self) -> None:
-        assert settings.comparison_candidate_collection == "books_e5base"
+        assert settings.comparison_candidate_collection == "books"
 
     @patch.dict(os.environ, {
         "COMPARISON_BASELINE_COLLECTION": "custom_baseline",
