@@ -191,9 +191,9 @@ services:
       replicas: 1
       resources:
         limits:
-          memory: 512m
+          memory: 2g
         reservations:
-          memory: 256m
+          memory: 512m
     logging:
       driver: json-file
       options:
