@@ -1,6 +1,8 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.13.0 Release Notes](release-notes/v1.13.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.14.1 Release Notes](release-notes/v1.14.1.md).
+
+**v1.14.1 operator note:** the release context supplied for this version does not introduce a newly verified end-user workflow beyond what is already documented below. The most concrete `v1.14.x` additions verified in the current tree are operator-facing backup/restore and reindex tools, which are covered in the admin manual.
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
