@@ -373,3 +373,26 @@ Created comprehensive rollback plan for the embedding model A/B test.
 - Solr 9.7 security manager defaults to enabled; SASL/JAAS needs it disabled or custom policy grants
 - ZK docker image (zookeeper:3.9) runs initial entrypoint as root then switches to `zookeeper` (UID 1000) via gosu; JAAS file must be owned by zookeeper
 - Solr docker image (solr:9.7) runs entirely as `solr` (UID 8983); writable paths: `/var/solr/`
+
+## 2026-03-24 — Monthly Restore Drill Fix (Issue #962, PR #981)
+
+**Branch:** squad/962-restore-drill-fix
+**Status:** PR created, local dry-run verified
+
+### Root Cause
+Monthly restore drill CI workflow failed because restore scripts did not fully respect `DRY_RUN=1`:
+1. `restore-critical.sh` — encryption key pre-flight check (`/etc/aithena/backup.key`) exited fatally before any DRY_RUN guard
+2. `restore-high.sh` — Solr health check ran unconditionally, blocking 30s in CI (no Solr cluster)
+3. Both scripts had DRY_RUN guards inside restore functions, but placed AFTER file-find and checksum steps that fail with CI mock data
+
+### Fix Pattern
+- Pre-flight checks that depend on infrastructure (encryption keys, Solr cluster, etc.) must be skipped or non-fatal in DRY_RUN mode
+- Restore function flow in DRY_RUN: missing backup files and checksum failures produce warnings, not fatal errors
+- No changes to production (non-dry-run) code paths
+- Medium tier (`restore-medium.sh`) was already correct — it uses graceful degradation pattern (`if check_health; then restore; else warn; fi`)
+
+### Learnings
+- The medium tier's graceful degradation pattern is the gold standard for CI drill compatibility
+- DRY_RUN guards must be placed at every decision point that depends on live infrastructure, not just before the final I/O operation
+- Restore drill workflow treats exit 2 (warnings) as acceptable — only exit 1 fails the drill
+- Key file paths: `scripts/restore-critical.sh`, `scripts/restore-high.sh`, `.github/workflows/monthly-restore-drill.yml`
