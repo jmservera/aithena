@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate-tag:
@@ -31,6 +31,31 @@ jobs:
           fi
 
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify VERSION file matches pushed tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check VERSION-tag consistency
+        env:
+          TAG_VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          if [[ ! -f VERSION ]]; then
+            echo "::error::VERSION file not found in repository root"
+            exit 1
+          fi
+
+          file_version="$(tr -d '[:space:]' < VERSION)"
+
+          if [[ "$file_version" != "$TAG_VERSION" ]]; then
+            echo "::error::VERSION file ($file_version) does not match pushed tag v${TAG_VERSION}"
+            echo "::error::Update the VERSION file before tagging, or use scripts/create-release-tag.sh"
+            exit 1
+          fi
+
+          echo "✅ VERSION file ($file_version) matches tag v${TAG_VERSION}"
 
       - name: Validate tag exists on main branch
         env:
