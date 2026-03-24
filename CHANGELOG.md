@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.1] — 2026-03-24
+
+### Fixed
+
+- **Stats endpoint 500 error** — Solr returns stats field values as strings; `parse_stats_response` now casts to `float()` before `round()`/`int()` (#995)
+- **RabbitMQ indexer queue_bind** — indexer user lacked write permission on `shortembeddings` queue, causing `ACCESS_REFUSED` on `queue_bind`. Expanded write regex to include `shortembeddings.*` (#995)
+
 ## [1.14.0] — 2026-03-26
 
 ### Added

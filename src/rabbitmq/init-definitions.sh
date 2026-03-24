@@ -68,8 +68,8 @@ cat > /etc/rabbitmq/definitions.json << DEFS
       "user": "indexer",
       "vhost": "/",
       "configure": "^(documents|shortembeddings.*)$",
-      "write": "^documents$",
-      "read": "^shortembeddings.*$"
+      "write": "^(documents|shortembeddings.*)$",
+      "read": "^(documents|shortembeddings.*)$"
     },
     {
       "user": "search",

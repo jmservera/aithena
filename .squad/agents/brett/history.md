@@ -396,3 +396,32 @@ Monthly restore drill CI workflow failed because restore scripts did not fully r
 - DRY_RUN guards must be placed at every decision point that depends on live infrastructure, not just before the final I/O operation
 - Restore drill workflow treats exit 2 (warnings) as acceptable — only exit 1 fails the drill
 - Key file paths: `scripts/restore-critical.sh`, `scripts/restore-high.sh`, `.github/workflows/monthly-restore-drill.yml`
+
+## 2026-03-24 — Release v1.14.0
+
+**Branch:** release/v1.14.0 → dev (PR #989) → main (PR #990)
+**Tag:** v1.14.0 on main
+**Status:** Released successfully
+
+### Release Process
+
+1. Created release branch from dev, updated VERSION (1.13.1 → 1.14.0) and CHANGELOG.md
+2. Initial attempt: release/v1.14.0 → main PR (#986) blocked by "constitution" ruleset requiring "All tests passed" and "Python lint (ruff)" checks — these only trigger from the CI workflow which runs on PRs targeting `dev`, not `main`
+3. Adjusted flow: merged release branch → dev (PR #989), then dev → main (PR #990)
+4. Tag v1.14.0 was auto-created on main by Copilot automation after merge
+
+### Changes in v1.14.0
+- Reindex endpoint test coverage (13 tests, #983)
+- Benchmark scripts updated for single-collection e5 (#985)
+- @eslint/js upgraded to v10 (#940), actions/setup-node to v6.3.0 (#942)
+- Solr bind-mount volume permissions fix (#979)
+- Restore drill DRY_RUN fix (#981)
+- AdminPage tab handler lint fix (#982)
+- Squad heartbeat detection fix (#980) and Dependabot triage permissions (#984)
+
+### Learnings
+- The "constitution" ruleset requires "All tests passed" and "Python lint (ruff)" checks — these come from `.github/workflows/ci.yml` which only triggers on `push: branches: [dev]` and `pull_request: branches: [dev]`
+- Release PRs targeting `main` will NOT get these checks. Must merge to dev first, then dev → main
+- Repo rulesets have no bypass actors — even `--admin` flag cannot override them
+- v1.13.1 was merged dev→main by jmservera (repo owner) who has implicit bypass as owner
+- The release workflow auto-tags and creates a GitHub release when the merge commit lands on main

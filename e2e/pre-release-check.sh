@@ -225,6 +225,10 @@ scan_security() {
     svc="$(extract_service "$line")"
     lc_line="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
     case "$lc_line" in
+      *"insecure"*"quorum"*|*"non-tls"*"quorum"*)
+        # ZK non-TLS quorum is expected in dev/CI — downgrade to warning
+        add_finding "security" "warning" "${svc:-unknown}" "$line" "$LINE_NUM"
+        ;;
       *"insecure"*|*"certificate"*"error"*|*"certificate"*"expired"*|*"certificate"*"invalid"*|*"tls"*"error"*|*"tls"*"fail"*|*"ssl"*"error"*|*"auth"*"fail"*|*"authentication failed"*|*"unauthorized"*|*"permission denied"*)
         add_finding "security" "error" "${svc:-unknown}" "$line" "$LINE_NUM"
         ;;
@@ -243,6 +247,10 @@ scan_memory() {
     svc="$(extract_service "$line")"
     lc_line="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
     case "$lc_line" in
+      *"crashonoutofmemoryerror"*)
+        # JVM startup config flag, not actual OOM — downgrade to info
+        add_finding "memory" "info" "${svc:-unknown}" "$line" "$LINE_NUM"
+        ;;
       *"oom"*|*"out of memory"*|*"cannot allocate memory"*|*"memory allocation failed"*)
         add_finding "memory" "error" "${svc:-unknown}" "$line" "$LINE_NUM"
         ;;
