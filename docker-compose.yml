@@ -516,10 +516,8 @@ services:
         max-size: "10m"
         max-file: "3"
   solr:
-    image: solr:9.7
-    # build:
-    #   context: .
-    #   dockerfile: ./src/solr/Dockerfile
+    build:
+      context: ./src/solr
     user: "0:0"  # Run entrypoint as root to fix bind-mount ownership; entrypoint.sh drops to solr (8983) before running docker-entrypoint.sh
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -567,10 +565,8 @@ services:
         condition: service_healthy
   # second solr node
   solr2:
-    image: solr:9.7
-    # build:
-    #   context: .
-    #   dockerfile: ./src/solr/Dockerfile
+    build:
+      context: ./src/solr
     user: "0:0"  # Run entrypoint.sh as root to fix bind-mount ownership; it drops to solr (8983) via gosu before exec'ing docker-entrypoint.sh
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -617,10 +613,8 @@ services:
       solr:
         condition: service_healthy
   solr3:
-    image: solr:9.7
-    # build:
-    #   context: .
-    #   dockerfile: ./src/solr/Dockerfile
+    build:
+      context: ./src/solr
     user: "0:0"  # Run entrypoint.sh as root to fix bind-mount ownership; it drops to solr (8983) before execing docker-entrypoint.sh
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -667,7 +661,8 @@ services:
       solr2:
         condition: service_healthy
   solr-init:
-    image: solr:9.7
+    build:
+      context: ./src/solr
     depends_on:
       solr:
         condition: service_healthy
