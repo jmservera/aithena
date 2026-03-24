@@ -28,7 +28,7 @@ services:
       - "443:443"
     environment:
       - NGINX_HOST=${NGINX_HOST:?Set NGINX_HOST to your domain for TLS (e.g. NGINX_HOST=aithena.example.com)}
-      - NGINX_ENVSUBST_FILTER=$$NGINX_HOST
+      - NGINX_ENVSUBST_FILTER=NGINX_HOST|SOLR_BASIC_AUTH
     volumes:
       - certbot-data-conf:/etc/letsencrypt
       - certbot-data-www:/var/www/certbot

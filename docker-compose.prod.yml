@@ -330,6 +330,8 @@ services:
       - default
   nginx:
     image: nginx:1.27-alpine
+    entrypoint: ["/docker-entrypoint-solr-auth.sh"]
+    command: ["nginx", "-g", "daemon off;"]
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
@@ -343,6 +345,10 @@ services:
         condition: service_healthy
       solr:
         condition: service_healthy
+    environment:
+      SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:-solr_admin}
+      SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
+      NGINX_ENVSUBST_FILTER: SOLR_BASIC_AUTH
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:80/health"]
       interval: 30s
@@ -363,7 +369,8 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./src/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./src/nginx/docker-entrypoint-solr-auth.sh:/docker-entrypoint-solr-auth.sh:ro
+      - ./src/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./src/nginx/html:/usr/share/nginx/html:ro
       - document-data:/data/documents:ro
   zoo1:
