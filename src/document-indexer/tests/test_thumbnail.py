@@ -244,6 +244,8 @@ class TestThumbnailIntegration:
         call_args = mock_gen_thumb.call_args
         assert call_args[0][0] == str(pdf)
         assert call_args[0][1].endswith(".thumb.jpg")
+        # Thumbnail should be written under the thumbnail dir, not alongside the PDF
+        assert "thumbnails" in call_args[0][1]
 
         # Verify thumbnail_url_s was included in Solr params
         post_call = mock_post.call_args

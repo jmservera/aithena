@@ -37,6 +37,7 @@ from . import (
     SOLR_COLLECTION,
     SOLR_HOST,
     SOLR_PORT,
+    THUMBNAIL_DIR,
     VERSION,
 )
 from .chunker import chunk_text_with_pages
@@ -427,10 +428,16 @@ def index_document(path: Path) -> dict:
 
     # ── Thumbnail generation (best-effort) ───────────────────────────────
     thumbnail_url: str | None = None
-    thumb_path = Path(f"{path}.thumb.jpg")
+    thumb_dir = Path(THUMBNAIL_DIR)
+    try:
+        relative = path.relative_to(BASE_PATH)
+        thumb_path = thumb_dir / f"{relative}.thumb.jpg"
+    except ValueError:
+        thumb_path = thumb_dir / f"{path.name}.thumb.jpg"
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
     if generate_thumbnail(str(path), str(thumb_path)):
         try:
-            thumbnail_url = str(thumb_path.relative_to(BASE_PATH))
+            thumbnail_url = str(thumb_path.relative_to(thumb_dir))
         except ValueError:
             thumbnail_url = thumb_path.name
 

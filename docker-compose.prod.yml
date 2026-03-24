@@ -163,6 +163,7 @@ services:
       - CHUNK_OVERLAP=50
       - SOLR_AUTH_USER=${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       - SOLR_AUTH_PASS=${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      - THUMBNAIL_DIR=/data/thumbnails
     restart: on-failure
     stop_grace_period: 10s
     deploy:
@@ -194,6 +195,7 @@ services:
       start_period: 10s
     volumes:
       - document-data:/data/documents:ro
+      - thumbnail-data:/data/thumbnails
     networks:
       - default
   solr-search:
@@ -712,6 +714,8 @@ services:
       - default
     restart: "no"
 volumes:
+  thumbnail-data:
+
   rabbitmq-data:
     driver: local
     driver_opts:
