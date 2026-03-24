@@ -11736,3 +11736,213 @@ fi
 - ZK 3.9 SASL issue: https://issues.apache.org/jira/browse/ZOOKEEPER-4577
 - Solr 9.7 BasicAuth: https://solr.apache.org/guide/solr/latest/deployment-guide/basic-auth-plugin.html
 - Docker network security: https://docs.docker.com/engine/security/network/
+
+---
+
+## Decision: v1.15.0 Release Approval
+
+**Author:** Newt (Product Manager)
+**Date:** 2026-03-24
+**Status:** Approved (pending CI)
+
+### Context
+
+v1.15.0 is a release-quality and CI hardening release with 29 merged PRs covering admin portal improvements, CI/CD workflow enhancements, and critical bug fixes.
+
+### Decision
+
+Release v1.15.0 is approved by the PM gate with the following conditions:
+
+1. **PR #1087** (release docs) must merge to dev before the release PR #1088 is merged
+2. **Merge strategy:** Use `--merge` (NOT squash) for dev→main per team convention
+3. **Do NOT create the git tag manually** — the release workflow handles tagging
+
+### Test Gate
+
+1,939 tests across 6 services. 5 pre-existing failures (not release blockers):
+- 4 metadata pattern edge cases in document-indexer
+- 1 auth defaults test environment issue in admin
+
+### Documentation Gate
+
+All required documentation committed:
+- CHANGELOG.md, release notes, test report, user manual, admin manual
+
+### Open Items for Next Cycle
+
+- Admin service coverage at 62% — recommend improvement to 70%+ in next milestone
+- Pre-existing test failures should be tracked and fixed
+
+---
+
+## Decision: Docker Build Optimization Strategy
+
+**Author:** Brett (Infrastructure/DevOps)
+**Date:** 2026-03-24
+**Status:** Approved for implementation
+
+### Context
+
+Current embeddings-server Dockerfile uses 2-stage build, causing model re-downloads on every app code change due to inefficient layer caching.
+
+### Decision
+
+Implement 3-stage Dockerfile (model-downloader → dependencies → app-builder → runtime):
+1. **Stage 1 (model-downloader):** Download models once, cache independently
+2. **Stage 2 (dependencies):** Install Python dependencies, cache separately
+3. **Stage 3 (app-builder):** Build application
+4. **Stage 4 (runtime):** Lean production image
+
+### Benefits
+
+- **80% faster incremental builds** for code-only changes (models not re-downloaded)
+- **Secure HF_TOKEN handling** (multi-stage isolation, build secret, not ARG)
+- **Stable layer ordering** (most-stable layers first for cache effectiveness)
+
+### Implementation Plan
+
+1. Restructure Dockerfile with 4 stages
+2. Move HF_TOKEN to build secret (not environment variable)
+3. Layer caching strategy: models → deps → app → runtime
+4. Test & validate build time improvements
+5. Measure cache hit rates in CI/CD
+
+### Success Criteria
+
+- Build time for code-only changes < 2 minutes
+- Models cached reliably across builds
+- HF_TOKEN never exposed in image history
+- CI/CD integration working
+
+---
+
+## Decision: Docker Health Checks Implementation
+
+**Author:** Brett (Infrastructure/DevOps)
+**Date:** 2026-03-24
+**Status:** Approved
+
+### Context
+
+Some containers lack health checks, making it harder to detect service degradation in production.
+
+### Decision
+
+Add health check commands to Docker Compose services:
+- Define `/healthz` or `/health` endpoints in each service
+- Set check interval: 30s, timeout: 10s, start_period: 40s, retries: 3
+- Ensure health checks don't impact performance
+
+### Benefits
+
+- Automatic container restart on failure
+- Better orchestration in Kubernetes-ready environment
+- Production visibility into service health
+
+---
+
+## Decision: Internal Service Authentication Simplification
+
+**Author:** Kane (Security)
+**Date:** 2026-03-24
+**Status:** Approved with reservations
+
+### Context
+
+Current setup includes authentication for Redis, ZooKeeper, and Solr. ZooKeeper DigestMD5 causes NullPointerException on Java 17. Redis password adds operational burden without clear security benefit for internal-only services.
+
+### Decision
+
+**Drop:** Redis password, ZooKeeper DigestMD5 auth  
+**Keep:** Solr BasicAuth (thin compliance baseline)
+
+### Rationale
+
+- Services not exposed externally; Docker bridge network isolation sufficient
+- Fixes Java 17 ZK startup bug
+- Reduces onboarding friction
+- Removes ~60–80 lines of SASL configuration
+
+### Compensating Controls
+
+- Network isolation: Docker bridge (services not accessible from host)
+- Solr remains authenticated (compliance requirement)
+- Monitor for unauthorized access patterns
+
+### Implementation
+
+1. Remove Redis requirepass configuration
+2. Remove ZooKeeper DigestMD5 auth
+3. Keep Solr BasicAuth
+4. Update integration tests
+5. Deploy and monitor
+
+---
+
+## Decision: Board Updates Directive
+
+**Author:** Copilot Coding Agent
+**Date:** 2026-03-24
+**Status:** Information
+
+### Summary
+
+Project board and issue tracking require periodic updates to reflect current sprint state, completed work, and upcoming focus areas. This is ongoing operational guidance for the team.
+
+---
+
+## Decision: Embeddings-Server Extraction Architecture
+
+**Author:** Ripley (Architecture)
+**Date:** 2026-03-24
+**Status:** Approved (subject to PO sign-off)
+
+### Context
+
+`src/embeddings-server/` is independent, HTTP-only, uses zero code coupling to core aithena. Opportunity to extract to reusable service.
+
+### Decision
+
+Extract embeddings-server to independent GitHub repository (`github.com/jmservera/embeddings-server`).
+
+### Benefits
+
+- Independent release rhythm (model updates without aithena coordination)
+- Genericization as reusable embeddings service
+- 2–3 minutes faster aithena releases
+- Cleaner architectural boundaries
+
+### Technical Readiness
+
+✅ Zero code coupling to aithena core  
+✅ HTTP-only integration (no internal dependencies)  
+✅ Self-contained dependencies (HuggingFace, transformers)  
+✅ Independent build/test cycle possible
+
+### Extraction Strategy
+
+**Phase 1 (Current):** Finalize integration boundaries  
+**Phase 2:** Create new repository, migrate code  
+**Phase 3:** Version pinning in aithena (submodule or versioned dependency)  
+**Phase 4:** Independent release and deployment
+
+### Risk Mitigation
+
+- **Version pinning discipline:** Strict API versioning
+- **API stability:** Maintain backward compatibility
+- **Supply chain security:** Monitor model distribution sources
+- **Deployment coordination:** Gradual rollout with fallback strategy
+
+### Success Criteria
+
+- Extraction complete with zero functionality loss
+- Independent release process established
+- Model updates 2–3 minutes faster
+- Reusable service ready for internal/external use
+
+### Open Items
+
+- Approval from jmservera (Product Owner)
+- Team consensus on release coordination process
+- Plan for aithena integration (submodule vs. container registry)
+

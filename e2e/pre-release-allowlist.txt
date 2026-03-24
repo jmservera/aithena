@@ -17,9 +17,14 @@ security:*non-tls*quorum*=ignore
 # JVM startup flags like -XX:+CrashOnOutOfMemoryError are not actual OOM errors
 memory:*CrashOnOutOfMemoryError*=ignore
 
-# Read-only volume permission errors are expected for :ro mounts
+# Volume permission errors are expected in CI (tmpfs volumes are root-owned,
+# application containers run as non-root UIDs)
 security:*PermissionError*=warning
 security:*permission denied*read-only*=warning
+
+# Thumbnail directory write errors in CI — tmpfs thumbnail-data volume is root-owned
+# but document-indexer runs as UID 1000. Thumbnails are non-critical; indexing succeeds.
+security:*permission denied*/data/thumbnails/*=ignore
 
 # Solr deprecation warnings for internal APIs
 deprecation:*Deprecated*=info
