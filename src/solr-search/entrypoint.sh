@@ -7,6 +7,9 @@ set -e
 if [ "$(id -u)" = "0" ]; then
     chown -R app:app /data/auth 2>/dev/null || true
     chown -R app:app /data/collections 2>/dev/null || true
+    # Ensure uploads dir exists inside the bind-mounted document volume
+    mkdir -p /data/documents/uploads 2>/dev/null || true
+    chown app:app /data/documents/uploads 2>/dev/null || true
     exec gosu app "$@"
 fi
 
