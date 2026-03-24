@@ -80,8 +80,7 @@ runs:
             return !memberLabels.some(ml => issueLabels.includes(ml));
           });
 
-          // 2. Find assigned but unstarted issues (has squad:{member} label, no assignee)
-          const unstarted = [];
+          // 2. Fix orphaned squad:* labels (ensure parent 'squad' label is present)
           for (const member of members) {
             try {
               const { data: memberIssues } = await github.rest.issues.listForRepo({
@@ -92,7 +91,6 @@ runs:
                 per_page: 10
               });
               for (const issue of memberIssues) {
-                // Ensure parent 'squad' label is present (fix orphaned squad:* labels)
                 const hasSquadLabel = issue.labels.some(l => l.name === 'squad');
                 if (!hasSquadLabel) {
                   await github.rest.issues.addLabels({
@@ -102,9 +100,6 @@ runs:
                     labels: ['squad']
                   });
                   core.info(`Fixed orphaned label: added 'squad' to #${issue.number}`);
-                }
-                if (!issue.assignees || issue.assignees.length === 0) {
-                  unstarted.push({ issue, member });
                 }
               }
             } catch (e) {
@@ -195,9 +190,6 @@ runs:
           const summary = [];
           if (untriaged.length > 0) {
             summary.push(`🔴 **${untriaged.length} untriaged issue(s)** need triage`);
-          }
-          if (unstarted.length > 0) {
-            summary.push(`🟡 **${unstarted.length} assigned issue(s)** have no assignee`);
           }
           if (missingVerdict.length > 0) {
             summary.push(`⚪ **${missingVerdict.length} issue(s)** missing triage verdict (no \`go:\` label)`);
