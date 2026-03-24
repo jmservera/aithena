@@ -259,5 +259,32 @@
 - #897 — Collections enablement
 - #898 — Remember-me checkbox
 
+- #897 — Collections enablement
+- #898 — Remember-me checkbox
+
 **Team Coordination:** All team members should test both auth paths when adding auth gates.
+
+### 2026-03-24 — HF_TOKEN Release Workflow Integration (PR #1052)
+
+**Status:** COMPLETED  
+**Branch:** `squad/993-hf-token-release`  
+**Coordinates:** Supports Brett's Docker build optimization analysis
+
+**Implementation Details:**
+- Integrated HF_TOKEN secret from GitHub Actions into embeddings-server build args
+- Updated release workflow `.github/workflows/release.yml` to pass HF_TOKEN as build secret
+- Falls back to empty string if secret is not set (prevents CI failures)
+- Tested in integration-test.yml (already had HF_TOKEN support)
+
+**Security Approach:**
+- Uses GitHub Actions `secrets: |` syntax (tokens not embedded in image history)
+- HF_TOKEN only used at build time (builder stage), not in runtime image
+- Multi-stage Dockerfile isolation ensures token is not persisted
+
+**Related Decisions:**
+- Supports Brett's Docker layer optimization (4-stage build with HF_TOKEN secrets)
+- Enables faster embeddings-server builds across future releases
+- No changes to docker-compose.yml (build args unchanged)
+
+**Follow-up:** Docker restructuring (4-stage build) is separate PR pending team approval.
 
