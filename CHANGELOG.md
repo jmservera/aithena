@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-03-26
+
+### Added
+
+- **Reindex endpoint test coverage** — 13 tests for POST `/v1/admin/reindex` endpoint (#983)
+
+### Changed
+
+- **Benchmark scripts** updated for single-collection e5 setup (#985)
+- **@eslint/js** upgraded to v10 (#940)
+- **actions/setup-node** upgraded from v4.4.0 to v6.3.0 (#942)
+
+### Fixed
+
+- **Solr bind-mount volume permissions** — run entrypoint as root, drop to solr via gosu (#979)
+- **Restore drill scripts** respect DRY_RUN in pre-flight checks (#981)
+- **AdminPage tab handler** — removed useless null assignment lint fix (#982)
+- **Squad heartbeat detection** — add 🔄 emoji to Ralph roster entry (#980)
+- **Dependabot triage permissions** — heartbeat permissions fix and false-positive warning removal (#984)
+
 ## [1.13.0] — 2026-03-25
 
 ### Added
