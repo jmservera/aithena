@@ -62,8 +62,8 @@ class TestStatsEndpoint:
     def test_stats_endpoint(
         self, api_url: str, api_available: None, auth_headers: dict[str, str]
     ) -> None:
-        """GET /v1/stats must return HTTP 200 with total_documents (int) and
-        page_count_stats containing a numeric mean."""
+        """GET /v1/stats must return HTTP 200 with total_books (int) and
+        page_stats containing numeric avg."""
         resp = requests.get(
             f"{api_url}/v1/stats", headers=auth_headers, timeout=10
         )
@@ -72,23 +72,23 @@ class TestStatsEndpoint:
         )
         body = resp.json()
 
-        # total_documents must be an integer
-        assert "total_documents" in body, (
-            f"'total_documents' missing from /v1/stats: {body}"
+        # total_books must be an integer
+        assert "total_books" in body, (
+            f"'total_books' missing from /v1/stats: {body}"
         )
-        assert isinstance(body["total_documents"], int), (
-            f"'total_documents' must be int, got {type(body['total_documents'])}: "
-            f"{body['total_documents']!r}"
+        assert isinstance(body["total_books"], int), (
+            f"'total_books' must be int, got {type(body['total_books'])}: "
+            f"{body['total_books']!r}"
         )
 
-        # page_count_stats.mean must be numeric
-        page_stats = body.get("page_count_stats", {})
-        assert "mean" in page_stats, (
-            f"'mean' missing from page_count_stats: {page_stats}"
+        # page_stats.avg must be numeric
+        page_stats = body.get("page_stats", {})
+        assert "avg" in page_stats, (
+            f"'avg' missing from page_stats: {page_stats}"
         )
-        assert isinstance(page_stats["mean"], (int, float)), (
-            f"page_count_stats.mean must be numeric, got "
-            f"{type(page_stats['mean'])}: {page_stats['mean']!r}"
+        assert isinstance(page_stats["avg"], (int, float)), (
+            f"page_stats.avg must be numeric, got "
+            f"{type(page_stats['avg'])}: {page_stats['avg']!r}"
         )
 
     def test_stats_returns_numeric_types(
@@ -108,15 +108,15 @@ class TestStatsEndpoint:
         body = resp.json()
 
         # Top-level numeric fields
-        for key in ("total_documents", "total_pages"):
+        for key in ("total_books", "total_pages"):
             if key in body:
                 assert isinstance(body[key], (int, float)), (
                     f"Top-level stat '{key}' must be numeric, got "
                     f"{type(body[key])}: {body[key]!r}"
                 )
 
-        # Nested stat blocks (e.g. page_count_stats) — every value must be numeric
-        for section_key in ("page_count_stats",):
+        # Nested stat blocks (e.g. page_stats) — every value must be numeric
+        for section_key in ("page_stats",):
             section = body.get(section_key, {})
             if not isinstance(section, dict):
                 continue
