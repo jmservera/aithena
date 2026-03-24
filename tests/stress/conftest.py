@@ -18,7 +18,6 @@ Environment variables (with defaults for the local dev stack):
   RABBITMQ_PASSWORD   RabbitMQ password (default: guest)
   REDIS_HOST          Redis host (default: localhost)
   REDIS_PORT          Redis port (default: 6379)
-  REDIS_PASSWORD      Redis password (default: empty)
   STRESS_RESULTS_DIR  Results output directory (default: tests/stress/results)
   MONITOR_INTERVAL    Docker stats sampling interval in seconds (default: 2)
 """
@@ -56,7 +55,6 @@ RABBITMQ_USER: str = os.environ.get("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD: str = os.environ.get("RABBITMQ_PASSWORD", "guest")
 REDIS_HOST: str = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT: int = int(os.environ.get("REDIS_PORT", "6379"))
-REDIS_PASSWORD: str = os.environ.get("REDIS_PASSWORD", "")
 STRESS_RESULTS_DIR: str = os.environ.get("STRESS_RESULTS_DIR", str(DEFAULT_RESULTS_DIR))
 MONITOR_INTERVAL: float = float(os.environ.get("MONITOR_INTERVAL", "2"))
 
@@ -90,7 +88,6 @@ def redis_config() -> dict[str, str | int]:
     return {
         "host": REDIS_HOST,
         "port": REDIS_PORT,
-        "password": REDIS_PASSWORD,
     }
 
 
