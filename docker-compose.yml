@@ -551,6 +551,7 @@ services:
       - solr-data:/var/solr/data
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
+      - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
       SOLR_MODULES: extraction,langid
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -606,6 +607,7 @@ services:
       - solr-data2:/var/solr/data
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
+      - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
       SOLR_MODULES: extraction,langid
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -660,6 +662,7 @@ services:
       - solr-data3:/var/solr/data
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
+      - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
       SOLR_MODULES: extraction,langid
       SOLR_SECURITY_MANAGER_ENABLED: "false"
