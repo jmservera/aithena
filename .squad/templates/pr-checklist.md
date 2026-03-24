@@ -4,6 +4,14 @@ Run through this checklist before opening any PR. Copy into your PR description.
 
 ---
 
+## Quality Gate (MANDATORY)
+
+- [ ] Ran `.squad/scripts/verify.sh` — all checks pass
+- [ ] `ruff check` + `ruff format --check` pass for all changed Python files
+- [ ] `npm run lint` + `npm run format:check` pass (if aithena-ui changed)
+- [ ] Tests pass for all changed services (`uv run pytest` / `npx vitest run`)
+- [ ] No `--no-verify` was used on any commit
+
 ## Scope
 
 - [ ] `git diff --stat origin/dev` shows ONLY files related to this issue
