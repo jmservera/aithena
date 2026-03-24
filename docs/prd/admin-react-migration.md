@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary
 
-The Aithena admin portal (`src/admin/`) is currently a standalone Streamlit (Python) application running as a separate service. The main user-facing search UI (`src/aithena-ui/`) was migrated to React + Vite in earlier releases and now includes a growing set of admin-oriented pages (document manager, backup dashboard, user management). This creates a **split-brain admin experience**: operators must context-switch between two completely different UIs with different auth flows, different tech stacks, and different deployment models.
+The Aithena admin portal (`src/admin/`) is a Streamlit (Python) application whose features are being progressively migrated into the React UI. The `streamlit-admin` Docker Compose service has been removed and nginx redirects `/admin/streamlit` → `/admin`, but the `src/admin/` source tree is retained as reference for migration. The main user-facing search UI (`src/aithena-ui/`) was migrated to React + Vite in earlier releases and now includes a growing set of admin-oriented pages (document manager, backup dashboard, user management). This creates a **split-brain admin experience**: some admin features exist only in the legacy Streamlit code while others are already in React.
 
 This PRD proposes a **full migration of all Streamlit admin features into the existing React application** for v2.0, unifying the tech stack, eliminating the standalone Streamlit service, and enabling shared components, consistent UX, and a single auth system.
 
@@ -22,7 +22,7 @@ This PRD proposes a **full migration of all Streamlit admin features into the ex
 - **Shared component library**: Reuse existing React components (tables, metrics cards, error states, loading spinners, modals) across user and admin pages
 - **Single auth system**: JWT-based auth with role-based access control already in aithena-ui — no separate basic auth or cookie SSO passthrough needed
 - **Eliminated Docker socket dependency**: The Streamlit log viewer mounts `/var/run/docker.sock` — a security concern flagged in review. The React version will use a proper API-based log streaming endpoint
-- **Reduced deployment footprint**: Remove the `streamlit-admin` container from the Docker Compose stack
+- **Reduced deployment footprint**: Complete removal of the `streamlit-admin` container and `src/admin/` source tree from the Docker Compose stack
 - **Better accessibility**: The React UI already has `eslint-plugin-jsx-a11y`, keyboard navigation patterns, and ARIA roles; Streamlit's accessibility story is limited
 
 ---
@@ -50,7 +50,7 @@ The Streamlit admin communicates **directly** with Redis, RabbitMQ Management AP
 
 3. **Direct infrastructure access**: The admin talks directly to Redis (`redis-py`), RabbitMQ (HTTP management API), and Docker (`docker-py` with socket mount). This creates tight coupling, security surface, and makes the admin impossible to run outside the Docker network.
 
-4. **Security concern — Docker socket**: The log viewer requires mounting `/var/run/docker.sock:ro` into the admin container. Even read-only, this grants significant host Docker daemon access. This was flagged during PR review and gated behind `ENABLE_LOG_VIEWER=false` by default.
+4. **Security concern — Docker socket**: The log viewer requires mounting `/var/run/docker.sock:ro` into the admin container. Even read-only, this grants significant host Docker daemon access. This was flagged during PR review; a configuration gate (e.g., an `ENABLE_LOG_VIEWER` flag defaulting to `false`) is a desired mitigation but is not currently enforced in the Streamlit `src/admin/src/pages/log_viewer.py`.
 
 5. **Partial React migration already in progress**: `aithena-ui` already has an `/admin` page (document manager with queued/processed/failed tabs), `/admin/users` (user management), and `/admin/backups` (backup dashboard). The Streamlit pages duplicate some of this functionality with inconsistent UX.
 
@@ -141,7 +141,7 @@ The Streamlit admin communicates **directly** with Redis, RabbitMQ Management AP
 
 | Feature | Current Implementation | Data Source |
 |---|---|---|
-| Security gate | `ENABLE_LOG_VIEWER` env var (default: false) | Config |
+| Security gate | None in Streamlit; planned `ENABLE_LOG_VIEWER` env var gate for React (default: false) | Config (planned) |
 | Docker dependency check | `docker` Python package import check | Runtime |
 | Docker connection test | `docker.from_env().ping()` | Docker socket (`/var/run/docker.sock:ro`) |
 | Service selector | `st.selectbox` with running aithena containers | Docker SDK: `client.containers.list()` |
@@ -484,7 +484,7 @@ Returns recent log lines for a container, without requiring Docker socket access
 
 **Implementation options** (in order of preference):
 
-1. **Docker SDK in backend**: Move Docker socket mount to `solr-search` container instead of admin. The backend is a trusted service with API authentication — this is more defensible than exposing the socket to a Streamlit app with basic auth.
+1. **Docker SDK in backend**: Move Docker socket mount to `solr-search` container instead of admin. The backend is a trusted service with API authentication — this is more defensible than exposing the socket directly to the Streamlit admin UI, even though it is protected by JWT/cookie-based auth.
 
 2. **Docker API over HTTP**: Configure Docker daemon to expose the API over a Unix socket or TCP to `solr-search` only, with network-level isolation.
 
@@ -620,15 +620,15 @@ Returns infrastructure connection details and management UI URLs.
 | Metric | Target | Measurement |
 |---|---|---|
 | Streamlit pages migrated | 7/7 | Feature checklist (Section 4 inventory) |
-| Streamlit service removed | Yes | `docker compose ps` shows no `streamlit-admin` |
-| Docker socket removed | Yes | No `/var/run/docker.sock` mount in any compose file |
+| Legacy Streamlit artifacts removed | Yes | `src/admin/` directory deleted; Streamlit admin CI job removed; docs contain no references to the Streamlit admin UI |
+| Docker socket removed from browser-facing services | Yes | No `/var/run/docker.sock` mount in any browser-facing compose service (backend-only mount is acceptable) |
 | Separate auth system removed | Yes | No `AUTH_JWT_SECRET` / `AUTH_ADMIN_USERNAME` / `AUTH_ADMIN_PASSWORD` env vars |
 
 ### 11.2 Quality Gates
 
 | Metric | Target | Measurement |
 |---|---|---|
-| Admin test count | ≥ 81 (current Streamlit baseline) | `vitest run` count for admin-related test files |
+| Admin test count | ≥ 116 (v1.15.0 baseline) | `vitest run` count for admin-related test files (React) must equal or exceed the current combined Streamlit+React admin test count |
 | Admin test coverage | ≥ 80% | `vitest --coverage` for `pages/admin/` and `hooks/admin*` |
 | Accessibility violations | 0 (critical/serious) | `axe-core` automated audit |
 | Admin page load time | < 2s on local Docker stack | Manual measurement + Lighthouse |
