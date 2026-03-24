@@ -65,7 +65,7 @@ The pre-commit hook at `.github/hooks/pre-commit` automatically runs lint, forma
 git config core.hooksPath .github/hooks
 ```
 
-**The hook CANNOT be skipped.** Never use `--no-verify`.
+**The hook MUST NOT be skipped.** Never use `--no-verify`.
 
 ## Checklist (copy into PR description)
 
