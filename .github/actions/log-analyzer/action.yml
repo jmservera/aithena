@@ -145,49 +145,70 @@ runs:
           const milestoneLabel = milestone || 'pre-release';
           const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-          if (hasErrors) {
-            // Create one combined failure issue
-            let findingsText = `### Error findings (${errors.length})\n\n`;
-            if (errors.length > 0) {
-              findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
-              for (const f of errors.slice(0, 50)) {
-                const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
-                findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
-              }
-            }
-
-            findingsText += `\n### Warning findings (${warnings.length})\n\n`;
-            if (warnings.length > 0) {
-              findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
-              for (const f of warnings.slice(0, 50)) {
-                const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
-                findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
-              }
-            }
-
-            const body = [
-              `## Pre-release validation failed for ${milestoneLabel}`,
-              '',
-              `**Run:** ${runUrl}`,
-              `**Triggered by:** ${context.actor}`,
-              '',
-              findingsText,
-              '',
-              '---',
-              '_Created automatically by pre-release log analyzer._',
-            ].join('\n');
-
-            const issueParams = {
+          // Fetch existing open squad issues once for dedup
+          let existingIssues = [];
+          try {
+            const resp = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Pre-release validation failed for ${milestoneLabel}`,
-              body,
-              labels: ['squad', 'squad:brett'],
-            };
-            if (milestoneNumber) issueParams.milestone = milestoneNumber;
+              state: 'open',
+              labels: 'squad',
+              per_page: 100,
+            });
+            existingIssues = resp.data;
+          } catch (e) {
+            core.warning(`Could not fetch existing issues for dedup: ${e.message}`);
+          }
 
-            await github.rest.issues.create(issueParams);
-            core.info('Created failure issue');
+          if (hasErrors) {
+            // Create one combined failure issue
+            const errorTitle = `Pre-release validation failed for ${milestoneLabel}`;
+            const existingError = existingIssues.find(i => i.title === errorTitle);
+            if (existingError) {
+              core.info(`Skipping duplicate error issue — #${existingError.number} already open`);
+            } else {
+              let findingsText = `### Error findings (${errors.length})\n\n`;
+              if (errors.length > 0) {
+                findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
+                for (const f of errors.slice(0, 50)) {
+                  const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                  findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
+                }
+              }
+
+              findingsText += `\n### Warning findings (${warnings.length})\n\n`;
+              if (warnings.length > 0) {
+                findingsText += '| Category | Service | Message | Line |\n|---|---|---|---|\n';
+                for (const f of warnings.slice(0, 50)) {
+                  const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
+                  findingsText += `| ${f.category} | ${f.service} | ${msg} | ${f.line} |\n`;
+                }
+              }
+
+              const body = [
+                `## Pre-release validation failed for ${milestoneLabel}`,
+                '',
+                `**Run:** ${runUrl}`,
+                `**Triggered by:** ${context.actor}`,
+                '',
+                findingsText,
+                '',
+                '---',
+                '_Created automatically by pre-release log analyzer._',
+              ].join('\n');
+
+              const issueParams = {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: errorTitle,
+                body,
+                labels: ['squad', 'squad:brett'],
+              };
+              if (milestoneNumber) issueParams.milestone = milestoneNumber;
+
+              await github.rest.issues.create(issueParams);
+              core.info('Created failure issue');
+            }
           } else {
             // Create per-category warning issues
             const grouped = {};
@@ -197,6 +218,20 @@ runs:
             }
 
             for (const [category, items] of Object.entries(grouped)) {
+              // Skip categories that only contain 'info' severity findings
+              const hasWarning = items.some(f => f.severity === 'warning');
+              if (!hasWarning) {
+                core.info(`Skipping info-only category: ${category} (${items.length} findings)`);
+                continue;
+              }
+
+              const title = `Pre-release ${category} warnings for ${milestoneLabel}`;
+              const existingWarning = existingIssues.find(i => i.title === title);
+              if (existingWarning) {
+                core.info(`Skipping duplicate issue for ${category} — #${existingWarning.number} already open`);
+                continue;
+              }
+
               let table = '| Service | Severity | Message | Line |\n|---|---|---|---|\n';
               for (const f of items.slice(0, 30)) {
                 const msg = f.message.length > 120 ? f.message.substring(0, 120) + '...' : f.message;
@@ -223,7 +258,7 @@ runs:
               const issueParams = {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: `Pre-release ${category} warnings for ${milestoneLabel}`,
+                title,
                 body,
                 labels: ['squad', squadLabel],
               };
