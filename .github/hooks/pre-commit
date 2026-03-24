@@ -41,7 +41,7 @@ PYTHON_SERVICES=(document-indexer document-lister embeddings-server solr-search 
 CHANGED_PY_SERVICES=()
 
 for svc in "${PYTHON_SERVICES[@]}"; do
-  if echo "$STAGED" | grep -q "^src/$svc/.*\.py$"; then
+  if echo "$STAGED" | grep -q "^src/$svc/"; then
     CHANGED_PY_SERVICES+=("$svc")
   fi
 done
