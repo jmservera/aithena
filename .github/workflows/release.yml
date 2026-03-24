@@ -246,14 +246,40 @@ jobs:
           name: release-package
           path: .
 
+      - name: Extract release notes from CHANGELOG.md
+        id: release_notes
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        shell: bash
+        run: |
+          # Extract the section for this version from CHANGELOG.md
+          # Matches from "## [X.Y.Z]" until the next "## [" heading or end of file
+          notes=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p;}" CHANGELOG.md)
+
+          if [[ -z "$notes" ]]; then
+            echo "::warning::No CHANGELOG.md entry found for ${VERSION}, falling back to auto-generated notes"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            # Write to a temp file to avoid shell quoting issues
+            echo "$notes" > "$RUNNER_TEMP/release-notes.md"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub release with artifacts
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
           VERSION: ${{ needs.validate-tag.outputs.version }}
+          NOTES_FOUND: ${{ steps.release_notes.outputs.found }}
         run: |
-          gh release create "$TAG_NAME" \
-            --generate-notes \
-            --verify-tag \
+          release_args=("$TAG_NAME" --verify-tag)
+
+          if [[ "$NOTES_FOUND" == "true" ]]; then
+            release_args+=(--notes-file "$RUNNER_TEMP/release-notes.md")
+          else
+            release_args+=(--generate-notes)
+          fi
+
+          gh release create "${release_args[@]}" \
             "aithena-v${VERSION}-release.tar.gz#Production Release Package" \
             "aithena-v${VERSION}-release.tar.gz.sha256#SHA256 Checksum"
