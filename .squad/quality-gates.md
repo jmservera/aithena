@@ -58,7 +58,7 @@ npx vitest run
 
 ## Git Hook (Deterministic)
 
-The pre-commit hook at `.github/hooks/pre-commit` automatically runs lint, format checks, and tests for staged files. It blocks the commit if anything fails.
+The pre-commit hook at `.github/hooks/pre-commit` automatically runs lint, format checks, and tests for staged source files in supported services (for example, Python `*.py` files and UI source files). It blocks the commit if anything fails.
 
 **Setup** (once per clone):
 ```bash

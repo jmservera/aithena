@@ -72,7 +72,7 @@ if [ ${#CHANGED_PY_SERVICES[@]} -gt 0 ]; then
 fi
 
 # ── Section 3: Node lint (eslint + prettier) ───────────────────────
-if echo "$STAGED" | grep -q '^src/aithena-ui/.*\.\(ts\|tsx\|js\|jsx\|css\)$'; then
+if echo "$STAGED" | grep -q '^src/aithena-ui/'; then
   echo "⚛️  Linting src/aithena-ui..."
   pushd "$ROOT/src/aithena-ui" > /dev/null
 
@@ -98,7 +98,7 @@ fi
 if [ ${#CHANGED_PY_SERVICES[@]} -gt 0 ]; then
   for svc in "${CHANGED_PY_SERVICES[@]}"; do
     SVC_DIR="$ROOT/src/$svc"
-    if [ -d "$SVC_DIR/tests" ] || find "$SVC_DIR" -maxdepth 2 -name "test_*.py" 2>/dev/null | grep -q .; then
+    if [ -d "$SVC_DIR/tests" ] || find -maxdepth 2 "$SVC_DIR" -name "test_*.py" 2>/dev/null | grep -q .; then
       echo "🧪 Testing src/$svc..."
       pushd "$SVC_DIR" > /dev/null
       if ! uv run pytest --tb=short -q; then
