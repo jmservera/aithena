@@ -142,7 +142,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "python"]
+      test: ["CMD", "pgrep", "-f", "document_lister"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -216,7 +216,7 @@ services:
       solr-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "python"]
+      test: ["CMD", "pgrep", "-f", "document_indexer"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -356,7 +356,7 @@ services:
       solr-search:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/"]
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
