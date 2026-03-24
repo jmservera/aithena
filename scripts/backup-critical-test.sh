@@ -91,7 +91,6 @@ SQL
     # --- Create test .env file ---
     cat > "${project_root}/.env" <<'ENV'
 AUTH_JWT_SECRET=supersecretjwtkey123
-REDIS_PASSWORD=redispass456
 RABBITMQ_USER=rabbit
 RABBITMQ_PASS=rabbitpass789
 ENV

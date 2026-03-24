@@ -123,7 +123,6 @@ python tests/stress/monitor.py --interval 2 --output-dir tests/stress/results --
 | `RABBITMQ_PASSWORD` | `guest` | RabbitMQ password |
 | `REDIS_HOST` | `localhost` | Redis host |
 | `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_PASSWORD` | *(empty)* | Redis password |
 | `STRESS_RESULTS_DIR` | `tests/stress/results` | Results output directory |
 | `MONITOR_INTERVAL` | `2` | Docker stats sampling interval (seconds) |
 

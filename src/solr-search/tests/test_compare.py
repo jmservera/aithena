@@ -385,7 +385,6 @@ class TestComparisonConfig:
             book_embedding_field="embedding_v",
             redis_host="redis",
             redis_port=6379,
-            redis_password=None,
             redis_key_pattern="doc:*",
             redis_queue_name="shortembeddings",
             rabbitmq_host="rabbitmq",

@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 import redis
-from pages.shared.config import AUTH_ENABLED, QUEUE_NAME, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
+from pages.shared.config import AUTH_ENABLED, QUEUE_NAME, REDIS_HOST, REDIS_PORT
 
 if AUTH_ENABLED:
     from auth import AuthSettings, require_auth
@@ -20,7 +20,7 @@ if AUTH_ENABLED:
 st.set_page_config(page_title="Document Manager", page_icon="📄", layout="wide")
 st.title("📄 Document Manager")
 
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
 def load_documents() -> tuple[list[dict], list[dict], list[dict]]:

@@ -1645,7 +1645,6 @@ def _get_redis_pool() -> redis_lib.ConnectionPool:
                 _redis_pool = redis_lib.ConnectionPool(
                     host=settings.redis_host,
                     port=settings.redis_port,
-                    password=settings.redis_password,
                     decode_responses=True,
                     socket_connect_timeout=2,
                     socket_timeout=5,

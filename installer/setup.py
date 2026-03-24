@@ -31,7 +31,6 @@ DEFAULT_RABBITMQ_USER = "aithena"
 INSECURE_JWT_SECRETS = {"", "change-me", "development-only-change-me", "generate-with-installer"}
 INSECURE_RABBITMQ_USERS = {"", "change-me", "guest", "generate-with-installer"}
 INSECURE_RABBITMQ_PASSWORDS = {"", "change-me", "guest", "generate-with-installer"}
-INSECURE_REDIS_PASSWORDS = {"", "change-me", "generate-with-installer"}
 # Per-service RabbitMQ users (names are fixed; only passwords are generated)
 RABBITMQ_SERVICE_USERS = ("lister", "indexer", "search", "admin")
 INSECURE_RABBITMQ_SERVICE_PASSWORDS = {"", "change-me", "generate-with-installer",
@@ -59,7 +58,6 @@ ENV_COMMENTS: list[tuple[str, str]] = [
     ("RABBITMQ_SEARCH_PASS", "Password for RabbitMQ search user"),
     ("RABBITMQ_ADMIN_USER", "RabbitMQ admin user for management UI"),
     ("RABBITMQ_ADMIN_PASS", "Password for RabbitMQ admin user"),
-    ("REDIS_PASSWORD", "Redis password applied via redis-server --requirepass"),
     ("VERSION", "Container build metadata (defaults to VERSION file)"),
     ("GIT_COMMIT", "Container build metadata (defaults to current HEAD)"),
     ("BUILD_DATE", "Container build metadata timestamp"),
@@ -268,11 +266,6 @@ def build_env_values(
         else:
             rabbitmq_service_passwords[svc_name] = existing_svc_pass
 
-    existing_redis_password = existing_env.get("REDIS_PASSWORD", "")
-    redis_password = existing_redis_password
-    if reset or existing_redis_password in INSECURE_REDIS_PASSWORDS:
-        redis_password = secret_factory(32)
-
     existing_admin_api_key = existing_env.get("ADMIN_API_KEY", "")
     admin_api_key = existing_admin_api_key
     if reset or not existing_admin_api_key:
@@ -301,7 +294,6 @@ def build_env_values(
         "RABBITMQ_SEARCH_PASS": rabbitmq_service_passwords["search"],
         "RABBITMQ_ADMIN_USER": "admin",
         "RABBITMQ_ADMIN_PASS": rabbitmq_service_passwords["admin"],
-        "REDIS_PASSWORD": redis_password,
         "VERSION": existing_env.get("VERSION", read_repo_version()),
         "GIT_COMMIT": existing_env.get("GIT_COMMIT", read_git_commit()),
         "BUILD_DATE": existing_env.get("BUILD_DATE", utc_now_iso()),

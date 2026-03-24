@@ -318,7 +318,7 @@ def fetch_redis_states(keys: list[str]) -> dict[str, str | None]:
     script = (
         "import json, os, redis, sys; "
         "client = redis.Redis(host=os.environ['REDIS_HOST'], port=int(os.environ['REDIS_PORT']), "
-        "password=os.environ.get('REDIS_PASSWORD') or None, decode_responses=True); "
+        "decode_responses=True); "
         "print(json.dumps({key: client.get(key) for key in sys.argv[1:]}))"
     )
     result = run_compose(["exec", "-T", "solr-search", "python", "-c", script, *keys])

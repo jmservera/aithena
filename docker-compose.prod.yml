@@ -2,11 +2,7 @@ services:
   redis:
     image: redis:7.4-alpine
     command: >-
-      sh -c 'exec redis-server /usr/local/etc/redis/redis.conf
-      --requirepass "$$REDIS_PASSWORD"'
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
-      - REDISCLI_AUTH=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      redis-server /usr/local/etc/redis/redis.conf
     expose:
       - 6379
     healthcheck:
@@ -115,7 +111,6 @@ services:
       - RABBITMQ_USER=${RABBITMQ_LISTER_USER:-lister}
       - RABBITMQ_PASS=${RABBITMQ_LISTER_PASS:-lister_dev_pass}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
       - EXCHANGE_NAME=documents
       - BASE_PATH=/data/documents/
@@ -156,7 +151,6 @@ services:
       - RABBITMQ_USER=${RABBITMQ_INDEXER_USER:-indexer}
       - RABBITMQ_PASS=${RABBITMQ_INDEXER_PASS:-indexer_dev_pass}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - QUEUE_NAME=shortembeddings
       - EXCHANGE_NAME=documents
       - BASE_PATH=/data/documents/
@@ -253,7 +247,6 @@ services:
       - E5_COLLECTIONS=books
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - AUTH_DB_PATH=${AUTH_DB_PATH:-/data/auth/users.db}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?error Run python -m installer to generate secrets}
       - AUTH_JWT_TTL=${AUTH_JWT_TTL:-24h}
@@ -304,7 +297,6 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - URL_PREFIX=/admin/redis
     networks:
       - default
@@ -376,7 +368,6 @@ services:
       - document-data:/data/documents:ro
   zoo1:
     image: zookeeper:3.9
-    entrypoint: /entrypoint-sasl.sh
     command: ["zkServer.sh", "start-foreground"]
     expose:
       - "2181"
@@ -387,15 +378,11 @@ services:
       ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
-      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
-      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data1_logs:/logs
       - zoo-data1_data:/data
       - zoo-data1_datalog:/datalog
       - zoo-backup:/backup
-      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -417,7 +404,6 @@ services:
         max-file: "3"
   zoo2:
     image: zookeeper:3.9
-    entrypoint: /entrypoint-sasl.sh
     command: ["zkServer.sh", "start-foreground"]
     expose:
       - "2181"
@@ -428,15 +414,11 @@ services:
       ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
-      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
-      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data2_logs:/logs
       - zoo-data2_data:/data
       - zoo-data2_datalog:/datalog
       - zoo-backup:/backup
-      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -458,7 +440,6 @@ services:
         max-file: "3"
   zoo3:
     image: zookeeper:3.9
-    entrypoint: /entrypoint-sasl.sh
     command: ["zkServer.sh", "start-foreground"]
     expose:
       - "2181"
@@ -469,15 +450,11 @@ services:
       ZOO_CFG_EXTRA: "admin.enableServer=false"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
-      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
-      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SERVER_JVMFLAGS: ""
     volumes:
       - zoo-data3_logs:/logs
       - zoo-data3_data:/data
       - zoo-data3_datalog:/datalog
       - zoo-backup:/backup
-      - ./src/zookeeper/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "printf ruok | nc -w 2 localhost 2181 | grep -q imok"]
       interval: 10s
@@ -500,24 +477,19 @@ services:
   solr:
     image: solr:9.7
     user: "0:0"
-    entrypoint: /entrypoint-sasl.sh
+    entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data:/var/solr/data
       - document-data:/data/documents:ro
-      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
+      - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
-      SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
-      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
-      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
-      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     expose:
       - "8983"
     networks:
@@ -550,24 +522,19 @@ services:
   solr2:
     image: solr:9.7
     user: "0:0"
-    entrypoint: /entrypoint-sasl.sh
+    entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data2:/var/solr/data
       - document-data:/data/documents:ro
-      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
+      - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
-      SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
-      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
-      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
-      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     expose:
       - "8983"
     healthcheck:
@@ -600,24 +567,19 @@ services:
   solr3:
     image: solr:9.7
     user: "0:0"
-    entrypoint: /entrypoint-sasl.sh
+    entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:
       - solr-data3:/var/solr/data
       - document-data:/data/documents:ro
-      - ./src/solr/entrypoint-sasl.sh:/entrypoint-sasl.sh:ro
+      - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
       SOLR_MODULES: extraction,langid
-      SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
-      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
-      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
-      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     expose:
       - "8983"
     healthcheck:
@@ -667,10 +629,6 @@ services:
       SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:?Set SOLR_READONLY_PASS}
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
-      ZK_SASL_USER: ${ZK_SASL_USER:-solr}
-      ZK_SASL_PASS: ${ZK_SASL_PASS:?ZK_SASL_PASS must be set in .env for production}
-      SOLR_ZK_CREDS_AND_ACLS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS must be set}"
-      SOLR_OPTS: "-DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider -DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider -DzkDigestUsername=${ZK_SASL_USER:-solr} -DzkDigestPassword=${ZK_SASL_PASS:?ZK_SASL_PASS}"
     entrypoint:
       - /bin/bash
       - -ceu

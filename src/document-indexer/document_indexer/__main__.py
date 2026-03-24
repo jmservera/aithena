@@ -29,7 +29,6 @@ from . import (
     RABBITMQ_PORT,
     RABBITMQ_USER,
     REDIS_HOST,
-    REDIS_PASSWORD,
     REDIS_PORT,
     SOLR_AUTH,
     SOLR_COLLECTION,
@@ -50,7 +49,7 @@ SOLR_TIMEOUT = 300
 SOLR_STARTUP_TIMEOUT = 10
 SOLR_STARTUP_DELAY = 5
 SOLR_STARTUP_ATTEMPTS = 60
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 queue = None
 
 

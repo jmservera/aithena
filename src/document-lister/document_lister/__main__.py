@@ -23,7 +23,6 @@ from . import (
     RABBITMQ_PORT,
     RABBITMQ_USER,
     REDIS_HOST,
-    REDIS_PASSWORD,
     REDIS_PORT,
     VERSION,
 )
@@ -146,7 +145,7 @@ def produce():
         pika.exceptions.ConnectionClosedByBroker: If the connection to the RabbitMQ server is closed
         by the broker.
     """
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
     connection = pika.BlockingConnection(_rabbitmq_connection_parameters())
     channel = connection.channel()

@@ -2,7 +2,7 @@
 
 **Author:** Brett (Infrastructure Architect)
 **Date:** 2026-03-24
-**Status:** PROPOSED — awaiting PO approval
+**Status:** APPROVED by Juanma (2026-03-24) — note: model-downloader stage must include download dependencies
 
 ## Context
 
