@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Custom Solr log4j2 configuration for Aithena.
+  Based on the Solr 9.7 default with added suppression of
+  noisy PDFBox font-fallback warnings during PDF extraction.
+-->
+<Configuration>
+  <Appenders>
+
+    <Console name="STDOUT" target="SYSTEM_OUT">
+      <PatternLayout>
+        <Pattern>
+          %maxLen{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%notEmpty{c:%X{collection}}%notEmpty{ s:%X{shard}}%notEmpty{ r:%X{replica}}%notEmpty{ x:%X{core}}%notEmpty{ t:%X{trace_id}}] %c{1.} %m%notEmpty{ =>%ex{short}}}{10240}%n
+        </Pattern>
+      </PatternLayout>
+    </Console>
+
+    <RollingRandomAccessFile
+        name="MainLogFile"
+        fileName="${sys:solr.log.dir}/solr.log"
+        filePattern="${sys:solr.log.dir}/solr.log.%i" >
+      <PatternLayout>
+        <Pattern>
+          %maxLen{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%notEmpty{c:%X{collection}}%notEmpty{ s:%X{shard}}%notEmpty{ r:%X{replica}}%notEmpty{ x:%X{core}}%notEmpty{ t:%X{trace_id}}] %c{1.} %m%notEmpty{ =>%ex{short}}}{10240}%n
+        </Pattern>
+      </PatternLayout>
+      <Policies>
+        <OnStartupTriggeringPolicy />
+        <SizeBasedTriggeringPolicy size="32 MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="10"/>
+    </RollingRandomAccessFile>
+
+    <RollingRandomAccessFile
+        name="SlowLogFile"
+        fileName="${sys:solr.log.dir}/solr_slow_requests.log"
+        filePattern="${sys:solr.log.dir}/solr_slow_requests.log.%i" >
+      <PatternLayout>
+        <Pattern>
+          %maxLen{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%notEmpty{c:%X{collection}}%notEmpty{ s:%X{shard}}%notEmpty{ r:%X{replica}}%notEmpty{ x:%X{core}}%notEmpty{ t:%X{trace_id}}] %c{1.} %m%notEmpty{ =>%ex{short}}}{10240}%n
+        </Pattern>
+      </PatternLayout>
+      <Policies>
+        <OnStartupTriggeringPolicy />
+        <SizeBasedTriggeringPolicy size="32 MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="10"/>
+    </RollingRandomAccessFile>
+
+  </Appenders>
+  <Loggers>
+    <AsyncLogger name="org.apache.hadoop" level="warn"/>
+    <AsyncLogger name="org.apache.solr.update.LoggingInfoStream" level="off"/>
+    <AsyncLogger name="org.apache.zookeeper" level="warn"/>
+    <AsyncLogger name="org.apache.solr.servlet.HttpSolrCall" level="info">
+      <MarkerFilter marker="org.apache.solr.handler.admin.MetricsHandler" onMatch="DENY" onMismatch="ACCEPT"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.apache.solr.core.SolrCore.SlowRequest" level="info" additivity="false">
+      <AppenderRef ref="SlowLogFile"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.eclipse.jetty.deploy" level="warn"/>
+    <AsyncLogger name="org.eclipse.jetty.webapp" level="warn"/>
+    <AsyncLogger name="org.eclipse.jetty.server.session" level="warn"/>
+
+    <!-- Suppress noisy PDFBox font-fallback warnings during PDF extraction -->
+    <AsyncLogger name="org.apache.pdfbox.pdmodel.font" level="error"/>
+    <AsyncLogger name="org.apache.fontbox" level="error"/>
+
+    <AsyncRoot level="info">
+      <AppenderRef ref="MainLogFile"/>
+      <AppenderRef ref="STDOUT"/>
+    </AsyncRoot>
+  </Loggers>
+</Configuration>
