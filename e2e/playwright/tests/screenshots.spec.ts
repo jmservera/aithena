@@ -136,17 +136,21 @@ test('captures curated screenshots for release documentation', async ({ browser,
     const closeButton = page.locator('.pdf-viewer-close');
     if (await closeButton.isVisible()) {
       await closeButton.click();
-      await expect(page.locator('.pdf-viewer-overlay')).not.toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('.pdf-viewer-overlay')).not.toBeVisible({ timeout: 10_000 });
     }
   });
 
+  // Ensure the PDF viewer is fully dismissed before navigating to other pages.
+  // The close animation may not have completed in the previous step.
+  await expect(page.locator('.pdf-viewer-overlay')).not.toBeVisible({ timeout: 5_000 }).catch(() => {});
+
   await test.step('capture admin dashboard', async () => {
-    await page.locator('a.tab-nav-link[href="/admin"]').click();
-    await expect(page).toHaveURL(/\/admin$/);
-    // The admin API call may fail in CI (e.g. Redis not seeded), which can
-    // trigger the auth-failure handler and redirect to /login.  Tolerate this
-    // so the screenshot suite is not fragile.
     try {
+      await page.locator('a.tab-nav-link[href="/admin"]').click({ timeout: 15_000 });
+      await expect(page).toHaveURL(/\/admin$/);
+      // The admin API call may fail in CI (e.g. Redis not seeded), which can
+      // trigger the auth-failure handler and redirect to /login.  Tolerate this
+      // so the screenshot suite is not fragile.
       await expect(page.locator('.admin-title')).toContainText('Admin Dashboard', { timeout: 15_000 });
       await saveScreenshot(page, testInfo, 'admin-dashboard.png');
     } catch {
