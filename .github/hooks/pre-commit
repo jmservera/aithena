@@ -119,6 +119,10 @@ if echo "$STAGED" | grep -q '^src/aithena-ui/.*\.\(ts\|tsx\|js\|jsx\)$'; then
       echo "❌ vitest failed for aithena-ui"
       FAIL=1
     fi
+  else
+    echo "❌ node_modules not found in src/aithena-ui — install Node dependencies before committing UI changes."
+    echo "   Hint: run: npm install"
+    FAIL=1
   fi
   popd > /dev/null
 fi
