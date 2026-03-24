@@ -9,20 +9,10 @@ import pandas as pd
 import streamlit as st
 
 import redis
-from pages.shared.config import AUTH_ENABLED, QUEUE_NAME, REDIS_HOST, REDIS_PORT
-
-if AUTH_ENABLED:
-    from auth import AuthSettings, require_auth
-
-    try:
-        _settings = AuthSettings.from_env()
-    except ValueError as _exc:
-        st.error(f"Authentication configuration error: {_exc}")
-        st.stop()
-    require_auth(_settings)
+from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PORT
 
 
-st.set_page_config(page_title="Indexing Status", page_icon="📊", layout="wide")
+st.title("📈 Indexing Status")
 st.title("📊 Indexing Status")
 
 

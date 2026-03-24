@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("AUTH_ENABLED", "false")
 
-from pages.log_viewer import (
-    AITHENA_SERVICES,
-    list_running_containers,
-    tail_logs,
-)
+# docker may not be installed in CI — mock it for import
+with patch.dict("sys.modules", {"docker": MagicMock(), "docker.models": MagicMock(), "docker.models.containers": MagicMock()}):
+    from pages.log_viewer import (
+        AITHENA_SERVICES,
+        list_running_containers,
+        tail_logs,
+    )
 
 
 def _make_container(name: str, labels: dict | None = None) -> MagicMock:

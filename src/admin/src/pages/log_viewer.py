@@ -4,20 +4,6 @@ from __future__ import annotations
 
 import streamlit as st
 
-from pages.shared.config import AUTH_ENABLED
-
-if AUTH_ENABLED:
-    from auth import AuthSettings, require_auth
-
-    try:
-        _settings = AuthSettings.from_env()
-    except ValueError as _exc:
-        st.error(f"Authentication configuration error: {_exc}")
-        st.stop()
-    require_auth(_settings)
-
-
-st.set_page_config(page_title="Log Viewer", page_icon="📜", layout="wide")
 st.title("📜 Service Log Viewer")
 
 try:
@@ -25,6 +11,7 @@ try:
 
     _DOCKER_AVAILABLE = True
 except ImportError:
+    docker = None  # type: ignore[assignment]
     _DOCKER_AVAILABLE = False
 
 AITHENA_SERVICES = [
@@ -46,9 +33,9 @@ AITHENA_SERVICES = [
 ]
 
 
-def list_running_containers(client: docker.DockerClient) -> dict[str, docker.models.containers.Container]:
+def list_running_containers(client: object) -> dict[str, object]:
     """Return a map of service-name → Container for aithena-related services."""
-    containers: dict[str, docker.models.containers.Container] = {}
+    containers: dict[str, object] = {}
     for container in client.containers.list():
         name = container.name.lstrip("/")
         for svc in AITHENA_SERVICES:
@@ -64,7 +51,7 @@ def list_running_containers(client: docker.DockerClient) -> dict[str, docker.mod
 
 
 def tail_logs(
-    container: docker.models.containers.Container,
+    container: object,
     tail_lines: int,
 ) -> str:
     """Return the last *tail_lines* of a container's logs as a string."""
