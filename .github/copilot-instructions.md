@@ -2,6 +2,32 @@
 
 You are working on a project that uses **Squad**, an AI team framework. When picking up issues autonomously, follow these guidelines.
 
+## Quality Gates (MANDATORY)
+
+**Before EVERY commit, you MUST run the verify script:**
+
+```bash
+.squad/scripts/verify.sh
+```
+
+This auto-detects which services you changed and runs lint + format + tests. **Your commit will be blocked by the pre-commit hook if checks fail.**
+
+Per-language quick reference:
+- **Python** (document-indexer, document-lister, embeddings-server, solr-search, admin):
+  - `ruff check src/{service}/` — lint
+  - `ruff format --check src/{service}/` — format
+  - `cd src/{service} && uv run pytest --tb=short -q` — test
+  - Auto-fix: `ruff check --fix src/{service}/ && ruff format src/{service}/`
+- **TypeScript** (aithena-ui):
+  - `cd src/aithena-ui && npm run lint` — lint
+  - `cd src/aithena-ui && npm run format:check` — format
+  - `cd src/aithena-ui && npx vitest run` — test
+  - Auto-fix: `npm run lint -- --fix && npm run format`
+
+**Never use `git commit --no-verify`.** If checks fail, fix the code.
+
+Read `.squad/quality-gates.md` for full details.
+
 ## Team Context
 
 Before starting work on any issue:
