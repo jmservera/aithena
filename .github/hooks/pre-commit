@@ -8,7 +8,7 @@
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
-STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 
 if [ -z "$STAGED" ]; then
   exit 0
