@@ -11,7 +11,6 @@ import streamlit as st
 import redis
 from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PORT
 
-
 st.title("📈 Indexing Status")
 st.title("📊 Indexing Status")
 

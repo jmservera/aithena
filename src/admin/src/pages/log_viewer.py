@@ -116,15 +116,16 @@ if st.button("🔄 Refresh Logs"):
     st.rerun()
 
 # Display logs
-container = available_containers[selected_service]
-with st.spinner(f"Fetching logs for **{selected_service}**…"):
-    log_text = tail_logs(container, tail_count)
+if selected_service and selected_service in available_containers:
+    container = available_containers[selected_service]
+    with st.spinner(f"Fetching logs for **{selected_service}**…"):
+        log_text = tail_logs(container, tail_count)
 
-st.code(log_text, language="log")
+    st.code(log_text, language="log")
 
-if auto_refresh:
-    st.caption("Auto-refreshing every 30 seconds…")
-    import time
+    if auto_refresh:
+        st.caption("Auto-refreshing every 30 seconds…")
+        import time
 
-    time.sleep(30)
-    st.rerun()
+        time.sleep(30)
+        st.rerun()

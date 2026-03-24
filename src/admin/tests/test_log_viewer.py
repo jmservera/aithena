@@ -3,17 +3,39 @@
 from __future__ import annotations
 
 import os
+import sys
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("AUTH_ENABLED", "false")
 
-# docker may not be installed in CI — mock it for import
-with patch.dict("sys.modules", {"docker": MagicMock(), "docker.models": MagicMock(), "docker.models.containers": MagicMock()}):
-    from pages.log_viewer import (
-        AITHENA_SERVICES,
-        list_running_containers,
-        tail_logs,
-    )
+
+def _import_log_viewer():
+    """Import log_viewer with docker and Streamlit interactive calls mocked."""
+    docker_mock = MagicMock()
+    docker_mock.from_env.return_value.ping.return_value = True
+    docker_mock.from_env.return_value.containers.list.return_value = []
+
+    with patch.dict(
+        sys.modules,
+        {
+            "docker": docker_mock,
+            "docker.models": MagicMock(),
+            "docker.models.containers": MagicMock(),
+        },
+    ):
+        import importlib
+
+        if "pages.log_viewer" in sys.modules:
+            mod = importlib.reload(sys.modules["pages.log_viewer"])
+        else:
+            mod = importlib.import_module("pages.log_viewer")
+        return mod
+
+
+_mod = _import_log_viewer()
+AITHENA_SERVICES = _mod.AITHENA_SERVICES
+list_running_containers = _mod.list_running_containers
+tail_logs = _mod.tail_logs
 
 
 def _make_container(name: str, labels: dict | None = None) -> MagicMock:
