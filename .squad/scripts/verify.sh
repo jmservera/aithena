@@ -63,8 +63,8 @@ changed_services() {
     fi
   done
 
-  # Also check if root config files changed (ruff.toml, etc.)
-  if echo "$changed_files" | grep -qE '^(ruff\.toml|\.eslintrc)'; then
+  # Also check if root config files changed (ruff, ESLint, etc.)
+  if echo "$changed_files" | grep -qE '^(ruff\.toml|eslint\.config\.js|src/aithena-ui/eslint\.config\.js)'; then
     # If root lint config changed, check everything
     for svc in "${PYTHON_SERVICES[@]}" "${NODE_SERVICES[@]}"; do
       if [[ ! " ${services[*]} " =~ " $svc " ]]; then
@@ -127,7 +127,7 @@ check_python_service() {
   # Tests (only if venv/lockfile exists)
   if [ -f "$svc_dir/uv.lock" ] || [ -f "$svc_dir/pyproject.toml" ]; then
     pushd "$svc_dir" > /dev/null
-    if [ -d "tests" ] || find . -name "test_*.py" -maxdepth 2 | grep -q .; then
+    if [ -d "tests" ] || find . -maxdepth 2 -name "test_*.py" | grep -q .; then
       run_check "$svc: pytest" uv run pytest --tb=short -q
     else
       SKIPPED+=("$svc: pytest (no tests found)")
@@ -153,7 +153,7 @@ check_node_service() {
   # Ensure deps are installed
   if [ ! -d "node_modules" ] && [ -f "package-lock.json" ]; then
     echo -e "${YELLOW}  ⏳ Installing npm dependencies...${NC}"
-    npm ci --silent
+    run_check "$svc: npm ci" npm ci --silent
   fi
 
   # Lint

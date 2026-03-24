@@ -65,8 +65,9 @@ if [ ${#CHANGED_PY_SERVICES[@]} -gt 0 ]; then
       fi
     done
   else
-    echo "⚠️  ruff not found — skipping Python lint."
+    echo "❌ ruff not found — cannot run Python lint on staged files."
     echo "   Install: pip install ruff"
+    FAIL=1
   fi
 fi
 
@@ -85,7 +86,8 @@ if echo "$STAGED" | grep -q '^src/aithena-ui/.*\.\(ts\|tsx\|js\|jsx\|css\)$'; th
       FAIL=1
     fi
   else
-    echo "⚠️  node_modules not found — run 'npm ci' in src/aithena-ui first."
+    echo "❌ node_modules not found in src/aithena-ui — run 'npm ci' there before committing UI changes."
+    FAIL=1
   fi
 
   popd > /dev/null
@@ -96,7 +98,7 @@ fi
 if [ ${#CHANGED_PY_SERVICES[@]} -gt 0 ]; then
   for svc in "${CHANGED_PY_SERVICES[@]}"; do
     SVC_DIR="$ROOT/src/$svc"
-    if [ -d "$SVC_DIR/tests" ] || find "$SVC_DIR" -name "test_*.py" -maxdepth 2 2>/dev/null | grep -q .; then
+    if [ -d "$SVC_DIR/tests" ] || find "$SVC_DIR" -maxdepth 2 -name "test_*.py" 2>/dev/null | grep -q .; then
       echo "🧪 Testing src/$svc..."
       pushd "$SVC_DIR" > /dev/null
       if ! uv run pytest --tb=short -q 2>/dev/null; then

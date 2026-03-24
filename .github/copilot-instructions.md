@@ -10,7 +10,7 @@ You are working on a project that uses **Squad**, an AI team framework. When pic
 .squad/scripts/verify.sh
 ```
 
-This auto-detects which services you changed and runs lint + format + tests. **Your commit will be blocked by the pre-commit hook if checks fail.**
+This auto-detects which services you changed and runs lint + format + tests. **In normal setups, failing checks will cause the pre-commit hook to block your commit, but some missing-tool or missing-dependency cases may only produce warnings.**
 
 Per-language quick reference:
 - **Python** (document-indexer, document-lister, embeddings-server, solr-search, admin):
