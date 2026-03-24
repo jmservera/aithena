@@ -32,6 +32,7 @@ known-first-party = [
     "search_service",
     "template",
     "thumbnail",
+    "utils",
 ]
 
 [lint.per-file-ignores]

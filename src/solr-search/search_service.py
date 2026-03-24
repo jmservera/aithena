@@ -7,6 +7,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import quote
 
+from utils import safe_numeric
+
 FACET_FIELDS: dict[str, tuple[str, ...]] = {
     "author": ("author_s",),
     "category": ("category_s",),
@@ -161,7 +163,7 @@ def parse_facet_counts(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]
             raw_values = facet_fields.get(solr_field) or []
             if raw_values:
                 buckets = [
-                    {"value": raw_values[index], "count": raw_values[index + 1]}
+                    {"value": raw_values[index], "count": safe_numeric(raw_values[index + 1], int, 0)}
                     for index in range(0, len(raw_values), 2)
                 ]
                 break
@@ -256,13 +258,14 @@ def normalize_book(
 
 
 def build_pagination(num_found: int, page: int, page_size: int) -> dict[str, int]:
+    safe_total = safe_numeric(num_found, int, 0)
     return {
         "page": page,
         "limit": page_size,
         "page_size": page_size,
-        "total": num_found,
-        "total_results": num_found,
-        "total_pages": math.ceil(num_found / page_size) if num_found else 0,
+        "total": safe_total,
+        "total_results": safe_total,
+        "total_pages": math.ceil(safe_total / page_size) if safe_total else 0,
     }
 
 
@@ -409,22 +412,29 @@ def parse_stats_response(payload: dict[str, Any]) -> dict[str, Any]:
     grouped = payload.get("grouped", {})
     parent_id_groups = grouped.get("parent_id_s", {})
     ngroups = parent_id_groups.get("ngroups")
-    total_books: int = ngroups if ngroups is not None else parent_id_groups.get("matches", 0)
+    total_books = (
+        safe_numeric(ngroups, int, 0)
+        if ngroups is not None
+        else safe_numeric(parent_id_groups.get("matches", 0), int, 0)
+    )
 
     facet_fields: dict[str, list[Any]] = payload.get("facet_counts", {}).get("facet_fields", {})
 
     def _parse_facet(field: str) -> list[dict[str, Any]]:
         raw = facet_fields.get(field) or []
-        return [{"value": raw[i], "count": raw[i + 1]} for i in range(0, len(raw), 2)]
+        return [
+            {"value": raw[i], "count": safe_numeric(raw[i + 1], int, 0)}
+            for i in range(0, len(raw), 2)
+        ]
 
     stats_fields: dict[str, Any] = payload.get("stats", {}).get("stats_fields", {})
     page_count_stats: dict[str, Any] = stats_fields.get("page_count_i") or {}
 
     page_stats: dict[str, Any] = {
-        "total": int(float(page_count_stats.get("sum") or 0)),
-        "avg": round(float(page_count_stats.get("mean") or 0)),
-        "min": int(float(page_count_stats.get("min") or 0)),
-        "max": int(float(page_count_stats.get("max") or 0)),
+        "total": safe_numeric(page_count_stats.get("sum"), lambda v: int(float(v)), 0),
+        "avg": safe_numeric(page_count_stats.get("mean"), lambda v: round(float(v)), 0),
+        "min": safe_numeric(page_count_stats.get("min"), lambda v: int(float(v)), 0),
+        "max": safe_numeric(page_count_stats.get("max"), lambda v: int(float(v)), 0),
     }
 
     return {
