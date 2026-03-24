@@ -1,0 +1,30 @@
+# Pre-release Log Analyzer — Allowlist of known false positives
+#
+# Format: category:pattern=severity
+# Lines starting with # are comments, blank lines are ignored.
+# Patterns are shell globs matched against the message field of findings.
+# Severity overrides: ignore (drop finding), warning, info
+# If severity is omitted, defaults to "ignore".
+#
+# The category field must match one of the analyzer categories:
+#   crash, deprecation, version, slow_startup, connection,
+#   security, memory, config, dependency
+
+# ZK non-TLS quorum communication is expected in CI environments
+security:*insecure*quorum*=ignore
+security:*non-tls*quorum*=ignore
+
+# JVM startup flags like -XX:+CrashOnOutOfMemoryError are not actual OOM errors
+memory:*CrashOnOutOfMemoryError*=ignore
+
+# Read-only volume permission errors are expected for :ro mounts
+security:*PermissionError*=warning
+security:*permission denied*read-only*=warning
+
+# Solr deprecation warnings for internal APIs
+deprecation:*Deprecated*=info
+deprecation:*deprecated*=info
+
+# Connection retries during startup are normal for Docker Compose orchestration
+connection:*retrying*=ignore
+connection:*connection refused*=ignore

@@ -10,6 +10,12 @@ inputs:
   version-file:
     description: 'Path to the VERSION file'
     default: './VERSION'
+  allowlist-path:
+    description: 'Path to the allowlist file for known false positives (optional)'
+    default: ''
+  max-errors:
+    description: 'Error threshold; only fail if errors exceed this count (default: 0)'
+    default: '0'
   create-issues:
     description: 'Whether to create GitHub issues for findings (true/false)'
     default: 'false'
@@ -43,10 +49,19 @@ runs:
       env:
         INPUT_VERSION_FILE: ${{ inputs.version-file }}
         INPUT_COMPOSE_LOGS_PATH: ${{ inputs.compose-logs-path }}
+        INPUT_ALLOWLIST_PATH: ${{ inputs.allowlist-path }}
+        INPUT_MAX_ERRORS: ${{ inputs.max-errors }}
       run: |
         set +e
+        ANALYZER_ARGS="--version-file $INPUT_VERSION_FILE"
+        if [ -n "$INPUT_ALLOWLIST_PATH" ] && [ -f "$INPUT_ALLOWLIST_PATH" ]; then
+          ANALYZER_ARGS="$ANALYZER_ARGS --allowlist $INPUT_ALLOWLIST_PATH"
+        fi
+        if [ -n "$INPUT_MAX_ERRORS" ]; then
+          ANALYZER_ARGS="$ANALYZER_ARGS --max-errors $INPUT_MAX_ERRORS"
+        fi
         sh e2e/pre-release-check.sh \
-          --version-file "$INPUT_VERSION_FILE" \
+          $ANALYZER_ARGS \
           "$INPUT_COMPOSE_LOGS_PATH" \
           > "$RUNNER_TEMP/findings.json" 2>"$RUNNER_TEMP/analyzer-summary.txt"
         EXIT_CODE=$?
