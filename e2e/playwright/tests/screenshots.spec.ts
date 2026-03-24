@@ -31,6 +31,9 @@ async function captureUnauthenticatedLoginPage(browser: Browser, appBaseURL: str
 
 test('captures curated screenshots for release documentation', async ({ browser, page, request }, testInfo) => {
   test.slow();
+  // Screenshot tests are non-blocking: failures here must not gate releases.
+  // They run in the separate "screenshots" Playwright project (see playwright.config.ts).
+  test.info().annotations.push({ type: 'non-blocking', description: 'Screenshot capture — does not gate releases.' });
 
   const appBaseURL = getAppBaseURL();
   const catalog = await discoverCatalogScenario(request, appBaseURL);
