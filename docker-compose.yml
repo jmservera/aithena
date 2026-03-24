@@ -542,7 +542,7 @@ services:
     # build:
     #   context: .
     #   dockerfile: ./src/solr/Dockerfile
-    user: "0:0"  # Run entrypoint as root to fix bind-mount ownership; drops to solr (8983) via docker-entrypoint.sh
+    user: "0:0"  # Run entrypoint as root to fix bind-mount ownership; entrypoint-sasl.sh drops to solr (8983) before running docker-entrypoint.sh
     entrypoint: /entrypoint-sasl.sh
     command: ["solr-foreground"]
     restart: unless-stopped
