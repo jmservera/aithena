@@ -279,14 +279,12 @@ else
       JWT_SECRET="$(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)"
       ADMIN_API_KEY="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p | head -c 64)"
       RABBIT_PASS="$(openssl rand -base64 24 2>/dev/null || head -c 24 /dev/urandom | base64)"
-      REDIS_PASS="$(openssl rand -base64 24 2>/dev/null || head -c 24 /dev/urandom | base64)"
 
       # Substitute placeholder values
       sed -i "s|AUTH_JWT_SECRET=generate-with-installer|AUTH_JWT_SECRET=${JWT_SECRET}|" "$ENV_FILE"
       sed -i "s|ADMIN_API_KEY=generate-with-installer|ADMIN_API_KEY=${ADMIN_API_KEY}|" "$ENV_FILE"
       sed -i "s|RABBITMQ_USER=generate-with-installer|RABBITMQ_USER=aithena|" "$ENV_FILE"
       sed -i "s|RABBITMQ_PASS=generate-with-installer|RABBITMQ_PASS=${RABBIT_PASS}|" "$ENV_FILE"
-      sed -i "s|REDIS_PASSWORD=generate-with-installer|REDIS_PASSWORD=${REDIS_PASS}|" "$ENV_FILE"
 
       # Set version
       sed -i "s|VERSION=.*|VERSION=${VERSION}|" "$ENV_FILE"

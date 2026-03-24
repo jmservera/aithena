@@ -2,8 +2,7 @@
 
 **Author:** Ripley (Lead Architect)
 **Date:** 2026-03-24
-**Status:** PROPOSED — awaiting PO approval
-**Verdict:** GO
+**Status:** APPROVED by Juanma (2026-03-24) — scheduled for next milestone (post v1.15.0)
 
 ## Context
 
