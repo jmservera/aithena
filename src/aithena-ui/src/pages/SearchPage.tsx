@@ -301,6 +301,7 @@ function SearchPage() {
 
   const handleClosePdf = useCallback(() => {
     setSelectedBook(null);
+    setFocusedBookId(null);
 
     window.requestAnimationFrame(() => {
       lastPdfTriggerRef.current?.focus();
