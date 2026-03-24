@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import pytest
+
 from utils import safe_numeric
 
 # ---------------------------------------------------------------------------
