@@ -312,6 +312,9 @@ jobs:
           E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
           RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
         run: |
+          # Docker volume mounts may change ownership of the library directory
+          # to root, preventing the test fixtures from creating subdirectories.
+          chmod -R a+rwX "$E2E_LIBRARY_PATH" 2>/dev/null || true
           ADMIN_API_KEY=$(grep '^ADMIN_API_KEY=' ../.env 2>/dev/null | cut -d= -f2 || true)
           export ADMIN_API_KEY="${ADMIN_API_KEY:-ci-admin-api-key}"
           pytest -v --junitxml=pytest-results.xml
