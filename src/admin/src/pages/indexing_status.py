@@ -1,4 +1,10 @@
-"""Detailed indexing status page — shows per-file processing progress from Redis."""
+"""Detailed indexing status page — shows per-file processing progress from Redis.
+
+Helper functions (classify_document, load_all_documents, build_status_dataframe) are
+import-safe and can be used by tests without triggering Streamlit UI or Redis I/O.
+The render_page() function contains all UI and I/O logic and is only called when
+running inside the Streamlit runtime.
+"""
 
 from __future__ import annotations
 
@@ -10,10 +16,6 @@ import streamlit as st
 
 import redis
 from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PORT
-
-st.title("📈 Indexing Status")
-st.title("📊 Indexing Status")
-
 
 STATUS_LABELS = {
     "processing": ("🔄", "Processing"),
@@ -103,81 +105,98 @@ def build_status_dataframe(
     return df.reset_index(drop=True)
 
 
-try:
-    redis_client = redis.Redis(
-        host=REDIS_HOST, port=REDIS_PORT, decode_responses=True
-    )
+def render_page() -> None:
+    """Render the indexing status page (requires Streamlit runtime + Redis)."""
+    st.title("📊 Indexing Status")
 
-    all_docs = load_all_documents(redis_client)
+    try:
+        redis_client = redis.Redis(
+            host=REDIS_HOST, port=REDIS_PORT, decode_responses=True
+        )
 
-    # Summary metrics
-    counts = {"queued": 0, "processing": 0, "processed": 0, "failed": 0}
-    total_pages = 0
-    total_chunks = 0
-    for doc in all_docs:
-        status = doc.get("status", "queued")
-        counts[status] = counts.get(status, 0) + 1
-        total_pages += int(doc.get("page_count") or 0)
-        total_chunks += int(doc.get("chunk_count") or 0)
+        all_docs = load_all_documents(redis_client)
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    col1.metric("📚 Total Files", len(all_docs))
-    col2.metric("⏳ Queued", counts["queued"])
-    col3.metric("🔄 Processing", counts["processing"])
-    col4.metric("✅ Done", counts["processed"])
-    col5.metric("📄 Pages Indexed", total_pages)
-    col6.metric("🧩 Chunks Indexed", total_chunks)
+        # Summary metrics
+        counts = {"queued": 0, "processing": 0, "processed": 0, "failed": 0}
+        total_pages = 0
+        total_chunks = 0
+        for doc in all_docs:
+            status = doc.get("status", "queued")
+            counts[status] = counts.get(status, 0) + 1
+            total_pages += int(doc.get("page_count") or 0)
+            total_chunks += int(doc.get("chunk_count") or 0)
 
-    st.divider()
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        col1.metric("📚 Total Files", len(all_docs))
+        col2.metric("⏳ Queued", counts["queued"])
+        col3.metric("🔄 Processing", counts["processing"])
+        col4.metric("✅ Done", counts["processed"])
+        col5.metric("📄 Pages Indexed", total_pages)
+        col6.metric("🧩 Chunks Indexed", total_chunks)
 
-    # Filter controls
-    filter_col, refresh_col = st.columns([4, 1])
-    with filter_col:
-        status_options = ["All", "Queued", "Processing", "Done", "Failed"]
-        selected = st.selectbox("Filter by status", status_options, index=0)
-    with refresh_col:
-        st.markdown("")  # spacing
-        if st.button("🔄 Refresh", use_container_width=True):
-            st.rerun()
-
-    status_map = {
-        "All": None,
-        "Queued": "queued",
-        "Processing": "processing",
-        "Done": "processed",
-        "Failed": "failed",
-    }
-    active_filter = status_map.get(selected)
-
-    # Currently processing section
-    processing_docs = [d for d in all_docs if d["status"] == "processing"]
-    if processing_docs:
-        st.subheader("🔄 Currently Processing")
-        for doc in processing_docs:
-            path = doc.get("path", "Unknown")
-            text_done = "✅" if doc.get("text_indexed") else "⏳"
-            embed_done = "✅" if doc.get("embedding_indexed") else "⏳"
-            pages = int(doc.get("page_count") or 0)
-            chunks = int(doc.get("chunk_count") or 0)
-
-            with st.container(border=True):
-                pcol1, pcol2, pcol3, pcol4 = st.columns([4, 1, 1, 1])
-                pcol1.markdown(f"**{path}**")
-                pcol2.markdown(f"Text: {text_done}")
-                pcol3.markdown(f"Pages: **{pages}**")
-                pcol4.markdown(f"Embed: {embed_done} ({chunks} chunks)")
         st.divider()
 
-    # Full table
-    st.subheader("📋 All Documents")
-    df = build_status_dataframe(all_docs, active_filter)
-    if df.empty:
-        st.info("No documents match the selected filter.")
-    else:
-        st.dataframe(df, use_container_width=True, height=500)
+        # Filter controls
+        filter_col, refresh_col = st.columns([4, 1])
+        with filter_col:
+            status_options = ["All", "Queued", "Processing", "Done", "Failed"]
+            selected = st.selectbox("Filter by status", status_options, index=0)
+        with refresh_col:
+            st.markdown("")  # spacing
+            if st.button("🔄 Refresh", use_container_width=True):
+                st.rerun()
 
-except redis.exceptions.ConnectionError:
-    st.error(
-        f"Cannot connect to Redis at {REDIS_HOST}:{REDIS_PORT}. "
-        "Check that the `REDIS_HOST` and `REDIS_PORT` environment variables are set correctly."
-    )
+        status_map = {
+            "All": None,
+            "Queued": "queued",
+            "Processing": "processing",
+            "Done": "processed",
+            "Failed": "failed",
+        }
+        active_filter = status_map.get(selected)
+
+        # Currently processing section
+        processing_docs = [d for d in all_docs if d["status"] == "processing"]
+        if processing_docs:
+            st.subheader("🔄 Currently Processing")
+            for doc in processing_docs:
+                path = doc.get("path", "Unknown")
+                text_done = "✅" if doc.get("text_indexed") else "⏳"
+                embed_done = "✅" if doc.get("embedding_indexed") else "⏳"
+                pages = int(doc.get("page_count") or 0)
+                chunks = int(doc.get("chunk_count") or 0)
+
+                with st.container(border=True):
+                    pcol1, pcol2, pcol3, pcol4 = st.columns([4, 1, 1, 1])
+                    pcol1.markdown(f"**{path}**")
+                    pcol2.markdown(f"Text: {text_done}")
+                    pcol3.markdown(f"Pages: **{pages}**")
+                    pcol4.markdown(f"Embed: {embed_done} ({chunks} chunks)")
+            st.divider()
+
+        # Full table
+        st.subheader("📋 All Documents")
+        df = build_status_dataframe(all_docs, active_filter)
+        if df.empty:
+            st.info("No documents match the selected filter.")
+        else:
+            st.dataframe(df, use_container_width=True, height=500)
+
+    except redis.exceptions.ConnectionError:
+        st.error(
+            f"Cannot connect to Redis at {REDIS_HOST}:{REDIS_PORT}. "
+            "Check that the `REDIS_HOST` and `REDIS_PORT` environment variables are set correctly."
+        )
+
+
+def _in_streamlit_context() -> bool:
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        return get_script_run_ctx() is not None
+    except Exception:
+        return False
+
+
+if _in_streamlit_context():
+    render_page()
