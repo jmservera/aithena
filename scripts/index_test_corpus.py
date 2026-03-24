@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Trigger indexing of documents through both embedding pipelines.
+"""Trigger indexing of documents through the e5-base embedding pipeline.
 
-Publishes document file paths to the RabbitMQ fanout exchange so that
-both document-indexer (distiluse → books) and document-indexer-e5
-(e5-base → books_e5base) receive and process every document.
+Publishes document file paths to the RabbitMQ exchange so that the
+document-indexer (e5-base → books) receives and processes every document.
 
 The script is idempotent — re-running it re-publishes the same paths;
-the indexers handle deduplication via Solr's unique key.
+the indexer handles deduplication via Solr's unique key.
 
 Usage:
     python scripts/index_test_corpus.py                          # defaults
@@ -40,7 +39,7 @@ EXCHANGE_NAME = os.environ.get("EXCHANGE_NAME", "documents")
 
 SOLR_HOST = os.environ.get("SOLR_HOST", "localhost")
 SOLR_PORT = int(os.environ.get("SOLR_PORT", 8983))
-COLLECTIONS = ("books", "books_e5base")
+COLLECTION = "books"
 
 
 def discover_documents(base_path: str, wildcard: str, limit: int | None = None) -> list[str]:
@@ -60,7 +59,7 @@ def publish_documents(
     password: str = RABBITMQ_PASS,
     exchange: str = EXCHANGE_NAME,
 ) -> int:
-    """Publish file paths to the fanout exchange. Returns count published."""
+    """Publish file paths to the exchange. Returns count published."""
     credentials = pika.PlainCredentials(user, password)
     params = pika.ConnectionParameters(host=host, port=port, credentials=credentials)
     connection = pika.BlockingConnection(params)
@@ -88,27 +87,24 @@ def publish_documents(
     return published
 
 
-def get_collection_counts(
+def get_collection_count(
     solr_host: str = SOLR_HOST,
     solr_port: int = SOLR_PORT,
-    collections: tuple[str, ...] = COLLECTIONS,
-) -> dict[str, int | str]:
-    """Query Solr for document counts in each collection."""
-    counts: dict[str, int | str] = {}
-    for col in collections:
-        url = f"http://{solr_host}:{solr_port}/solr/{col}/select?q=*:*&rows=0&wt=json"
-        try:
-            resp = requests.get(url, timeout=10)
-            resp.raise_for_status()
-            counts[col] = resp.json()["response"]["numFound"]
-        except Exception as exc:
-            counts[col] = f"error: {exc}"
-    return counts
+    collection: str = COLLECTION,
+) -> int | str:
+    """Query Solr for document count in the collection."""
+    url = f"http://{solr_host}:{solr_port}/solr/{collection}/select?q=*:*&rows=0&wt=json"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return resp.json()["response"]["numFound"]
+    except Exception as exc:
+        return f"error: {exc}"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Index test corpus through both embedding pipelines.",
+        description="Index test corpus through the e5-base embedding pipeline.",
     )
     parser.add_argument(
         "--base-path",
@@ -139,16 +135,15 @@ def main() -> None:
     parser.add_argument(
         "--status-only",
         action="store_true",
-        help="Only show current collection document counts",
+        help="Only show current collection document count",
     )
     args = parser.parse_args()
 
     # Status-only mode
     if args.status_only:
         print("Current collection status:")
-        counts = get_collection_counts()
-        for col, count in counts.items():
-            print(f"  {col}: {count} documents")
+        count = get_collection_count()
+        print(f"  {COLLECTION}: {count} documents")
         return
 
     # Discover documents
@@ -156,7 +151,7 @@ def main() -> None:
     files = discover_documents(args.base_path, args.wildcard, args.limit)
 
     if not files:
-        print(f"No documents found matching '{args.wildcard}' in {args.base_path}")
+        print(f"No documents found matching \'{args.wildcard}\' in {args.base_path}")
         print("Ensure BASE_PATH is set to a directory containing documents.")
         sys.exit(1)
 
@@ -166,27 +161,21 @@ def main() -> None:
         print("\n--- Dry Run (documents that would be published) ---")
         for f in files:
             print(f"  {f}")
-        print(f"\nTotal: {len(files)} documents → fanout exchange '{args.exchange}'")
-        print("Both indexers (distiluse → books, e5-base → books_e5base) would receive all documents.")
+        print(f"\nTotal: {len(files)} documents \u2192 exchange \'{args.exchange}\'")
+        print(f"The document-indexer (e5-base \u2192 {COLLECTION}) would receive all documents.")
         return
 
     # Publish
-    print(f"\nPublishing {len(files)} documents to exchange '{args.exchange}'...")
-    print("Both indexers will receive every document via the fanout exchange.")
+    print(f"\nPublishing {len(files)} documents to exchange \'{args.exchange}\'...")
     count = publish_documents(files, exchange=args.exchange)
-    print(f"\n✓ Published {count} documents to '{args.exchange}' fanout exchange")
-    print("  → document-indexer (distiluse → books collection)")
-    print("  → document-indexer-e5 (e5-base → books_e5base collection)")
+    print(f"\n\u2713 Published {count} documents to \'{args.exchange}\' exchange")
+    print(f"  \u2192 document-indexer (e5-base \u2192 {COLLECTION} collection)")
 
     # Show current status
     print("\nChecking current collection status...")
-    counts = get_collection_counts()
-    if counts:
-        for col, doc_count in counts.items():
-            print(f"  {col}: {doc_count} documents")
-        print("\nNote: Indexing is asynchronous. Re-run with --status-only to check progress.")
-    else:
-        print("  (Could not query Solr — services may not be running locally)")
+    doc_count = get_collection_count()
+    print(f"  {COLLECTION}: {doc_count} documents")
+    print("\nNote: Indexing is asynchronous. Re-run with --status-only to check progress.")
 
 
 if __name__ == "__main__":

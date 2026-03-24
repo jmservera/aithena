@@ -147,3 +147,13 @@
 - 28 new tests: unit (store, percentile, summarize), thread-safety (concurrent writes/reads/resets), endpoint integration (auth, schema, reset)
 - Admin endpoints use `require_admin_auth` dependency (X-API-Key) — same pattern as existing `/v1/admin/*` routes
 - solr-search test count: 888 passed (up from ~833)
+
+### Benchmark Script Cleanup for Single-Collection e5 (PR #985 for #968)
+- Migrated 8 files from dual-collection A/B setup (distiluse+e5) to single `books` collection with e5-base 768D
+- **run_benchmark.py:** Removed entire A/B comparison framework (QueryComparison, jaccard_similarity, compare_results). Replaced with single-collection benchmark reporting per-mode latency stats. Changed `COLLECTIONS = ("books", "books_e5base")` → `COLLECTION = "books"`
+- **verify_collections.py:** Simplified from dual-collection parity checker to single-collection health check (has_documents, has_chunks, embedding_dim=768)
+- **index_test_corpus.py:** Removed dual-indexer references, `get_collection_counts()` → `get_collection_count()` (singular)
+- **queries.json:** v1→v2, `"collections": ["books","books_e5base"]` → `"collection": "books"`
+- Rewrote all 3 test files to match new APIs: 49 tests pass
+- Net -304 lines of dead code removed (~40 stale references eliminated)
+- **Bash heredoc gotcha:** Large Python file writes via heredoc silently fail on this environment — use `python3` with `pathlib.Path.write_text()` instead

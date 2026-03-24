@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from index_test_corpus import (
     discover_documents,
-    get_collection_counts,
+    get_collection_count,
     publish_documents,
 )
 
@@ -157,37 +157,28 @@ class TestPublishDocuments:
 
 
 # ---------------------------------------------------------------------------
-# get_collection_counts (mocked requests)
+# get_collection_count (mocked requests)
 # ---------------------------------------------------------------------------
 
 
-class TestGetCollectionCounts:
+class TestGetCollectionCount:
     @patch("index_test_corpus.requests.get")
-    def test_returns_counts(self, mock_get: MagicMock) -> None:
-        def side_effect(url, **kwargs):
-            mock_resp = MagicMock()
-            if "books_e5base" in url:
-                mock_resp.json.return_value = {"response": {"numFound": 50}}
-            else:
-                mock_resp.json.return_value = {"response": {"numFound": 100}}
-            mock_resp.raise_for_status = MagicMock()
-            return mock_resp
+    def test_returns_count(self, mock_get: MagicMock) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"response": {"numFound": 100}}
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
 
-        mock_get.side_effect = side_effect
-
-        counts = get_collection_counts(
-            solr_host="localhost", solr_port=8983,
-            collections=("books", "books_e5base"),
+        count = get_collection_count(
+            solr_host="localhost", solr_port=8983, collection="books",
         )
-        assert counts["books"] == 100
-        assert counts["books_e5base"] == 50
+        assert count == 100
 
     @patch("index_test_corpus.requests.get")
     def test_handles_connection_error(self, mock_get: MagicMock) -> None:
         mock_get.side_effect = ConnectionError("refused")
 
-        counts = get_collection_counts(
-            solr_host="localhost", solr_port=8983,
-            collections=("books",),
+        count = get_collection_count(
+            solr_host="localhost", solr_port=8983, collection="books",
         )
-        assert "error" in str(counts["books"])
+        assert "error" in str(count)

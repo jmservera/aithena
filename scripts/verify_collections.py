@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Verify that both Solr collections are correctly indexed with matching documents.
+"""Verify that the Solr books collection is correctly indexed.
 
 Checks:
-1. Document counts match between books and books_e5base (parent docs)
-2. Chunk counts are present in both collections
-3. Embeddings have correct dimensionality (512D in books, 768D in books_e5base)
-4. Parent document IDs match between collections
+1. The books collection is accessible and contains documents
+2. Parent and chunk documents are present
+3. Embeddings have correct dimensionality (768D for e5-base)
 
 Usage:
     python scripts/verify_collections.py
@@ -36,13 +35,8 @@ except ImportError:
 SOLR_HOST = os.environ.get("SOLR_HOST", "localhost")
 SOLR_PORT = int(os.environ.get("SOLR_PORT", 8983))
 
-BASELINE_COLLECTION = "books"
-CANDIDATE_COLLECTION = "books_e5base"
-
-EXPECTED_DIMENSIONS = {
-    BASELINE_COLLECTION: 512,
-    CANDIDATE_COLLECTION: 768,
-}
+COLLECTION = "books"
+EXPECTED_EMBEDDING_DIM = 768
 
 # Parent docs have no parent_id_s; chunks have parent_id_s set
 PARENT_FILTER = "-parent_id_s:[* TO *]"
@@ -56,7 +50,7 @@ CHUNK_FILTER = "parent_id_s:[* TO *]"
 
 @dataclass
 class CollectionStatus:
-    """Status of a single Solr collection."""
+    """Status of the Solr collection."""
 
     collection: str
     total_docs: int = 0
@@ -69,16 +63,12 @@ class CollectionStatus:
 
 @dataclass
 class VerificationResult:
-    """Result of the verification across both collections."""
+    """Result of the verification checks."""
 
-    baseline: CollectionStatus | None = None
-    candidate: CollectionStatus | None = None
-    parent_count_match: bool = False
-    parent_ids_match: bool = False
-    missing_in_baseline: list[str] = field(default_factory=list)
-    missing_in_candidate: list[str] = field(default_factory=list)
-    baseline_dim_correct: bool = False
-    candidate_dim_correct: bool = False
+    status: CollectionStatus | None = None
+    has_documents: bool = False
+    has_chunks: bool = False
+    embedding_dim_correct: bool = False
     all_checks_passed: bool = False
 
 
@@ -111,7 +101,7 @@ def get_doc_count(solr_url: str, collection: str, fq: str | None = None) -> int:
 
 
 def get_parent_ids(solr_url: str, collection: str, max_rows: int = 50000) -> list[str]:
-    """Retrieve all parent document IDs from a collection."""
+    """Retrieve all parent document IDs from the collection."""
     params: dict[str, Any] = {
         "q": "*:*",
         "fq": PARENT_FILTER,
@@ -147,7 +137,7 @@ def get_sample_embedding_dim(solr_url: str, collection: str) -> int | None:
 
 
 def inspect_collection(solr_url: str, collection: str) -> CollectionStatus:
-    """Gather status information for a single collection."""
+    """Gather status information for the collection."""
     status = CollectionStatus(collection=collection)
     try:
         status.total_docs = get_doc_count(solr_url, collection)
@@ -165,48 +155,34 @@ def inspect_collection(solr_url: str, collection: str) -> CollectionStatus:
 # ---------------------------------------------------------------------------
 
 
-def verify_collections(
+def verify_collection(
     solr_url: str,
-    baseline_collection: str = BASELINE_COLLECTION,
-    candidate_collection: str = CANDIDATE_COLLECTION,
+    collection: str = COLLECTION,
 ) -> VerificationResult:
     """Run all verification checks and return structured results."""
     result = VerificationResult()
 
-    result.baseline = inspect_collection(solr_url, baseline_collection)
-    result.candidate = inspect_collection(solr_url, candidate_collection)
+    result.status = inspect_collection(solr_url, collection)
 
-    if result.baseline.error or result.candidate.error:
+    if result.status.error:
         return result
 
-    # Check 1: Parent document counts match
-    result.parent_count_match = result.baseline.parent_docs == result.candidate.parent_docs
+    # Check 1: Collection has documents
+    result.has_documents = result.status.parent_docs > 0
 
-    # Check 2: Parent document IDs match
-    baseline_ids = set(result.baseline.parent_ids)
-    candidate_ids = set(result.candidate.parent_ids)
-    result.parent_ids_match = baseline_ids == candidate_ids
-    result.missing_in_baseline = sorted(candidate_ids - baseline_ids)
-    result.missing_in_candidate = sorted(baseline_ids - candidate_ids)
+    # Check 2: Collection has chunks
+    result.has_chunks = result.status.chunk_docs > 0
 
-    # Check 3: Embedding dimensionality
-    expected_baseline_dim = EXPECTED_DIMENSIONS[baseline_collection]
-    expected_candidate_dim = EXPECTED_DIMENSIONS[candidate_collection]
-
-    result.baseline_dim_correct = result.baseline.sample_embedding_dim == expected_baseline_dim
-    result.candidate_dim_correct = result.candidate.sample_embedding_dim == expected_candidate_dim
-
-    # Allow dim check to pass if there are no chunks yet (nothing to verify)
-    if result.baseline.chunk_docs == 0:
-        result.baseline_dim_correct = True
-    if result.candidate.chunk_docs == 0:
-        result.candidate_dim_correct = True
+    # Check 3: Embedding dimensionality is 768D (e5-base)
+    if result.status.chunk_docs == 0:
+        result.embedding_dim_correct = True  # no chunks to verify
+    else:
+        result.embedding_dim_correct = result.status.sample_embedding_dim == EXPECTED_EMBEDDING_DIM
 
     result.all_checks_passed = all([
-        result.parent_count_match,
-        result.parent_ids_match,
-        result.baseline_dim_correct,
-        result.candidate_dim_correct,
+        result.has_documents,
+        result.has_chunks,
+        result.embedding_dim_correct,
     ])
 
     return result
@@ -224,55 +200,40 @@ def format_report(result: VerificationResult, verbose: bool = False) -> str:
     lines.append("COLLECTION VERIFICATION REPORT")
     lines.append("=" * 68)
 
-    for label, status in [("Baseline", result.baseline), ("Candidate", result.candidate)]:
-        if status is None:
-            lines.append(f"\n{label}: NOT AVAILABLE")
-            continue
-        lines.append(f"\n{label}: {status.collection}")
-        if status.error:
-            lines.append(f"  ✗ Error: {status.error}")
-            continue
+    status = result.status
+    if status is None:
+        lines.append("\nCollection: NOT AVAILABLE")
+    elif status.error:
+        lines.append(f"\nCollection: {status.collection}")
+        lines.append(f"  \u2717 Error: {status.error}")
+    else:
+        lines.append(f"\nCollection: {status.collection}")
         lines.append(f"  Total docs:      {status.total_docs}")
         lines.append(f"  Parent docs:     {status.parent_docs}")
         lines.append(f"  Chunk docs:      {status.chunk_docs}")
         dim_str = str(status.sample_embedding_dim) if status.sample_embedding_dim else "N/A (no chunks)"
-        expected = EXPECTED_DIMENSIONS.get(status.collection, "?")
-        lines.append(f"  Embedding dim:   {dim_str} (expected: {expected})")
+        lines.append(f"  Embedding dim:   {dim_str} (expected: {EXPECTED_EMBEDDING_DIM})")
+
+        if verbose and status.parent_ids:
+            lines.append(f"\n  Parent document IDs ({len(status.parent_ids)}):")
+            for doc_id in status.parent_ids:
+                lines.append(f"    - {doc_id}")
 
     lines.append("\n--- Checks ---")
 
     def _check(passed: bool, label: str) -> str:
-        icon = "✓" if passed else "✗"
+        icon = "\u2713" if passed else "\u2717"
         return f"  {icon} {label}"
 
-    lines.append(_check(result.parent_count_match, "Parent document counts match"))
-    lines.append(_check(result.parent_ids_match, "Parent document IDs match"))
-    baseline_dim = EXPECTED_DIMENSIONS[BASELINE_COLLECTION]
-    candidate_dim = EXPECTED_DIMENSIONS[CANDIDATE_COLLECTION]
-    lines.append(_check(result.baseline_dim_correct, f"Baseline embedding dim = {baseline_dim}D"))
-    lines.append(_check(result.candidate_dim_correct, f"Candidate embedding dim = {candidate_dim}D"))
-
-    if result.missing_in_candidate:
-        lines.append(f"\n  Missing in candidate ({len(result.missing_in_candidate)}):")
-        display = result.missing_in_candidate[:10] if not verbose else result.missing_in_candidate
-        for doc_id in display:
-            lines.append(f"    - {doc_id}")
-        if not verbose and len(result.missing_in_candidate) > 10:
-            lines.append(f"    ... and {len(result.missing_in_candidate) - 10} more")
-
-    if result.missing_in_baseline:
-        lines.append(f"\n  Missing in baseline ({len(result.missing_in_baseline)}):")
-        display = result.missing_in_baseline[:10] if not verbose else result.missing_in_baseline
-        for doc_id in display:
-            lines.append(f"    - {doc_id}")
-        if not verbose and len(result.missing_in_baseline) > 10:
-            lines.append(f"    ... and {len(result.missing_in_baseline) - 10} more")
+    lines.append(_check(result.has_documents, "Collection has parent documents"))
+    lines.append(_check(result.has_chunks, "Collection has chunk documents"))
+    lines.append(_check(result.embedding_dim_correct, f"Embedding dim = {EXPECTED_EMBEDDING_DIM}D (e5-base)"))
 
     lines.append("")
     if result.all_checks_passed:
-        lines.append("✓ ALL CHECKS PASSED")
+        lines.append("\u2713 ALL CHECKS PASSED")
     else:
-        lines.append("✗ SOME CHECKS FAILED")
+        lines.append("\u2717 SOME CHECKS FAILED")
     lines.append("=" * 68)
 
     return "\n".join(lines)
@@ -281,24 +242,20 @@ def format_report(result: VerificationResult, verbose: bool = False) -> str:
 def result_to_dict(result: VerificationResult) -> dict[str, Any]:
     """Serialize verification result to JSON-compatible dict."""
     d: dict[str, Any] = {
-        "parent_count_match": result.parent_count_match,
-        "parent_ids_match": result.parent_ids_match,
-        "baseline_dim_correct": result.baseline_dim_correct,
-        "candidate_dim_correct": result.candidate_dim_correct,
+        "has_documents": result.has_documents,
+        "has_chunks": result.has_chunks,
+        "embedding_dim_correct": result.embedding_dim_correct,
         "all_checks_passed": result.all_checks_passed,
-        "missing_in_baseline": result.missing_in_baseline,
-        "missing_in_candidate": result.missing_in_candidate,
     }
-    for label, status in [("baseline", result.baseline), ("candidate", result.candidate)]:
-        if status:
-            d[label] = {
-                "collection": status.collection,
-                "total_docs": status.total_docs,
-                "parent_docs": status.parent_docs,
-                "chunk_docs": status.chunk_docs,
-                "sample_embedding_dim": status.sample_embedding_dim,
-                "error": status.error,
-            }
+    if result.status:
+        d["collection"] = {
+            "name": result.status.collection,
+            "total_docs": result.status.total_docs,
+            "parent_docs": result.status.parent_docs,
+            "chunk_docs": result.status.chunk_docs,
+            "sample_embedding_dim": result.status.sample_embedding_dim,
+            "error": result.status.error,
+        }
     return d
 
 
@@ -309,7 +266,7 @@ def result_to_dict(result: VerificationResult) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Verify dual Solr collections have matching documents and correct embeddings.",
+        description="Verify Solr books collection has correct documents and e5-base embeddings.",
     )
     parser.add_argument(
         "--solr-url",
@@ -325,11 +282,11 @@ def main() -> None:
     parser.add_argument(
         "--verbose", "-v",
         action="store_true",
-        help="Show all document IDs in discrepancy lists",
+        help="Show all document IDs",
     )
     args = parser.parse_args()
 
-    result = verify_collections(args.solr_url)
+    result = verify_collection(args.solr_url)
 
     if args.json_output:
         print(json.dumps(result_to_dict(result), indent=2))
