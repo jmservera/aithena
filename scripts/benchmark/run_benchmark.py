@@ -292,7 +292,8 @@ def format_summary(report: BenchmarkReport) -> str:
     lines.append("")
     lines.append("--- By Category ---")
     for cat, stats in sorted(summary.get("by_category", {}).items()):
-        lines.append(f"  {cat:20s}  queries={stats['query_count']:<3d}  mean_latency={_fmt(stats['mean_latency_ms'])} ms")
+        latency = _fmt(stats["mean_latency_ms"])
+        lines.append(f"  {cat:20s}  queries={stats['query_count']:<3d}  mean_latency={latency} ms")
 
     # Error queries
     lines.append("")
