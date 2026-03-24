@@ -13,6 +13,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
+# Auto-configure git hooks if not already set
+CURRENT_HOOKS=$(git config core.hooksPath 2>/dev/null || true)
+if [ "$CURRENT_HOOKS" != ".github/hooks" ]; then
+  git config core.hooksPath .github/hooks
+  echo "📌 Git hooks path configured → .github/hooks"
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
