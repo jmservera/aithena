@@ -3293,7 +3293,7 @@ Credentials are injected from `.env` at runtime. To view current Solr users:
 
 ```bash
 docker compose exec solr-search curl \
-  -u solr-admin:$SOLR_ADMIN_PASSWORD \
+  -u solr-admin:$SOLR_ADMIN_PASS \
   http://localhost:8983/api/users
 ```
 
@@ -3447,7 +3447,7 @@ git checkout v1.13.0
 
 # 3. Update .env with new per-service credentials (if upgrading from < v1.13.0)
 # Review and merge .env.example into your current .env
-# Add new variables: RABBITMQ_INDEXER_USER, RABBITMQ_LISTER_USER, SOLR_ADMIN_PASSWORD, etc.
+# Add new variables: RABBITMQ_INDEXER_USER, RABBITMQ_LISTER_USER, SOLR_ADMIN_PASS, etc.
 
 # 4. Pull new images
 docker compose pull
@@ -3470,7 +3470,7 @@ docker compose logs | grep -i error
 **Solution:**
 ```bash
 # 1. Check if credentials are in .env
-grep SOLR_ADMIN_PASSWORD .env
+grep SOLR_ADMIN_PASS .env
 grep RABBITMQ_INDEXER_USER .env
 grep REDIS_PASSWORD .env
 
@@ -3524,7 +3524,7 @@ The passthrough is configured in the nginx proxy and uses credentials from `.env
 ```bash
 # Ensure these are set in .env (created by the installer)
 SOLR_ADMIN_USER=admin
-SOLR_ADMIN_PASSWORD=<your-solr-password>
+SOLR_ADMIN_PASS=<your-solr-password>
 ```
 
 ### Document Indexer OOM Fix (#1074, #1075)

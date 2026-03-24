@@ -348,8 +348,8 @@ services:
       solr:
         condition: service_healthy
     environment:
-      SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:-solr_admin}
-      SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
+      SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
+      SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
       NGINX_ENVSUBST_FILTER: SOLR_BASIC_AUTH
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:80/health"]

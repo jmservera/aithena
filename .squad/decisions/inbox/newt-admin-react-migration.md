@@ -7,7 +7,7 @@
 
 ## Context
 
-The admin portal (`src/admin/`) is a standalone Streamlit (Python) app with 7 pages. The React UI (`src/aithena-ui/`) already has 3 admin pages (`/admin`, `/admin/users`, `/admin/backups`). For v2.0, we need to decide how to unify these.
+The admin portal (`src/admin/`) was originally a standalone Streamlit (Python) app with 7 pages. The `streamlit-admin` Compose service has since been removed and nginx redirects `/admin/streamlit` → `/admin`, but the `src/admin/` source tree is retained as reference. The React UI (`src/aithena-ui/`) already has 3 admin pages (`/admin`, `/admin/users`, `/admin/backups`). For v2.0, we need to complete the migration of all remaining Streamlit admin features into React.
 
 ## Decision
 
