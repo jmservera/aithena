@@ -2777,7 +2777,13 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
     safe_filename = _sanitize_filename(file.filename)
 
     # Ensure upload directory exists
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Upload directory is not available. Check volume permissions.",
+        ) from exc
 
     # Handle filename collision with timestamp
     target_path = settings.upload_dir / safe_filename
