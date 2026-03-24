@@ -499,6 +499,7 @@ services:
         max-file: "3"
   solr:
     image: solr:9.7
+    user: "0:0"
     entrypoint: /entrypoint-sasl.sh
     command: ["solr-foreground"]
     restart: unless-stopped
@@ -548,6 +549,7 @@ services:
         condition: service_healthy
   solr2:
     image: solr:9.7
+    user: "0:0"
     entrypoint: /entrypoint-sasl.sh
     command: ["solr-foreground"]
     restart: unless-stopped
@@ -597,6 +599,7 @@ services:
         condition: service_healthy
   solr3:
     image: solr:9.7
+    user: "0:0"
     entrypoint: /entrypoint-sasl.sh
     command: ["solr-foreground"]
     restart: unless-stopped
