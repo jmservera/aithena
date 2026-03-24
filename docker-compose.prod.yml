@@ -475,7 +475,8 @@ services:
         max-size: "10m"
         max-file: "3"
   solr:
-    image: solr:9.7
+    build:
+      context: ./src/solr
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -520,7 +521,8 @@ services:
       zoo3:
         condition: service_healthy
   solr2:
-    image: solr:9.7
+    build:
+      context: ./src/solr
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -565,7 +567,8 @@ services:
       solr:
         condition: service_healthy
   solr3:
-    image: solr:9.7
+    build:
+      context: ./src/solr
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -610,7 +613,8 @@ services:
       solr2:
         condition: service_healthy
   solr-init:
-    image: solr:9.7
+    build:
+      context: ./src/solr
     depends_on:
       solr:
         condition: service_healthy
