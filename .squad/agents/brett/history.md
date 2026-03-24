@@ -479,3 +479,10 @@ Monthly restore drill CI workflow failed because restore scripts did not fully r
 **Impact:** Cleaner issue triage, reduced noise in GitHub backlog, faster incident response.
 
 **PR Ready:** Awaiting review and merge to dev branch.
+
+### Health Check Improvements (#1009 → PR #1055)
+- aithena-ui: Added `/health` endpoint to its nginx.conf for lightweight health probes (avoids serving full SPA)
+- document-lister/indexer: Tightened `pgrep -f python` to `pgrep -f document_lister`/`document_indexer` for module-specific matching
+- document-lister/indexer are pure MQ workers with no HTTP server; pgrep is the correct infra-level strategy
+- nginx reverse proxy already had proper /health check via BusyBox wget — no changes needed
+- `nginx:1.27-alpine` includes BusyBox wget (no curl); health checks use wget throughout
