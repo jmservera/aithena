@@ -189,6 +189,11 @@ echo "==> Installing Playwright Chromium browser + system deps..."
 \. "$HOME/.nvm/nvm.sh"
 (cd "$REPO_ROOT/e2e/playwright" && npx playwright install --with-deps chromium)
 
+# === Git hooks ===
+echo "==> Configuring git hooks path..."
+git config core.hooksPath .github/hooks
+echo "    Pre-commit hook enabled (lint + format + tests on staged files)"
+
 echo ""
 echo "==> Dev environment setup complete!"
 echo "    Verify: npx playwright --version"
