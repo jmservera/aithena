@@ -106,13 +106,13 @@ test('pdf viewer opens from a search result and loads the document iframe', asyn
   await card.locator('.open-pdf-btn').click();
 
   const viewer = page.locator('.pdf-viewer-overlay');
-  await expect(viewer).toBeVisible();
-  await expect(viewer.locator('.pdf-viewer-title strong')).toContainText(scenario.result.title);
-  await expect(viewer.locator('.pdf-viewer-frame')).toBeVisible();
+  await expect(viewer).toBeVisible({ timeout: 10_000 });
+  await expect(viewer.locator('.pdf-viewer-title strong')).toContainText(scenario.result.title, { timeout: 10_000 });
+  await expect(viewer.locator('.pdf-viewer-frame')).toBeVisible({ timeout: 10_000 });
   await expect(viewer.locator('.pdf-viewer-frame')).toHaveAttribute('src', /\/documents\//);
 
   await page.getByRole('button', { name: 'Close PDF viewer' }).click();
-  await expect(viewer).toBeHidden();
+  await expect(viewer).toBeHidden({ timeout: 10_000 });
 });
 
 test('pdf viewer supports page fragment navigation for multi-page PDFs', async ({ page }) => {

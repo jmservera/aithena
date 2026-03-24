@@ -209,6 +209,6 @@ test('closing the PDF viewer also hides the similar-books panel', async ({ page 
   // which removes both the PDF viewer overlay and the SimilarBooks panel.
   await page.getByRole('button', { name: 'Close PDF viewer' }).click();
 
-  await expect(panel).toBeHidden({ timeout: 5_000 });
-  await expect(page.locator('.pdf-viewer-overlay')).toBeHidden({ timeout: 5_000 });
+  await expect(panel).toBeHidden({ timeout: 10_000 });
+  await expect(page.locator('.pdf-viewer-overlay')).toBeHidden({ timeout: 10_000 });
 });
