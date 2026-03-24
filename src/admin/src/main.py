@@ -41,9 +41,11 @@ pages = {
     ],
     "Indexing": [
         st.Page("pages/reindex.py", title="Reindex Library", icon="🔄"),
+        st.Page("pages/indexing_status.py", title="Indexing Status", icon="📈"),
     ],
     "System": [
         st.Page("pages/system_status.py", title="System Status", icon="🔧"),
+        st.Page("pages/log_viewer.py", title="Log Viewer", icon="📜"),
         st.Page("pages/infrastructure.py", title="Infrastructure", icon="🏗️"),
     ],
 }
