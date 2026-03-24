@@ -107,7 +107,7 @@ test('pdf viewer opens from a search result and loads the document iframe', asyn
 
   const viewer = page.locator('.pdf-viewer-overlay');
   await expect(viewer).toBeVisible({ timeout: 10_000 });
-  await expect(viewer.locator('.pdf-viewer-title strong')).toContainText(scenario.result.title, { timeout: 10_000 });
+  await expect(viewer.locator('.pdf-viewer-toolbar__title strong')).toContainText(scenario.result.title, { timeout: 10_000 });
   await expect(viewer.locator('.pdf-viewer-frame')).toBeVisible({ timeout: 10_000 });
   await expect(viewer.locator('.pdf-viewer-frame')).toHaveAttribute('src', /\/documents\//);
 
