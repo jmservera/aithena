@@ -40,6 +40,8 @@ RUN addgroup -S -g 1000 app && adduser -S -u 1000 -G app app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/document_indexer /app/document_indexer
 
+RUN mkdir -p /data/thumbnails && chown app:app /data/thumbnails
+
 RUN chown -R app:app /app
 
 ENV PATH="/app/.venv/bin:${PATH}"
