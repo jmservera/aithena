@@ -118,10 +118,70 @@ async function writeAuthStorageState(resolvedBaseURL: string): Promise<void> {
   }
 }
 
+const SEARCH_READY_TIMEOUT_MS = Number(process.env.SEARCH_READY_TIMEOUT_MS || '120000');
+const SEARCH_READY_POLL_MS = 3_000;
+
+async function waitForSearchReadiness(resolvedBaseURL: string, accessToken: string): Promise<void> {
+  const apiBaseURL = getApiBaseUrl(resolvedBaseURL) || DEFAULT_SEARCH_API_URL;
+  const searchUrl = new URL('/v1/search/', `${apiBaseURL}/`).toString();
+  const api = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  const startedAt = Date.now();
+  let lastError = '';
+
+  try {
+    while (Date.now() - startedAt < SEARCH_READY_TIMEOUT_MS) {
+      try {
+        const response = await api.get(searchUrl, {
+          params: { q: '*', page: '1', limit: '1' },
+          headers: { Authorization: `Bearer ${accessToken}` },
+          timeout: 10_000,
+        });
+
+        if (response.ok()) {
+          const payload = await response.json() as { total?: number };
+          if (typeof payload.total === 'number' && payload.total > 0) {
+            console.log(`[playwright] search readiness confirmed: ${payload.total} document(s) indexed`);
+            return;
+          }
+          lastError = `Search returned 0 results (total: ${payload.total ?? 'undefined'})`;
+        } else {
+          lastError = `Search API responded with ${response.status()}`;
+        }
+      } catch (error) {
+        lastError = `Search API unreachable: ${error instanceof Error ? error.message : String(error)}`;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, SEARCH_READY_POLL_MS));
+    }
+  } finally {
+    await api.dispose();
+  }
+
+  console.warn(
+    `[playwright] search readiness gate timed out after ${SEARCH_READY_TIMEOUT_MS}ms. ` +
+    `Last error: ${lastError}. Proceeding anyway — tests that need indexed data will skip.`
+  );
+}
+
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   const resolvedBaseURL = await findAvailableAppUrl();
   process.env.PLAYWRIGHT_APP_BASE_URL = resolvedBaseURL;
   await writeAuthStorageState(resolvedBaseURL);
+
+  const authState = JSON.parse(
+    await (await import('node:fs/promises')).readFile(AUTH_STATE_PATH, 'utf-8')
+  );
+  const accessToken =
+    authState?.origins?.[0]?.localStorage?.find(
+      (item: { name: string; value: string }) => item.name === AUTH_TOKEN_STORAGE_KEY
+    )?.value || '';
+
+  if (accessToken) {
+    await waitForSearchReadiness(resolvedBaseURL, accessToken);
+  } else {
+    console.warn('[playwright] no auth token available — skipping search readiness gate');
+  }
+
   console.log(`[playwright] using app base URL: ${resolvedBaseURL}`);
   console.log(`[playwright] using search API URL: ${getApiBaseUrl(resolvedBaseURL) || DEFAULT_SEARCH_API_URL}`);
   console.log(`[playwright] wrote auth storage state: ${AUTH_STATE_PATH}`);
