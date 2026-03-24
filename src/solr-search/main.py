@@ -1757,13 +1757,35 @@ def _raw_indexing_status(key_pattern: str) -> tuple[dict[str, int], set[str]]:
     for key, val in zip(keys, values, strict=False):
         if val is None:
             pending += 1
-        elif val == "text_indexed":
-            indexed += 1
-        elif val == "failed":
-            failed += 1
-            failed_keys.add(str(key))
-        else:
-            pending += 1
+            continue
+        try:
+            state = json.loads(val)
+            if isinstance(state, dict):
+                if state.get("failed"):
+                    failed += 1
+                    failed_keys.add(str(key))
+                elif state.get("processed") or state.get("text_indexed"):
+                    indexed += 1
+                else:
+                    pending += 1
+            else:
+                # Legacy string format fallback
+                if val == "text_indexed":
+                    indexed += 1
+                elif val == "failed":
+                    failed += 1
+                    failed_keys.add(str(key))
+                else:
+                    pending += 1
+        except (json.JSONDecodeError, ValueError):
+            # Treat unparseable values as legacy format
+            if val == "text_indexed":
+                indexed += 1
+            elif val == "failed":
+                failed += 1
+                failed_keys.add(str(key))
+            else:
+                pending += 1
 
     total = len(keys)
     return {
