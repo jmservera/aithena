@@ -1,6 +1,6 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.13.0 Release Notes](release-notes/v1.13.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.14.0 Release Notes](release-notes/v1.14.0.md).
 
 ## System architecture overview
 
@@ -1370,6 +1370,37 @@ v1.5.0 validates that all persistent data survives container restarts.
 - [ ] All volumes have at least 50 GB free space for production library
 - [ ] Volumes backed up regularly via snapshot (daily recommended)
 - [ ] Smoke test suite passes all persistence validation tests
+
+#### Solr Bind-Mount Permissions (v1.14.0+)
+
+v1.14.0 includes a fix for Solr bind-mount volume permissions. Solr runs as a non-root user (UID 8983), and if the host directory is owned by root or a different user, the container may lack write permission.
+
+**How it's fixed:**
+- Solr's entrypoint runs as `root` and uses `gosu solr` to drop privileges before starting the Solr JVM
+- Directory ownership is corrected on startup (if needed)
+- File permissions are set to allow `solr:solr` to write to the mounted volume
+
+**If you are running v1.13.x or earlier with bind-mounted Solr volumes:**
+
+1. Upgrade to v1.14.0 or later
+2. Restart the Solr service: `docker compose restart solr`
+3. Verify permissions: `docker compose exec solr ls -la /var/solr/data`
+4. Check for errors: `docker compose logs solr | grep -i permission`
+
+**If you encounter permission errors:**
+
+```bash
+# Check host directory permissions
+ls -la /var/lib/aithena/solr
+# Should show: drwxr-xr-x solr solr (or equivalent user ownership)
+
+# If needed, fix ownership on host
+sudo chown -R 8983:8983 /var/lib/aithena/solr
+sudo chmod 755 /var/lib/aithena/solr
+
+# Restart Solr
+docker compose restart solr
+```
 
 ### Deployment health checks
 
@@ -3190,6 +3221,53 @@ docker compose logs -f
 ```
 
 **Important:** The installer generates all credentials, secrets, and configuration on the target host. This ensures no credentials are leaked or pre-shared across networks.
+
+#### Restore Script DRY_RUN Mode (v1.14.0+)
+
+v1.14.0 adds support for `DRY_RUN` environment variable in restore scripts. This allows you to safely test the restore process before committing changes.
+
+**Usage:**
+
+```bash
+# Test restore without modifying anything
+DRY_RUN=true ./scripts/restore.sh
+# Output shows what would happen without executing
+
+# Perform actual restore
+DRY_RUN=false ./scripts/restore.sh
+# (or omit DRY_RUN, defaults to false)
+```
+
+**Benefits:**
+- Validate restore workflow before committing
+- Verify bundle integrity without side effects
+- Catch configuration errors before deployment
+- Safer migration to air-gapped environments
+
+**Available restore scripts:**
+- `scripts/restore.sh` — General-purpose restore
+- `scripts/restore-critical.sh` — Restore critical system data first
+- `scripts/restore-high.sh` — Restore high-priority collections
+- `scripts/restore-medium.sh` — Restore medium-priority collections
+
+**Example workflow:**
+
+```bash
+# 1. Extract bundle
+tar xzf aithena-offline-v1.14.0.tar.gz
+cd aithena-offline-v1.14.0
+
+# 2. Dry-run to validate restore
+DRY_RUN=true sudo ./scripts/restore.sh
+# Review output for errors or warnings
+
+# 3. If dry-run succeeds, perform actual restore
+DRY_RUN=false sudo ./scripts/restore.sh
+
+# 4. Verify services
+sudo docker compose ps
+sudo docker compose logs | grep -i error
+```
 
 ### Security Hardening in v1.13.0
 
