@@ -77,11 +77,11 @@ if echo "$STAGED" | grep -q '^src/aithena-ui/.*\.\(ts\|tsx\|js\|jsx\|css\)$'; th
   pushd "$ROOT/src/aithena-ui" > /dev/null
 
   if [ -d "node_modules" ]; then
-    if ! npm run lint 2>/dev/null; then
+    if ! npm run lint; then
       echo "❌ eslint failed for aithena-ui"
       FAIL=1
     fi
-    if ! npm run format:check 2>/dev/null; then
+    if ! npm run format:check; then
       echo "❌ prettier format check failed for aithena-ui"
       FAIL=1
     fi
@@ -101,7 +101,7 @@ if [ ${#CHANGED_PY_SERVICES[@]} -gt 0 ]; then
     if [ -d "$SVC_DIR/tests" ] || find "$SVC_DIR" -maxdepth 2 -name "test_*.py" 2>/dev/null | grep -q .; then
       echo "🧪 Testing src/$svc..."
       pushd "$SVC_DIR" > /dev/null
-      if ! uv run pytest --tb=short -q 2>/dev/null; then
+      if ! uv run pytest --tb=short -q; then
         echo "❌ pytest failed for $svc"
         FAIL=1
       fi
@@ -115,7 +115,7 @@ if echo "$STAGED" | grep -q '^src/aithena-ui/.*\.\(ts\|tsx\|js\|jsx\)$'; then
   echo "🧪 Testing src/aithena-ui..."
   pushd "$ROOT/src/aithena-ui" > /dev/null
   if [ -d "node_modules" ]; then
-    if ! npx vitest run --reporter=verbose 2>/dev/null; then
+    if ! npx vitest run --reporter=verbose; then
       echo "❌ vitest failed for aithena-ui"
       FAIL=1
     fi
