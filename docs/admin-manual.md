@@ -1,6 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.13.0 Release Notes](release-notes/v1.13.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.14.1 Release Notes](release-notes/v1.14.1.md).
+
+**v1.14.1 operator note:** this manual now explicitly documents two operator workflows that are present in the current tree and are important for release operations: the `/admin/backups` backup dashboard with restore wizard, and the protected full reindex flow backed by `POST /v1/admin/reindex`.
 
 ## System architecture overview
 
@@ -118,6 +120,38 @@ Common local URLs:
 | Redis Commander | `http://localhost/admin/redis/` | Protected |
 
 Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
+
+## Backup dashboard and restore workflow (v1.14.x)
+
+The current UI includes an admin-only backup dashboard at:
+
+- `/admin/backups`
+
+This route is wired through the React application and exposes a dedicated operator workflow for backup visibility and restore actions.
+
+### What the dashboard provides
+
+The page renders three main surfaces:
+
+1. **Tier status** — a quick view of backup tier health/state
+2. **Backup now controls** — on-demand backup triggers from the UI
+3. **Backup history** — a table of known backups with restore entry points
+
+When you choose **Restore**, the UI opens a modal restore wizard with these steps:
+
+- `select`
+- `preview`
+- `confirm`
+- `progress`
+
+The page logic supports both a direct restore action and a test-restore action. Treat both as privileged operational tools and validate them in staging before relying on them in production runbooks.
+
+### Recommended operator practice
+
+- Verify backup history loads before starting maintenance windows
+- Prefer test-restore on non-production environments when available
+- Use the preview/confirm steps to verify you selected the correct backup set
+- Monitor restore progress and application health before reopening the system to users
 
 ## Configuration
 
@@ -723,6 +757,36 @@ Without a reindex, language filters and language-facing reports can mix old and 
    curl http://localhost/v1/stats/
    curl "http://localhost/v1/search/?q=historia&fq_language=ca"
    ```
+
+### Dedicated admin reindex flow (v1.14.x)
+
+The current tree also includes a dedicated admin reindex flow backed by:
+
+- UI/admin page: **Reindex Library**
+- API endpoint: `POST /v1/admin/reindex`
+
+This flow is more explicit than the older manual procedure because it documents the destructive behavior directly in the UI and in the API handler.
+
+#### What the action does
+
+When triggered successfully, the reindex flow:
+
+1. Deletes all documents from the target Solr collection
+2. Clears Redis tracking state used by the ingestion pipeline
+3. Allows `document-lister` to rediscover files
+4. Forces the indexing pipeline to rebuild search data with the current configuration and embedding model
+
+#### Operational warning
+
+This is a **destructive maintenance action**. Search results will be unavailable until reindexing completes.
+
+Use it when you intentionally need a full rebuild, such as:
+
+- after changing the embedding model
+- after making a Solr schema change that requires reprocessing existing content
+- after recovering from index corruption or inconsistent tracking state
+
+If your deployment exposes the admin page, require the same operational review you would for any other high-impact maintenance step.
 
 ### Why this is safe
 
