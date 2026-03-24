@@ -403,6 +403,8 @@ jobs:
         with:
           compose-logs-path: ${{ runner.temp }}/compose-logs.txt
           version-file: ./VERSION
+          allowlist-path: ./e2e/pre-release-allowlist.txt
+          max-errors: '0'
           create-issues: 'true'
           milestone: ''
           artifact-name: integration-test-log-analysis
