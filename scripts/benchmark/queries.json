@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "description": "Benchmark query suite for A/B testing distiluse (512D) vs e5-base (768D) embedding models",
+  "version": "2.0.0",
+  "description": "Benchmark query suite for measuring search quality with e5-base (768D) embeddings",
   "categories": {
     "simple_keyword": {
       "description": "Simple keyword queries typical of basic catalog searches",
@@ -178,7 +178,11 @@
       ]
     }
   },
-  "search_modes": ["keyword", "semantic", "hybrid"],
-  "collections": ["books", "books_e5base"],
+  "search_modes": [
+    "keyword",
+    "semantic",
+    "hybrid"
+  ],
+  "collection": "books",
   "default_top_k": 10
 }

@@ -1,10 +1,10 @@
 # Benchmark & Verification Tools
 
-Tools for A/B testing search quality across Solr collections (distiluse 512D vs e5-base 768D).
+Tools for measuring search quality and verifying collection health for the books collection (e5-base 768D).
 
 ## Test Corpus Indexing
 
-Index documents through both embedding pipelines (distiluse → `books`, e5-base → `books_e5base`).
+Index documents through the e5-base embedding pipeline into the `books` collection.
 
 ```bash
 # Index all documents in the configured BASE_PATH
@@ -23,7 +23,7 @@ python scripts/index_test_corpus.py --dry-run
 python scripts/index_test_corpus.py --status-only
 ```
 
-**How it works:** The script publishes document file paths to the `documents` fanout exchange in RabbitMQ. Both `document-indexer` (distiluse) and `document-indexer-e5` (e5-base) consume from this exchange, so every document is indexed into both collections.
+**How it works:** The script publishes document file paths to the `documents` exchange in RabbitMQ. The `document-indexer` (e5-base) consumes from this exchange and indexes each document into the `books` collection.
 
 **Requirements:** `pika` (for RabbitMQ) and `requests` (for status checks). Both are available in the document-lister/indexer containers.
 
@@ -31,7 +31,7 @@ python scripts/index_test_corpus.py --status-only
 
 ## Collection Verification
 
-Verify that both collections have matching documents with correct embeddings.
+Verify that the books collection has correctly indexed documents with e5-base embeddings.
 
 ```bash
 # Run all verification checks
@@ -40,7 +40,7 @@ python scripts/verify_collections.py
 # JSON output (for CI/scripts)
 python scripts/verify_collections.py --json
 
-# Verbose output (all discrepant IDs)
+# Verbose output (all details)
 python scripts/verify_collections.py --verbose
 
 # Custom Solr URL
@@ -48,15 +48,15 @@ python scripts/verify_collections.py --solr-url http://solr:8983
 ```
 
 **Checks performed:**
-1. Parent document counts match between `books` and `books_e5base`
-2. Parent document IDs are identical in both collections
-3. Embedding dimensionality is 512D in `books` and 768D in `books_e5base`
+1. The `books` collection is accessible and contains documents
+2. Parent and chunk documents are present
+3. Embedding dimensionality is 768D (e5-base)
 
 Exit code: `0` if all checks pass, `1` otherwise.
 
 ## Benchmark Runner
 
-Compare search quality across collections.
+Measure search quality across keyword, semantic, and hybrid modes.
 
 ```bash
 # Run against a live instance
@@ -67,17 +67,18 @@ python scripts/benchmark/run_benchmark.py --modes semantic hybrid
 
 # Save JSON report
 python scripts/benchmark/run_benchmark.py -o results/benchmark.json
+
+# Custom collection
+python scripts/benchmark/run_benchmark.py --collection books
 ```
 
 ## End-to-End Workflow
 
-The typical A/B test workflow:
-
 ```bash
-# 1. Start all services (both indexers, both embeddings servers)
+# 1. Start all services
 docker compose up -d
 
-# 2. Index the test corpus through both pipelines
+# 2. Index the test corpus
 python scripts/index_test_corpus.py
 
 # 3. Wait for indexing to complete, then verify
@@ -99,28 +100,25 @@ python scripts/benchmark/run_benchmark.py -o results/benchmark.json
 | `long_complex` | 4 | Long queries testing 512-token context window |
 | `edge_cases` | 9 | Short queries, special chars, empty results |
 
-Each query is tested across:
-- **3 modes:** keyword, semantic, hybrid
-- **2 collections:** `books` (distiluse 512D), `books_e5base` (e5-base 768D)
+Each query is tested across **3 modes:** keyword, semantic, hybrid.
 
-Total: 30 queries × 3 modes = 90 comparison pairs per run.
+Total: 30 queries × 3 modes = 90 query executions per run.
 
 ## Metrics
 
-Per query pair:
-- **Top-10 document IDs and scores** from each collection
+Per query:
+- **Top-10 document IDs and scores**
 - **Response latency** (ms)
-- **Jaccard similarity** of top-10 result sets (overlap metric)
 
 Aggregate (per mode and category):
-- Mean/median/min/max Jaccard similarity
-- Mean and p95 latency for baseline vs candidate
-- Low-overlap queries flagged for human review
+- Mean/median/p95 latency
+- Mean result count
+- Error count
 
 ## Output
 
-- **Console:** Human-readable summary with per-mode stats and flagged queries
-- **JSON** (`--output`): Full comparison data for further analysis
+- **Console:** Human-readable summary with per-mode stats and errors
+- **JSON** (`--output`): Full result data for further analysis
 
 ## Running Tests
 

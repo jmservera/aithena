@@ -1,7 +1,7 @@
 """Tests for the collection verification logic.
 
 All Solr calls are mocked — these tests validate the verification logic,
-dimension checks, ID comparison, and report formatting.
+dimension checks, and report formatting for the single books collection.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from verify_collections import (
     get_parent_ids,
     get_sample_embedding_dim,
     result_to_dict,
-    verify_collections,
+    verify_collection,
 )
 
 SOLR_URL = "http://localhost:8983"
@@ -37,7 +37,7 @@ def _make_collection_status(
     total_docs: int = 100,
     parent_docs: int = 20,
     chunk_docs: int = 80,
-    sample_embedding_dim: int | None = 512,
+    sample_embedding_dim: int | None = 768,
     parent_ids: list[str] | None = None,
     error: str | None = None,
 ) -> CollectionStatus:
@@ -110,20 +110,7 @@ class TestGetParentIds:
 
 class TestGetSampleEmbeddingDim:
     @patch("verify_collections.requests.get")
-    def test_returns_dimension(self, mock_get: MagicMock) -> None:
-        embedding = [0.1] * 512
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = _mock_solr_response(
-            1, [{"id": "chunk1", "embedding_v": embedding}],
-        )
-        mock_resp.raise_for_status = MagicMock()
-        mock_get.return_value = mock_resp
-
-        dim = get_sample_embedding_dim(SOLR_URL, "books")
-        assert dim == 512
-
-    @patch("verify_collections.requests.get")
-    def test_returns_768_for_e5base(self, mock_get: MagicMock) -> None:
+    def test_returns_768_for_e5_base(self, mock_get: MagicMock) -> None:
         embedding = [0.1] * 768
         mock_resp = MagicMock()
         mock_resp.json.return_value = _mock_solr_response(
@@ -132,7 +119,7 @@ class TestGetSampleEmbeddingDim:
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value = mock_resp
 
-        dim = get_sample_embedding_dim(SOLR_URL, "books_e5base")
+        dim = get_sample_embedding_dim(SOLR_URL, "books")
         assert dim == 768
 
     @patch("verify_collections.requests.get")
@@ -157,126 +144,75 @@ class TestGetSampleEmbeddingDim:
 
 
 # ---------------------------------------------------------------------------
-# verify_collections (integration with mocked Solr)
+# verify_collection (integration with mocked Solr)
 # ---------------------------------------------------------------------------
 
 
-class TestVerifyCollections:
+class TestVerifyCollection:
     @patch("verify_collections.inspect_collection")
     def test_all_checks_pass(self, mock_inspect: MagicMock) -> None:
-        shared_ids = [f"doc{i}" for i in range(10)]
-        mock_inspect.side_effect = [
-            _make_collection_status(
-                collection="books", parent_docs=10, chunk_docs=80,
-                sample_embedding_dim=512, parent_ids=shared_ids,
-            ),
-            _make_collection_status(
-                collection="books_e5base", parent_docs=10, chunk_docs=60,
-                sample_embedding_dim=768, parent_ids=shared_ids,
-            ),
-        ]
+        mock_inspect.return_value = _make_collection_status(
+            collection="books", parent_docs=10, chunk_docs=80,
+            sample_embedding_dim=768,
+        )
 
-        result = verify_collections(SOLR_URL)
+        result = verify_collection(SOLR_URL)
 
-        assert result.parent_count_match is True
-        assert result.parent_ids_match is True
-        assert result.baseline_dim_correct is True
-        assert result.candidate_dim_correct is True
+        assert result.has_documents is True
+        assert result.has_chunks is True
+        assert result.embedding_dim_correct is True
         assert result.all_checks_passed is True
 
     @patch("verify_collections.inspect_collection")
-    def test_count_mismatch_detected(self, mock_inspect: MagicMock) -> None:
-        mock_inspect.side_effect = [
-            _make_collection_status(
-                collection="books", parent_docs=10,
-                parent_ids=[f"d{i}" for i in range(10)],
-            ),
-            _make_collection_status(
-                collection="books_e5base", parent_docs=8,
-                sample_embedding_dim=768, parent_ids=[f"d{i}" for i in range(8)],
-            ),
-        ]
+    def test_empty_collection_fails(self, mock_inspect: MagicMock) -> None:
+        mock_inspect.return_value = _make_collection_status(
+            collection="books", total_docs=0, parent_docs=0, chunk_docs=0,
+            sample_embedding_dim=None, parent_ids=[],
+        )
 
-        result = verify_collections(SOLR_URL)
+        result = verify_collection(SOLR_URL)
 
-        assert result.parent_count_match is False
+        assert result.has_documents is False
+        assert result.has_chunks is False
+        assert result.embedding_dim_correct is True  # no chunks -> passes
         assert result.all_checks_passed is False
-
-    @patch("verify_collections.inspect_collection")
-    def test_missing_ids_detected(self, mock_inspect: MagicMock) -> None:
-        mock_inspect.side_effect = [
-            _make_collection_status(
-                collection="books", parent_docs=3,
-                parent_ids=["doc1", "doc2", "doc3"],
-            ),
-            _make_collection_status(
-                collection="books_e5base", parent_docs=3,
-                sample_embedding_dim=768,
-                parent_ids=["doc1", "doc2", "doc4"],
-            ),
-        ]
-
-        result = verify_collections(SOLR_URL)
-
-        assert result.parent_ids_match is False
-        assert result.missing_in_candidate == ["doc3"]
-        assert result.missing_in_baseline == ["doc4"]
 
     @patch("verify_collections.inspect_collection")
     def test_wrong_dimensionality_detected(self, mock_inspect: MagicMock) -> None:
-        shared_ids = ["doc1"]
-        mock_inspect.side_effect = [
-            _make_collection_status(
-                collection="books", parent_docs=1, chunk_docs=5,
-                sample_embedding_dim=768,  # wrong! should be 512
-                parent_ids=shared_ids,
-            ),
-            _make_collection_status(
-                collection="books_e5base", parent_docs=1, chunk_docs=5,
-                sample_embedding_dim=512,  # wrong! should be 768
-                parent_ids=shared_ids,
-            ),
-        ]
+        mock_inspect.return_value = _make_collection_status(
+            collection="books", parent_docs=5, chunk_docs=20,
+            sample_embedding_dim=512,  # wrong! should be 768
+        )
 
-        result = verify_collections(SOLR_URL)
+        result = verify_collection(SOLR_URL)
 
-        assert result.baseline_dim_correct is False
-        assert result.candidate_dim_correct is False
+        assert result.embedding_dim_correct is False
         assert result.all_checks_passed is False
-
-    @patch("verify_collections.inspect_collection")
-    def test_empty_collections_pass(self, mock_inspect: MagicMock) -> None:
-        mock_inspect.side_effect = [
-            _make_collection_status(
-                collection="books", total_docs=0, parent_docs=0, chunk_docs=0,
-                sample_embedding_dim=None, parent_ids=[],
-            ),
-            _make_collection_status(
-                collection="books_e5base", total_docs=0, parent_docs=0, chunk_docs=0,
-                sample_embedding_dim=None, parent_ids=[],
-            ),
-        ]
-
-        result = verify_collections(SOLR_URL)
-
-        assert result.parent_count_match is True
-        assert result.parent_ids_match is True
-        assert result.baseline_dim_correct is True  # no chunks → passes
-        assert result.candidate_dim_correct is True
-        assert result.all_checks_passed is True
 
     @patch("verify_collections.inspect_collection")
     def test_error_in_collection_does_not_crash(self, mock_inspect: MagicMock) -> None:
-        mock_inspect.side_effect = [
-            _make_collection_status(collection="books", error="Connection refused"),
-            _make_collection_status(collection="books_e5base", sample_embedding_dim=768),
-        ]
+        mock_inspect.return_value = _make_collection_status(
+            collection="books", error="Connection refused",
+        )
 
-        result = verify_collections(SOLR_URL)
+        result = verify_collection(SOLR_URL)
 
         assert result.all_checks_passed is False
-        assert result.baseline is not None
-        assert result.baseline.error == "Connection refused"
+        assert result.status is not None
+        assert result.status.error == "Connection refused"
+
+    @patch("verify_collections.inspect_collection")
+    def test_no_chunks_passes_dim_check(self, mock_inspect: MagicMock) -> None:
+        mock_inspect.return_value = _make_collection_status(
+            collection="books", parent_docs=5, chunk_docs=0,
+            sample_embedding_dim=None,
+        )
+
+        result = verify_collection(SOLR_URL)
+
+        assert result.has_documents is True
+        assert result.has_chunks is False
+        assert result.embedding_dim_correct is True  # no chunks -> passes
 
 
 # ---------------------------------------------------------------------------
@@ -287,67 +223,55 @@ class TestVerifyCollections:
 class TestFormatReport:
     def test_passing_report(self) -> None:
         result = VerificationResult(
-            baseline=_make_collection_status(collection="books", sample_embedding_dim=512),
-            candidate=_make_collection_status(collection="books_e5base", sample_embedding_dim=768),
-            parent_count_match=True,
-            parent_ids_match=True,
-            baseline_dim_correct=True,
-            candidate_dim_correct=True,
+            status=_make_collection_status(collection="books", sample_embedding_dim=768),
+            has_documents=True,
+            has_chunks=True,
+            embedding_dim_correct=True,
             all_checks_passed=True,
         )
         text = format_report(result)
 
         assert "ALL CHECKS PASSED" in text
         assert "books" in text
-        assert "books_e5base" in text
-        assert "512" in text
         assert "768" in text
 
-    def test_failing_report_shows_discrepancies(self) -> None:
+    def test_failing_report(self) -> None:
         result = VerificationResult(
-            baseline=_make_collection_status(collection="books"),
-            candidate=_make_collection_status(collection="books_e5base", sample_embedding_dim=768),
-            parent_count_match=False,
-            parent_ids_match=False,
-            baseline_dim_correct=True,
-            candidate_dim_correct=True,
-            missing_in_candidate=["doc99"],
+            status=_make_collection_status(collection="books", sample_embedding_dim=512),
+            has_documents=True,
+            has_chunks=True,
+            embedding_dim_correct=False,
             all_checks_passed=False,
         )
         text = format_report(result)
 
         assert "SOME CHECKS FAILED" in text
-        assert "doc99" in text
 
     def test_error_report(self) -> None:
         result = VerificationResult(
-            baseline=_make_collection_status(collection="books", error="timeout"),
-            candidate=None,
+            status=_make_collection_status(collection="books", error="timeout"),
             all_checks_passed=False,
         )
         text = format_report(result)
 
         assert "timeout" in text
-        assert "NOT AVAILABLE" in text
 
-    def test_verbose_shows_all_ids(self) -> None:
-        missing = [f"doc{i}" for i in range(20)]
+    def test_verbose_shows_ids(self) -> None:
         result = VerificationResult(
-            baseline=_make_collection_status(collection="books"),
-            candidate=_make_collection_status(collection="books_e5base", sample_embedding_dim=768),
-            parent_count_match=False,
-            parent_ids_match=False,
-            baseline_dim_correct=True,
-            candidate_dim_correct=True,
-            missing_in_candidate=missing,
-            all_checks_passed=False,
+            status=_make_collection_status(
+                collection="books", parent_docs=3,
+                parent_ids=["doc0", "doc1", "doc2"],
+            ),
+            has_documents=True,
+            has_chunks=True,
+            embedding_dim_correct=True,
+            all_checks_passed=True,
         )
         terse = format_report(result, verbose=False)
         verbose = format_report(result, verbose=True)
 
-        assert "... and 10 more" in terse
-        assert "... and 10 more" not in verbose
-        assert "doc19" in verbose
+        assert "doc0" not in terse
+        assert "doc0" in verbose
 
 
 # ---------------------------------------------------------------------------
@@ -358,34 +282,27 @@ class TestFormatReport:
 class TestResultToDict:
     def test_json_serializable(self) -> None:
         result = VerificationResult(
-            baseline=_make_collection_status(collection="books"),
-            candidate=_make_collection_status(collection="books_e5base", sample_embedding_dim=768),
-            parent_count_match=True,
-            parent_ids_match=True,
-            baseline_dim_correct=True,
-            candidate_dim_correct=True,
+            status=_make_collection_status(collection="books", sample_embedding_dim=768),
+            has_documents=True,
+            has_chunks=True,
+            embedding_dim_correct=True,
             all_checks_passed=True,
         )
         d = result_to_dict(result)
         serialized = json.dumps(d)
         assert "books" in serialized
-        assert "books_e5base" in serialized
 
     def test_includes_all_fields(self) -> None:
         result = VerificationResult(
-            baseline=_make_collection_status(collection="books"),
-            candidate=_make_collection_status(collection="books_e5base", sample_embedding_dim=768),
-            parent_count_match=True,
-            parent_ids_match=False,
-            baseline_dim_correct=True,
-            candidate_dim_correct=True,
-            missing_in_candidate=["doc5"],
-            all_checks_passed=False,
+            status=_make_collection_status(collection="books"),
+            has_documents=True,
+            has_chunks=True,
+            embedding_dim_correct=True,
+            all_checks_passed=True,
         )
         d = result_to_dict(result)
 
-        assert d["parent_count_match"] is True
-        assert d["parent_ids_match"] is False
-        assert d["missing_in_candidate"] == ["doc5"]
-        assert d["baseline"]["collection"] == "books"
-        assert d["candidate"]["collection"] == "books_e5base"
+        assert d["has_documents"] is True
+        assert d["has_chunks"] is True
+        assert d["embedding_dim_correct"] is True
+        assert d["collection"]["name"] == "books"

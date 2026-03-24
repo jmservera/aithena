@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Benchmark runner for A/B testing search quality across Solr collections.
+"""Benchmark runner for search quality measurement.
 
 Executes queries from the benchmark suite against the solr-search API,
-comparing results between the baseline (books/distiluse 512D) and
-candidate (books_e5base/e5-base 768D) collections.
+measuring latency, result quality, and search behavior across keyword,
+semantic, and hybrid modes against the books collection (e5-base 768D).
 
 Usage:
     python run_benchmark.py                         # defaults: localhost:8080
@@ -29,7 +29,7 @@ import requests
 DEFAULT_BASE_URL = "http://localhost:8080"
 DEFAULT_QUERIES_PATH = Path(__file__).parent / "queries.json"
 DEFAULT_TOP_K = 10
-COLLECTIONS = ("books", "books_e5base")
+COLLECTION = "books"
 SEARCH_MODES = ("keyword", "semantic", "hybrid")
 
 
@@ -39,7 +39,7 @@ SEARCH_MODES = ("keyword", "semantic", "hybrid")
 
 @dataclass
 class QueryResult:
-    """Result of a single query execution against one collection."""
+    """Result of a single query execution."""
 
     query_id: str
     query: str
@@ -54,31 +54,16 @@ class QueryResult:
 
 
 @dataclass
-class QueryComparison:
-    """Side-by-side comparison of a query across two collections."""
-
-    query_id: str
-    query: str
-    category: str
-    mode: str
-    baseline: QueryResult | None = None
-    candidate: QueryResult | None = None
-    jaccard_similarity: float | None = None
-    overlap_ids: list[str] = field(default_factory=list)
-    baseline_only_ids: list[str] = field(default_factory=list)
-    candidate_only_ids: list[str] = field(default_factory=list)
-
-
-@dataclass
 class BenchmarkReport:
-    """Complete benchmark report with all comparisons and aggregate metrics."""
+    """Complete benchmark report with all results and aggregate metrics."""
 
     timestamp: str = ""
     base_url: str = ""
     queries_file: str = ""
+    collection: str = COLLECTION
     total_queries: int = 0
     modes_tested: list[str] = field(default_factory=list)
-    comparisons: list[QueryComparison] = field(default_factory=list)
+    results: list[QueryResult] = field(default_factory=list)
     summary: dict[str, Any] = field(default_factory=dict)
 
 
@@ -166,94 +151,60 @@ def execute_query(
 
 
 # ---------------------------------------------------------------------------
-# Comparison metrics
-# ---------------------------------------------------------------------------
-
-def jaccard_similarity(set_a: set, set_b: set) -> float:
-    """Compute Jaccard similarity between two sets."""
-    if not set_a and not set_b:
-        return 1.0
-    union = set_a | set_b
-    if not union:
-        return 1.0
-    return len(set_a & set_b) / len(union)
-
-
-def compare_results(
-    baseline: QueryResult,
-    candidate: QueryResult,
-    category: str,
-) -> QueryComparison:
-    """Compare results from baseline and candidate collections."""
-    baseline_set = set(baseline.top_k_ids)
-    candidate_set = set(candidate.top_k_ids)
-
-    return QueryComparison(
-        query_id=baseline.query_id,
-        query=baseline.query,
-        category=category,
-        mode=baseline.mode,
-        baseline=baseline,
-        candidate=candidate,
-        jaccard_similarity=jaccard_similarity(baseline_set, candidate_set),
-        overlap_ids=sorted(baseline_set & candidate_set),
-        baseline_only_ids=sorted(baseline_set - candidate_set),
-        candidate_only_ids=sorted(candidate_set - baseline_set),
-    )
-
-
-# ---------------------------------------------------------------------------
 # Aggregate statistics
 # ---------------------------------------------------------------------------
 
-def compute_summary(comparisons: list[QueryComparison]) -> dict[str, Any]:
-    """Compute aggregate statistics across all comparisons."""
+def compute_summary(results: list[QueryResult]) -> dict[str, Any]:
+    """Compute aggregate statistics across all results."""
     summary: dict[str, Any] = {"by_mode": {}, "by_category": {}}
 
     # Group by mode
-    by_mode: dict[str, list[QueryComparison]] = {}
-    for c in comparisons:
-        by_mode.setdefault(c.mode, []).append(c)
+    by_mode: dict[str, list[QueryResult]] = {}
+    for r in results:
+        by_mode.setdefault(r.mode, []).append(r)
 
-    for mode, comps in sorted(by_mode.items()):
-        jaccards = [c.jaccard_similarity for c in comps if c.jaccard_similarity is not None]
-        baseline_latencies = [
-            c.baseline.latency_ms for c in comps if c.baseline and not c.baseline.error
-        ]
-        candidate_latencies = [
-            c.candidate.latency_ms for c in comps if c.candidate and not c.candidate.error
-        ]
-        errors = sum(
-            1 for c in comps
-            if (c.baseline and c.baseline.error) or (c.candidate and c.candidate.error)
-        )
+    for mode, mode_results in sorted(by_mode.items()):
+        latencies = [r.latency_ms for r in mode_results if not r.error]
+        result_counts = [float(r.total_results) for r in mode_results if not r.error]
+        errors = sum(1 for r in mode_results if r.error)
 
         summary["by_mode"][mode] = {
-            "query_count": len(comps),
-            "mean_jaccard": _safe_mean(jaccards),
-            "median_jaccard": _safe_median(jaccards),
-            "min_jaccard": min(jaccards) if jaccards else None,
-            "max_jaccard": max(jaccards) if jaccards else None,
-            "baseline_mean_latency_ms": _safe_mean(baseline_latencies),
-            "candidate_mean_latency_ms": _safe_mean(candidate_latencies),
-            "baseline_p95_latency_ms": _percentile(baseline_latencies, 0.95),
-            "candidate_p95_latency_ms": _percentile(candidate_latencies, 0.95),
+            "query_count": len(mode_results),
+            "mean_latency_ms": _safe_mean(latencies),
+            "median_latency_ms": _safe_median(latencies),
+            "p95_latency_ms": _percentile(latencies, 0.95),
+            "mean_result_count": _safe_mean(result_counts),
             "error_count": errors,
         }
 
     # Group by category
-    by_category: dict[str, list[QueryComparison]] = {}
-    for c in comparisons:
-        by_category.setdefault(c.category, []).append(c)
+    by_category: dict[str, list[QueryResult]] = {}
+    for r in results:
+        by_category.setdefault(_category_from_id(r.query_id), []).append(r)
 
-    for cat, comps in sorted(by_category.items()):
-        jaccards = [c.jaccard_similarity for c in comps if c.jaccard_similarity is not None]
+    for cat, cat_results in sorted(by_category.items()):
+        latencies = [r.latency_ms for r in cat_results if not r.error]
         summary["by_category"][cat] = {
-            "query_count": len(comps),
-            "mean_jaccard": _safe_mean(jaccards),
+            "query_count": len(cat_results),
+            "mean_latency_ms": _safe_mean(latencies),
         }
 
     return summary
+
+
+_CATEGORY_MAP = {
+    "sk": "simple_keyword",
+    "nl": "natural_language",
+    "ml": "multilingual",
+    "lc": "long_complex",
+    "ec": "edge_cases",
+}
+
+
+def _category_from_id(query_id: str) -> str:
+    """Derive category name from query ID prefix."""
+    prefix = query_id.split("-")[0] if "-" in query_id else query_id
+    return _CATEGORY_MAP.get(prefix, prefix)
 
 
 def _safe_mean(values: list[float]) -> float | None:
@@ -277,30 +228,20 @@ def _percentile(values: list[float], pct: float) -> float | None:
 # Report serialization
 # ---------------------------------------------------------------------------
 
-def comparison_to_dict(c: QueryComparison) -> dict[str, Any]:
-    """Serialize a QueryComparison to a JSON-compatible dict."""
-    result: dict[str, Any] = {
-        "query_id": c.query_id,
-        "query": c.query,
-        "category": c.category,
-        "mode": c.mode,
-        "jaccard_similarity": c.jaccard_similarity,
-        "overlap_ids": c.overlap_ids,
-        "baseline_only_ids": c.baseline_only_ids,
-        "candidate_only_ids": c.candidate_only_ids,
+def query_result_to_dict(r: QueryResult) -> dict[str, Any]:
+    """Serialize a QueryResult to a JSON-compatible dict."""
+    return {
+        "query_id": r.query_id,
+        "query": r.query,
+        "collection": r.collection,
+        "mode": r.mode,
+        "top_k_ids": r.top_k_ids,
+        "top_k_scores": r.top_k_scores,
+        "total_results": r.total_results,
+        "latency_ms": round(r.latency_ms, 2),
+        "degraded": r.degraded,
+        "error": r.error,
     }
-    for label, qr in [("baseline", c.baseline), ("candidate", c.candidate)]:
-        if qr:
-            result[label] = {
-                "collection": qr.collection,
-                "top_k_ids": qr.top_k_ids,
-                "top_k_scores": qr.top_k_scores,
-                "total_results": qr.total_results,
-                "latency_ms": round(qr.latency_ms, 2),
-                "degraded": qr.degraded,
-                "error": qr.error,
-            }
-    return result
 
 
 def report_to_dict(report: BenchmarkReport) -> dict[str, Any]:
@@ -309,10 +250,11 @@ def report_to_dict(report: BenchmarkReport) -> dict[str, Any]:
         "timestamp": report.timestamp,
         "base_url": report.base_url,
         "queries_file": report.queries_file,
+        "collection": report.collection,
         "total_queries": report.total_queries,
         "modes_tested": report.modes_tested,
         "summary": report.summary,
-        "comparisons": [comparison_to_dict(c) for c in report.comparisons],
+        "results": [query_result_to_dict(r) for r in report.results],
     }
 
 
@@ -327,6 +269,7 @@ def format_summary(report: BenchmarkReport) -> str:
     lines.append("BENCHMARK REPORT")
     lines.append(f"  Timestamp:    {report.timestamp}")
     lines.append(f"  Base URL:     {report.base_url}")
+    lines.append(f"  Collection:   {report.collection}")
     lines.append(f"  Queries:      {report.total_queries}")
     lines.append(f"  Modes:        {', '.join(report.modes_tested)}")
     lines.append("=" * 72)
@@ -337,34 +280,28 @@ def format_summary(report: BenchmarkReport) -> str:
     for mode, stats in sorted(summary.get("by_mode", {}).items()):
         lines.append("")
         lines.append(f"--- Mode: {mode} ({stats['query_count']} queries) ---")
-        lines.append("  Jaccard (top-10 overlap):")
-        lines.append(f"    Mean:   {_fmt(stats['mean_jaccard'])}")
-        lines.append(f"    Median: {_fmt(stats['median_jaccard'])}")
-        lines.append(f"    Range:  [{_fmt(stats['min_jaccard'])}, {_fmt(stats['max_jaccard'])}]")
         lines.append("  Latency (ms):")
-        lines.append(f"    Baseline mean:  {_fmt(stats['baseline_mean_latency_ms'])} ms")
-        lines.append(f"    Candidate mean: {_fmt(stats['candidate_mean_latency_ms'])} ms")
-        lines.append(f"    Baseline p95:   {_fmt(stats['baseline_p95_latency_ms'])} ms")
-        lines.append(f"    Candidate p95:  {_fmt(stats['candidate_p95_latency_ms'])} ms")
+        lines.append(f"    Mean:   {_fmt(stats['mean_latency_ms'])} ms")
+        lines.append(f"    Median: {_fmt(stats['median_latency_ms'])} ms")
+        lines.append(f"    p95:    {_fmt(stats['p95_latency_ms'])} ms")
+        lines.append(f"  Mean result count: {_fmt(stats['mean_result_count'])}")
         if stats["error_count"]:
-            lines.append(f"  ⚠ Errors: {stats['error_count']}")
+            lines.append(f"  \u26a0 Errors: {stats['error_count']}")
 
     # Per-category summary
     lines.append("")
     lines.append("--- By Category ---")
     for cat, stats in sorted(summary.get("by_category", {}).items()):
-        lines.append(f"  {cat:20s}  queries={stats['query_count']:<3d}  mean_jaccard={_fmt(stats['mean_jaccard'])}")
+        latency = _fmt(stats["mean_latency_ms"])
+        lines.append(f"  {cat:20s}  queries={stats['query_count']:<3d}  mean_latency={latency} ms")
 
-    # Low-overlap queries (interesting for human review)
+    # Error queries
     lines.append("")
-    lines.append("--- Low Overlap Queries (Jaccard < 0.3) ---")
-    low_overlap = [
-        c for c in report.comparisons
-        if c.jaccard_similarity is not None and c.jaccard_similarity < 0.3
-    ]
-    if low_overlap:
-        for c in low_overlap:
-            lines.append(f"  [{c.mode}] {c.query_id}: \"{c.query[:60]}\" → jaccard={c.jaccard_similarity:.2f}")
+    error_results = [r for r in report.results if r.error]
+    lines.append(f"--- Errors ({len(error_results)}) ---")
+    if error_results:
+        for r in error_results:
+            lines.append(f"  [{r.mode}] {r.query_id}: {r.error[:60]}")
     else:
         lines.append("  (none)")
 
@@ -385,19 +322,19 @@ def run_benchmark(
     base_url: str = DEFAULT_BASE_URL,
     queries_path: Path = DEFAULT_QUERIES_PATH,
     modes: tuple[str, ...] = SEARCH_MODES,
-    collections: tuple[str, ...] = COLLECTIONS,
+    collection: str = COLLECTION,
     top_k: int = DEFAULT_TOP_K,
     timeout: float = 30.0,
     token: str | None = None,
 ) -> BenchmarkReport:
     """Execute the full benchmark suite and return a report."""
     queries = load_queries(queries_path)
-    baseline_col, candidate_col = collections[0], collections[1]
 
     report = BenchmarkReport(
         timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         base_url=base_url,
         queries_file=str(queries_path),
+        collection=collection,
         total_queries=len(queries),
         modes_tested=list(modes),
     )
@@ -411,23 +348,18 @@ def run_benchmark(
             progress = f"[{completed}/{total}]"
             print(f"{progress} {mode:8s} | {q['id']:6s} | {q['query'][:50]}...", flush=True)
 
-            baseline = execute_query(
-                base_url, q["query"], q["id"], baseline_col, mode, top_k, timeout, token=token,
+            result = execute_query(
+                base_url, q["query"], q["id"], collection, mode, top_k, timeout, token=token,
             )
-            candidate = execute_query(
-                base_url, q["query"], q["id"], candidate_col, mode, top_k, timeout, token=token,
-            )
+            report.results.append(result)
 
-            comparison = compare_results(baseline, candidate, q["category"])
-            report.comparisons.append(comparison)
-
-    report.summary = compute_summary(report.comparisons)
+    report.summary = compute_summary(report.results)
     return report
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Benchmark runner for A/B testing search quality across Solr collections.",
+        description="Benchmark runner for search quality measurement.",
     )
     parser.add_argument(
         "--base-url",
@@ -448,10 +380,15 @@ def main() -> None:
         help="Search modes to test (default: all)",
     )
     parser.add_argument(
+        "--collection",
+        default=COLLECTION,
+        help=f"Solr collection to benchmark (default: {COLLECTION})",
+    )
+    parser.add_argument(
         "--top-k",
         type=int,
         default=DEFAULT_TOP_K,
-        help=f"Number of top results to compare (default: {DEFAULT_TOP_K})",
+        help=f"Number of top results to retrieve (default: {DEFAULT_TOP_K})",
     )
     parser.add_argument(
         "--timeout",
@@ -475,6 +412,7 @@ def main() -> None:
         base_url=args.base_url,
         queries_path=args.queries,
         modes=tuple(args.modes),
+        collection=args.collection,
         top_k=args.top_k,
         timeout=args.timeout,
         token=args.token,
