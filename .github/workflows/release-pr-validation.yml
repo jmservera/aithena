@@ -1,0 +1,67 @@
+name: Release PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-checklist:
+    name: Validate release checklist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check required files exist
+        shell: bash
+        run: |
+          missing=()
+          for f in VERSION CHANGELOG.md docker-compose.yml; do
+            if [[ ! -f "$f" ]]; then
+              missing+=("$f")
+            fi
+          done
+
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing required files: ${missing[*]}"
+            exit 1
+          fi
+
+          echo "✅ All required files present"
+
+      - name: Validate VERSION is stable semver
+        id: version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::VERSION must be stable semver (X.Y.Z). Found: '$version'"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "✅ VERSION=$version is valid semver"
+
+      - name: Validate CHANGELOG.md has entry for VERSION
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          if ! grep -qE "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md is missing an entry for version ${VERSION}"
+            echo "::error::Expected a heading like: ## [${VERSION}]"
+            exit 1
+          fi
+
+          echo "✅ CHANGELOG.md contains entry for version ${VERSION}"
