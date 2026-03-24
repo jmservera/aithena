@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -16,6 +17,15 @@ REQUIRED_METADATA_KEYS = {
     "folder_path",
     "file_size",
 }
+
+
+@pytest.fixture(autouse=True)
+def _thumbnail_dir(tmp_path: Path):
+    """Redirect thumbnail output to a writable temp directory for every test."""
+    thumb_dir = tmp_path / "thumbnails"
+    thumb_dir.mkdir(exist_ok=True)
+    with patch("document_indexer.__main__.THUMBNAIL_DIR", str(thumb_dir)):
+        yield
 
 
 @pytest.fixture(scope="session")
