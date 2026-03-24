@@ -4,7 +4,7 @@ name: Dependabot Auto-Merge
 # ci.yml already runs all Python services (including admin), frontend
 # lint+build+tests, and Ruff lint. No need to re-run them here.
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- guarded by Dependabot-only checks + minimal permissions
     workflows: ["CI - Unit & Integration Tests"]
     types: [completed]
     branches: [dev]
