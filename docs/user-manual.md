@@ -1,8 +1,8 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.14.1 Release Notes](release-notes/v1.14.1.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.15.0 Release Notes](release-notes/v1.15.0.md).
 
-**v1.14.1 operator note:** the release context supplied for this version does not introduce a newly verified end-user workflow beyond what is already documented below. The most concrete `v1.14.x` additions verified in the current tree are operator-facing backup/restore and reindex tools, which are covered in the admin manual.
+**v1.15.0 introduces admin portal improvements:** redesigned sidebar navigation for the admin dashboard, per-service log viewer for inspecting container logs, detailed indexing status, and SSO passthrough for Solr admin access. See [Admin Portal (v1.15.0+)](#admin-portal-v1150) below.
 
 **v1.9.0 introduces account management and role-based access control.** Users can now manage their own passwords, and access is enforced by role (admin, user, viewer). See [Your Account & Permissions](#your-account--permissions) below.
 
@@ -13,6 +13,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 **v1.12.1 refines UX:** collections now use real backend data by default, login form adds "Remember me" checkbox for session persistence, search result text previews are truncated for improved readability, and thumbnail generation is fixed in Alpine containers.
 
 **v1.13.0 improves offline deployment and search:** air-gapped offline installer package for disconnected environments, diacritic-insensitive search by default (matches "café" when searching "cafe"), and comprehensive infrastructure security hardening. See [Diacritic-Insensitive Search](#diacritic-insensitive-search-v1130) below.
+
+**v1.15.0 adds admin portal enhancements:** sidebar navigation, per-service log viewer, detailed indexing status, and SSO for Solr admin. See [Admin Portal (v1.15.0+)](#admin-portal-v1150) below.
 
 ## Getting started
 
@@ -686,6 +688,46 @@ Hover over the version badge in the bottom-right corner of the footer to see:
 - Build timestamp
 
 If the version displays as "unknown", the admin dashboard may not be running or the version endpoint is unavailable.
+
+## Admin Portal (v1.15.0+)
+
+The admin portal has been redesigned with a sidebar navigation for easier access to admin tools. Administrators can access it at `/admin`.
+
+### Sidebar Navigation
+
+The admin portal now groups tools into a sidebar menu:
+
+- **Dashboard** — overview of system status and quick actions
+- **Indexing Status** — detailed per-document progress with failure reasons
+- **Log Viewer** — per-service log streaming (see below)
+- **Backups** — backup dashboard and restore wizard
+- **Solr Admin** — embedded Solr admin UI with SSO passthrough
+
+All existing admin routes continue to work; the sidebar provides a centralized way to navigate between them.
+
+### Per-Service Log Viewer (v1.15.0+)
+
+The log viewer lets administrators inspect container logs directly from the admin UI:
+
+1. Open the admin portal at `/admin`
+2. Select **Log Viewer** from the sidebar
+3. Choose a service from the dropdown (e.g., `document-indexer`, `solr-search`, `nginx`)
+4. View recent log output with automatic scrolling
+
+This is useful for diagnosing indexing failures, auth issues, or service health problems without needing SSH access to the host.
+
+### Solr Admin SSO (v1.15.0+)
+
+Administrators no longer need separate Solr credentials to access the Solr admin UI. The admin portal injects BasicAuth credentials automatically when navigating to `/admin/solr/`. This single sign-on passthrough uses the credentials configured in the nginx proxy.
+
+### Detailed Indexing Status (v1.15.0+)
+
+The indexing status page now shows:
+
+- Per-document indexing progress
+- Failure details with error messages
+- Retry status for failed documents
+- Alignment between the System Status view and the indexer's internal state
 
 ## Tips and tricks
 

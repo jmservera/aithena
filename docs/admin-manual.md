@@ -1,8 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.14.1 Release Notes](release-notes/v1.14.1.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.15.0 Release Notes](release-notes/v1.15.0.md).
 
-**v1.14.1 operator note:** this manual now explicitly documents two operator workflows that are present in the current tree and are important for release operations: the `/admin/backups` backup dashboard with restore wizard, and the protected full reindex flow backed by `POST /v1/admin/reindex`.
+**v1.15.0 operator note:** this release includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150) section below.
 
 ## System architecture overview
 
@@ -191,6 +191,7 @@ That means every service using `/data/documents` is reading from the same mounte
 | `SOLR_COLLECTION` | `books` | Target collection |
 | `EMBEDDINGS_HOST` | `embeddings-server` | Embeddings service hostname |
 | `EMBEDDINGS_PORT` | `8085` | Embeddings service port |
+| `THUMBNAIL_DIR` | `/data/thumbnails` | Writable directory for generated document thumbnails (v1.15.0+) |
 
 #### `solr-search`
 
@@ -3493,3 +3494,112 @@ docker compose logs -f
 4. Test connectivity: `docker compose exec <service> curl -u user:pass http://target:port/...`
 
 ---
+
+## Deployment Updates for v1.15.0 (Admin Portal, Bug Fixes, CI Hardening)
+
+v1.15.0 is a release-quality and infrastructure hardening release. Key operator-facing changes:
+
+### Admin Portal Redesign
+
+The admin portal (`/admin`) now features a sidebar navigation with organized menu:
+
+- **Dashboard** — system overview
+- **Indexing Status** — detailed per-document progress and failure information
+- **Log Viewer** — per-service log streaming from the browser
+- **Backups** — existing backup/restore dashboard
+- **Solr Admin** — Solr admin UI with SSO passthrough
+
+No configuration changes needed — the sidebar is purely a UI improvement.
+
+### Per-Service Log Viewer
+
+The new log viewer at `/admin` → **Log Viewer** lets operators stream container logs directly from the admin portal. This reduces the need for SSH access for routine log inspection.
+
+### Solr Admin SSO Passthrough (#994)
+
+Nginx now injects BasicAuth credentials for Solr admin access when navigating through the admin portal. This eliminates the need for separate Solr credentials when using the admin UI.
+
+The passthrough is configured in the nginx proxy and uses credentials from `.env`:
+
+```bash
+# Ensure these are set in .env (created by the installer)
+SOLR_ADMIN_USER=admin
+SOLR_ADMIN_PASSWORD=<your-solr-password>
+```
+
+### Document Indexer OOM Fix (#1074, #1075)
+
+The document indexer previously crashed with exit code 137 (OOM) on large PDFs. Memory limits have been tuned to handle large documents without exhausting container memory.
+
+**Operator action:** No configuration changes needed. The fix is built into the updated image.
+
+### Thumbnail Writable Volume (#1077, #1084)
+
+Document thumbnails are now written to a configurable writable directory instead of the read-only document volume.
+
+**New environment variable:**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `THUMBNAIL_DIR` | `/data/thumbnails` | Writable directory for generated document thumbnails |
+
+**Operator action:** If you have a custom volume layout, ensure `THUMBNAIL_DIR` points to a writable location. The default works with the standard Docker Compose configuration.
+
+### Volume Permission Hardening (#1007, #1071)
+
+The `document-lister` service now uses an entrypoint wrapper that ensures correct directory permissions at startup. This prevents permission-denied errors when the container runs as a non-root user.
+
+### Build-Time Dependencies (#1078, #1083)
+
+All Python packages are now installed during Docker image build. Containers no longer download packages at startup, resulting in:
+
+- Faster cold starts
+- Reliable air-gapped deployments
+- Deterministic builds
+
+### Solr PDF Font Support (#1072, #1076)
+
+Solr now uses a custom Dockerfile that installs PDF fonts needed for accurate text extraction. This fixes garbled text in documents using non-standard fonts.
+
+### Health Checks for Nginx and UI (#1009, #1055)
+
+Both `nginx` and `aithena-ui` containers now include health check probes, improving orchestration readiness detection.
+
+### Indexing Progress Sync (#1065, #1082)
+
+The System Status Redis key pattern has been aligned with the indexer namespace. The admin status page and indexer now report consistent progress numbers.
+
+### Upgrade Procedure
+
+1. Pull the latest images:
+   ```bash
+   docker compose pull
+   ```
+2. Stop and restart:
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+3. Verify the admin portal sidebar loads at `/admin`
+4. Check the log viewer shows per-service logs
+5. Verify indexing status shows consistent numbers between the status page and admin portal
+
+### Deployment Validation Checklist
+
+| Check | How to verify |
+|---|---|
+| Admin sidebar loads | Navigate to `/admin`, confirm sidebar menu appears |
+| Log viewer works | Select a service in the log viewer dropdown |
+| Solr SSO passthrough | Navigate to `/admin/solr/` — should load without separate login |
+| Thumbnails writable | Upload a document and verify thumbnail generation |
+| Indexing status consistent | Compare document counts in Status tab and admin Indexing Status |
+| No OOM on large PDFs | Index a large PDF (>100MB) and verify indexer stays running |
+
+### Backward Compatibility
+
+All changes are backward-compatible:
+
+- Existing admin routes continue to work alongside the new sidebar navigation
+- The `THUMBNAIL_DIR` variable has a sensible default; existing deployments work without changes
+- Solr SSO passthrough is additive; direct Solr access still works with existing credentials
+- Redis key alignment is transparent; no manual key migration needed

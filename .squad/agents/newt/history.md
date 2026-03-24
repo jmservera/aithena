@@ -380,3 +380,39 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 - If e5-base model benchmarks show negligible loss, skip v1.14.0 entirely and migrate directly to new model
 - Otherwise, proceed with A/B UI only if quality differences require human judgment
 - v1.12.2 milestone created for embeddings evaluation work
+
+## 2026-03-24 — v1.15.0 Release Preparation
+
+**Release:** v1.15.0 — Release Quality & CI Hardening
+**Status:** PRs created, pending review
+
+**Scope:**
+- 29 merged PRs, 15 milestone issues + 2 hotfix issues + 4 additional
+- 3 milestones closed: v1.15.0, v1.14.2, plus unlabeled work
+- Admin portal: sidebar navigation, log viewer, Solr SSO
+- CI/CD: smoke tests, release checklist gate, parallel CI, flaky test handling
+- Bug fixes: indexer OOM, thumbnail write failures, Redis key sync
+
+**Test Results (1,939 total — 3× growth from v1.7.0):**
+- solr-search: 993 passed, 91.01% coverage
+- aithena-ui: 600 passed
+- document-indexer: 178 passed + 4 pre-existing failures, 85.13% coverage
+- admin: 115 passed + 1 pre-existing failure, 62% coverage
+- embeddings-server: 34 passed
+- document-lister: 19 passed, 79% coverage
+
+**Documentation Delivered:**
+- CHANGELOG.md v1.15.0 entry
+- docs/release-notes/v1.15.0.md
+- docs/test-reports/v1.15.0.md
+- docs/user-manual.md (admin portal section)
+- docs/admin-manual.md (v1.15.0 deployment section, THUMBNAIL_DIR env var)
+
+**PRs Created:**
+- #1087 — Release docs branch → dev (needs merge first)
+- #1088 — dev → main release PR
+
+**Notes:**
+- Branch protection on dev prevented direct push; used feature branch + PR workflow
+- 5 pre-existing test failures (4 metadata patterns, 1 auth defaults) — not release blockers
+- Admin coverage at 62%, below 70% threshold used for other services — flagged for next cycle

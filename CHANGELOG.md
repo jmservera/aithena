@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-03-24
+
+### Added
+
+- **Per-container smoke tests** in the release workflow for fine-grained service validation (#1004)
+- **Parallel smoke tests** and faster embeddings build via HF_TOKEN in release CI (#1005, #1052)
+- **RabbitMQ permission integration tests** for all queue operations (#1010, #1080)
+- **E2E tests** for upload, stats, and admin endpoints using Playwright (#1012, #1079)
+- **Release checklist CI gate** — enforces documentation and validation before release approval (#1014, #1060)
+- **Main→dev sync automation** after release merges to keep branches aligned (#1013, #1057)
+- **Nginx proxy limit validation tests** matching backend limits (#1015, #1068)
+- **Admin portal sidebar navigation** with organized menu structure (#1069, #1085)
+- **Admin log viewer** with per-service log streaming and detailed indexing status (#1070, #1086)
+- **Flaky E2E test handling** with readiness gate and retry strategy (#1022, #1073)
+
+### Changed
+
+- **Pre-release log analyzer** improved with allowlist, severity tuning, and error thresholds to reduce false positives (#1006, #1062)
+- **Embeddings server Docker build** restructured into 4-stage pipeline for 80% faster code-change rebuilds (#1064)
+- **Nginx Solr auth passthrough** — admin portal SSO now injects BasicAuth for Solr admin access (#994, #1081)
+- **Indexing progress sync** — System Status Redis key pattern aligned with indexer namespace (#1065, #1082)
+
+### Fixed
+
+- **Document indexer OOM** (exit code 137) on large PDFs — memory limits tuned (#1074, #1075)
+- **Document indexer thumbnail write failure** — thumbnails redirected to writable volume (#1077, #1084)
+- **Stale tag creation** and release workflow race conditions prevented (#1008, #1056)
+- **Health checks** added to nginx and aithena-ui containers (#1009, #1055)
+- **Volume permission hardening** for document-lister with entrypoint wrapper (#1007, #1071)
+- **Solr stats/facet type coercion** — string values from Solr now correctly cast to numeric types (#1011, #1059)
+- **Noisy PDFBox font-fallback warnings** suppressed in Solr logs (#1054)
+- **Pre-release log analyzer** duplicate issue creation prevented (#1053)
+- **Sync workflow** removed; merge commits enforced for releases (#1061)
+- **Runtime package downloads** eliminated — all dependencies installed at build time (#1078, #1083)
+
+### Security
+
+- **Simplified internal service authentication** — streamlined auth layer for inter-service communication (#1066)
+
+### Infrastructure
+
+- **Solr PDF font support** — custom Dockerfile installs missing fonts for accurate PDF text extraction (#1072, #1076)
+
 ## [1.14.1] — 2026-03-24
 
 ### Fixed
