@@ -10,7 +10,9 @@ set -euo pipefail
 
 # Fix bind-mount ownership when running as root, then drop privileges
 if [ "$(id -u)" = "0" ]; then
-  chown -R 8983:8983 /var/solr
+  if [ -d /var/solr/data ]; then
+    find -P /var/solr/data -user root -exec chown 8983:8983 {} +
+  fi
   printf 'Client {\n    org.apache.zookeeper.server.auth.DigestLoginModule required\n    username="%s"\n    password="%s";\n};\n' \
     "$ZK_SASL_USER" "$ZK_SASL_PASS" \
     > /var/solr/solr-jaas.conf
