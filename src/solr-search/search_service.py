@@ -421,10 +421,10 @@ def parse_stats_response(payload: dict[str, Any]) -> dict[str, Any]:
     page_count_stats: dict[str, Any] = stats_fields.get("page_count_i") or {}
 
     page_stats: dict[str, Any] = {
-        "total": int(page_count_stats.get("sum") or 0),
-        "avg": round(page_count_stats.get("mean") or 0),
-        "min": int(page_count_stats.get("min") or 0),
-        "max": int(page_count_stats.get("max") or 0),
+        "total": int(float(page_count_stats.get("sum") or 0)),
+        "avg": round(float(page_count_stats.get("mean") or 0)),
+        "min": int(float(page_count_stats.get("min") or 0)),
+        "max": int(float(page_count_stats.get("max") or 0)),
     }
 
     return {

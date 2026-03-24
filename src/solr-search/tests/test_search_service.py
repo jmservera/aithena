@@ -596,6 +596,35 @@ def test_parse_stats_response_rounds_average() -> None:
     assert result["page_stats"]["max"] == 100
 
 
+def test_parse_stats_response_handles_string_stats_from_solr() -> None:
+    """Regression test for bug where Solr returns stats as strings instead of numbers.
+    
+    Solr can return stats field values as strings (e.g. "42.5" instead of 42.5),
+    which caused TypeError when calling round() or int() directly.
+    """
+    payload = {
+        "grouped": {"parent_id_s": {"matches": 5, "ngroups": 3, "groups": []}},
+        "stats": {
+            "stats_fields": {
+                "page_count_i": {
+                    "min": "10",
+                    "max": "200",
+                    "sum": "500",
+                    "mean": "42.5",
+                }
+            }
+        },
+        "facet_counts": {"facet_fields": {}},
+    }
+
+    result = parse_stats_response(payload)
+
+    assert result["page_stats"]["avg"] == 42
+    assert result["page_stats"]["total"] == 500
+    assert result["page_stats"]["min"] == 10
+    assert result["page_stats"]["max"] == 200
+
+
 # ---------------------------------------------------------------------------
 # Issue #653 — Folder facet edge-case tests
 # ---------------------------------------------------------------------------
