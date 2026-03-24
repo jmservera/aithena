@@ -598,7 +598,7 @@ def test_parse_stats_response_rounds_average() -> None:
 
 def test_parse_stats_response_handles_string_stats_from_solr() -> None:
     """Regression test for bug where Solr returns stats as strings instead of numbers.
-    
+
     Solr can return stats field values as strings (e.g. "42.5" instead of 42.5),
     which caused TypeError when calling round() or int() directly.
     """
