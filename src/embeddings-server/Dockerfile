@@ -2,37 +2,47 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-# ---------- build stage ----------
-FROM python:3.12-slim AS builder
+# ── Stage 1: model-downloader (changes only when model version changes) ──
+FROM python:3.12-slim AS model-downloader
 
 ARG MODEL_NAME=intfloat/multilingual-e5-base
-ARG HF_TOKEN
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    MODEL_NAME=${MODEL_NAME} \
     HF_HOME=/models/huggingface \
-    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
-    HF_TOKEN=${HF_TOKEN}
+    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
+
+RUN mkdir -p /models
+
+# Install the Python packages required to download the model
+RUN pip install --no-cache-dir sentence-transformers huggingface_hub
+
+# Pre-download the model so it is baked into the image.
+# HF_TOKEN is mounted as a build secret — never stored in image layers.
+RUN --mount=type=secret,id=HF_TOKEN \
+    export HF_TOKEN="$(cat /run/secrets/HF_TOKEN 2>/dev/null || true)" && \
+    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
+
+# ── Stage 2: dependencies (changes when pyproject.toml / uv.lock change) ──
+FROM python:3.12-slim AS dependencies
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-RUN mkdir -p /models
-
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
 
-ENV PATH="/app/.venv/bin:${PATH}"
-
-# Pre-download the model so it is baked into the image
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
+# ── Stage 3: app-builder (changes most frequently — every code edit) ──
+FROM dependencies AS app-builder
 
 COPY main.py model_utils.py ./
 COPY config ./config
 
-# ---------- runtime stage ----------
+# ── Stage 4: runtime (slim final image) ──
 FROM python:3.12-slim AS runtime
 
 ARG VERSION
@@ -63,11 +73,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 
 RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /models /models
-COPY --from=builder /app/main.py /app/main.py
-COPY --from=builder /app/model_utils.py /app/model_utils.py
-COPY --from=builder /app/config /app/config
+COPY --from=app-builder /app/.venv /app/.venv
+COPY --from=model-downloader /models /models
+COPY --from=app-builder /app/main.py /app/main.py
+COPY --from=app-builder /app/model_utils.py /app/model_utils.py
+COPY --from=app-builder /app/config /app/config
 
 RUN chown -R app:app /app /models
 

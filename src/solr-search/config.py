@@ -61,7 +61,6 @@ class Settings:
     book_embedding_field: str
     redis_host: str
     redis_port: int
-    redis_password: str | None
     redis_key_pattern: str
     redis_queue_name: str
     rabbitmq_host: str
@@ -158,9 +157,11 @@ settings = Settings(
     book_embedding_field=os.environ.get("BOOK_EMBEDDING_FIELD", "embedding_v"),
     redis_host=os.environ.get("REDIS_HOST", "redis"),
     redis_port=int(os.environ.get("REDIS_PORT", "6379")),
-    redis_password=os.environ.get("REDIS_PASSWORD") or None,
-    redis_key_pattern=os.environ.get("REDIS_KEY_PATTERN", "doc:*"),
     redis_queue_name=os.environ.get("REDIS_QUEUE_NAME", os.environ.get("QUEUE_NAME", "shortembeddings")),
+    redis_key_pattern=os.environ.get(
+        "REDIS_KEY_PATTERN",
+        f"/{os.environ.get('REDIS_QUEUE_NAME', os.environ.get('QUEUE_NAME', 'shortembeddings'))}/*",
+    ),
     rabbitmq_host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
     rabbitmq_port=int(os.environ.get("RABBITMQ_PORT", "5672")),
     rabbitmq_user=os.environ.get("RABBITMQ_USER", ""),

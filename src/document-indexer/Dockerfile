@@ -37,13 +37,14 @@ RUN apk add --no-cache procps libstdc++ libgomp libgcc
 
 RUN addgroup -S -g 1000 app && adduser -S -u 1000 -G app app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/document_indexer /app/document_indexer
-COPY --from=builder /app/pyproject.toml /app/pyproject.toml
-COPY --from=builder /app/uv.lock /app/uv.lock
+
+RUN mkdir -p /data/thumbnails && chown app:app /data/thumbnails
 
 RUN chown -R app:app /app
+
+ENV PATH="/app/.venv/bin:${PATH}"
 
 ENV RABBITMQ_HOST="localhost"
 ENV RABBITMQ_PORT=5672
@@ -58,4 +59,4 @@ ENV SOLR_COLLECTION="books"
 
 USER app
 
-CMD ["uv", "run", "python", "-m", "document_indexer"]
+CMD ["python", "-m", "document_indexer"]

@@ -52,7 +52,6 @@ RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD = os.environ.get("RABBITMQ_PASSWORD", "guest")
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
-REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "")
 
 
 # ---------------------------------------------------------------------------
@@ -280,8 +279,6 @@ def _collect_redis_memory() -> dict | None:
         import redis
 
         conn_kwargs: dict = {"host": REDIS_HOST, "port": REDIS_PORT, "socket_timeout": 5}
-        if REDIS_PASSWORD:
-            conn_kwargs["password"] = REDIS_PASSWORD
         r = redis.Redis(**conn_kwargs)
         info = r.info("memory")
         r.close()

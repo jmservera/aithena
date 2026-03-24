@@ -17,6 +17,8 @@ Options:
   --startup-threshold N  Seconds to flag slow startups (default: 30)
   --ignore-startup-window N  Seconds after first log line to ignore connection
                              retries (default: 60)
+  --allowlist PATH      Path to allowlist file for false positives
+  --max-errors N        Error threshold; exit 0 if errors <= N (default: 0)
   -h, --help            Show this help
 
 Categories:
@@ -35,12 +37,16 @@ EOF
 VERSION_FILE="./VERSION"
 STARTUP_THRESHOLD=30
 STARTUP_WINDOW=60
+ALLOWLIST_FILE=""
+MAX_ERRORS=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --version-file)  VERSION_FILE="$2"; shift 2 ;;
     --startup-threshold) STARTUP_THRESHOLD="$2"; shift 2 ;;
     --ignore-startup-window) STARTUP_WINDOW="$2"; shift 2 ;;
+    --allowlist) ALLOWLIST_FILE="$2"; shift 2 ;;
+    --max-errors) MAX_ERRORS="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
     *)  break ;;
@@ -79,6 +85,96 @@ extract_service() {
   printf '%s' "$1" | sed -n 's/^\([a-zA-Z0-9_-]*\)[[:space:]]*|.*/\1/p'
 }
 
+# --- Allowlist loading ---
+# Parsed into parallel arrays: AL_CATEGORY[], AL_PATTERN[], AL_SEVERITY[]
+AL_COUNT=0
+AL_CATEGORIES=""
+AL_PATTERNS=""
+AL_SEVERITIES=""
+
+load_allowlist() {
+  _file="$1"
+  if [ ! -f "$_file" ]; then
+    echo "Warning: allowlist file not found: $_file" >&2
+    return
+  fi
+  while IFS= read -r _line; do
+    # Skip comments and blank lines
+    case "$_line" in
+      "#"*|"") continue ;;
+    esac
+    # Parse category:pattern=severity
+    _cat="${_line%%:*}"
+    _rest="${_line#*:}"
+    case "$_rest" in
+      *=*)
+        _pat="${_rest%%=*}"
+        _sev="${_rest##*=}"
+        ;;
+      *)
+        _pat="$_rest"
+        _sev="ignore"
+        ;;
+    esac
+    AL_COUNT=$((AL_COUNT + 1))
+    AL_CATEGORIES="${AL_CATEGORIES}${_cat}
+"
+    AL_PATTERNS="${AL_PATTERNS}${_pat}
+"
+    AL_SEVERITIES="${AL_SEVERITIES}${_sev}
+"
+  done < "$_file"
+  echo "Loaded $AL_COUNT allowlist rules from $_file" >&2
+}
+
+# Check if a finding matches an allowlist rule.
+# Returns the overridden severity via stdout, or empty string if no match.
+check_allowlist() {
+  _check_cat="$1"
+  _check_msg="$2"
+  _lc_msg="$(printf '%s' "$_check_msg" | tr '[:upper:]' '[:lower:]')"
+  if [ "$AL_COUNT" -eq 0 ]; then
+    return
+  fi
+  _idx=0
+  _remaining_cats="$AL_CATEGORIES"
+  _remaining_pats="$AL_PATTERNS"
+  _remaining_sevs="$AL_SEVERITIES"
+  while [ "$_idx" -lt "$AL_COUNT" ]; do
+    _al_cat="${_remaining_cats%%
+*}"
+    _remaining_cats="${_remaining_cats#*
+}"
+    _al_pat="${_remaining_pats%%
+*}"
+    _remaining_pats="${_remaining_pats#*
+}"
+    _al_sev="${_remaining_sevs%%
+*}"
+    _remaining_sevs="${_remaining_sevs#*
+}"
+    # Category must match (or be '*')
+    if [ "$_al_cat" != "*" ] && [ "$_al_cat" != "$_check_cat" ]; then
+      _idx=$((_idx + 1))
+      continue
+    fi
+    # Convert pattern to lowercase for case-insensitive glob matching
+    _lc_pat="$(printf '%s' "$_al_pat" | tr '[:upper:]' '[:lower:]')"
+    # shellcheck disable=SC2254
+    case "$_lc_msg" in
+      $_lc_pat)
+        printf '%s' "$_al_sev"
+        return
+        ;;
+    esac
+    _idx=$((_idx + 1))
+  done
+}
+
+if [ -n "$ALLOWLIST_FILE" ]; then
+  load_allowlist "$ALLOWLIST_FILE"
+fi
+
 # Finding accumulator
 FINDINGS=""
 FINDING_COUNT=0
@@ -89,14 +185,25 @@ add_finding() {
   _cat="$1"
   _sev="$2"
   _svc="$3"
-  _msg="$(json_escape "$4")"
+  _msg="$4"
   _line="$5"
+
+  # Check allowlist for severity override
+  _override="$(check_allowlist "$_cat" "$_msg")"
+  if [ -n "$_override" ]; then
+    if [ "$_override" = "ignore" ]; then
+      return
+    fi
+    _sev="$_override"
+  fi
+
+  _esc_msg="$(json_escape "$_msg")"
 
   if [ "$FINDING_COUNT" -gt 0 ]; then
     FINDINGS="${FINDINGS},"
   fi
 
-  FINDINGS="${FINDINGS}{\"category\":\"${_cat}\",\"severity\":\"${_sev}\",\"service\":\"${_svc}\",\"message\":\"${_msg}\",\"line\":${_line}}"
+  FINDINGS="${FINDINGS}{\"category\":\"${_cat}\",\"severity\":\"${_sev}\",\"service\":\"${_svc}\",\"message\":\"${_esc_msg}\",\"line\":${_line}}"
   FINDING_COUNT=$((FINDING_COUNT + 1))
 
   case "$_sev" in
@@ -314,9 +421,13 @@ printf '[%s]\n' "$FINDINGS"
 # Summary to stderr
 echo "--- Pre-release check summary ---" >&2
 echo "Total findings: $FINDING_COUNT (errors: $ERROR_COUNT, warnings: $WARNING_COUNT)" >&2
+if [ -n "$ALLOWLIST_FILE" ]; then
+  echo "Allowlist: $ALLOWLIST_FILE ($AL_COUNT rules loaded)" >&2
+fi
+echo "Error threshold: $MAX_ERRORS" >&2
 
 # Exit code
-if [ "$ERROR_COUNT" -gt 0 ]; then
+if [ "$ERROR_COUNT" -gt "$MAX_ERRORS" ]; then
   exit 1
 elif [ "$WARNING_COUNT" -gt 0 ]; then
   exit 2

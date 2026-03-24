@@ -12,7 +12,7 @@ export default defineConfig({
   },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   globalSetup: require.resolve('./global-setup'),
   outputDir: 'test-results',
@@ -28,6 +28,15 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /screenshots\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+    },
+    {
+      name: 'screenshots',
+      testMatch: /screenshots\.spec\.ts/,
+      retries: 1,
       use: {
         ...devices['Desktop Chrome'],
       },

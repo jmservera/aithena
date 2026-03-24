@@ -50,6 +50,7 @@ server {
     location /admin/solr/ {
         auth_request /_auth;
         error_page 401 = @auth_redirect;
+        proxy_set_header Authorization "Basic ${SOLR_BASIC_AUTH}";
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -69,6 +70,7 @@ server {
     location /solr/ {
         auth_request /_auth;
         error_page 401 = @auth_redirect;
+        proxy_set_header Authorization "Basic ${SOLR_BASIC_AUTH}";
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;

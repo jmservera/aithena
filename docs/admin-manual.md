@@ -1,6 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.13.0 Release Notes](release-notes/v1.13.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.15.0 Release Notes](release-notes/v1.15.0.md).
+
+**v1.15.0 operator note:** this release includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150) section below.
 
 ## System architecture overview
 
@@ -119,6 +121,38 @@ Common local URLs:
 
 Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
 
+## Backup dashboard and restore workflow (v1.14.x)
+
+The current UI includes an admin-only backup dashboard at:
+
+- `/admin/backups`
+
+This route is wired through the React application and exposes a dedicated operator workflow for backup visibility and restore actions.
+
+### What the dashboard provides
+
+The page renders three main surfaces:
+
+1. **Tier status** — a quick view of backup tier health/state
+2. **Backup now controls** — on-demand backup triggers from the UI
+3. **Backup history** — a table of known backups with restore entry points
+
+When you choose **Restore**, the UI opens a modal restore wizard with these steps:
+
+- `select`
+- `preview`
+- `confirm`
+- `progress`
+
+The page logic supports both a direct restore action and a test-restore action. Treat both as privileged operational tools and validate them in staging before relying on them in production runbooks.
+
+### Recommended operator practice
+
+- Verify backup history loads before starting maintenance windows
+- Prefer test-restore on non-production environments when available
+- Use the preview/confirm steps to verify you selected the correct backup set
+- Monitor restore progress and application health before reopening the system to users
+
 ## Configuration
 
 ### Host-mounted volume
@@ -157,6 +191,7 @@ That means every service using `/data/documents` is reading from the same mounte
 | `SOLR_COLLECTION` | `books` | Target collection |
 | `EMBEDDINGS_HOST` | `embeddings-server` | Embeddings service hostname |
 | `EMBEDDINGS_PORT` | `8085` | Embeddings service port |
+| `THUMBNAIL_DIR` | `/data/thumbnails` | Writable directory for generated document thumbnails (v1.15.0+) |
 
 #### `solr-search`
 
@@ -484,7 +519,7 @@ For a ready-to-use scrape example and starter alert thresholds, see the dedicate
 
 ### Credential rotation procedure
 
-The v0.12.0 deployment path assumes operator-managed credential rotation for the auth bootstrap user, JWT secret, RabbitMQ credentials, and Redis password.
+The v0.12.0 deployment path assumes operator-managed credential rotation for the auth bootstrap user, JWT secret, and RabbitMQ credentials.
 
 Preferred workflow:
 
@@ -493,10 +528,10 @@ Preferred workflow:
    python3 -m installer
    python3 -m installer --reset  # when you need to rebuild auth storage and rotate generated secrets
    ```
-2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD`.
+2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER` and `RABBITMQ_PASS`.
 3. Recreate every dependent service so clients reconnect with the new credentials:
    ```bash
-   docker compose up -d --force-recreate redis rabbitmq redis-commander document-lister document-indexer solr-search nginx
+   docker compose up -d --force-recreate rabbitmq document-lister document-indexer solr-search nginx
    ```
 
 The full production procedure and recovery notes are documented in the [Production deployment guide](deployment/production.md).
@@ -723,6 +758,36 @@ Without a reindex, language filters and language-facing reports can mix old and 
    curl http://localhost/v1/stats/
    curl "http://localhost/v1/search/?q=historia&fq_language=ca"
    ```
+
+### Dedicated admin reindex flow (v1.14.x)
+
+The current tree also includes a dedicated admin reindex flow backed by:
+
+- UI/admin page: **Reindex Library**
+- API endpoint: `POST /v1/admin/reindex`
+
+This flow is more explicit than the older manual procedure because it documents the destructive behavior directly in the UI and in the API handler.
+
+#### What the action does
+
+When triggered successfully, the reindex flow:
+
+1. Deletes all documents from the target Solr collection
+2. Clears Redis tracking state used by the ingestion pipeline
+3. Allows `document-lister` to rediscover files
+4. Forces the indexing pipeline to rebuild search data with the current configuration and embedding model
+
+#### Operational warning
+
+This is a **destructive maintenance action**. Search results will be unavailable until reindexing completes.
+
+Use it when you intentionally need a full rebuild, such as:
+
+- after changing the embedding model
+- after making a Solr schema change that requires reprocessing existing content
+- after recovering from index corruption or inconsistent tracking state
+
+If your deployment exposes the admin page, require the same operational review you would for any other high-impact maintenance step.
 
 ### Why this is safe
 
@@ -3228,7 +3293,7 @@ Credentials are injected from `.env` at runtime. To view current Solr users:
 
 ```bash
 docker compose exec solr-search curl \
-  -u solr-admin:$SOLR_ADMIN_PASSWORD \
+  -u solr-admin:$SOLR_ADMIN_PASS \
   http://localhost:8983/api/users
 ```
 
@@ -3382,7 +3447,7 @@ git checkout v1.13.0
 
 # 3. Update .env with new per-service credentials (if upgrading from < v1.13.0)
 # Review and merge .env.example into your current .env
-# Add new variables: RABBITMQ_INDEXER_USER, RABBITMQ_LISTER_USER, SOLR_ADMIN_PASSWORD, etc.
+# Add new variables: RABBITMQ_INDEXER_USER, RABBITMQ_LISTER_USER, SOLR_ADMIN_PASS, etc.
 
 # 4. Pull new images
 docker compose pull
@@ -3405,9 +3470,8 @@ docker compose logs | grep -i error
 **Solution:**
 ```bash
 # 1. Check if credentials are in .env
-grep SOLR_ADMIN_PASSWORD .env
+grep SOLR_ADMIN_PASS .env
 grep RABBITMQ_INDEXER_USER .env
-grep REDIS_PASSWORD .env
 
 # 2. If missing, add them to .env with unique values
 # Services require per-service credentials to authenticate
@@ -3429,3 +3493,112 @@ docker compose logs -f
 4. Test connectivity: `docker compose exec <service> curl -u user:pass http://target:port/...`
 
 ---
+
+## Deployment Updates for v1.15.0 (Admin Portal, Bug Fixes, CI Hardening)
+
+v1.15.0 is a release-quality and infrastructure hardening release. Key operator-facing changes:
+
+### Admin Portal Redesign
+
+The admin portal (`/admin`) now features a sidebar navigation with organized menu:
+
+- **Dashboard** — system overview
+- **Indexing Status** — detailed per-document progress and failure information
+- **Log Viewer** — per-service log streaming from the browser
+- **Backups** — existing backup/restore dashboard
+- **Solr Admin** — Solr admin UI with SSO passthrough
+
+No configuration changes needed — the sidebar is purely a UI improvement.
+
+### Per-Service Log Viewer
+
+The new log viewer at `/admin` → **Log Viewer** lets operators stream container logs directly from the admin portal. This reduces the need for SSH access for routine log inspection.
+
+### Solr Admin SSO Passthrough (#994)
+
+Nginx now injects BasicAuth credentials for Solr admin access when navigating through the admin portal. This eliminates the need for separate Solr credentials when using the admin UI.
+
+The passthrough is configured in the nginx proxy and uses credentials from `.env`:
+
+```bash
+# Ensure these are set in .env (created by the installer)
+SOLR_ADMIN_USER=admin
+SOLR_ADMIN_PASS=<your-solr-password>
+```
+
+### Document Indexer OOM Fix (#1074, #1075)
+
+The document indexer previously crashed with exit code 137 (OOM) on large PDFs. Memory limits have been tuned to handle large documents without exhausting container memory.
+
+**Operator action:** No configuration changes needed. The fix is built into the updated image.
+
+### Thumbnail Writable Volume (#1077, #1084)
+
+Document thumbnails are now written to a configurable writable directory instead of the read-only document volume.
+
+**New environment variable:**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `THUMBNAIL_DIR` | `/data/thumbnails` | Writable directory for generated document thumbnails |
+
+**Operator action:** If you have a custom volume layout, ensure `THUMBNAIL_DIR` points to a writable location. The default works with the standard Docker Compose configuration.
+
+### Volume Permission Hardening (#1007, #1071)
+
+The `document-lister` service now uses an entrypoint wrapper that ensures correct directory permissions at startup. This prevents permission-denied errors when the container runs as a non-root user.
+
+### Build-Time Dependencies (#1078, #1083)
+
+All Python packages are now installed during Docker image build. Containers no longer download packages at startup, resulting in:
+
+- Faster cold starts
+- Reliable air-gapped deployments
+- Deterministic builds
+
+### Solr PDF Font Support (#1072, #1076)
+
+Solr now uses a custom Dockerfile that installs PDF fonts needed for accurate text extraction. This fixes garbled text in documents using non-standard fonts.
+
+### Health Checks for Nginx and UI (#1009, #1055)
+
+Both `nginx` and `aithena-ui` containers now include health check probes, improving orchestration readiness detection.
+
+### Indexing Progress Sync (#1065, #1082)
+
+The System Status Redis key pattern has been aligned with the indexer namespace. The admin status page and indexer now report consistent progress numbers.
+
+### Upgrade Procedure
+
+1. Pull the latest images:
+   ```bash
+   docker compose pull
+   ```
+2. Stop and restart:
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+3. Verify the admin portal sidebar loads at `/admin`
+4. Check the log viewer shows per-service logs
+5. Verify indexing status shows consistent numbers between the status page and admin portal
+
+### Deployment Validation Checklist
+
+| Check | How to verify |
+|---|---|
+| Admin sidebar loads | Navigate to `/admin`, confirm sidebar menu appears |
+| Log viewer works | Select a service in the log viewer dropdown |
+| Solr SSO passthrough | Navigate to `/admin/solr/` — should load without separate login |
+| Thumbnails writable | Upload a document and verify thumbnail generation |
+| Indexing status consistent | Compare document counts in Status tab and admin Indexing Status |
+| No OOM on large PDFs | Index a large PDF (>100MB) and verify indexer stays running |
+
+### Backward Compatibility
+
+All changes are backward-compatible:
+
+- Existing admin routes continue to work alongside the new sidebar navigation
+- The `THUMBNAIL_DIR` variable has a sensible default; existing deployments work without changes
+- Solr SSO passthrough is additive; direct Solr access still works with existing credentials
+- Redis key alignment is transparent; no manual key migration needed

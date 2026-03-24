@@ -1,34 +1,142 @@
 #!/usr/bin/env bash
-# Pre-commit hook: runs zizmor on any staged workflow files.
+# Pre-commit hook: lint, format-check, and test staged code.
 # Install: git config core.hooksPath .github/hooks
+#
+# This hook is DETERMINISTIC — it blocks commits that fail quality checks.
+# Agents cannot bypass it without --no-verify (which they must never use).
 
 set -euo pipefail
 
-WORKFLOWS=$(git diff --cached --name-only --diff-filter=ACM | grep '^\.github/workflows/.*\.ya\?ml$' || true)
+ROOT="$(git rev-parse --show-toplevel)"
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 
-if [ -z "$WORKFLOWS" ]; then
+if [ -z "$STAGED" ]; then
   exit 0
 fi
 
-if ! command -v zizmor &>/dev/null; then
-  echo "⚠️  zizmor not found — skipping workflow security scan."
-  echo "   Install: pip install zizmor"
-  exit 0
+FAIL=0
+
+# ── Section 1: Workflow security (zizmor) ──────────────────────────
+WORKFLOWS=$(echo "$STAGED" | grep '^\.github/workflows/.*\.ya\?ml$' || true)
+
+if [ -n "$WORKFLOWS" ]; then
+  if command -v zizmor &>/dev/null; then
+    echo "🔍 Running zizmor on staged workflows..."
+    ZIZMOR_CONFIG=""
+    if [ -f "$ROOT/.zizmor.yml" ]; then
+      ZIZMOR_CONFIG="--config $ROOT/.zizmor.yml"
+    fi
+    # shellcheck disable=SC2086
+    if ! zizmor $ZIZMOR_CONFIG --min-severity medium $WORKFLOWS; then
+      echo "❌ zizmor found issues in workflow files."
+      FAIL=1
+    fi
+  else
+    echo "⚠️  zizmor not found — skipping workflow security scan."
+  fi
 fi
 
-echo "🔍 Running zizmor on staged workflows..."
+# ── Section 2: Python lint (ruff) ──────────────────────────────────
+PYTHON_SERVICES=(document-indexer document-lister embeddings-server solr-search admin)
+CHANGED_PY_SERVICES=()
 
-ZIZMOR_CONFIG=""
-if [ -f .zizmor.yml ]; then
-  ZIZMOR_CONFIG="--config .zizmor.yml"
+for svc in "${PYTHON_SERVICES[@]}"; do
+  if echo "$STAGED" | grep -q "^src/$svc/"; then
+    CHANGED_PY_SERVICES+=("$svc")
+  fi
+done
+
+if [ ${#CHANGED_PY_SERVICES[@]} -gt 0 ]; then
+  if command -v ruff &>/dev/null; then
+    for svc in "${CHANGED_PY_SERVICES[@]}"; do
+      SVC_FILES=$(echo "$STAGED" | grep "^src/$svc/.*\.py$" || true)
+      if [ -n "$SVC_FILES" ]; then
+        echo "🐍 Linting src/$svc..."
+        # shellcheck disable=SC2086
+        if ! ruff check --config "$ROOT/ruff.toml" $SVC_FILES; then
+          echo "❌ ruff check failed for $svc"
+          FAIL=1
+        fi
+        # shellcheck disable=SC2086
+        if ! ruff format --check --config "$ROOT/ruff.toml" $SVC_FILES; then
+          echo "❌ ruff format check failed for $svc"
+          FAIL=1
+        fi
+      fi
+    done
+  else
+    echo "❌ ruff not found — cannot run Python lint on staged files."
+    echo "   Install: pip install ruff"
+    FAIL=1
+  fi
 fi
 
-# shellcheck disable=SC2086
-if ! zizmor $ZIZMOR_CONFIG --min-severity medium $WORKFLOWS; then
+# ── Section 3: Node lint (eslint + prettier) ───────────────────────
+if echo "$STAGED" | grep -q '^src/aithena-ui/'; then
+  echo "⚛️  Linting src/aithena-ui..."
+  pushd "$ROOT/src/aithena-ui" > /dev/null
+
+  if [ -d "node_modules" ]; then
+    if ! npm run lint; then
+      echo "❌ eslint failed for aithena-ui"
+      FAIL=1
+    fi
+    if ! npm run format:check; then
+      echo "❌ prettier format check failed for aithena-ui"
+      FAIL=1
+    fi
+  else
+    echo "❌ node_modules not found in src/aithena-ui — run 'npm ci' there before committing UI changes."
+    FAIL=1
+  fi
+
+  popd > /dev/null
+fi
+
+# ── Section 4: Python tests for changed services ──────────────────
+# Only run tests for services with staged changes — keeps it fast.
+if [ ${#CHANGED_PY_SERVICES[@]} -gt 0 ]; then
+  for svc in "${CHANGED_PY_SERVICES[@]}"; do
+    SVC_DIR="$ROOT/src/$svc"
+    if [ -d "$SVC_DIR/tests" ] || find -maxdepth 2 "$SVC_DIR" -name "test_*.py" 2>/dev/null | grep -q .; then
+      echo "🧪 Testing src/$svc..."
+      pushd "$SVC_DIR" > /dev/null
+      if ! uv run pytest --tb=short -q; then
+        echo "❌ pytest failed for $svc"
+        FAIL=1
+      fi
+      popd > /dev/null
+    fi
+  done
+fi
+
+# ── Section 5: Node tests for changed UI ──────────────────────────
+if echo "$STAGED" | grep -q '^src/aithena-ui/.*\.\(ts\|tsx\|js\|jsx\)$'; then
+  echo "🧪 Testing src/aithena-ui..."
+  pushd "$ROOT/src/aithena-ui" > /dev/null
+  if [ -d "node_modules" ]; then
+    if ! npx vitest run --reporter=verbose; then
+      echo "❌ vitest failed for aithena-ui"
+      FAIL=1
+    fi
+  else
+    echo "❌ node_modules not found in src/aithena-ui — install Node dependencies before committing UI changes."
+    echo "   Hint: run: npm install"
+    FAIL=1
+  fi
+  popd > /dev/null
+fi
+
+# ── Result ─────────────────────────────────────────────────────────
+if [ "$FAIL" -ne 0 ]; then
   echo ""
-  echo "❌ zizmor found issues in workflow files. Fix them before committing."
-  echo "   Run: zizmor --config .zizmor.yml .github/workflows/"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "❌ Pre-commit checks FAILED. Fix errors before committing."
+  echo "   Run: .squad/scripts/verify.sh"
+  echo "   Auto-fix lint: ruff check --fix <files>"
+  echo "   Auto-fix format: ruff format <files>"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 1
 fi
 
-echo "✅ Workflow security scan passed."
+echo "✅ All pre-commit checks passed."

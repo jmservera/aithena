@@ -6,18 +6,7 @@ from typing import Any
 import requests
 import streamlit as st
 
-from pages.shared.config import AUTH_ENABLED, SOLR_SEARCH_URL
-
-if AUTH_ENABLED:
-    from auth import AuthSettings, require_auth
-
-    try:
-        _settings = AuthSettings.from_env()
-    except ValueError as _exc:
-        st.error(f"Authentication configuration error: {_exc}")
-        st.stop()
-    require_auth(_settings)
-
+from pages.shared.config import SOLR_SEARCH_URL
 
 APP_SERVICE_ORDER = [
     "solr-search",
@@ -37,7 +26,6 @@ STATUS_STYLE = {
     "down": ("❌", "red"),
 }
 
-st.set_page_config(page_title="System Status", page_icon="🔧", layout="wide")
 st.title("🔧 System Status")
 
 

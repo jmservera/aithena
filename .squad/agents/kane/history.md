@@ -114,5 +114,34 @@
 
 **Deliverable:** docs/security/threat-assessment-v1.12.md
 
+**Deliverable:** docs/security/threat-assessment-v1.12.md
+
 **Release Gate:** This document is now mandatory for version tagging.
+
+### 2026-03-24 — Internal Service Authentication Assessment (Background Spawn)
+
+**Recommendation:** Simplify internal service auth (Redis/ZK) for non-exposed services; keep thin Solr auth layer
+
+**Security Analysis:**
+- Current topology: Services use `expose:` (internal visibility) in prod, `ports:` in dev override
+- Network exposure: No ports published to host in production (docker-compose.yml)
+- Auth burden: Redis password + ZooKeeper DigestMD5 (60–80 lines SASL bootstrap code)
+- Auth value: Minimal — services not exposed externally; Docker bridge isolation is primary control
+
+**Recommendation Summary:**
+- **Drop:** Redis internal password (session/cache only, network-isolated)
+- **Drop:** ZooKeeper DigestMD5 auth (complex, broken on ZK 3.9 + Java 17, triggers NullPointerException)
+- **Keep:** Solr BasicAuth (thin compliance baseline, simple bootstrap via Solr 9.7 default)
+- **Compensating Control:** Maintain Docker bridge network isolation, reject external port mappings
+
+**Expected Benefits:**
+- Remove 60–80 lines of SASL bootstrap code (entrypoint-sasl.sh, JAAS generation)
+- Fix ZK 3.9 startup NullPointerException (Java 17 SASL bug)
+- Simpler env var management (no ZK_SASL_USER/PASS, reduced SOLR_ZK_CREDS config)
+- Faster dev onboarding (fewer auth failures)
+- Retain compliance-ready baseline (internal auth can be re-added for prod if governance requires)
+
+**Decision Record:** `.squad/decisions.md` → "Security Analysis: Internal Service Authentication (Redis, ZooKeeper, Solr)"
+
+**Next:** Pending team consensus on compliance implications; network isolation discussion recommended.
 

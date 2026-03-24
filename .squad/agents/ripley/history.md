@@ -369,3 +369,24 @@ Conducted comprehensive audit of all inter-service communication paths. **Confir
 - Missing: no tests for the new reindex endpoint or admin reindex page
 
 **Decision:** scripts/benchmark/ is A/B test infrastructure that should be updated or deprecated in a follow-up issue, not this PR.
+
+### 2026-03-24 — Embeddings-Server Extraction Analysis (Background Spawn)
+
+**Decision:** Extract `src/embeddings-server/` to standalone repository at `github.com/jmservera/embeddings-server`
+
+**Analysis Findings:**
+- Technical readiness: ✅ Zero code coupling, HTTP-only integration, already generic (OpenAI-compatible)
+- Strategic drivers: Independent release rhythm, faster aithena cycles (2–3 min savings), genericization
+- Risk mitigation: Semantic versioning, version pinning discipline, supply chain security
+- 4-phase implementation timeline (prep → repo creation → aithena cleanup → validation)
+
+**Key Design Decisions:**
+- New repo: no `aithena-` prefix, reusable positioning
+- Image registry: `ghcr.io/jmservera/embeddings-server:1.14.1` (cleaner than `-aithena-` variant)
+- Version pinning: aithena pins exact versions (1.14.1, not `latest`) for reproducibility
+- Release independence: embeddings-server ships model updates without aithena coordination
+- Integration surface minimal: pure HTTP contract, environment variables unchanged
+
+**Decision Record:** `.squad/decisions.md` → "Decision: Extract Embeddings-Server to Independent Repository"
+
+**Next:** Awaiting approval from jmservera (project owner) for Phase 1 implementation.

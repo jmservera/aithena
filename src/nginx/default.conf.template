@@ -36,6 +36,10 @@ server {
     location /admin/solr/ {
         auth_request /_auth;
         error_page 401 = @auth_redirect;
+        # Inject Solr BasicAuth so authenticated portal users reach the Solr UI
+        # without re-entering credentials (SSO). The JWT is already validated by
+        # auth_request above; this only adds the Solr service credential.
+        proxy_set_header Authorization "Basic ${SOLR_BASIC_AUTH}";
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -55,6 +59,7 @@ server {
     location /solr/ {
         auth_request /_auth;
         error_page 401 = @auth_redirect;
+        proxy_set_header Authorization "Basic ${SOLR_BASIC_AUTH}";
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;

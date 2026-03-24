@@ -27,7 +27,6 @@ All settings are read from environment variables (a `.env` file in `src/admin/sr
 |---|---|---|
 | `REDIS_HOST` | `localhost` | Redis hostname |
 | `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_PASSWORD` | _(empty)_ | Redis password when the server uses `requirepass` |
 | `QUEUE_NAME` | `shortembeddings` | Shared queue/key-prefix name (must match `document-lister` and `document-indexer`) |
 | `RABBITMQ_HOST` | `localhost` | RabbitMQ hostname |
 | `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ management HTTP API port |

@@ -17,7 +17,6 @@ Environment variables (with defaults for the local dev stack):
   RABBITMQ_PASSWORD   RabbitMQ password (default: guest)
   REDIS_HOST          Redis host (default: localhost)
   REDIS_PORT          Redis port (default: 6379)
-  REDIS_PASSWORD      Redis password (default: empty)
   AUTH_DB_DIR         Auth DB directory (default: ~/.local/share/aithena/auth)
   VERIFY_TIMEOUT      Per-check timeout in seconds (default: 30)
   VERIFY_USERNAME     Test username for auth verification
@@ -52,7 +51,6 @@ RABBITMQ_USER: str = os.environ.get("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD: str = os.environ.get("RABBITMQ_PASSWORD", "guest")
 REDIS_HOST: str = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT: int = int(os.environ.get("REDIS_PORT", "6379"))
-REDIS_PASSWORD: str = os.environ.get("REDIS_PASSWORD", "")
 AUTH_DB_DIR: str = os.environ.get(
     "AUTH_DB_DIR",
     str(Path.home() / ".local" / "share" / "aithena" / "auth"),
@@ -103,7 +101,6 @@ def redis_config() -> dict[str, str | int]:
     return {
         "host": REDIS_HOST,
         "port": REDIS_PORT,
-        "password": REDIS_PASSWORD,
     }
 
 
