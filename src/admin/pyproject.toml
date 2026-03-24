@@ -12,6 +12,7 @@ dependencies = [
     "pillow>=12.1.1",
     "pyjwt>=2.10.0",
     "python-json-logger>=4.0.0",
+    "docker>=7.0.0",
 ]
 
 [tool.uv]
