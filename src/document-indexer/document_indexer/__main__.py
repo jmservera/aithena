@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import logging
@@ -19,10 +20,12 @@ from . import (
     BASE_PATH,
     CHUNK_OVERLAP,
     CHUNK_SIZE,
+    EMBEDDING_BATCH_SIZE,
     EMBEDDINGS_HOST,
     EMBEDDINGS_PORT,
     EXCHANGE_NAME,
     GIT_COMMIT,
+    MAX_PDF_PAGES,
     QUEUE_NAME,
     RABBITMQ_HOST,
     RABBITMQ_PASS,
@@ -280,6 +283,9 @@ def index_chunks(
 ) -> int:
     """Chunk the PDF text, obtain embeddings, and index into Solr.
 
+    Embeddings are requested in batches of EMBEDDING_BATCH_SIZE to limit
+    peak memory usage when processing large documents.
+
     Returns:
         The number of chunks successfully indexed.
 
@@ -293,23 +299,39 @@ def index_chunks(
         logger.info("No text chunks extracted from %s; skipping embedding indexing.", path)
         return 0
 
-    chunks = [chunk for chunk, _, _ in page_chunks]
-    embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
-
-    docs = [
-        build_chunk_doc(parent_id, idx, chunk, emb, metadata, page_start, page_end)
-        for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(page_chunks, embeddings, strict=False))
-    ]
-
     solr_url = f"http://{SOLR_HOST}:{SOLR_PORT}/solr/{SOLR_COLLECTION}/update?commitWithin=10000"
-    response = requests.post(
-        solr_url,
-        json=docs,
-        timeout=SOLR_TIMEOUT,
-        auth=SOLR_AUTH,
-    )
-    response.raise_for_status()
-    return len(docs)
+    total_indexed = 0
+
+    for batch_start in range(0, len(page_chunks), EMBEDDING_BATCH_SIZE):
+        batch = page_chunks[batch_start : batch_start + EMBEDDING_BATCH_SIZE]
+        chunks = [chunk for chunk, _, _ in batch]
+        embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
+
+        docs = [
+            build_chunk_doc(
+                parent_id,
+                batch_start + idx,
+                chunk,
+                emb,
+                metadata,
+                page_start,
+                page_end,
+            )
+            for idx, ((chunk, page_start, page_end), emb) in enumerate(
+                zip(batch, embeddings, strict=False)
+            )
+        ]
+
+        response = requests.post(
+            solr_url,
+            json=docs,
+            timeout=SOLR_TIMEOUT,
+            auth=SOLR_AUTH,
+        )
+        response.raise_for_status()
+        total_indexed += len(docs)
+
+    return total_indexed
 
 
 def load_metadata_override(doc_id: str) -> dict | None:
@@ -376,6 +398,21 @@ def index_document(path: Path) -> dict:
 
     metadata = extract_metadata(str(path), base_path=BASE_PATH)
     page_count = get_page_count(path)
+
+    # ── Per-document memory guard ─────────────────────────────────────────
+    if page_count is not None:
+        if page_count > 500:
+            logger.warning(
+                "Large PDF detected: %s has %d pages",
+                path,
+                page_count,
+                extra={"file_path": str(path), "page_count": page_count},
+            )
+        if page_count > MAX_PDF_PAGES:
+            msg = f"PDF too large: {path} has {page_count} pages (limit: {MAX_PDF_PAGES})"
+            logger.error(msg, extra={"file_path": str(path), "page_count": page_count})
+            mark_failure(path, msg, stage="page_guard")
+            raise ValueError(msg)
 
     # Apply manual metadata overrides from Redis (edits survive re-indexing)
     doc_id = hashlib.sha256(metadata["file_path"].encode("utf-8")).hexdigest()
@@ -505,6 +542,7 @@ def callback(
             logger.error("Unable to persist failed state for %s: %s", file_path, persist_exc)
             logger.debug("Unable to persist failed state for %s", file_path, exc_info=True)
     finally:
+        gc.collect()
         channel.basic_ack(delivery_tag=method.delivery_tag)
 
 
