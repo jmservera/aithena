@@ -17,7 +17,6 @@ import streamlit as st
 import redis
 from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PORT
 
-
 STATUS_LABELS = {
     "processing": ("🔄", "Processing"),
     "queued": ("⏳", "Queued"),

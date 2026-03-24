@@ -7,7 +7,6 @@ Streamlit context via render_page(). Helpers can be imported directly.
 from __future__ import annotations
 
 import os
-
 from unittest.mock import MagicMock
 
 os.environ.setdefault("AUTH_ENABLED", "false")

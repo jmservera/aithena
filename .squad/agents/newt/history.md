@@ -416,3 +416,20 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 - Branch protection on dev prevented direct push; used feature branch + PR workflow
 - 5 pre-existing test failures (4 metadata patterns, 1 auth defaults) — not release blockers
 - Admin coverage at 62%, below 70% threshold used for other services — flagged for next cycle
+
+### PRD: Admin Portal React Migration (v2.0) — 2025-07-18
+
+**Task**: Wrote comprehensive PRD for migrating admin portal from Streamlit to React.
+
+**Key findings from codebase research**:
+- Streamlit admin has 7 pages across 4 groups: Dashboard, Document Manager, Reindex, Indexing Status, System Status, Log Viewer, Infrastructure
+- React UI already has partial admin migration: /admin (document manager), /admin/users (user management), /admin/backups (backup dashboard)
+- The AdminRoute component + AuthContext already enforce role-based access (admin role required)
+- solr-search already has most admin API endpoints: /v1/admin/documents, /v1/admin/reindex, /v1/admin/containers, /v1/admin/metrics, /v1/admin/backups/*
+- Four new API endpoints needed: queue-status, indexing-status, logs/{service}, infrastructure
+- Docker socket dependency for log viewer is the primary migration challenge
+- Auth is split: Streamlit uses env-var credentials + JWT; React uses SQLite-backed users + JWT
+
+**Recommendation**: Integrate admin into existing aithena-ui as /admin/* routes (not a separate app). Phase 1 builds API foundation (can start in v1.16.x), Phase 2 builds React pages, Phase 3 tests, Phase 4 removes Streamlit.
+
+**Output**: `docs/prd/admin-react-migration.md`
