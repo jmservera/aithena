@@ -10,20 +10,8 @@ from __future__ import annotations
 import requests
 import streamlit as st
 
-from pages.shared.config import ADMIN_API_KEY, AUTH_ENABLED, SOLR_SEARCH_URL
+from pages.shared.config import ADMIN_API_KEY, SOLR_SEARCH_URL
 
-if AUTH_ENABLED:
-    from auth import AuthSettings, require_auth
-
-    try:
-        _settings = AuthSettings.from_env()
-    except ValueError as _exc:
-        st.error(f"Authentication configuration error: {_exc}")
-        st.stop()
-    require_auth(_settings)
-
-
-st.set_page_config(page_title="Reindex Library", page_icon="🔄", layout="wide")
 st.title("🔄 Reindex Library")
 
 st.markdown(
