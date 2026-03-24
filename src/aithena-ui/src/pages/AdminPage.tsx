@@ -312,7 +312,7 @@ function AdminPage() {
   );
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
-    let nextIndex: number | null = null;
+    let nextIndex: number;
 
     switch (event.key) {
       case 'ArrowRight':
