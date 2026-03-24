@@ -486,3 +486,11 @@ Monthly restore drill CI workflow failed because restore scripts did not fully r
 - document-lister/indexer are pure MQ workers with no HTTP server; pgrep is the correct infra-level strategy
 - nginx reverse proxy already had proper /health check via BusyBox wget — no changes needed
 - `nginx:1.27-alpine` includes BusyBox wget (no curl); health checks use wget throughout
+
+### Pre-release Log Analyzer Allowlist Fix (2026-03-24, #1089/PR#1090)
+- CI integration tests on PR #1088 (v1.15.0 release) failed because log analyzer found 3 `Permission denied: '/data/thumbnails/{author}'` errors from document-indexer
+- Root cause: `document-indexer` Dockerfile doesn't create `/data/thumbnails` with app user ownership; named volume mounts root-owned by default
+- Fix 1 (allowlist): Added `security:*permission denied*/data/thumbnails/*=ignore` — thumbnails are non-critical, indexing succeeds without them
+- Fix 2 (Dockerfile): Added `RUN mkdir -p /data/thumbnails && chown app:app /data/thumbnails` so named volumes inherit correct ownership
+- Key insight: Named volumes initialize permissions from image layer on first creation, so Dockerfile `mkdir+chown` propagates through. This is the same bind-mount permission pattern documented in history.
+- Existing allowlist rules `*PermissionError*` and `*permission denied*read-only*` didn't match because actual messages say "Permission denied" (not "PermissionError") and don't contain "read-only"
