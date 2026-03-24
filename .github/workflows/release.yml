@@ -161,6 +161,7 @@ jobs:
             VERSION=${{ needs.validate-tag.outputs.version }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ needs.validate-tag.outputs.build_date }}
+          secrets: |
             HF_TOKEN=${{ secrets.HF_TOKEN }}
           cache-from: type=gha,scope=${{ matrix.service.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.image }}
