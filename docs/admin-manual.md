@@ -528,7 +528,7 @@ Preferred workflow:
    python3 -m installer
    python3 -m installer --reset  # when you need to rebuild auth storage and rotate generated secrets
    ```
-2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER`, `RABBITMQ_PASS`, and `REDIS_PASSWORD`.
+2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER` and `RABBITMQ_PASS`.
 3. Recreate every dependent service so clients reconnect with the new credentials:
    ```bash
    docker compose up -d --force-recreate redis rabbitmq redis-commander document-lister document-indexer solr-search nginx
@@ -3472,7 +3472,6 @@ docker compose logs | grep -i error
 # 1. Check if credentials are in .env
 grep SOLR_ADMIN_PASS .env
 grep RABBITMQ_INDEXER_USER .env
-grep REDIS_PASSWORD .env
 
 # 2. If missing, add them to .env with unique values
 # Services require per-service credentials to authenticate
