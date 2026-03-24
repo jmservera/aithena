@@ -33,7 +33,7 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-RUN apk add --no-cache procps
+RUN apk add --no-cache procps su-exec
 
 RUN addgroup -S -g 1000 app && adduser -S -u 1000 -G app app
 
@@ -45,6 +45,9 @@ COPY --from=builder /app/uv.lock /app/uv.lock
 
 RUN mkdir -p /data/documents && chown -R app:app /app /data/documents
 
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 ENV RABBITMQ_HOST="localhost"
 ENV RABBITMQ_PORT=5672
 ENV REDIS_HOST="localhost"
@@ -53,6 +56,5 @@ ENV DOCUMENT_WILDCARD="*.pdf"
 ENV QUEUE_NAME="new_documents"
 ENV EXCHANGE_NAME="documents"
 
-USER app
-
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uv", "run", "python", "-m", "document_lister"]
