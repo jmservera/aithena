@@ -117,3 +117,82 @@ The admin portal (`src/admin/`) was originally a standalone Streamlit (Python) a
 ## Full PRD
 
 See `docs/prd/admin-react-migration.md` for the complete Product Requirements Document including feature inventory, API requirements, migration phases, and success metrics.
+---
+
+# Decision: Thumbnail URL Prefix in Search API
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-25  
+**Status:** Implemented (PR #1139)  
+**Context:** Issue #1137
+
+## Problem
+
+Thumbnail URLs stored in Solr are relative paths (e.g., `folder/book.pdf.thumb.jpg`). The search API returned these as-is, but the frontend uses them directly in `<img src>`. Without a `/thumbnails/` prefix, the browser resolved them as relative URLs against the current page, hitting the SPA catch-all instead of the nginx static-file location block.
+
+## Decision
+
+The search API now prefixes relative thumbnail paths with `/thumbnails/` via `_thumbnail_url()` in `search_service.py`. Absolute URLs (http/https) and already-prefixed paths (starting with `/`) are passed through unchanged.
+
+## Rationale
+
+- The backend is the right place to apply URL prefixes because it knows the routing scheme
+- The frontend should receive ready-to-use URLs without needing path manipulation
+- Preserving absolute URLs ensures backward compatibility with any externally-hosted thumbnails
+- The nginx location block `^/thumbnails/(.+\.thumb\.jpg)$` expects this prefix
+
+## Impact
+
+- All search, books, and similar-books responses now return `/thumbnails/`-prefixed URLs
+- Frontend components (`BookCard`, `BookDetailView`) work without changes
+- nginx correctly routes to `/data/thumbnails/` filesystem path
+
+---
+
+# Decision: Bug Triage for v1.16.0 (2026-03-25)
+
+**Author:** Ripley (Project Lead)  
+**Date:** 2026-03-25T15:30Z  
+**Requested by:** Juanma (jmservera)  
+**Status:** DECIDED
+
+## Context
+
+Three new bugs submitted for triage with no assigned milestones:
+- #1137 — Thumbnails not loaded in UI (squad:parker)
+- #1138 — Admin dashboard queued/processed/failed list not paged (squad:dallas)
+- #1136 — RabbitMQ deprecation warning (squad:lambert)
+
+## Decision
+
+All three bugs assigned to **v1.16.0 milestone**.
+
+### Priority Ranking (for Ralph's backlog)
+
+1. **#1137 (Thumbnails)** — Parker | Medium severity | Low–Medium effort
+   - User-visible feature broken; nginx route or volume mount issue
+   - Investigate static `/thumbnails` serving; verify Docker volume creation
+
+2. **#1138 (Admin pagination)** — Dallas | Medium severity | Low effort
+   - Scales with data size; missing React pagination component
+   - **Note:** Streamlit admin deprecated in v2.0; consider deferred if v2.0 React migration imminent
+
+3. **#1136 (RabbitMQ warning)** — Lambert (investigation) → Parker (fix) | Low severity | Very Low effort
+   - Log noise only; blocks future RabbitMQ upgrades
+   - Add `deprecated_features.permit.management_metrics_collection` config before next patch release
+
+### Label Actions
+
+- Removed `go:needs-research` from all three (clear enough to implement immediately)
+- Preserved squad routing: Parker (backend), Dallas (frontend), Lambert (testing)
+
+## Rationale
+
+- **User impact ordering:** Visible bugs before warnings
+- **#1137 first:** Broken feature, direct user impact
+- **#1138 second:** Unscalable UX, but Streamlit admin EOL in v2.0 (risk: low-ROI effort if timeline tight)
+- **#1136 last:** No functional impact; maintenance task
+
+## Risk
+
+#1138 (admin paging) may be low-ROI if v2.0 React migration happens soon. Recommend Ralph check with Newt on admin-react-migration timeline before committing.
