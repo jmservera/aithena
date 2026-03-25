@@ -24,3 +24,6 @@ Backend Developer: Python services, PDF processing, metadata extraction, file wa
 - FastAPI + uvicorn for APIs, requests for Solr HTTP calls
 - Refer to skill `project-conventions` for full service inventory
 - Refer to skill `path-metadata-heuristics` and `solr-pdf-indexing` for indexing patterns
+
+## History
+- **#1136** — Disabled deprecated `management_metrics_collection` feature in `rabbitmq.conf` to suppress RabbitMQ 4.x deprecation warning. Management UI uses Prometheus-based metrics instead.
