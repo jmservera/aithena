@@ -88,11 +88,22 @@ PRs targeting `main` trigger the integration-test workflow, which runs the full 
 
 Branch protection rules require PRs for all changes to `main`. Direct pushes are blocked.
 
+## Pre-Release (RC) Builds
+
+Before merging `dev` into `main`, you can build release candidate images to validate the upcoming release. The pre-release workflow builds all six service containers with an RC tag (e.g., `1.16.0-rc.1`) and pushes them to GHCR for local testing.
+
+- **Trigger:** `workflow_dispatch` on the `dev` branch with a `version` input
+- **RC numbering:** Auto-increments from existing tags, or set explicitly
+- **Testing:** Pull RC images locally with `docker-compose.prod.yml` and run validation
+
+See [Pre-Release Testing](pre-release-testing.md) for the full step-by-step workflow.
+
 ## Quick Reference
 
 | Action | Branch | Workflow | Required? |
 |--------|--------|----------|-----------|
 | Push/PR to `dev` | `dev` | ci.yml (unit tests + lint) | ✅ Yes |
+| Pre-release RC build | `dev` | pre-release.yml (manual trigger) | 🔶 Recommended |
 | PR to `main` | `main` | ci.yml + integration-test.yml | ✅ Yes |
 | Tag `vX.Y.Z` on `main` | `main` | release.yml (build + publish) | ✅ Yes |
 | Tag on non-`main` branch | any | release.yml → **FAILS** | ❌ Blocked |
@@ -102,6 +113,9 @@ Branch protection rules require PRs for all changes to `main`. Direct pushes are
 - `.github/workflows/ci.yml` — Unit tests and lint
 - `.github/workflows/integration-test.yml` — E2E integration tests
 - `.github/workflows/release.yml` — Release build and publish
+- `.github/workflows/pre-release.yml` — RC image builds for pre-release validation
+- `.github/workflows/build-containers.yml` — Reusable container build workflow
 - `.github/workflows/pre-release-validation.yml` — Manual pre-release checks
 - `VERSION` — Source of truth for the current version
 - `CHANGELOG.md` — Release notes history
+- `docs/pre-release-testing.md` — Pre-release testing workflow guide
