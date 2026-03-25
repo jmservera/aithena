@@ -1,27 +1,30 @@
-# Newt — History & Reskill (Consolidated 2026-03-21)
+# Newt — History & Learnings (Consolidated 2026-03-25)
 
 ## CORE CONTEXT — Product Essentials
 
-**Aithena** is a self-contained book library search engine (Python backend, React UI, Docker Compose). 7 releases shipped (v1.4.0–v1.7.0 managed by current PM cycle). All releases require: feature guide, test report, manual updates, and PM sign-off before dev→main merge.
+**Aithena** is a self-contained book library search engine (Python backend, React UI, Docker Compose). 15 releases shipped (v1.4.0–v1.15.0). All releases require: documentation, tests, manual updates, PM sign-off before dev→main merge. Core responsibility: release gate enforcement.
 
-**My Core Responsibility:** Release gate enforcement—no merge without documentation + test validation.
-
-**Key Architecture:**
+**Architecture Stable:**
 - `aithena-ui/` (React+Vite) → `solr-search/` (FastAPI) + embeddings + document-indexer + document-lister
-- Docker Compose (6 services) + Solr + Redis + RabbitMQ + Nginx; all on-premises, zero cloud dependencies
-- Health checks in docker-compose.yml (per Checkov policy), not Dockerfiles
-- UI: http://localhost (nginx) or :5173 (Vite dev); Search API: :8080/v1/search/
+- 6 Docker Compose services + Solr + Redis + RabbitMQ + Nginx; on-premises only
+- Health checks in docker-compose.yml (Checkov enforced)
 
-**Docs Structure (Post-v1.7.0 Restructure):**
-- `docs/release-notes/vX.Y.Z.md` — Feature guides (12 historical releases)
-- `docs/test-reports/vX.Y.Z.md` — Test counts & coverage (14 historical reports)
-- `docs/guides/` — Operational guides (i18n, monitoring, observability, performance, readiness checklist)
-- `docs/{user, admin}-manual.md` — User guides + deployment procedures (with screenshot references)
-- `docs/images/` — Screenshots (search-page, search-results, pdf-viewer, stats-tab, status-tab, facet-panel)
+**Docs Structure Mature (Post-v1.7.0 Restructure):**
+- `docs/release-notes/` (20+ versioned files)
+- `docs/test-reports/` (20+ versioned files)
+- `docs/guides/` (5 operational guides)
+- `docs/{user, admin}-manual.md` (comprehensive deployments + features)
+- `docs/images/` (6 tier-1 screenshots, 4 pending tier-2)
 
-**Test Baseline (v1.7.0):**
-- solr-search: 231 | aithena-ui: 213 | document-indexer: 91 | admin: 81 | document-lister: 12 | embeddings-server: 9 = ~627 total
-- Test trend: v1.4.0 (467) → v1.5.0 (575) → v1.7.0 (628) shows steady growth with new features
+**Recent Releases (v1.12.0–v1.15.0):**
+- v1.12.0: A/B embedding infrastructure (11 issues, 768D Solr schema, e5-base model)
+- v1.12.1: Bug fixes + polish (7 issues)
+- v1.14.0–v1.15.0: Major features (admin sidebar, log viewer, CI hardening)
+- Test growth: v1.7.0 (628) → v1.15.0 (1,939, 3× growth from expanded admin+CI)
+
+**Active PRDs (v1.16.0+):**
+1. **Pre-Release Containers** (v1.16.0, 5 issues) — RC workflow before main merge; manual + auto-trigger; local validation with docker-compose.prod.yml
+2. **Admin React Migration** (v2.0, 12 issues) — Streamlit → React consolidation; unify auth; eliminate docker.sock security concern; phase-gated across 4 waves
 
 ---
 

@@ -211,7 +211,22 @@ docker compose exec zoo1 sh -lc 'printf conf | nc -w 2 localhost 2181'
 - Configure ZooKeeper autopurge (`autopurge.snapRetainCount`, `autopurge.purgeInterval`) to prevent unbounded disk growth.
 - Never wipe `/data` or `/datalog` casually. A single failed node should be replaced, not used to justify full ensemble reinitialization.
 
-### 6. Account for aithena-specific operational risks
+### 6. SASL Auth Model: Solr 9.7 + Java 17 + ZK 3.9 Incompatibility (v1.14.0+)
+
+**Critical finding (v1.14.0):** SASL DIGEST-MD5 client auth from Solr to ZooKeeper is fundamentally broken in this stack:
+- **Root cause:** Solr 9.7's bundled ZooKeeper client JAR is missing `org.apache.zookeeper.server.auth.DigestLoginModule`, required for SASL DIGEST-MD5
+- **Additional blocker:** Solr 9.7 security manager enabled by default, denies access to `sun.security.provider` needed by JAAS
+- **Expected behavior:** `requireClientAuthScheme=sasl` in ZK config should enforce client auth; does not work
+
+**Workaround & Current Architecture (v1.14.0+):**
+- **Disabled:** `requireClientAuthScheme=sasl` (doesn't work with Solr 9.7's client)
+- **Enabled:** ZK quorum SASL (inter-node auth between zoo1/zoo2/zoo3) — ✅ works
+- **Enabled:** ZK digest ACLs (Solr znodes restricted to `DigestZkCredentialsProvider`) — ✅ works
+- **Security boundary:** Docker network isolation + ZK digest ACLs on znodes sufficient for production
+- **File path gotcha:** JAAS config must be owned by container user (ZK runs as UID 1000 via gosu; file unreadable if root-owned). Solr writable path is `/var/solr/` only.
+- **ZK SASL limitation:** ZooKeeper DIGEST-MD5 authentication is broken on the Solr 9.7 + Java 17 + ZK 3.9 combination. Do not attempt to enable client SASL auth in this environment.
+
+### 7. Account for aithena-specific operational risks
 
 The current `docker-compose.yml` has the following important infrastructure risks:
 - `zoo1` publishes `8080:8080`, which collides with `solr-search` publishing `8080:8080`.
