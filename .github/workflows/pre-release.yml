@@ -1,0 +1,137 @@
+name: Pre-release Containers
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semantic version without v prefix (e.g. 1.16.0)'
+        required: true
+        type: string
+      rc_number:
+        description: 'RC number (leave empty to auto-increment from existing tags)'
+        required: false
+        type: string
+
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare RC version
+    runs-on: ubuntu-latest
+    # Skip PR builds from forks (they lack push/package permissions)
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      rc_number: ${{ steps.resolve.outputs.rc_number }}
+      full_tag: ${{ steps.resolve.outputs.full_tag }}
+      build_date: ${{ steps.resolve.outputs.build_date }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve version and RC number
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_RC: ${{ inputs.rc_number }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # --- Determine version ---
+          if [[ -n "${INPUT_VERSION:-}" ]]; then
+            version="$INPUT_VERSION"
+          elif [[ -f VERSION ]]; then
+            version="$(tr -d '[:space:]' < VERSION)"
+          else
+            echo "::error::No version input and VERSION file not found"
+            exit 1
+          fi
+
+          # Validate semver format
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format: $version (expected X.Y.Z)"
+            exit 1
+          fi
+
+          echo "Using version: $version"
+
+          # --- Determine RC number ---
+          if [[ -n "${INPUT_RC:-}" ]]; then
+            rc_number="$INPUT_RC"
+            echo "Using manual RC number: $rc_number"
+          else
+            echo "Auto-detecting next RC number..."
+
+            # Query ghcr.io for existing tags on the admin image
+            # The packages API lists versions for the container
+            max_rc=0
+
+            # Use GitHub API to list package versions and find existing RC tags
+            owner="${REPO%%/*}"
+            response=$(gh api \
+              "/users/${owner}/packages/container/aithena-admin/versions" \
+              --paginate \
+              --jq ".[].metadata.container.tags[]" 2>/dev/null || true)
+
+            if [[ -n "$response" ]]; then
+              # Find highest rc.N for this version
+              while IFS= read -r tag; do
+                if [[ "$tag" =~ ^${version}-rc\.([0-9]+)$ ]]; then
+                  n="${BASH_REMATCH[1]}"
+                  if (( n > max_rc )); then
+                    max_rc=$n
+                  fi
+                fi
+              done <<< "$response"
+            fi
+
+            rc_number=$(( max_rc + 1 ))
+            echo "Auto-incremented RC number: $rc_number (previous highest: $max_rc)"
+          fi
+
+          full_tag="${version}-rc.${rc_number}"
+          build_date="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "rc_number=$rc_number" >> "$GITHUB_OUTPUT"
+          echo "full_tag=$full_tag" >> "$GITHUB_OUTPUT"
+          echo "build_date=$build_date" >> "$GITHUB_OUTPUT"
+
+          echo "### Pre-release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`$version\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| RC Number | \`$rc_number\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Full Tag | \`$full_tag\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build Date | \`$build_date\` |" >> "$GITHUB_STEP_SUMMARY"
+
+  build-and-push:
+    name: Build and push RC containers
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-containers.yml
+    with:
+      version: ${{ needs.prepare.outputs.full_tag }}
+      push: ${{ github.event_name != 'pull_request' }}
+      tags: |
+        type=raw,value=${{ needs.prepare.outputs.full_tag }}
+      build-date: ${{ needs.prepare.outputs.build_date }}
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
