@@ -171,16 +171,17 @@ Active decisions in `.squad/decisions.md`:
 
 **Aggressive pruning completed (2026-03-21).** Removed 15 unvalidated, one-time, and overlapping skills (ci-coverage-setup, ralph-dependency-check, smoke-testing, i18n-extraction-workflow, reskill, project-conventions, tdd-clean-code, lead-retrospective, dependabot-triage-routing, copilot-review-to-issues, squad-pr-workflow, docker-health-checks, hybrid-search-parent-chunk, hybrid-search-patterns). Consolidated hybrid-search patterns into solr-parent-chunk-model.
 
-**Final 34 skills by category:**
-- **Architecture (5):** phase-gated-execution, solr-parent-chunk-model (with hybrid search), solr-pdf-indexing, nginx-reverse-proxy, http-wrapper-services
-- **Testing (4):** pytest-aithena-patterns, vitest-testing-patterns, playwright-e2e-aithena, path-metadata-tdd
-- **Backend (5):** fastapi-auth-patterns, fastapi-query-params, redis-connection-patterns, pika-rabbitmq-fastapi, logging-security
-- **Frontend (2):** react-frontend-patterns, accessibility-wcag-react
-- **Infrastructure (5):** docker-compose-operations, solrcloud-docker-operations, bind-mount-permissions, branch-protection-strict-mode, nginx-reverse-proxy
-- **Security (4):** security-scanning-baseline, workflow-secrets-security, ci-workflow-security, logging-security
-- **Release/Quality (8):** release-gate, release-tagging-process, multi-release-orchestration, pr-integration-gate, ci-gate-pattern, milestone-gate-review, milestone-wave-execution, api-contract-alignment, agent-debugging-discipline, pdf-extraction-dual-tool, path-metadata-heuristics
+**Final 37 skills by category:**
+- **Architecture:** phase-gated-execution, solr-parent-chunk-model (with hybrid search), solr-pdf-indexing, nginx-reverse-proxy, http-wrapper-services
+- **Testing:** pytest-aithena-patterns, vitest-testing-patterns, playwright-e2e-aithena, path-metadata-tdd
+- **Backend:** fastapi-auth-patterns, fastapi-query-params, redis-connection-patterns, pika-rabbitmq-fastapi, logging-security
+- **Frontend:** react-frontend-patterns, accessibility-wcag-react
+- **Infrastructure:** docker-compose-operations, solrcloud-docker-operations, bind-mount-permissions, branch-protection-strict-mode
+- **Security:** security-scanning-baseline, workflow-secrets-security, ci-workflow-security
+- **Release/Quality:** release-gate, release-tagging-process, multi-release-orchestration, pr-integration-gate, ci-gate-pattern, milestone-gate-review, milestone-wave-execution, api-contract-alignment, agent-debugging-discipline, pdf-extraction-dual-tool, path-metadata-heuristics
+- **Patterns/Misc:** aithena-ab-testing-benchmarking, embedding-model-selection, prd-writing-aithena
 
-**Pattern:** Aggressive pruning works better than slow accumulation. Ruthlessly removing unvalidated, one-time, and overlapping content leaves the 34 battle-tested patterns that actually guide team work.
+**Pattern:** Aggressive pruning works better than slow accumulation. Ruthlessly removing unvalidated, one-time, and overlapping content leaves 37 battle-tested patterns (and emerging patterns like A/B testing, embedding selection, and PRD writing) that guide team work.
 
 ### Skills Created/Validated (v1.10.1 Reskill)
 

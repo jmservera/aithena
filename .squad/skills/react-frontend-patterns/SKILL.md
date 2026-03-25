@@ -264,7 +264,7 @@ export function useSearch() {
 
 ```
 aithena-ui/src/
-├── App.tsx, api.ts, main.tsx
+├── App.tsx, App.css, api.ts, main.tsx
 ├── Components/     (40+: BookCard, BookDetailView, PdfViewer, SimilarBooks, BatchEditPanel,
 │                    MetadataEditModal, CollectionModal, FolderFacetTree, AdminRoute,
 │                    ProtectedRoute, AddToCollectionModal, CollectionDetailView,
@@ -296,7 +296,7 @@ Uses `react-router-dom` v7.13.1 with 14 routes:
     <Route path="/search" element={<SearchPage />} />
     <Route path="/library" element={<LibraryPage />} />
     <Route path="/collections" element={<CollectionsPage />} />
-    <Route path="/collections/:collectionId" element={<CollectionDetailPage />} />
+    <Route path="/collections/:id" element={<CollectionDetailPage />} />
     <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
     <Route path="/status" element={<StatusPage />} />
     <Route path="/stats" element={<StatsPage />} />

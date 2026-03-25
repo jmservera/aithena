@@ -224,8 +224,7 @@ docker compose exec zoo1 sh -lc 'printf conf | nc -w 2 localhost 2181'
 - **Enabled:** ZK digest ACLs (Solr znodes restricted to `DigestZkCredentialsProvider`) — ✅ works
 - **Security boundary:** Docker network isolation + ZK digest ACLs on znodes sufficient for production
 - **File path gotcha:** JAAS config must be owned by container user (ZK runs as UID 1000 via gosu; file unreadable if root-owned). Solr writable path is `/var/solr/` only.
-
-**Reference:** `.squad/agents/brett/history.md` section "SASL Auth Broken in Solr 9.7 + Java 17 + ZK 3.9"
+- **ZK SASL limitation:** ZooKeeper DIGEST-MD5 authentication is broken on the Solr 9.7 + Java 17 + ZK 3.9 combination. Do not attempt to enable client SASL auth in this environment.
 
 ### 7. Account for aithena-specific operational risks
 
