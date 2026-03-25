@@ -119,6 +119,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | 2026-03-22 | #826/PR#847 | nginx static thumbnail serving (volume mount + /thumbnails/ location) |
 | — | #1120 | Extract reusable container build workflow (build-containers.yml) |
 | — | #1123 | Pre-release container workflow (RC tags via build-containers.yml, auto-increment) |
+| — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
 
 ---
 
