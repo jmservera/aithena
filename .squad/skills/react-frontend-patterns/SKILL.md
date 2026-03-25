@@ -264,24 +264,30 @@ export function useSearch() {
 
 ```
 aithena-ui/src/
-├── App.tsx, App.css, main.tsx, api.ts
-├── Components/     (~30 presentational: BookCard, FacetPanel, PdfViewer, ErrorBoundary,
-│                    SimilarBooks, LanguageSwitcher, FolderFacetTree, SkeletonCard,
-│                    SkeletonFacetPanel, EmptyState, ErrorState, LoadingSpinner, Footer,
-│                    AdminRoute, ProtectedRoute, FilterChip, ActiveFilters, Pagination,
-│                    TabNav, CollectionStats, IndexingStatus, List)
-├── hooks/          (11: search, status, stats, library, upload, admin, users,
-│                    similarBooks, useSearchState, chat, input)
-├── pages/          (9: Search, Library, Upload, Status, Stats, Login, Admin,
-│                    Profile, UserManagement, ChangePassword)
+├── App.tsx, api.ts, main.tsx
+├── Components/     (40+: BookCard, BookDetailView, PdfViewer, SimilarBooks, BatchEditPanel,
+│                    MetadataEditModal, CollectionModal, FolderFacetTree, AdminRoute,
+│                    ProtectedRoute, AddToCollectionModal, CollectionDetailView,
+│                    CollectionItemCard, CollectionPicker, CollectionsGrid,
+│                    SkeletonCard, SkeletonFacetPanel, ErrorBoundary, ErrorState,
+│                    EmptyState, LoadingSpinner, Footer, LanguageSwitcher,
+│                    FacetPanel, FilterChip, ActiveFilters, Pagination, TabNav,
+│                    CollectionStats, IndexingStatus, List, ConfirmDialog, NoteEditor, etc.)
+├── hooks/          (16: search, bookDetail, collections, useBatchMetadataEdit,
+│                    useMetadataEdit, useSearchState, status, stats, library,
+│                    upload, admin, users, similarBooks, chat, input, backups)
+├── pages/          (14: SearchPage, LibraryPage, CollectionsPage, CollectionDetailPage,
+│                    UploadPage, StatusPage, StatsPage, LoginPage, AdminPage,
+│                    BackupDashboardPage, ProfilePage, UserManagementPage,
+│                    ChangePasswordPage, + lazy routes)
 ├── contexts/       (AuthContext — cookie-based auth, I18nContext — locale management)
-├── locales/        (en.json, es.json, ca.json, fr.json — ~260 keys each)
-└── __tests__/      (31 test files, Vitest + RTL)
+├── locales/        (en.json, es.json, ca.json, fr.json — 300+ keys each)
+└── __tests__/      (600+ tests)
 ```
 
 ## Routing
 
-Uses `react-router-dom` v7.13.1 with 9 routes:
+Uses `react-router-dom` v7.13.1 with 14 routes:
 
 ```typescript
 <BrowserRouter>
@@ -289,12 +295,17 @@ Uses `react-router-dom` v7.13.1 with 9 routes:
     <Route path="/" element={<Navigate to="/search" />} />
     <Route path="/search" element={<SearchPage />} />
     <Route path="/library" element={<LibraryPage />} />
+    <Route path="/collections" element={<CollectionsPage />} />
+    <Route path="/collections/:collectionId" element={<CollectionDetailPage />} />
     <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
     <Route path="/status" element={<StatusPage />} />
     <Route path="/stats" element={<StatsPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+    <Route path="/admin/backups" element={<AdminRoute><BackupDashboardPage /></AdminRoute>} />
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+    <Route path="/admin/users" element={<AdminRoute><UserManagementPage /></AdminRoute>} />
+    <Route path="/profile/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
   </Routes>
 </BrowserRouter>
 ```

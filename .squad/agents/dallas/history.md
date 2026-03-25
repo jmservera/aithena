@@ -1,7 +1,7 @@
 # Dallas — Frontend Developer History
 
-**Last Updated:** 2026-03-20 (post-reskill consolidation)  
-**Status:** Shipped v1.4.0 → v1.7.0; v1.8.0–v1.10.0 in progress
+**Last Updated:** 2026-03-22 (reskill consolidation #2)  
+**Status:** v1.10.0+ in progress. Shipped: v1.4.0–v1.10.0. Collections API & UX (v1.11.0+) active.
 
 ---
 
@@ -9,38 +9,31 @@
 
 **Project:** Aithena — Book library search engine with semantic + keyword search  
 **Role:** Dallas, Frontend Developer (React/TypeScript specialist)  
-**Team:** Squad (Ripley, Parker, Brett, Newt, Kane + others)  
-**Releases Shipped:** v1.4.0 (Deps), v1.5.0 (Production), v1.6.0 (i18n), v1.7.0 (Quality), v1.8.0+ (UX)
+**Team:** Squad (Ripley, Parker, Brett, Newt, Kane + others)
 
-### Frontend Codebase State (current)
+### Frontend Stack (Stable)
 - **Framework:** React 19 + TypeScript strict mode
-- **Build:** Vite 8.x with TypeScript compilation
-- **Linting/Formatting:** ESLint 10 (flat config) + Prettier 3.8 + eslint-plugin-jsx-a11y
-- **Testing:** Vitest 4.1 + React Testing Library + jsdom + @vitest/coverage-v8
-- **Routing:** React Router 7.13.1 (9 pages: Search, Library, Upload, Status, Stats, Login, Admin, Profile, UserManagement, ChangePassword)
-- **Internationalization:** react-intl 10.0 with 4 locales (en, es, ca, fr), ~260 keys
-- **Icons:** Lucide React (tree-shakeable, accessible SVG icons)
-- **Styling:** Global CSS (BEM) + emerging CSS Modules (Footer, LoadingSpinner), dark theme #282c34
-- **Auth:** Cookie-based auth with AuthContext, ProtectedRoute, AdminRoute
-- **Components:** ~30 presentational components + error boundaries + skeletons
-- **Tests:** 31 UI test files + backend tests across all services
+- **Build:** Vite 8.x with TypeScript
+- **Linting:** ESLint 10 (flat config, jsx-a11y plugin)
+- **Testing:** Vitest 4.1 + React Testing Library
+- **Routing:** React Router 7.13.1 (14 pages: Search, Library, Upload, Status, Stats, Login, Admin, Profile, UserManagement, ChangePassword, Collections, CollectionDetail, BackupDashboard, StatsPage)
+- **i18n:** react-intl 10.0 (4 locales: en, es, ca, fr; ~300+ keys)
+- **Icons:** Lucide React
+- **Styling:** Global CSS (BEM) + CSS Modules (Footer, LoadingSpinner)
+- **Auth:** Cookie-based + AuthContext + ProtectedRoute/AdminRoute
+- **Components:** 40+ presentational components
 
-
-### File Organization (current)
+### File Organization
 ```
 src/aithena-ui/src/
-├── App.tsx, App.css, main.tsx, api.ts
-├── Components/     (~30: BookCard, FacetPanel, PdfViewer, ErrorBoundary, SimilarBooks,
-│                    LanguageSwitcher, FolderFacetTree, SkeletonCard, SkeletonFacetPanel,
-│                    EmptyState, ErrorState, LoadingSpinner, Footer, AdminRoute, ProtectedRoute,
-│                    FilterChip, ActiveFilters, Pagination, TabNav, CollectionStats, IndexingStatus, List)
-├── hooks/          (11: search, status, stats, library, upload, admin, users, similarBooks,
-│                    useSearchState, chat, input)
-├── pages/          (9: Search, Library, Upload, Status, Stats, Login, Admin, Profile,
-│                    UserManagement, ChangePassword)
-├── contexts/       (AuthContext, I18nContext)
-├── locales/        (en.json, es.json, ca.json, fr.json — ~260 keys each)
-└── __tests__/      (31 test files)
+├── App.tsx, api.ts, main.tsx
+├── Components/   (40+: BookCard, BookDetailView, PdfViewer, SimilarBooks, BatchEditPanel,
+│                  MetadataEditModal, CollectionModal, FolderFacetTree, AdminRoute, etc.)
+├── hooks/        (16: search, bookDetail, collections, useBatchMetadataEdit, etc.)
+├── pages/        (14: SearchPage, LibraryPage, CollectionsPage, AdminPage, etc.)
+├── contexts/     (AuthContext, I18nContext)
+├── locales/      (en.json, es.json, ca.json, fr.json)
+└── __tests__/    (600+ tests)
 ```
 
 ---
@@ -190,115 +183,174 @@ src/aithena-ui/src/
 
 ### Decouple SimilarBooks from PDF Viewer (#820 — PR #841)
 
-**State separation pattern:** Introduced `focusedBookId` state alongside `selectedBook` in SearchPage and LibraryPage. `selectedBook` controls the PDF viewer; `focusedBookId` controls the SimilarBooks panel. This allows similar books to render independently of the PDF viewer state and persist after closing the viewer.
+**State separation:** `focusedBookId` controls SimilarBooks panel. `selectedBook` controls PDF viewer. Independent rendering; panel persists after viewer closes.
 
-**BookCard onSelect prop:** Added `onSelect?: (book: BookResult) => void` to BookCard. When provided, the `<article>` element gets `role="button"`, `tabIndex={0}`, keyboard handlers (Enter/Space), and a `.book-card--selectable` CSS class with cursor/hover states. Interactive children (checkbox, menu, Open PDF button) use `stopPropagation` to prevent double-triggering.
+**BookCard onSelect prop:** Added optional `onSelect?: (book: BookResult) => void`. When provided, `<article>` gets `role="button"`, `tabIndex={0}`, keyboard handlers, `.book-card--selectable` CSS. Children use `stopPropagation`.
 
-**z-index layering:** `.similar-books-panel` gets `position: relative; z-index: 1001` to sit above the PDF viewer overlay (`z-index: 1000`). This ensures the panel is never obscured by the dark overlay when both are visible.
+**z-index layering:** `.similar-books-panel` at z-index 1001 sits above PDF overlay (z-index 1000).
 
-**a11y lint with conditional roles:** ESLint's `jsx-a11y/no-noninteractive-element-interactions` fires on `<article>` with event handlers. Since we conditionally apply `role="button"`, an inline `eslint-disable` comment is appropriate. The `stopPropagation` wrapper divs need `role="presentation"` + `onKeyDown` handler to satisfy `jsx-a11y/click-events-have-key-events` and `jsx-a11y/no-static-element-interactions`.
-
-**Testing decoupled components:** When a parent element has `role="button"` and contains child buttons, `getByRole('button', { name: ... })` may match multiple elements. Use `getByLabelText` for specific child buttons instead.
+**a11y:** eslint-disable justified for conditional role. Child stopPropagation wrappers need `role="presentation"` + `onKeyDown`.
 
 ### Chunk Text Display (#809, 2026-07-17)
 
-**Feature:** Display vector search chunk text snippets in BookCard.
+**Feature:** Display vector search chunk text snippets in BookCard with left accent border, subtle blue background.
 
-**Implementation:** Added `is_chunk`, `chunk_text`, `page_start`, `page_end` to `BookResult` type. When `is_chunk=true` and `chunk_text` is present, a visually distinct panel renders above keyword highlights with a left accent border and subtle blue background (`.book-chunk-text` CSS class). Page range shown when available (singular/plural).
+**Implementation:** Added `is_chunk`, `chunk_text`, `page_start`, `page_end` to `BookResult`. Page range shown when available (singular/plural).
 
-**Learnings:**
-- Used `book.*` i18n key prefix to stay consistent with existing BookCard keys rather than introducing a new `bookCard.*` domain prefix.
-- Chunk text is plain text (no HTML sanitization needed) — unlike keyword highlights which come with `<em>` tags from Solr.
-- Added `book.chunkPage` (singular) and `book.chunkPages` (plural) for page display — follows existing `book.foundOnPage`/`book.foundOnPages` pattern.
-- 8 tests cover all edge cases: presence/absence of chunk, single vs. multi page, empty string, missing page range, coexistence with keyword highlights.
+**Key pattern:** Used `book.*` i18n prefix for consistency. Plain text, no sanitization needed (unlike keyword highlights with `<em>` tags).
 
 ### BookCard → BookDetailView Navigation (#821 — PR #843)
 
-**Pattern:** Repurposed the existing `onSelect` prop on BookCard (from #820's SimilarBooks decoupling) to open BookDetailView instead of just setting `focusedBookId`. No changes to BookCard.tsx were needed — all click, keyboard (Enter/Space), role="button", tabIndex, and stopPropagation on Open PDF were already wired from #820.
+**Pattern:** Reused existing `onSelect` prop. No component changes needed — already wired with click, keyboard, role, and stopPropagation.
 
-**State pattern:** Two state variables — `detailBookId: string | null` and `detailInitialData: BookResult | undefined` — cleanly separate "which book to show" from "what data we already have." Passing full BookResult as `initialData` to `useBookDetail` avoids a refetch for card clicks. For similar book navigation within the detail view, `getCachedSimilarBook()` provides cached data when available.
+**State:** `detailBookId: string | null` + `detailInitialData: BookResult | undefined` cleanly separate "which book" from "what data we have." Avoids refetch for card clicks.
 
-**Learnings:**
-- When `onSelect` infrastructure already exists on a component, wiring a new feature is a page-level state change only — no component modifications needed.
-- Two-variable state (`detailBookId` + `detailInitialData`) is cleaner than a single `BookResult | null` when the hook (`useBookDetail`) needs to distinguish "has initial data, skip fetch" vs. "no initial data, fetch by ID."
-- BookDetailView embeds SimilarBooks, so the standalone SimilarBooks panel (from #820) and the detail view coexist — `focusedBookId` drives the standalone panel, `detailBookId` drives the modal.
-- Shared environment risk: another session switched branches mid-work. Always verify `git branch --show-current` after any pause.
-### Inline Metadata Editing in BookDetailView (#822 — PR #844)
-
-**Inline edit pattern:** Instead of opening a separate MetadataEditModal on top of BookDetailView, the edit form renders inline within the modal body. An `editMode` boolean state toggles between read-only metadata display and the editable form. This avoids stacking two modals and provides a smoother UX.
-
-**Hook reuse:** The `useMetadataEdit` hook (from v1.10.0) is reused directly inside `InlineEditForm` — no changes needed. Form fields (TextInput, YearInput, ComboboxField) are duplicated locally since the originals are non-exported internal components of `MetadataEditModal.tsx`. If a third usage appears, extract to shared `Components/fields/`.
-
-**useBookDetail refresh pattern:** Added `refresh()` to `useBookDetail` using a `refreshCounter` state + `isInitialMount` ref. When `refresh()` is called, the counter increments and the effect re-runs, bypassing the `initialData` early-return. This pattern avoids exposing `setBook` and keeps the hook's API clean.
-
-**ESC key layering:** When `editMode` is true, pressing ESC exits edit mode instead of closing the modal. The keydown handler checks `editMode` first. This required adding `editMode` to the effect's dependency array alongside `onClose`.
-
-**Timer cleanup in InlineEditForm:** The 600ms toast delay (`setTimeout → onSaved`) can leak between tests (or after unmount). Added `mountedRef` guard to prevent `onSaved` from firing after the component unmounts.
-
-**Learnings:**
-- Reusing `meta-edit-*` CSS classes from `MetadataEditModal.css` inside BookDetailView works because the CSS is globally scoped. No duplicate import needed.
-- The `as keyof MetadataFormValues` cast on `setField` calls is needed because the `onChange` callback type is `(value: string) => void` but `setField` expects the field name as a typed key.
-- When BookDetailView's parent branch (squad/819) is already merged to dev, branch from dev directly — don't branch from the feature branch.
-- 12 new tests cover: edit mode entry, field population, Save/Cancel toggle, ESC layering, Save disabled state, API error display, auth gating, and action button persistence in edit mode.
+**Hook pattern:** `useBookDetail` with `initialData` prop — skips API fetch if already provided.
 
 ### BookDetailView Modal (#819, PR #842)
 
-**Feature:** Modal overlay component showing full book metadata, similar books, and action buttons.
+**Architecture:** Follows PdfViewer pattern (focus trap, ESC dismiss, body scroll lock, `aria-modal`). Adapted for centered overlay instead of side panel.
 
-**Architecture:** Followed the established PdfViewer modal pattern — focus trap, ESC dismiss, body scroll lock, `aria-modal` — but adapted for a centered overlay (vs PdfViewer's side panel). Created `useBookDetail` hook with `initialData` prop pattern: when the caller already has `BookResult` from search results, it skips the API fetch entirely, avoiding a redundant `GET /v1/books/{book_id}` call.
+**initialData pattern:** When caller already has `BookResult` from search, skips `/v1/books/{id}` fetch entirely.
 
-**Content sections:** Header (title/author/year), metadata grid (category, language, series, page count, file size, folder path), chunk text preview (reuses existing `book.matchingText`/`book.chunkPage`/`book.chunkPages` i18n keys), action buttons (Open PDF, Open external, Edit metadata for admins), and SimilarBooks component integration.
+**Content:** Header (title/author/year), metadata grid, chunk text preview, action buttons, SimilarBooks integration.
 
-**Learnings:**
-- Used `bookDetail.*` i18n key prefix for modal-specific labels (close, loading, error, fileSize, folderPath, openExternal, untitled) — keeps them distinct from `book.*` keys used by BookCard.
-- Added `file_size`, `folder_path`, `score` to `BookResult` interface — these fields exist in the backend `normalize_book()` response but were missing from the frontend type.
-- Admin gating uses `useAuth().user?.role === 'admin'` — straightforward role check via AuthContext.
-- Title appears in both toolbar and body header — test queries must use `getAllByText` or role-based selectors to avoid ambiguity.
-- `SimilarBooks` heading text ("Similar Books") overlaps with loading text ("Loading similar books…") for `/similar books/i` regex — use `getByRole('region', { name: /similar books/i })` for the section.
-- Backdrop click handler on `role="dialog"` triggers `jsx-a11y/click-events-have-key-events` — suppressed with eslint-disable since ESC is the keyboard equivalent.
-- CSS: centered modal with `max-width: 800px`, responsive at 600px breakpoint (full-width, stacked layout). BEM naming `.book-detail-*`.
+**i18n:** Used `bookDetail.*` prefix for modal-specific labels (distinct from `book.*`).
 
+**Type additions:** Added `file_size`, `folder_path`, `score` to `BookResult` interface.
+
+### Inline Metadata Editing in BookDetailView (#822 — PR #844)
+
+**Pattern:** Edit form renders inline within modal, toggled by `editMode` boolean. Avoids stacking two modals.
+
+**Hook reuse:** `useMetadataEdit` reused directly inside `InlineEditForm`. Form fields duplicated locally since originals non-exported.
+
+**useBookDetail refresh:** Added `refresh()` via `refreshCounter` state + `isInitialMount` ref. Increments counter to bypass `initialData` early-return and re-fetch.
+
+**ESC key layering:** When `editMode` true, ESC exits edit mode (not closes modal). Added `editMode` to effect deps.
 
 ### BookCard Thumbnails (#827, PR #849)
 
-**Feature:** Thumbnail image display in BookCard and BookDetailView with lazy loading and graceful fallback.
+**Feature:** Thumbnail image display with lazy loading and graceful fallback to FileText icon.
 
-**Architecture:** Added `thumbnail_url?: string | null` to `BookResult` type. Created small `BookThumbnail` and `DetailThumbnail` components that manage image error state internally — on load error they swap to a FileText placeholder icon. Used `loading="lazy"` on `<img>` tags for performance.
+**Architecture:** Added `thumbnail_url?: string | null` to `BookResult`. BookThumbnail/DetailThumbnail components manage image error state internally.
 
-**Layout:** BookCard body is now a flex row: thumbnail (80×112px) on the left, content on the right. Wrapped existing card content in `book-card-body > book-card-thumbnail + book-card-content` divs. BookDetailView header similarly shows a larger thumbnail (200×280px) beside the title/author info.
+**Layout:** BookCard flex row: thumbnail (80×112px) on left, content on right. BookDetailView shows larger thumbnail (200×280px).
 
-**Learnings:**
-- When wrapping existing JSX in new container divs, carefully count opening/closing tags — prettier will catch syntax errors but the nesting must be correct.
-- Placeholder thumbnails use `aria-hidden="true"` since they're decorative; actual images use book title as alt text.
-- The `onError` handler on `<img>` is the cleanest way to handle broken image URLs — simpler than intersection observer approaches.
-- BEM naming: `book-card-body`, `book-card-thumbnail`, `book-card-thumbnail--placeholder`, `book-card-content`, `book-detail-header__thumbnail`, `book-detail-header__thumbnail--placeholder`, `book-detail-header__info`.
-- `fireEvent.error(img)` in tests simulates image load failure for fallback testing.
-- 7 new tests added; all 581 tests pass.
+**Lazy loading:** Used `loading="lazy"` on `<img>` tags. Simpler than intersection observer.
 
-## Session 2026-03-22T14:41Z — Completed Spawn Work Summary
+---
 
-### Issues Closed This Batch
+## Recent Shipments (Session 2026-03-22T14:41Z)
 
-1. **#897 — Collections API enablement** (PR #922)
-   - Removed 242 lines of hardcoded mock collection data from collectionsApi.ts
-   - Real API calls now default for all collection list operations
-   - Frontend now pulls live collections from backend
+### Collections API Enablement (#897, PR #922)
+- Removed 242 lines of hardcoded mock data
+- Real API calls now default for all collection operations
+- Frontend pulls live collections from backend
 
-2. **#898 — Remember-me checkbox** (PR #923)
-   - Added checkbox UI to LoginPage
-   - Updated AuthContext with rememberMe parameter
-   - Implemented sessionStorage/localStorage toggle
-   - Added i18n labels for English, Spanish, French, and German
-   - All 600 tests pass
+### Remember-me Checkbox (#898, PR #923)
+- Added checkbox UI to LoginPage
+- Updated AuthContext with `rememberMe` parameter
+- Implemented sessionStorage/localStorage toggle
+- i18n labels: English, Spanish, French, German
+- All 600 tests pass
 
-3. **#896 — Text preview truncation** (PR #924)
-   - Created truncateChunkText utility with smart truncation logic
-   - Keeps matched keywords centered and visible in truncated text
-   - Proper em-tag handling for highlighting
-   - 13 new tests added and passing
+### Text Preview Truncation (#896, PR #924)
+- Created `truncateChunkText` utility with smart truncation
+- Keeps matched keywords centered and visible
+- Proper em-tag handling for highlighting
+- 13 new tests added and passing
 
-### Orchestration Logs Created
+---
 
-- 2026-03-22T14:41:02Z-dallas-collections-api.md (#897, PR #922)
-- 2026-03-22T14:41:02Z-dallas-remember-me.md (#898, PR #923)
-- 2026-03-22T14:41:02Z-dallas-text-preview.md (#896, PR #924)
+## Skills Status
+
+### Reviewed & Validated
+
+1. **react-frontend-patterns** (SKILL.md)
+   - ✅ Comprehensive. Component/hook patterns correct. Covers CSS, routing, API integration, TypeScript patterns.
+   - Updated stats: 40+ components, 16 hooks, 14 pages (was 30, 11, 9).
+   - Added: CSS Modules emerging, BatchEditPanel, BookDetailView, thumbnail patterns.
+   - Added: `initialData` pattern for zero-refetch modal initialization.
+
+2. **vitest-testing-patterns** (SKILL.md)
+   - ✅ Comprehensive. IntlWrapper, component/hook testing, mocking patterns, i18n testing.
+   - Added: File upload via dispatchEvent (needed for accept attribute testing).
+   - Added: Error boundary + MemoryRouter for route-change testing.
+   - Verified: All 31 test files follow patterns; 600+ tests passing.
+
+3. **accessibility-wcag-react** (SKILL.md)
+   - ✅ Comprehensive. Skip link, focus management, color contrast, media queries, ARIA, static linting.
+   - Verified: eslint-plugin-jsx-a11y integrated and catching ~70% of issues.
+   - Note: Remaining 30% requires browser audit (color contrast, focus visible, keyboard nav flow, screen reader announcements).
+   - Patterns used: BookDetailView modal, PDF viewer toolbar, BookCard roles, SimilarBooks z-index layering.
+
+4. **nginx-reverse-proxy** (SKILL.md)
+   - ⚠️ Infrastructure, not frontend-specific. Reviewed for context.
+   - Single port publisher pattern, health endpoint, upstream routing map, startup ordering.
+   - Relevant to frontend: `/` routes to `aithena-ui:5173` (Vite), `/v1` routes to `solr-search:8080` (backend API).
+
+### Created or Updated
+
+**None new created this session.** All core frontend skills (react-frontend-patterns, vitest-testing-patterns, accessibility-wcag-react) were already in place and validated during reskill consolidation.
+
+---
+
+## Knowledge Gaps & Future Work
+
+### Collections UI (v1.11.0+)
+- **Status:** Backend 9 CRUD endpoints ready. Frontend API integration exists (collectionsApi.ts), real API calls enabled (#897). UI components partially in place (CollectionModal, CollectionPicker, CollectionsGrid, CollectionDetailView, CollectionDetailPage).
+- **Gaps:** Comprehensive workflow documentation for collections CRUD (create, read, update, delete, add-to-collection, remove-from-collection). Test coverage gaps for collections UI.
+- **Action:** Create `collections-ui-patterns` skill once full workflow is tested and stabilized.
+
+### Folder Facet Tree & Query-Based Batch Editing
+- **Status:** FolderFacetTree component implemented. Batch editing with query context (via `BatchQueryContext`) wired into `useBatchMetadataEdit` and batch panel.
+- **Gaps:** Advanced filtering patterns (nested folder filtering, multi-select folder trees, dynamic folder expansion on API result).
+- **Action:** Document advanced facet patterns once folder-based filtering is expanded.
+
+### Dark/Light Theme Toggle
+- **Status:** Currently dark theme only (`#282c34` bg, `#7ec8e3` accent). Design tokens exist in `design-tokens.css`.
+- **Gaps:** No light theme implementation. No theme toggle UI. No localStorage persistence for theme preference.
+- **Action:** Create `theming-react-patterns` skill with light theme color palette and toggle implementation once launched.
+
+### CSS Modules Migration
+- **Status:** Only 2 files use CSS Modules (Footer.module.css, LoadingSpinner.module.css). Global CSS still predominant.
+- **Gaps:** Best practices for CSS Modules in large codebases. Handling of shared variables/utilities. Migration strategy from global CSS.
+- **Action:** Document CSS Modules migration approach once rollout is planned.
+
+### Advanced Playwright E2E Patterns
+- **Status:** Basic E2E tests exist (e2e/ directory). Learnings from emoji, checkbox, file upload testing documented in vitest-testing-patterns.
+- **Gaps:** Advanced patterns (visual regression, performance testing, accessibility testing in headless browsers, multi-tab workflows).
+- **Action:** Create `playwright-advanced-patterns` skill once e2e suite is expanded significantly.
+
+### v2.0 React Migration Readiness
+- **Status:** Frontend already React 19. Streamlit admin dashboard still exists (separate service, not replaced by React frontend).
+- **Gaps:** No consolidation of admin UI from Streamlit into React frontend. Unclear scope/timeline for v2.0.
+- **Action:** Track v2.0 plan in squad decisions. Update history when consolidation begins.
+
+---
+
+## Self-Assessment Summary
+
+### Strengths (Demonstrated)
+- **i18n mastery:** 300+ keys across 4 locales. ICU MessageFormat patterns. localStorage migration.
+- **Hook architecture:** Data-fetching patterns with cancellation, polling, state management, search state reset.
+- **Component design:** Presentational components, prop interfaces, CSS class patterns, keyboard accessibility.
+- **Test coverage:** 600+ tests. IntlWrapper, mocking, hook testing, i18n verification.
+- **Modal/overlay patterns:** PDF viewer, BookDetailView, Collections modals. Focus management, ESC key, z-index layering.
+- **API integration:** Zero-refetch `initialData` patterns, query-based batch editing, error handling.
+
+### Growing Areas
+- **Advanced CSS Modules:** Only 2 files use them. Need experience with larger-scale scoped CSS.
+- **Theme switching:** Currently dark-only. Ready to learn light theme + toggle implementation.
+- **E2E testing:** Basic patterns known. Advanced visual/perf/a11y E2E patterns need development.
+- **Collections UI at scale:** API ready, basic UI in place. Full workflow documentation and test coverage expansion needed.
+
+### Confidence Level
+- **High:** React/TypeScript patterns, i18n, hook design, component architecture, accessibility, testing, API integration.
+- **Medium:** CSS Modules scaling, advanced E2E, collections feature complete workflow.
+- **Learning:** Theme implementation, advanced responsive patterns, performance optimization at scale.
+
+---
+
+## End of History — Dallas Frontend Developer (Reskill #2, 2026-03-22)
