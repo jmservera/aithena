@@ -117,6 +117,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | 2026-07-25 | — | setupdev.sh expansion (all dev tools) |
 | 2026-03-16 | — | Cleaned 44 stale branches; enabled auto-delete |
 | 2026-03-22 | #826/PR#847 | nginx static thumbnail serving (volume mount + /thumbnails/ location) |
+| — | #1120 | Extract reusable container build workflow (build-containers.yml) |
 
 ---
 
