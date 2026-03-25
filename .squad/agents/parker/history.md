@@ -97,6 +97,16 @@
 
 <!-- Append learnings below this line -->
 
+### Thumbnail Serving Bug (#1137, 2026-03-25)
+
+**Root cause (triple):** nginx alias pointed to `/data/documents/` instead of `/data/thumbnails/`, nginx container was missing the `thumbnail-data` volume mount, and the search API returned bare relative paths without the `/thumbnails/` prefix — causing the browser to hit the SPA catch-all.
+
+**Fix:** Corrected alias in all three nginx configs (default.conf, default.conf.template, ssl.conf.template). Added `thumbnail-data:/data/thumbnails:ro` to nginx in docker-compose.yml and docker-compose.prod.yml. Added `_thumbnail_url()` helper in search_service.py to prefix relative Solr paths with `/thumbnails/`.
+
+**Key lesson:** When adding a new nginx static-file location block, verify three things: (1) the alias points to the correct filesystem path, (2) the container mounts the corresponding volume, and (3) the URL returned by the API matches the nginx location pattern. All three must align or the SPA catch-all swallows the request.
+
+**Recurring pattern update:** Added to watch-for list: volume/alias/URL triple misalignment for nginx static file serving. When a new file type is served statically, audit all three compose files (base, prod, SSL) and all nginx configs.
+
 ### Admin Login Loop (#887, v1.12.0)
 
 **Root cause (dual):** `require_admin_auth` only accepted X-API-Key, blocking browser JWT sessions. Nginx `location = /admin/` served a static HTML page, intercepting React SPA routes on page refresh.
