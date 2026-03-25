@@ -192,8 +192,8 @@ jobs:
           - image: admin
             type: http
             port: "8501"
-            health_endpoint: /_stcore/health
-            startup_timeout: 30
+            health_endpoint: /admin/streamlit/_stcore/health
+            startup_timeout: 60
           - image: aithena-ui
             type: http
             port: "8080"
