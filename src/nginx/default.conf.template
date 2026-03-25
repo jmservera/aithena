@@ -180,8 +180,8 @@ server {
     }
 
     # Serve thumbnail images directly from the thumbnails volume.
-    # Only .thumb.jpg files are matched; all other paths return 404.
-    location ~ ^/thumbnails/(.+\.thumb\.jpg)$ {
+    # Only .thumb.jpg files are matched; path traversal (..) is rejected.
+    location ~ ^/thumbnails/((?:(?!\.\.).)+\.thumb\.jpg)$ {
         auth_request /_auth;
         error_page 401 = @auth_error;
 
