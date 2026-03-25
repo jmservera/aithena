@@ -369,6 +369,14 @@ jobs:
       - build-and-push
       - package-release
       - smoke-test
+    # Smoke tests are advisory — a failure warns but does not block the release.
+    # Images are already pushed by build-and-push; the release should proceed as
+    # long as validation, build, and packaging all succeeded.
+    if: >-
+      always()
+      && needs.validate-tag.result == 'success'
+      && needs.build-and-push.result == 'success'
+      && needs.package-release.result == 'success'
     permissions:
       contents: write
     steps:
@@ -402,17 +410,37 @@ jobs:
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Add smoke test warning if tests did not all pass
+        if: needs.smoke-test.result != 'success'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SMOKE_RESULT: ${{ needs.smoke-test.result }}
+          NOTES_FOUND: ${{ steps.release_notes.outputs.found }}
+        shell: bash
+        run: |
+          warning="⚠️ **Smoke tests did not pass (${SMOKE_RESULT}).** Container images were published successfully but post-push health checks did not all pass. Review the [workflow run](${RUN_URL}) for details before deploying to production."
+
+          if [[ "$NOTES_FOUND" == "true" ]]; then
+            printf '%s\n\n---\n\n' "$warning" | cat - "$RUNNER_TEMP/release-notes.md" > "$RUNNER_TEMP/release-notes-final.md"
+            mv "$RUNNER_TEMP/release-notes-final.md" "$RUNNER_TEMP/release-notes.md"
+          else
+            echo "$warning" > "$RUNNER_TEMP/smoke-warning.md"
+          fi
+
       - name: Create GitHub release with artifacts
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
           VERSION: ${{ needs.validate-tag.outputs.version }}
           NOTES_FOUND: ${{ steps.release_notes.outputs.found }}
+          SMOKE_PASSED: ${{ needs.smoke-test.result == 'success' }}
         run: |
           release_args=("$TAG_NAME" --verify-tag)
 
           if [[ "$NOTES_FOUND" == "true" ]]; then
             release_args+=(--notes-file "$RUNNER_TEMP/release-notes.md")
+          elif [[ "$SMOKE_PASSED" != "true" && -f "$RUNNER_TEMP/smoke-warning.md" ]]; then
+            release_args+=(--notes-file "$RUNNER_TEMP/smoke-warning.md")
           else
             release_args+=(--generate-notes)
           fi
