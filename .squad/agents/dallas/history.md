@@ -1,7 +1,18 @@
 # Dallas — Frontend Developer History
 
-**Last Updated:** 2026-03-22 (reskill consolidation #2)  
+**Last Updated:** 2026-03-25 (issue #1138)  
 **Status:** v1.10.0+ in progress. Shipped: v1.4.0–v1.10.0. Collections API & UX (v1.11.0+) active.
+
+---
+
+## Recent
+
+### #1138 — Admin dashboard pagination (v1.16.0)
+- Added client-side pagination (page size 25) to all three admin tabs (queued/processed/failed)
+- React: reused existing `Pagination` component, added per-tab page state to `AdminPage`
+- Streamlit: added `paginate()` helper with `st.number_input` page controls
+- No backend API changes needed — client-side slicing is sufficient for current scale
+- Streamlit admin is deprecated in v2.0; kept fix minimal
 
 ---
 
