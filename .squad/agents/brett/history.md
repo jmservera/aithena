@@ -162,3 +162,27 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Offline installer architecture (3-stage)
 - A/B testing human evaluation UI (SQLite storage, nDCG@10+MRR metrics)
 - ZooKeeper AdminServer hardening
+
+---
+
+## v1.17.0 GPU Acceleration: Admin Manual Documentation (WI-11, 2026-03-25)
+
+### Work Item WI-11: Admin Manual GPU Documentation
+
+**PR #1216 opened (squad/1158-admin-manual-gpu).** Operator documentation for GPU deployment and troubleshooting.
+
+**Content added to admin-manual.md (137 lines):**
+- Architecture section: `DEVICE` and `BACKEND` environment variable reference table
+- NVIDIA GPU prerequisites, Container Toolkit installation (Ubuntu/Debian), host + Docker verification
+- Intel GPU prerequisites, compute-runtime installation, device verification
+- WSL2 GPU passthrough patterns for both vendors (Windows driver requirement emphasized)
+- Docker Compose override file usage pattern (`-f docker-compose.nvidia.override.yml`)
+- Embeddings-server health endpoint verification with expected GPU output
+- Troubleshooting table: 5 symptoms with diagnosis and resolution
+
+**Key learning for ops:** WSL2 GPU passthrough differs significantly by vendor:
+- **NVIDIA:** `/dev/dxg` exposed by WSL2 automatically; install drivers on Windows host; install Container Toolkit inside WSL
+- **Intel:** `/dev/dri/renderD128` exposed by WSL2; install drivers on Windows host; container override maps `/dev/dri` into container
+- **Critical:** Both vendors require GPU drivers installed on the Windows host, not inside WSL. This is the #1 failure point.
+
+**Placement:** Section added after "Deployment with Docker Compose" section (logical flow for first-time operators). Appears before "Backup dashboard and restore workflow" section.
