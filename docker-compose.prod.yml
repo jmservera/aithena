@@ -375,6 +375,7 @@ services:
       - ./src/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./src/nginx/html:/usr/share/nginx/html:ro
       - document-data:/data/documents:ro
+      - thumbnail-data:/data/thumbnails:ro
   zoo1:
     image: zookeeper:3.9
     command: ["zkServer.sh", "start-foreground"]

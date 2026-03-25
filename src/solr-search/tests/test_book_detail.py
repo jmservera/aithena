@@ -392,7 +392,7 @@ def test_book_detail_includes_thumbnail_url_when_present(mock_post: MagicMock) -
     client = get_client()
     data = client.get(f"/v1/books/{VALID_SHA256}").json()
 
-    assert data["thumbnail_url"] == "library/test-book.pdf.thumb.jpg"
+    assert data["thumbnail_url"] == "/thumbnails/library/test-book.pdf.thumb.jpg"
 
 
 @patch("main.requests.post")
