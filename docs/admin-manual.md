@@ -491,6 +491,10 @@ v0.7.0 includes a CI/CD workflow (`.github/workflows/release.yml`) that automate
 - `v0.7.0-beta` (beta)
 - `v0.7.0-alpha` (alpha)
 
+**Pre-release (RC) testing:**
+
+Before creating a final release, you can build and test release candidate images using the pre-release workflow. This lets you validate RC images locally with `docker-compose.prod.yml` before merging to `main`. See the [Pre-Release Testing](pre-release-testing.md) guide for the full workflow, including how to trigger RC builds, pull images, and run the validation checklist.
+
 **To test locally:**
 
 ```bash
