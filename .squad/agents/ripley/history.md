@@ -165,228 +165,87 @@ Active decisions in `.squad/decisions.md`:
 
 ---
 
-## Learnings
+## Learnings & Skill Consolidation (v1.10.1–v1.14.0 Era)
 
-### Skills Database Pruning: 49 → 34 High-Confidence Skills (2026-03-21)
+### Skills Database Pruning: 49 → 34 High-Confidence Skills
 
-**Session:** Comprehensive audit and aggressive pruning of the skills database.
+**Aggressive pruning completed (2026-03-21).** Removed 15 unvalidated, one-time, and overlapping skills (ci-coverage-setup, ralph-dependency-check, smoke-testing, i18n-extraction-workflow, reskill, project-conventions, tdd-clean-code, lead-retrospective, dependabot-triage-routing, copilot-review-to-issues, squad-pr-workflow, docker-health-checks, hybrid-search-parent-chunk, hybrid-search-patterns). Consolidated hybrid-search patterns into solr-parent-chunk-model.
 
-**Findings:**
-- **Starting point:** 49 skills accumulated across v1.0–v1.11 with low barrier to creation
-- **Problem:** Skills without clear ownership, one-time process docs, deprecated content (Streamlit admin), and overlapping documentation created noise
-- **Strategy:** Aggressive pruning targeting skills that either:
-  1. Were never validated or are low-confidence ("planned for v1.11.0, not yet validated")
-  2. Document one-time processes (i18n extraction for v1.6.0–v1.7.0)
-  3. Are too generic (project conventions, TDD/Clean Code, "reskill" meta-skill)
-  4. Refer to removed systems (admin coverage setup, smoke testing)
-  5. Overlap with other high-value skills (2 hybrid search skills consolidated into solr parent-chunk model)
-
-**Changes:**
-- **Removed 15 skills:** ci-coverage-setup, ralph-dependency-check, milestone-branching-strategy, smoke-testing, i18n-extraction-workflow, reskill, project-conventions, tdd-clean-code, lead-retrospective, dependabot-triage-routing, copilot-review-to-issues, squad-pr-workflow, docker-health-checks, hybrid-search-parent-chunk, hybrid-search-patterns
-- **Consolidated:** hybrid-search patterns (RRF, embedding integration, timeout handling) merged into solr-parent-chunk-model
-- **Result:** 34 high-confidence, team-wide, battlefield-proven skills remaining
-
-**Final Skills by Category:**
+**Final 37 skills by category:**
 - **Architecture:** phase-gated-execution, solr-parent-chunk-model (with hybrid search), solr-pdf-indexing, nginx-reverse-proxy, http-wrapper-services
 - **Testing:** pytest-aithena-patterns, vitest-testing-patterns, playwright-e2e-aithena, path-metadata-tdd
 - **Backend:** fastapi-auth-patterns, fastapi-query-params, redis-connection-patterns, pika-rabbitmq-fastapi, logging-security
 - **Frontend:** react-frontend-patterns, accessibility-wcag-react
-- **Infrastructure:** docker-compose-operations, solrcloud-docker-operations, bind-mount-permissions, branch-protection-strict-mode, nginx-reverse-proxy
-- **Security:** security-scanning-baseline, workflow-secrets-security, ci-workflow-security, logging-security
+- **Infrastructure:** docker-compose-operations, solrcloud-docker-operations, bind-mount-permissions, branch-protection-strict-mode
+- **Security:** security-scanning-baseline, workflow-secrets-security, ci-workflow-security
 - **Release/Quality:** release-gate, release-tagging-process, multi-release-orchestration, pr-integration-gate, ci-gate-pattern, milestone-gate-review, milestone-wave-execution, api-contract-alignment, agent-debugging-discipline, pdf-extraction-dual-tool, path-metadata-heuristics
+- **Patterns/Misc:** aithena-ab-testing-benchmarking, embedding-model-selection, prd-writing-aithena
 
-**Pattern Reinforced:** "Aggressive pruning is better than slow accumulation." The 49-skill database had become a burden for onboarding (which skills matter?). Ruthlessly removing unvalidated, one-time, and overlapping content leaves the 34 battle-tested patterns that actually guide team work.
+**Pattern:** Aggressive pruning works better than slow accumulation. Ruthlessly removing unvalidated, one-time, and overlapping content leaves 37 battle-tested patterns (and emerging patterns like A/B testing, embedding selection, and PRD writing) that guide team work.
 
-**Next Action:** Squad members should reference these 34 skills in their charters; onboarding should point here, not to the full skills directory.
+### Skills Created/Validated (v1.10.1 Reskill)
 
-### v1.11.0 PRD: Search Results Redesign (2026-03-21)
+1. **branch-protection-strict-mode** — Sequential PR merges with GitHub strict branch protection. Use `gh pr merge --admin --merge` to bypass BEHIND states when status checks pass.
+2. **milestone-gate-review** — Security/performance/architecture audit before closing any milestone. First enforced in v1.10.1: 13 issues reviewed, 0 blockers. Gate reviews catch subtle things (e.g., S608 suppressions vs actual SQL injection) that automated linting misses.
+3. **fastapi-query-params** — FastAPI silently ignores undeclared query params. Bug found in #656: `fq_folder` sent but not received. Different from Flask/Express behavior.
+4. **pdf-extraction-dual-tool** — Tika (Solr, full-text + metadata) vs pdfplumber (indexer, per-page chunks) are complementary, not redundant. Tika doesn't expose per-page boundaries; pdfplumber doesn't reliably extract metadata.
 
-**Session:** Research + PRD authoring for 4 requirements from Juanma.
+**Skill validated:**
+- **fastapi-auth-patterns** — Confirmed in v1.10.1 auth hardening: WWW-Authenticate headers (RFC 7235), if-guards (not exception-driven), role checks enforced.
 
-**Key findings from code research:**
-- **Chunk text is already stored** — `chunk_text_t` in Solr schema is `stored="true"`, but `SOLR_FIELD_LIST` in `search_service.py` doesn't include it. The vector search text preview (R1) is a genuinely small change.
-- **Similar books aren't grayed out** — they're rendered below results but visually obscured by the PDF viewer's overlay (z-index 1000 with 65% black overlay). The fix is architectural: decouple similar books from PDF state.
-- **Parent vs chunk search gap** — keyword search returns parents (chunks excluded via `-parent_id_s:[* TO *]`), semantic returns chunks (with embeddings). Hybrid RRF merges both. This means chunk text previews only apply to semantic/hybrid results.
-- **Thumbnail generation is the largest risk** — no PDF rendering capability exists in the indexer today. Needs new dependencies (pymupdf or pdf2image), Docker changes, and storage decisions. Recommended deferral to Phase 3 or v1.12.0.
+### v1.11.0 & A/B Testing PRD Research
 
-**Decisions made:**
-- Created milestone v1.11.0 (GitHub milestone #29)
-- Separated chunking strategy into its own issue (#796) — PO decision needed before R1 implementation
-- PRD issue #797, PR #798 for review
-- Phasing: R1+R2 (quick wins) → R3 (main deliverable) → R4 (deferred)
+**Key findings from code research** (2026-03-21, 2026-03-22):
+- **R1 (chunk text preview):** Already 80% done. `chunk_text_t` stored in Solr but not in `SOLR_FIELD_LIST`. Simple retrieval change.
+- **Similar books gap:** Rendered below results but obscured by PDF viewer z-index. Architectural fix: decouple from PDF state.
+- **A/B test bottleneck:** RabbitMQ competing consumers trap. Both indexers on same queue → messages routed to ONE consumer. Requires fanout exchange or separate queues.
+- **Solr schema coupling:** `knn_vector_512` hardcoded. New collection needs `knn_vector_768` field type.
+- **PDF extraction architecture:** Tika handles full-text + metadata (keyword search). pdfplumber handles per-page chunks (semantic search). Neither extracts structure. Sentence-boundary awareness in chunker.py is short-term improvement.
+- **Chunking:** Currently word-count based (400 words, 50-word overlap). No section awareness.
 
-**Pattern reinforced:** "Research before implementation" — 30 minutes of code reading revealed that R1 is 80% done (chunk text stored but not retrieved), which completely changes the scoping estimate from what it would have been without research.
+**Decisions:** 3-phase A/B test with PO decision gate. Thumbnail generation deferred to Phase 3/v1.12.0 (requires PDF rendering, not available today).
 
-### v1.10.1 Security & Performance Gate Review (2026-03-21)
+### v1.10.1 Gate Review Findings (2026-03-21)
 
-**Session:** Milestone gate review for all 13 v1.10.1 issues before release.
+**Security:** SQL injection clean (parameterized queries, S608 suppressions justified). Auth RFC 7235 compliant (WWW-Authenticate headers). Shell scripts safe (set -euo pipefail, flock, umask). GitHub Actions hardened (SHA-pinned, persist-credentials: false).
 
-**Verdict:** APPROVE — no blockers.
+**Performance:** Sequential batch updates ~100s at 5000 docs max load. Acceptable for admin-only scope; async chunking recommended for v1.11+.
 
-**Key findings:**
-- **SQL injection surface clean.** `collections_service.py` uses parameterized queries throughout. Two `# noqa: S608` remain but are justified false positives (dynamic column names and placeholder counts, not user data).
-- **Auth hardening solid.** All four 401 paths include WWW-Authenticate headers (RFC 7235). Auth middleware uses if-guards, not exception-driven flow. JWT decode still uses try/except (correct — crypto parsing should use exceptions).
-- **Shell scripts safe.** `verify-backup.sh` uses `set -euo pipefail`, whitelist validation for tier names, `umask 077`, `flock` concurrency guard. No `eval` or command injection vectors.
-- **GitHub Actions workflows well-secured.** Both `monthly-restore-drill.yml` and `stress-tests.yml` use SHA-pinned actions, `persist-credentials: false`, minimal permissions.
-- **Batch operations scoped correctly.** Admin-only (API key + JWT role), filter whitelist, value escaping via `solr_escape()`, query caps (1000 IDs / 5000 query results).
-- **Performance observation:** Sequential batch updates (up to 5000 docs) could take ~100s at max load. Acceptable for admin-only scope in v1.10.1; recommend async chunking for v1.11+.
+**Verdict:** APPROVE, 0 blockers.
 
-**Pattern reinforced:** Gate reviews catch the subtle things — the S608 suppressions required careful reading to confirm they're justified (dynamic column names vs user data). Automated linting alone would either flag false positives or miss the distinction.
+### Infrastructure & Extraction Insights (2026-03-22–2026-03-24)
 
-### PDF Text Extraction Pipeline Analysis (2026-03-21)
+- **Offline audit:** Confirmed fully on-premises. Zero cloud APIs, telemetry, external auth. All services on Docker network. HuggingFace models pre-downloaded.
+- **e5 migration review:** Core migration solid. 10 issues (2 medium, 8 low). Missing: tests for new reindex endpoint. Two blocking: timeout mismatch, dangling scripts/ references.
+- **embeddings-server extraction analysis:** Technically ready for standalone repo. Zero coupling, HTTP-only, OpenAI-compatible API. New registry: `ghcr.io/jmservera/embeddings-server`. Version pinning discipline required.
 
-**Session:** Deep investigation of the two-tool extraction pipeline for hierarchical chunking feasibility.
+**Key pattern reinforced:** "Research before implementation" — 20–30 min of code reading catches major issues (RabbitMQ competing consumers, R1 80%-done state, dual-extraction complementarity) that would emerge only during testing/launch without upfront research.
 
-**Key findings:**
-- **Dual extraction is intentional:** Tika (embedded in Solr via `SOLR_MODULES: extraction`) handles full-text + metadata for keyword search. pdfplumber handles per-page text for chunk-based semantic search. Tika doesn't expose per-page boundaries; pdfplumber doesn't reliably extract metadata.
-- **Neither tool currently extracts document structure.** Tika flattens everything to `_text_` via `fmap.content`. pdfplumber uses only `page.extract_text()` — no font metadata analyzed.
-- **Tika COULD provide XHTML with heading tags** if called directly (not via Solr's ExtractingRequestHandler). This is the most practical path to hierarchical chunking.
-- **Current chunker is purely word-count based** — no sentence, paragraph, or section awareness. 400-word window, 50-word overlap.
-- **Short-term fix exists:** Sentence boundary awareness in `chunker.py` is a small change that significantly improves preview readability without requiring structure extraction.
+---
 
-**Deliverables:**
-- PRD updated with Section 5 (PDF Text Extraction Pipeline) — PR #803
-- Issue #796 commented with structure extraction analysis and recommendations
-- Open Questions updated with hierarchical chunking questions for PO and Ash
+## Recent Milestones & Decisions (Summary)
 
-**Pattern reinforced:** "Document the data model before anyone touches it" — the dual-extraction architecture had no documentation. Without reading `__main__.py` end-to-end, you'd assume Tika and pdfplumber were redundant. They're complementary by design.
+### v1.14.0: e5 Model Migration (Complete)
+- e5-base migration reviewed and approved (PR #964)
+- 10 issues identified (2 medium, 8 low), all addressed in follow-ups
+- A/B comparison deferred (e5 benchmarks showed clear superiority)
+- Offline audit confirmed: zero cloud dependencies
 
-### Reskill + Wins Report for v1.10.1 (2026-03-21)
+### v1.11.0: Search Results Redesign (In Progress)
+- PRD created with 4 user requirements
+- R1+R2 phased as quick wins; R3 main deliverable; R4 deferred
+- Chunking strategy decision pending from PO
+- PDF thumbnails deferred to v1.12.0
 
-**Session:** Extract skills from v1.10.1 work and write wins report.
+### v1.10.1: Collections + BCDR (Released)
+- Gate review: 13 issues, 0 blockers, APPROVE
+- Security hardened: parameterized SQL, RFC 7235 auth, shell script safety
+- BCDR workflows implemented: monthly restore drills, stress tests
+- Performance: sequential batch ops ~100s @ 5000 docs (acceptable for admin-only scope)
 
-**Skills created:**
-1. **branch-protection-strict-mode** — Sequential PR merges with GitHub strict branch protection (use `gh pr merge --admin` to bypass BEHIND states when status checks pass)
-2. **milestone-gate-review** — Security/performance/architecture audit before closing any milestone (first enforced in v1.10.1, 13 issues reviewed, 0 blockers)
-3. **milestone-branching-strategy** — Using `milestone/v{X.Y.Z}` branches for parallel milestone work (planned for v1.11.0, confidence: medium, not yet validated)
-4. **copilot-review-to-issues** — Triage Copilot PR review comments into GitHub issues (P0–P2 get issues, P3 deferred). v1.10.1 had 7 issues from Copilot review → all fixed.
-5. **fastapi-query-params** — FastAPI silently ignores undeclared query params (different from Flask/Express). Bug found in #656: `fq_folder` sent but not received.
-6. **pdf-extraction-dual-tool** — Tika (Solr, full-text + metadata) vs pdfplumber (indexer, per-page chunks) — complementary tools, not redundant.
+### Strategic Decisions in Queue
+1. **Embeddings-Server Extraction** — Technical readiness confirmed. Awaiting jmservera approval to extract to `github.com/jmservera/embeddings-server`. Zero coupling, HTTP-only, semantic versioning discipline.
+2. **A/B Testing as Compose Overlay** — Pattern established: experimental services in separate compose file prevents production drift, trivial cleanup. 
+3. **Release Process Hardening** — Mandatory security + performance review before shipping. 8 security checkpoints + 4 performance checkpoints.
 
-**Skill updated:**
-- **fastapi-auth-patterns** — Confirmed in v1.10.1 auth hardening (WWW-Authenticate headers, no exception-driven flow, role checks enforced)
-
-**Wins report highlights:**
-- 13 issues closed, 7 PRs merged, 0 blockers
-- Security hardening (SQL injection prevention, auth RFC compliance, exception flow elimination)
-- BCDR workflows (monthly restore drills, stress test CI, backup checksums)
-- 4 new processes established (gate review, Copilot → issues, strict branch protection, milestone branching)
-- 5 lessons learned (Parker direct-push, cascading BEHIND states, docs-only PR gaps, FastAPI silent params, dual PDF extraction confusion)
-- Team performance: Parker+Lambert consolidated 7 issues into 1 PR, Brett took over infrastructure from Dallas
-
-**PR #805 created** — reskill + wins report to dev (pending CI checks)
-
-**Pattern reinforced:** "Reskill after every milestone" — v1.10.1 yielded 6 new skills + 1 update. Without dedicated reskill time, these patterns would have been lost. The wins report captures team morale, process improvements, and lessons learned in a shareable format for Juanma.
-
-### Embedding Model A/B Test PRD (2026-03-22)
-
-**Session:** PRD creation for in-repo A/B test of multilingual-e5-base vs distiluse.
-
-**Key findings from code research:**
-- **Embeddings server is model-agnostic:** `MODEL_NAME` env var + runtime dimension detection means zero code changes to swap models. Only gap: e5 models require query/passage prefixes not currently supported.
-- **Document indexer is fully configurable:** `CHUNK_SIZE`, `CHUNK_OVERLAP`, `SOLR_COLLECTION`, `EMBEDDINGS_HOST` all env-var driven. Dual indexing = dual Docker services, no code changes needed.
-- **RabbitMQ competing consumers is a trap:** Both indexers on the same queue (`shortembeddings`) means messages go to only ONE consumer. Dual indexing requires fanout exchange or separate queues. Flagged as OQ-1 (blocking).
-- **Solr schema is the only hardcoded bottleneck:** `knn_vector_512` field type has dimension baked in. New collection needs a new configset with `knn_vector_768`. This is the one piece that can't be env-var switched.
-- **Chunking recalculation follows PO's proportional logic:** 90 words for 128 tokens → 300 words for 512 tokens (same ~75% utilization target).
-
-**Decisions made:**
-- Dual-collection architecture (not dual-field in one collection)
-- Docker Compose overlay (not inline in production compose)
-- Prefix handling centralized in embeddings server (not scattered across indexer + search)
-- 3-phase execution with PO decision gate between Phase 2 and Phase 3
-- Decision: `.squad/decisions/inbox/ripley-embedding-prd.md`
-
-**Pattern reinforced:** "Research before implementation" — 20 minutes of codebase reading revealed the RabbitMQ competing-consumer issue that would have silently caused missing documents in one collection. Without reading the actual queue topology, this would have been discovered only during testing.
-
-**Pattern new:** "A/B testing as compose overlay" — Keeping experimental services in a separate compose file prevents production config drift and makes cleanup trivial. Should become the standard pattern for future model experiments.
-
-
-### 2026-03-22T13:49Z: Spawned for A/B testing evaluation PRD
-
-**Scope:** Create PRD for A/B testing evaluation framework + decompose into GitHub issues
-
-**Deliverable:** docs/prd/ab-testing-evaluation.md
-
-**Impact:** Enables user research validation post-v1.11. Will feed issues into upcoming milestones.
-
-**Related Directives:**
-- Release process now mandatory: security + performance review before shipping
-- Release checklist updated with sign-off requirements
-
-## Session 2026-03-22T14:41Z — Completed Spawn Work Summary & Offline Audit
-
-### Offline Audit Confirmation
-
-Conducted comprehensive audit of all inter-service communication paths. **Confirmed:** Aithena is fully on-premises with zero runtime internet dependencies.
-
-**Findings:**
-- ✅ All inter-service calls through internal Docker network (Solr, Redis, RabbitMQ, embedding endpoints)
-- ✅ Zero cloud API calls (AWS, Azure, GCP SDKs) — no boto3, azure-identity, google-cloud imports
-- ✅ HuggingFace embeddings models (e5-base, e5-multilingual-e15-small) pre-downloaded at build time
-- ✅ No external telemetry (Sentry, New Relic, DataDog)
-- ✅ No external auth (OAuth, JWT issuers beyond internal Aithena)
-- ✅ Pure Docker Compose, zero cloud service dependencies
-
-**Impact:** Aithena meets on-premises compliance requirements; verified compatible with offline installer (#921); confirmed air-gapped deployment scenario in production.
-
-### Decisions Created/Merged
-
-1. **A/B Testing Human Evaluation UI** — PROPOSED (awaiting PO review)
-   - 11 issues (#900–#918) decomposed
-   - Environment-gated (`ENABLE_AB_TEST=true`)
-   - Public `/v1/config` endpoint for frontend detection
-   - SQLite storage for feedback (`ab_evaluation.db`)
-   - Per-session blinding (A↔B randomization in sessionStorage)
-   - nDCG@10 + MRR metrics computed server-side
-   - Pre-loaded 30-query benchmark suite + custom queries
-
-2. **Offline Installer Architecture** — IMPLEMENTED (PR #925)
-   - 3-script pattern: export-images.sh → install-offline.sh → verify.sh
-   - Single .tar.gz package (11 Docker image tarballs + compose files + scripts + docs)
-   - Convention alignment (VERSION file, .env management, backup script patterns)
-
-3. **Mandatory Security Review in Release Checklist** — IMPLEMENTED (PR #899)
-   - 8-checkpoint security review (Bandit, Checkov, Zizmor, CodeQL, Dependabot, threat assessment, supply chain, input validation)
-   - 4-checkpoint performance review (benchmarks, latency p50/p95/p99, regression check, resource utilization)
-   - Release CANNOT ship with critical/high security issues
-   - Threat assessment required for significant features
-
-
-### 2026-03-23T10:00Z: PR #964 Review — e5 Migration for Release Readiness
-
-**Scope:** Full code review of multilingual-e5-base migration PR across embeddings-server, solr-search, admin, Solr schema, and Docker Compose.
-
-**Verdict:** Approve with required follow-ups (see below). Core migration is solid — config changes, schema updates, service removal, and test updates are all correct and consistent. Two blocking issues: timeout mismatch and dangling references in scripts/.
-
-**Key findings:**
-- 10 issues identified (2 medium, 8 low)
-- No critical bugs
-- Auth on reindex endpoint: ✅ (require_admin_auth)
-- Schema 512→768D: ✅ consistent (field type + both fields)
-- Config defaults: ✅ aligned across all services
-- Redis cleanup: ✅ uses scan_iter + pipeline batching
-- Tests: all pass (72 solr-search, 34 embeddings-server)
-- Missing: no tests for the new reindex endpoint or admin reindex page
-
-**Decision:** scripts/benchmark/ is A/B test infrastructure that should be updated or deprecated in a follow-up issue, not this PR.
-
-### 2026-03-24 — Embeddings-Server Extraction Analysis (Background Spawn)
-
-**Decision:** Extract `src/embeddings-server/` to standalone repository at `github.com/jmservera/embeddings-server`
-
-**Analysis Findings:**
-- Technical readiness: ✅ Zero code coupling, HTTP-only integration, already generic (OpenAI-compatible)
-- Strategic drivers: Independent release rhythm, faster aithena cycles (2–3 min savings), genericization
-- Risk mitigation: Semantic versioning, version pinning discipline, supply chain security
-- 4-phase implementation timeline (prep → repo creation → aithena cleanup → validation)
-
-**Key Design Decisions:**
-- New repo: no `aithena-` prefix, reusable positioning
-- Image registry: `ghcr.io/jmservera/embeddings-server:1.14.1` (cleaner than `-aithena-` variant)
-- Version pinning: aithena pins exact versions (1.14.1, not `latest`) for reproducibility
-- Release independence: embeddings-server ships model updates without aithena coordination
-- Integration surface minimal: pure HTTP contract, environment variables unchanged
-
-**Decision Record:** `.squad/decisions.md` → "Decision: Extract Embeddings-Server to Independent Repository"
-
-**Next:** Awaiting approval from jmservera (project owner) for Phase 1 implementation.
+---

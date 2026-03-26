@@ -6,6 +6,8 @@ import streamlit as st
 import redis
 from pages.shared.config import QUEUE_NAME, REDIS_HOST, REDIS_PORT
 
+PAGE_SIZE = 25
+
 st.title("📄 Document Manager")
 
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
@@ -51,6 +53,26 @@ def make_df(docs: list[dict], columns: list[str]) -> pd.DataFrame:
     return df[available].reset_index(drop=True)
 
 
+def paginate(docs: list, tab_key: str) -> list:
+    """Show pagination controls and return the current page slice."""
+    total = len(docs)
+    if total <= PAGE_SIZE:
+        return docs
+    total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    page = st.number_input(
+        f"Page (1–{total_pages})",
+        min_value=1,
+        max_value=total_pages,
+        value=1,
+        step=1,
+        key=f"page_{tab_key}",
+    )
+    start = (page - 1) * PAGE_SIZE
+    end = min(start + PAGE_SIZE, total)
+    st.caption(f"Showing {start + 1}–{end} of {total}")
+    return docs[start:end]
+
+
 try:
     queued_docs, processed_docs, failed_docs = load_documents()
 
@@ -69,7 +91,8 @@ try:
         if st.button("🔄 Refresh", key="refresh_queued"):
             st.rerun()
         if queued_docs:
-            df = make_df(queued_docs, ["path", "timestamp", "last_modified"])
+            page_docs = paginate(queued_docs, "queued")
+            df = make_df(page_docs, ["path", "timestamp", "last_modified"])
             st.dataframe(df, use_container_width=True)
         else:
             st.success("No documents currently queued.")
@@ -104,8 +127,9 @@ try:
                     st.session_state.pop("confirm_clear_processed", None)
                     st.rerun()
         if processed_docs:
+            page_docs = paginate(processed_docs, "processed")
             display_cols = ["path", "title", "author", "year", "category", "page_count", "timestamp"]
-            st.dataframe(make_df(processed_docs, display_cols), use_container_width=True)
+            st.dataframe(make_df(page_docs, display_cols), use_container_width=True)
         else:
             st.info("No processed documents yet.")
 
@@ -128,7 +152,8 @@ try:
                 st.rerun()
 
         if failed_docs:
-            for doc in failed_docs:
+            page_docs = paginate(failed_docs, "failed")
+            for doc in page_docs:
                 path_label = doc.get("path", doc.get("_redis_key", "Unknown"))
                 with st.expander(f"❌ {path_label}"):
                     st.markdown(f"**Error:** {doc.get('error') or 'No error details recorded.'}")

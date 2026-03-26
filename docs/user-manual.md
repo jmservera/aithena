@@ -698,7 +698,7 @@ The admin portal has been redesigned with a sidebar navigation for easier access
 The admin portal now groups tools into a sidebar menu:
 
 - **Dashboard** — overview of system status and quick actions
-- **Indexing Status** — detailed per-document progress with failure reasons
+- **Indexing Status** — detailed per-document progress
 - **Log Viewer** — per-service log streaming (see below)
 - **Backups** — backup dashboard and restore wizard
 - **Solr Admin** — embedded Solr admin UI with SSO passthrough
@@ -712,7 +712,7 @@ The log viewer lets administrators inspect container logs directly from the admi
 1. Open the admin portal at `/admin`
 2. Select **Log Viewer** from the sidebar
 3. Choose a service from the dropdown (e.g., `document-indexer`, `solr-search`, `nginx`)
-4. View recent log output with automatic scrolling
+4. View recent log output
 
 This is useful for diagnosing indexing failures, auth issues, or service health problems without needing SSH access to the host.
 
@@ -722,12 +722,7 @@ Administrators no longer need separate Solr credentials to access the Solr admin
 
 ### Detailed Indexing Status (v1.15.0+)
 
-The indexing status page now shows:
-
-- Per-document indexing progress
-- Failure details with error messages
-- Retry status for failed documents
-- Alignment between the System Status view and the indexer's internal state
+The indexing status page now shows per-document indexing progress and status alignment with the system status view.
 
 ## Tips and tricks
 

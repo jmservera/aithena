@@ -2,8 +2,11 @@ import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Database, Rabbit, ExternalLink } from 'lucide-react';
 import { useAdmin, AdminDocument } from '../hooks/admin';
+import Pagination from '../Components/Pagination';
 
 type TabKey = 'queued' | 'processed' | 'failed';
+
+const ADMIN_PAGE_SIZE = 25;
 
 const ADMIN_TABS: { key: TabKey; labelId: string }[] = [
   { key: 'queued', labelId: 'admin.tab.queued' },
@@ -26,35 +29,48 @@ function DocPath({ path }: { path?: string }) {
 
 interface QueuedTableProps {
   docs: AdminDocument[];
+  page: number;
+  onPageChange: (page: number) => void;
 }
 
-function QueuedTable({ docs }: QueuedTableProps) {
+function QueuedTable({ docs, page, onPageChange }: QueuedTableProps) {
   const intl = useIntl();
   if (docs.length === 0) {
     return <p className="admin-empty">{intl.formatMessage({ id: 'admin.queued.empty' })}</p>;
   }
 
+  const start = (page - 1) * ADMIN_PAGE_SIZE;
+  const pageDocs = docs.slice(start, start + ADMIN_PAGE_SIZE);
+
   return (
-    <div className="admin-table-wrapper">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerPath' })}</th>
-            <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerQueuedAt' })}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {docs.map((doc) => (
-            <tr key={doc.id}>
-              <td>
-                <DocPath path={doc.path} />
-              </td>
-              <td>{formatTimestamp(doc.timestamp)}</td>
+    <>
+      <div className="admin-table-wrapper">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerPath' })}</th>
+              <th scope="col">{intl.formatMessage({ id: 'admin.queued.headerQueuedAt' })}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {pageDocs.map((doc) => (
+              <tr key={doc.id}>
+                <td>
+                  <DocPath path={doc.path} />
+                </td>
+                <td>{formatTimestamp(doc.timestamp)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination
+        page={page}
+        limit={ADMIN_PAGE_SIZE}
+        total={docs.length}
+        onPageChange={onPageChange}
+      />
+    </>
   );
 }
 
@@ -62,15 +78,20 @@ interface ProcessedTableProps {
   docs: AdminDocument[];
   onClearAll: () => void;
   busy: boolean;
+  page: number;
+  onPageChange: (page: number) => void;
 }
 
-function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
+function ProcessedTable({ docs, onClearAll, busy, page, onPageChange }: ProcessedTableProps) {
   const intl = useIntl();
   const [confirmClear, setConfirmClear] = useState(false);
 
   if (docs.length === 0) {
     return <p className="admin-empty">{intl.formatMessage({ id: 'admin.processed.empty' })}</p>;
   }
+
+  const start = (page - 1) * ADMIN_PAGE_SIZE;
+  const pageDocs = docs.slice(start, start + ADMIN_PAGE_SIZE);
 
   return (
     <>
@@ -124,7 +145,7 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
             </tr>
           </thead>
           <tbody>
-            {docs.map((doc) => (
+            {pageDocs.map((doc) => (
               <tr key={doc.id}>
                 <td>
                   <DocPath path={doc.path} />
@@ -138,6 +159,12 @@ function ProcessedTable({ docs, onClearAll, busy }: ProcessedTableProps) {
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={page}
+        limit={ADMIN_PAGE_SIZE}
+        total={docs.length}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }
@@ -147,13 +174,25 @@ interface FailedTableProps {
   onRequeue: (id: string) => void;
   onRequeueAll: () => void;
   busy: boolean;
+  page: number;
+  onPageChange: (page: number) => void;
 }
 
-function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) {
+function FailedTable({
+  docs,
+  onRequeue,
+  onRequeueAll,
+  busy,
+  page,
+  onPageChange,
+}: FailedTableProps) {
   const intl = useIntl();
   if (docs.length === 0) {
     return <p className="admin-empty">{intl.formatMessage({ id: 'admin.failed.empty' })}</p>;
   }
+
+  const start = (page - 1) * ADMIN_PAGE_SIZE;
+  const pageDocs = docs.slice(start, start + ADMIN_PAGE_SIZE);
 
   return (
     <>
@@ -179,7 +218,7 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
             </tr>
           </thead>
           <tbody>
-            {docs.map((doc) => (
+            {pageDocs.map((doc) => (
               <tr key={doc.id}>
                 <td>
                   <DocPath path={doc.path} />
@@ -205,6 +244,12 @@ function FailedTable({ docs, onRequeue, onRequeueAll, busy }: FailedTableProps) 
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={page}
+        limit={ADMIN_PAGE_SIZE}
+        total={docs.length}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }
@@ -265,6 +310,11 @@ function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('queued');
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pages, setPages] = useState<Record<TabKey, number>>({
+    queued: 1,
+    processed: 1,
+    failed: 1,
+  });
   const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({
     queued: null,
     processed: null,
@@ -274,6 +324,8 @@ function AdminPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  const setTabPage = (tab: TabKey, page: number) => setPages((prev) => ({ ...prev, [tab]: page }));
 
   async function runAction(action: () => Promise<void>) {
     setBusy(true);
@@ -442,7 +494,11 @@ function AdminPage() {
               aria-labelledby="admin-tab-queued"
               tabIndex={0}
             >
-              <QueuedTable docs={queuedDocs} />
+              <QueuedTable
+                docs={queuedDocs}
+                page={pages.queued}
+                onPageChange={(p) => setTabPage('queued', p)}
+              />
             </section>
           )}
 
@@ -458,6 +514,8 @@ function AdminPage() {
                 docs={processedDocs}
                 onClearAll={() => runAction(clearProcessed)}
                 busy={busy}
+                page={pages.processed}
+                onPageChange={(p) => setTabPage('processed', p)}
               />
             </section>
           )}
@@ -475,6 +533,8 @@ function AdminPage() {
                 onRequeue={(id) => runAction(() => requeueDocument(id))}
                 onRequeueAll={() => runAction(requeueAllFailed)}
                 busy={busy}
+                page={pages.failed}
+                onPageChange={(p) => setTabPage('failed', p)}
               />
             </section>
           )}

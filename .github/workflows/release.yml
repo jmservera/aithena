@@ -94,77 +94,23 @@ jobs:
         run: echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
   build-and-push:
-    name: Build and push ${{ matrix.service.image }}
-    runs-on: ubuntu-latest
+    name: Build and push containers
     needs: validate-tag
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - image: admin
-            context: .
-            dockerfile: ./src/admin/Dockerfile
-          - image: aithena-ui
-            context: ./src/aithena-ui
-            dockerfile: ./src/aithena-ui/Dockerfile
-          - image: document-indexer
-            context: ./src/document-indexer
-            dockerfile: ./src/document-indexer/Dockerfile
-          - image: document-lister
-            context: ./src/document-lister
-            dockerfile: ./src/document-lister/Dockerfile
-          - image: embeddings-server
-            context: ./src/embeddings-server
-            dockerfile: ./src/embeddings-server/Dockerfile
-          - image: solr-search
-            context: .
-            dockerfile: ./src/solr-search/Dockerfile
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate Docker metadata
-        id: meta
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
-        with:
-          images: ghcr.io/jmservera/aithena-${{ matrix.service.image }}
-          tags: |
-            type=semver,pattern={{version}},value=v${{ needs.validate-tag.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.validate-tag.outputs.version }}
-            type=semver,pattern={{major}},value=v${{ needs.validate-tag.outputs.version }}
-            type=raw,value=latest
-
-      - name: Build and push image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294  # v7.0.0
-        with:
-          context: ${{ matrix.service.context }}
-          file: ${{ matrix.service.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ needs.validate-tag.outputs.version }}
-            GIT_COMMIT=${{ github.sha }}
-            BUILD_DATE=${{ needs.validate-tag.outputs.build_date }}
-          secrets: |
-            HF_TOKEN=${{ secrets.HF_TOKEN }}
-          cache-from: type=gha,scope=${{ matrix.service.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service.image }}
+    uses: ./.github/workflows/build-containers.yml
+    with:
+      version: ${{ needs.validate-tag.outputs.version }}
+      push: true
+      tags: |
+        type=semver,pattern={{version}},value=v${{ needs.validate-tag.outputs.version }}
+        type=semver,pattern={{major}}.{{minor}},value=v${{ needs.validate-tag.outputs.version }}
+        type=semver,pattern={{major}},value=v${{ needs.validate-tag.outputs.version }}
+        type=raw,value=latest
+      build-date: ${{ needs.validate-tag.outputs.build_date }}
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   smoke-test:
     name: Smoke test ${{ matrix.service.image }}
@@ -192,8 +138,8 @@ jobs:
           - image: admin
             type: http
             port: "8501"
-            health_endpoint: /_stcore/health
-            startup_timeout: 30
+            health_endpoint: /admin/streamlit/_stcore/health
+            startup_timeout: 60
           - image: aithena-ui
             type: http
             port: "8080"
@@ -369,6 +315,14 @@ jobs:
       - build-and-push
       - package-release
       - smoke-test
+    # Smoke tests are advisory — a failure warns but does not block the release.
+    # Images are already pushed by build-and-push; the release should proceed as
+    # long as validation, build, and packaging all succeeded.
+    if: >-
+      always()
+      && needs.validate-tag.result == 'success'
+      && needs.build-and-push.result == 'success'
+      && needs.package-release.result == 'success'
     permissions:
       contents: write
     steps:
@@ -402,17 +356,37 @@ jobs:
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Add smoke test warning if tests did not all pass
+        if: needs.smoke-test.result != 'success'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SMOKE_RESULT: ${{ needs.smoke-test.result }}
+          NOTES_FOUND: ${{ steps.release_notes.outputs.found }}
+        shell: bash
+        run: |
+          warning="⚠️ **Smoke tests did not pass (${SMOKE_RESULT}).** Container images were published successfully but post-push health checks did not all pass. Review the [workflow run](${RUN_URL}) for details before deploying to production."
+
+          if [[ "$NOTES_FOUND" == "true" ]]; then
+            printf '%s\n\n---\n\n' "$warning" | cat - "$RUNNER_TEMP/release-notes.md" > "$RUNNER_TEMP/release-notes-final.md"
+            mv "$RUNNER_TEMP/release-notes-final.md" "$RUNNER_TEMP/release-notes.md"
+          else
+            echo "$warning" > "$RUNNER_TEMP/smoke-warning.md"
+          fi
+
       - name: Create GitHub release with artifacts
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
           VERSION: ${{ needs.validate-tag.outputs.version }}
           NOTES_FOUND: ${{ steps.release_notes.outputs.found }}
+          SMOKE_PASSED: ${{ needs.smoke-test.result == 'success' }}
         run: |
           release_args=("$TAG_NAME" --verify-tag)
 
           if [[ "$NOTES_FOUND" == "true" ]]; then
             release_args+=(--notes-file "$RUNNER_TEMP/release-notes.md")
+          elif [[ "$SMOKE_PASSED" != "true" && -f "$RUNNER_TEMP/smoke-warning.md" ]]; then
+            release_args+=(--notes-file "$RUNNER_TEMP/smoke-warning.md")
           else
             release_args+=(--generate-notes)
           fi

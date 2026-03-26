@@ -7,6 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from search_service import (  # noqa: E402
     SOLR_FIELD_LIST,
+    build_chunk_page_params,
     build_filter_queries,
     build_inline_content_disposition,
     build_pagination,
@@ -14,11 +15,13 @@ from search_service import (  # noqa: E402
     build_sort_clause,
     decode_document_token,
     encode_document_token,
+    enrich_results_with_chunk_pages,
     normalize_book,
     normalize_search_query,
     parse_facet_counts,
     resolve_document_path,
     solr_escape,
+    thumbnail_url,
 )
 
 
@@ -1145,3 +1148,177 @@ def test_solr_field_list_includes_score() -> None:
 def test_solr_field_list_includes_thumbnail_url() -> None:
     """SOLR_FIELD_LIST must include thumbnail_url_s for thumbnail support."""
     assert "thumbnail_url_s" in SOLR_FIELD_LIST
+
+
+# ── thumbnail_url helper ─────────────────────────────────────────────────────
+
+
+def test_thumbnail_url_prefixes_relative_path() -> None:
+    """Relative thumbnail paths get /thumbnails/ prefix for nginx routing."""
+    assert thumbnail_url("library/book.pdf.thumb.jpg") == "/thumbnails/library/book.pdf.thumb.jpg"
+
+
+def test_thumbnail_url_returns_none_for_none() -> None:
+    assert thumbnail_url(None) is None
+
+
+def test_thumbnail_url_returns_none_for_empty_string() -> None:
+    assert thumbnail_url("") is None
+
+
+def test_thumbnail_url_preserves_absolute_http_url() -> None:
+    url = "https://covers.example.com/thumb.jpg"
+    assert thumbnail_url(url) == url
+
+
+def test_thumbnail_url_preserves_absolute_path() -> None:
+    assert thumbnail_url("/thumbnails/already-prefixed.thumb.jpg") == "/thumbnails/already-prefixed.thumb.jpg"
+
+
+# ── build_chunk_page_params ──────────────────────────────────────────────────
+
+
+def test_build_chunk_page_params_basic_structure() -> None:
+    """Returned params contain the correct Solr query structure."""
+    params = build_chunk_page_params("catalan", ["id-1", "id-2"])
+    assert params["defType"] == "edismax"
+    assert params["qf"] == "chunk_text_t"
+    assert params["fl"] == "parent_id_s,page_start_i,page_end_i"
+    assert params["wt"] == "json"
+    assert params["rows"] == 6  # 2 parents * CHUNK_PAGES_ROWS_MULTIPLIER (3)
+
+
+def test_build_chunk_page_params_escapes_parent_ids() -> None:
+    """Parent IDs with Lucene special chars must be solr-escaped in the fq."""
+    params = build_chunk_page_params("test", ["path/to:file (1)"])
+    fq_list = params["fq"]
+    parent_filter = [f for f in fq_list if f.startswith("parent_id_s:(")][0]
+    # Verify the special chars are escaped
+    assert "\\/" in parent_filter
+    assert "\\:" in parent_filter
+    assert "\\(" in parent_filter
+    assert "\\)" in parent_filter
+
+
+def test_build_chunk_page_params_multiple_ids_escaped() -> None:
+    """Multiple parent IDs should all be escaped and joined with OR."""
+    params = build_chunk_page_params("q", ["a:b", "c/d"])
+    fq_list = params["fq"]
+    parent_filter = [f for f in fq_list if f.startswith("parent_id_s:(")][0]
+    assert "\\:" in parent_filter
+    assert "\\/" in parent_filter
+    assert " OR " in parent_filter
+
+
+def test_build_chunk_page_params_with_filters() -> None:
+    """User filters should be appended to fq."""
+    params = build_chunk_page_params("test", ["id-1"], filters={"language": "ca"})
+    fq_list = params["fq"]
+    # Should have the 2 base filters plus the user filter
+    assert len(fq_list) >= 3
+    assert any("language" in f for f in fq_list)
+
+
+# ── enrich_results_with_chunk_pages ──────────────────────────────────────────
+
+
+def test_enrich_merges_page_range_from_multiple_chunks() -> None:
+    """Min start / max end across multiple chunks for same parent."""
+    results = [{"id": "book-1"}]
+    chunks = [
+        {"parent_id_s": "book-1", "page_start_i": 5, "page_end_i": 10},
+        {"parent_id_s": "book-1", "page_start_i": 2, "page_end_i": 15},
+        {"parent_id_s": "book-1", "page_start_i": 8, "page_end_i": 12},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    assert results[0]["pages"] == [2, 15]
+    assert results[0]["page_start"] == 2
+    assert results[0]["page_end"] == 15
+
+
+def test_enrich_handles_missing_page_start() -> None:
+    """Chunk with only page_end_i still contributes to the range."""
+    results = [{"id": "book-1"}]
+    chunks = [
+        {"parent_id_s": "book-1", "page_start_i": None, "page_end_i": 10},
+        {"parent_id_s": "book-1", "page_start_i": 3, "page_end_i": 7},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    assert results[0]["pages"] == [3, 10]
+
+
+def test_enrich_handles_missing_page_end() -> None:
+    """Chunk with only page_start_i still contributes to the range."""
+    results = [{"id": "book-1"}]
+    chunks = [
+        {"parent_id_s": "book-1", "page_start_i": 4, "page_end_i": None},
+        {"parent_id_s": "book-1", "page_start_i": 1, "page_end_i": 6},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    assert results[0]["pages"] == [1, 6]
+
+
+def test_enrich_skips_chunk_with_both_pages_missing() -> None:
+    """Chunk with neither page_start_i nor page_end_i is ignored."""
+    results = [{"id": "book-1"}]
+    chunks = [
+        {"parent_id_s": "book-1", "page_start_i": None, "page_end_i": None},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    assert "pages" not in results[0]
+
+
+def test_enrich_preserves_existing_pages_field() -> None:
+    """Results that already have a pages field must NOT be overwritten."""
+    results = [{"id": "book-1", "pages": [1, 100]}]
+    chunks = [
+        {"parent_id_s": "book-1", "page_start_i": 5, "page_end_i": 10},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    assert results[0]["pages"] == [1, 100]
+
+
+def test_enrich_no_matching_chunks() -> None:
+    """Results with no matching chunks are left untouched."""
+    results = [{"id": "book-1"}, {"id": "book-2"}]
+    chunks = [
+        {"parent_id_s": "book-99", "page_start_i": 1, "page_end_i": 5},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    assert "pages" not in results[0]
+    assert "pages" not in results[1]
+
+
+def test_enrich_multiple_parents() -> None:
+    """Multiple parents each get their own merged range."""
+    results = [{"id": "a"}, {"id": "b"}]
+    chunks = [
+        {"parent_id_s": "a", "page_start_i": 1, "page_end_i": 3},
+        {"parent_id_s": "b", "page_start_i": 10, "page_end_i": 20},
+        {"parent_id_s": "a", "page_start_i": 5, "page_end_i": 8},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    assert results[0]["pages"] == [1, 8]
+    assert results[1]["pages"] == [10, 20]
+
+
+def test_enrich_fills_start_from_end_when_only_end_available() -> None:
+    """When merged range has only end page, start falls back to end."""
+    results = [{"id": "book-1"}]
+    chunks = [
+        {"parent_id_s": "book-1", "page_start_i": None, "page_end_i": 7},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    # start falls back to end value
+    assert results[0]["pages"] == [7, 7]
+
+
+def test_enrich_fills_end_from_start_when_only_start_available() -> None:
+    """When merged range has only start page, end falls back to start."""
+    results = [{"id": "book-1"}]
+    chunks = [
+        {"parent_id_s": "book-1", "page_start_i": 3, "page_end_i": None},
+    ]
+    enrich_results_with_chunk_pages(results, chunks)
+    # end falls back to start value
+    assert results[0]["pages"] == [3, 3]

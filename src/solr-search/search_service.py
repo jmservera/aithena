@@ -216,6 +216,15 @@ def build_inline_content_disposition(filename: str) -> str:
     return f"inline; filename*=UTF-8''{quote(sanitized, safe='')}"
 
 
+def thumbnail_url(raw: str | None) -> str | None:
+    """Prefix a relative thumbnail path with ``/thumbnails/`` for nginx."""
+    if not raw:
+        return None
+    if raw.startswith(("/", "http://", "https://")):
+        return raw
+    return f"/thumbnails/{raw}"
+
+
 def normalize_book(
     document: dict[str, Any],
     highlighting: dict[str, Any],
@@ -253,7 +262,7 @@ def normalize_book(
         "score": document.get("score"),
         "highlights": collect_highlights(document_id, highlighting),
         "document_url": document_url,
-        "thumbnail_url": document.get("thumbnail_url_s"),
+        "thumbnail_url": thumbnail_url(document.get("thumbnail_url_s")),
     }
 
 
@@ -300,6 +309,68 @@ def build_knn_params(
     if filters:
         params["fq"] = list(filters)
     return params
+
+
+CHUNK_PAGES_ROWS_MULTIPLIER = 3  # best-effort: fetch up to 3 chunks per parent for page range estimation
+
+
+def build_chunk_page_params(
+    query: str,
+    parent_ids: list[str],
+    filters: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Build Solr params to find matching chunks and their page ranges."""
+    search_query = normalize_search_query(query)
+    id_filter = " OR ".join('"' + solr_escape(pid) + '"' for pid in parent_ids)
+    fq: list[str] = [
+        "parent_id_s:[* TO *]",
+        f"parent_id_s:({id_filter})",
+    ]
+    fq.extend(build_filter_queries(filters))
+    return {
+        "q": search_query,
+        "defType": "edismax",
+        "qf": "chunk_text_t",
+        "rows": len(parent_ids) * CHUNK_PAGES_ROWS_MULTIPLIER,
+        "fl": "parent_id_s,page_start_i,page_end_i",
+        "fq": fq,
+        "wt": "json",
+    }
+
+
+def enrich_results_with_chunk_pages(
+    results: list[dict[str, Any]],
+    chunk_docs: list[dict[str, Any]],
+) -> None:
+    """Merge chunk page ranges into parent-level keyword results (in-place)."""
+    page_map: dict[str, list[int | None]] = {}
+    for chunk in chunk_docs:
+        pid = chunk.get("parent_id_s")
+        ps = chunk.get("page_start_i")
+        pe = chunk.get("page_end_i")
+        if not pid or (ps is None and pe is None):
+            continue
+        if pid not in page_map:
+            page_map[pid] = [ps, pe]
+        else:
+            cur = page_map[pid]
+            if ps is not None:
+                cur[0] = min(cur[0], ps) if cur[0] is not None else ps
+            if pe is not None:
+                cur[1] = max(cur[1], pe) if cur[1] is not None else pe
+
+    for result in results:
+        if result.get("pages") is not None:
+            continue
+        pages = page_map.get(result["id"])
+        if pages:
+            start = pages[0] if pages[0] is not None else pages[1]
+            end = pages[1] if pages[1] is not None else pages[0]
+            result["pages"] = [start, end]
+            if result.get("page_start") is None:
+                result["page_start"] = start
+            if result.get("page_end") is None:
+                result["page_end"] = end
 
 
 def get_query_embedding(
