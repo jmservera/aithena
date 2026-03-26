@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-03-26
+
+### Added
+
+- **Pre-release container workflow with RC smoke tests** — comprehensive integration testing for release candidates (#1141, #1142, #1143)
+- **Reusable container build workflow** — standardized and modular CI pipeline for container builds (#1141)
+- **Pre-release testing documentation** — guides for validating releases and running smoke tests (#1144)
+
+### Fixed
+
+- **Search UI regressions** — fixed thumbnails, pagination, snippets, and styling issues in search results (#1225)
+- **Similar books 422 regression** — corrected error when books have chunks but no embeddings (#1226)
+- **Thumbnails served from correct volume and URL path** — resolved volume mounting and URL path issues (#1139)
+- **Admin dashboard list pagination** — added pagination controls to dashboard lists (#1145)
+- **RabbitMQ deprecated management_metrics_collection warning** — suppressed non-critical deprecation warning (#1140)
+- **MCP server identifiers in mcp.json** — corrected server identifiers in configuration (#1227)
+
+### Changed
+
+- **Smoke tests made advisory in release workflow** — non-blocking validation for faster release cycles (#1135)
+- **Admin smoke test timeout increased to 60s** — improved reliability for slow environments (#1133)
+- **VERSION bumped to 1.16.0** — reflects new release version (#1146)
+
 ## [1.15.0] — 2026-03-24
 
 ### Added
