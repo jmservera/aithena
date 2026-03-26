@@ -28,7 +28,7 @@ describe('truncateChunkText', () => {
   it('truncates plain text to 250 chars by default and adds ellipsis', () => {
     const long = 'A'.repeat(300);
     const result = truncateChunkText(long);
-    // visible chars (before ellipsis) should be exactly 20
+    // visible chars (before ellipsis) should be exactly 250
     expect(result.replace('…', '').length).toBe(250);
     expect(result.endsWith('…')).toBe(true);
   });

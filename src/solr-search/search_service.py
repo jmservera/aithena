@@ -311,6 +311,9 @@ def build_knn_params(
     return params
 
 
+CHUNK_PAGES_ROWS_MULTIPLIER = 3  # best-effort: fetch up to 3 chunks per parent for page range estimation
+
+
 def build_chunk_page_params(
     query: str,
     parent_ids: list[str],
@@ -328,7 +331,7 @@ def build_chunk_page_params(
         "q": search_query,
         "defType": "edismax",
         "qf": "chunk_text_t",
-        "rows": len(parent_ids) * 3,
+        "rows": len(parent_ids) * CHUNK_PAGES_ROWS_MULTIPLIER,
         "fl": "parent_id_s,page_start_i,page_end_i",
         "fq": fq,
         "wt": "json",
