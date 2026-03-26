@@ -405,7 +405,6 @@ Four search result display regressions identified during v1.16.0 pre-release:
 ---
 
 ## End of History — Dallas Frontend Developer (Reskill #2, 2026-03-22)
-## End of History — Dallas Frontend Developer (Reskill #2, 2026-03-22)
 
 ## Learnings
 
