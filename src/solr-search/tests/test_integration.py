@@ -766,6 +766,8 @@ def test_similar_excludes_source_book_chunks_via_fq(mock_solr_post: MagicMock) -
     assert mock_solr_post.call_count == 3
     knn_call_params = mock_solr_post.call_args_list[1][1]["data"]
     fq = knn_call_params.get("fq", "")
+    if isinstance(fq, list):
+        fq = " ".join(fq)
     assert "-parent_id_s:" in fq
     assert "source" in fq
 

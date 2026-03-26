@@ -1503,15 +1503,14 @@ def similar_books(
 
     # 2. kNN search against chunks, excluding chunks from the same book.
     knn_top_k = (limit + 1) * 5  # over-fetch to allow deduplication
-    knn_payload = query_solr(
-        {
-            "q": f"{{!knn f={embedding_field} topK={knn_top_k}}}{json.dumps(vector)}",
-            "fq": f"-parent_id_s:{solr_escape(document_id)}",
-            "fl": "id,parent_id_s,score",
-            "rows": knn_top_k,
-            "wt": "json",
-        }
+    knn_params = build_knn_params(
+        vector,
+        knn_top_k,
+        embedding_field,
+        filters=[f"-parent_id_s:{solr_escape(document_id)}"],
     )
+    knn_params["fl"] = "id,parent_id_s,score"  # only need IDs and scores
+    knn_payload = query_solr(knn_params)
     chunk_hits = knn_payload.get("response", {}).get("docs", [])
 
     # 3. Deduplicate by parent_id_s — keep the highest-scoring chunk per book.
