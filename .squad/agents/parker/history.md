@@ -338,3 +338,13 @@
 **Error code change:** Missing embedding/chunks now returns 404 (not 422) — these are "not found yet" conditions, not validation errors.
 
 **Test pattern:** The happy path requires 4 mock Solr calls (verify parent → fetch chunk → kNN → fetch parent metadata). Use `_similar_happy_side_effect()` helper to generate the mock chain.
+
+### PR #1226 Review Round 2 (2026-03-26)
+
+**Sort order fix:** Changed first-chunk lookup from `sort: id asc` to `sort: chunk_index_i asc`. The `id` sort relied on Solr document ID format (which happens to have chunk index in it), but `chunk_index_i` is the dedicated schema field — more reliable and self-documenting.
+
+**Status code correction:** Changed missing-embedding response from 404 to 422 (Unprocessable Entity). Semantic distinction:
+- **404** — no chunks found → book not in the index at all
+- **422** — chunks exist but no `embedding_v` → book indexed but embedding pipeline hasn't processed it yet
+
+This follows HTTP semantics: 404 = resource doesn't exist, 422 = resource exists but can't be processed as requested. The book *exists* (we found its chunks), we just can't compute similarity without an embedding vector.
