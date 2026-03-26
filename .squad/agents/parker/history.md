@@ -350,3 +350,10 @@
 **Final status codes:**
 - **404** — no chunks found → book not in the index at all
 - **422** — chunks exist but no `embedding_v` → book indexed but embedding pipeline hasn't processed it yet
+
+### PR #1226 Review Round 3 Learnings (2026-03-26)
+
+- **Chunk-first optimization:** When a Solr query on child docs (chunks) succeeds, the parent must exist. Skip the parent existence check in the happy path to save a round-trip. Only fall back to parent check when no chunks are found.
+- **Unused fl fields:** Always verify that every field in Solr `fl` lists is consumed by the response builder. `thumbnail_url_s` was fetched but never wired into the response dict.
+- **Test assertion strength:** `<= N` assertions pass on 0 results — always use `== N` and verify IDs for count-limit tests.
+- **History accuracy:** Keep implementation notes in sync with actual code. Contradictions between earlier and later history entries confuse future readers. Consolidate into a single authoritative section reflecting final state.
