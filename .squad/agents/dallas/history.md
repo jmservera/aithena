@@ -405,3 +405,12 @@ Four search result display regressions identified during v1.16.0 pre-release:
 ---
 
 ## End of History — Dallas Frontend Developer (Reskill #2, 2026-03-22)
+## End of History — Dallas Frontend Developer (Reskill #2, 2026-03-22)
+
+## Learnings
+
+### PR #1225 — Backend fix: Solr escape & chunk page tests (2026-07-09)
+- Applied `solr_escape()` to parent IDs in `build_chunk_page_params` to prevent Lucene query injection
+- Added 14 unit tests for `build_chunk_page_params` and `enrich_results_with_chunk_pages` covering edge cases
+- `FACET_FIELDS` keys are logical names (e.g., `"language"`) not Solr field names (e.g., `"language_s"`) — important for `build_filter_queries`
+- PR review comment replies use `in_reply_to` field on the `pulls/{pr}/comments` endpoint, not a `/replies` sub-endpoint
