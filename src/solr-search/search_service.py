@@ -321,7 +321,7 @@ def build_chunk_page_params(
 ) -> dict[str, Any]:
     """Build Solr params to find matching chunks and their page ranges."""
     search_query = normalize_search_query(query)
-    id_filter = " OR ".join('"' + pid + '"' for pid in parent_ids)
+    id_filter = " OR ".join('"' + solr_escape(pid) + '"' for pid in parent_ids)
     fq: list[str] = [
         "parent_id_s:[* TO *]",
         f"parent_id_s:({id_filter})",
