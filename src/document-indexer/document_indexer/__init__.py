@@ -14,9 +14,7 @@ SOLR_PORT = int(os.environ.get("SOLR_PORT", 8983))
 SOLR_COLLECTION = os.environ.get("SOLR_COLLECTION", "books")
 SOLR_AUTH_USER = os.environ.get("SOLR_AUTH_USER") or None
 SOLR_AUTH_PASS = os.environ.get("SOLR_AUTH_PASS") or None
-SOLR_AUTH: tuple[str, str] | None = (
-    (SOLR_AUTH_USER, SOLR_AUTH_PASS) if SOLR_AUTH_USER and SOLR_AUTH_PASS else None
-)
+SOLR_AUTH: tuple[str, str] | None = (SOLR_AUTH_USER, SOLR_AUTH_PASS) if SOLR_AUTH_USER and SOLR_AUTH_PASS else None
 VERSION = os.environ.get("VERSION", "dev")
 GIT_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
 EMBEDDINGS_HOST = os.environ.get("EMBEDDINGS_HOST", "embeddings-server")
