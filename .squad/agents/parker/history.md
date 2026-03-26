@@ -298,3 +298,44 @@
 
 **Follow-up:** Docker restructuring (4-stage build) is separate PR pending team approval.
 
+
+### 2026-03-26 — Similar Books 422 Regression Fix (PR #1226)
+
+**Status:** COMPLETED
+**Branch:** `squad/1220-fix-similar-books-422`
+**Issue:** #1220 — `/books/{id}/similar` returns 422 for all books
+
+**Root Cause:**
+- The `similar_books` endpoint queried parent book documents for `embedding_v`, but embedding vectors only exist on chunk documents (child docs with `parent_id_s`)
+- PR #705 changed `book_embedding_field` default from `"book_embedding"` to `"embedding_v"` — but neither field was ever populated on parent docs
+- The `book_embedding` field in the Solr schema was a dead field; the indexer only writes `embedding_v` to chunks via `build_chunk_doc()`
+
+**Fix:**
+- Query first chunk via `parent_id_s:{document_id}` sorted by `chunk_index_i asc`
+- If no chunks, fall back to parent doc check for 404 vs 422 distinction
+- kNN `fq` uses a single filter string `-parent_id_s:{id}` to exclude source book
+- Set `knn_top_k = (limit + 1) * 5` to over-fetch candidates, then de-duplicate by `parent_id_s`
+- Return parent book IDs, not chunk IDs
+
+**Key Learning:**
+- Solr data model: parent docs carry metadata, chunks carry embeddings. Any kNN-based feature must query chunks, not parents.
+- `search_service.py` comment (line 304-306) explicitly documents this: "Embedding vectors live on chunk documents"
+
+### PR #1226 Review Round 2 & 3 (2026-03-26)
+
+**Sort order fix:** Changed first-chunk lookup from `sort: id asc` to `sort: chunk_index_i asc`. The `id` sort relied on Solr document ID format (which happens to have chunk index in it), but `chunk_index_i` is the dedicated schema field — more reliable and self-documenting.
+
+**Chunk-first refactor:** Moved chunk lookup before parent existence check to save 1 Solr round-trip in the happy path. If chunks exist, the parent must exist. Parent check only runs when no chunks are found (to distinguish "book not found" from "no chunks yet").
+
+**thumbnail_url wired into response:** The parent metadata query already fetched `thumbnail_url_s` but never included it in results. Added `thumbnail_url` field using `_thumbnail_url()` helper for consistent nginx-prefixed URLs.
+
+**Final status codes:**
+- **404** — no chunks found for this book ID (book may not be indexed yet, or may still be processing)
+- **422** — chunks exist but first chunk has no `embedding_v` → embedding pipeline hasn't processed it yet
+
+### PR #1226 Review Round 3 Learnings (2026-03-26)
+
+- **Chunk-first optimization:** When a Solr query on child docs (chunks) succeeds, the parent must exist. Skip the parent existence check in the happy path to save a round-trip. Only fall back to parent check when no chunks are found.
+- **Unused fl fields:** Always verify that every field in Solr `fl` lists is consumed by the response builder. `thumbnail_url_s` was fetched but never wired into the response dict.
+- **Test assertion strength:** `<= N` assertions pass on 0 results — always use `== N` and verify IDs for count-limit tests.
+- **History accuracy:** Keep implementation notes in sync with actual code. Contradictions between earlier and later history entries confuse future readers. Consolidate into a single authoritative section reflecting final state.

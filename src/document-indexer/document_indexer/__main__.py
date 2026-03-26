@@ -318,9 +318,7 @@ def index_chunks(
                 page_start,
                 page_end,
             )
-            for idx, ((chunk, page_start, page_end), emb) in enumerate(
-                zip(batch, embeddings, strict=False)
-            )
+            for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(batch, embeddings, strict=False))
         ]
 
         response = requests.post(

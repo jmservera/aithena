@@ -185,3 +185,8 @@ tests/stress/test_data/
 # Stress test virtualenv
 tests/stress/.venv/
 
+.squad/orchestration-log/
+.squad/log/
+.squad/decisions/inbox/
+.squad/sessions/
+.squad-workstream
