@@ -81,7 +81,13 @@ class ModelInfo(BaseModel):
 @app.get("/health")
 async def health():
     """Health check endpoint for container orchestration."""
-    return {"status": "healthy", "model": MODEL_NAME, "embedding_dim": embedding_dim, "device": DEVICE, "backend": BACKEND}
+    return {
+        "status": "healthy",
+        "model": MODEL_NAME,
+        "embedding_dim": embedding_dim,
+        "device": DEVICE,
+        "backend": BACKEND,
+    }
 
 
 @app.get("/v1/embeddings/model")
