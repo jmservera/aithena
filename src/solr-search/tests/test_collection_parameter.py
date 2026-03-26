@@ -148,9 +148,12 @@ def test_search_default_collection_uses_default_solr_url(mock_post: MagicMock) -
 
     assert response.status_code == 200
     solr_calls = [c for c in mock_post.call_args_list if "data" in c.kwargs]
-    assert len(solr_calls) == 1
+    assert len(solr_calls) == 2
     # Should use the default select_url (books collection)
     assert solr_calls[0].args[0] == settings.select_url
+    # Secondary call fetches chunk page ranges
+    chunk_fq = " ".join(solr_calls[1].kwargs["data"]["fq"])
+    assert "parent_id_s" in chunk_fq
 
 
 @patch("main.requests.post")
@@ -166,8 +169,11 @@ def test_search_explicit_default_collection(mock_post: MagicMock) -> None:
 
     assert response.status_code == 200
     solr_calls = [c for c in mock_post.call_args_list if "data" in c.kwargs]
-    assert len(solr_calls) == 1
+    assert len(solr_calls) == 2
     assert "/books/select" in solr_calls[0].args[0]
+    # Secondary call fetches chunk page ranges
+    chunk_fq = " ".join(solr_calls[1].kwargs["data"]["fq"])
+    assert "parent_id_s" in chunk_fq
 
 
 def test_search_invalid_collection_returns_400() -> None:
@@ -197,8 +203,11 @@ def test_search_with_allowed_collection_routes_to_correct_url(mock_post: MagicMo
 
         assert response.status_code == 200
         solr_calls = [c for c in mock_post.call_args_list if "data" in c.kwargs]
-        assert len(solr_calls) == 1
+        assert len(solr_calls) == 2
         assert "/books_e5base/select" in solr_calls[0].args[0]
+        # Secondary call fetches chunk page ranges
+        chunk_fq = " ".join(solr_calls[1].kwargs["data"]["fq"])
+        assert "parent_id_s" in chunk_fq
     finally:
         object.__setattr__(settings, "allowed_collections", original)
 
@@ -518,9 +527,12 @@ def test_search_with_collection_and_filters(mock_post: MagicMock) -> None:
 
     assert response.status_code == 200
     solr_calls = [c for c in mock_post.call_args_list if "data" in c.kwargs]
-    assert len(solr_calls) == 1
-    # Verify filter queries are present
+    assert len(solr_calls) == 2
+    # Verify filter queries are present in the primary search call
     fq = solr_calls[0].kwargs["data"]["fq"]
     fq_str = " ".join(fq) if isinstance(fq, list) else fq
     assert "author_s" in fq_str
     assert "year_i" in fq_str
+    # Secondary call fetches chunk page ranges
+    chunk_fq = " ".join(solr_calls[1].kwargs["data"]["fq"])
+    assert "parent_id_s" in chunk_fq
