@@ -321,24 +321,6 @@
 - Solr data model: parent docs carry metadata, chunks carry embeddings. Any kNN-based feature must query chunks, not parents.
 - `search_service.py` comment (line 304-306) explicitly documents this: "Embedding vectors live on chunk documents"
 
-### Similar Books 422 Fix (#1220, 2026-03-26)
-
-**Root cause:** The `/books/{id}/similar` endpoint fetched `embedding_v` from the parent book document, but embeddings only exist on chunk documents (which carry `parent_id_s`). Parent docs never have embeddings, so the endpoint always returned 422.
-
-**Fix:** Rewrote `similar_books()` in `src/solr-search/main.py` to:
-1. Fetch embedding from the book's first chunk via `parent_id_s:{book_id}` (chunk-first to save a Solr round-trip)
-2. If no chunks, fall back to parent existence check to distinguish 404 reasons
-3. Run kNN against other books' chunks (exclude same `parent_id_s`)
-4. Deduplicate chunk hits by `parent_id_s` (keep highest score per book)
-5. Fetch parent metadata for unique similar books (including `thumbnail_url_s`)
-6. Return results sorted by descending similarity score
-
-**Key insight:** In the Solr schema, parent docs are book-level metadata (title, author, etc.) while chunks carry the actual content and embedding vectors. Any endpoint needing embeddings must query chunks, not parents. The `EXCLUDE_CHUNKS_FQ` filter (`-parent_id_s:[* TO *]`) is the standard way to scope to parent docs only.
-
-**Status codes:** 404 = no chunks found (book not indexed or doesn't exist), 422 = chunks exist but no `embedding_v` (embedding pipeline hasn't processed it yet).
-
-**Test pattern:** The happy path requires 3 mock Solr calls (fetch chunk → kNN → fetch parent metadata). Use `_similar_happy_side_effect()` helper to generate the mock chain.
-
 ### PR #1226 Review Round 2 & 3 (2026-03-26)
 
 **Sort order fix:** Changed first-chunk lookup from `sort: id asc` to `sort: chunk_index_i asc`. The `id` sort relied on Solr document ID format (which happens to have chunk index in it), but `chunk_index_i` is the dedicated schema field — more reliable and self-documenting.
@@ -348,8 +330,8 @@
 **thumbnail_url wired into response:** The parent metadata query already fetched `thumbnail_url_s` but never included it in results. Added `thumbnail_url` field using `_thumbnail_url()` helper for consistent nginx-prefixed URLs.
 
 **Final status codes:**
-- **404** — no chunks found → book not in the index at all
-- **422** — chunks exist but no `embedding_v` → book indexed but embedding pipeline hasn't processed it yet
+- **404** — no chunks found for this book ID (book may not be indexed yet, or may still be processing)
+- **422** — chunks exist but first chunk has no `embedding_v` → embedding pipeline hasn't processed it yet
 
 ### PR #1226 Review Round 3 Learnings (2026-03-26)
 

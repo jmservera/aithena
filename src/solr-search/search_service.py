@@ -216,7 +216,7 @@ def build_inline_content_disposition(filename: str) -> str:
     return f"inline; filename*=UTF-8''{quote(sanitized, safe='')}"
 
 
-def _thumbnail_url(raw: str | None) -> str | None:
+def thumbnail_url(raw: str | None) -> str | None:
     """Prefix a relative thumbnail path with ``/thumbnails/`` for nginx."""
     if not raw:
         return None
@@ -262,7 +262,7 @@ def normalize_book(
         "score": document.get("score"),
         "highlights": collect_highlights(document_id, highlighting),
         "document_url": document_url,
-        "thumbnail_url": _thumbnail_url(document.get("thumbnail_url_s")),
+        "thumbnail_url": thumbnail_url(document.get("thumbnail_url_s")),
     }
 
 

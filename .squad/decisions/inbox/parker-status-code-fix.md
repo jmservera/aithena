@@ -20,9 +20,9 @@ Both cases returned 404, but they have different semantics.
 
 ## Rationale
 
-HTTP 404 means "resource not found." When no chunks exist for the requested book ID, the book has either never been indexed or doesn't exist at all — a genuine "not found" condition. HTTP 422 (Unprocessable Entity) applies when chunks exist (proving the book is indexed) but the embedding pipeline hasn't populated the `embedding_v` field yet — the server understands the request but can't fulfill it with the current state of the resource.
+HTTP 404 means "resource not found." When no chunks exist for the requested book ID, the book may not have been indexed yet, or may still be processing — no chunk documents have been created for it. This is a genuine "not found" condition because the parent document may or may not exist; what matters is that there is nothing to compute similarity from. HTTP 422 (Unprocessable Entity) applies when chunks exist (proving the book is at least partially indexed) but the first chunk has no `embedding_v` field yet — the server understands the request but can't fulfill it because the embedding pipeline hasn't run.
 
-This lets clients distinguish between "book doesn't exist" (retry won't help) and "book isn't ready yet" (retry after embedding pipeline runs).
+This lets clients distinguish between "no chunks for this book" (check back after indexing) and "chunks exist but embeddings aren't ready yet" (retry after embedding pipeline runs).
 
 ## Impact
 
