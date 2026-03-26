@@ -206,16 +206,11 @@ class TestSentenceBoundaryChunking:
         assert chunks[1] == "The bird flew."
 
     def test_sentence_boundary_chunks_never_exceed_chunk_size(self):
-        text = (
-            "First sentence here. Second sentence here. "
-            "Third sentence here. Fourth sentence here."
-        )
+        text = "First sentence here. Second sentence here. Third sentence here. Fourth sentence here."
         for cs in (5, 8, 10, 15):
             chunks = chunk_text(text, chunk_size=cs, overlap=0)
             for chunk in chunks:
-                assert len(chunk.split()) <= cs, (
-                    f"chunk_size={cs}: chunk has {len(chunk.split())} words"
-                )
+                assert len(chunk.split()) <= cs, f"chunk_size={cs}: chunk has {len(chunk.split())} words"
 
     def test_chunks_may_be_shorter_to_respect_sentences(self):
         # "Hello world." = 2 words, "How are you today?" = 4 words.
@@ -282,11 +277,7 @@ class TestSentenceBoundaryChunking:
         assert chunks == ["item one item two", "item three item four"]
 
     def test_mixed_long_and_short_sentences(self):
-        text = (
-            "Short one. "
-            "This is a much longer sentence that exceeds the chunk size easily. "
-            "Tiny."
-        )
+        text = "Short one. This is a much longer sentence that exceeds the chunk size easily. Tiny."
         chunks = chunk_text(text, chunk_size=6, overlap=0)
         # "Short one." (2 words) fits in a chunk.
         # Next sentence is 12 words → word-based fallback.
