@@ -1,8 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.15.0 Release Notes](release-notes/v1.15.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.16.0 Release Notes](release-notes/v1.16.0.md).
 
-**v1.15.0 operator note:** this release includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150) section below.
+**v1.15.0 / v1.16.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150) and [v1.16.0 Deployment Updates](#deployment-updates-for-v1160) sections below.
 
 ## System architecture overview
 
@@ -3571,3 +3571,112 @@ All changes are backward-compatible:
 - Existing admin routes continue to work alongside the new sidebar navigation
 - The `THUMBNAIL_DIR` variable has a sensible default; existing deployments work without changes
 - Solr SSO passthrough is additive; direct Solr access still works with existing credentials
+
+---
+
+## Pre-Release Container Workflow (v1.16.0+)
+
+Starting with v1.16.0, Aithena uses a formal release-candidate (RC) build and smoke-test workflow before promoting images to a final release tag. This reduces the risk of shipping regressions to production.
+
+### What RC builds are
+
+An RC build produces container images tagged `-rc.N` (e.g. `ghcr.io/owner/aithena-ui:1.16.0-rc.1`). RC images are built for all 6 services and run through the same smoke tests as a full release. RC images are **never** tagged `latest`, major (`1`), or minor (`1.16`) — only the final promoted release receives those tags.
+
+### Triggering a manual RC build
+
+1. Go to **Actions** → **Pre-release** in the GitHub repository.
+2. Click **Run workflow**, select the `dev` branch, and optionally specify an RC number (leave blank to auto-increment).
+3. The workflow builds all 6 services, pushes RC-tagged images, and runs smoke tests.
+
+RC builds also trigger automatically on PRs targeting `main` (non-fork PRs only).
+
+### RC auto-numbering
+
+When no RC number is specified, the workflow queries ghcr.io for existing RC tags for the current version and increments to the next available number. If no RC tags exist yet, it defaults to `-rc.1`. You can override this with a manual input (e.g. `rc.3`) on the workflow dispatch form.
+
+### Running RC images locally
+
+Pull and start the RC stack using the production Compose file:
+
+```bash
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml pull
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
+```
+
+Substitute `1.16.0-rc.1` with the actual RC tag you want to test. The `VERSION` environment variable overrides the image tag used by the production Compose file.
+
+### Validation before promotion
+
+Before promoting an RC to a final release tag, confirm:
+
+- [ ] All smoke tests passed in the pre-release workflow run
+- [ ] Search UI displays thumbnails, page numbers, and consistent chunk text across all search modes
+- [ ] Similar books feature returns results (HTTP 200) from a book detail page
+- [ ] Admin dashboard indexing status list is paginated
+- [ ] Thumbnails load correctly in the UI (confirm nginx content-type is `image/jpeg`)
+- [ ] No RabbitMQ deprecation warnings in container logs
+
+### Rollback
+
+If an RC reveals a blocking issue:
+
+1. Stop the RC stack:
+   ```bash
+   docker compose -f docker-compose.prod.yml down
+   ```
+2. Pull and restart the previous release:
+   ```bash
+   VERSION=1.15.0 docker compose -f docker-compose.prod.yml pull
+   VERSION=1.15.0 docker compose -f docker-compose.prod.yml up -d
+   ```
+
+### HF_TOKEN security note
+
+The `embeddings-server` build requires a Hugging Face token (`HF_TOKEN`) to download model weights at build time. This token must be stored as a GitHub Actions secret named `HF_TOKEN` in your repository. It is never embedded in images or logged. Ensure the secret is set before triggering any RC or release build.
+
+---
+
+## Deployment Updates for v1.16.0
+
+v1.16.0 delivers search UI fixes, a similar-books endpoint correction, admin UI pagination, and infrastructure fixes. There are no breaking changes from v1.15.0.
+
+### Upgrade from v1.15.0
+
+No migration steps required. Standard upgrade procedure:
+
+```bash
+docker compose pull
+docker compose down
+docker compose up -d
+```
+
+All fixes take effect automatically from the new images.
+
+### RabbitMQ deprecation warning fix
+
+v1.16.0 updates the RabbitMQ configuration to suppress the `management_metrics_collection` deprecation warning that appeared in container startup logs. No operator action is needed — the fix is applied inside the container image.
+
+### Thumbnail serving fix
+
+The nginx static content routing has been corrected so that thumbnail requests return `image/jpeg` instead of `text/html`. This restores thumbnail display across all views. No operator configuration change is required.
+
+### Admin dashboard pagination
+
+The admin indexing status list is now paginated automatically. No operator configuration is required. The change takes effect immediately on upgrade.
+
+### Search UI fixes
+
+All four search display regressions (#1221 – #1224) are fixed in the `aithena-ui` image. No operator action is required beyond pulling the new image.
+
+### Similar books fix
+
+The similar-books kNN query regression (#1220) is fixed in the `solr-search` image. No operator action is required.
+
+### Backward compatibility
+
+All changes are backward-compatible:
+
+- No new environment variables introduced
+- No volume layout changes
+- No auth or configuration format changes
+- Existing deployments can upgrade with a standard `docker compose pull && docker compose up -d`

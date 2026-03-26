@@ -1,6 +1,8 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.15.0 Release Notes](release-notes/v1.15.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.16.0 Release Notes](release-notes/v1.16.0.md).
+
+**v1.16.0 fixes search experience:** semantic search results now use the same display style as keyword results, keyword match context is truncated to 40 words, page numbers are restored for keyword matches, and thumbnails are now shown for all search modes. See [Search (v1.16.0 fixes)](#searching-for-books) below.
 
 **v1.15.0 introduces admin portal improvements:** redesigned sidebar navigation for the admin dashboard, per-service log viewer for inspecting container logs, detailed indexing status, and SSO passthrough for Solr admin access. See [Admin Portal (v1.15.0+)](#admin-portal-v1150) below.
 
@@ -24,9 +26,9 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - search by keyword, semantic meaning, or a hybrid of both
 - see chunk text previews with page ranges in search results (v1.11.0+)
 - narrow results with facets
-- view document thumbnails in search and library results (v1.11.0+)
+- view document thumbnails in search and library results (v1.11.0+; all search modes v1.16.0+)
 - click a result to open a richer book detail view with metadata and similar books (v1.11.0+)
-- open PDFs directly from search results with improved toolbar actions like fullscreen and download (v1.11.0+)
+- open PDFs directly from search results with page-level navigation from keyword matches (v1.11.0+; page links restored v1.16.0+)
 - use Similar Books recommendations from the book detail view or PDF viewer (v1.11.0+)
 - upload PDF files via drag-and-drop (v0.6.0+)
 - organize documents into personal collections with notes (v1.10.0+)
