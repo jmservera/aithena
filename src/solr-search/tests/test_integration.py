@@ -874,8 +874,8 @@ def test_similar_returns_404_when_no_chunks_found(mock_solr_post: MagicMock) -> 
 
 
 @patch("main.requests.post")
-def test_similar_returns_404_when_chunk_has_no_embedding(mock_solr_post: MagicMock) -> None:
-    """If the chunk exists but has no embedding_v, return 404."""
+def test_similar_returns_422_when_chunk_has_no_embedding(mock_solr_post: MagicMock) -> None:
+    """If the chunk exists but has no embedding_v, return 422 (unprocessable)."""
     client = get_client()
     chunk_no_embedding = {"parent_id_s": "source-doc-id"}
     mock_solr_post.side_effect = [
@@ -885,7 +885,7 @@ def test_similar_returns_404_when_chunk_has_no_embedding(mock_solr_post: MagicMo
 
     response = client.get("/books/source-doc-id/similar")
 
-    assert response.status_code == 404
+    assert response.status_code == 422
     assert "embedding" in response.json()["detail"].lower()
 
 

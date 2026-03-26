@@ -1473,7 +1473,7 @@ def similar_books(
             "q": f"parent_id_s:{solr_escape(document_id)}",
             "fl": f"{embedding_field},parent_id_s",
             "rows": 1,
-            "sort": "id asc",
+            "sort": "chunk_index_i asc",
             "wt": "json",
         }
     )
@@ -1490,7 +1490,7 @@ def similar_books(
     vector = chunk_docs[0].get(embedding_field)
     if not vector:
         raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail=(
                 f"Document {document_id!r} has no embedding yet. "
                 "Embeddings are populated by the Phase 3 indexing pipeline."
