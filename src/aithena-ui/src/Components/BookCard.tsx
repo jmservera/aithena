@@ -284,13 +284,9 @@ const BookCard = memo(function BookCard({
           </div>
           {((book.is_chunk && book.chunk_text) || highlightMarkup.length > 0) && (
             <div className="book-highlights">
-              {chunkPagesLabel && (
-                <span className="book-highlight-pages">{chunkPagesLabel}</span>
-              )}
+              {chunkPagesLabel && <span className="book-highlight-pages">{chunkPagesLabel}</span>}
               {book.is_chunk && book.chunk_text && (
-                <p className="book-highlight-snippet">
-                  {truncateChunkText(book.chunk_text)}
-                </p>
+                <p className="book-highlight-snippet">{truncateChunkText(book.chunk_text)}</p>
               )}
               {highlightMarkup.map((snippet) => (
                 <p

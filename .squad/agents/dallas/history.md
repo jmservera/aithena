@@ -7,6 +7,13 @@
 
 ## Recent
 
+### PR #1225 review fixes (v1.16.0)
+- Rebased branch onto origin/dev to remove PRD pollution commit (c516233)
+- Fixed 14 prettier errors, 3 ruff errors (S110 bare except, W292 trailing newlines)
+- Fixed 6 failing solr-search tests: updated call counts for secondary chunk page query
+- Addressed review comments: gated thumbnail derivation on `is_chunk`, fixed test regex
+- All checks green: eslint, prettier, ruff, pytest (6/6 target tests pass)
+
 ### #1138 — Admin dashboard pagination (v1.16.0)
 - Added client-side pagination (page size 25) to all three admin tabs (queued/processed/failed)
 - React: reused existing `Pagination` component, added per-tab page state to `AdminPage`
@@ -382,6 +389,10 @@ Four search result display regressions identified during v1.16.0 pre-release:
 - Keyword search EXCLUDE_CHUNKS_FQ returns parent docs (no page info). Semantic returns chunks (no thumbnail). Both need enrichment.
 - Backend collaboration: traced bug to query structure, added backend functions for root cause fix.
 - truncateChunkText handles <em> tags: strips HTML when measuring, centers around first match.
+- PR review fix pattern: secondary Solr query (chunk page enrichment) adds +1 to mock_post.call_count in tests — always verify with `parent_id_s` fq check.
+- Thumbnail URL derivation must be gated on `is_chunk` — only chunk results need client-side derivation; parent docs get thumbnails from the backend.
+- Regex in test assertions: `/Page \\d/` in JS matches literal backslash-d, not digits. Use `/Page \d+/`.
+- Rebase `--onto` is the right tool to excise polluting commits from a PR branch.
 
 ---
 

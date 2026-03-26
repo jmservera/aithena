@@ -125,7 +125,7 @@ export function useSearch() {
       const data: SearchResponse = await response.json();
       // Derive thumbnail URLs for chunk results that lack them (#1221).
       const enriched = (data.results ?? []).map((r) => {
-        if (!r.thumbnail_url && r.file_path) {
+        if (!r.thumbnail_url && r.is_chunk && r.file_path) {
           return { ...r, thumbnail_url: `/thumbnails/${r.file_path}.thumb.jpg` };
         }
         return r;
