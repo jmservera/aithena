@@ -7,11 +7,12 @@
  * - If no highlights, truncation starts from the beginning.
  *
  * @param text - The text to truncate (may contain `<em>…</em>` tags).
- * @param maxChars - Maximum **visible** characters (HTML tags excluded). Default 20.
+ * @param maxChars - Maximum **visible** characters (HTML tags excluded). Default 250
+ *   (~40 words), keeping search result snippets compact.
  * @returns Truncated text with "…" where content was trimmed, or the original
  *          text when it already fits within the limit.
  */
-export function truncateChunkText(text: string, maxChars: number = 20): string {
+export function truncateChunkText(text: string, maxChars: number = 250): string {
   if (!text) return text;
 
   // Strip <em>/</ em> to measure visible length.

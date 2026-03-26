@@ -19,17 +19,17 @@ describe('truncateChunkText', () => {
   });
 
   it('returns text unchanged when exactly at limit', () => {
-    const exact = 'A'.repeat(20);
+    const exact = 'A'.repeat(250);
     expect(truncateChunkText(exact)).toBe(exact);
   });
 
   // ---- plain text (semantic search) ----
 
-  it('truncates plain text to 20 chars by default and adds ellipsis', () => {
-    const long = 'Neural networks learn hierarchical representations of data';
+  it('truncates plain text to 250 chars by default and adds ellipsis', () => {
+    const long = 'A'.repeat(300);
     const result = truncateChunkText(long);
     // visible chars (before ellipsis) should be exactly 20
-    expect(result.replace('…', '').length).toBe(20);
+    expect(result.replace('…', '').length).toBe(250);
     expect(result.endsWith('…')).toBe(true);
   });
 

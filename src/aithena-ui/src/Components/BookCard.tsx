@@ -121,7 +121,7 @@ const BookCard = memo(function BookCard({
     () =>
       book.highlights?.map((snippet, index) => ({
         id: `${book.id}-highlight-${index}`,
-        html: `…${sanitizeHighlight(snippet)}…`,
+        html: sanitizeHighlight(truncateChunkText(snippet)),
       })) ?? [],
     [book.highlights, book.id]
   );
@@ -282,19 +282,16 @@ const BookCard = memo(function BookCard({
               <span className="book-meta-item book-found-pages">{foundPagesLabel}</span>
             )}
           </div>
-          {book.is_chunk && book.chunk_text && (
-            <div className="book-chunk-text">
-              <span className="book-chunk-text__label">
-                {intl.formatMessage({ id: 'book.matchingText' })}
-                {chunkPagesLabel && (
-                  <span className="book-chunk-text__pages"> · {chunkPagesLabel}</span>
-                )}
-              </span>
-              <p className="book-chunk-text__content">{truncateChunkText(book.chunk_text)}</p>
-            </div>
-          )}
-          {highlightMarkup.length > 0 && (
+          {((book.is_chunk && book.chunk_text) || highlightMarkup.length > 0) && (
             <div className="book-highlights">
+              {chunkPagesLabel && (
+                <span className="book-highlight-pages">{chunkPagesLabel}</span>
+              )}
+              {book.is_chunk && book.chunk_text && (
+                <p className="book-highlight-snippet">
+                  {truncateChunkText(book.chunk_text)}
+                </p>
+              )}
               {highlightMarkup.map((snippet) => (
                 <p
                   key={snippet.id}

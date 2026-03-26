@@ -114,6 +114,7 @@ from perf_metrics import perf_metrics
 from search_service import (
     EXCLUDE_CHUNKS_FQ,
     SOLR_FIELD_LIST,
+    build_chunk_page_params,
     build_filter_queries,
     build_inline_content_disposition,
     build_knn_params,
@@ -121,6 +122,7 @@ from search_service import (
     build_solr_params,
     decode_document_token,
     encode_document_token,
+    enrich_results_with_chunk_pages,
     get_query_embedding,
     normalize_book,
     parse_facet_counts,
@@ -1022,6 +1024,19 @@ def _search_keyword(
         )
         for document in response.get("docs", [])
     ]
+
+    # Enrich keyword results with page numbers from matching chunks (#1222).
+    parent_ids = [r["id"] for r in results if r.get("pages") is None]
+    if parent_ids:
+        try:
+            chunk_payload = query_solr(
+                build_chunk_page_params(q, parent_ids, filters),
+                collection=collection,
+            )
+            chunk_docs = chunk_payload.get("response", {}).get("docs", [])
+            enrich_results_with_chunk_pages(results, chunk_docs)
+        except Exception:
+            pass  # best-effort; page info is non-critical
 
     search_response: dict[str, Any] = {
         "query": q,
@@ -3147,4 +3162,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=settings.port)
-
