@@ -394,6 +394,14 @@ Four search result display regressions identified during v1.16.0 pre-release:
 - Regex in test assertions: `/Page \\d/` in JS matches literal backslash-d, not digits. Use `/Page \d+/`.
 - Rebase `--onto` is the right tool to excise polluting commits from a PR branch.
 
+### #1225 Round 2 — PR review comment fixes
+- Fixed App.css prettier formatting (CI `format:check` was failing)
+- Fixed truncateChunkText test inline comment: said 20 but assertion was 250
+- Extracted `CHUNK_PAGES_ROWS_MULTIPLIER` constant in search_service.py with explanatory comment
+- Replied to all 9 review comments (5 current + 4 outdated)
+- Comments D/E (thumbnail_url_s unused, 404→422 in similar_books) directed to companion PR #1226
+- **Learning:** `prettier --check` and `eslint` are separate CI steps; fixing eslint doesn't fix prettier. Always run both locally before pushing.
+
 ---
 
 ## End of History — Dallas Frontend Developer (Reskill #2, 2026-03-22)
