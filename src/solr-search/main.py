@@ -115,7 +115,6 @@ from search_service import (
     EXCLUDE_CHUNKS_FQ,
     SOLR_FIELD_LIST,
     build_chunk_page_params,
-    thumbnail_url,
     build_filter_queries,
     build_inline_content_disposition,
     build_knn_params,
@@ -131,6 +130,7 @@ from search_service import (
     reciprocal_rank_fusion,
     resolve_document_path,
     solr_escape,
+    thumbnail_url,
 )
 
 setup_logging(service_name="solr-search")

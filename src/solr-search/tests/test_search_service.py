@@ -7,7 +7,6 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from search_service import (  # noqa: E402
     SOLR_FIELD_LIST,
-    thumbnail_url,
     build_chunk_page_params,
     build_filter_queries,
     build_inline_content_disposition,
@@ -22,6 +21,7 @@ from search_service import (  # noqa: E402
     parse_facet_counts,
     resolve_document_path,
     solr_escape,
+    thumbnail_url,
 )
 
 
