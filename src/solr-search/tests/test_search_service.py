@@ -7,7 +7,6 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from search_service import (  # noqa: E402
     SOLR_FIELD_LIST,
-    _thumbnail_url,
     build_chunk_page_params,
     build_filter_queries,
     build_inline_content_disposition,
@@ -22,6 +21,7 @@ from search_service import (  # noqa: E402
     parse_facet_counts,
     resolve_document_path,
     solr_escape,
+    thumbnail_url,
 )
 
 
@@ -1150,29 +1150,29 @@ def test_solr_field_list_includes_thumbnail_url() -> None:
     assert "thumbnail_url_s" in SOLR_FIELD_LIST
 
 
-# ── _thumbnail_url helper ────────────────────────────────────────────────────
+# ── thumbnail_url helper ─────────────────────────────────────────────────────
 
 
 def test_thumbnail_url_prefixes_relative_path() -> None:
     """Relative thumbnail paths get /thumbnails/ prefix for nginx routing."""
-    assert _thumbnail_url("library/book.pdf.thumb.jpg") == "/thumbnails/library/book.pdf.thumb.jpg"
+    assert thumbnail_url("library/book.pdf.thumb.jpg") == "/thumbnails/library/book.pdf.thumb.jpg"
 
 
 def test_thumbnail_url_returns_none_for_none() -> None:
-    assert _thumbnail_url(None) is None
+    assert thumbnail_url(None) is None
 
 
 def test_thumbnail_url_returns_none_for_empty_string() -> None:
-    assert _thumbnail_url("") is None
+    assert thumbnail_url("") is None
 
 
 def test_thumbnail_url_preserves_absolute_http_url() -> None:
     url = "https://covers.example.com/thumb.jpg"
-    assert _thumbnail_url(url) == url
+    assert thumbnail_url(url) == url
 
 
 def test_thumbnail_url_preserves_absolute_path() -> None:
-    assert _thumbnail_url("/thumbnails/already-prefixed.thumb.jpg") == "/thumbnails/already-prefixed.thumb.jpg"
+    assert thumbnail_url("/thumbnails/already-prefixed.thumb.jpg") == "/thumbnails/already-prefixed.thumb.jpg"
 
 
 # ── build_chunk_page_params ──────────────────────────────────────────────────

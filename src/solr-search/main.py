@@ -130,6 +130,7 @@ from search_service import (
     reciprocal_rank_fusion,
     resolve_document_path,
     solr_escape,
+    thumbnail_url,
 )
 
 setup_logging(service_name="solr-search")
@@ -1453,64 +1454,66 @@ def similar_books(
     """
     embedding_field = settings.book_embedding_field
 
-    # 1. Verify the parent book exists.
-    source_payload = query_solr(
-        {
-            "q": f"id:{solr_escape(document_id)}",
-            "fl": "id",
-            "rows": 1,
-            "wt": "json",
-            "fq": EXCLUDE_CHUNKS_FQ,
-        }
-    )
-    source_docs = source_payload.get("response", {}).get("docs", [])
-    if not source_docs:
-        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
-
-    # 2. Fetch the embedding from the book's first chunk.
+    # 1. Fetch the embedding from the book's first chunk.
+    #    Attempted first to avoid an extra Solr round-trip — if chunks exist
+    #    the parent book must exist too.
     chunk_payload = query_solr(
         {
             "q": f"parent_id_s:{solr_escape(document_id)}",
             "fl": f"{embedding_field},parent_id_s",
             "rows": 1,
-            "sort": "id asc",
+            "sort": "chunk_index_i asc",
             "wt": "json",
         }
     )
     chunk_docs = chunk_payload.get("response", {}).get("docs", [])
+
     if not chunk_docs:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"No indexed chunks found for document {document_id!r}. "
-                "The document may still be processing."
-            ),
+        # No chunks found — check if the parent book exists to distinguish
+        # "book not found" from "book exists but no chunks yet".
+        source_payload = query_solr(
+            {
+                "q": f"id:{solr_escape(document_id)}",
+                "fl": "id",
+                "rows": 1,
+                "wt": "json",
+                "fq": EXCLUDE_CHUNKS_FQ,
+            }
         )
+        source_docs = source_payload.get("response", {}).get("docs", [])
+        if source_docs:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No indexed chunks found for document {document_id!r}. "
+                    "The document may still be processing."
+                ),
+            )
+        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
 
     vector = chunk_docs[0].get(embedding_field)
     if not vector:
         raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail=(
                 f"Document {document_id!r} has no embedding yet. "
                 "Embeddings are populated by the Phase 3 indexing pipeline."
             ),
         )
 
-    # 3. kNN search against chunks, excluding chunks from the same book.
+    # 2. kNN search against chunks, excluding chunks from the same book.
     knn_top_k = (limit + 1) * 5  # over-fetch to allow deduplication
-    knn_payload = query_solr(
-        {
-            "q": f"{{!knn f={embedding_field} topK={knn_top_k}}}{json.dumps(vector)}",
-            "fq": f"-parent_id_s:{solr_escape(document_id)}",
-            "fl": "id,parent_id_s,score",
-            "rows": knn_top_k,
-            "wt": "json",
-        }
+    knn_params = build_knn_params(
+        vector,
+        knn_top_k,
+        embedding_field,
+        filters=[f"-parent_id_s:{solr_escape(document_id)}"],
     )
+    knn_params["fl"] = "id,parent_id_s,score"  # only need IDs and scores
+    knn_payload = query_solr(knn_params)
     chunk_hits = knn_payload.get("response", {}).get("docs", [])
 
-    # 4. Deduplicate by parent_id_s — keep the highest-scoring chunk per book.
+    # 3. Deduplicate by parent_id_s — keep the highest-scoring chunk per book.
     seen_parents: dict[str, float] = {}
     for chunk in chunk_hits:
         pid = chunk.get("parent_id_s")
@@ -1527,7 +1530,7 @@ def similar_books(
     if not seen_parents:
         return {"results": []}
 
-    # 5. Fetch parent book metadata for the unique similar books.
+    # 4. Fetch parent book metadata for the unique similar books.
     parent_id_query = " OR ".join(f"id:{solr_escape(pid)}" for pid in seen_parents)
     parent_payload = query_solr(
         {
@@ -1542,7 +1545,7 @@ def similar_books(
         doc["id"]: doc for doc in parent_payload.get("response", {}).get("docs", []) if "id" in doc
     }
 
-    # 6. Build results sorted by descending similarity score.
+    # 5. Build results sorted by descending similarity score.
     ranked = sorted(seen_parents.items(), key=lambda item: item[1], reverse=True)
     results = []
     for pid, score in ranked:
@@ -1555,6 +1558,7 @@ def similar_books(
                 "author": doc.get("author_s") or "Unknown",
                 "year": doc.get("year_i"),
                 "category": doc.get("category_s"),
+                "thumbnail_url": thumbnail_url(doc.get("thumbnail_url_s")),
                 "document_url": build_document_url(request, file_path),
                 "score": score,
             }
