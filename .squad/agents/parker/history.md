@@ -320,3 +320,21 @@
 **Key Learning:**
 - Solr data model: parent docs carry metadata, chunks carry embeddings. Any kNN-based feature must query chunks, not parents.
 - `search_service.py` comment (line 304-306) explicitly documents this: "Embedding vectors live on chunk documents"
+
+### Similar Books 422 Fix (#1220, 2026-03-26)
+
+**Root cause:** The `/books/{id}/similar` endpoint fetched `embedding_v` from the parent book document, but embeddings only exist on chunk documents (which carry `parent_id_s`). Parent docs never have embeddings, so the endpoint always returned 422.
+
+**Fix:** Rewrote `similar_books()` in `src/solr-search/main.py` to:
+1. Verify the parent book exists (with `EXCLUDE_CHUNKS_FQ`)
+2. Fetch embedding from the book's first chunk via `parent_id_s:{book_id}`
+3. Run kNN against other books' chunks (exclude same `parent_id_s`)
+4. Deduplicate chunk hits by `parent_id_s` (keep highest score per book)
+5. Fetch parent metadata for unique similar books
+6. Return results sorted by descending similarity score
+
+**Key insight:** In the Solr schema, parent docs are book-level metadata (title, author, etc.) while chunks carry the actual content and embedding vectors. Any endpoint needing embeddings must query chunks, not parents. The `EXCLUDE_CHUNKS_FQ` filter (`-parent_id_s:[* TO *]`) is the standard way to scope to parent docs only.
+
+**Error code change:** Missing embedding/chunks now returns 404 (not 422) — these are "not found yet" conditions, not validation errors.
+
+**Test pattern:** The happy path requires 4 mock Solr calls (verify parent → fetch chunk → kNN → fetch parent metadata). Use `_similar_happy_side_effect()` helper to generate the mock chain.
