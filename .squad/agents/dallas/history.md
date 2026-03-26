@@ -362,6 +362,27 @@ src/aithena-ui/src/
 - **Medium:** CSS Modules scaling, advanced E2E, collections feature complete workflow.
 - **Learning:** Theme implementation, advanced responsive patterns, performance optimization at scale.
 
+
+## Work Item: Search UI Bug Fixes (#1221-#1224) - 2026-03-26
+
+### Context
+Four search result display regressions identified during v1.16.0 pre-release:
+- #1221: Thumbnails missing in semantic search results
+- #1222: Page numbers missing in keyword search results
+- #1223: Snippet text truncated to 20 chars (far too short)
+- #1224: Inconsistent styling between chunk text and keyword highlights
+
+### Changes (PR #1225)
+1. **Thumbnail derivation** (search.ts): Derive from file_path using /thumbnails/{path}.thumb.jpg convention.
+2. **Chunk page enrichment** (search_service.py, main.py): Secondary Solr query for page ranges. Best-effort.
+3. **Snippet length** (truncateChunkText.ts): Default 20->250 chars. Applied to keyword highlights too.
+4. **Unified rendering** (BookCard.tsx, App.css): Merged chunk/highlight sections under .book-highlights.
+
+### Learnings
+- Keyword search EXCLUDE_CHUNKS_FQ returns parent docs (no page info). Semantic returns chunks (no thumbnail). Both need enrichment.
+- Backend collaboration: traced bug to query structure, added backend functions for root cause fix.
+- truncateChunkText handles <em> tags: strips HTML when measuring, centers around first match.
+
 ---
 
 ## End of History — Dallas Frontend Developer (Reskill #2, 2026-03-22)
