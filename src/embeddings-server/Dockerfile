@@ -1,9 +1,11 @@
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
+ARG MODEL_CACHE_IMAGE=ghcr.io/jmservera/embeddings-server-base:3.12-slim-multilingual-e5-base
 
 # ── Stage 1: model-cache (pre-built base image with cached model) ──
-FROM ghcr.io/jmservera/embeddings-server-base:3.12-slim-multilingual-e5-base AS model-cache
+# To use a different model, override MODEL_CACHE_IMAGE and MODEL_NAME together.
+FROM ${MODEL_CACHE_IMAGE} AS model-cache
 
 # ── Stage 2: dependencies (changes when pyproject.toml / uv.lock change) ──
 FROM python:3.12-slim AS dependencies
@@ -30,6 +32,7 @@ FROM python:3.12-slim AS runtime
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
+# MODEL_NAME must match the model cached in MODEL_CACHE_IMAGE
 ARG MODEL_NAME=intfloat/multilingual-e5-base
 
 LABEL org.opencontainers.image.version="${VERSION}" \
