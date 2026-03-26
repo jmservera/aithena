@@ -312,9 +312,9 @@
 
 **Fix:**
 - Query first chunk via `parent_id_s:{document_id}` sorted by `chunk_index_i asc`
-- Fall back to parent doc check for 404 vs 422 distinction
-- kNN `fq` uses a list `[-parent_id_s:{id}, -id:{id}]` to exclude source book
-- Over-fetch `limit * 3 + 1` candidates, de-duplicate by `parent_id_s`
+- If no chunks, fall back to parent doc check for 404 vs 422 distinction
+- kNN `fq` uses a single filter string `-parent_id_s:{id}` to exclude source book
+- Set `knn_top_k = (limit + 1) * 5` to over-fetch candidates, then de-duplicate by `parent_id_s`
 - Return parent book IDs, not chunk IDs
 
 **Key Learning:**
@@ -326,25 +326,27 @@
 **Root cause:** The `/books/{id}/similar` endpoint fetched `embedding_v` from the parent book document, but embeddings only exist on chunk documents (which carry `parent_id_s`). Parent docs never have embeddings, so the endpoint always returned 422.
 
 **Fix:** Rewrote `similar_books()` in `src/solr-search/main.py` to:
-1. Verify the parent book exists (with `EXCLUDE_CHUNKS_FQ`)
-2. Fetch embedding from the book's first chunk via `parent_id_s:{book_id}`
+1. Fetch embedding from the book's first chunk via `parent_id_s:{book_id}` (chunk-first to save a Solr round-trip)
+2. If no chunks, fall back to parent existence check to distinguish 404 reasons
 3. Run kNN against other books' chunks (exclude same `parent_id_s`)
 4. Deduplicate chunk hits by `parent_id_s` (keep highest score per book)
-5. Fetch parent metadata for unique similar books
+5. Fetch parent metadata for unique similar books (including `thumbnail_url_s`)
 6. Return results sorted by descending similarity score
 
 **Key insight:** In the Solr schema, parent docs are book-level metadata (title, author, etc.) while chunks carry the actual content and embedding vectors. Any endpoint needing embeddings must query chunks, not parents. The `EXCLUDE_CHUNKS_FQ` filter (`-parent_id_s:[* TO *]`) is the standard way to scope to parent docs only.
 
-**Error code change:** Missing embedding/chunks now returns 404 (not 422) — these are "not found yet" conditions, not validation errors.
+**Status codes:** 404 = no chunks found (book not indexed or doesn't exist), 422 = chunks exist but no `embedding_v` (embedding pipeline hasn't processed it yet).
 
-**Test pattern:** The happy path requires 4 mock Solr calls (verify parent → fetch chunk → kNN → fetch parent metadata). Use `_similar_happy_side_effect()` helper to generate the mock chain.
+**Test pattern:** The happy path requires 3 mock Solr calls (fetch chunk → kNN → fetch parent metadata). Use `_similar_happy_side_effect()` helper to generate the mock chain.
 
-### PR #1226 Review Round 2 (2026-03-26)
+### PR #1226 Review Round 2 & 3 (2026-03-26)
 
 **Sort order fix:** Changed first-chunk lookup from `sort: id asc` to `sort: chunk_index_i asc`. The `id` sort relied on Solr document ID format (which happens to have chunk index in it), but `chunk_index_i` is the dedicated schema field — more reliable and self-documenting.
 
-**Status code correction:** Changed missing-embedding response from 404 to 422 (Unprocessable Entity). Semantic distinction:
+**Chunk-first refactor:** Moved chunk lookup before parent existence check to save 1 Solr round-trip in the happy path. If chunks exist, the parent must exist. Parent check only runs when no chunks are found (to distinguish "book not found" from "no chunks yet").
+
+**thumbnail_url wired into response:** The parent metadata query already fetched `thumbnail_url_s` but never included it in results. Added `thumbnail_url` field using `_thumbnail_url()` helper for consistent nginx-prefixed URLs.
+
+**Final status codes:**
 - **404** — no chunks found → book not in the index at all
 - **422** — chunks exist but no `embedding_v` → book indexed but embedding pipeline hasn't processed it yet
-
-This follows HTTP semantics: 404 = resource doesn't exist, 422 = resource exists but can't be processed as requested. The book *exists* (we found its chunks), we just can't compute similarity without an embedding vector.

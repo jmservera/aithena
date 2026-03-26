@@ -710,12 +710,11 @@ def _make_mock_response(docs: list[dict], num_found: int | None = None) -> Magic
 
 
 def _similar_happy_side_effect() -> list[MagicMock]:
-    """Return mock responses for the 4 Solr calls in the happy path."""
+    """Return mock responses for the 3 Solr calls in the happy path."""
     return [
-        _make_mock_response([SOURCE_PARENT_DOC]),            # 1. verify parent exists
-        _make_mock_response([SOURCE_CHUNK_WITH_EMBEDDING]),  # 2. fetch first chunk
-        _make_mock_response(SIMILAR_CHUNK_HITS),             # 3. kNN search
-        _make_mock_response(SIMILAR_PARENT_DOCS),            # 4. fetch parent metadata
+        _make_mock_response([SOURCE_CHUNK_WITH_EMBEDDING]),  # 1. fetch first chunk
+        _make_mock_response(SIMILAR_CHUNK_HITS),             # 2. kNN search
+        _make_mock_response(SIMILAR_PARENT_DOCS),            # 3. fetch parent metadata
     ]
 
 
@@ -752,20 +751,20 @@ def test_similar_result_contains_required_fields(mock_solr_post: MagicMock) -> N
 
     assert response.status_code == 200
     result = response.json()["results"][0]
-    for field in ("id", "title", "author", "year", "category", "document_url", "score"):
+    for field in ("id", "title", "author", "year", "category", "thumbnail_url", "document_url", "score"):
         assert field in result, f"Missing required field: {field}"
 
 
 @patch("main.requests.post")
 def test_similar_excludes_source_book_chunks_via_fq(mock_solr_post: MagicMock) -> None:
-    """The kNN query (3rd Solr call) must exclude chunks belonging to the source book."""
+    """The kNN query (2nd Solr call) must exclude chunks belonging to the source book."""
     client = get_client()
     mock_solr_post.side_effect = _similar_happy_side_effect()
 
     client.get("/books/source-doc-id/similar")
 
-    assert mock_solr_post.call_count == 4
-    knn_call_params = mock_solr_post.call_args_list[2][1]["data"]
+    assert mock_solr_post.call_count == 3
+    knn_call_params = mock_solr_post.call_args_list[1][1]["data"]
     fq = knn_call_params.get("fq", "")
     assert "-parent_id_s:" in fq
     assert "source" in fq
@@ -778,7 +777,7 @@ def test_similar_uses_knn_query_parser(mock_solr_post: MagicMock) -> None:
 
     client.get("/books/source-doc-id/similar")
 
-    knn_call_params = mock_solr_post.call_args_list[2][1]["data"]
+    knn_call_params = mock_solr_post.call_args_list[1][1]["data"]
     q = knn_call_params.get("q", "")
     assert "{!knn" in q
     assert "embedding_v" in q
@@ -786,13 +785,13 @@ def test_similar_uses_knn_query_parser(mock_solr_post: MagicMock) -> None:
 
 @patch("main.requests.post")
 def test_similar_fetches_embedding_from_chunk(mock_solr_post: MagicMock) -> None:
-    """The 2nd Solr call must query chunks by parent_id_s and request embedding_v."""
+    """The 1st Solr call must query chunks by parent_id_s and request embedding_v."""
     client = get_client()
     mock_solr_post.side_effect = _similar_happy_side_effect()
 
     client.get("/books/source-doc-id/similar")
 
-    chunk_call_params = mock_solr_post.call_args_list[1][1]["data"]
+    chunk_call_params = mock_solr_post.call_args_list[0][1]["data"]
     q = chunk_call_params.get("q", "")
     assert "parent_id_s:" in q
     assert "source" in q
@@ -818,7 +817,6 @@ def test_similar_deduplicates_by_parent_id(mock_solr_post: MagicMock) -> None:
 def test_similar_limit_controls_result_count(mock_solr_post: MagicMock) -> None:
     client = get_client()
     mock_solr_post.side_effect = [
-        _make_mock_response([SOURCE_PARENT_DOC]),
         _make_mock_response([SOURCE_CHUNK_WITH_EMBEDDING]),
         _make_mock_response(SIMILAR_CHUNK_HITS),
         _make_mock_response(SIMILAR_PARENT_DOCS[:1]),
@@ -827,14 +825,15 @@ def test_similar_limit_controls_result_count(mock_solr_post: MagicMock) -> None:
     response = client.get("/books/source-doc-id/similar?limit=1")
 
     assert response.status_code == 200
-    assert len(response.json()["results"]) <= 1
+    results = response.json()["results"]
+    assert len(results) == 1
+    assert results[0]["id"] == "parent-a"
 
 
 @patch("main.requests.post")
 def test_similar_min_score_filters_results(mock_solr_post: MagicMock) -> None:
     client = get_client()
     mock_solr_post.side_effect = [
-        _make_mock_response([SOURCE_PARENT_DOC]),
         _make_mock_response([SOURCE_CHUNK_WITH_EMBEDDING]),
         _make_mock_response(SIMILAR_CHUNK_HITS),  # parent-a: 0.93, parent-b: 0.85
         _make_mock_response(SIMILAR_PARENT_DOCS[:1]),
@@ -851,7 +850,10 @@ def test_similar_min_score_filters_results(mock_solr_post: MagicMock) -> None:
 @patch("main.requests.post")
 def test_similar_returns_404_for_unknown_id(mock_solr_post: MagicMock) -> None:
     client = get_client()
-    mock_solr_post.return_value = _make_mock_response([])
+    mock_solr_post.side_effect = [
+        _make_mock_response([]),  # no chunks
+        _make_mock_response([]),  # no parent either
+    ]
 
     response = client.get("/books/nonexistent-id/similar")
 
@@ -863,8 +865,8 @@ def test_similar_returns_404_when_no_chunks_found(mock_solr_post: MagicMock) -> 
     """If the parent exists but has no indexed chunks yet, return 404."""
     client = get_client()
     mock_solr_post.side_effect = [
-        _make_mock_response([SOURCE_PARENT_DOC]),
-        _make_mock_response([]),  # no chunks
+        _make_mock_response([]),                  # no chunks
+        _make_mock_response([SOURCE_PARENT_DOC]), # parent exists
     ]
 
     response = client.get("/books/source-doc-id/similar")
@@ -879,7 +881,6 @@ def test_similar_returns_422_when_chunk_has_no_embedding(mock_solr_post: MagicMo
     client = get_client()
     chunk_no_embedding = {"parent_id_s": "source-doc-id"}
     mock_solr_post.side_effect = [
-        _make_mock_response([SOURCE_PARENT_DOC]),
         _make_mock_response([chunk_no_embedding]),
     ]
 
@@ -893,7 +894,6 @@ def test_similar_returns_422_when_chunk_has_no_embedding(mock_solr_post: MagicMo
 def test_similar_returns_empty_list_when_no_similar_found(mock_solr_post: MagicMock) -> None:
     client = get_client()
     mock_solr_post.side_effect = [
-        _make_mock_response([SOURCE_PARENT_DOC]),
         _make_mock_response([SOURCE_CHUNK_WITH_EMBEDDING]),
         _make_mock_response([]),  # no kNN hits
     ]

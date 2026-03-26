@@ -115,6 +115,7 @@ from search_service import (
     EXCLUDE_CHUNKS_FQ,
     SOLR_FIELD_LIST,
     build_chunk_page_params,
+    thumbnail_url,
     build_filter_queries,
     build_inline_content_disposition,
     build_knn_params,
@@ -1453,21 +1454,9 @@ def similar_books(
     """
     embedding_field = settings.book_embedding_field
 
-    # 1. Verify the parent book exists.
-    source_payload = query_solr(
-        {
-            "q": f"id:{solr_escape(document_id)}",
-            "fl": "id",
-            "rows": 1,
-            "wt": "json",
-            "fq": EXCLUDE_CHUNKS_FQ,
-        }
-    )
-    source_docs = source_payload.get("response", {}).get("docs", [])
-    if not source_docs:
-        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
-
-    # 2. Fetch the embedding from the book's first chunk.
+    # 1. Fetch the embedding from the book's first chunk.
+    #    Attempted first to avoid an extra Solr round-trip — if chunks exist
+    #    the parent book must exist too.
     chunk_payload = query_solr(
         {
             "q": f"parent_id_s:{solr_escape(document_id)}",
@@ -1478,14 +1467,29 @@ def similar_books(
         }
     )
     chunk_docs = chunk_payload.get("response", {}).get("docs", [])
+
     if not chunk_docs:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"No indexed chunks found for document {document_id!r}. "
-                "The document may still be processing."
-            ),
+        # No chunks found — check if the parent book exists to distinguish
+        # "book not found" from "book exists but no chunks yet".
+        source_payload = query_solr(
+            {
+                "q": f"id:{solr_escape(document_id)}",
+                "fl": "id",
+                "rows": 1,
+                "wt": "json",
+                "fq": EXCLUDE_CHUNKS_FQ,
+            }
         )
+        source_docs = source_payload.get("response", {}).get("docs", [])
+        if source_docs:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No indexed chunks found for document {document_id!r}. "
+                    "The document may still be processing."
+                ),
+            )
+        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
 
     vector = chunk_docs[0].get(embedding_field)
     if not vector:
@@ -1497,7 +1501,7 @@ def similar_books(
             ),
         )
 
-    # 3. kNN search against chunks, excluding chunks from the same book.
+    # 2. kNN search against chunks, excluding chunks from the same book.
     knn_top_k = (limit + 1) * 5  # over-fetch to allow deduplication
     knn_payload = query_solr(
         {
@@ -1510,7 +1514,7 @@ def similar_books(
     )
     chunk_hits = knn_payload.get("response", {}).get("docs", [])
 
-    # 4. Deduplicate by parent_id_s — keep the highest-scoring chunk per book.
+    # 3. Deduplicate by parent_id_s — keep the highest-scoring chunk per book.
     seen_parents: dict[str, float] = {}
     for chunk in chunk_hits:
         pid = chunk.get("parent_id_s")
@@ -1527,7 +1531,7 @@ def similar_books(
     if not seen_parents:
         return {"results": []}
 
-    # 5. Fetch parent book metadata for the unique similar books.
+    # 4. Fetch parent book metadata for the unique similar books.
     parent_id_query = " OR ".join(f"id:{solr_escape(pid)}" for pid in seen_parents)
     parent_payload = query_solr(
         {
@@ -1542,7 +1546,7 @@ def similar_books(
         doc["id"]: doc for doc in parent_payload.get("response", {}).get("docs", []) if "id" in doc
     }
 
-    # 6. Build results sorted by descending similarity score.
+    # 5. Build results sorted by descending similarity score.
     ranked = sorted(seen_parents.items(), key=lambda item: item[1], reverse=True)
     results = []
     for pid, score in ranked:
@@ -1555,6 +1559,7 @@ def similar_books(
                 "author": doc.get("author_s") or "Unknown",
                 "year": doc.get("year_i"),
                 "category": doc.get("category_s"),
+                "thumbnail_url": thumbnail_url(doc.get("thumbnail_url_s")),
                 "document_url": build_document_url(request, file_path),
                 "score": score,
             }
