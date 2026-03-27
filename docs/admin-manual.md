@@ -121,6 +121,143 @@ Common local URLs:
 
 Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
 
+## GPU Acceleration Setup (v1.17.0)
+
+GPU acceleration is opt-in and requires host-level driver installation before Docker can access GPU hardware. This section covers prerequisites, installation, and verification for both NVIDIA and Intel GPUs.
+
+### Architecture
+
+The `embeddings-server` container accepts two environment variables:
+
+| Variable | Values | Default | Purpose |
+|----------|--------|---------|---------|
+| `DEVICE` | `auto`, `cpu`, `cuda`, `xpu` | `cpu` | PyTorch device selection |
+| `BACKEND` | `torch`, `openvino` | `torch` | Inference backend |
+
+GPU acceleration is activated via Docker Compose override files that:
+1. Set the correct `DEVICE` and `BACKEND` environment variables
+2. Pass through the GPU device to the container
+
+### NVIDIA GPU Setup
+
+#### Prerequisites
+- NVIDIA GPU with CUDA Compute Capability 5.0+ (GeForce GTX 900 series or newer)
+- NVIDIA driver 525.60.13+ (Linux) or 528.33+ (Windows)
+- Docker Engine 19.03+ with GPU support
+
+#### Install NVIDIA Container Toolkit
+
+**Ubuntu/Debian:**
+```bash
+# Add NVIDIA package repository
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+#### Verify NVIDIA setup
+```bash
+# Host GPU check
+nvidia-smi
+
+# Docker GPU passthrough check
+docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+```
+
+#### Start with NVIDIA
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+```
+
+### Intel GPU Setup
+
+#### Prerequisites
+- Intel GPU with OpenCL/Level Zero support (Arc A-series, Iris Xe, or integrated GPU with Gen12+)
+- Intel compute-runtime drivers
+- `/dev/dri` device accessible
+
+#### Install Intel compute-runtime
+
+**Ubuntu/Debian:**
+```bash
+# Add Intel package repository
+wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | \
+  sudo gpg --dearmor -o /usr/share/keyrings/intel-graphics.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] \
+  https://repositories.intel.com/gpu/ubuntu jammy unified" | \
+  sudo tee /etc/apt/sources.list.d/intel-gpu.list
+
+sudo apt-get update
+sudo apt-get install -y intel-opencl-icd intel-level-zero-gpu
+```
+
+#### Verify Intel setup
+```bash
+# Check /dev/dri exists
+ls -la /dev/dri/
+
+# Check Intel GPU is recognized
+sudo apt-get install -y clinfo
+clinfo | head -20
+```
+
+#### Start with Intel
+```bash
+docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+```
+
+### WSL2 GPU Passthrough (Windows)
+
+Many users run Aithena on Windows via WSL2. GPU passthrough works for both NVIDIA and Intel GPUs.
+
+#### NVIDIA on WSL2
+1. Install latest NVIDIA Game Ready or Studio drivers on **Windows** (not inside WSL)
+2. WSL2 automatically exposes `/dev/dxg` for GPU access
+3. Install NVIDIA Container Toolkit inside WSL (same steps as Ubuntu above)
+4. Docker Desktop WSL2 backend automatically supports `--gpus`
+
+#### Intel on WSL2
+1. Install latest Intel GPU drivers on **Windows**
+2. WSL2 exposes `/dev/dri/renderD128` for GPU compute
+3. Verify: `ls -la /dev/dri/` inside WSL — you should see `renderD128`
+4. The Intel override file maps `/dev/dri` into the container
+
+### Verification
+
+After starting with a GPU override, check the embeddings-server health endpoint:
+
+```bash
+curl -s http://localhost:8080/health | python3 -m json.tool
+```
+
+Expected output with GPU:
+```json
+{
+    "status": "healthy",
+    "model": "intfloat/multilingual-e5-base",
+    "embedding_dim": 768,
+    "device": "cuda",
+    "backend": "torch"
+}
+```
+
+### Troubleshooting Quick Reference
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `CUDA not available` in logs | NVIDIA drivers not installed or toolkit missing | Install NVIDIA Container Toolkit |
+| `xpu device not found` | Intel compute-runtime missing | Install intel-opencl-icd |
+| Health shows `device: cpu` despite override | Override file not loaded | Check `docker compose config` output |
+| Container crash on startup | GPU memory insufficient | Try `DEVICE=cpu` to verify, then check GPU memory |
+| `/dev/dri` not found in WSL2 | GPU drivers not installed on Windows host | Install Windows GPU drivers, restart WSL |
+
 ## Backup dashboard and restore workflow (v1.14.x)
 
 The current UI includes an admin-only backup dashboard at:
