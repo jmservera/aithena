@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-03-27
+
+### Added
+
+- **GPU acceleration support** — NVIDIA and Intel GPU passthrough via Docker Compose override files (#1213)
+- **GPU device/backend configuration** — DEVICE and BACKEND env vars for embeddings-server (#1215)
+- **GPU documentation** — admin setup guide (#1216), troubleshooting guide (#1217), user manual section (#1218)
+- **GPU configuration tests** — comprehensive test suite for device/backend config (#1214)
+- **Embeddings server base image** — pre-built base image with cached model for faster container builds (#1243)
+
+### Changed
+
+- **VERSION bumped to 1.17.0** (#1244)
+- **Release documentation** — added v1.16.0 release notes and test reports (#1245)
+
+### Security
+
+- **picomatch** bumped 4.0.3 → 4.0.4 in aithena-ui (#1219)
+- **requests** bumped 2.32.5 → 2.33.0 in document-indexer, solr-search, admin (#1228, #1229, #1230)
+
 ## [1.16.0] — 2026-03-26
 
 ### Added
