@@ -2,6 +2,7 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG BASE_TAG=3.12-slim-multilingual-e5-base
+ARG INSTALL_OPENVINO=false
 
 # ── Stage 1: dependencies (changes when pyproject.toml / uv.lock change) ──
 FROM python:3.12-slim AS dependencies
@@ -15,6 +16,12 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
+
+# Optionally install OpenVINO for Intel GPU support
+ARG INSTALL_OPENVINO
+RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
+      /app/.venv/bin/pip install --no-cache-dir optimum-intel openvino; \
+    fi
 
 # ── Stage 2: runtime (base image already contains the cached model) ──
 FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
@@ -49,14 +56,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
 COPY --from=dependencies /app/.venv /app/.venv
-
-# Make base-image OpenVINO packages visible to .venv (no-op on CPU images)
-RUN if python -c "import openvino" 2>/dev/null; then \
-      cp -r /usr/local/lib/python3.12/site-packages/openvino* \
-            /app/.venv/lib/python3.12/site-packages/ 2>/dev/null || true; \
-      cp -r /usr/local/lib/python3.12/site-packages/optimum* \
-            /app/.venv/lib/python3.12/site-packages/ 2>/dev/null || true; \
-    fi
 
 COPY main.py model_utils.py /app/
 COPY config /app/config
