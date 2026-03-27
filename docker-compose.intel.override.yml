@@ -23,6 +23,7 @@ services:
     build:
       args:
         INSTALL_OPENVINO: "true"
+        BASE_TAG: "3.12-slim-multilingual-e5-base-openvino"
     environment:
       - DEVICE=xpu
       - BACKEND=openvino

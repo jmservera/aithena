@@ -62,18 +62,6 @@ ENV PATH="/app/.venv/bin:${PATH}"
 COPY main.py model_utils.py /app/
 COPY config /app/config
 
-# Pre-download OpenVINO model files at build time.
-# The base image caches torch-format model files; OpenVINO needs its own
-# IR format files (openvino_model.xml + .bin) from the HF repo's openvino/ folder.
-# SentenceTransformer(backend="openvino") fetches them automatically.
-ARG INSTALL_OPENVINO=false
-RUN --mount=type=secret,id=HF_TOKEN \
-    if [ "$INSTALL_OPENVINO" = "true" ]; then \
-      HF_TOKEN="$(cat /run/secrets/HF_TOKEN 2>/dev/null || true)" \
-      HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
-      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-base', backend='openvino')" ; \
-    fi
-
 RUN chown -R app:app /app /models
 
 EXPOSE 8080
