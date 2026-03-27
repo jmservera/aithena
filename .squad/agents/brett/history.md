@@ -120,8 +120,18 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | — | #1120 | Extract reusable container build workflow (build-containers.yml) |
 | — | #1123 | Pre-release container workflow (RC tags via build-containers.yml, auto-increment) |
 | — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
+| — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
 
 ---
+
+## Learnings
+
+### GPU Compose Override Pattern
+- Used override files (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
+- `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
+- NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
+- Intel: `/dev/dri` device passthrough + `video`/`render` group_add + `INSTALL_OPENVINO` build arg
+- Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
 
 ## Reskill Notes (2026-07-25)
 
