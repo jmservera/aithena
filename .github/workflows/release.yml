@@ -113,7 +113,7 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   smoke-test:
-    name: Smoke test ${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
+    name: Smoke test ${{ matrix.service.image }}
     runs-on: ubuntu-latest
     needs:
       - validate-tag
@@ -135,13 +135,6 @@ jobs:
             port: "8080"
             health_endpoint: /health
             startup_timeout: 60
-          - image: embeddings-server
-            type: http
-            port: "8080"
-            health_endpoint: /health
-            startup_timeout: 60
-            tag_suffix: "-openvino"
-            docker_env: "-e BACKEND=openvino -e DEVICE=cpu"
           - image: admin
             type: http
             port: "8501"
@@ -168,26 +161,23 @@ jobs:
         env:
           SERVICE_IMAGE: ${{ matrix.service.image }}
           VERSION: ${{ needs.validate-tag.outputs.version }}
-          TAG_SUFFIX: ${{ matrix.service.tag_suffix || '' }}
-        run: docker pull "ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${VERSION}${TAG_SUFFIX}"
+        run: docker pull "ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${VERSION}"
 
       - name: Start container and check health endpoint
         if: matrix.service.type == 'http'
         env:
           SERVICE_IMAGE: ${{ matrix.service.image }}
           VERSION: ${{ needs.validate-tag.outputs.version }}
-          TAG_SUFFIX: ${{ matrix.service.tag_suffix || '' }}
           SERVICE_PORT: ${{ matrix.service.port }}
           HEALTH_ENDPOINT: ${{ matrix.service.health_endpoint }}
           STARTUP_TIMEOUT: ${{ matrix.service.startup_timeout }}
-          DOCKER_ENV: ${{ matrix.service.docker_env || '' }}
         run: |
-          image="ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${VERSION}${TAG_SUFFIX}"
+          image="ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${VERSION}"
           port="${SERVICE_PORT}"
           endpoint="${HEALTH_ENDPOINT}"
           timeout="${STARTUP_TIMEOUT}"
 
-          docker run -d --name smoke-container -p "${port}:${port}" ${DOCKER_ENV} "${image}"
+          docker run -d --name smoke-container -p "${port}:${port}" "${image}"
 
           elapsed=0
           echo "Waiting up to ${timeout}s for ${SERVICE_IMAGE} at :${port}${endpoint}..."
@@ -212,9 +202,8 @@ jobs:
         env:
           SERVICE_IMAGE: ${{ matrix.service.image }}
           VERSION: ${{ needs.validate-tag.outputs.version }}
-          TAG_SUFFIX: ${{ matrix.service.tag_suffix || '' }}
         run: |
-          image="ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${VERSION}${TAG_SUFFIX}"
+          image="ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${VERSION}"
 
           docker run -d --name smoke-container "${image}"
 
