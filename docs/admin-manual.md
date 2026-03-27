@@ -181,7 +181,7 @@ docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
 #### Prerequisites
 - Intel GPU with OpenCL/Level Zero support (Arc A-series, Iris Xe, or integrated GPU with Gen12+)
 - Intel compute-runtime drivers
-- `/dev/dri` device accessible
+- `/dev/dxg` device accessible
 
 #### Install Intel compute-runtime
 
@@ -200,8 +200,8 @@ sudo apt-get install -y intel-opencl-icd intel-level-zero-gpu
 
 #### Verify Intel setup
 ```bash
-# Check /dev/dri exists
-ls -la /dev/dri/
+# Check /dev/dxg exists
+ls -la /dev/dxg/
 
 # Check Intel GPU is recognized
 sudo apt-get install -y clinfo
@@ -225,9 +225,9 @@ Many users run Aithena on Windows via WSL2. GPU passthrough works for both NVIDI
 
 #### Intel on WSL2
 1. Install latest Intel GPU drivers on **Windows**
-2. WSL2 exposes `/dev/dri/renderD128` for GPU compute
-3. Verify: `ls -la /dev/dri/` inside WSL — you should see `renderD128`
-4. The Intel override file maps `/dev/dri` into the container
+2. WSL2 exposes `/dev/dxg` for GPU compute
+3. Verify: `ls -la /dev/dxg/` inside WSL — you should see `renderD128`
+4. The Intel override file maps `/dev/dxg` into the container
 
 ### Verification
 
@@ -256,7 +256,7 @@ Expected output with GPU:
 | `xpu device not found` | Intel compute-runtime missing | Install intel-opencl-icd |
 | Health shows `device: cpu` despite override | Override file not loaded | Check `docker compose config` output |
 | Container crash on startup | GPU memory insufficient | Try `DEVICE=cpu` to verify, then check GPU memory |
-| `/dev/dri` not found in WSL2 | GPU drivers not installed on Windows host | Install Windows GPU drivers, restart WSL |
+| `/dev/dxg` not found in WSL2 | GPU drivers not installed on Windows host | Install Windows GPU drivers, restart WSL |
 
 ## Backup dashboard and restore workflow (v1.14.x)
 

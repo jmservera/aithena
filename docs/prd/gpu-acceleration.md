@@ -236,7 +236,7 @@ services:
 services:
   embeddings-server:
     devices:
-      - /dev/dri  # Intel GPU device passthrough
+      - /dev/dxg  # Intel GPU device passthrough (WSL2)
     environment:
       DEVICE: "${DEVICE:-auto}"
       BACKEND: "${BACKEND:-openvino}"
