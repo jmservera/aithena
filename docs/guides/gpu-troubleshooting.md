@@ -112,7 +112,7 @@ docker compose logs embeddings-server --tail 100 | grep -i "error\|fail\|cuda\|x
 |-------|-------|-----|
 | `CUDA out of memory` | GPU VRAM insufficient | Model needs ~1.5GB VRAM. Close other GPU apps. |
 | `RuntimeError: No CUDA GPUs are available` | Docker can't see GPU | Reinstall NVIDIA Container Toolkit |
-| `ImportError: openvino` | OpenVINO runtime broken | Rebuild the image or check Python environment |
+| `ImportError: openvino` | OpenVINO not installed in image | Use the `-openvino` image variant or rebuild with `INSTALL_OPENVINO=true` build arg |
 | `xpu` device errors | Intel compute-runtime version mismatch | Update to latest compute-runtime |
 
 ### Performance Not Improved
@@ -144,6 +144,7 @@ CPU mode is always stable. GPU acceleration is purely opt-in.
 |----------|--------|---------|-------------|
 | `DEVICE` | `auto`, `cpu`, `cuda`, `xpu` | `cpu` | Compute device for embeddings |
 | `BACKEND` | `torch`, `openvino` | `torch` | Inference backend |
+| `INSTALL_OPENVINO` | `true`, `false` | `false` | Build arg: include OpenVINO + pre-download IR model |
 
 ## Log Messages Reference
 

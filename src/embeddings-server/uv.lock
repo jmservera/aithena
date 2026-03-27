@@ -253,10 +253,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
-    { name = "openvino" },
-    { name = "optimum-intel" },
     { name = "sentence-transformers" },
     { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+openvino = [
+    { name = "openvino" },
+    { name = "optimum-intel" },
 ]
 
 [package.dev-dependencies]
@@ -270,11 +274,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.135,<1" },
-    { name = "openvino" },
-    { name = "optimum-intel" },
+    { name = "openvino", marker = "extra == 'openvino'" },
+    { name = "optimum-intel", marker = "extra == 'openvino'" },
     { name = "sentence-transformers", specifier = ">=3.4,<6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.42,<1" },
 ]
+provides-extras = ["openvino"]
 
 [package.metadata.requires-dev]
 dev = [

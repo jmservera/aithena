@@ -31,7 +31,7 @@ permissions:
 
 jobs:
   build-and-push:
-    name: Build and push ${{ matrix.service.image }}
+    name: Build and push ${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -52,6 +52,11 @@ jobs:
           - image: embeddings-server
             context: ./src/embeddings-server
             dockerfile: ./src/embeddings-server/Dockerfile
+          - image: embeddings-server
+            context: ./src/embeddings-server
+            dockerfile: ./src/embeddings-server/Dockerfile
+            tag_suffix: "-openvino"
+            extra_build_args: "INSTALL_OPENVINO=true"
           - image: solr-search
             context: .
             dockerfile: ./src/solr-search/Dockerfile
@@ -77,6 +82,8 @@ jobs:
         with:
           images: ghcr.io/jmservera/aithena-${{ matrix.service.image }}
           tags: ${{ inputs.tags }}
+          flavor: |
+            suffix=${{ matrix.service.tag_suffix || '' }}
 
       - name: Build and push image
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294  # v7.0.0
@@ -90,7 +97,8 @@ jobs:
             VERSION=${{ inputs.version }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ inputs.build-date }}
+            ${{ matrix.service.extra_build_args || '' }}
           secrets: |
             HF_TOKEN=${{ secrets.HF_TOKEN }}
-          cache-from: type=gha,scope=${{ matrix.service.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service.image }}
+          cache-from: type=gha,scope=${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
