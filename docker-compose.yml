@@ -89,6 +89,9 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
       secrets:
         - HF_TOKEN
+    environment:
+      - DEVICE=${DEVICE:-cpu}
+      - BACKEND=${BACKEND:-torch}
     expose:
       - "8080"
     healthcheck:
