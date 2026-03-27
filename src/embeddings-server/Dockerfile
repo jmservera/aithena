@@ -21,13 +21,7 @@ RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
     .venv/bin/pip install --no-cache-dir optimum-intel openvino; \
     fi
 
-# ── Stage 2: app-builder (changes most frequently — every code edit) ──
-FROM dependencies AS app-builder
-
-COPY main.py model_utils.py ./
-COPY config ./config
-
-# ── Stage 3: runtime (base image already contains the cached model) ──
+# ── Stage 2: runtime (base image already contains the cached model) ──
 FROM ghcr.io/jmservera/embeddings-server-base:3.12-slim-multilingual-e5-base AS runtime
 
 ARG VERSION
@@ -59,10 +53,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 
 RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
-COPY --from=app-builder /app/.venv /app/.venv
-COPY --from=app-builder /app/main.py /app/main.py
-COPY --from=app-builder /app/model_utils.py /app/model_utils.py
-COPY --from=app-builder /app/config /app/config
+COPY --from=dependencies /app/.venv /app/.venv
+COPY main.py model_utils.py /app/
+COPY config /app/config
 
 RUN chown -R app:app /app /models
 
