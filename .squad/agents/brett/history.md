@@ -130,8 +130,14 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Used override files (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
 - `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
 - NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
-- Intel: `/dev/dri` device passthrough + `video`/`render` group_add + `INSTALL_OPENVINO` build arg
+- Intel: `/dev/dri` device passthrough + `video`/`render` group_add + `BASE_TAG` build arg (selects openvino base image)
 - Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
+
+### System-Site-Packages for Base Image Dependencies (PR #1257)
+- When the base image ships pre-installed packages (e.g. openvino), don't reinstall them in the .venv — enable `include-system-site-packages = true` in `pyvenv.cfg` instead
+- This avoids version drift between base image packages and .venv copies
+- Pattern: `sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' /app/.venv/pyvenv.cfg` after COPY --from=dependencies
+- Removed `INSTALL_OPENVINO` build arg entirely — `BASE_TAG` is the only build arg needed to select the openvino variant
 
 ## Reskill Notes (2026-07-25)
 
