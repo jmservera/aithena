@@ -120,8 +120,18 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | — | #1120 | Extract reusable container build workflow (build-containers.yml) |
 | — | #1123 | Pre-release container workflow (RC tags via build-containers.yml, auto-increment) |
 | — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
+| — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
 
 ---
+
+## Learnings
+
+### GPU Compose Override Pattern
+- Used override files (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
+- `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
+- NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
+- Intel: `/dev/dri` device passthrough + `video`/`render` group_add + `INSTALL_OPENVINO` build arg
+- Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
 
 ## Reskill Notes (2026-07-25)
 
@@ -162,3 +172,27 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Offline installer architecture (3-stage)
 - A/B testing human evaluation UI (SQLite storage, nDCG@10+MRR metrics)
 - ZooKeeper AdminServer hardening
+
+---
+
+## v1.17.0 GPU Acceleration: Admin Manual Documentation (WI-11, 2026-03-25)
+
+### Work Item WI-11: Admin Manual GPU Documentation
+
+**PR #1216 opened (squad/1158-admin-manual-gpu).** Operator documentation for GPU deployment and troubleshooting.
+
+**Content added to admin-manual.md (137 lines):**
+- Architecture section: `DEVICE` and `BACKEND` environment variable reference table
+- NVIDIA GPU prerequisites, Container Toolkit installation (Ubuntu/Debian), host + Docker verification
+- Intel GPU prerequisites, compute-runtime installation, device verification
+- WSL2 GPU passthrough patterns for both vendors (Windows driver requirement emphasized)
+- Docker Compose override file usage pattern (`-f docker-compose.nvidia.override.yml`)
+- Embeddings-server health endpoint verification with expected GPU output
+- Troubleshooting table: 5 symptoms with diagnosis and resolution
+
+**Key learning for ops:** WSL2 GPU passthrough differs significantly by vendor:
+- **NVIDIA:** `/dev/dxg` exposed by WSL2 automatically; install drivers on Windows host; install Container Toolkit inside WSL
+- **Intel:** `/dev/dri/renderD128` exposed by WSL2; install drivers on Windows host; container override maps `/dev/dri` into container
+- **Critical:** Both vendors require GPU drivers installed on the Windows host, not inside WSL. This is the #1 failure point.
+
+**Placement:** Section added after "Deployment with Docker Compose" section (logical flow for first-time operators). Appears before "Backup dashboard and restore workflow" section.

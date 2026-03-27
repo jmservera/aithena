@@ -15,3 +15,9 @@ GIT_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
 BUILD_DATE = os.environ.get("BUILD_DATE", "unknown")
 # ADR-004 → updated: multilingual-e5-base replaces distiluse (benchmark #926)
 MODEL_NAME = os.environ.get("MODEL_NAME", "intfloat/multilingual-e5-base")
+
+# GPU acceleration config (v1.17.0)
+# DEVICE: auto|cpu|cuda|xpu — controls PyTorch device selection
+# BACKEND: torch|openvino — controls inference backend
+DEVICE = os.environ.get("DEVICE", "cpu")
+BACKEND = os.environ.get("BACKEND", "torch")

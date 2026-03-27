@@ -1,6 +1,8 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.15.0 Release Notes](release-notes/v1.15.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.16.0 Release Notes](release-notes/v1.16.0.md).
+
+**v1.16.0 fixes search experience:** semantic search results now use the same display style as keyword results, keyword match context is truncated to 40 words, page numbers are restored for keyword matches, and thumbnails are now shown for all search modes. See [Search (v1.16.0 fixes)](#searching-for-books) below.
 
 **v1.15.0 introduces admin portal improvements:** redesigned sidebar navigation for the admin dashboard, per-service log viewer for inspecting container logs, detailed indexing status, and SSO passthrough for Solr admin access. See [Admin Portal (v1.15.0+)](#admin-portal-v1150) below.
 
@@ -16,6 +18,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.15.0 adds admin portal enhancements:** sidebar navigation, per-service log viewer, detailed indexing status, and SSO for Solr admin. See [Admin Portal (v1.15.0+)](#admin-portal-v1150) below.
 
+**v1.17.0 adds GPU acceleration for embeddings:** optional GPU support speeds up document indexing 2–4× on NVIDIA GPUs and 1.5–2× on Intel GPUs. GPU is opt-in via environment variables; CPU-only deployments are unaffected. See [GPU Acceleration](#gpu-acceleration-v1170) below.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -24,9 +28,9 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - search by keyword, semantic meaning, or a hybrid of both
 - see chunk text previews with page ranges in search results (v1.11.0+)
 - narrow results with facets
-- view document thumbnails in search and library results (v1.11.0+)
+- view document thumbnails in search and library results (v1.11.0+; all search modes v1.16.0+)
 - click a result to open a richer book detail view with metadata and similar books (v1.11.0+)
-- open PDFs directly from search results with improved toolbar actions like fullscreen and download (v1.11.0+)
+- open PDFs directly from search results with page-level navigation from keyword matches (v1.11.0+; page links restored v1.16.0+)
 - use Similar Books recommendations from the book detail view or PDF viewer (v1.11.0+)
 - upload PDF files via drag-and-drop (v0.6.0+)
 - organize documents into personal collections with notes (v1.10.0+)
@@ -723,6 +727,56 @@ Administrators no longer need separate Solr credentials to access the Solr admin
 ### Detailed Indexing Status (v1.15.0+)
 
 The indexing status page now shows per-document indexing progress and status alignment with the system status view.
+
+## GPU Acceleration (v1.17.0)
+
+GPU acceleration is an optional feature that speeds up document indexing by offloading embedding generation to your GPU. This is most noticeable when indexing large libraries (10,000+ documents).
+
+### Performance expectations
+
+| Hardware | Improvement | Typical indexing time (50K docs) |
+|----------|------------|----------------------------------|
+| CPU only (default) | Baseline | 8–12 hours |
+| NVIDIA GPU (RTX 3060+) | 2–4× faster | 2–4 hours |
+| Intel GPU (Arc, iGPU via WSL2) | 1.5–2× faster | 4–6 hours |
+
+### How to enable
+
+GPU acceleration is controlled by two environment variables in your deployment:
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `DEVICE` | `auto`, `cpu`, `cuda`, `xpu` | `cpu` | Which compute device to use |
+| `BACKEND` | `torch`, `openvino` | `torch` | Inference backend |
+
+**For NVIDIA GPUs:**
+```bash
+# In your .env file or docker compose command
+DEVICE=cuda
+```
+Then start with the NVIDIA override:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+```
+
+**For Intel GPUs (including WSL2):**
+```bash
+DEVICE=xpu
+BACKEND=openvino
+```
+Then start with the Intel override:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+```
+
+**No GPU? No problem.** The default configuration (`DEVICE=cpu`, `BACKEND=torch`) works exactly as before — no changes needed.
+
+### Prerequisites
+
+- **NVIDIA:** NVIDIA drivers + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- **Intel:** Intel GPU drivers + `/dev/dri` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
+
+> **Note:** GPU acceleration only affects indexing speed. Search performance is unchanged — Solr handles search queries independently of the embedding hardware.
 
 ## Tips and tricks
 
