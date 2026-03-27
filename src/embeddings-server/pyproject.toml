@@ -7,10 +7,6 @@ dependencies = [
     "sentence-transformers>=3.4,<6",
     "fastapi>=0.135,<1",
     "uvicorn[standard]>=0.42,<1",
-]
-
-[project.optional-dependencies]
-openvino = [
     "optimum-intel",
     "openvino",
 ]

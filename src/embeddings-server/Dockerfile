@@ -2,7 +2,6 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG BASE_TAG=3.12-slim-multilingual-e5-base
-ARG INSTALL_OPENVINO=false
 
 # ── Stage 1: dependencies (changes when pyproject.toml / uv.lock change) ──
 FROM python:3.12-slim AS dependencies
@@ -16,12 +15,6 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
-
-# Optionally install OpenVINO for Intel GPU support
-ARG INSTALL_OPENVINO=false
-RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
-      uv sync --frozen --no-dev --no-install-project --extra openvino --native-tls; \
-    fi
 
 # ── Stage 2: runtime (base image already contains the cached model) ──
 FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
