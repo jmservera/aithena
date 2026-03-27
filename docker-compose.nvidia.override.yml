@@ -5,14 +5,13 @@
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
 #
-# Usage (production / GHCR images):
+# Production:
 #   docker compose -f docker-compose.prod.yml -f docker-compose.nvidia.override.yml up -d
 #
 # Prerequisites:
 #   - NVIDIA GPU with CUDA support
-#   - NVIDIA Container Toolkit installed:
-#     https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
-#   - nvidia-docker2 or nvidia-container-runtime configured as Docker default runtime
+#   - NVIDIA Container Toolkit installed
+#   - nvidia-container-runtime configured as Docker default runtime
 #
 # Verify GPU access:
 #   docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
