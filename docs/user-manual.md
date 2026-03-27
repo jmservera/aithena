@@ -772,7 +772,7 @@ docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
 ### Prerequisites
 
 - **NVIDIA:** NVIDIA drivers + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- **Intel:** Intel GPU drivers + `/dev/dri` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
+- **Intel:** Intel GPU drivers + `/dev/dxg` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
 
 > **Note:** GPU acceleration only affects indexing speed. Search performance is unchanged — Solr handles search queries independently of the embedding hardware.
 
