@@ -18,9 +18,9 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
 
 # Optionally install OpenVINO for Intel GPU support
-ARG INSTALL_OPENVINO
+ARG INSTALL_OPENVINO=false
 RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
-      /app/.venv/bin/pip install --no-cache-dir optimum-intel openvino; \
+      uv sync --frozen --no-dev --no-install-project --extra openvino --native-tls; \
     fi
 
 # ── Stage 2: runtime (base image already contains the cached model) ──
