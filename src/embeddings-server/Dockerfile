@@ -2,6 +2,7 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG BASE_TAG=3.12-slim-multilingual-e5-base
+ARG INSTALL_OPENVINO=false
 
 # ── Stage 1: dependencies (changes when pyproject.toml / uv.lock change) ──
 FROM python:3.12-slim AS dependencies
@@ -15,6 +16,12 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
+
+# Optionally install OpenVINO for Intel GPU support
+ARG INSTALL_OPENVINO=false
+RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
+      uv sync --frozen --no-dev --no-install-project --extra openvino --native-tls; \
+    fi
 
 # ── Stage 2: runtime (base image already contains the cached model) ──
 FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
@@ -50,12 +57,24 @@ RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --
 
 COPY --from=dependencies /app/.venv /app/.venv
 
+ENV PATH="/app/.venv/bin:${PATH}"
+
 COPY main.py model_utils.py /app/
 COPY config /app/config
 
-RUN chown -R app:app /app /models
+# Pre-download OpenVINO model files at build time.
+# The base image caches torch-format model files; OpenVINO needs its own
+# IR format files (openvino_model.xml + .bin) from the HF repo's openvino/ folder.
+# SentenceTransformer(backend="openvino") fetches them automatically.
+ARG INSTALL_OPENVINO=false
+RUN --mount=type=secret,id=HF_TOKEN \
+    if [ "$INSTALL_OPENVINO" = "true" ]; then \
+      HF_TOKEN="$(cat /run/secrets/HF_TOKEN 2>/dev/null || true)" \
+      HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
+      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-base', backend='openvino')" ; \
+    fi
 
-ENV PATH="/app/.venv/bin:${PATH}"
+RUN chown -R app:app /app /models
 
 EXPOSE 8080
 
