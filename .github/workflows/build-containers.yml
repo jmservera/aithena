@@ -56,7 +56,9 @@ jobs:
             context: ./src/embeddings-server
             dockerfile: ./src/embeddings-server/Dockerfile
             tag_suffix: "-openvino"
-            extra_build_args: "INSTALL_OPENVINO=true"
+            extra_build_args: |
+              INSTALL_OPENVINO=true
+              BASE_TAG=3.12-slim-multilingual-e5-base-openvino
           - image: solr-search
             context: .
             dockerfile: ./src/solr-search/Dockerfile
