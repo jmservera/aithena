@@ -18,6 +18,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.15.0 adds admin portal enhancements:** sidebar navigation, per-service log viewer, detailed indexing status, and SSO for Solr admin. See [Admin Portal (v1.15.0+)](#admin-portal-v1150) below.
 
+**v1.17.0 adds GPU acceleration for embeddings:** optional GPU support speeds up document indexing 2–4× on NVIDIA GPUs and 1.5–2× on Intel GPUs. GPU is opt-in via environment variables; CPU-only deployments are unaffected. See [GPU Acceleration](#gpu-acceleration-v1170) below.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -725,6 +727,56 @@ Administrators no longer need separate Solr credentials to access the Solr admin
 ### Detailed Indexing Status (v1.15.0+)
 
 The indexing status page now shows per-document indexing progress and status alignment with the system status view.
+
+## GPU Acceleration (v1.17.0)
+
+GPU acceleration is an optional feature that speeds up document indexing by offloading embedding generation to your GPU. This is most noticeable when indexing large libraries (10,000+ documents).
+
+### Performance expectations
+
+| Hardware | Improvement | Typical indexing time (50K docs) |
+|----------|------------|----------------------------------|
+| CPU only (default) | Baseline | 8–12 hours |
+| NVIDIA GPU (RTX 3060+) | 2–4× faster | 2–4 hours |
+| Intel GPU (Arc, iGPU via WSL2) | 1.5–2× faster | 4–6 hours |
+
+### How to enable
+
+GPU acceleration is controlled by two environment variables in your deployment:
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `DEVICE` | `auto`, `cpu`, `cuda`, `xpu` | `cpu` | Which compute device to use |
+| `BACKEND` | `torch`, `openvino` | `torch` | Inference backend |
+
+**For NVIDIA GPUs:**
+```bash
+# In your .env file or docker compose command
+DEVICE=cuda
+```
+Then start with the NVIDIA override:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+```
+
+**For Intel GPUs (including WSL2):**
+```bash
+DEVICE=xpu
+BACKEND=openvino
+```
+Then start with the Intel override:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+```
+
+**No GPU? No problem.** The default configuration (`DEVICE=cpu`, `BACKEND=torch`) works exactly as before — no changes needed.
+
+### Prerequisites
+
+- **NVIDIA:** NVIDIA drivers + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- **Intel:** Intel GPU drivers + `/dev/dri` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
+
+> **Note:** GPU acceleration only affects indexing speed. Search performance is unchanged — Solr handles search queries independently of the embedding hardware.
 
 ## Tips and tricks
 

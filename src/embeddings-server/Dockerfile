@@ -36,6 +36,12 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
 
+# OpenVINO support for Intel GPUs/CPUs (optional ~150MB)
+ARG INSTALL_OPENVINO=false
+RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
+    .venv/bin/pip install --no-cache-dir optimum-intel openvino; \
+    fi
+
 # ── Stage 3: app-builder (changes most frequently — every code edit) ──
 FROM dependencies AS app-builder
 
@@ -65,7 +71,9 @@ ENV VERSION=${VERSION} \
     HF_HOME=/models/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
     HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1
+    TRANSFORMERS_OFFLINE=1 \
+    DEVICE=cpu \
+    BACKEND=torch
 
 WORKDIR /app
 
