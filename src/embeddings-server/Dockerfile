@@ -2,28 +2,7 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-# ── Stage 1: model-downloader (changes only when model version changes) ──
-FROM python:3.12-slim AS model-downloader
-
-ARG MODEL_NAME=intfloat/multilingual-e5-base
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    HF_HOME=/models/huggingface \
-    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers
-
-RUN mkdir -p /models
-
-# Install the Python packages required to download the model
-RUN pip install --no-cache-dir sentence-transformers huggingface_hub
-
-# Pre-download the model so it is baked into the image.
-# HF_TOKEN is mounted as a build secret — never stored in image layers.
-RUN --mount=type=secret,id=HF_TOKEN \
-    export HF_TOKEN="$(cat /run/secrets/HF_TOKEN 2>/dev/null || true)" && \
-    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
-
-# ── Stage 2: dependencies (changes when pyproject.toml / uv.lock change) ──
+# ── Stage 1: dependencies (changes when pyproject.toml / uv.lock change) ──
 FROM python:3.12-slim AS dependencies
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -42,19 +21,12 @@ RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
     .venv/bin/pip install --no-cache-dir optimum-intel openvino; \
     fi
 
-# ── Stage 3: app-builder (changes most frequently — every code edit) ──
-FROM dependencies AS app-builder
-
-COPY main.py model_utils.py ./
-COPY config ./config
-
-# ── Stage 4: runtime (slim final image) ──
-FROM python:3.12-slim AS runtime
+# ── Stage 2: runtime (base image already contains the cached model) ──
+FROM ghcr.io/jmservera/embeddings-server-base:3.12-slim-multilingual-e5-base AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
-ARG MODEL_NAME=intfloat/multilingual-e5-base
 
 LABEL org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/jmservera/aithena" \
@@ -67,7 +39,7 @@ ENV VERSION=${VERSION} \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8080 \
-    MODEL_NAME=${MODEL_NAME} \
+    MODEL_NAME=intfloat/multilingual-e5-base \
     HF_HOME=/models/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
     HF_HUB_OFFLINE=1 \
@@ -81,11 +53,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 
 RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
-COPY --from=app-builder /app/.venv /app/.venv
-COPY --from=model-downloader /models /models
-COPY --from=app-builder /app/main.py /app/main.py
-COPY --from=app-builder /app/model_utils.py /app/model_utils.py
-COPY --from=app-builder /app/config /app/config
+COPY --from=dependencies /app/.venv /app/.venv
+COPY main.py model_utils.py /app/
+COPY config /app/config
 
 RUN chown -R app:app /app /models
 
