@@ -22,7 +22,6 @@ services:
     # Build args for local dev builds (only used with --build flag; ignored for pre-built images)
     build:
       args:
-        INSTALL_OPENVINO: "true"
         BASE_TAG: "3.12-slim-multilingual-e5-base-openvino"
     environment:
       - DEVICE=xpu

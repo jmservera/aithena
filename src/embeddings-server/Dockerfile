@@ -2,7 +2,6 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG BASE_TAG=3.12-slim-multilingual-e5-base
-ARG INSTALL_OPENVINO=false
 
 # ── Stage 1: dependencies (changes when pyproject.toml / uv.lock change) ──
 FROM python:3.12-slim AS dependencies
@@ -16,12 +15,6 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
-
-# Optionally install OpenVINO for Intel GPU support
-ARG INSTALL_OPENVINO=false
-RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
-      uv sync --frozen --no-dev --no-install-project --extra openvino --native-tls; \
-    fi
 
 # ── Stage 2: runtime (base image already contains the cached model) ──
 FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
@@ -56,6 +49,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
 
 COPY --from=dependencies /app/.venv /app/.venv
+
+# Let the .venv inherit system-site-packages from the base image (e.g. openvino)
+RUN sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' /app/.venv/pyvenv.cfg
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
