@@ -26,9 +26,7 @@ def _make_mock_model(embedding_dim: int = DEFAULT_DIM) -> MagicMock:
     """Build a minimal SentenceTransformer mock."""
     mock = MagicMock()
     mock.get_sentence_embedding_dimension.return_value = embedding_dim
-    mock.encode.side_effect = lambda sentences: np.zeros(
-        (len(sentences), embedding_dim), dtype=np.float32
-    )
+    mock.encode.side_effect = lambda sentences: np.zeros((len(sentences), embedding_dim), dtype=np.float32)
     return mock
 
 
@@ -57,9 +55,7 @@ def _fresh_import(
         os.environ[k] = v
 
     try:
-        with patch(
-            "sentence_transformers.SentenceTransformer", return_value=mock_model
-        ) as mock_st_class:
+        with patch("sentence_transformers.SentenceTransformer", return_value=mock_model) as mock_st_class:
             for key in list(sys.modules):
                 if key in ("main", "config"):
                     del sys.modules[key]
@@ -244,9 +240,7 @@ class TestGpuBackwardCompat:
     def test_existing_embeddings_still_work(self):
         """Embeddings endpoint produces same output with default GPU config."""
         client, _, _, _ = _fresh_import()
-        response = client.post(
-            "/v1/embeddings/", json={"input": "hello world"}
-        )
+        response = client.post("/v1/embeddings/", json={"input": "hello world"})
         assert response.status_code == 200
         data = response.json()
         assert data["object"] == "list"
