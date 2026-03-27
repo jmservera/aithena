@@ -17,9 +17,9 @@
 
 services:
   embeddings-server:
-    # For prod: override the image tag to pull the OpenVINO variant
+    # Override image tag to the pre-built OpenVINO variant (used by docker compose pull / up)
     image: ghcr.io/jmservera/aithena-embeddings-server:${EMBEDDINGS_VERSION:-${VERSION:-latest}-openvino}
-    # For dev builds: pass INSTALL_OPENVINO to the build
+    # Build args for local dev builds (only used with --build flag; ignored for pre-built images)
     build:
       args:
         INSTALL_OPENVINO: "true"
