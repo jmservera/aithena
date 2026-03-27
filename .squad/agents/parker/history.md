@@ -339,3 +339,21 @@
 - **Unused fl fields:** Always verify that every field in Solr `fl` lists is consumed by the response builder. `thumbnail_url_s` was fetched but never wired into the response dict.
 - **Test assertion strength:** `<= N` assertions pass on 0 results — always use `== N` and verify IDs for count-limit tests.
 - **History accuracy:** Keep implementation notes in sync with actual code. Contradictions between earlier and later history entries confuse future readers. Consolidate into a single authoritative section reflecting final state.
+### GPU Device/Backend Config (#1152, #1151 — v1.17.0)
+
+**Approach:** Added `DEVICE` and `BACKEND` environment variables to embeddings-server config for GPU acceleration. SentenceTransformer kwargs are only passed when non-default (cpu/torch defaults produce zero kwargs = identical behavior to pre-change code).
+
+**Key design decisions:**
+- `DEVICE=auto` passes `None` to SentenceTransformer, letting PyTorch auto-detect GPU
+- `DEVICE=cpu` (default) and `BACKEND=torch` (default) produce no extra kwargs — backward compatible
+- OpenVINO is optional: `INSTALL_OPENVINO=true` build arg installs `optimum-intel` + `openvino` into the .venv
+- Health and version endpoints expose device/backend for operational visibility
+- GPU config tests were pre-scaffolded with xfail markers (#1148); removed markers after implementation
+
+**File paths:**
+- `src/embeddings-server/config/__init__.py` — DEVICE, BACKEND env vars
+- `src/embeddings-server/main.py` — model_kwargs construction, endpoint updates
+- `src/embeddings-server/Dockerfile` — INSTALL_OPENVINO build arg, runtime env defaults
+- `src/embeddings-server/tests/test_gpu_config.py` — GPU-specific tests (50 total)
+
+**Pattern note:** The `edit` tool fails silently on files containing certain Unicode characters (e.g., 𐃆). Use Python file I/O via bash as workaround.
