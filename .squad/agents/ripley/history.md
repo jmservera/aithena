@@ -249,3 +249,21 @@ Active decisions in `.squad/decisions.md`:
 3. **Release Process Hardening** — Mandatory security + performance review before shipping. 8 security checkpoints + 4 performance checkpoints.
 
 ---
+
+## v1.17.0: GPU Acceleration Work
+
+### GPU Troubleshooting Guide (WI-12, #1159)
+
+**Completed:** GPU troubleshooting documentation created (PR #1217)
+
+Created comprehensive troubleshooting guide for GPU acceleration issues. Covers:
+- Quick diagnostics (health endpoint checks, container log inspection)
+- NVIDIA GPU detection and configuration (driver checks, Docker GPU access, CUDA version validation)
+- Intel GPU setup (DRI device checks, Intel compute-runtime diagnostics, permission fixes, WSL2 special cases)
+- Container crash scenarios (OOM, missing OpenVINO, compute-runtime version mismatches)
+- Performance validation (GPU utilization during indexing, bottleneck identification)
+- CPU fallback path and environment variable reference
+
+**Reasoning:** GPU acceleration PRD approved for v1.17.0 (research completed in #1147). Users enabling GPU support need clear diagnostic path for hardware/driver issues. Guide references Admin Manual GPU setup section, completing user-facing documentation.
+
+---

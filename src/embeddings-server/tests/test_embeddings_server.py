@@ -184,6 +184,8 @@ class TestVersionEndpoint:
             "commit": main_module.GIT_COMMIT,
             "built": main_module.BUILD_DATE,
             "model": DEFAULT_MODEL,
+            "device": "cpu",
+            "backend": "torch",
         }
 
 
