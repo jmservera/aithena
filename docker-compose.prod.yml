@@ -78,6 +78,9 @@ services:
           - rabbitmq
   embeddings-server:
     image: ghcr.io/jmservera/aithena-embeddings-server:${VERSION:-latest}
+    environment:
+      - DEVICE=${DEVICE:-cpu}
+      - BACKEND=${BACKEND:-torch}
     expose:
       - "8080"
     healthcheck:

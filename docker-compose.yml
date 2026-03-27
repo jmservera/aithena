@@ -87,6 +87,7 @@ services:
         VERSION: ${VERSION:-dev}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        BASE_TAG: ${EMBEDDINGS_BASE_TAG:-3.12-slim-multilingual-e5-base}
       secrets:
         - HF_TOKEN
     environment:

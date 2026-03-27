@@ -14,14 +14,14 @@
 #     https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
 #   - nvidia-docker2 or nvidia-container-runtime configured as Docker default runtime
 #
+# Environment configuration:
+#   Set DEVICE=cuda and BACKEND=torch in your .env file
+#
 # Verify GPU access:
 #   docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
 
 services:
   embeddings-server:
-    environment:
-      - DEVICE=cuda
-      - BACKEND=torch
     deploy:
       resources:
         reservations:
