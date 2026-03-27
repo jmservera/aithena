@@ -363,9 +363,7 @@ The **Similar Books** panel helps you discover related documents. You can access
 
 Click any similar-book card to navigate to that book's detail view or to replace the currently selected PDF with that recommendation. This makes it easy to explore related titles without starting a new search from scratch.
 
-![Similar Books recommendations](images/similar-books.png)
-
-<!-- TODO: capture screenshot -->
+<!-- TODO: capture similar-books.png screenshot when library has indexed data -->
 
 ## Book Detail View (v1.11.0+)
 
