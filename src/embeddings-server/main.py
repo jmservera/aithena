@@ -8,17 +8,28 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
-from config import BUILD_DATE, GIT_COMMIT, MODEL_NAME, PORT, VERSION
+from config import BACKEND, BUILD_DATE, DEVICE, GIT_COMMIT, MODEL_NAME, PORT, VERSION
 from model_utils import apply_prefix, detect_model_family
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 model_family = detect_model_family(MODEL_NAME)
-logger.info("Loading embedding model: %s (family=%s)", MODEL_NAME, model_family)
+
+# Resolve device: "auto" means let PyTorch decide
+device = None if DEVICE == "auto" else DEVICE
+
+# Build kwargs for SentenceTransformer
+model_kwargs = {}
+if device and device != "cpu":
+    model_kwargs["device"] = device
+if BACKEND != "torch":
+    model_kwargs["backend"] = BACKEND
+
+logger.info("Loading embedding model: %s (family=%s, device=%s, backend=%s)", MODEL_NAME, model_family, DEVICE, BACKEND)
 
 try:
-    model = SentenceTransformer(MODEL_NAME)
+    model = SentenceTransformer(MODEL_NAME, **model_kwargs)
     embedding_dim = model.get_sentence_embedding_dimension()
     logger.info("Model loaded successfully: %s (embedding_dim=%d)", MODEL_NAME, embedding_dim)
 except Exception as exc:
@@ -70,7 +81,13 @@ class ModelInfo(BaseModel):
 @app.get("/health")
 async def health():
     """Health check endpoint for container orchestration."""
-    return {"status": "healthy", "model": MODEL_NAME, "embedding_dim": embedding_dim}
+    return {
+        "status": "healthy",
+        "model": MODEL_NAME,
+        "embedding_dim": embedding_dim,
+        "device": DEVICE,
+        "backend": BACKEND,
+    }
 
 
 @app.get("/v1/embeddings/model")
@@ -93,6 +110,8 @@ async def version() -> dict[str, str]:
         "commit": GIT_COMMIT,
         "built": BUILD_DATE,
         "model": MODEL_NAME,
+        "device": DEVICE,
+        "backend": BACKEND,
     }
 
 
