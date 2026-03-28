@@ -133,12 +133,11 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Intel: `/dev/dri` device passthrough + `video` group_add + `BASE_TAG` build arg (selects openvino base image)
 - Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
 
-### HF Hub Offline Loading — Local Path is the Only Reliable Method
-- `snapshot_download()` does NOT fully cache the API metadata `optimum-intel` needs (tree/main endpoint)
-- The ONLY reliable way to get zero HF Hub calls with openvino: save model to a local directory, load from path
-- Pattern: `m = SentenceTransformer(name, backend='openvino'); m.save('/models/...')` in Dockerfile
-- Runtime: check `os.path.isdir(local_path)` → use local path or fall back to hub (backward-compat)
-- Always add offline verification RUN step: `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -c "..."` to fail-fast during build
+### HF Hub Offline Loading — Pre-Cached Local Model Directory
+- `snapshot_download()` does NOT fully cache the API metadata `optimum-intel` needs (`tree/main?recursive=True` endpoint)
+- Base images pre-cache models into a local directory during build using `m = SentenceTransformer(name, backend='openvino'); m.save('/models/...')`
+- Runtime: `os.path.isdir(local_path)` → load from disk (zero HF Hub API calls); fall back to hub if missing (backward-compat)
+- Always add an offline verification RUN step (`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -c "SentenceTransformer('/models/...')"`) to fail-fast during build
 - Key files: `embeddings-server-base/Dockerfile`, `src/embeddings-server/main.py`
 
 ### Container Group Gotcha

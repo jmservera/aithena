@@ -28,11 +28,18 @@ if BACKEND != "torch":
     model_kwargs["backend"] = BACKEND
 
 # Check if model is pre-cached locally (base image saves to this path)
-local_model_path = os.path.join(
-    os.environ.get("SENTENCE_TRANSFORMERS_HOME", "/models/sentence_transformers"),
-    MODEL_NAME.replace("/", "_"),
-)
-model_source = local_model_path if os.path.isdir(local_model_path) else MODEL_NAME
+_st_home = os.environ.get("SENTENCE_TRANSFORMERS_HOME", "/models/sentence_transformers")
+local_model_path = os.path.join(_st_home, MODEL_NAME.replace("/", "_"))
+
+if os.path.isdir(local_model_path):
+    model_source = local_model_path
+    _source_label = "local-cache"
+elif os.path.isdir(MODEL_NAME) or os.path.isfile(MODEL_NAME):
+    model_source = MODEL_NAME
+    _source_label = "local-path"
+else:
+    model_source = MODEL_NAME
+    _source_label = "hub"
 
 logger.info(
     "Loading embedding model: %s (family=%s, device=%s, backend=%s, source=%s)",
@@ -40,7 +47,7 @@ logger.info(
     model_family,
     DEVICE,
     BACKEND,
-    "local" if model_source == local_model_path else "hub",
+    _source_label,
 )
 
 try:

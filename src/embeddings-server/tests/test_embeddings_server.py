@@ -28,44 +28,84 @@ def _make_mock_model(embedding_dim: int = DEFAULT_DIM) -> MagicMock:
     return mock
 
 
-def _fresh_import(model_name: str | None = None, embedding_dim: int = DEFAULT_DIM):
+def _fresh_import(model_name: str | None = None, embedding_dim: int = DEFAULT_DIM, *, extra_env: dict | None = None):
     """Import main.py with a mocked model, optionally overriding MODEL_NAME.
 
-    Returns (TestClient, main_module, mock_model).
+    Returns (TestClient, main_module, mock_model, mock_st_class).
+    The mock_st_class can be inspected to verify what path was passed.
     """
     mock_model = _make_mock_model(embedding_dim)
     orig = os.environ.get("MODEL_NAME")
+    saved_env = {}
     if model_name is not None:
         os.environ["MODEL_NAME"] = model_name
+    if extra_env:
+        for k, v in extra_env.items():
+            saved_env[k] = os.environ.get(k)
+            os.environ[k] = v
     try:
-        with patch("sentence_transformers.SentenceTransformer", return_value=mock_model):
+        with patch("sentence_transformers.SentenceTransformer", return_value=mock_model) as mock_st_class:
             for key in list(sys.modules):
                 if key in ("main", "config"):
                     del sys.modules[key]
             import main as main_module
     finally:
-        # Restore env
         if model_name is not None:
             if orig is None:
                 os.environ.pop("MODEL_NAME", None)
             else:
                 os.environ["MODEL_NAME"] = orig
+        if extra_env:
+            for k, v in saved_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
     client = TestClient(main_module.app)
-    return client, main_module, mock_model
+    return client, main_module, mock_model, mock_st_class
 
 
 @pytest.fixture()
 def app_client():
     """Return a TestClient backed by the default e5-base model (mocked)."""
-    client, main_module, _ = _fresh_import()
+    client, main_module, _, _ = _fresh_import()
     yield client, main_module
 
 
 @pytest.fixture()
 def e5_client():
     """Return a TestClient with MODEL_NAME set to the e5-base model (mocked)."""
-    client, main_module, mock_model = _fresh_import(E5_MODEL, E5_DIM)
+    client, main_module, mock_model, _ = _fresh_import(E5_MODEL, E5_DIM)
     yield client, main_module, mock_model
+
+
+# ---------------------------------------------------------------------------
+# Local path detection (unit-level)
+# ---------------------------------------------------------------------------
+
+
+class TestLocalPathDetection:
+    """Verify model_source uses local cached path when present, falls back to hub."""
+
+    def test_uses_local_path_when_directory_exists(self, tmp_path):
+        """When SENTENCE_TRANSFORMERS_HOME contains the expected model dir, load from it."""
+        model_dir = tmp_path / "intfloat_multilingual-e5-base"
+        model_dir.mkdir()
+        _, main_mod, _, mock_st = _fresh_import(
+            extra_env={"SENTENCE_TRANSFORMERS_HOME": str(tmp_path)},
+        )
+        call_args = mock_st.call_args
+        assert call_args[0][0] == str(model_dir)
+        assert main_mod.model_source == str(model_dir)
+
+    def test_falls_back_to_hub_when_no_local_dir(self, tmp_path):
+        """When SENTENCE_TRANSFORMERS_HOME has no matching dir, use model name."""
+        _, main_mod, _, mock_st = _fresh_import(
+            extra_env={"SENTENCE_TRANSFORMERS_HOME": str(tmp_path)},
+        )
+        call_args = mock_st.call_args
+        assert call_args[0][0] == DEFAULT_MODEL
+        assert main_mod.model_source == DEFAULT_MODEL
 
 
 # ---------------------------------------------------------------------------
