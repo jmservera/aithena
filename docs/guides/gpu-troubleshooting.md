@@ -67,7 +67,7 @@ ls -la /dev/dxg/
 # 2. Check Intel GPU is recognized
 clinfo | head -20
 
-# 3. Check user has video/render group access
+# 3. Check user has video group access
 groups
 ```
 
@@ -77,7 +77,7 @@ groups
 |-------|-----|
 | `/dev/dxg` missing | Install Intel compute-runtime drivers |
 | `clinfo` shows no devices | Install `intel-opencl-icd` and `intel-level-zero-gpu` |
-| Permission denied on `/dev/dxg` | Add user to `video` and `render` groups |
+| Permission denied on `/dev/dxg` | Add user to `video` group |
 | WSL2: `/dev/dxg` missing | Install Intel GPU drivers on **Windows** host, restart WSL |
 
 ### WSL2-Specific Issues
