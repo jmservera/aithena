@@ -141,6 +141,7 @@ jobs:
             health_endpoint: /health
             startup_timeout: 60
             tag_suffix: "-openvino"
+            docker_env: "-e BACKEND=openvino -e DEVICE=cpu"
           - image: admin
             type: http
             port: "8501"
@@ -177,13 +178,14 @@ jobs:
           SERVICE_PORT: ${{ matrix.service.port }}
           HEALTH_ENDPOINT: ${{ matrix.service.health_endpoint }}
           STARTUP_TIMEOUT: ${{ matrix.service.startup_timeout }}
+          DOCKER_ENV: ${{ matrix.service.docker_env || '' }}
         run: |
           image="ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${VERSION}"
           port="${SERVICE_PORT}"
           endpoint="${HEALTH_ENDPOINT}"
           timeout="${STARTUP_TIMEOUT}"
 
-          docker run -d --name smoke-container -p "${port}:${port}" "${image}"
+          docker run -d --name smoke-container -p "${port}:${port}" ${DOCKER_ENV} "${image}"
 
           elapsed=0
           echo "Waiting up to ${timeout}s for ${SERVICE_IMAGE} at :${port}${endpoint}..."
