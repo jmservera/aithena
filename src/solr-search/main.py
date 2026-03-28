@@ -2967,7 +2967,7 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
+def _enrich_collection_items(items: list[dict[str, Any]], request: Request) -> None:
     """Enrich collection items with document metadata from Solr."""
     doc_ids = [item["document_id"] for item in items if item.get("document_id")]
     if not doc_ids:
@@ -2978,7 +2978,7 @@ def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
         result = query_solr(
             {
                 "q": f"({id_query})",
-                "fl": "id,title_s,author_s,year_i,file_path_s",
+                "fl": "id,title_s,author_s,year_i,file_path_s,thumbnail_url_s",
                 "rows": len(doc_ids),
                 "wt": "json",
             }
@@ -2993,10 +2993,13 @@ def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
 
         for item in items:
             doc = metadata_map.get(item["document_id"], {})
-            item["title"] = doc.get("title_s") or Path(doc.get("file_path_s", "")).stem or None
+            file_path = doc.get("file_path_s")
+            item["title"] = doc.get("title_s") or Path(file_path or "").stem or None
             item["author"] = doc.get("author_s") or None
             item["year"] = doc.get("year_i")
             item["cover_url"] = None
+            item["thumbnail_url"] = thumbnail_url(doc.get("thumbnail_url_s"))
+            item["document_url"] = build_document_url(request, file_path)
     except Exception:
         logger.warning("Failed to enrich collection items with Solr metadata", exc_info=True)
         for item in items:
@@ -3004,12 +3007,14 @@ def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
             item.setdefault("author", None)
             item.setdefault("year", None)
             item.setdefault("cover_url", None)
+            item.setdefault("thumbnail_url", None)
+            item.setdefault("document_url", None)
 
 
-def _prepare_collection_detail(result: dict[str, Any]) -> dict[str, Any]:
+def _prepare_collection_detail(result: dict[str, Any], request: Request) -> dict[str, Any]:
     """Enrich items and add item_count to a collection detail response."""
     items = result.get("items", [])
-    _enrich_collection_items(items)
+    _enrich_collection_items(items, request)
     result["item_count"] = len(items)
     return result
 
@@ -3033,7 +3038,7 @@ def get_collection(collection_id: str, request: Request):
     result = svc_get_collection(settings.collections_db_path, collection_id, str(user.id))
     if result is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    return _prepare_collection_detail(result)
+    return _prepare_collection_detail(result, request)
 
 
 @app.put("/v1/collections/{collection_id}", response_model=CollectionDetailResponse)
@@ -3046,7 +3051,7 @@ def update_collection(collection_id: str, body: UpdateCollectionRequest, request
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    return _prepare_collection_detail(result)
+    return _prepare_collection_detail(result, request)
 
 
 @app.delete("/v1/collections/{collection_id}", status_code=204)
