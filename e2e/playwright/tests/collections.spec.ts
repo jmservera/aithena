@@ -481,7 +481,7 @@ test.describe('collection detail view', () => {
     expect(await itemCards.count()).toBeGreaterThan(0);
 
     const firstCard = itemCards.first();
-    await expect(firstCard.locator('.collection-item-title')).toBeVisible();
+    await expect(firstCard.locator('.book-title')).toBeVisible();
   });
 
   test('empty collection shows empty state message', async ({ page, request }) => {
