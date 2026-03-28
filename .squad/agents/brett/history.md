@@ -130,8 +130,20 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Used override files (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
 - `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
 - NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
-- Intel: `/dev/dri` device passthrough + `video`/`render` group_add + `INSTALL_OPENVINO` build arg
+- Intel: `/dev/dri` device passthrough + `video` group_add + `BASE_TAG` build arg (selects openvino base image)
 - Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
+
+### HF Hub Offline Loading — Pre-Cached Local Model Directory
+- `snapshot_download()` does NOT fully cache the API metadata `optimum-intel` needs (`tree/main?recursive=True` endpoint)
+- Base images pre-cache models into a local directory during build using `m = SentenceTransformer(name, backend='openvino'); m.save('/models/...')`
+- Runtime: `os.path.isdir(local_path)` → load from disk (zero HF Hub API calls); fall back to hub if missing (backward-compat)
+- Always add an offline verification RUN step (`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -c "SentenceTransformer('/models/...')"`) to fail-fast during build
+- Key files: `embeddings-server-base/Dockerfile`, `src/embeddings-server/main.py`
+
+### Container Group Gotcha
+- `group_add: [render]` in Docker Compose fails if the `render` group doesn't exist inside the container image
+- The `render` group is a host-level Linux concept for GPU DRM access; slim Python images don't have it
+- For WSL2 Intel GPU (`/dev/dxg`), only `video` group is needed
 
 ## Reskill Notes (2026-07-25)
 

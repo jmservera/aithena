@@ -31,4 +31,3 @@ services:
       - /dev/dxg:/dev/dxg
     group_add:
       - video
-      - render
