@@ -169,7 +169,7 @@ jobs:
             type: http
             port: "8080"
             health_endpoint: /health
-            startup_timeout: 60
+            startup_timeout: 120
             tag_suffix: "-openvino"
             docker_env: "-e BACKEND=openvino -e DEVICE=cpu"
           - image: admin
