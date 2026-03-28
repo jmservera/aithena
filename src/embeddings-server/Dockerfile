@@ -63,6 +63,11 @@ RUN if ! id -u app >/dev/null 2>&1; then \
 
 COPY --from=dependencies /app/.venv /app/.venv
 
+# Relink venv python to the runtime image's interpreter (the build stage
+# used python:3.12-slim at /usr/local/bin/python3 which doesn't exist here).
+RUN REAL_PYTHON="$(readlink -f "$(which python3)")"; \
+    ln -sf "$REAL_PYTHON" /app/.venv/bin/python
+
 ENV PATH="/app/.venv/bin:${PATH}"
 
 COPY main.py model_utils.py /app/
