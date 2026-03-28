@@ -1,8 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.16.0 Release Notes](release-notes/v1.16.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.17.0 Release Notes](release-notes/v1.17.0.md).
 
-**v1.15.0 / v1.16.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150) and [v1.16.0 Deployment Updates](#deployment-updates-for-v1160) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), and [v1.17.0 Deployment Updates](#deployment-updates-for-v1170) sections below.
 
 ## System architecture overview
 
@@ -3834,3 +3834,308 @@ All changes are backward-compatible:
 - No volume layout changes
 - No auth or configuration format changes
 - Existing deployments can upgrade with a standard `docker compose pull && docker compose up -d`
+
+## Deployment Updates for v1.17.0
+
+v1.17.0 introduces GPU acceleration for embeddings indexing (opt-in), security dependency updates, and comprehensive GPU documentation. There are no breaking changes from v1.16.0. CPU-only deployments are completely unaffected.
+
+### Upgrade from v1.16.0
+
+No migration steps required. Standard upgrade procedure:
+
+```bash
+docker compose pull
+docker compose down
+docker compose up -d
+```
+
+The default CPU-only mode works exactly as before. GPU support is entirely opt-in.
+
+### GPU Acceleration (New Feature)
+
+v1.17.0 optionally supports GPU acceleration for document embeddings, speeding up indexing by 2–4× on NVIDIA GPUs and 1.5–2× on Intel GPUs.
+
+#### Prerequisites for GPU support
+
+**For NVIDIA GPUs:**
+- NVIDIA GPU drivers installed on the host
+- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed and configured
+
+**For Intel GPUs:**
+- Intel Arc GPU drivers (or compatible Intel GPU drivers)
+- Intel compute-runtime installed
+- Device access to `/dev/dri` (automatic in most configurations)
+
+**For WSL2 GPU support:**
+- Windows 11 with GPU passthrough enabled (see Microsoft docs for [GPU support in WSL2](https://docs.microsoft.com/en-us/windows/wsl/tutorials/gpu-compute))
+
+#### Enabling GPU acceleration
+
+GPU support is accessed via Docker Compose profiles and environment variables.
+
+**For NVIDIA GPUs:**
+```bash
+DEVICE=cuda BACKEND=torch docker compose --profile nvidia up -d
+```
+
+**For Intel GPUs:**
+```bash
+DEVICE=xpu BACKEND=openvino docker compose --profile intel up -d
+```
+
+**CPU-only (default):**
+```bash
+docker compose up -d  # No changes needed; runs in CPU mode
+```
+
+#### Verifying GPU is detected
+
+Check container logs to confirm GPU detection:
+
+```bash
+docker compose logs embeddings-server | grep -i "device\|gpu\|cuda\|xpu"
+```
+
+Expected output (NVIDIA):
+```
+INFO: Device selection: DEVICE=cuda, BACKEND=torch
+INFO: GPU detected: NVIDIA GeForce RTX 4090
+```
+
+Expected output (Intel with OpenVINO):
+```
+INFO: Device selection: DEVICE=xpu, BACKEND=openvino
+INFO: GPU detected: Intel Arc GPU (DG2)
+```
+
+#### Troubleshooting GPU
+
+See the updated [Admin Manual GPU Prerequisites](#gpu-prerequisites-v1170) and [GPU Troubleshooting](#gpu-troubleshooting-v1170) sections below, or consult the standalone [GPU Troubleshooting Guide](guides/gpu-troubleshooting.md).
+
+### Security: Dependency Updates
+
+v1.17.0 merges Dependabot security updates for two medium-severity vulnerabilities:
+
+| Package | Vulnerability | Fix Version |
+|---------|---|---|
+| `requests` | Insecure Temp File Reuse in `extract_zipped_paths()` | 2.33.0 |
+| `picomatch` | Method Injection in POSIX Character Classes | 4.0.4 |
+
+Updated services:
+- `document-indexer`: requests 2.33.0
+- `solr-search`: requests 2.33.0
+- `admin`: requests 2.33.0
+- `aithena-ui`: picomatch 4.0.4
+
+No operator action required; all fixes are included in the new container images.
+
+### Embeddings-Server Build Optimization (Infrastructure)
+
+Issue #1231 proposes creating a separate base image for embeddings-server to cache the ~1GB model and speed up CI builds by ~50%. This issue is closed with implementation planned for a future release. No operator changes in v1.17.0.
+
+### Backward compatibility
+
+All changes are backward-compatible:
+
+- GPU support is opt-in via environment variables and compose profiles
+- CPU-only deployments work identically to v1.16.0
+- No new required environment variables (existing deployments unchanged)
+- No volume layout changes
+- No auth or configuration format changes
+- Existing deployments can upgrade with a standard `docker compose pull && docker compose up -d`
+
+---
+
+## GPU Prerequisites (v1.17.0+)
+
+This section covers GPU hardware and driver setup for Aithena operators.
+
+### NVIDIA GPU Setup
+
+#### Ubuntu/Debian
+
+1. Install NVIDIA drivers:
+```bash
+ubuntu-drivers install  # or apt install nvidia-driver-XYZ
+```
+
+2. Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html):
+```bash
+curl https://nvidia.github.io/libnvidia-container/gpgkey | sudo apt-key add -
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo systemctl restart docker
+```
+
+3. Verify installation:
+```bash
+docker run --rm --runtime=nvidia nvidia/cuda:12.0.0-runtime-ubuntu22.04 nvidia-smi
+```
+
+#### RHEL/CentOS
+
+1. Install NVIDIA drivers (see NVIDIA docs or use `nvidia-driver-install-utility`)
+
+2. Install NVIDIA Container Toolkit:
+```bash
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.repo | \
+  sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo
+sudo yum install -y nvidia-container-toolkit
+sudo systemctl restart docker
+```
+
+3. Verify installation:
+```bash
+docker run --rm --runtime=nvidia nvidia/cuda:12.0.0-runtime-ubuntu22.04 nvidia-smi
+```
+
+#### Windows WSL2
+
+Follow [Microsoft's GPU support guide for WSL2](https://docs.microsoft.com/en-us/windows/wsl/tutorials/gpu-compute) to enable GPU passthrough from Windows to WSL2. Requires Windows 11 with a GPU.
+
+### Intel GPU Setup
+
+#### Ubuntu/Debian
+
+1. Install Intel GPU drivers:
+```bash
+sudo apt-get install -y intel-level-zero-gpu libze-loader
+```
+
+2. Install Intel compute-runtime:
+```bash
+sudo apt-get install -y intel-level-zero-gpu intel-metrics-discovery intel-media-driver intel-igc-core intel-igc-media
+# Or via oneAPI (recommended):
+wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+sudo apt-get update && sudo apt-get install -y intel-oneapi-level-zero-gpu
+```
+
+3. Verify installation:
+```bash
+clinfo  # or another Intel GPU tool
+```
+
+#### RHEL/CentOS
+
+1. Enable Intel oneAPI repository and install:
+```bash
+sudo dnf install -y intel-level-zero-gpu
+```
+
+2. Verify:
+```bash
+clinfo
+```
+
+### Monitoring GPU Usage
+
+Use the following commands to monitor GPU utilization during indexing:
+
+**NVIDIA:**
+```bash
+watch -n 1 nvidia-smi  # Real-time GPU stats
+```
+
+**Intel:**
+```bash
+gpu-top  # Part of Intel Metrics Discovery
+# Or:
+clinfo
+```
+
+Monitor embeddings-server logs for device selection:
+```bash
+docker compose logs -f embeddings-server | grep -i "device\|gpu"
+```
+
+---
+
+## GPU Troubleshooting (v1.17.0+)
+
+For a comprehensive troubleshooting guide, see [docs/guides/gpu-troubleshooting.md](guides/gpu-troubleshooting.md). This section covers common deployment issues.
+
+### GPU Not Detected
+
+**Symptom:** Logs show `DEVICE=cuda` but fall back to CPU.
+
+**Check:**
+1. Verify NVIDIA Container Toolkit is installed and Docker is restarted:
+   ```bash
+   docker run --rm --runtime=nvidia nvidia/cuda:12.0.0-runtime nvidia-smi
+   ```
+   If this fails, reinstall the toolkit and restart Docker.
+
+2. Check Docker daemon configuration for `nvidia` runtime:
+   ```bash
+   cat /etc/docker/daemon.json | grep nvidia
+   ```
+   Should include `"runtimes": {"nvidia": ...}`.
+
+3. Verify NVIDIA drivers are installed:
+   ```bash
+   nvidia-smi
+   ```
+
+### CUDA Version Mismatch
+
+**Symptom:** Logs show errors like `CUDA version mismatch` or `driver version is insufficient`.
+
+**Check:**
+1. Host NVIDIA driver version:
+   ```bash
+   nvidia-smi | head -1  # Shows driver version
+   ```
+
+2. CUDA version in embeddings-server image:
+   ```bash
+   docker compose logs embeddings-server | grep -i "cuda"
+   ```
+
+3. Update drivers or adjust `docker-compose.yml` to use a compatible CUDA base image.
+
+### Slow Indexing with GPU Enabled
+
+**Symptom:** GPU enabled but indexing is not faster than CPU mode.
+
+**Check:**
+1. Verify GPU is actually being used:
+   ```bash
+   watch -n 1 nvidia-smi  # Should show embeddings process using GPU memory
+   ```
+
+2. Check for GPU memory exhaustion:
+   ```bash
+   nvidia-smi | grep "Processes"
+   ```
+   If memory is full, reduce batch size or use CPU mode.
+
+3. Verify embeddings-server is using GPU in logs:
+   ```bash
+   docker compose logs embeddings-server | grep -i "device"
+   ```
+
+### Intel GPU Not Available
+
+**Symptom:** Logs show `DEVICE=xpu` but no Intel GPU detected.
+
+**Check:**
+1. Verify Intel GPU drivers are installed:
+   ```bash
+   clinfo  # Should list Intel GPU
+   ```
+
+2. Check `/dev/dri` device access:
+   ```bash
+   ls -la /dev/dri/  # Should show GPU devices
+   ```
+
+3. Verify compose profile is being used:
+   ```bash
+   docker compose --profile intel up -d  # Must include --profile intel
+   ```
+
+For more detailed troubleshooting, see the [GPU Troubleshooting Guide](guides/gpu-troubleshooting.md).
