@@ -322,10 +322,26 @@ def test_book_detail_response_contains_all_expected_keys(mock_post: MagicMock) -
     data = client.get(f"/v1/books/{VALID_SHA256}").json()
 
     expected_keys = {
-        "id", "title", "author", "year", "category", "language",
-        "series", "file_path", "folder_path", "page_count", "file_size",
-        "pages", "is_chunk", "chunk_text", "page_start", "page_end",
-        "score", "highlights", "document_url", "thumbnail_url",
+        "id",
+        "title",
+        "author",
+        "year",
+        "category",
+        "language",
+        "series",
+        "file_path",
+        "folder_path",
+        "page_count",
+        "file_size",
+        "pages",
+        "is_chunk",
+        "chunk_text",
+        "page_start",
+        "page_end",
+        "score",
+        "highlights",
+        "document_url",
+        "thumbnail_url",
     }
     assert expected_keys.issubset(data.keys()), f"Missing keys: {expected_keys - data.keys()}"
 
