@@ -426,3 +426,16 @@ Four search result display regressions identified during v1.16.0 pre-release:
   - `src/aithena-ui/src/hooks/search.ts` — Added `parent_id` to `BookResult` interface
   - `src/aithena-ui/src/pages/SearchPage.tsx` — Two handlers updated
   - `src/aithena-ui/src/Components/BookDetailView.tsx` — SimilarBooks prop updated
+
+### #1234 — Fix PDF X-Frame-Options (v1.18.0)
+- PDF viewer iframe was blocked by X-Frame-Options: DENY in three scenarios:
+  1. `@auth_error` named location inherited server-level DENY — 401 responses in the iframe were blocked
+  2. No `proxy_hide_header` to strip upstream X-Frame-Options from proxied responses
+  3. `resolveDocumentUrl()` returned same-origin non-/documents/ URLs as-is, hitting root location with DENY
+- Fix: Added SAMEORIGIN headers to `@auth_error`, `proxy_hide_header` to `/documents/`, and same-origin URL normalization in `resolveDocumentUrl()`
+- **Key insight:** nginx named locations (`@name`) don't inherit `add_header` from the calling location; they inherit from the server block. Always add explicit headers to named locations used by iframe-served content.
+- **Key insight:** `proxy_hide_header X-Frame-Options;` must be used alongside `add_header` when proxying, to prevent duplicate conflicting headers.
+- **Files touched:**
+  - `src/nginx/default.conf`, `default.conf.template`, `ssl.conf.template` — nginx header fixes
+  - `src/aithena-ui/src/api.ts` — same-origin URL normalization in resolveDocumentUrl()
+  - `src/aithena-ui/src/__tests__/PdfViewer.test.tsx` — new test case
