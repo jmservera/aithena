@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.1] — 2026-03-28
+
+### Fixed
+
+- Restore openvino pip package for venv isolation (#1267)
+- Relink venv python symlink for openvino base image (#1269)
+- Bump openvino smoke test timeout to 120s (#1270)
+
+### Security
+
+- Add GitHub Actions environment to workflows using secrets (#1268)
+
 ## [1.17.0] — 2026-03-27
 
 ### Added
