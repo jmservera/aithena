@@ -63,17 +63,6 @@ RUN if ! id -u app >/dev/null 2>&1; then \
 
 COPY --from=dependencies /app/.venv /app/.venv
 
-# Bridge system OpenVINO into the venv (openvino base image exposes packages
-# via PYTHONPATH, but uv venvs isolate from system paths; a .pth file is the
-# standard Python mechanism to add paths inside a venv).
-RUN OPENVINO_PYTHON="/opt/intel/openvino/python"; \
-    if [ -d "$OPENVINO_PYTHON" ]; then \
-      SITE_DIR="$(/app/.venv/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"; \
-      echo "$OPENVINO_PYTHON" > "$SITE_DIR/openvino-system.pth"; \
-      /app/.venv/bin/python -c "import openvino; print(f'OpenVINO {openvino.__version__} bridged into venv')" \
-        || (echo "FATAL: OpenVINO not importable inside venv after .pth setup" && exit 1); \
-    fi
-
 ENV PATH="/app/.venv/bin:${PATH}"
 
 COPY main.py model_utils.py /app/
