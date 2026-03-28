@@ -22,6 +22,7 @@ FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
+ARG BASE_TAG
 
 LABEL org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/jmservera/aithena" \
@@ -50,8 +51,11 @@ RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --
 
 COPY --from=dependencies /app/.venv /app/.venv
 
-# Let the .venv inherit system-site-packages from the base image (e.g. openvino)
-RUN sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' /app/.venv/pyvenv.cfg
+# For the openvino base image, let the .venv see system-site-packages (e.g. openvino, optimum-intel).
+# For all other base images the venv remains fully isolated.
+RUN if echo "${BASE_TAG}" | grep -q openvino; then \
+        sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' /app/.venv/pyvenv.cfg; \
+    fi
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
