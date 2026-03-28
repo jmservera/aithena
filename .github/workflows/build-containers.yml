@@ -52,10 +52,12 @@ jobs:
           - image: embeddings-server
             context: ./src/embeddings-server
             dockerfile: ./src/embeddings-server/Dockerfile
+            no_cache: true
           - image: embeddings-server
             context: ./src/embeddings-server
             dockerfile: ./src/embeddings-server/Dockerfile
             tag_suffix: "-openvino"
+            no_cache: true
             extra_build_args: |
               INSTALL_OPENVINO=true
               BASE_TAG=3.12-slim-multilingual-e5-base-openvino
@@ -102,5 +104,5 @@ jobs:
             ${{ matrix.service.extra_build_args || '' }}
           secrets: |
             HF_TOKEN=${{ secrets.HF_TOKEN }}
-          cache-from: type=gha,scope=${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
+          cache-from: ${{ !matrix.service.no_cache && format('type=gha,scope={0}{1}', matrix.service.image, matrix.service.tag_suffix || '') || '' }}
+          cache-to: ${{ !matrix.service.no_cache && format('type=gha,mode=max,scope={0}{1}', matrix.service.image, matrix.service.tag_suffix || '') || '' }}
