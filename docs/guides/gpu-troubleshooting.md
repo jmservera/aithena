@@ -82,6 +82,8 @@ groups
 
 ### WSL2-Specific Issues
 
+**For comprehensive WSL2 GPU setup and troubleshooting, see [Running Aithena with Intel GPU on WSL2](./intel-gpu-wsl2.md).**
+
 **`/dev/dxg` not available in WSL2:**
 1. Ensure GPU drivers are installed on the **Windows host** (not inside WSL)
 2. Run `wsl --update` to get the latest WSL2 kernel
@@ -93,9 +95,15 @@ groups
 3. Restart Docker: `sudo systemctl restart docker`
 
 **Intel: `/dev/dxg` missing:**
-1. This requires recent Intel GPU drivers on Windows
+1. This requires recent Intel GPU drivers on Windows (v30.0.100.9684+)
 2. Check Windows Device Manager → Display adapters for Intel GPU
-3. Update Intel driver from [Intel Download Center](https://www.intel.com/content/www/us/en/download-center/home.html)
+3. Update Intel driver from [Intel Support — Download Center](https://www.intel.com/content/www/us/en/support/products/80939/graphics.html)
+4. After Windows driver update and reboot, run `wsl --update && wsl --shutdown`
+
+**Intel GPU in WSL2: Model Compilation Slow**
+- First embedding load is slow (10–60s) as OpenVINO compiles the model for GPU
+- This only happens once; cached model loads instantly thereafter
+- If stuck longer than 2 minutes, check logs: `docker compose logs embeddings-server --tail 50`
 
 ### Container Crashes on Startup
 

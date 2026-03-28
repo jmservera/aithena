@@ -11,8 +11,8 @@ dependencies = [
 
 [project.optional-dependencies]
 openvino = [
-    "optimum-intel",
     "openvino",
+    "optimum-intel",
 ]
 
 [dependency-groups]

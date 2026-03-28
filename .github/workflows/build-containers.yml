@@ -33,6 +33,7 @@ jobs:
   build-and-push:
     name: Build and push ${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
     runs-on: ubuntu-latest
+    environment: production
     strategy:
       fail-fast: false
       matrix:

@@ -436,3 +436,40 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 **Recommendation**: Integrate admin into existing aithena-ui as /admin/* routes (not a separate app). Phase 1 builds API foundation (can start in v1.16.x), Phase 2 builds React pages, Phase 3 tests, Phase 4 removes Streamlit.
 
 **Output**: `docs/prd/admin-react-migration.md`
+
+### Documentation: Intel GPU WSL2 Setup Guide — 2026-03-26
+
+**Task:** Create comprehensive guide for running Aithena with Intel GPU acceleration on WSL2.
+
+**Deliverables:**
+- `docs/guides/intel-gpu-wsl2.md` — 15.7 KB, 8 major sections + 20+ subsections
+  - Prerequisites (Windows 11, WSL2 kernel, Intel driver v30.0.100.9684+)
+  - 7 sequential setup steps (Windows driver → WSL2 repositories → GPU runtime → verification)
+  - Step-by-step Docker Compose configuration
+  - WSL2 GPU architecture overview (DirectX vs. DRM, `/dev/dxg` device model, GPU library mounting)
+  - 9 dedicated troubleshooting scenarios with diagnostic commands
+  - Performance expectations table (5–10× speedup on batch embeddings)
+  - 4 authoritative references (Intel oneAPI, OpenVINO, compute-runtime)
+
+- Updated `docs/guides/gpu-troubleshooting.md`
+  - Added link to WSL2 Intel GPU guide at top of WSL2 section
+  - Enhanced Intel troubleshooting with driver version requirement (v30.0.100.9684+)
+  - Added note on first-run model compilation delay (10–60s expected)
+
+- Updated `docs/admin-manual.md`
+  - Enhanced "Intel on WSL2" subsection with link to comprehensive guide
+  - Added new "Windows Users: Intel GPU on WSL2" callout section after GPU troubleshooting
+  - Updated quick reference table with `/dev/dxg` troubleshooting for WSL2
+
+**Key Learnings:**
+1. **WSL2 GPU is fundamentally different from native Linux:** Uses DirectX (`/dev/dxg` device) instead of DRM (`/dev/dri`), requires both device mount AND `/usr/lib/wsl` volume mount, no Linux render group needed
+2. **Windows driver is critical:** Intel GPU drivers on Windows host MUST be recent (v30.0.100.9684+); WSL2 simply exposes them, doesn't provide its own
+3. **Model compilation is expected on first run:** OpenVINO compiles models for GPU on first use (10–60s), then caches; users often mistake this for a hang
+4. **Batch sizes matter for GPU:** Small batches (1–4) don't utilize GPU efficiently; 16–32 recommended for Intel Xe GPUs
+5. **Documentation structure for OS-specific guides:** Comprehensive guides (15+ KB) work better than inline admin-manual sections when setup involves multiple OS-level steps; link from admin manual for discovery
+6. **Troubleshooting mental model:** WSL2 troubleshooting must emphasize "Windows side" vs. "WSL2 side" mental model (driver on Windows, libraries in WSL, device mounted in container)
+
+**Release Note Coverage:**
+- Not user-facing (operational guide for existing users), but improves onboarding for Windows developers
+- Complements v1.17.0 GPU acceleration feature
+- Should be highlighted in setup/deployment sections of PRD or changelog if v1.17.1+ includes this documentation
