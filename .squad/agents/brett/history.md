@@ -130,8 +130,20 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Used override files (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
 - `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
 - NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
-- Intel: `/dev/dri` device passthrough + `video`/`render` group_add + `INSTALL_OPENVINO` build arg
+- Intel: `/dev/dri` device passthrough + `video` group_add + `BASE_TAG` build arg (selects openvino base image)
 - Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
+
+### HF Hub Offline Cache for Base Images
+- `SentenceTransformer()` alone does NOT cache HF Hub API metadata (tree listings, model card endpoints)
+- `optimum-intel` loading path calls `huggingface.co/api/models/.../tree/main` to discover openvino files — fails offline
+- Fix: call `huggingface_hub.snapshot_download(model_name)` BEFORE `SentenceTransformer()` to cache full repo metadata
+- Always add an offline verification `RUN` step: `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -c "..."` to fail-fast during build
+- Applies to both torch and openvino variants in `embeddings-server-base` repo
+
+### Container Group Gotcha
+- `group_add: [render]` in Docker Compose fails if the `render` group doesn't exist inside the container image
+- The `render` group is a host-level Linux concept for GPU DRM access; slim Python images don't have it
+- For WSL2 Intel GPU (`/dev/dxg`), only `video` group is needed
 
 ## Reskill Notes (2026-07-25)
 
