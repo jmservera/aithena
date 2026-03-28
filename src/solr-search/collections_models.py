@@ -36,6 +36,8 @@ class CollectionItemResponse(BaseModel):
     author: str | None = None
     year: int | None = None
     cover_url: str | None = None
+    thumbnail_url: str | None = None
+    document_url: str | None = None
     position: int | None
     note: str | None
     added_at: str

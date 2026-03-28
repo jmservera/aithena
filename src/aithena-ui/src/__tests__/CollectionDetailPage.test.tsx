@@ -31,6 +31,8 @@ vi.mock('../hooks/collections', () => ({
           author: 'Ian Goodfellow',
           year: 2016,
           cover_url: null,
+          thumbnail_url: null,
+          document_url: '/documents/abc123',
           note: 'Great intro.',
           added_at: '2025-01-10T10:00:00Z',
         },

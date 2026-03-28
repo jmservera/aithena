@@ -3147,6 +3147,10 @@ select:focus-visible,
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   transition: border-color var(--transition-normal);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .collection-item-card:hover {
@@ -3161,19 +3165,18 @@ select:focus-visible,
   margin-bottom: var(--space-2);
 }
 
-.collection-item-title {
-  margin: 0;
-  font-size: 1em;
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
+.collection-item-card .book-title {
+  margin: 0 0 4px;
+  font-size: 1.05em;
 }
 
-.collection-item-meta {
-  display: flex;
-  gap: var(--space-3);
-  font-size: var(--font-size-xs);
-  color: rgba(255, 255, 255, 0.55);
-  margin-top: 2px;
+.collection-item-card .book-meta {
+  margin-bottom: 4px;
+}
+
+.collection-item-card .book-card-footer {
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .collection-item-actions {

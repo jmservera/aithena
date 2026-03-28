@@ -11,6 +11,7 @@ interface CollectionDetailViewProps {
   detail: CollectionDetail;
   onRemoveItem: (itemId: string) => void;
   onSaveNote: (itemId: string, note: string) => void;
+  onOpenPdf?: (item: CollectionItem) => void;
   onEdit: () => void;
   onDelete: () => void;
   saving?: boolean;
@@ -42,6 +43,7 @@ function CollectionDetailView({
   detail,
   onRemoveItem,
   onSaveNote,
+  onOpenPdf,
   onEdit,
   onDelete,
   saving,
@@ -136,6 +138,7 @@ function CollectionDetailView({
               item={item}
               onRemove={onRemoveItem}
               onSaveNote={onSaveNote}
+              onOpenPdf={onOpenPdf}
               saving={saving}
             />
           ))}
