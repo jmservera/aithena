@@ -437,7 +437,7 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 
 **Output**: `docs/prd/admin-react-migration.md`
 
-### Documentation: Intel GPU WSL2 Setup Guide — 2025-03-26
+### Documentation: Intel GPU WSL2 Setup Guide — 2026-03-26
 
 **Task:** Create comprehensive guide for running Aithena with Intel GPU acceleration on WSL2.
 
