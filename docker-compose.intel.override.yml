@@ -29,5 +29,5 @@ services:
       - BACKEND=openvino
     devices:
       - /dev/dxg:/dev/dxg
-    group_add:
-      - video
+    volumes:
+      - /usr/lib/wsl:/usr/lib/wsl

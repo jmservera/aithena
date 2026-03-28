@@ -224,10 +224,15 @@ Many users run Aithena on Windows via WSL2. GPU passthrough works for both NVIDI
 4. Docker Desktop WSL2 backend automatically supports `--gpus`
 
 #### Intel on WSL2
-1. Install latest Intel GPU drivers on **Windows**
-2. WSL2 exposes `/dev/dxg` for GPU compute
-3. Verify: `ls -la /dev/dxg/` inside WSL — you should see `renderD128`
-4. The Intel override file maps `/dev/dxg` into the container
+
+For comprehensive setup, prerequisites, and troubleshooting specific to Intel GPUs on WSL2, see the [Intel GPU WSL2 Setup Guide](guides/intel-gpu-wsl2.md).
+
+Quick reference:
+1. Install latest Intel GPU drivers on **Windows** (v30.0.100.9684+)
+2. Run `wsl --update` to ensure latest WSL2 kernel
+3. Inside WSL, add Intel GPU repositories and install runtime packages
+4. Verify: `clinfo | head -20` should show your Intel GPU
+5. Use the Intel override: `docker compose -f docker-compose.prod.yml -f docker-compose.intel.override.yml up -d`
 
 ### Verification
 
@@ -257,6 +262,18 @@ Expected output with GPU:
 | Health shows `device: cpu` despite override | Override file not loaded | Check `docker compose config` output |
 | Container crash on startup | GPU memory insufficient | Try `DEVICE=cpu` to verify, then check GPU memory |
 | `/dev/dxg` not found in WSL2 | GPU drivers not installed on Windows host | Install Windows GPU drivers, restart WSL |
+
+### Windows Users: Intel GPU on WSL2
+
+If you're running Aithena on Windows with Intel GPU acceleration in WSL2, see the dedicated [Intel GPU WSL2 Setup Guide](guides/intel-gpu-wsl2.md). This guide covers:
+
+- Prerequisites (Windows 11, WSL2 kernel updates, Intel driver requirements)
+- Step-by-step driver and repository setup
+- GPU verification and container startup
+- WSL2-specific troubleshooting (DirectX vs. DRM device differences)
+- Performance tuning and monitoring
+
+The guide includes a quick-start command and detailed explanations of WSL2's GPU architecture, making it ideal for first-time users.
 
 ## Backup dashboard and restore workflow (v1.14.x)
 

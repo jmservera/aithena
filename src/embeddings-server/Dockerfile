@@ -51,9 +51,15 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
+# Ensure root for package installation (openvino base image runs as non-root)
+USER root
+
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
+RUN if ! id -u app >/dev/null 2>&1; then \
+      groupadd --system --gid 1000 app 2>/dev/null || groupadd --system app; \
+      useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
+    fi
 
 COPY --from=dependencies /app/.venv /app/.venv
 
