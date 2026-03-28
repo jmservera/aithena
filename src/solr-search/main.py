@@ -399,7 +399,6 @@ def check_search_rate_limit(request: Request) -> None:
         )
 
 
-
 if settings.cors_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -537,10 +536,7 @@ def resolve_collection(collection: str | None) -> str:
     if collection not in settings.allowed_collections:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Invalid collection: {collection!r}. "
-                f"Allowed collections: {sorted(settings.allowed_collections)}"
-            ),
+            detail=(f"Invalid collection: {collection!r}. Allowed collections: {sorted(settings.allowed_collections)}"),
         )
     return collection
 
@@ -876,11 +872,7 @@ def auth_delete_user(
     responses={
         429: {
             "description": "Rate limit exceeded",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Rate limit exceeded. Please try again later."}
-                }
-            },
+            "content": {"application/json": {"example": {"detail": "Rate limit exceeded. Please try again later."}}},
             "headers": {
                 "Retry-After": {
                     "description": "Number of seconds to wait before retrying",
@@ -952,17 +944,38 @@ def search(
         with _track_search_metrics(mode):
             if mode == "keyword":
                 response = _search_keyword(
-                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    request,
+                    q,
+                    page,
+                    resolved_page_size,
+                    sort_by,
+                    sort_order,
+                    sort,
+                    filters,
                     collection=resolved_collection,
                 )
             elif mode == "semantic":
                 response = _search_semantic(
-                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    request,
+                    q,
+                    page,
+                    resolved_page_size,
+                    sort_by,
+                    sort_order,
+                    sort,
+                    filters,
                     collection=resolved_collection,
                 )
             else:
                 response = _search_hybrid(
-                    request, q, page, resolved_page_size, sort_by, sort_order, sort, filters,
+                    request,
+                    q,
+                    page,
+                    resolved_page_size,
+                    sort_by,
+                    sort_order,
+                    sort,
+                    filters,
                     collection=resolved_collection,
                 )
     except Exception:
@@ -1038,8 +1051,7 @@ def _search_keyword(
             enrich_results_with_chunk_pages(results, chunk_docs)
         except Exception:
             logger.warning(
-                "Failed to enrich results with chunk pages (best-effort). "
-                "collection=%s parent_ids_count=%d",
+                "Failed to enrich results with chunk pages (best-effort). collection=%s parent_ids_count=%d",
                 collection,
                 len(parent_ids),
                 exc_info=True,
@@ -1253,17 +1265,38 @@ def _execute_search_for_compare(
     started = time.perf_counter()
     if mode == "keyword":
         resp = _search_keyword(
-            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            request,
+            q,
+            page,
+            page_size,
+            sort_by,
+            sort_order,
+            sort,
+            filters,
             collection=collection,
         )
     elif mode == "semantic":
         resp = _search_semantic(
-            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            request,
+            q,
+            page,
+            page_size,
+            sort_by,
+            sort_order,
+            sort,
+            filters,
             collection=collection,
         )
     else:
         resp = _search_hybrid(
-            request, q, page, page_size, sort_by, sort_order, sort, filters,
+            request,
+            q,
+            page,
+            page_size,
+            sort_by,
+            sort_order,
+            sort,
+            filters,
             collection=collection,
         )
     latency_ms = round((time.perf_counter() - started) * 1000, 2)
@@ -1454,6 +1487,22 @@ def similar_books(
     """
     embedding_field = settings.book_embedding_field
 
+    # If document_id looks like a chunk ID, resolve to parent.
+    if "_chunk_" in document_id:
+        chunk_lookup = query_solr(
+            {
+                "q": f"id:{solr_escape(document_id)}",
+                "fl": "parent_id_s",
+                "rows": 1,
+                "wt": "json",
+            }
+        )
+        chunk_docs_lookup = chunk_lookup.get("response", {}).get("docs", [])
+        if chunk_docs_lookup and chunk_docs_lookup[0].get("parent_id_s"):
+            document_id = chunk_docs_lookup[0]["parent_id_s"]
+        else:
+            raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
+
     # 1. Fetch the embedding from the book's first chunk.
     #    Attempted first to avoid an extra Solr round-trip — if chunks exist
     #    the parent book must exist too.
@@ -1484,10 +1533,7 @@ def similar_books(
         if source_docs:
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    f"No indexed chunks found for document {document_id!r}. "
-                    "The document may still be processing."
-                ),
+                detail=(f"No indexed chunks found for document {document_id!r}. The document may still be processing."),
             )
         raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
 
@@ -1541,9 +1587,7 @@ def similar_books(
             "fq": EXCLUDE_CHUNKS_FQ,
         }
     )
-    parent_docs = {
-        doc["id"]: doc for doc in parent_payload.get("response", {}).get("docs", []) if "id" in doc
-    }
+    parent_docs = {doc["id"]: doc for doc in parent_payload.get("response", {}).get("docs", []) if "id" in doc}
 
     # 5. Build results sorted by descending similarity score.
     ranked = sorted(seen_parents.items(), key=lambda item: item[1], reverse=True)
@@ -2453,7 +2497,6 @@ def admin_requeue_document(doc_id: str) -> dict[str, Any]:
     return {"requeued": 1, "id": doc_id}
 
 
-
 # ---------------------------------------------------------------------------
 # Metadata edit — PATCH /v1/admin/documents/{doc_id}/metadata
 # ---------------------------------------------------------------------------
@@ -2769,7 +2812,6 @@ def admin_edit_document_metadata(doc_id: str, body: MetadataEditRequest) -> dict
     }
 
 
-
 # ---------------------------------------------------------------------------
 # Phase 4 — /v1/upload endpoint
 # ---------------------------------------------------------------------------
@@ -2807,9 +2849,7 @@ def _publish_to_queue(file_path: Path) -> None:
     try:
         credentials = pika.PlainCredentials(settings.rabbitmq_user, settings.rabbitmq_pass)
         connection = pika.BlockingConnection(
-            pika.ConnectionParameters(
-                host=settings.rabbitmq_host, port=settings.rabbitmq_port, credentials=credentials
-            )
+            pika.ConnectionParameters(host=settings.rabbitmq_host, port=settings.rabbitmq_port, credentials=credentials)
         )
         channel = connection.channel()
         channel.queue_declare(queue=settings.rabbitmq_queue_name, durable=True, auto_delete=False)
@@ -2863,9 +2903,7 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
         while chunk := await file.read(chunk_size):
             content.extend(chunk)
             if len(content) > max_size_bytes:
-                raise HTTPException(
-                    status_code=413, detail=f"File size exceeds {settings.max_upload_size_mb}MB limit"
-                )
+                raise HTTPException(status_code=413, detail=f"File size exceeds {settings.max_upload_size_mb}MB limit")
     except HTTPException:
         raise
     except Exception as exc:
@@ -2937,12 +2975,14 @@ def _enrich_collection_items(items: list[dict[str, Any]]) -> None:
 
     try:
         id_query = " OR ".join(f"id:{solr_escape(did)}" for did in doc_ids)
-        result = query_solr({
-            "q": f"({id_query})",
-            "fl": "id,title_s,author_s,year_i,file_path_s",
-            "rows": len(doc_ids),
-            "wt": "json",
-        })
+        result = query_solr(
+            {
+                "q": f"({id_query})",
+                "fl": "id,title_s,author_s,year_i,file_path_s",
+                "rows": len(doc_ids),
+                "wt": "json",
+            }
+        )
 
         docs = result.get("response", {}).get("docs", [])
         metadata_map: dict[str, dict[str, Any]] = {}

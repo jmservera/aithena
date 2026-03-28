@@ -263,6 +263,7 @@ def normalize_book(
         "highlights": collect_highlights(document_id, highlighting),
         "document_url": document_url,
         "thumbnail_url": thumbnail_url(document.get("thumbnail_url_s")),
+        "parent_id": document.get("parent_id_s"),
     }
 
 
@@ -493,10 +494,7 @@ def parse_stats_response(payload: dict[str, Any]) -> dict[str, Any]:
 
     def _parse_facet(field: str) -> list[dict[str, Any]]:
         raw = facet_fields.get(field) or []
-        return [
-            {"value": raw[i], "count": safe_numeric(raw[i + 1], int, 0)}
-            for i in range(0, len(raw), 2)
-        ]
+        return [{"value": raw[i], "count": safe_numeric(raw[i + 1], int, 0)} for i in range(0, len(raw), 2)]
 
     stats_fields: dict[str, Any] = payload.get("stats", {}).get("stats_fields", {})
     page_count_stats: dict[str, Any] = stats_fields.get("page_count_i") or {}
