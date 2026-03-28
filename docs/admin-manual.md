@@ -1,8 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.17.0 Release Notes](release-notes/v1.17.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.17.1 Release Notes](release-notes/v1.17.1.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), and [v1.17.0 Deployment Updates](#deployment-updates-for-v1170) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.17.1 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.17.1 hardens GitHub Actions CI secrets behind a dedicated environment; no deployment changes. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), and [v1.17.1 Deployment Updates](#deployment-updates-for-v1171) sections below.
 
 ## System architecture overview
 
@@ -4139,3 +4139,50 @@ For a comprehensive troubleshooting guide, see [docs/guides/gpu-troubleshooting.
    ```
 
 For more detailed troubleshooting, see the [GPU Troubleshooting Guide](guides/gpu-troubleshooting.md).
+
+---
+
+## Deployment Updates for v1.17.1
+
+v1.17.1 is a **security patch** that hardens GitHub Actions CI secrets handling. There are **no deployment changes** from v1.17.0. CPU-only and GPU-enabled deployments continue to work without modification.
+
+### What Changed in v1.17.1
+
+**GitHub Actions CI/CD security hardening (#1237):**
+
+The `build-containers.yml` GitHub Actions workflow now uses a dedicated `build` environment with protection rules to gate access to container registry secrets (`GHCR_TOKEN`, `GHCR_USERNAME`). This resolves GitHub code scanning alert #230 (zizmor).
+
+**Operator impact:** None. This change affects only the build pipeline in GitHub Actions. Runtime services, configuration, volumes, and environment variables remain unchanged from v1.17.0.
+
+### Upgrade Path
+
+Standard upgrade from v1.17.0 to v1.17.1:
+
+```bash
+docker compose pull
+docker compose down
+docker compose up -d
+```
+
+All existing GPU and CPU-mode deployments continue to work without modification.
+
+### No Configuration Changes
+
+- No new environment variables
+- No volume layout changes
+- No database migrations
+- No auth or configuration format changes
+- Existing `.env` files work unchanged
+- Existing GPU profiles (`--profile nvidia`, `--profile intel`) work unchanged
+
+### Operator Validation Checklist
+
+Before considering v1.17.1 production-ready:
+
+- [ ] Run `docker compose pull` and verify new image digests are fetched
+- [ ] Run `docker compose up -d` and verify all services start without errors
+- [ ] Run a test search query and confirm results are returned
+- [ ] Check container logs for any warnings or errors: `docker compose logs`
+- [ ] (If GPU enabled) Verify GPU detection is still working: `docker compose logs embeddings-server | grep -i device`
+
+---

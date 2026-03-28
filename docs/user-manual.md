@@ -1,8 +1,10 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.17.0 Release Notes](release-notes/v1.17.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.17.1 Release Notes](release-notes/v1.17.1.md).
 
 **v1.16.0 fixes search experience:** semantic search results now use the same display style as keyword results, keyword match context is truncated to 40 words, page numbers are restored for keyword matches, and thumbnails are now shown for all search modes. See [Search (v1.16.0 fixes)](#searching-for-books) below.
+
+**v1.17.1 is a security patch:** GitHub Actions CI secrets are now gated behind a dedicated environment; no user-facing changes. See [v1.17.1 Release Notes](release-notes/v1.17.1.md).
 
 **v1.15.0 introduces admin portal improvements:** redesigned sidebar navigation for the admin dashboard, per-service log viewer for inspecting container logs, detailed indexing status, and SSO passthrough for Solr admin access. See [Admin Portal (v1.15.0+)](#admin-portal-v1150) below.
 
