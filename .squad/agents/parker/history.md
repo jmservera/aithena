@@ -357,3 +357,45 @@
 - `src/embeddings-server/tests/test_gpu_config.py` — GPU-specific tests (50 total)
 
 **Pattern note:** The `edit` tool fails silently on files containing certain Unicode characters (e.g., 𐃆). Use Python file I/O via bash as workaround.
+
+### Similar Books Chunk ID Fix (2026-03-28)
+
+**Problem:** Semantic search returns chunk document IDs (e.g., `{hash}_chunk_0000`) to the frontend. When users click "similar books", the UI sends the chunk ID to `/v1/books/{chunk_id}/similar`, which fails with 404 because:
+1. The endpoint queries `parent_id_s:{chunk_id}` to find chunks, but no chunk has `parent_id_s` equal to another chunk ID
+2. The fallback query also fails because chunk docs have `parent_id_s` set
+
+**Fix 1 — Add parent_id to normalize_book:**
+- Added `"parent_id": document.get("parent_id_s")` to the return dict in `search_service.py::normalize_book()`
+- This gives the frontend the parent book ID for chunk results, allowing it to request similar books using the correct parent ID
+
+**Fix 2 — Handle chunk IDs in similar_books endpoint:**
+- Added chunk ID detection at the start of `similar_books()` in `main.py` (before existing chunk lookup)
+- If `document_id` contains `"_chunk_"`, query Solr for that chunk's `parent_id_s` and use that as the real document_id
+- Makes the endpoint resilient to both parent IDs and chunk IDs
+
+**Implementation details:**
+```python
+# At start of similar_books():
+if "_chunk_" in document_id:
+    chunk_lookup = query_solr({
+        "q": f"id:{solr_escape(document_id)}",
+        "fl": "parent_id_s",
+        "rows": 1,
+        "wt": "json",
+    })
+    chunk_docs_lookup = chunk_lookup.get("response", {}).get("docs", [])
+    if chunk_docs_lookup and chunk_docs_lookup[0].get("parent_id_s"):
+        document_id = chunk_docs_lookup[0]["parent_id_s"]
+    else:
+        raise HTTPException(status_code=404, detail=f"Document not found: {document_id!r}")
+```
+
+**Files modified:**
+- `src/solr-search/search_service.py` — added `parent_id` field
+- `src/solr-search/main.py` — added chunk ID resolution
+- `src/solr-search/tests/test_search_service.py` — updated test assertion to include `parent_id`
+
+**Key Learning:**
+- The frontend needs both the chunk ID (for displaying the specific result) AND the parent ID (for feature navigation like "similar books")
+- Backend endpoints should be resilient to receiving either parent or chunk IDs — detect and resolve appropriately
+- The Solr data model separation (metadata on parents, embeddings on chunks) means we need to handle both ID types throughout the stack

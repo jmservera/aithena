@@ -413,3 +413,16 @@ Four search result display regressions identified during v1.16.0 pre-release:
 - Added 14 unit tests for `build_chunk_page_params` and `enrich_results_with_chunk_pages` covering edge cases
 - `FACET_FIELDS` keys are logical names (e.g., `"language"`) not Solr field names (e.g., `"language_s"`) — important for `build_filter_queries`
 - PR review comment replies use `in_reply_to` field on the `pulls/{pr}/comments` endpoint, not a `/replies` sub-endpoint
+
+### Similar Books Bug Fix — Semantic Search Mode (2026-07-09)
+- **Problem:** In semantic search mode, search results return chunk documents. The `book.id` is a chunk ID (like `{hash}_chunk_0000`), not a parent book ID. When clicking similar books, the frontend called `/v1/books/{chunk_id}/similar` and got 404.
+- **Solution:** Added `parent_id?: string | null` field to `BookResult` interface in `hooks/search.ts`. Backend now populates this field for chunks.
+- **Fix locations:**
+  1. `SearchPage.tsx` `handleOpenPdf`: Use `book.parent_id || book.id` when setting `focusedBookId`
+  2. `SearchPage.tsx` `handleSelectBook`: Use `book.parent_id || book.id` when setting `focusedBookId`
+  3. `BookDetailView.tsx`: Pass `book.parent_id || book.id` to `<SimilarBooks documentId={...} />`
+- **Key insight:** The similar books endpoint needs the *parent book ID*, not the chunk ID. Always prefer `parent_id` when available (when `is_chunk` is true), fall back to `id` for regular parent documents.
+- **Files touched:**
+  - `src/aithena-ui/src/hooks/search.ts` — Added `parent_id` to `BookResult` interface
+  - `src/aithena-ui/src/pages/SearchPage.tsx` — Two handlers updated
+  - `src/aithena-ui/src/Components/BookDetailView.tsx` — SimilarBooks prop updated

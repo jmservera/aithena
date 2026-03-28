@@ -677,7 +677,10 @@ function BookDetailView({
 
               {/* Similar books */}
               <div className="book-detail-similar">
-                <SimilarBooks documentId={book.id} onSelectBook={onSelectSimilarBook} />
+                <SimilarBooks
+                  documentId={book.parent_id || book.id}
+                  onSelectBook={onSelectSimilarBook}
+                />
               </div>
             </>
           ) : null}

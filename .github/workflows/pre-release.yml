@@ -15,6 +15,9 @@ on:
   pull_request:
     branches: [main]
 
+  push:
+    branches: [dev]
+
 permissions:
   contents: read
 
@@ -29,6 +32,7 @@ jobs:
     # Skip PR builds from forks (they lack push/package permissions)
     if: >-
       github.event_name == 'workflow_dispatch'
+      || github.event_name == 'push'
       || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     outputs:
       version: ${{ steps.resolve.outputs.version }}
@@ -137,7 +141,7 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   smoke-test:
-    name: Smoke test ${{ matrix.service.image }}
+    name: Smoke test ${{ matrix.service.image }}${{ matrix.service.tag_suffix || '' }}
     runs-on: ubuntu-latest
     needs:
       - prepare
@@ -161,6 +165,13 @@ jobs:
             port: "8080"
             health_endpoint: /health
             startup_timeout: 60
+          - image: embeddings-server
+            type: http
+            port: "8080"
+            health_endpoint: /health
+            startup_timeout: 60
+            tag_suffix: "-openvino"
+            docker_env: "-e BACKEND=openvino -e DEVICE=cpu"
           - image: admin
             type: http
             port: "8501"
@@ -186,24 +197,25 @@ jobs:
       - name: Pull image
         env:
           SERVICE_IMAGE: ${{ matrix.service.image }}
-          RC_TAG: ${{ needs.prepare.outputs.full_tag }}
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}${{ matrix.service.tag_suffix || '' }}
         run: docker pull "ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${RC_TAG}"
 
       - name: Start container and check health endpoint
         if: matrix.service.type == 'http'
         env:
           SERVICE_IMAGE: ${{ matrix.service.image }}
-          RC_TAG: ${{ needs.prepare.outputs.full_tag }}
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}${{ matrix.service.tag_suffix || '' }}
           SERVICE_PORT: ${{ matrix.service.port }}
           HEALTH_ENDPOINT: ${{ matrix.service.health_endpoint }}
           STARTUP_TIMEOUT: ${{ matrix.service.startup_timeout }}
+          DOCKER_ENV: ${{ matrix.service.docker_env || '' }}
         run: |
           image="ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${RC_TAG}"
           port="${SERVICE_PORT}"
           endpoint="${HEALTH_ENDPOINT}"
           timeout="${STARTUP_TIMEOUT}"
 
-          docker run -d --name smoke-container -p "${port}:${port}" "${image}"
+          docker run -d --name smoke-container -p "${port}:${port}" ${DOCKER_ENV} "${image}"
 
           elapsed=0
           echo "Waiting up to ${timeout}s for ${SERVICE_IMAGE} at :${port}${endpoint}..."
@@ -227,7 +239,7 @@ jobs:
         if: matrix.service.type == 'process'
         env:
           SERVICE_IMAGE: ${{ matrix.service.image }}
-          RC_TAG: ${{ needs.prepare.outputs.full_tag }}
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}${{ matrix.service.tag_suffix || '' }}
         run: |
           image="ghcr.io/jmservera/aithena-${SERVICE_IMAGE}:${RC_TAG}"
 
@@ -266,7 +278,7 @@ jobs:
         if: always()
         env:
           SERVICE_IMAGE: ${{ matrix.service.image }}
-          RC_TAG: ${{ needs.prepare.outputs.full_tag }}
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}${{ matrix.service.tag_suffix || '' }}
           STEP_STATUS: ${{ job.status }}
         run: |
           if [ "$STEP_STATUS" = "success" ]; then

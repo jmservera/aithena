@@ -123,6 +123,8 @@ def test_build_sort_clause_invalid_format() -> None:
 
 def test_parse_facet_counts_series_empty_bucket() -> None:
     """Series facet returns empty list when Solr returns an empty bucket."""
+
+
 def test_build_filter_queries_supports_folder_filter() -> None:
     filters = build_filter_queries({"folder": "en/Science Fiction"})
 
@@ -130,7 +132,7 @@ def test_build_filter_queries_supports_folder_filter() -> None:
 
 
 def test_build_filter_queries_folder_with_special_chars() -> None:
-    filters = build_filter_queries({"folder": 'es/Ciencia Ficción'})
+    filters = build_filter_queries({"folder": "es/Ciencia Ficción"})
 
     assert filters == [r"folder_path_s:es\/Ciencia\ Ficción"]
 
@@ -146,9 +148,12 @@ def test_parse_facet_counts_includes_folder_facet() -> None:
                 "language_s": [],
                 "series_s": [],
                 "folder_path_s": [
-                    "en/Science Fiction", 125,
-                    "en/History", 89,
-                    "es/Ciencia Ficción", 47,
+                    "en/Science Fiction",
+                    125,
+                    "en/History",
+                    89,
+                    "es/Ciencia Ficción",
+                    47,
                 ],
             }
         }
@@ -220,9 +225,9 @@ def test_normalize_book_series_none_when_absent() -> None:
 
 def test_solr_escape_handles_folder_path_characters() -> None:
     assert solr_escape("en/Science Fiction") == r"en\/Science\ Fiction"
-    assert solr_escape('es/Ciencia Ficción') == r"es\/Ciencia\ Ficción"
+    assert solr_escape("es/Ciencia Ficción") == r"es\/Ciencia\ Ficción"
     assert solr_escape("") == ""
-    assert solr_escape('path/with "quotes"') == r'path\/with\ \"quotes\"'
+    assert solr_escape('path/with "quotes"') == r"path\/with\ \"quotes\""
 
 
 def test_normalize_book_collects_fields_and_highlights() -> None:
@@ -271,6 +276,7 @@ def test_normalize_book_collects_fields_and_highlights() -> None:
         "highlights": ["<em>folk</em> story", "second snippet"],
         "document_url": "/documents/token",
         "thumbnail_url": None,
+        "parent_id": None,
     }
 
 
@@ -656,7 +662,7 @@ def test_build_filter_queries_deeply_nested_folder() -> None:
 def test_build_filter_queries_folder_with_double_quotes() -> None:
     """Double quotes in folder names must be escaped for Solr."""
     queries = build_filter_queries({"folder": 'books/"special" edition'})
-    assert queries == [r'folder_path_s:books\/\"special\"\ edition']
+    assert queries == [r"folder_path_s:books\/\"special\"\ edition"]
 
 
 def test_build_filter_queries_folder_with_parentheses_and_colon() -> None:
@@ -706,8 +712,10 @@ def test_parse_facet_counts_deeply_nested_folder_paths() -> None:
                 "language_s": [],
                 "series_s": [],
                 "folder_path_s": [
-                    "a/b/c/d/e", 10,
-                    "x/y/z", 5,
+                    "a/b/c/d/e",
+                    10,
+                    "x/y/z",
+                    5,
                 ],
             }
         }
@@ -731,9 +739,12 @@ def test_parse_facet_counts_folder_with_utf8_paths() -> None:
                 "language_s": [],
                 "series_s": [],
                 "folder_path_s": [
-                    "日本語/科学", 8,
-                    "Ελληνικά/Ιστορία", 3,
-                    "Русский/Наука", 2,
+                    "日本語/科学",
+                    8,
+                    "Ελληνικά/Ιστορία",
+                    3,
+                    "Русский/Наука",
+                    2,
                 ],
             }
         }
@@ -942,8 +953,12 @@ def test_keyword_search_excludes_chunks_semantic_does_not() -> None:
     - kNN search must include chunks because that's where embeddings live
     """
     kw_params = build_solr_params(
-        query="test", page=1, page_size=10, sort_by="score",
-        sort_order="desc", facet_limit=5,
+        query="test",
+        page=1,
+        page_size=10,
+        sort_by="score",
+        sort_order="desc",
+        facet_limit=5,
     )
     assert EXCLUDE_CHUNKS_FQ in kw_params["fq"], "Keyword search must exclude chunks"
 
@@ -956,8 +971,7 @@ def test_knn_params_with_folder_filter_does_not_exclude_chunks() -> None:
     folder_fq = build_filter_queries({"folder": "en/Science"})
     params = build_knn_params([0.1], top_k=5, knn_field="embedding_v", filters=folder_fq)
     for fq_clause in params.get("fq", []):
-        assert "parent_id_s" not in fq_clause, \
-            f"kNN filter query must not reference parent_id_s: {fq_clause}"
+        assert "parent_id_s" not in fq_clause, f"kNN filter query must not reference parent_id_s: {fq_clause}"
 
 
 def test_rrf_deduplicates_by_document_id() -> None:

@@ -9,6 +9,12 @@ dependencies = [
     "uvicorn[standard]>=0.42,<1",
 ]
 
+[project.optional-dependencies]
+openvino = [
+    "optimum-intel",
+    "openvino",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",

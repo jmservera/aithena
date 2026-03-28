@@ -363,9 +363,7 @@ The **Similar Books** panel helps you discover related documents. You can access
 
 Click any similar-book card to navigate to that book's detail view or to replace the currently selected PDF with that recommendation. This makes it easy to explore related titles without starting a new search from scratch.
 
-![Similar Books recommendations](images/similar-books.png)
-
-<!-- TODO: capture screenshot -->
+<!-- TODO: capture similar-books.png screenshot when library has indexed data -->
 
 ## Book Detail View (v1.11.0+)
 
@@ -774,7 +772,7 @@ docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
 ### Prerequisites
 
 - **NVIDIA:** NVIDIA drivers + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- **Intel:** Intel GPU drivers + `/dev/dri` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
+- **Intel:** Intel GPU drivers + `/dev/dxg` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
 
 > **Note:** GPU acceleration only affects indexing speed. Search performance is unchanged — Solr handles search queries independently of the embedding hardware.
 
