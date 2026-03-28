@@ -19,6 +19,13 @@ const bookWithAbsolutePdfUrl: BookResult = {
   document_url: 'https://example.com/advanced.pdf',
 };
 
+const bookWithSameOriginNoDocPath: BookResult = {
+  id: 'book-6',
+  title: 'Same Origin Book',
+  author: 'Test Author',
+  document_url: `${window.location.origin}/abc123token`,
+};
+
 const bookWithInternalDocUrl: BookResult = {
   id: 'book-5',
   title: 'Internal Host Book',
@@ -220,6 +227,18 @@ describe('PdfViewer', () => {
     const iframe = screen.getByTitle(/internal host book/i);
     expect(iframe).toHaveAttribute('src', expect.stringContaining('/documents/aW50ZXJuYWwucGRm'));
     expect(iframe.getAttribute('src')).not.toMatch(/solr-search/);
+  });
+
+  it('normalises same-origin absolute URL without /documents/ path to /documents/{token}', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithSameOriginNoDocPath} onClose={onClose} />
+      </IntlWrapper>
+    );
+
+    const iframe = screen.getByTitle(/same origin book/i);
+    expect(iframe).toHaveAttribute('src', expect.stringContaining('/documents/abc123token'));
   });
 
   it('shows an error state when no document URL is available', () => {
