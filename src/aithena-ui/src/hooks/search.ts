@@ -29,6 +29,7 @@ export interface BookResult {
   page_start?: number;
   page_end?: number;
   thumbnail_url?: string | null;
+  parent_id?: string | null;
 }
 
 export interface FacetValue {

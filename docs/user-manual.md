@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.16.0 Release Notes](release-notes/v1.16.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.17.0 Release Notes](release-notes/v1.17.0.md).
 
 **v1.16.0 fixes search experience:** semantic search results now use the same display style as keyword results, keyword match context is truncated to 40 words, page numbers are restored for keyword matches, and thumbnails are now shown for all search modes. See [Search (v1.16.0 fixes)](#searching-for-books) below.
 
@@ -772,7 +772,7 @@ docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
 ### Prerequisites
 
 - **NVIDIA:** NVIDIA drivers + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- **Intel:** Intel GPU drivers + `/dev/dri` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
+- **Intel:** Intel GPU drivers + `/dev/dxg` device accessible (see [Admin Manual](admin-manual.md) for WSL2 setup)
 
 > **Note:** GPU acceleration only affects indexing speed. Search performance is unchanged — Solr handles search queries independently of the embedding hardware.
 

@@ -51,9 +51,15 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
+# Ensure root for package installation (openvino base image runs as non-root)
+USER root
+
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
+RUN if ! id -u app >/dev/null 2>&1; then \
+      groupadd --system --gid 1000 app 2>/dev/null || groupadd --system app; \
+      useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
+    fi
 
 COPY --from=dependencies /app/.venv /app/.venv
 
@@ -61,18 +67,6 @@ ENV PATH="/app/.venv/bin:${PATH}"
 
 COPY main.py model_utils.py /app/
 COPY config /app/config
-
-# Pre-download OpenVINO model files at build time.
-# The base image caches torch-format model files; OpenVINO needs its own
-# IR format files (openvino_model.xml + .bin) from the HF repo's openvino/ folder.
-# SentenceTransformer(backend="openvino") fetches them automatically.
-ARG INSTALL_OPENVINO=false
-RUN --mount=type=secret,id=HF_TOKEN \
-    if [ "$INSTALL_OPENVINO" = "true" ]; then \
-      HF_TOKEN="$(cat /run/secrets/HF_TOKEN 2>/dev/null || true)" \
-      HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
-      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-base', backend='openvino')" ; \
-    fi
 
 RUN chown -R app:app /app /models
 

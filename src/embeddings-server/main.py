@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import logging
+import os
 import sys
 from typing import Literal
 
@@ -26,10 +27,31 @@ if device and device != "cpu":
 if BACKEND != "torch":
     model_kwargs["backend"] = BACKEND
 
-logger.info("Loading embedding model: %s (family=%s, device=%s, backend=%s)", MODEL_NAME, model_family, DEVICE, BACKEND)
+# Check if model is pre-cached locally (base image saves to this path)
+_st_home = os.environ.get("SENTENCE_TRANSFORMERS_HOME", "/models/sentence_transformers")
+local_model_path = os.path.join(_st_home, MODEL_NAME.replace("/", "_"))
+
+if os.path.isdir(local_model_path):
+    model_source = local_model_path
+    _source_label = "local-cache"
+elif os.path.isdir(MODEL_NAME) or os.path.isfile(MODEL_NAME):
+    model_source = MODEL_NAME
+    _source_label = "local-path"
+else:
+    model_source = MODEL_NAME
+    _source_label = "hub"
+
+logger.info(
+    "Loading embedding model: %s (family=%s, device=%s, backend=%s, source=%s)",
+    MODEL_NAME,
+    model_family,
+    DEVICE,
+    BACKEND,
+    _source_label,
+)
 
 try:
-    model = SentenceTransformer(MODEL_NAME, **model_kwargs)
+    model = SentenceTransformer(model_source, **model_kwargs)
     embedding_dim = model.get_sentence_embedding_dimension()
     logger.info("Model loaded successfully: %s (embedding_dim=%d)", MODEL_NAME, embedding_dim)
 except Exception as exc:

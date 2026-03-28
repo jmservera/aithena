@@ -296,7 +296,7 @@ function SearchPage() {
     }
 
     setSelectedBook(book);
-    setFocusedBookId(book.id);
+    setFocusedBookId(book.parent_id || book.id);
   }, []);
 
   const handleClosePdf = useCallback(() => {
@@ -325,7 +325,7 @@ function SearchPage() {
   );
 
   const handleSelectBook = useCallback((book: BookResult) => {
-    setFocusedBookId(book.id);
+    setFocusedBookId(book.parent_id || book.id);
     setDetailBookId(book.id);
     setDetailInitialData(book);
   }, []);

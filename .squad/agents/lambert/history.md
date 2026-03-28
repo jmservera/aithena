@@ -222,3 +222,18 @@
 - No skills marked outdated; all remain valid for v1.15.0
 
 **Status:** Memory consolidated, ready for future testing work. Core domains: pytest, Vitest, Playwright, CI gates, release validation.
+
+### Chunk ID Handling Tests (Parker's Similar Books Fix)
+- Added 9 tests covering chunk ID resolution in `similar_books` endpoint and `parent_id` field in `normalize_book`
+- **Test file:** `tests/test_chunk_id_handling.py` (278 lines)
+- **normalize_book tests:** Verified `parent_id` is None for parent docs, equals `parent_id_s` for chunk docs
+- **similar_books chunk resolution tests:**
+  - Parent ID still works (no regression)
+  - Chunk ID correctly resolves to parent and returns similar books
+  - Non-existent chunk ID returns 404
+  - Chunk with no parent_id_s returns 404
+  - Chunk whose parent doesn't exist returns 404
+  - Verified chunk lookup uses correct Solr query params (fl=parent_id_s, rows=1, wt=json)
+- **Mocking pattern:** Used `@patch("main.requests.post")` with `side_effect` to simulate multi-call Solr flows
+- **Key insight:** Chunk ID format is `{parent_hash}_chunk_{index:04d}` — underscore-based detection is reliable
+- **Test counts after PR:** solr-search 1022 passed (up from 993), coverage 91.16%

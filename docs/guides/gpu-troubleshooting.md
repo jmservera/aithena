@@ -61,13 +61,13 @@ docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml confi
 
 **Diagnosis:**
 ```bash
-# 1. Check /dev/dri exists
-ls -la /dev/dri/
+# 1. Check /dev/dxg exists
+ls -la /dev/dxg/
 
 # 2. Check Intel GPU is recognized
 clinfo | head -20
 
-# 3. Check user has video/render group access
+# 3. Check user has video group access
 groups
 ```
 
@@ -75,14 +75,16 @@ groups
 
 | Check | Fix |
 |-------|-----|
-| `/dev/dri` missing | Install Intel compute-runtime drivers |
+| `/dev/dxg` missing | Install Intel compute-runtime drivers |
 | `clinfo` shows no devices | Install `intel-opencl-icd` and `intel-level-zero-gpu` |
-| Permission denied on `/dev/dri` | Add user to `video` and `render` groups |
-| WSL2: `/dev/dri` missing | Install Intel GPU drivers on **Windows** host, restart WSL |
+| Permission denied on `/dev/dxg` | Add user to `video` group |
+| WSL2: `/dev/dxg` missing | Install Intel GPU drivers on **Windows** host, restart WSL |
 
 ### WSL2-Specific Issues
 
-**`/dev/dri` not available in WSL2:**
+**For comprehensive WSL2 GPU setup and troubleshooting, see [Running Aithena with Intel GPU on WSL2](./intel-gpu-wsl2.md).**
+
+**`/dev/dxg` not available in WSL2:**
 1. Ensure GPU drivers are installed on the **Windows host** (not inside WSL)
 2. Run `wsl --update` to get the latest WSL2 kernel
 3. Restart WSL: `wsl --shutdown` then reopen
@@ -92,10 +94,16 @@ groups
 2. Configure Docker runtime: `sudo nvidia-ctk runtime configure --runtime=docker`
 3. Restart Docker: `sudo systemctl restart docker`
 
-**Intel: `/dev/dri/renderD128` missing:**
-1. This requires recent Intel GPU drivers on Windows
+**Intel: `/dev/dxg` missing:**
+1. This requires recent Intel GPU drivers on Windows (v30.0.100.9684+)
 2. Check Windows Device Manager → Display adapters for Intel GPU
-3. Update Intel driver from [Intel Download Center](https://www.intel.com/content/www/us/en/download-center/home.html)
+3. Update Intel driver from [Intel Support — Download Center](https://www.intel.com/content/www/us/en/support/products/80939/graphics.html)
+4. After Windows driver update and reboot, run `wsl --update && wsl --shutdown`
+
+**Intel GPU in WSL2: Model Compilation Slow**
+- First embedding load is slow (10–60s) as OpenVINO compiles the model for GPU
+- This only happens once; cached model loads instantly thereafter
+- If stuck longer than 2 minutes, check logs: `docker compose logs embeddings-server --tail 50`
 
 ### Container Crashes on Startup
 
@@ -162,6 +170,6 @@ CPU mode is always stable. GPU acceleration is purely opt-in.
 2. Review container logs: `docker compose logs embeddings-server`
 3. File an issue at the project repository with:
    - Output of `docker compose logs embeddings-server --tail 100`
-   - Output of `nvidia-smi` or `ls -la /dev/dri/`
+   - Output of `nvidia-smi` or `ls -la /dev/dxg/`
    - Your Docker Compose command
    - Host OS and GPU model
