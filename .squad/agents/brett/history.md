@@ -217,3 +217,15 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - **Critical:** Both vendors require GPU drivers installed on the Windows host, not inside WSL. This is the #1 failure point.
 
 **Placement:** Section added after "Deployment with Docker Compose" section (logical flow for first-time operators). Appears before "Backup dashboard and restore workflow" section.
+
+## v1.18.1 Release (2026-03-29)
+
+### Issue #1286: Add intel-extension-for-pytorch to OpenVINO extras
+
+**Completed:** 2026-03-29T10:10:00Z
+
+Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.toml` openvino extras group. Regenerated `uv.lock`. 52 tests pass.
+
+**Key insight:** IPEX is the required bridge between PyTorch and Intel's XPU runtime. Without it, PyTorch detects Intel GPU hardware but cannot dispatch inference to it. IPEX 2.8.0 resolves cleanly with torch 2.10.0 — no version conflicts.
+
+**Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker-compose.intel.override.yml` continues to work without changes.

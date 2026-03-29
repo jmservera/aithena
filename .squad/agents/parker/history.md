@@ -431,3 +431,36 @@ Extracted password hashing and auth DB schema init from `src/solr-search/auth.py
 - Re-exported symbols from the shared lib need `# noqa: F401` in the consuming module to avoid ruff unused-import errors
 - The `init_auth_db` in solr-search wraps the common version to add migrations + seeding — clean delegation pattern
 - `uv sync` with editable path sources (`{ path = "...", editable = true }`) works well for monorepo shared packages
+
+## v1.18.1 Release (2026-03-29)
+
+### Issue #1287: Solr auth bootstrap — explicit role assignment
+
+**Completed:** 2026-03-29T10:10:00Z  
+**Tests:** 1026/1026 passing
+
+Fixed Solr's auth bootstrap entrypoint to explicitly assign roles after `solr auth enable`. Corrected readonly role from "search" (doesn't exist in security.json) to "readonly". Added Solr credential generation to installer pipeline.
+
+**Changes:**
+- `docker-compose.yml` + `docker-compose.prod.yml`: After `solr auth enable`, call `set-user-role` to assign `["admin"]` to admin user and `["readonly"]` to readonly user
+- `installer/` — Added Solr credential generation: `SOLR_ADMIN_USER`, `SOLR_ADMIN_PASS`, `SOLR_READONLY_USER`, `SOLR_READONLY_PASS` now generated and rotated on installer run
+
+**Key insight:** Solr auth lifecycle is: `solr auth enable` (create user) → `set-user-role` (assign permissions) → operations work. RBAC setup is now explicit and traceable.
+
+### Issue #1288: Extract Shared Auth Library (aithena-common)
+
+**Completed:** 2026-03-29T10:25:00Z  
+**Status:** All tests pass
+
+Extracted `aithena-common/` as shared Python package containing passwords and auth DB logic. Both installer and solr-search now depend on aithena-common via uv path sources. Removed sys.path hacking from installer.
+
+**Changes:**
+1. Created `src/aithena-common/` with `aithena_common/passwords.py` and `aithena_common/auth_db.py`
+2. Updated installer: Added `pyproject.toml`, removed sys.path manipulation, now uses `--project installer` for fallback
+3. Updated solr-search: Added aithena-common to dependencies; auth module imports from common
+
+**What stays in solr-search:** JWT creation/verification, user CRUD, migrations, seeding, password policy, FastAPI-specific auth logic.
+
+**Architecture:** Dependency inversion applied — all services depend inward on `aithena-common`. No cross-service coupling except via HTTP APIs.
+
+**Key pattern:** When extracting shared code, keep domain-specific logic (migrations, seeding, JWT) in the service; only move pure utilities (hashing, schema DDL). Use re-exports with `# noqa: F401` if needed.
