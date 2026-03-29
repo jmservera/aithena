@@ -13,6 +13,7 @@ dependencies = [
 openvino = [
     "openvino",
     "optimum-intel",
+    "intel-extension-for-pytorch",
 ]
 
 [dependency-groups]

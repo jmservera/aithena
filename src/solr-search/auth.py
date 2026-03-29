@@ -9,15 +9,22 @@ from pathlib import Path
 from typing import Any
 
 import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
+
+from aithena_common.auth_db import (
+    SCHEMA_VERSION,  # noqa: F401 — re-exported for backward compatibility
+    get_schema_version,  # noqa: F401 — re-exported for backward compatibility
+)
+from aithena_common.passwords import (
+    _DUMMY_PASSWORD_HASH,
+    check_needs_rehash,
+    hash_password,
+    verify_password,
+)
 
 logger = logging.getLogger(__name__)
 
 JWT_ALGORITHM = "HS256"
-_PASSWORD_HASHER = PasswordHasher()
-_DUMMY_PASSWORD_HASH = _PASSWORD_HASHER.hash("aithena-dummy-password")
 _TTL_PATTERN = re.compile(r"^(?P<value>\d+)(?P<unit>[smhd]?)$")
 _TTL_MULTIPLIERS = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -61,63 +68,15 @@ def parse_ttl_to_seconds(raw_value: str) -> int:
     return ttl_seconds
 
 
-SCHEMA_VERSION = 1
-
-
-def _ensure_schema_version_table(connection: sqlite3.Connection) -> None:
-    """Create the schema_version tracking table if it does not exist."""
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS schema_version (
-            version INTEGER NOT NULL,
-            applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            description TEXT
-        )
-        """
-    )
-
-
-def get_schema_version(db_path: Path) -> int:
-    """Return the current schema version, or 0 if unversioned."""
-    with sqlite3.connect(db_path) as connection:
-        try:
-            row = connection.execute("SELECT MAX(version) FROM schema_version").fetchone()
-            return int(row[0]) if row and row[0] is not None else 0
-        except sqlite3.OperationalError:
-            return 0
-
-
 def init_auth_db(db_path: Path) -> None:
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path) as connection:
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        _ensure_schema_version_table(connection)
-        row = connection.execute("SELECT MAX(version) FROM schema_version").fetchone()
-        if row is None or row[0] is None:
-            connection.execute(
-                "INSERT INTO schema_version (version, description) VALUES (?, ?)",
-                (SCHEMA_VERSION, "Initial schema: users table"),
-            )
-        connection.commit()
+    from aithena_common.auth_db import init_auth_db as _init_schema  # noqa: PLC0415
 
-    from migrations import apply_pending_migrations
+    _init_schema(db_path)
+
+    from migrations import apply_pending_migrations  # noqa: PLC0415
 
     apply_pending_migrations(db_path)
     _seed_default_admin(db_path)
-
-
-def hash_password(password: str) -> str:
-    return _PASSWORD_HASHER.hash(password)
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
@@ -146,11 +105,8 @@ def _load_user_by_username(db_path: Path, username: str) -> StoredUser | None:
         )
 
 
-def _verify_password(password_hash: str, password: str) -> bool:
-    try:
-        return _PASSWORD_HASHER.verify(password_hash, password)
-    except (InvalidHashError, VerifyMismatchError, VerificationError):
-        return False
+# Keep _verify_password as a local alias for backward compatibility within this module.
+_verify_password = verify_password
 
 
 def authenticate_user(db_path: Path, username: str, password: str) -> AuthenticatedUser | None:
@@ -163,7 +119,7 @@ def authenticate_user(db_path: Path, username: str, password: str) -> Authentica
     if not password_valid:
         return None
 
-    if _PASSWORD_HASHER.check_needs_rehash(user.password_hash):
+    if check_needs_rehash(user.password_hash):
         with _connect(db_path) as connection:
             connection.execute(
                 "UPDATE users SET password_hash = ? WHERE id = ?",
@@ -198,9 +154,7 @@ def create_access_token(
 def _decode_payload(token: str, secret: str) -> dict:
     """Decode a JWT and return the raw payload dict."""
     try:
-        return jwt.decode(
-            token, secret, algorithms=[JWT_ALGORITHM], options={"require": ["exp"]}
-        )
+        return jwt.decode(token, secret, algorithms=[JWT_ALGORITHM], options={"require": ["exp"]})
     except ExpiredSignatureError as err:
         raise TokenExpiredError("Token expired") from err
     except (DecodeError, InvalidTokenError) as err:
@@ -275,9 +229,7 @@ def create_user(db_path: Path, username: str, password: str, role: str) -> dict:
             connection.commit()
         except sqlite3.IntegrityError as exc:
             raise UserExistsError(f"User {normalized_username!r} already exists") from exc
-        row = connection.execute(
-            "SELECT created_at FROM users WHERE id = ?", (cursor.lastrowid,)
-        ).fetchone()
+        row = connection.execute("SELECT created_at FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
         return {
             "id": cursor.lastrowid,
             "username": normalized_username,
@@ -288,9 +240,7 @@ def create_user(db_path: Path, username: str, password: str, role: str) -> dict:
 
 def list_users(db_path: Path) -> list[dict]:
     with _connect(db_path) as connection:
-        rows = connection.execute(
-            "SELECT id, username, role, created_at FROM users ORDER BY id"
-        ).fetchall()
+        rows = connection.execute("SELECT id, username, role, created_at FROM users ORDER BY id").fetchall()
     return [
         {"id": row["id"], "username": row["username"], "role": row["role"], "created_at": row["created_at"]}
         for row in rows
@@ -405,9 +355,7 @@ def change_password(db_path: Path, user_id: int, current_password: str, new_pass
         raise ValueError("Current password is incorrect")
 
     with _connect(db_path) as connection:
-        row = connection.execute(
-            "SELECT username, password_hash FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
+        row = connection.execute("SELECT username, password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
 
     if row is None:
         raise ValueError("User not found")

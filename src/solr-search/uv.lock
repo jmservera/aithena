@@ -8,6 +8,20 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "aithena-common"
+version = "0.1.0"
+source = { editable = "../aithena-common" }
+dependencies = [
+    { name = "argon2-cffi" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "argon2-cffi", specifier = ">=23.1" }]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.3" }]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1094,6 +1108,7 @@ name = "solr-search"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aithena-common" },
     { name = "argon2-cffi" },
     { name = "fastapi", extra = ["all"] },
     { name = "pika" },
@@ -1114,6 +1129,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aithena-common", editable = "../aithena-common" },
     { name = "argon2-cffi", specifier = ">=23.1.0" },
     { name = "fastapi", extras = ["all"], specifier = ">=0.115.0,<1" },
     { name = "pika", specifier = ">=1.3.2" },

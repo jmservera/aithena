@@ -267,3 +267,32 @@ Created comprehensive troubleshooting guide for GPU acceleration issues. Covers:
 **Reasoning:** GPU acceleration PRD approved for v1.17.0 (research completed in #1147). Users enabling GPU support need clear diagnostic path for hardware/driver issues. Guide references Admin Manual GPU setup section, completing user-facing documentation.
 
 ---
+
+## Clean Architecture Skill & Audit (2026-03-27)
+
+### Context
+PO directive to adopt Clean Architecture principles across the codebase. Triggered by #1288 (shared auth library extraction) and broader architectural concerns about cross-service coupling.
+
+### Work Completed
+
+1. **Read and synthesized** Uncle Bob's Clean Architecture article. Extracted core principles: Dependency Rule, four-layer model (Entities → Use Cases → Interface Adapters → Frameworks & Drivers), independence of frameworks/UI/database.
+
+2. **Created skill:** `.squad/skills/clean-architecture/SKILL.md` (confidence: low, first observation). Maps Clean Architecture to aithena's specific context — 5 concrete rules (R1-R5), PR review checklist, violation detection patterns, layer mapping for all services.
+
+3. **Audited codebase** — found 7 violations across severity levels:
+   - **V1 (High):** Admin `sys.path` manipulation in production code (`src/admin/src/pages/shared/config.py:22-24`)
+   - **V2 (High):** Duplicated auth logic between admin and solr-search (`parse_ttl_to_seconds`, `AuthenticatedUser`, JWT encode/decode in both services)
+   - **V3 (Medium):** Logging config duplicated across 4 services with feature drift
+   - **V4 (Medium):** `correlation.py` mixes FastAPI framework code with cross-cutting concern
+   - **V5 (Medium):** 30+ solr-search test files use `sys.path.append` instead of proper packaging
+   - **V6-V7 (Low):** Script-level `sys.path` usage in reset_password.py and benchmark tests
+
+4. **Documented findings:** `.squad/decisions/inbox/ripley-clean-architecture-audit.md` with severity ratings, file:line references, and phased remediation plan.
+
+### Key Finding
+`aithena-common` already exists and handles passwords + auth DB — the #1288 foundation is solid. The gap is incomplete adoption: `parse_ttl_to_seconds()`, `AuthenticatedUser`, JWT utils, and logging formatters are still duplicated. Solr-search itself doesn't use `aithena-common` yet. Recommended 4-phase migration plan.
+
+### Pattern Reinforced
+**"Extract shared package early, migrate incrementally."** The `aithena-common` package is architecturally correct. What's missing is a systematic migration of all consumers. This validates the pragmatic incrementalism pattern — ship the package, then migrate service by service.
+
+---
