@@ -422,3 +422,12 @@ if "_chunk_" in document_id:
 - PdfViewer accepts `BookResult` but only uses `document_url`, `title`, and `pages` — can construct a minimal compatible object from `CollectionItem`
 - Reusing CSS classes across components (`.book-card-*` in `CollectionItemCard`) provides visual consistency without needing a shared base component
 - The `_enrich_collection_items` function is the single place where Solr metadata is joined onto collection items — extending it is the correct backend approach
+
+### Shared Auth Library Extraction (#1288, 2026-07-09)
+Extracted password hashing and auth DB schema init from `src/solr-search/auth.py` into `src/aithena-common/` shared package. Installer now imports from `aithena_common` directly instead of `sys.path` hacking into solr-search. Created `installer/pyproject.toml` making the installer a proper uv project.
+
+**Key Learning:**
+- When extracting shared code, keep domain-specific logic (migrations, seeding, JWT) in the service; only move pure utilities (hashing, schema DDL)
+- Re-exported symbols from the shared lib need `# noqa: F401` in the consuming module to avoid ruff unused-import errors
+- The `init_auth_db` in solr-search wraps the common version to add migrations + seeding — clean delegation pattern
+- `uv sync` with editable path sources (`{ path = "...", editable = true }`) works well for monorepo shared packages
