@@ -119,6 +119,16 @@
 
 **Recurring pattern update:** Added to watch-for list: auth gates that only check one credential type (API key) while frontend uses another (JWT). Always verify both code paths.
 
+### Solr Auth Bootstrap (#1287, 2026)
+
+**Root cause (dual):** `solr auth enable` creates the admin user in BasicAuth but doesn't create the user-role mapping, so all RBAC-gated operations fail. Additionally, the readonly user was assigned the `search` role, but security.json uses `readonly` as the role name for read permissions.
+
+**Fix:** Added explicit `set-user-role` call for admin user after `solr auth enable`. Changed readonly role from `["search"]` to `["readonly"]`. Applied to both docker-compose.yml and docker-compose.prod.yml.
+
+**Installer fix:** Added SOLR_ADMIN_USER/PASS and SOLR_READONLY_USER/PASS to the installer's credential generation pipeline, following the same pattern as RabbitMQ (generate on first run, rotate insecure defaults, preserve secure passwords).
+
+**Key lesson:** `solr auth enable` only bootstraps BasicAuth credentials and default RBAC rules — it does NOT assign the admin role to the created user. Always verify role assignments explicitly after enabling auth. Also, role names in `set-user-role` must match exactly what security.json permissions reference.
+
 ### v1.10.0 Wave 0 Bugs (2026-03-20)
 
 **#646 -- Semantic 502:** Default `EMBEDDINGS_URL` port mismatch (8001 vs 8080) + Solr kNN failures not wrapped in degradation logic. Fix: try/except + fallback to keyword in both semantic and hybrid modes.
