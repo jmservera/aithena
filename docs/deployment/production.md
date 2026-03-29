@@ -154,11 +154,16 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
 
 2. **Create volume directories**:
    ```bash
-   sudo mkdir -p /source/volumes/{rabbitmq-data,redis,solr-data,solr-data2,solr-data3,zoo-backup}
-   sudo mkdir -p /source/volumes/{zoo-data1,zoo-data2,zoo-data3}/{data,logs,datalog}
-   sudo chown -R 8983:8983 /source/volumes/solr-data*  # Solr UID
-   sudo chown -R 1000:1000 /source/volumes/zoo-data*   # ZooKeeper UID
+   sudo ./scripts/init-volumes.sh
    ```
+
+   This creates all required directories under `/source/volumes` with correct ownership. To use a custom path (e.g., secondary disk), set `VOLUMES_ROOT`:
+
+   ```bash
+   sudo VOLUMES_ROOT=/mnt/data/aithena/volumes ./scripts/init-volumes.sh
+   ```
+
+   For WSL2-specific setup (secondary disks, Docker Desktop vs Docker CE), see the [WSL2 Installation Guide](../guides/wsl2-installation.md).
 
 3. **Start infrastructure tier**:
    ```bash
