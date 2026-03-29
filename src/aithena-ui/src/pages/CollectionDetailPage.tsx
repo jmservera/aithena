@@ -3,11 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import { ArrowLeft } from 'lucide-react';
 import { useAutoSaveNote, useCollectionDetail } from '../hooks/collections';
+import { type CollectionItem } from '../services/collectionsApi';
+import { type BookResult } from '../hooks/search';
 import CollectionDetailView from '../Components/CollectionDetailView';
 import CollectionModal from '../Components/CollectionModal';
 import ConfirmDialog from '../Components/ConfirmDialog';
 import LoadingSpinner from '../Components/LoadingSpinner';
 import ErrorState from '../Components/ErrorState';
+import PdfViewer from '../Components/PdfViewer';
 
 function CollectionDetailPage() {
   const intl = useIntl();
@@ -20,6 +23,7 @@ function CollectionDetailPage() {
 
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null);
 
   const handleRemoveItem = useCallback(
     async (itemId: string) => {
@@ -27,6 +31,21 @@ function CollectionDetailPage() {
     },
     [removeItem]
   );
+
+  const handleOpenPdf = useCallback((item: CollectionItem) => {
+    setSelectedBook({
+      id: item.document_id,
+      title: item.title,
+      author: item.author,
+      year: item.year,
+      document_url: item.document_url,
+      thumbnail_url: item.thumbnail_url,
+    });
+  }, []);
+
+  const handleClosePdf = useCallback(() => {
+    setSelectedBook(null);
+  }, []);
 
   const handleEditSubmit = useCallback(
     async (name: string, description: string) => {
@@ -69,6 +88,7 @@ function CollectionDetailPage() {
         detail={detail}
         onRemoveItem={handleRemoveItem}
         onSaveNote={debouncedSave}
+        onOpenPdf={handleOpenPdf}
         onEdit={() => setShowEdit(true)}
         onDelete={() => setShowDeleteConfirm(true)}
         saving={saving}
@@ -93,6 +113,8 @@ function CollectionDetailPage() {
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+
+      {selectedBook && <PdfViewer result={selectedBook} onClose={handleClosePdf} />}
     </section>
   );
 }

@@ -399,3 +399,16 @@ if "_chunk_" in document_id:
 - The frontend needs both the chunk ID (for displaying the specific result) AND the parent ID (for feature navigation like "similar books")
 - Backend endpoints should be resilient to receiving either parent or chunk IDs — detect and resolve appropriately
 - The Solr data model separation (metadata on parents, embeddings on chunks) means we need to handle both ID types throughout the stack
+
+### Collection Card Unification (#1233, 2026-03-28)
+**Context:** Collections page used a separate, minimal `CollectionItemCard` while Library used the feature-rich `BookCard`. Issue requested unifying the visual layout.
+
+**Changes:**
+- Backend: Extended `_enrich_collection_items` to fetch `thumbnail_url_s` from Solr and compute `document_url` via `build_document_url()` — requires passing `Request` through the call chain
+- Frontend: Refactored `CollectionItemCard` to reuse BookCard's CSS classes (`book-card-body`, `book-card-thumbnail`, `book-meta`, `open-pdf-btn`) while keeping collection-specific features (NoteEditor, remove button)
+- Added PdfViewer integration to `CollectionDetailPage` by constructing minimal `BookResult` from `CollectionItem`
+
+**Key Learning:**
+- PdfViewer accepts `BookResult` but only uses `document_url`, `title`, and `pages` — can construct a minimal compatible object from `CollectionItem`
+- Reusing CSS classes across components (`.book-card-*` in `CollectionItemCard`) provides visual consistency without needing a shared base component
+- The `_enrich_collection_items` function is the single place where Solr metadata is joined onto collection items — extending it is the correct backend approach
