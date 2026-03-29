@@ -15,10 +15,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
+from aithena_common.auth_db import find_user as _common_find_user
+from aithena_common.auth_db import init_auth_db
+from aithena_common.passwords import hash_password
+
 ROOT = Path(__file__).resolve().parents[1]
-SOLR_SEARCH_DIR = ROOT / "src" / "solr-search"
-if str(SOLR_SEARCH_DIR) not in sys.path:
-    sys.path.append(str(SOLR_SEARCH_DIR))
 
 DEFAULT_AUTH_DB_PATH = Path.home() / ".local" / "share" / "aithena" / "auth" / "users.db"
 DEFAULT_CONTAINER_AUTH_DB_PATH = "/data/auth/users.db"
@@ -173,8 +174,7 @@ def bootstrap_admin_user(
     if reset and db_path.exists():
         db_path.unlink()
 
-    hash_password_fn, init_auth_db_fn = load_auth_helpers()
-    init_auth_db_fn(db_path)
+    init_auth_db(db_path)
     with contextlib.suppress(OSError):
         db_path.chmod(0o600)
     normalized_username = normalize_username(username)
@@ -192,7 +192,7 @@ def bootstrap_admin_user(
         if existing_row is None:
             connection.execute(
                 "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                (normalized_username, hash_password_fn(password or ""), "admin"),
+                (normalized_username, hash_password(password or ""), "admin"),
             )
             connection.commit()
             return "created"
@@ -210,36 +210,16 @@ def bootstrap_admin_user(
 
         connection.execute(
             "UPDATE users SET password_hash = ?, role = ? WHERE id = ?",
-            (hash_password_fn(password), "admin", int(existing_row["id"])),
+            (hash_password(password), "admin", int(existing_row["id"])),
         )
         connection.commit()
         return "updated"
 
 
 def find_user(db_path: Path, username: str) -> dict[str, str | int] | None:
-    if not db_path.exists():
-        return None
-
-    with sqlite3.connect(db_path) as connection:
-        connection.row_factory = sqlite3.Row
-        row = connection.execute(
-            "SELECT id, username, role FROM users WHERE username = ?",
-            (normalize_username(username),),
-        ).fetchone()
-        if row is None:
-            return None
-        return {"id": int(row["id"]), "username": str(row["username"]), "role": str(row["role"])}
-
-
-def load_auth_helpers() -> tuple[Callable[[str], str], Callable[[Path], None]]:
-    try:
-        from auth import hash_password, init_auth_db  # noqa: PLC0415
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Missing auth dependencies. Run `uv run --project src/solr-search python -m installer` "
-            "or `cd src/solr-search && uv sync` before invoking the installer."
-        ) from exc
-    return hash_password, init_auth_db
+    """Look up a user by username, delegating to the shared library."""
+    normalized = normalize_username(username)
+    return _common_find_user(db_path, normalized)
 
 
 def build_env_values(
@@ -533,21 +513,21 @@ def _unquote_env_value(value: str) -> str:
 
 def ensure_runtime_dependencies(argv: list[str]) -> None:
     try:
-        load_auth_helpers()
-    except RuntimeError as exc:
+        from aithena_common.passwords import hash_password as _probe  # noqa: PLC0415, F401
+    except ImportError as exc:
         if os.environ.get("AITHENA_INSTALLER_UV") == "1":
-            raise
+            raise RuntimeError("aithena-common is not installed. Run `cd installer && uv sync` first.") from exc
 
         uv_executable = shutil.which("uv")
         if uv_executable is None:
-            raise
+            raise RuntimeError("aithena-common is not installed and uv is not available.") from exc
 
         completed = subprocess.run(  # noqa: S603
             [
                 uv_executable,
                 "run",
                 "--project",
-                str(SOLR_SEARCH_DIR),
+                str(ROOT / "installer"),
                 "python",
                 "-m",
                 "installer.setup",

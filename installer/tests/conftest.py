@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-# Ensure installer/ is importable (no pyproject.toml for this package)
+# Ensure installer/ is importable
 _INSTALLER_DIR = str(Path(__file__).resolve().parents[1])
 if _INSTALLER_DIR not in sys.path:
     sys.path.insert(0, _INSTALLER_DIR)
@@ -16,10 +16,13 @@ if _INSTALLER_DIR not in sys.path:
 
 @pytest.fixture(autouse=True)
 def _mock_auth_helpers():
-    """Mock load_auth_helpers so tests don't need solr-search dependencies."""
+    """Mock aithena_common functions so tests don't need the real package installed."""
     fake_hash = lambda pw: f"hashed:{pw}"  # noqa: E731
     fake_init = lambda db_path: None  # noqa: E731
-    with patch("setup.load_auth_helpers", return_value=(fake_hash, fake_init)):
+    with (
+        patch("setup.hash_password", side_effect=fake_hash),
+        patch("setup.init_auth_db", side_effect=fake_init),
+    ):
         yield
 
 
