@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import contextlib
 import logging
 import os
 import sys
@@ -22,10 +23,22 @@ device = None if DEVICE == "auto" else DEVICE
 
 # Build kwargs for SentenceTransformer
 model_kwargs = {}
-if device and device != "cpu":
-    model_kwargs["device"] = device
-if BACKEND != "torch":
+if BACKEND == "openvino":
     model_kwargs["backend"] = BACKEND
+    # OpenVINO uses its own device names (CPU, GPU, AUTO), not PyTorch names (cpu, xpu, cuda).
+    # The device must be passed via model_kwargs so it reaches OVModel.from_pretrained(),
+    # not as the top-level 'device' param which only controls PyTorch's .to().
+    _ov_device_map = {"xpu": "GPU", "gpu": "GPU", "cuda": "GPU", "auto": "AUTO", "cpu": "CPU"}
+    ov_device = _ov_device_map.get(device, "CPU") if device else "CPU"
+    if ov_device != "CPU":
+        model_kwargs["model_kwargs"] = {"device": ov_device}
+elif BACKEND != "torch":
+    model_kwargs["backend"] = BACKEND
+    if device and device != "cpu":
+        model_kwargs["device"] = device
+else:
+    if device and device != "cpu":
+        model_kwargs["device"] = device
 
 # Check if model is pre-cached locally (base image saves to this path)
 _st_home = os.environ.get("SENTENCE_TRANSFORMERS_HOME", "/models/sentence_transformers")
@@ -53,7 +66,18 @@ logger.info(
 try:
     model = SentenceTransformer(model_source, **model_kwargs)
     embedding_dim = model.get_sentence_embedding_dimension()
-    logger.info("Model loaded successfully: %s (embedding_dim=%d)", MODEL_NAME, embedding_dim)
+    # OVBaseModel.device always returns torch.device("cpu"); show the real OV device instead
+    _reported_device = model.device
+    if BACKEND == "openvino":
+        with contextlib.suppress(AttributeError, IndexError):
+            _reported_device = model[0].auto_model._device
+    logger.info(
+        "Model loaded successfully: %s (embedding_dim=%d, backend=%s, device=%s)",
+        MODEL_NAME,
+        embedding_dim,
+        model.backend,
+        _reported_device,
+    )
 except Exception as exc:
     logger.critical("Failed to load embedding model '%s': %s (%s)", MODEL_NAME, exc, type(exc).__name__)
     logger.debug("Model loading stack trace:", exc_info=True)
