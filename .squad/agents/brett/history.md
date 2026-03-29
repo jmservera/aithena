@@ -121,6 +121,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | — | #1123 | Pre-release container workflow (RC tags via build-containers.yml, auto-increment) |
 | — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
 | — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
+| — | #1286 | Add intel-extension-for-pytorch (IPEX) to openvino extras |
 
 ---
 
@@ -139,6 +140,14 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Runtime: `os.path.isdir(local_path)` → load from disk (zero HF Hub API calls); fall back to hub if missing (backward-compat)
 - Always add an offline verification RUN step (`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -c "SentenceTransformer('/models/...')"`) to fail-fast during build
 - Key files: `embeddings-server-base/Dockerfile`, `src/embeddings-server/main.py`
+
+### IPEX Dependency for Intel XPU (Issue #1286)
+- `intel-extension-for-pytorch` (IPEX) is required in the openvino extras for Intel GPU/XPU inference
+- Without IPEX, PyTorch detects Intel GPU hardware but cannot dispatch to it — inference fails at runtime
+- IPEX 2.8.0 resolved cleanly against torch 2.10.0 and sentence-transformers 5.3.0 (no version conflicts)
+- No Dockerfile or config changes needed — IPEX is pulled in automatically via `uv sync --extra openvino`
+- The CPU/torch variant is unaffected; IPEX is only installed when `INSTALL_OPENVINO=true`
+- Key file: `src/embeddings-server/pyproject.toml`
 
 ### Container Group Gotcha
 - `group_add: [render]` in Docker Compose fails if the `render` group doesn't exist inside the container image
