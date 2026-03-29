@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
-# Create all required Docker volume directories for Aithena.
+# Create required Docker volume directories for Aithena.
+# Covers docker-compose.yml and docker-compose.prod.yml.
+# For SSL (docker-compose.ssl.yml), also create certbot dirs manually.
 #
 # Usage:
-#   ./scripts/init-volumes.sh              # Uses default /source/volumes
-#   VOLUMES_ROOT=/mnt/d/aithena ./scripts/init-volumes.sh  # Custom root
+#   sudo ./scripts/init-volumes.sh              # Uses default /source/volumes
+#   sudo VOLUMES_ROOT=/mnt/data/volumes ./scripts/init-volumes.sh  # Custom root
+#
+# When using a custom VOLUMES_ROOT, you must symlink it so Docker Compose
+# can find the volumes at the expected path:
+#   ln -s /mnt/data/volumes /source/volumes
 #
 # The script is idempotent — safe to run repeatedly.
 
 set -euo pipefail
 
 VOLUMES_ROOT="${VOLUMES_ROOT:-/source/volumes}"
+WARN=0
 
 echo "Creating Aithena volume directories under ${VOLUMES_ROOT} ..."
 
@@ -38,18 +45,32 @@ for d in "${dirs[@]}"; do
 done
 
 # Solr runs as UID 8983 inside the container.
-# Use -R only on the top-level directory; ignore errors on files already
-# owned by the target UID (common on re-runs).
 for d in "${VOLUMES_ROOT}/solr-data" "${VOLUMES_ROOT}/solr-data2" "${VOLUMES_ROOT}/solr-data3"; do
-    chown -R 8983:8983 "$d" 2>/dev/null || chown 8983:8983 "$d" 2>/dev/null || true
+    if ! chown -R 8983:8983 "$d" 2>/dev/null; then
+        echo "⚠  Could not chown $d to 8983:8983 — run with sudo" >&2
+        WARN=1
+    fi
 done
 
 # ZooKeeper runs as UID 1000 inside the container.
 for d in "${VOLUMES_ROOT}/zoo-data1" "${VOLUMES_ROOT}/zoo-data2" "${VOLUMES_ROOT}/zoo-data3" "${VOLUMES_ROOT}/zoo-backup"; do
-    chown -R 1000:1000 "$d" 2>/dev/null || chown 1000:1000 "$d" 2>/dev/null || true
+    if ! chown -R 1000:1000 "$d" 2>/dev/null; then
+        echo "⚠  Could not chown $d to 1000:1000 — run with sudo" >&2
+        WARN=1
+    fi
 done
 
-echo "Done. All volume directories created under ${VOLUMES_ROOT}."
 echo ""
-echo "If using a custom path, export VOLUMES_ROOT before running docker compose:"
-echo "  export VOLUMES_ROOT=${VOLUMES_ROOT}"
+if [ "$WARN" -eq 1 ]; then
+    echo "Done with warnings. Some directories may have incorrect ownership."
+    echo "Re-run with sudo to fix: sudo $0"
+else
+    echo "Done. All volume directories created under ${VOLUMES_ROOT}."
+fi
+
+if [ "${VOLUMES_ROOT}" != "/source/volumes" ]; then
+    echo ""
+    echo "Docker Compose expects volumes at /source/volumes."
+    echo "Create a symlink so Compose can find them:"
+    echo "  sudo ln -s ${VOLUMES_ROOT} /source/volumes"
+fi

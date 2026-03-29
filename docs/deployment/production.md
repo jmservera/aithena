@@ -157,10 +157,11 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
    sudo ./scripts/init-volumes.sh
    ```
 
-   This creates all required directories under `/source/volumes` with correct ownership. To use a custom path (e.g., secondary disk), set `VOLUMES_ROOT`:
+   This creates all required directories under `/source/volumes` with correct ownership. To use a custom path (e.g., secondary disk), set `VOLUMES_ROOT` and symlink:
 
    ```bash
-   sudo VOLUMES_ROOT=/mnt/data/aithena/volumes ./scripts/init-volumes.sh
+   sudo VOLUMES_ROOT=/mnt/data/volumes ./scripts/init-volumes.sh
+   sudo ln -s /mnt/data/volumes /source/volumes
    ```
 
    For WSL2-specific setup (secondary disks, Docker Desktop vs Docker CE), see the [WSL2 Installation Guide](../guides/wsl2-installation.md).

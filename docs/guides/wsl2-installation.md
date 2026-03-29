@@ -94,17 +94,13 @@ sudo ./scripts/init-volumes.sh
 sudo VOLUMES_ROOT=/mnt/data/aithena/volumes ./scripts/init-volumes.sh
 ```
 
-If using a custom `VOLUMES_ROOT`, you have two choices to make Docker Compose use it:
-
-### Choice 1: Symlink (simple)
+If using a custom `VOLUMES_ROOT`, you **must** symlink the path so Docker Compose can find the volumes at the expected location:
 
 ```bash
 sudo ln -s /mnt/data/aithena/volumes /source/volumes
 ```
 
-### Choice 2: Override volume paths
-
-Create a `docker-compose.override.yml` that redefines the volume device paths. This is more explicit but requires maintaining the override file.
+Alternatively, you can override volume paths via a `docker-compose.override.yml`.
 
 ## Secondary disk options
 
