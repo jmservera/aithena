@@ -10,7 +10,7 @@ resolution-markers = [
 [[package]]
 name = "aithena-common"
 version = "0.1.0"
-source = { editable = "../aithena-common" }
+source = { directory = "../aithena-common" }
 dependencies = [
     { name = "argon2-cffi" },
 ]
@@ -1129,7 +1129,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aithena-common", editable = "../aithena-common" },
+    { name = "aithena-common", directory = "../aithena-common" },
     { name = "argon2-cffi", specifier = ">=23.1.0" },
     { name = "fastapi", extras = ["all"], specifier = ">=0.115.0,<1" },
     { name = "pika", specifier = ">=1.3.2" },

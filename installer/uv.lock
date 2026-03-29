@@ -9,7 +9,7 @@ resolution-markers = [
 [[package]]
 name = "aithena-common"
 version = "0.1.0"
-source = { editable = "../src/aithena-common" }
+source = { directory = "../src/aithena-common" }
 dependencies = [
     { name = "argon2-cffi" },
 ]
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "aithena-common", editable = "../src/aithena-common" }]
+requires-dist = [{ name = "aithena-common", directory = "../src/aithena-common" }]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.3" }]
