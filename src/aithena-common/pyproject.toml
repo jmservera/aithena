@@ -1,0 +1,16 @@
+[project]
+name = "aithena-common"
+version = "0.1.0"
+description = "Shared utilities for Aithena services"
+requires-python = ">=3.12"
+dependencies = [
+    "argon2-cffi>=23.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
