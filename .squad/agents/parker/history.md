@@ -464,3 +464,17 @@ Extracted `aithena-common/` as shared Python package containing passwords and au
 **Architecture:** Dependency inversion applied — all services depend inward on `aithena-common`. No cross-service coupling except via HTTP APIs.
 
 **Key pattern:** When extracting shared code, keep domain-specific logic (migrations, seeding, JWT) in the service; only move pure utilities (hashing, schema DDL). Use re-exports with `# noqa: F401` if needed.
+
+### Dependabot PR Routing in Heartbeat (2026-03-30)
+
+**Root cause:** When `ralph-triage.js` was extracted from inline workflow JS, the Dependabot PR routing logic was lost. The `isUntriagedIssue()` function filters out PRs (`if (issue.pull_request) return false`), so Dependabot PRs were never triaged.
+
+**Fix:** Added parallel Dependabot PR triage pipeline in `ralph-triage.js`:
+- `fetchDependabotPRs()` fetches open PRs from `dependabot[bot]` via Issues API
+- `classifyDependabotPR()` classifies by dependency domain (file patterns + title patterns)
+- Domain classification maps to squad members via routing rules and role-based fallback
+- Updated workflow permissions from `pull-requests: read` to `pull-requests: write`
+
+**Key lesson:** When refactoring inline workflow code into standalone scripts, audit all code paths — not just the primary one. The Dependabot PR path was a secondary code path that got silently dropped. Use the git history of the inline code as a checklist.
+
+**Pattern:** Domain-to-member mapping uses a two-tier strategy: (1) try routing rules from routing.md, (2) fall back to role-based matching from roster in team.md. This makes classification resilient to routing table format changes.
