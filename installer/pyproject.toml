@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-aithena-common = { path = "../src/aithena-common", editable = true }
+aithena-common = { path = "../src/aithena-common" }
 
 [dependency-groups]
 dev = [
