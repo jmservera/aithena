@@ -319,3 +319,18 @@ Orchestrated multi-agent sprint: Brett (IPEX), Parker (2 issues), Lambert (test 
 **Key Achievement:** Demonstrated scalable multi-agent orchestration with clean dependency resolution — all agents' work integrates seamlessly. Shared auth library foundation (`aithena-common`) established for future Phase 2 expansion.
 
 **Architecture Milestone:** Dependency Inversion Principle applied across all services. `aithena-common` is the single point of shared authority for passwords + auth DB. Violations documented with phased remediation plan (P1–P3).
+
+### Skill Consolidation Audit
+
+**Completed:** 2026-07-25
+**Status:** ✅ Complete
+
+Consolidated skills from 38 to 24 (14 eliminated, target was ≤35). Five merge groups:
+
+1. **CI/PR Gates** (9 → 2): `ci-gate-pattern`, `pr-integration-gate`, `branch-protection-strict-mode`, `milestone-gate-review`, `release-gate` → `ci-pr-gates`; `release-tagging-process`, `multi-release-orchestration`, `milestone-wave-execution`, `phase-gated-execution` → `release-orchestration`
+2. **Security** (4 → 1): `ci-workflow-security`, `workflow-secrets-security`, `security-scanning-baseline`, `logging-security` → `security-patterns`
+3. **Path Metadata** (2 → 1): `path-metadata-heuristics`, `path-metadata-tdd` → `path-metadata`
+4. **Solr** (3 → 1): `solr-parent-chunk-model`, `solr-pdf-indexing`, `solrcloud-docker-operations` → `solr-operations`
+5. **FastAPI** (2 → 1): `fastapi-auth-patterns`, `fastapi-query-params` → `fastapi-patterns`
+
+Each merged skill preserves key patterns, examples, and anti-patterns from all sources while removing duplication. All merged skills are under 300 lines.
