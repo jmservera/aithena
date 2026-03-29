@@ -246,3 +246,34 @@
 - **Key patterns:** YAML parsing for docker-compose script extraction; `tomllib` for pyproject.toml; conftest.py with sys.path manipulation for installer tests (no pyproject.toml)
 - **Finding:** Both fixes (#1286 IPEX, #1287 Solr credentials + role fix) were already applied — all 14 tests pass green
 - **Installer test infrastructure:** Created `installer/tests/conftest.py` with `_mock_auth_helpers` autouse fixture and `deterministic_secret` / `minimal_env_args` fixtures
+
+## v1.18.1 Release (2026-03-29)
+
+### Proactive Test Coverage for #1286 (IPEX) and #1287 (Solr Credentials)
+
+**Completed:** 2026-03-29T10:10:00Z  
+**Tests Added:** 14 new tests, all passing
+
+Wrote proactive test coverage for Brett's #1286 (IPEX addition) and Parker's #1287 (Solr credential management). Created 3 new test files with shared infrastructure following existing patterns.
+
+**Test Files Created:**
+
+1. **installer/tests/test_solr_credentials.py** (6 tests)
+   - Credential generation, preservation, rotation, reset, security validation
+   - Uses deterministic `secret_factory` and mocked auth helpers
+
+2. **src/embeddings-server/tests/test_openvino_deps.py** (4 tests)
+   - Validates IPEX in pyproject.toml openvino extras
+   - Checks IPEX 2.8.0 / torch 2.10.0 compatibility
+   - Verifies uv.lock generation
+   - Confirms CPU-only builds exclude IPEX
+
+3. **src/solr-search/tests/test_solr_init_script.py** (4 tests)
+   - Validates solr auth enable call
+   - Checks admin role assignment
+   - Verifies readonly (not "search") role
+   - Ensures role names match security.json
+
+**Key patterns:** YAML parsing for docker-compose script extraction, `tomllib` for pyproject.toml parsing, conftest.py with deterministic fixtures. All tests provide clear failure messages pointing to specific issue numbers.
+
+**Outcome:** Guards against credential management and IPEX packaging regressions. All 14 tests pass green — confirming fixes were already applied correctly by Brett and Parker.

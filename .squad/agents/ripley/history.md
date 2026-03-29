@@ -296,3 +296,26 @@ PO directive to adopt Clean Architecture principles across the codebase. Trigger
 **"Extract shared package early, migrate incrementally."** The `aithena-common` package is architecturally correct. What's missing is a systematic migration of all consumers. This validates the pragmatic incrementalism pattern — ship the package, then migrate service by service.
 
 ---
+
+## v1.18.1 Release (2026-03-29)
+
+### Multi-Agent Orchestration & v1.18.1 Release Gate
+
+**Completed:** 2026-03-29T10:10–10:25  
+**Status:** ✅ Complete; PR #1289 created; CI running
+
+Orchestrated multi-agent sprint: Brett (IPEX), Parker (2 issues), Lambert (test coverage), Ripley (Clean Architecture audit). VERSION bumped to 1.18.1. All 1026+ tests passing. SESSION LOG and ORCHESTRATION LOGS created.
+
+**Work Summary:**
+
+- **Brett #1286:** IPEX added to openvino extras. 52 tests pass.
+- **Parker #1287:** Solr role assignment fixed (admin/readonly). Credential generation added to installer. 1026 tests pass.
+- **Parker #1288:** Shared auth library extracted into `aithena-common`. Installer now proper uv project. All tests pass.
+- **Lambert:** 14 proactive tests across 3 files (credentials, IPEX, roles). All pass green.
+- **Ripley:** Clean Architecture audit completed — 7 violations found, skill created, Phase 2 recommendations documented.
+
+**Decisions Merged:** 8 decision inbox files merged into `decisions.md`, deduplicated. Inbox cleared.
+
+**Key Achievement:** Demonstrated scalable multi-agent orchestration with clean dependency resolution — all agents' work integrates seamlessly. Shared auth library foundation (`aithena-common`) established for future Phase 2 expansion.
+
+**Architecture Milestone:** Dependency Inversion Principle applied across all services. `aithena-common` is the single point of shared authority for passwords + auth DB. Violations documented with phased remediation plan (P1–P3).
