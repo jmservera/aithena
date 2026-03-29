@@ -237,3 +237,12 @@
 - **Mocking pattern:** Used `@patch("main.requests.post")` with `side_effect` to simulate multi-call Solr flows
 - **Key insight:** Chunk ID format is `{parent_hash}_chunk_{index:04d}` — underscore-based detection is reliable
 - **Test counts after PR:** solr-search 1022 passed (up from 993), coverage 91.16%
+
+### Proactive Tests for #1286 and #1287 (March 2026)
+- Added **14 new tests** across 3 files covering Solr credential management and IPEX openvino deps
+- **installer/tests/test_solr_credentials.py** (6 tests): Generation, preservation, rotation, reset, round-trip, and defaults for Solr passwords in `build_env_values()`. Uses deterministic `secret_factory` and mocked `load_auth_helpers`.
+- **src/embeddings-server/tests/test_openvino_deps.py** (4 tests): Validates `pyproject.toml` openvino extras include IPEX, openvino, and optimum-intel; checks uv.lock for IPEX entry.
+- **src/solr-search/tests/test_solr_init_script.py** (4 tests): Parses docker-compose.yml solr-init entrypoint to verify admin role assignment, readonly role (not "search"), readonly user creation, and security.json readonly role.
+- **Key patterns:** YAML parsing for docker-compose script extraction; `tomllib` for pyproject.toml; conftest.py with sys.path manipulation for installer tests (no pyproject.toml)
+- **Finding:** Both fixes (#1286 IPEX, #1287 Solr credentials + role fix) were already applied — all 14 tests pass green
+- **Installer test infrastructure:** Created `installer/tests/conftest.py` with `_mock_auth_helpers` autouse fixture and `deterministic_secret` / `minimal_env_args` fixtures
