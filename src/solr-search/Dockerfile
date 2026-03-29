@@ -9,6 +9,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
+COPY src/aithena-common/ /aithena-common/
 COPY src/solr-search/pyproject.toml src/solr-search/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --native-tls
 
