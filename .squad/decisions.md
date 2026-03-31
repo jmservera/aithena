@@ -444,3 +444,368 @@ File and title patterns map PRs to six domains: python-backend, frontend-js, git
 - New triage results include PRs alongside issues (same JSON format, uses `issueNumber` field since GitHub's label API works for both)
 - No changes to existing issue triage logic
 
+---
+
+# Decision: Embeddings-Server Docker Layer Optimization — Approach Analysis
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-31
+**Status:** Recommendation
+**Context:** Issue #1325 — reduce ~4GB .venv COPY layer; Juanma asked whether multi-stage can avoid keeping `uv` in runtime image
+
+## Problem
+
+The current app Dockerfile has a two-stage build:
+- **Stage 1** (`python:3.12-slim`): `uv sync` installs ALL deps into `/app/.venv` (~8GB uncompressed)
+- **Stage 2** (base image): `COPY --chown /app/.venv` from stage 1 → creates a ~4GB compressed layer
+
+The base image already contains the heavy packages (torch 1.7GB, nvidia-* 4.3GB, triton 641MB) at system site-packages. The COPY duplicates them entirely.
+
+**Prerequisite for Approaches 1–4:** The base image must be rebuilt to own `/app/.venv` with heavy deps pre-installed (instead of system site-packages). This is a one-time change to both base variants.
+
+## Comparison Table
+
+| Criteria | 1: In-place `uv sync` | 2: Multi-stage full COPY | 3: BuildKit `--mount=from` | 4: Delta-only COPY | 5: Strip + PYTHONPATH |
+|----------|----------------------|--------------------------|---------------------------|--------------------|-----------------------|
+| **New layer size** | ~200MB ✅ | ~4–8GB ❌ | ~200MB ✅ | ~200MB ✅ | ~1.1GB ⚠️ |
+| **Base layer sharing** | ✅ Preserved | ❌ COPY overrides | ✅ Preserved | ✅ Preserved | ✅ Preserved |
+| **uv in runtime** | ❌ Yes (~30MB) | ✅ No | ✅ No | ✅ No | ✅ No |
+| **Dockerfile complexity** | Low | Low-medium | Low | Very high | Medium |
+| **Maintainability** | Good | Good | Excellent | Poor | Fragile |
+| **Security** | ⚠️ uv binary in image | Good | Excellent | Good | Good |
+| **Build cache** | Good | Poor (full COPY) | Good | Moderate | Moderate |
+| **Compatibility** | Both variants ✅ | Both variants ✅ | Both variants ✅ | Fragile ⚠️ | Different PYTHONPATH per variant ⚠️ |
+| **CI/CD requirements** | Standard Docker | Standard Docker | BuildKit (already used) | Standard Docker | Standard Docker |
+| **Base image change needed** | Yes | Yes | Yes | Yes | **No** |
+| **Python symlink fix** | Not needed | Needed (cross-stage COPY) | Not needed | Not needed | Needed |
+
+## Detailed Analysis
+
+### Approach 1: In-place `uv sync --inexact` (Option C)
+
+```dockerfile
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG}
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+```
+
+**How it works:** Base image pre-owns `/app/.venv` with heavy deps. `uv sync --inexact` detects what's installed and only adds missing light deps (fastapi, uvicorn, etc.) as a ~200MB delta layer.
+
+**Pros:** Simple, small layer, base layers shared, great cache behavior.
+**Cons:** `COPY --from=...uv /uv /usr/local/bin/uv` permanently adds `uv` (~30MB) to the image. It's a development tool with no runtime purpose — unnecessary attack surface.
+
+### Approach 2: Multi-stage with full .venv COPY
+
+```dockerfile
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS build
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY --from=build /app/.venv /app/.venv
+```
+
+**Critical flaw:** `COPY` always writes the **full directory contents** as a new layer, regardless of what's already in the base image. Even though both stages share the same base, the COPY creates a ~4–8GB layer containing ALL of `/app/.venv` (heavy deps + delta). Docker layer deduplication works at the layer ID level, not file level — a new COPY layer is a completely new layer.
+
+**This approach is strictly worse than the current Dockerfile.** It adds multi-stage complexity without solving the layer size problem. The only benefit is removing `uv` from runtime, but at the cost of a massive layer that destroys base-image pull optimization.
+
+**Verdict:** ❌ Do not use.
+
+### Approach 3: BuildKit `--mount=from` bind mount ⭐ RECOMMENDED
+
+```dockerfile
+# syntax=docker/dockerfile:1
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY pyproject.toml uv.lock ./
+RUN --mount=from=ghcr.io/astral-sh/uv:latest,source=/uv,target=/usr/local/bin/uv \
+    uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+```
+
+**How it works:** `--mount=from=image` creates a read-only bind mount of a file from another image, available ONLY for the duration of the `RUN` command. After the command completes, the mount is removed. The `uv` binary never exists in any image layer.
+
+**Key insight:** This combines every advantage:
+- Same ~200MB delta layer as Approach 1 (only new packages)
+- Base image layers fully preserved (RUN adds on top, doesn't replace)
+- Zero `uv` in the final image (mounted transiently, not copied)
+- Actually *simpler* than Approach 1 (one fewer Dockerfile instruction)
+- No Python interpreter symlink fix needed (venv was created on this base)
+
+**BuildKit compatibility:**
+- `--mount` syntax requires BuildKit, available since Docker 18.09+ (2018)
+- Default builder since Docker Engine 23.0+ (2023)
+- CI already uses `docker/setup-buildx-action` which enables BuildKit
+- The `# syntax=docker/dockerfile:1` directive ensures compatibility with older Docker daemons
+- Docker Desktop (developer machines) has had BuildKit as default since 2020
+
+**Verdict:** ✅ Clear winner.
+
+### Approach 4: Multi-stage delta-only COPY
+
+```dockerfile
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS build
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN find /app/.venv -type f > /before.txt
+RUN uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+RUN find /app/.venv -type f > /after.txt && \
+    comm -13 /before.txt /after.txt | tar cf /delta.tar -T - 
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY --from=build /delta.tar /delta.tar
+RUN tar xf /delta.tar && rm /delta.tar
+```
+
+**Pros:** Small delta, no uv in runtime.
+**Cons:** Extremely fragile. File diff logic breaks on path changes, special characters, symlinks. Multiple RUN layers reduce cache efficiency. The tar approach creates two layers (COPY + RUN) instead of one. Hard to debug when it breaks.
+
+**Verdict:** ❌ Approach 3 achieves the same result with zero complexity.
+
+### Approach 5: Strip + PYTHONPATH (Issue's original proposal)
+
+```dockerfile
+FROM python:3.12-slim AS dependencies
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --native-tls && \
+    pip list --path /app/.venv/lib/python3.12/site-packages --format=freeze | \
+    grep -iE '^(torch|nvidia|triton)' | cut -d= -f1 | \
+    xargs -I{} rm -rf /app/.venv/lib/python3.12/site-packages/{}*
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY --from=dependencies --chown=app:app /app/.venv /app/.venv
+ENV PYTHONPATH="/usr/local/lib/python3.12/site-packages:${PYTHONPATH}"
+```
+
+**Pros:** No base image modification required — works today.
+**Cons:**
+- PYTHONPATH differs per variant (slim: `/usr/local/lib/...`, openvino: `/opt/venv/lib/...`) — needs conditional logic
+- Strip list must stay in sync with base image contents manually
+- ~1.1GB layer (still includes sentence-transformers and transitive deps not in strip list)
+- Python interpreter symlink fix still needed (cross-base COPY)
+- `PYTHONPATH` for package resolution is an anti-pattern — can cause version conflicts
+
+**Verdict:** ⚠️ Viable interim solution if base image change is delayed, but not recommended long-term.
+
+## Recommendation
+
+**Use Approach 3: BuildKit `--mount=from` bind mount.**
+
+It wins on every axis: smallest layer (~200MB), no tools in runtime, simplest Dockerfile, best maintainability, full CI compatibility. The only prerequisite is the base image rebuild to use `/app/.venv` (needed for Approaches 1–4 anyway).
+
+### Recommended Dockerfile (complete)
+
+> **Note:** This snippet reflects the final implementation as merged in PR #1328.
+
+```dockerfile
+# syntax=docker/dockerfile:1
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG BASE_TAG=3.12-slim-multilingual-e5-base
+ARG INSTALL_OPENVINO=false
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG}
+
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_DATE
+ARG INSTALL_OPENVINO
+
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/jmservera/aithena" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}"
+
+ENV VERSION=${VERSION} \
+    GIT_COMMIT=${GIT_COMMIT} \
+    BUILD_DATE=${BUILD_DATE} \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080 \
+    MODEL_NAME=intfloat/multilingual-e5-base \
+    HF_HOME=/models/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    DEVICE=cpu \
+    BACKEND=torch
+
+WORKDIR /app
+
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+
+RUN if ! id -u app >/dev/null 2>&1; then \
+      groupadd --system --gid 1000 app 2>/dev/null || groupadd --system app; \
+      useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
+    fi
+
+# Writable cache dir for OpenVINO compiled-model cache.
+RUN mkdir -p /app/ov_cache && chown app:app /app/ov_cache
+ENV OPENVINO_CACHE_DIR=/app/ov_cache
+
+# Switch to app user — all subsequent files are app-owned,
+# eliminating the multi-GB chown layer.
+USER app
+
+COPY --chown=app:app pyproject.toml uv.lock ./
+
+# uv is bind-mounted from its official image — never installed in the layer.
+# Pinned to specific version for reproducible builds.
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.2,source=/uv,target=/usr/local/bin/uv \
+    if [ "$INSTALL_OPENVINO" = "true" ]; then \
+      uv sync --frozen --no-dev --no-install-project --extra openvino --inexact --native-tls; \
+    else \
+      uv sync --frozen --no-dev --no-install-project --inexact --native-tls; \
+    fi
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+COPY --chown=app:app main.py model_utils.py /app/
+COPY --chown=app:app config /app/config
+
+EXPOSE 8080
+
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
+```
+
+### Changes vs. Previous Dockerfile
+
+| What changed | Why |
+|---|---|
+| Removed `FROM python:3.12-slim AS dependencies` stage | No longer needed — delta installed in-place |
+| Removed `COPY --from=dependencies /app/.venv` | No cross-stage .venv copy — eliminates the ~4GB layer |
+| Added `--mount=from=ghcr.io/astral-sh/uv:0.11.2` on RUN | uv available only during build, not in image; pinned for reproducibility |
+| Added `--inexact` flag to `uv sync` | Preserves base packages, installs only delta |
+| Removed Python symlink fix (`ln -sf`) | venv created on same base — no interpreter mismatch |
+| Added `# syntax=docker/dockerfile:1` | Ensures BuildKit syntax compatibility |
+| `USER app` before `COPY` and `RUN uv sync` | All new files owned by app — eliminates multi-GB `chown` layer |
+| OV cache at `/app/ov_cache` (not `/tmp`) | Consistent, inside WORKDIR, owned by app |
+| Removed `chown -R app:app /app` layer | Unnecessary — files created as app user from the start |
+
+### Required Base Image Changes
+
+Both base variants must be updated to:
+1. Create `/app/.venv` (instead of system site-packages or /opt/venv)
+2. Install heavy deps (torch, nvidia-*, triton, sentence-transformers) into `/app/.venv` via uv
+3. Create `app:1000` user owning the venv
+4. Set `PATH="/app/.venv/bin:${PATH}"`
+
+This is a one-time change. Heavy deps rarely change (torch version bumps are ~quarterly).
+
+## Impact
+
+- **Download size:** ~4.1GB → ~200MB compressed (when base cached) — **95% reduction**
+- **Build time:** Faster (only delta install, no cross-stage COPY of 8GB)
+- **Security:** Removes uv binary from runtime image
+- **CI:** No changes needed (BuildKit already enabled via buildx-action)
+- **Base image:** One-time rebuild required for both slim and openvino variants
+
+
+---
+
+# Decision: BuildKit --mount=from + --inexact for embeddings-server layer optimization
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-31T13:16:00Z
+**Status:** Implemented (blocked on base image)
+
+## Summary
+
+Replaced the multi-stage `COPY --from=dependencies /app/.venv` pattern in the embeddings-server Dockerfile with a single-stage BuildKit `--mount=from` approach. The app Dockerfile now bind-mounts `uv` at build time and runs `uv sync --inexact` to install only the delta of app-specific packages into the base image's pre-populated `.venv`.
+
+## What Changed
+
+- **Approach:** Approach 3 from the analysis — BuildKit `--mount=from` bind mount
+- **App Dockerfile:** `src/embeddings-server/Dockerfile` — removed dependencies stage, added `--mount=from` + `--inexact`
+- **Base image:** Blocks on jmservera/embeddings-server-base#5 — both Dockerfiles need to switch from system site-packages to `/app/.venv`
+- **PR:** jmservera/aithena#1328 (draft, blocked on base image update)
+
+## Key Design Decisions
+
+1. **`--inexact` over `--exact`:** Preserves base image packages, installs only missing deps. This is critical — `--exact` would remove the pre-installed heavy packages.
+2. **Single conditional RUN:** Both torch and openvino variants handled in one `if/else` block instead of two separate RUN commands.
+3. **OV cache at `/app/ov_cache`:** Moved from `/tmp/ov_cache` for consistency and to avoid potential noexec issues.
+4. **`# syntax=docker/dockerfile:1`:** Required as first line for cross-version BuildKit compatibility.
+
+## Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| .venv layer | ~4.1 GB compressed | ~200 MB compressed |
+| Build stages | 2 | 1 |
+| Python symlink hack | Required | Eliminated |
+
+## Dependencies
+
+This is a **breaking change pair** — the base image must be updated to provide `/app/.venv` before the app Dockerfile will build. Coordination tracked via:
+- Base: jmservera/embeddings-server-base#5
+- App: jmservera/aithena#1328
+
+---
+
+# Decision: Base image uses /app/.venv with uv
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-31T13:16:00Z
+**Status:** Implemented
+
+## Context
+
+The embeddings-server base image previously installed heavy Python packages (torch, sentence-transformers, nvidia-*, etc.) into system site-packages via `pip install`. The app image then had to COPY the entire ~4GB .venv from a build stage, creating a massive duplicate layer.
+
+## Decision
+
+Both base image Dockerfiles (`Dockerfile` and `Dockerfile.openvino`) now:
+
+1. **Install packages into `/app/.venv`** using `uv venv` + `uv pip install` instead of system `pip`
+2. **Use BuildKit `--mount=from`** to transiently mount the `uv` binary — it never exists in the final image
+3. **Create `app:1000` user** that owns `/app` — consistent with the app image's runtime user
+4. **Keep `/models` root-owned** with `chmod a+rX` to avoid duplicating the ~5GB model layer via chown
+5. **Provide `/models/.cache`** with `app:app` ownership for OpenVINO/HuggingFace cache writes
+
+## Consequences
+
+- The app Dockerfile (in aithena) **must** be updated to use `uv sync --inexact` instead of the current multi-stage COPY pattern. This is a coordinated change.
+- The `# syntax=docker/dockerfile:1` directive is now required (first line of each Dockerfile) to enable BuildKit mount syntax.
+- `uv` is never present at runtime — any debugging requiring package installs must use a temporary mount or exec into the container with a different approach.
+- The openvino variant now uses `app:1000` instead of the base image's `openvino` user, which is a breaking change for anything that depended on that user identity.
+
+## Impact on Team
+
+- **Brett (Infra):** This implements the prerequisite from his BuildKit mount analysis. The app Dockerfile changes can now proceed.
+- **Lambert (Tester):** Base image rebuild required before testing the full optimization pipeline.
+- **Dallas (Frontend):** No impact.
+
+---
+
+# User Directive: Base image Dockerfiles should use proper files instead of inline Python
+
+**Date:** 2026-03-31T13:16:00Z
+**By:** jmservera (via Copilot)
+
+## Directive
+
+Base image Dockerfiles should use proper `pyproject.toml` and `.py` script files for model download/verification instead of inline Python in RUN commands. No more writing Python code directly into the console in Dockerfile RUN instructions.
+
+## Rationale
+
+Inline Python in Dockerfiles is:
+- Fragile and error-prone (escaping issues, shell interpretation)
+- Hard to maintain and review
+- Not testable independently
+- Violates separation of concerns (build config vs. build logic)
+
+Proper files are cleaner, more maintainable, and testable.
+
+## Implementation
+
+Both base image Dockerfiles should extract model download/verification logic into:
+- `scripts/download_models.py` — handles model fetching, checksums, cache population
+- `scripts/verify_models.py` — validates model files, checksums, integrity
+- `pyproject.toml` — declares these as build-time dependencies or scripts
+
+Then in Dockerfile: `RUN uv run python scripts/download_models.py` (clean, testable, auditable).

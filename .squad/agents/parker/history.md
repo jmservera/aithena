@@ -1,5 +1,11 @@
 # Parker — History
 
+## Cross-Agent Notes
+
+**2026-03-31 — Brett (Infrastructure Architect):** Recommended Approach 3 (BuildKit `--mount=from` bind mount) for #1325 embeddings-server layer optimization. Analysis shows ~95% reduction (4.1GB → 200MB compressed) with zero tools in runtime. Prerequisite: rebuild base image to own `/app/.venv` with heavy deps (torch, nvidia-*, triton, sentence-transformers). This is a one-time change for both slim and openvino variants. Decision document in decisions.md.
+
+---
+
 ## Core Context (v1.10.0)
 
 **Backend Service Architecture:**
@@ -484,3 +490,39 @@ Extracted `aithena-common/` as shared Python package containing passwords and au
 Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working) and rc.23 (broken). Found the root cause: the Dockerfile `chown` layer changed from `chown -R app:app /app /models` to `chown -R app:app /app && chmod -R a+rX /models`. This makes `/models` owned by `root:root` and non-writable by the `app` user, so any runtime cache/lock writes fail. Python packages and env vars are identical between versions. `model_utils.py` has new OpenVINO device routing logic but this is not the cause. Full findings in `.squad/decisions/inbox/parker-rc-comparison.md`.
 
 **Key lesson:** When optimizing Docker layers to avoid duplicating large directories (e.g. 5 GB model files), the `chmod a+rX` approach makes files readable but not writable. Libraries like OpenVINO and HuggingFace may need write access for runtime caches and lock files. A targeted fix (writable cache subdir + env var) is better than a blanket chown.
+
+### Base Image .venv Migration (#1325, 2026-07-16)
+
+**What:** Updated both Dockerfiles in `jmservera/embeddings-server-base` to install heavy Python packages (torch, sentence-transformers, etc.) into `/app/.venv` instead of system site-packages. This is a prerequisite for the app image to use `uv sync --inexact` (Approach 3 from Brett's BuildKit analysis).
+
+**Key changes:**
+- `pip install` → `uv venv /app/.venv` + `VIRTUAL_ENV=/app/.venv uv pip install --no-cache`
+- uv is BuildKit-mounted transiently (`--mount=from=ghcr.io/astral-sh/uv:0.11.2`), never in the image
+- Added `app:1000` user to both variants for consistent ownership with the app image
+- Openvino variant: replaced `openvino` user with `app:1000`, added `2>/dev/null || true` for idempotent user creation
+- `# syntax=docker/dockerfile:1` as first line enables BuildKit features
+
+**PR:** jmservera/embeddings-server-base#5
+
+**Key lesson:** When migrating from system pip to uv venv in a Docker image, remember that `VIRTUAL_ENV` env var tells `uv pip install` where to put packages — it doesn't auto-detect from the shell. Also, the openvino base image has its own user (`openvino`) that must be replaced, and `groupadd`/`useradd` need `2>/dev/null || true` guards since the uid/gid might already exist.
+
+---
+
+## 2026-03-31T13:16Z — Base Image Dockerfile Refactor Complete
+
+**Status:** ✅ PR jmservera/embeddings-server-base#5 opened. Both Dockerfiles updated. README updated.
+
+**What happened:**
+- Updated `Dockerfile` and `Dockerfile.openvino` to install heavy packages into `/app/.venv` (not system site-packages)
+- Created `app:1000` user (consistent with app image runtime user)
+- Added BuildKit `--mount=from` transient `uv` mounts (no runtime bloat)
+- Created `/models/.cache` with app:app ownership (fixes OpenVINO/HuggingFace cache writes)
+- Breaking change: openvino variant now uses `app:1000` instead of `openvino` user
+
+**Production impact:** ✅ User confirmed rc.32 (OpenVINO cache fix) working in production. No regressions.
+
+**Next step:** This PR must merge first; base images must be published to ghcr.io. Then Brett's app Dockerfile (PR #1328) can be merged.
+
+**Decision:** `.squad/decisions.md` updated with full rationale.
+
+**Cross-reference:** Brett's app image implementation (orchestration log 2026-03-31T13-16Z-brett-buildkit-dockerfile.md) is now unblocked pending this PR merge.
