@@ -9,7 +9,7 @@
     "permissions": [
       {
         "name": "security-edit",
-        "role": "admin"
+        "role": "superadmin"
       },
       {
         "name": "security-read",
@@ -25,10 +25,7 @@
       },
       {
         "name": "config-read",
-        "role": [
-          "admin",
-          "readonly"
-        ]
+        "role": "admin"
       },
       {
         "name": "core-admin-edit",
@@ -36,10 +33,7 @@
       },
       {
         "name": "core-admin-read",
-        "role": [
-          "admin",
-          "readonly"
-        ]
+        "role": "admin"
       },
       {
         "name": "collection-admin-edit",
@@ -47,21 +41,23 @@
       },
       {
         "name": "collection-admin-read",
-        "role": [
-          "admin",
-          "readonly"
-        ]
+        "role": "search"
       },
       {
         "name": "update",
-        "role": "admin"
+        "role": "index"
       },
       {
         "name": "read",
-        "role": [
-          "admin",
-          "readonly"
-        ]
+        "role": "search"
+      },
+      {
+        "name": "health",
+        "role": null
+      },
+      {
+        "name": "metrics-read",
+        "role": null
       },
       {
         "name": "all",
