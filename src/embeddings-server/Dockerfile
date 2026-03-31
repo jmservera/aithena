@@ -34,7 +34,7 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-# Ensure root for package installation (openvino base image runs as non-root)
+# Root-only operations: system packages and user setup
 USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
@@ -44,8 +44,16 @@ RUN if ! id -u app >/dev/null 2>&1; then \
       useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
     fi
 
+# Writable cache dir for OpenVINO compiled-model cache.
+RUN mkdir -p /app/ov_cache && chown app:app /app/ov_cache
+ENV OPENVINO_CACHE_DIR=/app/ov_cache
+
+# Switch to app user — all subsequent files are app-owned,
+# eliminating the multi-GB chown layer.
+USER app
+
 # Copy lock files first for cache invalidation
-COPY pyproject.toml uv.lock ./
+COPY --chown=app:app pyproject.toml uv.lock ./
 
 # Install app-specific deps into the base image's .venv using --inexact
 # (preserves heavy pre-installed packages, only adds the delta).
@@ -62,19 +70,6 @@ ENV PATH="/app/.venv/bin:${PATH}"
 COPY --chown=app:app main.py model_utils.py /app/
 COPY --chown=app:app config /app/config
 
-# Only chown /app (tiny). Don't chown /models — it duplicates the entire
-# ~5 GB model directory as a new layer. Models are read-only; just ensure
-# world-readable permissions (small metadata-only layer).
-RUN chown -R app:app /app && chmod -R a+rX /models
-
-# Writable cache dir for OpenVINO compiled-model cache.
-# OpenVINO tries to create model_cache inside /models/ which is read-only.
-# Redirect via OPENVINO_CACHE_DIR to avoid permission errors (~4 KB layer).
-RUN mkdir -p /app/ov_cache && chown app:app /app/ov_cache
-ENV OPENVINO_CACHE_DIR=/app/ov_cache
-
 EXPOSE 8080
-
-USER app
 
 CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
