@@ -169,7 +169,9 @@ class TestGpuModelInit:
         # OpenVINO backend: device goes through model_kwargs, not top-level device
         assert "device" not in call_kwargs[1]
         assert call_kwargs[1].get("backend") == "openvino"
-        assert call_kwargs[1].get("model_kwargs") == {"device": "GPU"}
+        mk = call_kwargs[1].get("model_kwargs", {})
+        assert mk.get("device") == "GPU"
+        assert "CACHE_DIR" in mk.get("ov_config", {})
 
     def test_xpu_with_openvino(self):
         """With DEVICE=xpu + BACKEND=openvino, device is mapped to OV 'GPU' via model_kwargs."""
@@ -177,14 +179,45 @@ class TestGpuModelInit:
         call_kwargs = mock_st_class.call_args
         assert "device" not in call_kwargs[1]
         assert call_kwargs[1].get("backend") == "openvino"
-        assert call_kwargs[1].get("model_kwargs") == {"device": "GPU"}
+        mk = call_kwargs[1].get("model_kwargs", {})
+        assert mk.get("device") == "GPU"
+        assert "CACHE_DIR" in mk.get("ov_config", {})
 
     def test_cpu_with_openvino(self):
-        """With DEVICE=cpu + BACKEND=openvino, no model_kwargs device (defaults to CPU)."""
+        """With DEVICE=cpu + BACKEND=openvino, no model_kwargs device but ov_config CACHE_DIR is set."""
         _, _, _, mock_st_class = _fresh_import(device="cpu", backend="openvino")
         call_kwargs = mock_st_class.call_args
         assert call_kwargs[1].get("backend") == "openvino"
-        assert "model_kwargs" not in call_kwargs[1] or "device" not in call_kwargs[1].get("model_kwargs", {})
+        mk = call_kwargs[1].get("model_kwargs", {})
+        assert "device" not in mk
+        assert "CACHE_DIR" in mk.get("ov_config", {})
+
+    def test_openvino_cache_dir_default(self):
+        """Without OPENVINO_CACHE_DIR env var, CACHE_DIR defaults to /tmp/ov_cache."""
+        os.environ.pop("OPENVINO_CACHE_DIR", None)
+        _, _, _, mock_st_class = _fresh_import(backend="openvino")
+        mk = mock_st_class.call_args[1].get("model_kwargs", {})
+        assert mk.get("ov_config", {}).get("CACHE_DIR") == "/tmp/ov_cache"  # noqa: S108
+
+    def test_openvino_cache_dir_from_env(self):
+        """OPENVINO_CACHE_DIR env var overrides the default cache path."""
+        os.environ["OPENVINO_CACHE_DIR"] = "/custom/cache"
+        try:
+            _, _, _, mock_st_class = _fresh_import(backend="openvino")
+            mk = mock_st_class.call_args[1].get("model_kwargs", {})
+            assert mk.get("ov_config", {}).get("CACHE_DIR") == "/custom/cache"
+        finally:
+            os.environ.pop("OPENVINO_CACHE_DIR", None)
+
+    def test_openvino_cache_dir_empty_env_uses_default(self):
+        """Empty OPENVINO_CACHE_DIR env var falls back to /tmp/ov_cache."""
+        os.environ["OPENVINO_CACHE_DIR"] = ""
+        try:
+            _, _, _, mock_st_class = _fresh_import(backend="openvino")
+            mk = mock_st_class.call_args[1].get("model_kwargs", {})
+            assert mk.get("ov_config", {}).get("CACHE_DIR") == "/tmp/ov_cache"  # noqa: S108
+        finally:
+            os.environ.pop("OPENVINO_CACHE_DIR", None)
 
 
 # ---------------------------------------------------------------------------
