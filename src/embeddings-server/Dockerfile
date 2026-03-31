@@ -78,6 +78,12 @@ COPY --chown=app:app config /app/config
 # world-readable permissions (small metadata-only layer).
 RUN chown -R app:app /app && chmod -R a+rX /models
 
+# Writable cache dir for OpenVINO compiled-model cache.
+# OpenVINO tries to create model_cache inside /models/ which is read-only.
+# Redirect via OPENVINO_CACHE_DIR to avoid permission errors (~4 KB layer).
+RUN mkdir -p /tmp/ov_cache && chown app:app /tmp/ov_cache
+ENV OPENVINO_CACHE_DIR=/tmp/ov_cache
+
 EXPOSE 8080
 
 USER app

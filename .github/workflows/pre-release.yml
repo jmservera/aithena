@@ -297,3 +297,101 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f smoke-container 2>/dev/null || true
+
+  smoke-test-openvino:
+    name: Smoke test OpenVINO permissions
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-and-push
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull OpenVINO image
+        env:
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}-openvino
+        run: docker pull "ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}"
+
+      - name: Run OpenVINO permissions smoke test
+        id: smoke
+        env:
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}-openvino
+        run: |
+          chmod +x e2e/smoke-openvino-permissions.sh
+          ./e2e/smoke-openvino-permissions.sh \
+            "ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}" \
+            2>&1 | tee openvino-smoke-output.txt
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          echo "::group::OpenVINO smoke test output"
+          cat openvino-smoke-output.txt 2>/dev/null || true
+          echo "::endgroup::"
+
+      - name: Report result to summary
+        if: always()
+        env:
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}-openvino
+          STEP_STATUS: ${{ job.status }}
+        run: |
+          echo "### OpenVINO Permissions Smoke Test" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$STEP_STATUS" = "success" ]; then
+            echo "| ✅ | \`embeddings-server\` | \`${RC_TAG}\` | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| ❌ | \`embeddings-server\` | \`${RC_TAG}\` | **Failed** |" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "<details><summary>Test output</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat openvino-smoke-output.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Auto-create issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RC_TAG: ${{ needs.prepare.outputs.full_tag }}-openvino
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          OUTPUT=$(head -200 openvino-smoke-output.txt 2>/dev/null || echo "(no output captured)")
+
+          gh issue create \
+            --title "🔴 OpenVINO smoke test failed for ${RC_TAG}" \
+            --label "bug,squad" \
+            --body "## OpenVINO Permissions Smoke Test Failure
+
+          **Image:** \`ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}\`
+          **Workflow run:** ${RUN_URL}
+
+          ### What failed
+          The OpenVINO embeddings container smoke test detected a regression.
+
+          ### Test output
+          \`\`\`
+          ${OUTPUT}
+          \`\`\`
+
+          ### References
+          - Script: \`e2e/smoke-openvino-permissions.sh\`
+          - Dockerfile: \`src/embeddings-server/Dockerfile\`
+          - Related: #1323
+          "

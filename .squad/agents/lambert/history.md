@@ -277,3 +277,20 @@ Wrote proactive test coverage for Brett's #1286 (IPEX addition) and Parker's #12
 **Key patterns:** YAML parsing for docker-compose script extraction, `tomllib` for pyproject.toml parsing, conftest.py with deterministic fixtures. All tests provide clear failure messages pointing to specific issue numbers.
 
 **Outcome:** Guards against credential management and IPEX packaging regressions. All 14 tests pass green — confirming fixes were already applied correctly by Brett and Parker.
+
+### CI Smoke Test for OpenVINO Permissions (2025-07)
+
+**Context:** OpenVINO embeddings container regressed between rc.3 and rc.23 — `model_cache` directory creation failed with Permission denied because `chmod -R a+rX /models` grants read-only access.
+
+**Deliverables:**
+- `e2e/smoke-openvino-permissions.sh` — 5-check smoke test script (model dir exists, model_cache writable, uid=1000, health endpoint, inference dimension)
+- `e2e/smoke-openvino-permissions.ci.yml` — GitHub Actions job definition with auto-issue creation on failure
+
+**Design decisions:**
+- Separate CI job rather than extending the existing smoke-test matrix — the deep permission audit + auto-issue creation doesn't fit the generic health-check pattern
+- Tests run as the default container user (app, uid 1000) to catch permission regressions
+- `mkdir -p` + `touch` test validates both directory creation and file write inside model_cache
+- Auto-issue includes root cause pattern documentation so the fix is immediately clear
+- Uses `DEVICE=cpu` (no GPU needed) with `BACKEND=openvino` to test the actual code path
+
+**Key insight:** The existing smoke test matrix entry for openvino *does* check `/health` with `BACKEND=openvino DEVICE=cpu`, which would catch the crash. The new test adds targeted diagnostics (permission audit, writability checks) and automatic issue filing that the matrix approach lacks.
