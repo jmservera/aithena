@@ -114,3 +114,27 @@
 - E5-Base is now integrated; framework can scale to additional model families
 
 **No removals:** Nothing was deleted; just reorganized for easier navigation during future search work.
+
+## Learnings
+
+### Solr 10 Language-Models Module (2025-07-22)
+
+**Key finding:** Solr 10's `language-models` module (available since 9.8) does NOT run models locally. It is a bridge to **remote embedding APIs** (OpenAI, Cohere, HuggingFace Inference API, MistralAI) via LangChain4j. No ONNX, no in-process inference.
+
+**Critical facts:**
+- Module name: `language-models` (enable via `solr.modules=language-models`)
+- Provides: `knn_text_to_vector` query parser + `TextToVectorUpdateProcessorFactory`
+- All four supported model classes call remote HTTP APIs — no local execution
+- **SOLR-17446** tracks in-process ONNX support — not implemented, no timeline
+- Sease (module authors) list "local models" as **future work** in their July 2025 blog post
+- No text preprocessing hooks: E5 prefixes ("query:"/"passage:") cannot be injected by Solr
+- Index-time encoding is per-document (no batching), with explicit performance warnings
+
+**ONNX compatibility of multilingual-e5-base:**
+- Official ONNX exports exist on HuggingFace (onnx/ directory in model repo)
+- LangChain4j's `OnnxEmbeddingModel` can load custom ONNX models with tokenizer.json
+- Numerical precision differs from PyTorch by 1e-6 to 1e-4 — requires full re-index if switching
+- LangChain4j ONNX: CPU-only (no GPU support yet), parallelized across CPU cores
+
+**Verdict:** Cannot replace embeddings-server today. Keep current architecture. Monitor SOLR-17446.
+**Full report:** `docs/research/solr10-language-models-embeddings.md`
