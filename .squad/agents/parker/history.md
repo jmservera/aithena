@@ -478,3 +478,9 @@ Extracted `aithena-common/` as shared Python package containing passwords and au
 **Key lesson:** When refactoring inline workflow code into standalone scripts, audit all code paths — not just the primary one. The Dependabot PR path was a secondary code path that got silently dropped. Use the git history of the inline code as a checklist.
 
 **Pattern:** Domain-to-member mapping uses a two-tier strategy: (1) try routing rules from routing.md, (2) fall back to role-based matching from roster in team.md. This makes classification resilient to routing table format changes.
+
+### OpenVINO rc.3 vs rc.23 Container Comparison (2026-03-31)
+
+Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working) and rc.23 (broken). Found the root cause: the Dockerfile `chown` layer changed from `chown -R app:app /app /models` to `chown -R app:app /app && chmod -R a+rX /models`. This makes `/models` owned by `root:root` and non-writable by the `app` user, so any runtime cache/lock writes fail. Python packages and env vars are identical between versions. `model_utils.py` has new OpenVINO device routing logic but this is not the cause. Full findings in `.squad/decisions/inbox/parker-rc-comparison.md`.
+
+**Key lesson:** When optimizing Docker layers to avoid duplicating large directories (e.g. 5 GB model files), the `chmod a+rX` approach makes files readable but not writable. Libraries like OpenVINO and HuggingFace may need write access for runtime caches and lock files. A targeted fix (writable cache subdir + env var) is better than a blanket chown.
