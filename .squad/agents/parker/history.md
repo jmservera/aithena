@@ -497,7 +497,7 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 
 **Key changes:**
 - `pip install` → `uv venv /app/.venv` + `VIRTUAL_ENV=/app/.venv uv pip install --no-cache`
-- uv is BuildKit-mounted transiently (`--mount=from=ghcr.io/astral-sh/uv:latest`), never in the image
+- uv is BuildKit-mounted transiently (`--mount=from=ghcr.io/astral-sh/uv:0.11.2`), never in the image
 - Added `app:1000` user to both variants for consistent ownership with the app image
 - Openvino variant: replaced `openvino` user with `app:1000`, added `2>/dev/null || true` for idempotent user creation
 - `# syntax=docker/dockerfile:1` as first line enables BuildKit features

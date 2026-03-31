@@ -58,7 +58,7 @@ COPY --chown=app:app pyproject.toml uv.lock ./
 # Install app-specific deps into the base image's .venv using --inexact
 # (preserves heavy pre-installed packages, only adds the delta).
 # uv is bind-mounted from its official image — never installed in the layer.
-RUN --mount=from=ghcr.io/astral-sh/uv:latest,source=/uv,target=/usr/local/bin/uv \
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.2,source=/uv,target=/usr/local/bin/uv \
     if [ "$INSTALL_OPENVINO" = "true" ]; then \
       uv sync --frozen --no-dev --no-install-project --extra openvino --inexact --native-tls; \
     else \

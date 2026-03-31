@@ -596,6 +596,8 @@ It wins on every axis: smallest layer (~200MB), no tools in runtime, simplest Do
 
 ### Recommended Dockerfile (complete)
 
+> **Note:** This snippet reflects the final implementation as merged in PR #1328.
+
 ```dockerfile
 # syntax=docker/dockerfile:1
 ARG VERSION=dev
@@ -604,12 +606,12 @@ ARG BUILD_DATE=unknown
 ARG BASE_TAG=3.12-slim-multilingual-e5-base
 ARG INSTALL_OPENVINO=false
 
-# Single stage: base image owns .venv with heavy deps; we add only the delta.
-FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG}
 
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
+ARG INSTALL_OPENVINO
 
 LABEL org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/jmservera/aithena" \
@@ -632,27 +634,30 @@ ENV VERSION=${VERSION} \
 
 WORKDIR /app
 
-# System packages (needs root; openvino base may run as non-root)
 USER root
 
-RUN apt-get update && apt-get install -y --no-install-recommends wget \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 
 RUN if ! id -u app >/dev/null 2>&1; then \
       groupadd --system --gid 1000 app 2>/dev/null || groupadd --system app; \
-      useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || \
-        useradd --system --gid app --create-home app; \
+      useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
     fi
 
-# ── Delta dependency install (~200MB layer) ──
-# uv is bind-mounted from its official image for this RUN only.
-# It does NOT exist in any layer of the final image.
-# --inexact preserves base-image packages; only missing deps are added.
-COPY pyproject.toml uv.lock ./
-ARG INSTALL_OPENVINO=false
-RUN --mount=from=ghcr.io/astral-sh/uv:latest,source=/uv,target=/usr/local/bin/uv \
+# Writable cache dir for OpenVINO compiled-model cache.
+RUN mkdir -p /app/ov_cache && chown app:app /app/ov_cache
+ENV OPENVINO_CACHE_DIR=/app/ov_cache
+
+# Switch to app user — all subsequent files are app-owned,
+# eliminating the multi-GB chown layer.
+USER app
+
+COPY --chown=app:app pyproject.toml uv.lock ./
+
+# uv is bind-mounted from its official image — never installed in the layer.
+# Pinned to specific version for reproducible builds.
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.2,source=/uv,target=/usr/local/bin/uv \
     if [ "$INSTALL_OPENVINO" = "true" ]; then \
-      uv sync --frozen --no-dev --no-install-project --inexact --extra openvino --native-tls; \
+      uv sync --frozen --no-dev --no-install-project --extra openvino --inexact --native-tls; \
     else \
       uv sync --frozen --no-dev --no-install-project --inexact --native-tls; \
     fi
@@ -662,30 +667,24 @@ ENV PATH="/app/.venv/bin:${PATH}"
 COPY --chown=app:app main.py model_utils.py /app/
 COPY --chown=app:app config /app/config
 
-# Ownership: only /app (tiny). /models stays root-owned, world-readable.
-RUN chown -R app:app /app && chmod -R a+rX /models
-
-# Writable cache for OpenVINO compiled-model cache
-RUN mkdir -p /tmp/ov_cache && chown app:app /tmp/ov_cache
-ENV OPENVINO_CACHE_DIR=/tmp/ov_cache
-
 EXPOSE 8080
-
-USER app
 
 CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
 ```
 
-### Changes vs. Current Dockerfile
+### Changes vs. Previous Dockerfile
 
 | What changed | Why |
 |---|---|
 | Removed `FROM python:3.12-slim AS dependencies` stage | No longer needed — delta installed in-place |
 | Removed `COPY --from=dependencies /app/.venv` | No cross-stage .venv copy — eliminates the ~4GB layer |
-| Added `--mount=from=ghcr.io/astral-sh/uv:latest` on RUN | uv available only during build, not in image |
+| Added `--mount=from=ghcr.io/astral-sh/uv:0.11.2` on RUN | uv available only during build, not in image; pinned for reproducibility |
 | Added `--inexact` flag to `uv sync` | Preserves base packages, installs only delta |
 | Removed Python symlink fix (`ln -sf`) | venv created on same base — no interpreter mismatch |
 | Added `# syntax=docker/dockerfile:1` | Ensures BuildKit syntax compatibility |
+| `USER app` before `COPY` and `RUN uv sync` | All new files owned by app — eliminates multi-GB `chown` layer |
+| OV cache at `/app/ov_cache` (not `/tmp`) | Consistent, inside WORKDIR, owned by app |
+| Removed `chown -R app:app /app` layer | Unnecessary — files created as app user from the start |
 
 ### Required Base Image Changes
 

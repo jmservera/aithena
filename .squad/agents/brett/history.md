@@ -253,15 +253,14 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 
 ## 2026-03-31T13:16Z — BuildKit Dockerfile Implementation Complete
 
-**Status:** ✅ PR #1328 (draft) merged. All 61 tests passing.
+**Status:** ✅ PR #1328 implemented. All 61 tests passing. Base image PR merged and images published.
 
 **What happened:**
-- Implemented `--mount=from=ghcr.io/astral-sh/uv:latest` bind mount in `src/embeddings-server/Dockerfile`
+- Implemented `--mount=from=ghcr.io/astral-sh/uv:0.11.2` bind mount in `src/embeddings-server/Dockerfile`
 - Reduced multi-stage COPY pattern to single-stage build
-- Layer size: 4.1GB → 200MB compressed (95% reduction when base cached)
+- Layer size: 13GB → 37MB (99.7% reduction when base cached)
 - Key flags: `uv sync --inexact --frozen --no-dev` (preserves base packages, installs delta only)
-
-**Blocker note:** App Dockerfile build depends on Parker's base image PR (jmservera/embeddings-server-base#5) being merged and images published to ghcr.io. Once that lands, app Dockerfile can be merged.
+- uv pinned to specific version tag for reproducibility (no floating `:latest`)
 
 **Decision:** `.squad/decisions.md` updated with full analysis and rationale.
 
