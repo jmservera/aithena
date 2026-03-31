@@ -32,6 +32,14 @@ if BACKEND == "openvino":
     ov_device = _ov_device_map.get(device, "CPU") if device else "CPU"
     if ov_device != "CPU":
         model_kwargs["model_kwargs"] = {"device": ov_device}
+    # optimum-intel sets CACHE_DIR to {model_dir}/model_cache when device is GPU,
+    # which fails if /models/ is read-only. Override via ov_config so the compiled
+    # model cache goes to a writable location instead.
+    _ov_cache = os.environ.get("OPENVINO_CACHE_DIR", "").strip() or "/tmp/ov_cache"  # noqa: S108
+    model_kwargs["model_kwargs"] = {
+        **model_kwargs.get("model_kwargs", {}),
+        "ov_config": {"CACHE_DIR": _ov_cache},
+    }
 elif BACKEND != "torch":
     model_kwargs["backend"] = BACKEND
     if device and device != "cpu":
