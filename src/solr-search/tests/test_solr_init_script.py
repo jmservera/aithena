@@ -55,7 +55,7 @@ def test_init_script_assigns_admin_role():
     # The admin role should be assigned via "solr auth enable" which creates
     # the admin user with admin role by default. Verify the solr auth enable command.
     assert "solr auth enable" in script, "solr-init script missing 'solr auth enable' command for admin bootstrap"
-    assert "--credentials" in script, "solr-init script missing --credentials flag in solr auth enable"
+    assert "-u" in script, "solr-init script missing -u flag in solr auth enable"
     assert "SOLR_ADMIN_USER" in script, "solr-init script must reference SOLR_ADMIN_USER"
 
 
