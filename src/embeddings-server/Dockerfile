@@ -61,7 +61,7 @@ RUN if ! id -u app >/dev/null 2>&1; then \
       useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
     fi
 
-COPY --from=dependencies /app/.venv /app/.venv
+COPY --from=dependencies --chown=app:app /app/.venv /app/.venv
 
 # Relink venv python to the runtime image's interpreter (the build stage
 # used python:3.12-slim at /usr/local/bin/python3 which doesn't exist here).
@@ -70,10 +70,19 @@ RUN REAL_PYTHON="$(readlink -f "$(which python3)")"; \
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-COPY main.py model_utils.py /app/
-COPY config /app/config
+COPY --chown=app:app main.py model_utils.py /app/
+COPY --chown=app:app config /app/config
 
-RUN chown -R app:app /app /models
+# Only chown /app (tiny). Don't chown /models — it duplicates the entire
+# ~5 GB model directory as a new layer. Models are read-only; just ensure
+# world-readable permissions (small metadata-only layer).
+RUN chown -R app:app /app && chmod -R a+rX /models
+
+# Writable cache dir for OpenVINO compiled-model cache.
+# OpenVINO tries to create model_cache inside /models/ which is read-only.
+# Redirect via OPENVINO_CACHE_DIR to avoid permission errors (~4 KB layer).
+RUN mkdir -p /tmp/ov_cache && chown app:app /tmp/ov_cache
+ENV OPENVINO_CACHE_DIR=/tmp/ov_cache
 
 EXPOSE 8080
 

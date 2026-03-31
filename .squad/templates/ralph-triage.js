@@ -487,6 +487,179 @@ function isUntriagedIssue(issue, memberLabels) {
   return !memberLabels.some((label) => issueHasLabel(issue, label));
 }
 
+// --- Dependabot PR triage ---
+
+const DEPENDENCY_DOMAINS = [
+  {
+    name: 'python-backend',
+    filePatterns: [/pyproject\.toml$/, /requirements.*\.txt$/, /uv\.lock$/],
+    titlePatterns: [/\bpip\b/i, /\bpypi\b/i, /\bpython\b/i],
+    workTypeKeywords: ['python'],
+    roleKeywords: ['backend'],
+  },
+  {
+    name: 'frontend-js',
+    filePatterns: [/package\.json$/, /package-lock\.json$/, /yarn\.lock$/],
+    titlePatterns: [/\bnpm\b/i, /\bnode\b/i, /\btypescript\b/i],
+    workTypeKeywords: ['react', 'typescript'],
+    roleKeywords: ['frontend'],
+  },
+  {
+    name: 'github-actions',
+    filePatterns: [/\.github\/workflows\//, /\.github\/actions\//],
+    titlePatterns: [/\bgithub.actions?\b/i, /\bactions\//i],
+    workTypeKeywords: ['ci/cd'],
+    roleKeywords: ['infra'],
+  },
+  {
+    name: 'docker-infra',
+    filePatterns: [/Dockerfile/, /docker-compose/],
+    titlePatterns: [/\bdocker\b/i, /\bcontainer\b/i],
+    workTypeKeywords: ['docker', 'compose', 'container'],
+    roleKeywords: ['infra'],
+  },
+  {
+    name: 'security',
+    filePatterns: [],
+    titlePatterns: [/\bsecurity\b/i, /\bcrypto/i, /\bauth\b/i, /\bjwt\b/i, /\bcve-/i, /\bvulnerab/i],
+    workTypeKeywords: ['security'],
+    roleKeywords: ['security'],
+  },
+  {
+    name: 'testing',
+    filePatterns: [],
+    titlePatterns: [/\bpytest\b/i, /\bvitest\b/i, /\bjest\b/i, /\btesting[-\s]lib/i],
+    workTypeKeywords: ['testing', 'test'],
+    roleKeywords: ['test'],
+  },
+];
+
+async function fetchDependabotPRs(owner, repo, token) {
+  const all = [];
+  let page = 1;
+  const perPage = 100;
+
+  console.log('Fetching open Dependabot PRs…');
+  for (;;) {
+    const query = new URLSearchParams({
+      state: 'open',
+      creator: 'dependabot[bot]',
+      per_page: String(perPage),
+      page: String(page),
+    });
+    const items = await githubRequestJson(
+      `/repos/${owner}/${repo}/issues?${query.toString()}`,
+      token,
+    );
+    if (!Array.isArray(items) || items.length === 0) break;
+    all.push(...items.filter((item) => item.pull_request));
+    if (items.length < perPage) break;
+    page += 1;
+  }
+
+  console.log(`Found ${all.length} open Dependabot PR(s)`);
+  return all;
+}
+
+async function fetchPRFiles(owner, repo, prNumber, token) {
+  try {
+    const files = await githubRequestJson(
+      `/repos/${owner}/${repo}/pulls/${prNumber}/files?per_page=100`,
+      token,
+    );
+    return Array.isArray(files) ? files : [];
+  } catch (error) {
+    console.log(`Warning: could not fetch files for PR #${prNumber}: ${error.message}`);
+    return [];
+  }
+}
+
+function findMemberForDependencyDomain(domain, rules, roster) {
+  for (const keyword of domain.workTypeKeywords) {
+    const kw = keyword.toLowerCase();
+    for (const rule of rules) {
+      if (rule.workType.toLowerCase().includes(kw)) {
+        const agentName = rule.agentName.split(/\s*\+\s*/)[0].trim();
+        const agent = findMember(agentName, roster);
+        if (agent) return { agent, workType: rule.workType };
+      }
+    }
+  }
+
+  for (const keyword of domain.roleKeywords) {
+    const kw = keyword.toLowerCase();
+    for (const member of roster) {
+      if (member.role.toLowerCase().includes(kw)) {
+        return { agent: member, workType: member.role };
+      }
+    }
+  }
+
+  return null;
+}
+
+function classifyDependabotPR(prTitle, changedFiles, rules, modules, roster) {
+  const fileNames = changedFiles.map((f) => (typeof f === 'string' ? f : f.filename || ''));
+  const combinedText = `${prTitle}\n${fileNames.join('\n')}`.toLowerCase();
+  const normalizedText = normalizeTextForPathMatch(combinedText);
+
+  const bestModule = findBestModuleMatch(normalizedText, modules);
+  if (bestModule) {
+    const member = findMember(bestModule.primary, roster);
+    if (member) {
+      return {
+        agent: member,
+        reason: `Dependabot PR touches module "${bestModule.modulePath}"`,
+        source: 'module-ownership',
+        confidence: 'high',
+      };
+    }
+  }
+
+  for (const domain of DEPENDENCY_DOMAINS) {
+    const fileMatch =
+      domain.filePatterns.length > 0 &&
+      fileNames.some((f) => domain.filePatterns.some((p) => p.test(f)));
+    const titleMatch =
+      domain.titlePatterns.length > 0 && domain.titlePatterns.some((p) => p.test(prTitle));
+
+    if (fileMatch || titleMatch) {
+      const match = findMemberForDependencyDomain(domain, rules, roster);
+      if (match) {
+        const matchType = fileMatch ? 'file pattern' : 'title pattern';
+        return {
+          agent: match.agent,
+          reason: `Dependabot ${domain.name} dependency (${matchType}) → ${match.workType}`,
+          source: 'dependabot-domain',
+          confidence: fileMatch ? 'high' : 'medium',
+        };
+      }
+    }
+  }
+
+  const bestRule = findBestRuleMatch(combinedText, rules);
+  if (bestRule) {
+    const agent = findMember(bestRule.rule.agentName, roster);
+    if (agent) {
+      return {
+        agent,
+        reason: `Matched routing keyword(s): ${bestRule.matchedKeywords.join(', ')}`,
+        source: 'routing-rule',
+        confidence: 'medium',
+      };
+    }
+  }
+
+  const lead = findLeadFallback(roster);
+  if (!lead) return null;
+  return {
+    agent: lead,
+    reason: 'No dependency domain match — routed to Lead/Architect',
+    source: 'lead-fallback',
+    confidence: 'low',
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const token = process.env.GITHUB_TOKEN;
@@ -525,6 +698,35 @@ async function main() {
     if (!decision) continue;
     results.push({
       issueNumber: issue.number,
+      assignTo: decision.agent.name,
+      label: decision.agent.label,
+      reason: decision.reason,
+      source: decision.source,
+    });
+  }
+
+  // --- Dependabot PR triage ---
+  console.log('--- Dependabot PR triage ---');
+  const dependabotPRs = await fetchDependabotPRs(owner, repo, token);
+  const untriagedPRs = dependabotPRs.filter(
+    (pr) => !memberLabels.some((label) => issueHasLabel(pr, label)),
+  );
+  console.log(`${untriagedPRs.length} untriaged Dependabot PR(s) to classify`);
+
+  for (const pr of untriagedPRs) {
+    const files = await fetchPRFiles(owner, repo, pr.number, token);
+    const decision = classifyDependabotPR(pr.title || '', files, rules, modules, roster);
+
+    if (!decision) {
+      console.log(`PR #${pr.number}: no classification match, skipping`);
+      continue;
+    }
+
+    console.log(
+      `PR #${pr.number} "${pr.title}" → ${decision.agent.name} (${decision.source}, ${decision.confidence})`,
+    );
+    results.push({
+      issueNumber: pr.number,
       assignTo: decision.agent.name,
       label: decision.agent.label,
       reason: decision.reason,

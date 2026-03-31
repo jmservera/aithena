@@ -1,5 +1,101 @@
 # Squad Decisions
 
+---
+
+# Decision: OpenVINO Embeddings Container Regression Root Cause
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-31T09:10:00Z  
+**Status:** Analysis Complete
+
+## Summary
+
+The OpenVINO embeddings container regressed between rc.3 and rc.23 due to a **Dockerfile change that stopped chown-ing `/models`**. In rc.3 the chown layer was `chown -R app:app /app /models`, but in rc.23 it was changed to `chown -R app:app /app && chmod -R a+rX /models`. This makes `/models` **read-only** for the `app` user in rc.23 — the directory is owned by `root:root` with mode 755. Any runtime write to `/models` (e.g. OpenVINO model cache, lock files, HuggingFace cache updates) will fail with "Permission denied".
+
+## Root Cause Details
+
+| Dimension | rc.3 | rc.23 | Contributing? |
+|-----------|------|-------|---------------|
+| `/models/` ownership | app:app 755 | root:root 755 | **🔴 YES** |
+| `/models/` writable by app user | ✅ Yes | ❌ No | **🔴 YES** |
+| Process user | uid=999(app) | uid=999(app) | ✅ No |
+| Python packages (torch, optimum, optimum-intel, sentence-transformers) | Identical | Identical | ✅ No |
+| Environment variables | Identical | Identical | ✅ No |
+| `main.py` code | Identical | Identical | ✅ No |
+| `model_utils.py` code | Original | Enhanced device routing | 🟡 No (improvements) |
+
+## Why rc.23 Changed
+
+The Dockerfile comment explains: *"Don't chown /models — it duplicates the entire ~5 GB model directory as a new layer. Models are read-only; just ensure world-readable permissions"*
+
+The rationale is valid for the model files themselves (read-only), but the side effect is that OpenVINO and HuggingFace libraries cannot write cache/lock files at runtime inside `/models`.
+
+## Recommended Fixes (priority order)
+
+1. **Create a writable cache directory** (preferred):
+   ```dockerfile
+   RUN mkdir -p /models/.cache && chown app:app /models/.cache
+   ENV OPENVINO_CACHE_DIR=/models/.cache
+   ```
+   Targeted, doesn't bloat the image, explicitly controls where cache writes go.
+
+2. **Make only directory inodes writable**:
+   ```dockerfile
+   RUN find /models -type d -exec chmod 777 {} +
+   ```
+   Avoids full chown, but less explicit about which cache directories are writable.
+
+3. **Revert to full chown**:
+   ```dockerfile
+   RUN chown -R app:app /app /models
+   ```
+   Simplest fix, acceptable if layer size is acceptable.
+
+## Impact
+
+- Unblocks Dockerfile fix PR targeting embeddings-server
+- Provides root cause documentation for regression prevention
+- Validates against future permission-related regressions
+
+---
+
+# Decision: OpenVINO Smoke Test as Separate CI Job
+
+**Author:** Lambert (Tester)  
+**Date:** 2026-03-31T09:10:00Z  
+**Status:** Proposed
+
+## Context
+
+The OpenVINO embeddings container regressed between rc.3 and rc.23 due to a Permission denied error when creating `model_cache` inside the read-only `/models/` directory. The existing smoke-test matrix entry checks `/health` but provides no targeted diagnostics or automatic issue filing.
+
+## Decision
+
+Created a dedicated `smoke-test-openvino` CI job (not a matrix extension) that:
+1. Validates model directory permissions with `mkdir -p` / `touch` as uid 1000
+2. Audits container user identity and directory ownership
+3. Tests model loading via `/health` with `BACKEND=openvino DEVICE=cpu`
+4. Verifies embedding inference returns correct 768-dim vectors
+5. Auto-creates a GitHub Issue with root-cause documentation on failure
+
+## Rationale
+
+- The existing matrix smoke test only checks health endpoint liveness — no diagnostics on *why* it failed
+- Permission regressions are silent until the container crashes; targeted `mkdir -p` catches them before model loading
+- Auto-issue with documented root cause pattern reduces MTTR — the fix (restore `chown` or pre-create cache dir) is immediately actionable
+- Separate job avoids complicating the generic matrix pattern with openvino-specific logic
+
+## Files
+
+- `e2e/smoke-openvino-permissions.sh` — smoke test script (5 diagnostic checks)
+- `e2e/smoke-openvino-permissions.ci.yml` — CI job snippet (add to `.github/workflows/pre-release.yml`)
+
+## Impact
+
+- Requires `issues: write` permission on the pre-release workflow
+- Adds ~3-4 min to the pre-release pipeline (parallel with existing smoke tests)
+- Parker/Brett: if changing `/models` permissions in the Dockerfile, this test will catch regressions
+- Auto-issue on failure provides immediate root cause documentation
 
 ---
 
@@ -316,4 +412,35 @@ Created `.squad/skills/clean-architecture/SKILL.md` with dependency rules, PR ch
 | V3: Consolidate logging | P2 | Parker/Brett | Medium |
 | V4: Split correlation.py | P2 | Parker | Small |
 | V5: Fix solr-search test imports | P3 | Lambert | Medium |
+
+---
+
+# Decision: Dependabot PR Routing in ralph-triage.js
+
+**Author:** Parker  
+**Date:** 2026-03-30  
+**Status:** Implemented
+
+## Context
+
+The heartbeat workflow lost Dependabot PR auto-assignment when inline JS was refactored to `ralph-triage.js`. PRs were silently filtered out by `isUntriagedIssue()`.
+
+## Decision
+
+Added a separate Dependabot PR triage pipeline alongside the existing issue triage. The classification uses a two-tier member lookup:
+
+1. **Routing rules** (from `routing.md`) — matches dependency domain keywords against work type columns
+2. **Role-based fallback** (from `team.md` roster) — matches against member role text
+
+This makes it resilient to routing table format changes while still respecting routing.md as the source of truth when available.
+
+## Dependency domain patterns
+
+File and title patterns map PRs to six domains: python-backend, frontend-js, github-actions, docker-infra, security, testing. Each domain carries both `workTypeKeywords` (for routing rules) and `roleKeywords` (for roster fallback).
+
+## Impact
+
+- `pull-requests: write` permission added to heartbeat workflow
+- New triage results include PRs alongside issues (same JSON format, uses `issueNumber` field since GitHub's label API works for both)
+- No changes to existing issue triage logic
 
