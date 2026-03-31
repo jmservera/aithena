@@ -490,3 +490,18 @@ Extracted `aithena-common/` as shared Python package containing passwords and au
 Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working) and rc.23 (broken). Found the root cause: the Dockerfile `chown` layer changed from `chown -R app:app /app /models` to `chown -R app:app /app && chmod -R a+rX /models`. This makes `/models` owned by `root:root` and non-writable by the `app` user, so any runtime cache/lock writes fail. Python packages and env vars are identical between versions. `model_utils.py` has new OpenVINO device routing logic but this is not the cause. Full findings in `.squad/decisions/inbox/parker-rc-comparison.md`.
 
 **Key lesson:** When optimizing Docker layers to avoid duplicating large directories (e.g. 5 GB model files), the `chmod a+rX` approach makes files readable but not writable. Libraries like OpenVINO and HuggingFace may need write access for runtime caches and lock files. A targeted fix (writable cache subdir + env var) is better than a blanket chown.
+
+### Base Image .venv Migration (#1325, 2026-07-16)
+
+**What:** Updated both Dockerfiles in `jmservera/embeddings-server-base` to install heavy Python packages (torch, sentence-transformers, etc.) into `/app/.venv` instead of system site-packages. This is a prerequisite for the app image to use `uv sync --inexact` (Approach 3 from Brett's BuildKit analysis).
+
+**Key changes:**
+- `pip install` → `uv venv /app/.venv` + `VIRTUAL_ENV=/app/.venv uv pip install --no-cache`
+- uv is BuildKit-mounted transiently (`--mount=from=ghcr.io/astral-sh/uv:latest`), never in the image
+- Added `app:1000` user to both variants for consistent ownership with the app image
+- Openvino variant: replaced `openvino` user with `app:1000`, added `2>/dev/null || true` for idempotent user creation
+- `# syntax=docker/dockerfile:1` as first line enables BuildKit features
+
+**PR:** jmservera/embeddings-server-base#5
+
+**Key lesson:** When migrating from system pip to uv venv in a Docker image, remember that `VIRTUAL_ENV` env var tells `uv pip install` where to put packages — it doesn't auto-detect from the shell. Also, the openvino base image has its own user (`openvino`) that must be replaced, and `groupadd`/`useradd` need `2>/dev/null || true` guards since the uid/gid might already exist.
