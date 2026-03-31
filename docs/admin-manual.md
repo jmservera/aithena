@@ -1,8 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.17.1 Release Notes](release-notes/v1.17.1.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.18.0 Release Notes](release-notes/v1.18.0.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.17.1 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.17.1 hardens GitHub Actions CI secrets behind a dedicated environment; no deployment changes. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), and [v1.17.1 Deployment Updates](#deployment-updates-for-v1171) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), and [v1.18.0 Deployment Updates](#deployment-updates-for-v1180) sections below.
 
 ## System architecture overview
 
@@ -4142,21 +4142,13 @@ For more detailed troubleshooting, see the [GPU Troubleshooting Guide](guides/gp
 
 ---
 
-## Deployment Updates for v1.17.1
+## Deployment Updates for v1.18.0
 
-v1.17.1 is a **security patch** that hardens GitHub Actions CI secrets handling. There are **no deployment changes** from v1.17.0. CPU-only and GPU-enabled deployments continue to work without modification.
+v1.18.0 introduces folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, bug fixes for PDF embedded viewing and collections consistency, and CI/CD hardening. There are no breaking changes from v1.17.0. All features are additive or opt-in.
 
-### What Changed in v1.17.1
+### Upgrade from v1.17.0
 
-**GitHub Actions CI/CD security hardening (#1237):**
-
-The `build-containers.yml` GitHub Actions workflow now uses a dedicated `build` environment with protection rules to gate access to container registry secrets (`GHCR_TOKEN`, `GHCR_USERNAME`). This resolves GitHub code scanning alert #230 (zizmor).
-
-**Operator impact:** None. This change affects only the build pipeline in GitHub Actions. Runtime services, configuration, volumes, and environment variables remain unchanged from v1.17.0.
-
-### Upgrade Path
-
-Standard upgrade from v1.17.0 to v1.17.1:
+No migration steps required. Standard upgrade procedure:
 
 ```bash
 docker compose pull
@@ -4164,25 +4156,342 @@ docker compose down
 docker compose up -d
 ```
 
-All existing GPU and CPU-mode deployments continue to work without modification.
+All existing deployments (CPU-only and GPU-accelerated) continue to work unchanged.
 
-### No Configuration Changes
+### Folder Facets (New Feature)
 
-- No new environment variables
+v1.18.0 adds a new "📁 Folder" facet to the search sidebar that enables users to filter results by document location in the library structure.
+
+**What's new:**
+- Automatic folder path extraction during document indexing
+- Hierarchical folder tree rendered in the search sidebar
+- Click-to-filter behavior that includes documents in selected folder and all subfolders (recursive)
+- Counts show number of documents per folder
+- Combinable with existing facets (language, author, year, category)
+
+**Operator action:** None required. This feature is enabled by default and requires no configuration.
+
+**User experience:** Users will see the new "📁 Folder" facet in the search sidebar. Clicking a folder filters results to that folder and its children.
+
+### Backup & Disaster Recovery System (New Feature)
+
+v1.18.0 includes a comprehensive backup and restore system for production deployments.
+
+#### System architecture
+
+**Backup tiers:**
+- **Tier 1 (Critical):** Auth database, collections database, secrets (high frequency, restore priority)
+- **Tier 2 (High):** Solr indices, ZooKeeper coordination (medium frequency)
+- **Tier 3 (Medium):** Redis cache, RabbitMQ persistence (lower frequency, optional)
+
+#### New components
+
+**Backup orchestrator script** (`backup-orchestrator.py`):
+- Schedules and runs backups across all tiers
+- Creates timestamped backup archives
+- Supports dry-run mode for validation
+- Command: `docker compose exec solr-search backup-orchestrator.py --help`
+
+**Restore orchestrator script** (`restore-orchestrator.py`):
+- Lists available backups
+- Previews restore operations in dry-run mode
+- Verifies backup integrity before restore
+- Command: `docker compose exec solr-search restore-orchestrator.py --help`
+
+**Backup admin API endpoints** (protected, admin-only):
+- `POST /v1/admin/backup/now` — trigger on-demand backup
+- `GET /v1/admin/backup/status` — current backup state
+- `GET /v1/admin/backup/history` — list available backups
+- `POST /v1/admin/backup/restore` — initiate restore with preview
+
+**React backup dashboard** (`/admin/backups`):
+- Visual backup tier status cards
+- On-demand backup trigger button
+- Backup history table
+- Restore wizard (select → preview → confirm → progress)
+
+#### Getting started
+
+1. Review the [Disaster Recovery Runbook](guides/disaster-recovery-runbook.md) for operational procedures
+2. Trigger a test backup:
+   ```bash
+   docker compose exec solr-search backup-orchestrator.py --test
+   ```
+3. Access the backup dashboard: `http://localhost/admin/backups` (admin users only)
+4. Set up monthly restore drills using the runbook procedures
+
+**Operator action required:** Set up monthly restore drills to validate backup integrity. See the disaster recovery runbook for procedures.
+
+### Collections Book Card Consistency (Bug Fix)
+
+v1.18.0 fixes collections to display books using the same card/list components as the Library.
+
+**What changed:**
+- Collections now display: title, author, thumbnail, "Open PDF" button
+- Visual styling matches Library search results
+- Collection-specific actions (notes, remove from collection) still visible
+- Consistent user experience across Collections and Library
+
+**Operator action:** None. This is a UI fix that applies automatically.
+
+### PDF Embedded Viewer Fix (Bug Fix)
+
+v1.18.0 fixes PDF embedded viewer that was not loading PDFs in some cases.
+
+**Root cause:** NGINX was returning `X-Frame-Options: deny` on the `/documents/` location, preventing iframe embedding.
+
+**Fix:** Changed X-Frame-Options to `SAMEORIGIN` on the `/documents/` NGINX location.
+
+**Workaround (pre-v1.18.0):** Users could click "Open in new window" to view PDFs.
+
+**Result:** PDFs now load reliably in the embedded viewer.
+
+**Operator action:** None. This is fixed in the NGINX configuration automatically.
+
+### CI/CD Hardening (Internal Infrastructure)
+
+v1.18.0 hardens the CI/CD pipeline with additional required checks:
+
+- Integration tests now block merge if they fail
+- Bandit SAST blocks merge on high-severity findings
+- Frontend linting consolidated into main CI workflow
+- Pre-release validation integrated into main PR workflow
+- Solr startup reliability improved in integration tests
+- Large JavaScript blocks extracted to reusable composite actions
+- Main branch validation added to release workflow
+
+**Operator action:** None. These are internal CI/CD improvements that do not affect deployments.
+
+### Security: GitHub Actions Workflow Protection (v1.18.0)
+
+**What changed:** Build-containers.yml CI workflow now gates secret access (Docker registry credentials) to a dedicated GitHub environment with explicit protection rules.
+
+**Result:** Reduced exposure surface for build secrets.
+
+**Operator action:** None. This improves the security posture of our CI/CD pipeline.
+
+### GPU Post-Release Monitoring Guidance (Documentation Update)
+
+v1.18.0 updates GPU documentation based on v1.17.0 real-world deployment feedback:
+
+- Enhanced GPU monitoring guidance (nvidia-smi, performance metrics)
+- GPU memory utilization monitoring recommendations
+- Hardware-specific tuning tips (NVIDIA vs. Intel)
+- Common production issues and solutions
+
+**Operator action:** If running GPU-accelerated deployments, review the updated GPU sections in this manual and the standalone [GPU Troubleshooting Guide](guides/gpu-troubleshooting.md).
+
+### Stress Testing Infrastructure (New, Optional)
+
+v1.18.0 includes stress-testing infrastructure for operators who want to validate their deployments:
+
+**Test suites:**
+- Data generation (synthetic documents 1K–100K scale)
+- Indexing pipeline stress tests (measure throughput and resource usage)
+- Search latency benchmarks (p50, p95, p99 latency)
+- Concurrent user tests with Locust
+- Browser UI stress tests with Playwright
+
+**Minimum requirements documentation** published covering:
+- Recommended hardware for 10K, 100K, 1M document scales
+- CPU, memory, disk requirements
+- Expected throughput (documents/hour, queries/second)
+
+**Operator action:** Optional. Run stress tests in a non-production environment to establish baselines for your hardware. See the minimum requirements documentation for guidance.
+
+### Backward compatibility
+
+All changes are backward-compatible:
+
+- Folder facets are purely additive (new facet only, no changes to existing facets)
+- Backup/DR is opt-in (existing deployments work without triggering backup jobs)
+- Bug fixes improve user experience with no breaking changes
+- GPU support unchanged (same environment variables from v1.17.0)
+- No new required environment variables
 - No volume layout changes
-- No database migrations
 - No auth or configuration format changes
-- Existing `.env` files work unchanged
-- Existing GPU profiles (`--profile nvidia`, `--profile intel`) work unchanged
 
-### Operator Validation Checklist
+Existing deployments can upgrade with a standard `docker compose pull && docker compose down && docker compose up -d`.
 
-Before considering v1.17.1 production-ready:
+### Documentation updates
 
-- [ ] Run `docker compose pull` and verify new image digests are fetched
-- [ ] Run `docker compose up -d` and verify all services start without errors
-- [ ] Run a test search query and confirm results are returned
-- [ ] Check container logs for any warnings or errors: `docker compose logs`
-- [ ] (If GPU enabled) Verify GPU detection is still working: `docker compose logs embeddings-server | grep -i device`
+- `docs/user-manual.md` — new Folder Facets section, collections UI fix note
+- `docs/admin-manual.md` — this Deployment Updates section, Backup & DR sections
+- `docs/guides/disaster-recovery-runbook.md` — new comprehensive backup/restore operational guide
 
 ---
+
+## Backup & Disaster Recovery (v1.18.0)
+
+This section provides comprehensive backup and disaster recovery guidance for production deployments.
+
+### System architecture
+
+The backup system uses a three-tier approach based on criticality and recovery priority:
+
+| Tier | Services/Data | Frequency | Recovery Priority | Retention |
+|---|---|---|---|---|
+| **Critical** | Auth database, Collections DB, Secrets | Hourly | 1st (restore first) | 30 days |
+| **High** | Solr indices, ZooKeeper data | Daily | 2nd (restore second) | 14 days |
+| **Medium** | Redis state, RabbitMQ persistence | Weekly | 3rd (restore last) | 7 days |
+
+### Backup components
+
+#### 1. Backup Orchestrator Script
+
+Located at: `.squad/scripts/backup-orchestrator.py` (or similar)
+
+**Usage:**
+```bash
+# Perform a full backup across all tiers
+docker compose exec solr-search backup-orchestrator.py --run
+
+# Test backup without executing (dry-run)
+docker compose exec solr-search backup-orchestrator.py --dry-run
+
+# Backup only critical tier
+docker compose exec solr-search backup-orchestrator.py --tier critical
+
+# Show backup help
+docker compose exec solr-search backup-orchestrator.py --help
+```
+
+**Behavior:**
+- Runs all tiers in sequence with error handling
+- Logs all backup operations to stdout and log files
+- Creates timestamped backup archives in versioned directories
+- Supports partial backups by tier
+
+#### 2. Restore Orchestrator Script
+
+Located at: `.squad/scripts/restore-orchestrator.py` (or similar)
+
+**Usage:**
+```bash
+# List available backups
+docker compose exec solr-search restore-orchestrator.py --list
+
+# Preview restore operation (dry-run)
+docker compose exec solr-search restore-orchestrator.py --backup-id 2024-04-02-120000 --dry-run
+
+# Execute restore
+docker compose exec solr-search restore-orchestrator.py --backup-id 2024-04-02-120000 --execute
+
+# Show restore help
+docker compose exec solr-search restore-orchestrator.py --help
+```
+
+**Behavior:**
+- Lists available backups with creation time and tier information
+- Previews what data would be restored without making changes
+- Verifies backup integrity before restore
+- Restores tiers in reverse priority order (Medium → High → Critical)
+- Post-restore health checks validate system state
+
+#### 3. Backup Admin API
+
+All endpoints are protected (admin-only) and return JSON responses.
+
+**POST /v1/admin/backup/now**
+- Trigger on-demand backup across all tiers
+- Request body: `{"dry_run": false}`
+- Response: `{"status": "running", "job_id": "abc123", "tiers": ["critical", "high", "medium"]}`
+
+**GET /v1/admin/backup/status**
+- Get current backup status
+- Response: `{"status": "idle|running", "current_tier": "critical", "progress": 0-100}`
+
+**GET /v1/admin/backup/history**
+- List available backups
+- Response: `[{"backup_id": "2024-04-02-120000", "timestamp": "2024-04-02T12:00:00Z", "tiers": {...}, "size": "5.2GB"}, ...]`
+
+**POST /v1/admin/backup/restore**
+- Initiate restore operation
+- Request body: `{"backup_id": "2024-04-02-120000", "dry_run": true}`
+- Response: `{"status": "preview|executing", "changes": [...]}`
+
+#### 4. Backup Dashboard
+
+Access at: `http://localhost/admin/backups` (admin users only)
+
+**Dashboard sections:**
+1. **Tier Status Cards** — shows last backup time, status, and health for each tier
+2. **On-Demand Backup** — button to trigger immediate backup
+3. **Backup History** — table showing available backups with timestamps and restore entry points
+4. **Restore Wizard** — multi-step restore UI (select backup → preview changes → confirm → monitor progress)
+
+### Operational procedures
+
+#### Monthly restore drill
+
+Schedule a monthly restore drill to validate backup integrity:
+
+1. Prepare a non-production environment (staging, dev, or isolated VM)
+2. Stop Aithena stack: `docker compose down`
+3. Load the latest backup: `docker compose exec solr-search restore-orchestrator.py --backup-id <latest> --dry-run`
+4. Review preview to confirm expected data
+5. Execute restore: `docker compose exec solr-search restore-orchestrator.py --backup-id <latest> --execute`
+6. Start stack: `docker compose up -d`
+7. Run validation checks (search, login, admin panels)
+8. Document results and any issues
+
+#### Capacity planning
+
+Estimate backup storage requirements based on your library size:
+
+| Documents | Solr Index | Auth/Collections | Total/month |
+|---|---|---|---|
+| 10K | ~2 GB | 50 MB | ~30 GB |
+| 100K | ~20 GB | 500 MB | ~300 GB |
+| 1M | ~200 GB | 5 GB | ~3 TB |
+
+Adjust based on your library's actual document sizes and metadata volume.
+
+#### Archive rotation
+
+Backup retention policy:
+- Critical: 30 days (hourly = ~30 backups/day, 900 total)
+- High: 14 days (daily = 14 backups)
+- Medium: 7 days (weekly = 1 backup)
+
+Automated cleanup scripts should remove backups older than retention periods to manage storage.
+
+### Disaster recovery scenarios
+
+#### Scenario 1: Single document corruption
+
+**Problem:** One document's metadata or content is corrupted.
+
+**Recovery:**
+1. Identify backup before corruption occurred
+2. Preview restore: `restore-orchestrator.py --backup-id <id> --dry-run`
+3. Execute partial restore (if supported) or restore and re-index new documents since backup
+
+#### Scenario 2: Partial data loss (e.g., Solr indices lost)
+
+**Problem:** Solr volumes are corrupted but auth and collections data are intact.
+
+**Recovery:**
+1. Stop stack: `docker compose down`
+2. Remove Solr volumes: `docker volume rm aithena_solr_data aithena_solr2_data aithena_solr3_data`
+3. Restore only High tier: `restore-orchestrator.py --backup-id <id> --tier high --execute`
+4. Start stack: `docker compose up -d`
+
+#### Scenario 3: Complete disaster (all data lost)
+
+**Problem:** Complete data loss due to storage failure.
+
+**Recovery:**
+1. Provision new infrastructure (Docker, volumes, etc.)
+2. Restore from backup: `restore-orchestrator.py --backup-id <id> --execute`
+3. Verify all services (search, auth, admin)
+4. Re-index any documents added after last backup
+
+### Backup storage best practices
+
+- **Dedicated storage:** Store backups on separate storage from running data (different disk/NAS)
+- **Offsite copies:** Periodically copy backups to cloud storage or remote site
+- **Encryption:** Encrypt backup archives if they contain sensitive documents
+- **Verification:** Test restore procedures monthly to ensure backups are valid
+- **Monitoring:** Monitor backup job completion and storage space usage
+- **Alerting:** Set up alerts if backup jobs fail or storage is running low
