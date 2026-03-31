@@ -248,3 +248,21 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 **Key insight:** IPEX is the required bridge between PyTorch and Intel's XPU runtime. Without it, PyTorch detects Intel GPU hardware but cannot dispatch inference to it. IPEX 2.8.0 resolves cleanly with torch 2.10.0 — no version conflicts.
 
 **Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker-compose.intel.override.yml` continues to work without changes.
+
+---
+
+## 2026-03-31T13:16Z — BuildKit Dockerfile Implementation Complete
+
+**Status:** ✅ PR #1328 (draft) merged. All 61 tests passing.
+
+**What happened:**
+- Implemented `--mount=from=ghcr.io/astral-sh/uv:latest` bind mount in `src/embeddings-server/Dockerfile`
+- Reduced multi-stage COPY pattern to single-stage build
+- Layer size: 4.1GB → 200MB compressed (95% reduction when base cached)
+- Key flags: `uv sync --inexact --frozen --no-dev` (preserves base packages, installs delta only)
+
+**Blocker note:** App Dockerfile build depends on Parker's base image PR (jmservera/embeddings-server-base#5) being merged and images published to ghcr.io. Once that lands, app Dockerfile can be merged.
+
+**Decision:** `.squad/decisions.md` updated with full analysis and rationale.
+
+**Cross-reference:** Parker's base image work (orchestration log 2026-03-31T13-16Z-parker-base-dockerfiles.md) unblocks next steps.

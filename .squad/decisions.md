@@ -705,3 +705,108 @@ This is a one-time change. Heavy deps rarely change (torch version bumps are ~qu
 - **CI:** No changes needed (BuildKit already enabled via buildx-action)
 - **Base image:** One-time rebuild required for both slim and openvino variants
 
+
+---
+
+# Decision: BuildKit --mount=from + --inexact for embeddings-server layer optimization
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-31T13:16:00Z
+**Status:** Implemented (blocked on base image)
+
+## Summary
+
+Replaced the multi-stage `COPY --from=dependencies /app/.venv` pattern in the embeddings-server Dockerfile with a single-stage BuildKit `--mount=from` approach. The app Dockerfile now bind-mounts `uv` at build time and runs `uv sync --inexact` to install only the delta of app-specific packages into the base image's pre-populated `.venv`.
+
+## What Changed
+
+- **Approach:** Approach 3 from the analysis — BuildKit `--mount=from` bind mount
+- **App Dockerfile:** `src/embeddings-server/Dockerfile` — removed dependencies stage, added `--mount=from` + `--inexact`
+- **Base image:** Blocks on jmservera/embeddings-server-base#5 — both Dockerfiles need to switch from system site-packages to `/app/.venv`
+- **PR:** jmservera/aithena#1328 (draft, blocked on base image update)
+
+## Key Design Decisions
+
+1. **`--inexact` over `--exact`:** Preserves base image packages, installs only missing deps. This is critical — `--exact` would remove the pre-installed heavy packages.
+2. **Single conditional RUN:** Both torch and openvino variants handled in one `if/else` block instead of two separate RUN commands.
+3. **OV cache at `/app/ov_cache`:** Moved from `/tmp/ov_cache` for consistency and to avoid potential noexec issues.
+4. **`# syntax=docker/dockerfile:1`:** Required as first line for cross-version BuildKit compatibility.
+
+## Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| .venv layer | ~4.1 GB compressed | ~200 MB compressed |
+| Build stages | 2 | 1 |
+| Python symlink hack | Required | Eliminated |
+
+## Dependencies
+
+This is a **breaking change pair** — the base image must be updated to provide `/app/.venv` before the app Dockerfile will build. Coordination tracked via:
+- Base: jmservera/embeddings-server-base#5
+- App: jmservera/aithena#1328
+
+---
+
+# Decision: Base image uses /app/.venv with uv
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-31T13:16:00Z
+**Status:** Implemented
+
+## Context
+
+The embeddings-server base image previously installed heavy Python packages (torch, sentence-transformers, nvidia-*, etc.) into system site-packages via `pip install`. The app image then had to COPY the entire ~4GB .venv from a build stage, creating a massive duplicate layer.
+
+## Decision
+
+Both base image Dockerfiles (`Dockerfile` and `Dockerfile.openvino`) now:
+
+1. **Install packages into `/app/.venv`** using `uv venv` + `uv pip install` instead of system `pip`
+2. **Use BuildKit `--mount=from`** to transiently mount the `uv` binary — it never exists in the final image
+3. **Create `app:1000` user** that owns `/app` — consistent with the app image's runtime user
+4. **Keep `/models` root-owned** with `chmod a+rX` to avoid duplicating the ~5GB model layer via chown
+5. **Provide `/models/.cache`** with `app:app` ownership for OpenVINO/HuggingFace cache writes
+
+## Consequences
+
+- The app Dockerfile (in aithena) **must** be updated to use `uv sync --inexact` instead of the current multi-stage COPY pattern. This is a coordinated change.
+- The `# syntax=docker/dockerfile:1` directive is now required (first line of each Dockerfile) to enable BuildKit mount syntax.
+- `uv` is never present at runtime — any debugging requiring package installs must use a temporary mount or exec into the container with a different approach.
+- The openvino variant now uses `app:1000` instead of the base image's `openvino` user, which is a breaking change for anything that depended on that user identity.
+
+## Impact on Team
+
+- **Brett (Infra):** This implements the prerequisite from his BuildKit mount analysis. The app Dockerfile changes can now proceed.
+- **Lambert (Tester):** Base image rebuild required before testing the full optimization pipeline.
+- **Dallas (Frontend):** No impact.
+
+---
+
+# User Directive: Base image Dockerfiles should use proper files instead of inline Python
+
+**Date:** 2026-03-31T13:16:00Z
+**By:** jmservera (via Copilot)
+
+## Directive
+
+Base image Dockerfiles should use proper `pyproject.toml` and `.py` script files for model download/verification instead of inline Python in RUN commands. No more writing Python code directly into the console in Dockerfile RUN instructions.
+
+## Rationale
+
+Inline Python in Dockerfiles is:
+- Fragile and error-prone (escaping issues, shell interpretation)
+- Hard to maintain and review
+- Not testable independently
+- Violates separation of concerns (build config vs. build logic)
+
+Proper files are cleaner, more maintainable, and testable.
+
+## Implementation
+
+Both base image Dockerfiles should extract model download/verification logic into:
+- `scripts/download_models.py` — handles model fetching, checksums, cache population
+- `scripts/verify_models.py` — validates model files, checksums, integrity
+- `pyproject.toml` — declares these as build-time dependencies or scripts
+
+Then in Dockerfile: `RUN uv run python scripts/download_models.py` (clean, testable, auditable).

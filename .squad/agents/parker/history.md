@@ -505,3 +505,24 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 **PR:** jmservera/embeddings-server-base#5
 
 **Key lesson:** When migrating from system pip to uv venv in a Docker image, remember that `VIRTUAL_ENV` env var tells `uv pip install` where to put packages — it doesn't auto-detect from the shell. Also, the openvino base image has its own user (`openvino`) that must be replaced, and `groupadd`/`useradd` need `2>/dev/null || true` guards since the uid/gid might already exist.
+
+---
+
+## 2026-03-31T13:16Z — Base Image Dockerfile Refactor Complete
+
+**Status:** ✅ PR jmservera/embeddings-server-base#5 opened. Both Dockerfiles updated. README updated.
+
+**What happened:**
+- Updated `Dockerfile` and `Dockerfile.openvino` to install heavy packages into `/app/.venv` (not system site-packages)
+- Created `app:1000` user (consistent with app image runtime user)
+- Added BuildKit `--mount=from` transient `uv` mounts (no runtime bloat)
+- Created `/models/.cache` with app:app ownership (fixes OpenVINO/HuggingFace cache writes)
+- Breaking change: openvino variant now uses `app:1000` instead of `openvino` user
+
+**Production impact:** ✅ User confirmed rc.32 (OpenVINO cache fix) working in production. No regressions.
+
+**Next step:** This PR must merge first; base images must be published to ghcr.io. Then Brett's app Dockerfile (PR #1328) can be merged.
+
+**Decision:** `.squad/decisions.md` updated with full rationale.
+
+**Cross-reference:** Brett's app image implementation (orchestration log 2026-03-31T13-16Z-brett-buildkit-dockerfile.md) is now unblocked pending this PR merge.
