@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.17.0 Release Notes](release-notes/v1.17.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.18.0 Release Notes](release-notes/v1.18.0.md).
 
 **v1.16.0 fixes search experience:** semantic search results now use the same display style as keyword results, keyword match context is truncated to 40 words, page numbers are restored for keyword matches, and thumbnails are now shown for all search modes. See [Search (v1.16.0 fixes)](#searching-for-books) below.
 
@@ -20,6 +20,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.17.0 adds GPU acceleration for embeddings:** optional GPU support speeds up document indexing 2–4× on NVIDIA GPUs and 1.5–2× on Intel GPUs. GPU is opt-in via environment variables; CPU-only deployments are unaffected. See [GPU Acceleration](#gpu-acceleration-v1170) below.
 
+**v1.18.0 adds folder path facets for hierarchical search filtering:** new "📁 Folder" facet in the search sidebar lets you filter by document location in the library structure. Collections now display books using the same card/list components as the Library, creating a consistent reading experience. See [Folder Facets (v1.18.0)](#folder-facets-v1180) below.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -27,7 +29,7 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - sign in with the account created during installation (v0.11.0+)
 - search by keyword, semantic meaning, or a hybrid of both
 - see chunk text previews with page ranges in search results (v1.11.0+)
-- narrow results with facets
+- narrow results with facets including language, author, year, category, and folder location (v1.18.0+)
 - view document thumbnails in search and library results (v1.11.0+; all search modes v1.16.0+)
 - click a result to open a richer book detail view with metadata and similar books (v1.11.0+)
 - open PDFs directly from search results with page-level navigation from keyword matches (v1.11.0+; page links restored v1.16.0+)
@@ -271,6 +273,7 @@ You can filter by:
 - **Author**
 - **Year**
 - **Category**
+- **Folder** (v1.18.0+)
 
 ### How to use them
 
@@ -285,7 +288,41 @@ You can filter by:
 - Counts next to each facet show how many matching books are in that bucket.
 - Changing a filter refreshes the results immediately.
 - When you change a filter, the result list returns to page 1.
-- **Folder filter (v1.10.0+):** Click the "📁 Folder" facet to filter by the directory where documents are stored. This is useful for organizing searches by physical location in your library (e.g., all books in "English/Science Fiction").
+
+## Folder Facets (v1.18.0+)
+
+The **Folder** facet helps you organize and filter searches by the location of documents in your library structure. This is especially useful for large libraries organized by topic, language, or author.
+
+### How folder filtering works
+
+1. In the search sidebar, look for the **📁 Folder** facet (new in v1.18.0)
+2. Click on a folder name to filter results to documents in that folder
+3. The filter automatically includes documents in all subfolders (recursive filtering)
+4. Combine folder filters with other facets (language, author, etc.) for more precise searches
+5. View your active filters in the "Active Filters" section above the results
+6. Remove a folder filter by clicking the ✕ on its filter chip
+
+### Example workflows
+
+**Scenario 1: Narrow by language**
+- Click "📁 Folder" → "English" to see all books in the English section
+- Results automatically include "English/History", "English/Science", etc.
+
+**Scenario 2: Combine with other filters**
+- Click "📁 Folder" → "English" → "Science Fiction"
+- Then click **Year**: "2020–2025"
+- Result: Science Fiction books in English published in the last 5 years
+
+**Scenario 3: Explore library organization**
+- Expand the folder tree to see how your library is organized
+- Use folder filtering to discover sections you might not have known existed
+
+### Folder filter behavior
+
+- **Hierarchical:** Clicking a parent folder shows all documents in that folder and all subfolders
+- **Counts:** The number next to each folder shows how many documents are in that folder (including subfolders)
+- **Multi-select:** You can click multiple folder names to search across different sections
+- **Combinable:** Folder filters work alongside language, author, year, and category filters
 
 ![Filtered search results](images/facet-panel.png)
 
@@ -527,6 +564,8 @@ The **Upload** tab lets authenticated users add PDFs to the library without dire
 ## Collections (v1.10.0+)
 
 *Updated in v1.12.1:* Collections now use real backend data by default, with persistent storage and full CRUD support.
+
+*Updated in v1.18.0:* Collections now display books using the same card/list components as the Library, creating a consistent visual style with title, author, thumbnails, and Open PDF buttons.
 
 Collections let you organize, annotate, and revisit documents you find interesting. Think of them as personal reading lists within Aithena.
 
