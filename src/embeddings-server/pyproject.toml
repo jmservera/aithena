@@ -11,8 +11,10 @@ dependencies = [
 
 [project.optional-dependencies]
 openvino = [
+"sentence-transformers[openvino]>=3.4,<6",
     "openvino",
     "optimum-intel",
+    "intel-extension-for-pytorch",
 ]
 
 [dependency-groups]

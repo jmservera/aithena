@@ -121,6 +121,8 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | — | #1123 | Pre-release container workflow (RC tags via build-containers.yml, auto-increment) |
 | — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
 | — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
+| — | #1286 | Add intel-extension-for-pytorch (IPEX) to openvino extras |
+| — | #1325/PR#1328 | BuildKit --mount=from + --inexact for embeddings-server layer optimization (~95% reduction) |
 
 ---
 
@@ -140,10 +142,36 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Always add an offline verification RUN step (`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -c "SentenceTransformer('/models/...')"`) to fail-fast during build
 - Key files: `embeddings-server-base/Dockerfile`, `src/embeddings-server/main.py`
 
+### IPEX Dependency for Intel XPU (Issue #1286)
+- `intel-extension-for-pytorch` (IPEX) is required in the openvino extras for Intel GPU/XPU inference
+- Without IPEX, PyTorch detects Intel GPU hardware but cannot dispatch to it — inference fails at runtime
+- IPEX 2.8.0 resolved cleanly against torch 2.10.0 and sentence-transformers 5.3.0 (no version conflicts)
+- No Dockerfile or config changes needed — IPEX is pulled in automatically via `uv sync --extra openvino`
+- The CPU/torch variant is unaffected; IPEX is only installed when `INSTALL_OPENVINO=true`
+- Key file: `src/embeddings-server/pyproject.toml`
+
 ### Container Group Gotcha
 - `group_add: [render]` in Docker Compose fails if the `render` group doesn't exist inside the container image
 - The `render` group is a host-level Linux concept for GPU DRM access; slim Python images don't have it
 - For WSL2 Intel GPU (`/dev/dxg`), only `video` group is needed
+
+### BuildKit `--mount=from` for Transient Build Tools (Issue #1325)
+- `RUN --mount=from=image,source=/bin,target=/usr/local/bin/tool` bind-mounts a file from another image for the duration of a single RUN command only — it never appears in any image layer
+- This is the preferred pattern for build tools (uv, cargo, etc.) that should not ship in runtime images
+- `COPY --from=image /tool /usr/local/bin/tool` creates a permanent layer — use `--mount=from` instead when the tool is only needed during build
+- Docker COPY always writes the full directory content as a new layer regardless of what exists in the base — it does NOT deduplicate against base layers. This makes multi-stage "build→COPY .venv→runtime" ineffective when both stages share the same base with a pre-populated .venv
+- `uv sync --inexact` preserves existing packages and only installs the delta — combine with `--mount=from` for minimal layers (~200MB vs ~4GB)
+- Requires `# syntax=docker/dockerfile:1` directive for cross-version compatibility; BuildKit is default since Docker 23.0+ and already enabled in CI via `docker/setup-buildx-action`
+- Key file: `src/embeddings-server/Dockerfile`
+
+### OV Cache Location — /app over /tmp
+- OpenVINO cache dir moved from `/tmp/ov_cache` to `/app/ov_cache` for consistency — owned by `app` user, inside WORKDIR
+- `/tmp` should be avoided for persistent cache in containers (ephemeral, sometimes noexec-mounted)
+
+### Cross-Repo Coordination for Base Image Changes
+- Base image changes (jmservera/embeddings-server-base) and app Dockerfile changes (jmservera/aithena) must be coordinated as a breaking pair
+- Created issue in base repo (embeddings-server-base#4) with full Dockerfile specs for both variants
+- App-side PR is intentionally DRAFT/BLOCKED until base image is updated
 
 ## Reskill Notes (2026-07-25)
 
@@ -208,3 +236,32 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - **Critical:** Both vendors require GPU drivers installed on the Windows host, not inside WSL. This is the #1 failure point.
 
 **Placement:** Section added after "Deployment with Docker Compose" section (logical flow for first-time operators). Appears before "Backup dashboard and restore workflow" section.
+
+## v1.18.1 Release (2026-03-29)
+
+### Issue #1286: Add intel-extension-for-pytorch to OpenVINO extras
+
+**Completed:** 2026-03-29T10:10:00Z
+
+Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.toml` openvino extras group. Regenerated `uv.lock`. 52 tests pass.
+
+**Key insight:** IPEX is the required bridge between PyTorch and Intel's XPU runtime. Without it, PyTorch detects Intel GPU hardware but cannot dispatch inference to it. IPEX 2.8.0 resolves cleanly with torch 2.10.0 — no version conflicts.
+
+**Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker-compose.intel.override.yml` continues to work without changes.
+
+---
+
+## 2026-03-31T13:16Z — BuildKit Dockerfile Implementation Complete
+
+**Status:** ✅ PR #1328 implemented. All 61 tests passing. Base image PR merged and images published.
+
+**What happened:**
+- Implemented `--mount=from=ghcr.io/astral-sh/uv:0.11.2` bind mount in `src/embeddings-server/Dockerfile`
+- Reduced multi-stage COPY pattern to single-stage build
+- Layer size: 13GB → 37MB (99.7% reduction when base cached)
+- Key flags: `uv sync --inexact --frozen --no-dev` (preserves base packages, installs delta only)
+- uv pinned to specific version tag for reproducibility (no floating `:latest`)
+
+**Decision:** `.squad/decisions.md` updated with full analysis and rationale.
+
+**Cross-reference:** Parker's base image work (orchestration log 2026-03-31T13-16Z-parker-base-dockerfiles.md) unblocks next steps.

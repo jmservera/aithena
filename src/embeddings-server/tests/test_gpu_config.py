@@ -15,7 +15,6 @@ import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 from fastapi.testclient import TestClient
 
 DEFAULT_MODEL = "intfloat/multilingual-e5-base"
@@ -77,7 +76,6 @@ def _fresh_import(
 
 
 class TestGpuConfig:
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_default_device_is_cpu(self):
         """DEVICE defaults to 'cpu' when not set."""
         os.environ.pop("DEVICE", None)
@@ -88,7 +86,6 @@ class TestGpuConfig:
 
         assert DEVICE == "cpu"
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_default_backend_is_torch(self):
         """BACKEND defaults to 'torch' when not set."""
         os.environ.pop("BACKEND", None)
@@ -99,7 +96,6 @@ class TestGpuConfig:
 
         assert BACKEND == "torch"
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_device_from_env(self):
         """DEVICE reads from environment variable."""
         os.environ["DEVICE"] = "cuda"
@@ -113,7 +109,6 @@ class TestGpuConfig:
         finally:
             os.environ.pop("DEVICE", None)
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_backend_from_env(self):
         """BACKEND reads from environment variable."""
         os.environ["BACKEND"] = "openvino"
@@ -143,21 +138,18 @@ class TestGpuModelInit:
         assert "device" not in call_kwargs[1]
         assert "backend" not in call_kwargs[1]
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_cuda_passes_device(self):
-        """With DEVICE=cuda, SentenceTransformer gets device='cuda'."""
+        """With DEVICE=cuda (torch backend), SentenceTransformer gets device='cuda'."""
         _, _, _, mock_st_class = _fresh_import(device="cuda")
         call_kwargs = mock_st_class.call_args
         assert call_kwargs[1].get("device") == "cuda"
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_xpu_passes_device(self):
-        """With DEVICE=xpu, SentenceTransformer gets device='xpu'."""
+        """With DEVICE=xpu (torch backend), SentenceTransformer gets device='xpu'."""
         _, _, _, mock_st_class = _fresh_import(device="xpu")
         call_kwargs = mock_st_class.call_args
         assert call_kwargs[1].get("device") == "xpu"
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_openvino_passes_backend(self):
         """With BACKEND=openvino, SentenceTransformer gets backend='openvino'."""
         _, _, _, mock_st_class = _fresh_import(backend="openvino")
@@ -170,13 +162,62 @@ class TestGpuModelInit:
         call_kwargs = mock_st_class.call_args
         assert "device" not in call_kwargs[1]
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_cuda_with_openvino(self):
-        """With DEVICE=cuda + BACKEND=openvino, both params are passed."""
+        """With DEVICE=cuda + BACKEND=openvino, device is mapped to OV 'GPU' via model_kwargs."""
         _, _, _, mock_st_class = _fresh_import(device="cuda", backend="openvino")
         call_kwargs = mock_st_class.call_args
-        assert call_kwargs[1].get("device") == "cuda"
+        # OpenVINO backend: device goes through model_kwargs, not top-level device
+        assert "device" not in call_kwargs[1]
         assert call_kwargs[1].get("backend") == "openvino"
+        mk = call_kwargs[1].get("model_kwargs", {})
+        assert mk.get("device") == "GPU"
+        assert "CACHE_DIR" in mk.get("ov_config", {})
+
+    def test_xpu_with_openvino(self):
+        """With DEVICE=xpu + BACKEND=openvino, device is mapped to OV 'GPU' via model_kwargs."""
+        _, _, _, mock_st_class = _fresh_import(device="xpu", backend="openvino")
+        call_kwargs = mock_st_class.call_args
+        assert "device" not in call_kwargs[1]
+        assert call_kwargs[1].get("backend") == "openvino"
+        mk = call_kwargs[1].get("model_kwargs", {})
+        assert mk.get("device") == "GPU"
+        assert "CACHE_DIR" in mk.get("ov_config", {})
+
+    def test_cpu_with_openvino(self):
+        """With DEVICE=cpu + BACKEND=openvino, no model_kwargs device but ov_config CACHE_DIR is set."""
+        _, _, _, mock_st_class = _fresh_import(device="cpu", backend="openvino")
+        call_kwargs = mock_st_class.call_args
+        assert call_kwargs[1].get("backend") == "openvino"
+        mk = call_kwargs[1].get("model_kwargs", {})
+        assert "device" not in mk
+        assert "CACHE_DIR" in mk.get("ov_config", {})
+
+    def test_openvino_cache_dir_default(self):
+        """Without OPENVINO_CACHE_DIR env var, CACHE_DIR defaults to /tmp/ov_cache."""
+        os.environ.pop("OPENVINO_CACHE_DIR", None)
+        _, _, _, mock_st_class = _fresh_import(backend="openvino")
+        mk = mock_st_class.call_args[1].get("model_kwargs", {})
+        assert mk.get("ov_config", {}).get("CACHE_DIR") == "/tmp/ov_cache"  # noqa: S108
+
+    def test_openvino_cache_dir_from_env(self):
+        """OPENVINO_CACHE_DIR env var overrides the default cache path."""
+        os.environ["OPENVINO_CACHE_DIR"] = "/custom/cache"
+        try:
+            _, _, _, mock_st_class = _fresh_import(backend="openvino")
+            mk = mock_st_class.call_args[1].get("model_kwargs", {})
+            assert mk.get("ov_config", {}).get("CACHE_DIR") == "/custom/cache"
+        finally:
+            os.environ.pop("OPENVINO_CACHE_DIR", None)
+
+    def test_openvino_cache_dir_empty_env_uses_default(self):
+        """Empty OPENVINO_CACHE_DIR env var falls back to /tmp/ov_cache."""
+        os.environ["OPENVINO_CACHE_DIR"] = ""
+        try:
+            _, _, _, mock_st_class = _fresh_import(backend="openvino")
+            mk = mock_st_class.call_args[1].get("model_kwargs", {})
+            assert mk.get("ov_config", {}).get("CACHE_DIR") == "/tmp/ov_cache"  # noqa: S108
+        finally:
+            os.environ.pop("OPENVINO_CACHE_DIR", None)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +226,6 @@ class TestGpuModelInit:
 
 
 class TestGpuHealthEndpoint:
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_health_includes_device(self):
         """Health endpoint response includes device field."""
         client, _, _, _ = _fresh_import()
@@ -193,7 +233,6 @@ class TestGpuHealthEndpoint:
         assert response.status_code == 200
         assert "device" in response.json()
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_health_includes_backend(self):
         """Health endpoint response includes backend field."""
         client, _, _, _ = _fresh_import()
@@ -201,7 +240,6 @@ class TestGpuHealthEndpoint:
         assert response.status_code == 200
         assert "backend" in response.json()
 
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_health_default_values(self):
         """Health endpoint shows cpu/torch by default."""
         client, _, _, _ = _fresh_import()
@@ -218,7 +256,6 @@ class TestGpuHealthEndpoint:
 
 
 class TestGpuVersionEndpoint:
-    @pytest.mark.xfail(reason="Requires GPU config implementation")
     def test_version_includes_device_and_backend(self):
         """Version endpoint includes device and backend fields."""
         client, _, _, _ = _fresh_import()
