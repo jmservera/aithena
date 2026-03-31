@@ -1,11 +1,11 @@
-"""Tests for solr-init entrypoint script and security.json (issue #1287).
+"""Tests for solr-init entrypoint script and security.json (issue #1287, #1332).
 
 Parses docker-compose.yml to extract the solr-init inline entrypoint script
 and verifies that:
-- The admin user gets the "admin" role
-- The readonly user gets the "readonly" role (not "search")
+- The admin user roles are NOT overwritten (solr auth enable assigns all 4 roles)
+- The readonly user gets the "search" role (Solr 9.7 built-in role)
 - The readonly user is created via /admin/authentication
-- security.json references the "readonly" role for read operations
+- security.json matches Solr 9.7 built-in role hierarchy
 """
 
 from __future__ import annotations
@@ -45,42 +45,46 @@ def _load_security_json() -> dict:
 # ---------- 1. Admin role assignment ----------
 
 
-def test_init_script_assigns_admin_role():
-    """solr-init must assign the admin user-role via /admin/authorization."""
+def test_init_script_does_not_overwrite_admin_roles():
+    """solr-init must NOT overwrite admin roles set by solr auth enable (#1332).
+
+    Solr 9.7's `solr auth enable` assigns ["superadmin", "admin", "search", "index"]
+    to the created user. A set-user-role call for the admin user would overwrite these.
+    """
     script = _load_solr_init_script()
 
-    # Look for curl to /admin/authorization with set-user-role for admin
-    assert "/solr/admin/authorization" in script, "solr-init script missing /admin/authorization call"
-
-    # The admin role should be assigned via "solr auth enable" which creates
-    # the admin user with admin role by default. Verify the solr auth enable command.
-    assert "solr auth enable" in script, "solr-init script missing 'solr auth enable' command for admin bootstrap"
+    # Verify solr auth enable is used for admin bootstrap
+    assert "solr auth enable" in script, "solr-init script missing 'solr auth enable' command"
     assert "-u" in script, "solr-init script missing -u flag in solr auth enable"
     assert "SOLR_ADMIN_USER" in script, "solr-init script must reference SOLR_ADMIN_USER"
+
+    # Verify there is NO set-user-role call for the admin user
+    role_assignments = re.findall(r'"set-user-role":\s*\{[^}]*\}', script)
+    admin_assignments = [r for r in role_assignments if "SOLR_ADMIN_USER" in r]
+    assert not admin_assignments, (
+        f"solr-init must NOT call set-user-role for admin user — solr auth enable "
+        f"already assigns all needed roles. Found: {admin_assignments}"
+    )
 
 
 # ---------- 2. Readonly role assignment ----------
 
 
-def test_init_script_assigns_readonly_role():
-    """The readonly user must be assigned the 'readonly' role (not 'search')."""
+def test_init_script_assigns_readonly_search_role():
+    """The readonly user must be assigned the 'search' role (Solr 9.7 built-in)."""
     script = _load_solr_init_script()
 
     # Find all set-user-role JSON payloads for the readonly user
-    # Pattern: "set-user-role": {"$SOLR_READONLY_USER": ["readonly"]}
     role_assignments = re.findall(r'"set-user-role":\s*\{[^}]*\}', script)
     assert role_assignments, "No set-user-role calls found in solr-init script"
 
-    # Check that the readonly user gets "readonly" role, not "search"
     readonly_assignment = [r for r in role_assignments if "SOLR_READONLY_USER" in r]
     assert readonly_assignment, "No set-user-role for SOLR_READONLY_USER found"
 
     for assignment in readonly_assignment:
-        assert '"readonly"' in assignment, (
-            f"Readonly user should be assigned 'readonly' role, not 'search'. "
-            f"Found: {assignment} — #1287 fix may not be applied"
+        assert '"search"' in assignment, (
+            f"Readonly user should be assigned 'search' role (Solr 9.7 built-in). Found: {assignment}"
         )
-        assert '"search"' not in assignment, f"Readonly user should NOT use 'search' role. Found: {assignment}"
 
 
 # ---------- 3. Readonly user creation ----------
@@ -101,23 +105,23 @@ def test_init_script_creates_readonly_user():
     assert "SOLR_READONLY_PASS" in script, "Script must reference SOLR_READONLY_PASS"
 
 
-# ---------- 4. security.json has readonly role ----------
+# ---------- 4. security.json matches Solr 9.7 role hierarchy ----------
 
 
-def test_security_json_has_readonly_role():
-    """security.json must define permissions that reference the 'readonly' role."""
+def test_security_json_matches_solr97_roles():
+    """security.json must use Solr 9.7 built-in role hierarchy."""
     sec = _load_security_json()
 
     auth = sec.get("authorization", {})
     permissions = auth.get("permissions", [])
     assert permissions, "security.json has no permissions defined"
 
-    # Collect all roles referenced in read-type permissions
-    read_permissions = [p for p in permissions if p.get("name") == "read"]
-    assert read_permissions, "No 'read' permission found in security.json"
+    # Build permission-to-role map
+    perm_map = {p["name"]: p.get("role") for p in permissions}
 
-    for perm in read_permissions:
-        roles = perm.get("role", [])
-        if isinstance(roles, str):
-            roles = [roles]
-        assert "readonly" in roles, f"'read' permission should include 'readonly' role. Found roles: {roles}"
+    # Verify Solr 9.7 role hierarchy
+    assert perm_map.get("security-edit") == "superadmin", "security-edit must require superadmin role"
+    assert perm_map.get("collection-admin-read") == "search", "collection-admin-read must require search role"
+    assert perm_map.get("read") == "search", "read must require search role"
+    assert perm_map.get("collection-admin-edit") == "admin", "collection-admin-edit must require admin role"
+    assert perm_map.get("update") == "index", "update must require index role"

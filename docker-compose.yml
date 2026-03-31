@@ -739,12 +739,9 @@ services:
             echo "Waiting for Solr to load security config..."
             sleep 5
 
-            # Assign admin role to admin user
-            echo "Assigning admin role..."
-            curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
-              "$$SOLR_URL/solr/admin/authorization" \
-              -H 'Content-Type: application/json' \
-              -d '{"set-user-role": {"'"$$SOLR_ADMIN_USER"'": ["admin"]}}'
+            # NOTE: solr auth enable (Solr 9.7) already assigns the admin user
+            # all built-in roles: ["superadmin", "admin", "search", "index"].
+            # Do NOT overwrite with set-user-role — that strips superadmin/search.
 
             # Add readonly user
             echo "Adding readonly user..."
@@ -753,11 +750,11 @@ services:
               -H 'Content-Type: application/json' \
               -d '{"set-user": {"'"$$SOLR_READONLY_USER"'": "'"$$SOLR_READONLY_PASS"'"}}'
 
-            # Assign readonly role
+            # Assign search role (Solr 9.7 built-in role for read + collection-admin-read)
             curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
               "$$SOLR_URL/solr/admin/authorization" \
               -H 'Content-Type: application/json' \
-              -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["readonly"]}}'
+              -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["search"]}}'
 
             echo "Security bootstrap complete."
           else
