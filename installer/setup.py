@@ -1,3 +1,13 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "aithena-common",
+# ]
+#
+# [tool.uv.sources]
+# aithena-common = { path = "../src/aithena-common" }
+# ///
+
 from __future__ import annotations
 
 import argparse
