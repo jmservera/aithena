@@ -731,7 +731,7 @@ services:
 
             # Create admin user with hashed password (also creates default RBAC rules)
             solr auth enable --type basicAuth \
-              --credentials "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
               --block-unknown false \
               --solr-include-file /dev/null \
               -z "$$ZK_HOST"
