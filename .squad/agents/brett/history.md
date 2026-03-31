@@ -122,6 +122,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
 | — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
 | — | #1286 | Add intel-extension-for-pytorch (IPEX) to openvino extras |
+| — | #1325/PR#1328 | BuildKit --mount=from + --inexact for embeddings-server layer optimization (~95% reduction) |
 
 ---
 
@@ -162,6 +163,15 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - `uv sync --inexact` preserves existing packages and only installs the delta — combine with `--mount=from` for minimal layers (~200MB vs ~4GB)
 - Requires `# syntax=docker/dockerfile:1` directive for cross-version compatibility; BuildKit is default since Docker 23.0+ and already enabled in CI via `docker/setup-buildx-action`
 - Key file: `src/embeddings-server/Dockerfile`
+
+### OV Cache Location — /app over /tmp
+- OpenVINO cache dir moved from `/tmp/ov_cache` to `/app/ov_cache` for consistency — owned by `app` user, inside WORKDIR
+- `/tmp` should be avoided for persistent cache in containers (ephemeral, sometimes noexec-mounted)
+
+### Cross-Repo Coordination for Base Image Changes
+- Base image changes (jmservera/embeddings-server-base) and app Dockerfile changes (jmservera/aithena) must be coordinated as a breaking pair
+- Created issue in base repo (embeddings-server-base#4) with full Dockerfile specs for both variants
+- App-side PR is intentionally DRAFT/BLOCKED until base image is updated
 
 ## Reskill Notes (2026-07-25)
 
