@@ -24,6 +24,8 @@ export interface CollectionItem {
   author?: string;
   year?: number;
   cover_url?: string | null;
+  thumbnail_url?: string | null;
+  document_url?: string | null;
   note: string;
   added_at: string;
 }
@@ -53,6 +55,8 @@ function normalizeItem(raw: Record<string, unknown>): CollectionItem {
     author: raw.author != null ? String(raw.author) : undefined,
     year: typeof raw.year === 'number' ? raw.year : undefined,
     cover_url: raw.cover_url != null ? String(raw.cover_url) : null,
+    thumbnail_url: raw.thumbnail_url != null ? String(raw.thumbnail_url) : null,
+    document_url: raw.document_url != null ? String(raw.document_url) : null,
     note: raw.note != null ? String(raw.note) : '',
     added_at: String(raw.added_at ?? ''),
   };

@@ -739,6 +739,13 @@ services:
             echo "Waiting for Solr to load security config..."
             sleep 5
 
+            # Assign admin role to admin user
+            echo "Assigning admin role..."
+            curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              "$$SOLR_URL/solr/admin/authorization" \
+              -H 'Content-Type: application/json' \
+              -d '{"set-user-role": {"'"$$SOLR_ADMIN_USER"'": ["admin"]}}'
+
             # Add readonly user
             echo "Adding readonly user..."
             curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
@@ -750,7 +757,7 @@ services:
             curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
               "$$SOLR_URL/solr/admin/authorization" \
               -H 'Content-Type: application/json' \
-              -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["search"]}}'
+              -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["readonly"]}}'
 
             echo "Security bootstrap complete."
           else

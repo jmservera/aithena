@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-04-02
+
+### Fixed
+
+- **PDF Embedded Viewer** — Fixed X-Frame-Options blocking PDF display in embedded viewer. Nginx now uses SAMEORIGIN for auth error responses and strips upstream headers for document requests (#1277, closes #1234)
+
+### Added
+
+- **Collection Card Views** — Unified collection item cards with Library book card layout. Now shows thumbnails, metadata labels (Author/Year), and "Open PDF" button. Backend enriches collection items with thumbnail and document URLs from Solr (#1278, closes #1233)
+
+### Other
+
+- GPU acceleration validated on NVIDIA and Intel/OpenVINO hardware (closes #1155, #1156, #1161)
+
 ## [1.17.1] — 2026-03-28
 
 ### Fixed

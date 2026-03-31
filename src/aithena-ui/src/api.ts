@@ -75,6 +75,16 @@ export function resolveDocumentUrl(documentUrl?: string | null): string | null {
       if (parsed.pathname.startsWith('/documents/')) {
         return buildApiUrl(parsed.pathname);
       }
+      // When DOCUMENT_URL_BASE points to the same origin without the
+      // /documents/ prefix the resulting URL lands on the catch-all nginx
+      // location which sends X-Frame-Options: DENY, breaking the embedded
+      // PDF viewer.  Re-route same-origin URLs through /documents/{token}.
+      if (typeof window !== 'undefined' && parsed.origin === window.location.origin) {
+        const lastSegment = parsed.pathname.split('/').filter(Boolean).pop();
+        if (lastSegment) {
+          return buildApiUrl(`/documents/${lastSegment}`);
+        }
+      }
     } catch {
       // Malformed URL — fall through and return as-is
     }

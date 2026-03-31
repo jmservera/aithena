@@ -2,7 +2,102 @@
 
 ---
 
-> 📦 Older decisions archived to decisions-archive.md
+# Decision: OpenVINO Embeddings Container Regression Root Cause
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-03-31T09:10:00Z  
+**Status:** Analysis Complete
+
+## Summary
+
+The OpenVINO embeddings container regressed between rc.3 and rc.23 due to a **Dockerfile change that stopped chown-ing `/models`**. In rc.3 the chown layer was `chown -R app:app /app /models`, but in rc.23 it was changed to `chown -R app:app /app && chmod -R a+rX /models`. This makes `/models` **read-only** for the `app` user in rc.23 — the directory is owned by `root:root` with mode 755. Any runtime write to `/models` (e.g. OpenVINO model cache, lock files, HuggingFace cache updates) will fail with "Permission denied".
+
+## Root Cause Details
+
+| Dimension | rc.3 | rc.23 | Contributing? |
+|-----------|------|-------|---------------|
+| `/models/` ownership | app:app 755 | root:root 755 | **🔴 YES** |
+| `/models/` writable by app user | ✅ Yes | ❌ No | **🔴 YES** |
+| Process user | uid=999(app) | uid=999(app) | ✅ No |
+| Python packages (torch, optimum, optimum-intel, sentence-transformers) | Identical | Identical | ✅ No |
+| Environment variables | Identical | Identical | ✅ No |
+| `main.py` code | Identical | Identical | ✅ No |
+| `model_utils.py` code | Original | Enhanced device routing | 🟡 No (improvements) |
+
+## Why rc.23 Changed
+
+The Dockerfile comment explains: *"Don't chown /models — it duplicates the entire ~5 GB model directory as a new layer. Models are read-only; just ensure world-readable permissions"*
+
+The rationale is valid for the model files themselves (read-only), but the side effect is that OpenVINO and HuggingFace libraries cannot write cache/lock files at runtime inside `/models`.
+
+## Recommended Fixes (priority order)
+
+1. **Create a writable cache directory** (preferred):
+   ```dockerfile
+   RUN mkdir -p /models/.cache && chown app:app /models/.cache
+   ENV OPENVINO_CACHE_DIR=/models/.cache
+   ```
+   Targeted, doesn't bloat the image, explicitly controls where cache writes go.
+
+2. **Make only directory inodes writable**:
+   ```dockerfile
+   RUN find /models -type d -exec chmod 777 {} +
+   ```
+   Avoids full chown, but less explicit about which cache directories are writable.
+
+3. **Revert to full chown**:
+   ```dockerfile
+   RUN chown -R app:app /app /models
+   ```
+   Simplest fix, acceptable if layer size is acceptable.
+
+## Impact
+
+- Unblocks Dockerfile fix PR targeting embeddings-server
+- Provides root cause documentation for regression prevention
+- Validates against future permission-related regressions
+
+---
+
+# Decision: OpenVINO Smoke Test as Separate CI Job
+
+**Author:** Lambert (Tester)  
+**Date:** 2026-03-31T09:10:00Z  
+**Status:** Proposed
+
+## Context
+
+The OpenVINO embeddings container regressed between rc.3 and rc.23 due to a Permission denied error when creating `model_cache` inside the read-only `/models/` directory. The existing smoke-test matrix entry checks `/health` but provides no targeted diagnostics or automatic issue filing.
+
+## Decision
+
+Created a dedicated `smoke-test-openvino` CI job (not a matrix extension) that:
+1. Validates model directory permissions with `mkdir -p` / `touch` as uid 1000
+2. Audits container user identity and directory ownership
+3. Tests model loading via `/health` with `BACKEND=openvino DEVICE=cpu`
+4. Verifies embedding inference returns correct 768-dim vectors
+5. Auto-creates a GitHub Issue with root-cause documentation on failure
+
+## Rationale
+
+- The existing matrix smoke test only checks health endpoint liveness — no diagnostics on *why* it failed
+- Permission regressions are silent until the container crashes; targeted `mkdir -p` catches them before model loading
+- Auto-issue with documented root cause pattern reduces MTTR — the fix (restore `chown` or pre-create cache dir) is immediately actionable
+- Separate job avoids complicating the generic matrix pattern with openvino-specific logic
+
+## Files
+
+- `e2e/smoke-openvino-permissions.sh` — smoke test script (5 diagnostic checks)
+- `e2e/smoke-openvino-permissions.ci.yml` — CI job snippet (add to `.github/workflows/pre-release.yml`)
+
+## Impact
+
+- Requires `issues: write` permission on the pre-release workflow
+- Adds ~3-4 min to the pre-release pipeline (parallel with existing smoke tests)
+- Parker/Brett: if changing `/models` permissions in the Dockerfile, this test will catch regressions
+- Auto-issue on failure provides immediate root cause documentation
+
+---
 
 # Decision: User directive — PR Review Gate
 
@@ -14,667 +109,703 @@ Always check PR comments and failing checks — a PR is not finished until all c
 
 ---
 
-# Decision: 404 vs 422 for Missing Embeddings in Similar Books
+# Decision: Add intel-extension-for-pytorch to OpenVINO extras
 
-**Author:** Parker (Backend Dev)  
-**Date:** 2026-03-26  
-**Status:** Implemented (PR #1226)  
-**Context:** PR #1226 review comment
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-29T10:10:00Z
+**Status:** Implemented (Issue #1286)
 
-### Problem
+## Problem
 
-The `/books/{id}/similar` endpoint returned 404 for two different failure modes:
-1. No chunks found for the book (book not indexed)
-2. Chunks found but no `embedding_v` field (book indexed, embeddings pending)
+The OpenVINO embeddings-server image installed `openvino` and `optimum-intel` but not `intel-extension-for-pytorch` (IPEX). Without IPEX, PyTorch detects Intel XPU hardware but cannot dispatch inference to it — the bridge between PyTorch and Intel's XPU runtime is missing.
 
-Both cases returned 404, but they have different semantics.
+## Decision
 
-### Decision
+Add `intel-extension-for-pytorch` to the `[project.optional-dependencies] openvino` group in `src/embeddings-server/pyproject.toml`. This ensures IPEX is installed automatically when the OpenVINO variant is built (`INSTALL_OPENVINO=true`).
 
-- **404** — No indexed chunks found for this book
-- **422** — Chunks exist but no embedding → can't process for similarity
+## Rationale
 
-### Rationale
+- IPEX is the standard PyTorch extension for Intel GPU/XPU support — it's the required bridge
+- Adding it to the existing `openvino` extras group keeps the dependency scoped correctly (CPU builds unaffected)
+- IPEX 2.8.0 resolves cleanly with torch 2.10.0 — no version pinning needed
+- No Dockerfile or application code changes required — the existing `uv sync --extra openvino` picks it up
 
-HTTP 404 means "resource not found." When no chunks exist for the requested book ID, the book may not have been indexed yet, or may still be processing — no chunk documents have been created for it. This is a genuine "not found" condition because the parent document may or may not exist; what matters is that there is nothing to compute similarity from. HTTP 422 (Unprocessable Entity) applies when chunks exist (proving the book is at least partially indexed) but the first chunk has no `embedding_v` field yet — the server understands the request but can't fulfill it because the embedding pipeline hasn't run.
+## Impact
 
-This lets clients distinguish between "no chunks for this book" (check back after indexing) and "chunks exist but embeddings aren't ready yet" (retry after embedding pipeline runs).
-
-### Impact
-
-- Clients checking for 404 to mean "book not found" won't get false positives from unprocessed books
-- Frontend can show "embeddings processing" message on 422 vs "not found" on 404
-- Pattern applies to any future endpoint that depends on async pipeline output
+- OpenVINO image size will increase (IPEX adds ~50-100MB of compiled extensions)
+- CPU-only builds are completely unaffected
+- Existing Intel GPU override (`docker-compose.intel.override.yml`) works without changes
 
 ---
 
-# Decision: User directive — No A/B comparison for v1.14.0
+# Decision: Solr auth bootstrap requires explicit role assignment
 
-**Author:** Juanma (Project Owner)  
-**Date:** 2026-03-23T09:05Z  
-**Status:** CLOSED (v1.14.0 milestone)  
-**Impact:** All A/B evaluation issues (#900-918) closed as "not planned"
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-29T10:10:00Z
+**Status:** Implemented (#1287)
+
+## Problem
+
+`solr auth enable` creates a BasicAuth user but does not assign the admin role to it. All RBAC-gated operations (collection-admin-edit, etc.) fail with "does not have the right role." Additionally, the readonly user was assigned a `search` role that doesn't exist in security.json — the correct role name is `readonly`.
+
+## Decision
+
+1. After `solr auth enable`, explicitly call `set-user-role` to assign `["admin"]` to the admin user.
+2. Assign `["readonly"]` (not `["search"]`) to the readonly user.
+3. Add Solr credentials to the installer's credential generation pipeline so production deployments don't use hardcoded default passwords.
+
+## Impact
+
+- All RBAC-gated Solr operations now work correctly
+- Production deployments use generated secrets instead of defaults
+- All team members modifying solr-init entrypoints must ensure role assignments match the role names in security.json permissions.
+- The installer now generates 4 additional env vars (SOLR_ADMIN_USER, SOLR_ADMIN_PASS, SOLR_READONLY_USER, SOLR_READONLY_PASS). Existing .env files with insecure defaults will be rotated on next installer run.
+
+---
+
+# Decision: Test Coverage for #1287 (Solr Credentials) and #1286 (IPEX)
+
+**Author:** Lambert (Tester)
+**Date:** 2026-03-29T10:10:00Z
+**Status:** Implemented
+
+## Context
+
+Issues #1286 and #1287 required proactive test coverage to verify fixes for:
+1. Installer Solr credential management (generate, preserve, rotate, reset passwords)
+2. IPEX in openvino optional-dependencies
+3. Solr-init readonly role assignment (fix from "search" to "readonly")
+
+## Decision
+
+Added 14 tests across 3 new test files:
+- `installer/tests/test_solr_credentials.py` — 6 tests for `build_env_values()` Solr credential handling
+- `src/embeddings-server/tests/test_openvino_deps.py` — 4 tests for pyproject.toml/uv.lock validation
+- `src/solr-search/tests/test_solr_init_script.py` — 4 tests for docker-compose.yml solr-init script
+
+Created shared installer test infrastructure (`conftest.py`) with auth mocking and deterministic fixtures.
+
+## Rationale
+
+- Installer tests follow the same pattern as RabbitMQ password tests (deterministic secret_factory, autouse auth mock)
+- Config/packaging tests (openvino deps) use `tomllib` for reliable TOML parsing rather than regex
+- Docker-compose tests parse YAML and use regex on the inline bash script to verify role assignments
+- All tests produce clear failure messages pointing to the specific issue number if a fix is missing
+
+## Impact
+
+- 14 new tests guard against credential management regressions in the installer
+- Packaging tests prevent accidental removal of IPEX from openvino extras
+- Solr-init tests prevent role assignment regressions (readonly vs search)
+
+---
+
+# Decision: Collection Cards Reuse BookCard Visual Layout
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-28T00:00:00Z
+**Status:** Implemented (PR #1278)
+**Context:** Issue #1233
+
+## Problem
+
+Collections page had a separate, minimal `CollectionItemCard` component that looked very different from the Library page's `BookCard` — missing thumbnails, metadata labels, and PDF open button.
+
+## Decision
+
+- Refactor `CollectionItemCard` to reuse BookCard's CSS classes (`book-card-body`, `book-card-thumbnail`, `book-meta`, `open-pdf-btn`) for visual consistency
+- Keep `CollectionItemCard` as a separate component (not merge into `BookCard`) because the data types (`CollectionItem` vs `BookResult`), interactions, and collection-specific features (notes, remove) differ significantly
+- Backend enriches collection items with `thumbnail_url` and `document_url` in `_enrich_collection_items`
+
+## Rationale
+
+Merging into a single `BookCard` component with mode switching would require handling two different data types and many conditional branches, increasing complexity. Sharing CSS classes gives visual consistency with less coupling. Collection-specific features (NoteEditor, remove confirmation) stay co-located in the collection component.
+
+## Impact
+
+- Any future CSS changes to BookCard's core layout classes will automatically apply to collection cards too
+- Dallas should be aware that `.book-card-*` classes are now shared across both Library and Collections
+
+---
+
+# Decision: Extract Shared Auth Library (aithena-common)
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-29T10:25:00Z
+**Status:** Implemented (PR for #1288)
+**Context:** Issue #1288 — installer depended on solr-search internals via sys.path manipulation
+
+## Problem
+
+The installer imported `hash_password` and `init_auth_db` from `src/solr-search/auth.py` by appending solr-search to `sys.path`. This violated the Dependency Rule — an orchestrator (installer) depended directly on a service's internals.
+
+## Decision
+
+Created `src/aithena-common/` as a shared Python package containing:
+- `aithena_common.passwords` — `hash_password()`, `verify_password()`, `check_needs_rehash()`
+- `aithena_common.auth_db` — `init_auth_db()`, `find_user()`, `get_schema_version()`, `SCHEMA_VERSION`
+
+Both installer and solr-search now depend on aithena-common via uv path sources.
+
+## What Stays in solr-search
+
+- JWT creation/verification, token handling, cookies
+- User CRUD (create_user, list_users, update_user, delete_user)
+- Migrations framework, default admin seeding
+- Password policy validation
+- All HTTP/FastAPI-specific auth logic
+
+## Impact
+
+- Installer is now a proper uv project (`installer/pyproject.toml`)
+- `ensure_runtime_dependencies()` fallback uses `--project installer` instead of `--project src/solr-search`
+- Future services needing auth DB access should depend on `aithena-common`, not import from solr-search
+- `reset_password.py` in solr-search is unchanged (still imports from local `auth` module which re-exports from aithena-common)
+
+---
+
+# Decision: Copilot Directive — Extract Shared Auth Library Instead of Inline
+
+**Author:** Juanma (via Copilot)
+**Date:** 2026-03-29T10:15:00Z
+**Status:** Active
+
+When fixing the installer's dependency on solr-search (#1288), extract a shared auth library instead of inlining. Follow clean architecture / Dependency Inversion Principle — shared utilities belong in a standalone package, not duplicated across consumers.
+
+**Why:** User request — captured for team memory. Multiple projects (installer, solr-search, potentially future services) need auth utilities. The sys.path hack is a code smell; proper packaging is the solution.
+
+---
+
+# Decision: nginx X-Frame-Options strategy for iframe-served content
+
+**Author:** Dallas (Frontend Dev)
+**Date:** 2025-07-22T00:00:00Z
+**Status:** Active
+**Context:** Issue #1234 — PDF viewer iframe blocked by X-Frame-Options
+
+## Decision
+
+All nginx locations that serve content displayed inside iframes (currently `/documents/`) must:
+
+1. **Use `proxy_hide_header X-Frame-Options;`** before `add_header` to strip any upstream X-Frame-Options and avoid duplicate conflicting headers.
+2. **Set `add_header X-Frame-Options "SAMEORIGIN" always;`** to allow same-origin iframe embedding.
+3. **Re-declare all security headers** (`X-Content-Type-Options`, `Referrer-Policy`, HSTS in SSL) at location level because `add_header` suppresses server-level directives.
+
+Additionally, named locations used as error handlers (e.g. `@auth_error`) must have their own `add_header` directives since they inherit from the server block, not the calling location.
+
+## Rationale
+
+nginx's `add_header` behaviour has two non-obvious interactions:
+- Location-level `add_header` completely suppresses server-level `add_header` directives
+- Named locations inherit headers from the *server* block, not the calling location
+- `add_header` doesn't strip upstream headers; `proxy_hide_header` is needed for that
+
+These created edge cases where some PDF requests received `X-Frame-Options: DENY` despite the `/documents/` location setting SAMEORIGIN.
+
+## Impact
+
+Parker/Ash: If you add new nginx locations for iframe-served content, follow this pattern. If the backend starts adding security headers, the `proxy_hide_header` directive ensures no conflicts.
+
+---
+
+# Decision: Clean Architecture Audit — Findings & Recommendations
+
+**Author:** Ripley (Lead Architect)
+**Date:** 2026-03-29T10:20:00Z
+**Status:** Active
+**Trigger:** Issue #1288 + PO directive to adopt Clean Architecture principles
+**Reference:** [The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) — Robert C. Martin
+
+## Summary
+
+Audited the full aithena codebase against Clean Architecture principles. Found **2 high-severity**, **3 medium-severity**, and **2 low-severity** violations. The `aithena-common` shared package (created for #1288) is a strong foundation but adoption is incomplete — only the installer uses it. The admin service and solr-search still maintain independent auth implementations with duplicated logic.
+
+## Violations Found
+
+### V1: Admin `sys.path` Manipulation in Production Code
+
+**Severity:** 🔴 High
+**File:** `src/admin/src/pages/shared/config.py:22-24`
+**Impact:** Production code modifies Python's import system at module load time. This is fragile, affects all downstream imports globally, and indicates the admin service isn't properly packaged.
+**Fix:** Make admin an installable package (`pyproject.toml` with proper dependencies). Remove `sys.path` manipulation. Use `uv sync` to install.
+
+### V2: Duplicated Auth Logic Between Admin and Solr-Search
+
+**Severity:** 🔴 High
+**Files:**
+- `src/admin/src/auth.py` (180 lines) — Streamlit-specific auth
+- `src/solr-search/auth.py` (472 lines) — FastAPI-specific auth
+
+**Duplicated functions:** `parse_ttl_to_seconds()`, `AuthenticatedUser`, JWT encode/decode have identical logic in both.
+
+**Impact:** Bug fixes to auth must be applied in two places. Divergence risk is high — admin uses `hmac.compare_digest` for password comparison while solr-search uses Argon2 + SQLite.
+
+**Fix:** Extract `parse_ttl_to_seconds()`, `AuthenticatedUser`, and JWT encode/decode into `aithena-common`. Each service keeps only its framework-specific adapter (Streamlit session management, FastAPI middleware).
+
+### V3: Duplicated Logging Configuration Across 4 Services
+
+**Severity:** 🟡 Medium
+**Files:** solr-search, document-lister, document-indexer, admin
+**Impact:** Logging format inconsistency across services. Correlation ID tracing only works in solr-search.
+
+### V4: Solr-Search `correlation.py` Mixes Framework and Domain
+
+**Severity:** 🟡 Medium
+**File:** `src/solr-search/correlation.py`
+**Impact:** Framework-specific middleware mixed with generic correlation ID logic. Cannot reuse in non-FastAPI services.
+
+### V5: Solr-Search Tests Use `sys.path.append` (30+ files)
+
+**Severity:** 🟡 Medium
+**Impact:** Each test file independently manipulates `sys.path` instead of relying on proper package installation.
+
+### V6: Solr-Search `reset_password.py` Uses `sys.path.insert`
+
+**Severity:** 🟢 Low
+**Impact:** Standalone script with low blast radius.
+
+### V7: Benchmark Scripts Use `sys.path.insert`
+
+**Severity:** 🟢 Low
+**Impact:** Utility scripts, not production code.
+
+## Recommendation for #1288: Shared Auth Library
+
+### Phase 1: Expand `aithena-common`
+
+Add to `src/aithena-common/aithena_common/`:
+- `auth_models.py` — AuthenticatedUser, AuthSettings base
+- `ttl.py` — parse_ttl_to_seconds()
+- `jwt_utils.py` — create_access_token(), decode_access_token()
+- `logging_setup.py` — AithenaJsonFormatter, setup_logging()
+
+**Key constraint:** `aithena-common` must have ZERO framework dependencies.
+
+### Phase 2: Migrate solr-search and admin
+
+- Import shared entities from `aithena-common`
+- Keep only framework-specific adapters locally
+- Remove sys.path manipulation
+
+## Architecture Principle
+
+**Dependency Inversion Applied:**
+```
+installer ──────────────┐
+admin ──────────────────┼──→ aithena-common (entities + pure logic)
+solr-search ────────────┤
+document-indexer ───────┘
+```
+
+All services depend inward. No service depends on another service's internals except via HTTP APIs.
+
+## Skill Created
+
+Created `.squad/skills/clean-architecture/SKILL.md` with dependency rules, PR checklist, and violation detection patterns.
+
+## Priority
+
+| Action | Priority | Owner | Effort |
+|--------|----------|-------|--------|
+| V1: Fix admin sys.path in config.py | P1 | Parker | Small |
+| V2: Extract TTL, AuthenticatedUser, JWT to common | P1 | Parker | Medium |
+| V3: Consolidate logging | P2 | Parker/Brett | Medium |
+| V4: Split correlation.py | P2 | Parker | Small |
+| V5: Fix solr-search test imports | P3 | Lambert | Medium |
+
+---
+
+# Decision: Dependabot PR Routing in ralph-triage.js
+
+**Author:** Parker  
+**Date:** 2026-03-30  
+**Status:** Implemented
+
+## Context
+
+The heartbeat workflow lost Dependabot PR auto-assignment when inline JS was refactored to `ralph-triage.js`. PRs were silently filtered out by `isUntriagedIssue()`.
+
+## Decision
+
+Added a separate Dependabot PR triage pipeline alongside the existing issue triage. The classification uses a two-tier member lookup:
+
+1. **Routing rules** (from `routing.md`) — matches dependency domain keywords against work type columns
+2. **Role-based fallback** (from `team.md` roster) — matches against member role text
+
+This makes it resilient to routing table format changes while still respecting routing.md as the source of truth when available.
+
+## Dependency domain patterns
+
+File and title patterns map PRs to six domains: python-backend, frontend-js, github-actions, docker-infra, security, testing. Each domain carries both `workTypeKeywords` (for routing rules) and `roleKeywords` (for roster fallback).
+
+## Impact
+
+- `pull-requests: write` permission added to heartbeat workflow
+- New triage results include PRs alongside issues (same JSON format, uses `issueNumber` field since GitHub's label API works for both)
+- No changes to existing issue triage logic
+
+---
+
+# Decision: Embeddings-Server Docker Layer Optimization — Approach Analysis
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-31
+**Status:** Recommendation
+**Context:** Issue #1325 — reduce ~4GB .venv COPY layer; Juanma asked whether multi-stage can avoid keeping `uv` in runtime image
+
+## Problem
+
+The current app Dockerfile has a two-stage build:
+- **Stage 1** (`python:3.12-slim`): `uv sync` installs ALL deps into `/app/.venv` (~8GB uncompressed)
+- **Stage 2** (base image): `COPY --chown /app/.venv` from stage 1 → creates a ~4GB compressed layer
+
+The base image already contains the heavy packages (torch 1.7GB, nvidia-* 4.3GB, triton 641MB) at system site-packages. The COPY duplicates them entirely.
+
+**Prerequisite for Approaches 1–4:** The base image must be rebuilt to own `/app/.venv` with heavy deps pre-installed (instead of system site-packages). This is a one-time change to both base variants.
+
+## Comparison Table
+
+| Criteria | 1: In-place `uv sync` | 2: Multi-stage full COPY | 3: BuildKit `--mount=from` | 4: Delta-only COPY | 5: Strip + PYTHONPATH |
+|----------|----------------------|--------------------------|---------------------------|--------------------|-----------------------|
+| **New layer size** | ~200MB ✅ | ~4–8GB ❌ | ~200MB ✅ | ~200MB ✅ | ~1.1GB ⚠️ |
+| **Base layer sharing** | ✅ Preserved | ❌ COPY overrides | ✅ Preserved | ✅ Preserved | ✅ Preserved |
+| **uv in runtime** | ❌ Yes (~30MB) | ✅ No | ✅ No | ✅ No | ✅ No |
+| **Dockerfile complexity** | Low | Low-medium | Low | Very high | Medium |
+| **Maintainability** | Good | Good | Excellent | Poor | Fragile |
+| **Security** | ⚠️ uv binary in image | Good | Excellent | Good | Good |
+| **Build cache** | Good | Poor (full COPY) | Good | Moderate | Moderate |
+| **Compatibility** | Both variants ✅ | Both variants ✅ | Both variants ✅ | Fragile ⚠️ | Different PYTHONPATH per variant ⚠️ |
+| **CI/CD requirements** | Standard Docker | Standard Docker | BuildKit (already used) | Standard Docker | Standard Docker |
+| **Base image change needed** | Yes | Yes | Yes | Yes | **No** |
+| **Python symlink fix** | Not needed | Needed (cross-stage COPY) | Not needed | Not needed | Needed |
+
+## Detailed Analysis
+
+### Approach 1: In-place `uv sync --inexact` (Option C)
+
+```dockerfile
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG}
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+```
+
+**How it works:** Base image pre-owns `/app/.venv` with heavy deps. `uv sync --inexact` detects what's installed and only adds missing light deps (fastapi, uvicorn, etc.) as a ~200MB delta layer.
+
+**Pros:** Simple, small layer, base layers shared, great cache behavior.
+**Cons:** `COPY --from=...uv /uv /usr/local/bin/uv` permanently adds `uv` (~30MB) to the image. It's a development tool with no runtime purpose — unnecessary attack surface.
+
+### Approach 2: Multi-stage with full .venv COPY
+
+```dockerfile
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS build
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY --from=build /app/.venv /app/.venv
+```
+
+**Critical flaw:** `COPY` always writes the **full directory contents** as a new layer, regardless of what's already in the base image. Even though both stages share the same base, the COPY creates a ~4–8GB layer containing ALL of `/app/.venv` (heavy deps + delta). Docker layer deduplication works at the layer ID level, not file level — a new COPY layer is a completely new layer.
+
+**This approach is strictly worse than the current Dockerfile.** It adds multi-stage complexity without solving the layer size problem. The only benefit is removing `uv` from runtime, but at the cost of a massive layer that destroys base-image pull optimization.
+
+**Verdict:** ❌ Do not use.
+
+### Approach 3: BuildKit `--mount=from` bind mount ⭐ RECOMMENDED
+
+```dockerfile
+# syntax=docker/dockerfile:1
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY pyproject.toml uv.lock ./
+RUN --mount=from=ghcr.io/astral-sh/uv:latest,source=/uv,target=/usr/local/bin/uv \
+    uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+```
+
+**How it works:** `--mount=from=image` creates a read-only bind mount of a file from another image, available ONLY for the duration of the `RUN` command. After the command completes, the mount is removed. The `uv` binary never exists in any image layer.
+
+**Key insight:** This combines every advantage:
+- Same ~200MB delta layer as Approach 1 (only new packages)
+- Base image layers fully preserved (RUN adds on top, doesn't replace)
+- Zero `uv` in the final image (mounted transiently, not copied)
+- Actually *simpler* than Approach 1 (one fewer Dockerfile instruction)
+- No Python interpreter symlink fix needed (venv was created on this base)
+
+**BuildKit compatibility:**
+- `--mount` syntax requires BuildKit, available since Docker 18.09+ (2018)
+- Default builder since Docker Engine 23.0+ (2023)
+- CI already uses `docker/setup-buildx-action` which enables BuildKit
+- The `# syntax=docker/dockerfile:1` directive ensures compatibility with older Docker daemons
+- Docker Desktop (developer machines) has had BuildKit as default since 2020
+
+**Verdict:** ✅ Clear winner.
+
+### Approach 4: Multi-stage delta-only COPY
+
+```dockerfile
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS build
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN find /app/.venv -type f > /before.txt
+RUN uv sync --frozen --no-dev --no-install-project --inexact --native-tls
+RUN find /app/.venv -type f > /after.txt && \
+    comm -13 /before.txt /after.txt | tar cf /delta.tar -T - 
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY --from=build /delta.tar /delta.tar
+RUN tar xf /delta.tar && rm /delta.tar
+```
+
+**Pros:** Small delta, no uv in runtime.
+**Cons:** Extremely fragile. File diff logic breaks on path changes, special characters, symlinks. Multiple RUN layers reduce cache efficiency. The tar approach creates two layers (COPY + RUN) instead of one. Hard to debug when it breaks.
+
+**Verdict:** ❌ Approach 3 achieves the same result with zero complexity.
+
+### Approach 5: Strip + PYTHONPATH (Issue's original proposal)
+
+```dockerfile
+FROM python:3.12-slim AS dependencies
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --native-tls && \
+    pip list --path /app/.venv/lib/python3.12/site-packages --format=freeze | \
+    grep -iE '^(torch|nvidia|triton)' | cut -d= -f1 | \
+    xargs -I{} rm -rf /app/.venv/lib/python3.12/site-packages/{}*
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+COPY --from=dependencies --chown=app:app /app/.venv /app/.venv
+ENV PYTHONPATH="/usr/local/lib/python3.12/site-packages:${PYTHONPATH}"
+```
+
+**Pros:** No base image modification required — works today.
+**Cons:**
+- PYTHONPATH differs per variant (slim: `/usr/local/lib/...`, openvino: `/opt/venv/lib/...`) — needs conditional logic
+- Strip list must stay in sync with base image contents manually
+- ~1.1GB layer (still includes sentence-transformers and transitive deps not in strip list)
+- Python interpreter symlink fix still needed (cross-base COPY)
+- `PYTHONPATH` for package resolution is an anti-pattern — can cause version conflicts
+
+**Verdict:** ⚠️ Viable interim solution if base image change is delayed, but not recommended long-term.
+
+## Recommendation
+
+**Use Approach 3: BuildKit `--mount=from` bind mount.**
+
+It wins on every axis: smallest layer (~200MB), no tools in runtime, simplest Dockerfile, best maintainability, full CI compatibility. The only prerequisite is the base image rebuild to use `/app/.venv` (needed for Approaches 1–4 anyway).
+
+### Recommended Dockerfile (complete)
+
+> **Note:** This snippet reflects the final implementation as merged in PR #1328.
+
+```dockerfile
+# syntax=docker/dockerfile:1
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG BASE_TAG=3.12-slim-multilingual-e5-base
+ARG INSTALL_OPENVINO=false
+
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG}
+
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_DATE
+ARG INSTALL_OPENVINO
+
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/jmservera/aithena" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}"
+
+ENV VERSION=${VERSION} \
+    GIT_COMMIT=${GIT_COMMIT} \
+    BUILD_DATE=${BUILD_DATE} \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080 \
+    MODEL_NAME=intfloat/multilingual-e5-base \
+    HF_HOME=/models/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/models/sentence_transformers \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    DEVICE=cpu \
+    BACKEND=torch
+
+WORKDIR /app
+
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+
+RUN if ! id -u app >/dev/null 2>&1; then \
+      groupadd --system --gid 1000 app 2>/dev/null || groupadd --system app; \
+      useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
+    fi
+
+# Writable cache dir for OpenVINO compiled-model cache.
+RUN mkdir -p /app/ov_cache && chown app:app /app/ov_cache
+ENV OPENVINO_CACHE_DIR=/app/ov_cache
+
+# Switch to app user — all subsequent files are app-owned,
+# eliminating the multi-GB chown layer.
+USER app
+
+COPY --chown=app:app pyproject.toml uv.lock ./
+
+# uv is bind-mounted from its official image — never installed in the layer.
+# Pinned to specific version for reproducible builds.
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.2,source=/uv,target=/usr/local/bin/uv \
+    if [ "$INSTALL_OPENVINO" = "true" ]; then \
+      uv sync --frozen --no-dev --no-install-project --extra openvino --inexact --native-tls; \
+    else \
+      uv sync --frozen --no-dev --no-install-project --inexact --native-tls; \
+    fi
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+COPY --chown=app:app main.py model_utils.py /app/
+COPY --chown=app:app config /app/config
+
+EXPOSE 8080
+
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
+```
+
+### Changes vs. Previous Dockerfile
+
+| What changed | Why |
+|---|---|
+| Removed `FROM python:3.12-slim AS dependencies` stage | No longer needed — delta installed in-place |
+| Removed `COPY --from=dependencies /app/.venv` | No cross-stage .venv copy — eliminates the ~4GB layer |
+| Added `--mount=from=ghcr.io/astral-sh/uv:0.11.2` on RUN | uv available only during build, not in image; pinned for reproducibility |
+| Added `--inexact` flag to `uv sync` | Preserves base packages, installs only delta |
+| Removed Python symlink fix (`ln -sf`) | venv created on same base — no interpreter mismatch |
+| Added `# syntax=docker/dockerfile:1` | Ensures BuildKit syntax compatibility |
+| `USER app` before `COPY` and `RUN uv sync` | All new files owned by app — eliminates multi-GB `chown` layer |
+| OV cache at `/app/ov_cache` (not `/tmp`) | Consistent, inside WORKDIR, owned by app |
+| Removed `chown -R app:app /app` layer | Unnecessary — files created as app user from the start |
+
+### Required Base Image Changes
+
+Both base variants must be updated to:
+1. Create `/app/.venv` (instead of system site-packages or /opt/venv)
+2. Install heavy deps (torch, nvidia-*, triton, sentence-transformers) into `/app/.venv` via uv
+3. Create `app:1000` user owning the venv
+4. Set `PATH="/app/.venv/bin:${PATH}"`
+
+This is a one-time change. Heavy deps rarely change (torch version bumps are ~quarterly).
+
+## Impact
+
+- **Download size:** ~4.1GB → ~200MB compressed (when base cached) — **95% reduction**
+- **Build time:** Faster (only delta install, no cross-stage COPY of 8GB)
+- **Security:** Removes uv binary from runtime image
+- **CI:** No changes needed (BuildKit already enabled via buildx-action)
+- **Base image:** One-time rebuild required for both slim and openvino variants
+
+
+---
+
+# Decision: BuildKit --mount=from + --inexact for embeddings-server layer optimization
+
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-03-31T13:16:00Z
+**Status:** Implemented (blocked on base image)
+
+## Summary
+
+Replaced the multi-stage `COPY --from=dependencies /app/.venv` pattern in the embeddings-server Dockerfile with a single-stage BuildKit `--mount=from` approach. The app Dockerfile now bind-mounts `uv` at build time and runs `uv sync --inexact` to install only the delta of app-specific packages into the base image's pre-populated `.venv`.
+
+## What Changed
+
+- **Approach:** Approach 3 from the analysis — BuildKit `--mount=from` bind mount
+- **App Dockerfile:** `src/embeddings-server/Dockerfile` — removed dependencies stage, added `--mount=from` + `--inexact`
+- **Base image:** Blocks on jmservera/embeddings-server-base#5 — both Dockerfiles need to switch from system site-packages to `/app/.venv`
+- **PR:** jmservera/aithena#1328 (draft, blocked on base image update)
+
+## Key Design Decisions
+
+1. **`--inexact` over `--exact`:** Preserves base image packages, installs only missing deps. This is critical — `--exact` would remove the pre-installed heavy packages.
+2. **Single conditional RUN:** Both torch and openvino variants handled in one `if/else` block instead of two separate RUN commands.
+3. **OV cache at `/app/ov_cache`:** Moved from `/tmp/ov_cache` for consistency and to avoid potential noexec issues.
+4. **`# syntax=docker/dockerfile:1`:** Required as first line for cross-version BuildKit compatibility.
+
+## Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| .venv layer | ~4.1 GB compressed | ~200 MB compressed |
+| Build stages | 2 | 1 |
+| Python symlink hack | Required | Eliminated |
+
+## Dependencies
+
+This is a **breaking change pair** — the base image must be updated to provide `/app/.venv` before the app Dockerfile will build. Coordination tracked via:
+- Base: jmservera/embeddings-server-base#5
+- App: jmservera/aithena#1328
+
+---
+
+# Decision: Base image uses /app/.venv with uv
+
+**Author:** Parker (Backend Dev)
+**Date:** 2026-03-31T13:16:00Z
+**Status:** Implemented
+
+## Context
+
+The embeddings-server base image previously installed heavy Python packages (torch, sentence-transformers, nvidia-*, etc.) into system site-packages via `pip install`. The app image then had to COPY the entire ~4GB .venv from a build stage, creating a massive duplicate layer.
+
+## Decision
+
+Both base image Dockerfiles (`Dockerfile` and `Dockerfile.openvino`) now:
+
+1. **Install packages into `/app/.venv`** using `uv venv` + `uv pip install` instead of system `pip`
+2. **Use BuildKit `--mount=from`** to transiently mount the `uv` binary — it never exists in the final image
+3. **Create `app:1000` user** that owns `/app` — consistent with the app image's runtime user
+4. **Keep `/models` root-owned** with `chmod a+rX` to avoid duplicating the ~5GB model layer via chown
+5. **Provide `/models/.cache`** with `app:app` ownership for OpenVINO/HuggingFace cache writes
+
+## Consequences
+
+- The app Dockerfile (in aithena) **must** be updated to use `uv sync --inexact` instead of the current multi-stage COPY pattern. This is a coordinated change.
+- The `# syntax=docker/dockerfile:1` directive is now required (first line of each Dockerfile) to enable BuildKit mount syntax.
+- `uv` is never present at runtime — any debugging requiring package installs must use a temporary mount or exec into the container with a different approach.
+- The openvino variant now uses `app:1000` instead of the base image's `openvino` user, which is a breaking change for anything that depended on that user identity.
+
+## Impact on Team
+
+- **Brett (Infra):** This implements the prerequisite from his BuildKit mount analysis. The app Dockerfile changes can now proceed.
+- **Lambert (Tester):** Base image rebuild required before testing the full optimization pipeline.
+- **Dallas (Frontend):** No impact.
+
+---
+
+# User Directive: Base image Dockerfiles should use proper files instead of inline Python
+
+**Date:** 2026-03-31T13:16:00Z
+**By:** jmservera (via Copilot)
 
 ## Directive
 
-"We are not going to have a side by side comparer as we already decided to move to the new model directly." The e5-base benchmark showed clear superiority. The stack moves directly to multilingual-e5-base via PR #964.
-
-## Context
-
-A/B testing infrastructure was prepared for user-facing comparison of distiluse-base vs multilingual-e5-base embeddings. However, internal benchmarks demonstrated e5-base superiority across all metrics, eliminating the need for end-user A/B evaluation.
-
-## Decision
-
-- Close all v1.14.0 A/B evaluation issues (#900-918) as "not planned"
-- Mark v1.14.0 milestone complete
-- Proceed with e5-base deployment via #964 (no dual-model production stack)
-- Dual-model infrastructure remains available for future testing/rollback scenarios
-
----
-
-
----
-
-## Decision: Thumbnail Volume Permission Handling
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2026-03-24
-**Status:** Implemented (PR #1090)
-**Context:** Issue #1089
-
-### Problem
-
-Pre-release log analyzer flags `Permission denied: '/data/thumbnails/'` errors from document-indexer as security findings. These are caused by missing directory ownership in the Dockerfile — the named volume is root-owned but the container runs as UID 1000.
-
-### Decision
-
-1. **Allowlist rule:** `security:*permission denied*/data/thumbnails/*=ignore` — thumbnail generation is non-critical; indexing succeeds without thumbnails
-2. **Dockerfile fix:** `RUN mkdir -p /data/thumbnails && chown app:app /data/thumbnails` — named volumes inherit image layer permissions on first creation
-
-### Rationale
-
-- Thumbnail failures don't block document indexing (non-critical feature)
-- The Dockerfile fix is the correct infrastructure-level approach for named volume permissions
-- The allowlist provides defense-in-depth for CI environments where volumes may not initialize cleanly
-
-### Impact
-
-- Unblocks v1.15.0 release (PR #1088)
-- Pattern applies to any future service that writes to named volumes as non-root
-
----
-
-# User directive: review PR comments before merging
-
-**Date:** 2026-03-24T21:55:00Z  
-**Author:** Juanma (via Copilot)  
-**Status:** Proposed
-
-## Context
-PR #1095 was merged with 8 unaddressed review comments. The user has requested that this must not happen again.
-
-## Decision
-Always review PR comments before merging. Never merge a PR with unresolved review threads.
-
-## Rationale
-Ensuring all review comments are addressed before merging prevents regressions, maintains code quality, and respects reviewer feedback, aligning with the user's explicit request after the PR #1095 incident.
-
----
-
-# Decision: Admin Portal React Migration Architecture
-
-**Date**: 2025-07-18
-**Author**: Newt (Product Manager)
-**Status**: Proposed
-**Requested by**: Juanma (jmservera)
-
-## Context
-
-The admin portal (`src/admin/`) was originally a standalone Streamlit (Python) app with 7 pages. The `streamlit-admin` Compose service has since been removed and nginx redirects `/admin/streamlit` → `/admin`, but the `src/admin/` source tree is retained as reference. The React UI (`src/aithena-ui/`) already has 3 admin pages (`/admin`, `/admin/users`, `/admin/backups`). For v2.0, we need to complete the migration of all remaining Streamlit admin features into React.
-
-## Decision
-
-**Integrate admin pages into the existing `aithena-ui` React application** as `/admin/*` routes, rather than building a separate React admin application.
+Base image Dockerfiles should use proper `pyproject.toml` and `.py` script files for model download/verification instead of inline Python in RUN commands. No more writing Python code directly into the console in Dockerfile RUN instructions.
 
 ## Rationale
 
-1. **Infrastructure already exists**: `AdminRoute` component, `AuthContext`, `apiFetch` API layer, admin hooks, and tab navigation are all in place.
-2. **No duplication**: A separate app would duplicate auth, routing, theming, i18n, and build tooling.
-3. **Single deployment artifact**: One nginx container serves everything — simpler ops.
-4. **Lazy loading**: Admin pages are code-split, so they don't affect search page performance.
-5. **Precedent**: The existing `/admin`, `/admin/users`, and `/admin/backups` pages already follow this pattern.
+Inline Python in Dockerfiles is:
+- Fragile and error-prone (escaping issues, shell interpretation)
+- Hard to maintain and review
+- Not testable independently
+- Violates separation of concerns (build config vs. build logic)
 
-## Implications
+Proper files are cleaner, more maintainable, and testable.
 
-- Admin pages share the same build pipeline, test suite, and deployment as the main UI
-- An `AdminLayout.tsx` component with sidebar sub-navigation will wrap all admin routes
-- Four new backend API endpoints are required in `solr-search` (queue-status, indexing-status, logs, infrastructure)
-- Docker socket mount moves from Streamlit container to `solr-search` backend (for log API)
-- The Streamlit `streamlit-admin` service is removed from Docker Compose in v2.0
+## Implementation
 
-## Alternatives Considered
+Both base image Dockerfiles should extract model download/verification logic into:
+- `scripts/download_models.py` — handles model fetching, checksums, cache population
+- `scripts/verify_models.py` — validates model files, checksums, integrity
+- `pyproject.toml` — declares these as build-time dependencies or scripts
 
-1. **Separate React app** (`admin-ui/`): More isolation but duplicates auth/routing/theming. Rejected.
-2. **Micro-frontend**: Over-engineered for a single-tenant on-premises app. Rejected.
-3. **Keep Streamlit**: Maintains tech stack split and Docker socket security concern. Rejected.
-
-## Full PRD
-
-See `docs/prd/admin-react-migration.md` for the complete Product Requirements Document including feature inventory, API requirements, migration phases, and success metrics.
----
-
-# Decision: Thumbnail URL Prefix in Search API
-
-**Author:** Parker (Backend Dev)  
-**Date:** 2026-03-25  
-**Status:** Implemented (PR #1139)  
-**Context:** Issue #1137
-
-## Problem
-
-Thumbnail URLs stored in Solr are relative paths (e.g., `folder/book.pdf.thumb.jpg`). The search API returned these as-is, but the frontend uses them directly in `<img src>`. Without a `/thumbnails/` prefix, the browser resolved them as relative URLs against the current page, hitting the SPA catch-all instead of the nginx static-file location block.
-
-## Decision
-
-The search API now prefixes relative thumbnail paths with `/thumbnails/` via `_thumbnail_url()` in `search_service.py`. Absolute URLs (http/https) and already-prefixed paths (starting with `/`) are passed through unchanged.
-
-## Rationale
-
-- The backend is the right place to apply URL prefixes because it knows the routing scheme
-- The frontend should receive ready-to-use URLs without needing path manipulation
-- Preserving absolute URLs ensures backward compatibility with any externally-hosted thumbnails
-- The nginx location block `^/thumbnails/(.+\.thumb\.jpg)$` expects this prefix
-
-## Impact
-
-- All search, books, and similar-books responses now return `/thumbnails/`-prefixed URLs
-- Frontend components (`BookCard`, `BookDetailView`) work without changes
-- nginx correctly routes to `/data/thumbnails/` filesystem path
-
----
-
-# Decision: Bug Triage for v1.16.0 (2026-03-25)
-
-**Author:** Ripley (Project Lead)  
-**Date:** 2026-03-25T15:30Z  
-**Requested by:** Juanma (jmservera)  
-**Status:** DECIDED
-
-## Context
-
-Three new bugs submitted for triage with no assigned milestones:
-- #1137 — Thumbnails not loaded in UI (squad:parker)
-- #1138 — Admin dashboard queued/processed/failed list not paged (squad:dallas)
-- #1136 — RabbitMQ deprecation warning (squad:lambert)
-
-## Decision
-
-All three bugs assigned to **v1.16.0 milestone**.
-
-### Priority Ranking (for Ralph's backlog)
-
-1. **#1137 (Thumbnails)** — Parker | Medium severity | Low–Medium effort
-   - User-visible feature broken; nginx route or volume mount issue
-   - Investigate static `/thumbnails` serving; verify Docker volume creation
-
-2. **#1138 (Admin pagination)** — Dallas | Medium severity | Low effort
-   - Scales with data size; missing React pagination component
-   - **Note:** Streamlit admin deprecated in v2.0; consider deferred if v2.0 React migration imminent
-
-3. **#1136 (RabbitMQ warning)** — Lambert (investigation) → Parker (fix) | Low severity | Very Low effort
-   - Log noise only; blocks future RabbitMQ upgrades
-   - Add `deprecated_features.permit.management_metrics_collection` config before next patch release
-
-### Label Actions
-
-- Removed `go:needs-research` from all three (clear enough to implement immediately)
-- Preserved squad routing: Parker (backend), Dallas (frontend), Lambert (testing)
-
-## Rationale
-
-- **User impact ordering:** Visible bugs before warnings
-- **#1137 first:** Broken feature, direct user impact
-- **#1138 second:** Unscalable UX, but Streamlit admin EOL in v2.0 (risk: low-ROI effort if timeline tight)
-- **#1136 last:** No functional impact; maintenance task
-
-## Risk
-
-#1138 (admin paging) may be low-ROI if v2.0 React migration happens soon. Recommend Ralph check with Newt on admin-react-migration timeline before committing.
-
----
-
-# Decision: Pre-built Base Image for embeddings-server Model Cache
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2025-07-24
-**Status:** Implemented (PR #1243)
-**Context:** Issue #1231
-
-## Problem
-
-The embeddings-server Dockerfile's Stage 1 (`model-downloader`) installed sentence-transformers and downloaded the multilingual-e5-base model (~850 MB) on every build. This took ~15-20 minutes and was the dominant cost in CI, even when only application code changed.
-
-## Decision
-
-Replace the `model-downloader` build stage with a `FROM` reference to a pre-built base image (`ghcr.io/jmservera/embeddings-server-base:3.12-slim-multilingual-e5-base`) that caches the model at `/models/huggingface` and `/models/sentence_transformers`.
-
-The base image is maintained in a separate repo (`jmservera/embeddings-server-base`) and only needs to be rebuilt when the model version changes.
-
-## Rationale
-
-- **Build time:** Code-only rebuilds drop from ~20 min to ~2 min
-- **Layer caching:** Docker/GHCR caches the model layers; only changed app code layers are rebuilt
-- **Separation of concerns:** Model versioning is decoupled from application code changes
-- **No HF_TOKEN secret needed at build time:** The model is pre-baked in the base image
-
-## Impact
-
-- `src/embeddings-server/Dockerfile` Stage 1 is now a single `FROM` line
-- `COPY --from=model-downloader` → `COPY --from=model-cache`
-- Stages 2-4 (dependencies, app-builder, runtime) are unchanged
-- CI builds that only change application code skip the model download entirely
-- When the model needs updating, rebuild and push the base image first, then update the tag in the Dockerfile
-
----
-
-# Decision: GPU acceleration via Compose override files (not profiles)
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2026-07-26
-**Status:** Implemented (PR #1213)
-**Context:** Issues #1153, #1154 (v1.17.0 GPU acceleration PRD)
-
-## Problem
-
-Need to support NVIDIA and Intel GPU acceleration for `embeddings-server` without breaking the default CPU-only deployment.
-
-## Decision
-
-Use **Compose override files** (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) instead of Compose profiles.
-
-## Rationale
-
-- Consistent with existing overlay pattern (`docker-compose.ssl.yml`, `docker-compose.e2e.yml`)
-- Override files are self-documenting with prerequisite comments and usage examples
-- No service name confusion (profiles create separate services like `embeddings-server-nvidia`)
-- Override files can add `deploy.resources.reservations.devices`, `devices`, `group_add`, and `build.args` — all merge cleanly
-- Base compose adds `DEVICE=${DEVICE:-cpu}` and `BACKEND=${BACKEND:-torch}` — zero change for existing users
-
-## Impact
-
-- Parker/Dallas: `DEVICE` and `BACKEND` env vars are now available in the embeddings-server container
-- Installer scripts may need updating to support `-f docker-compose.nvidia.override.yml` flag
-- Future: `docker-compose.prod.yml` should also support the GPU overrides (verified: works with `-f docker-compose.prod.yml -f docker-compose.nvidia.override.yml`)
-
----
-
-# Decision: Local Path Loading for Offline HF Models (Supersedes snapshot_download)
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2026-07-28
-**Status:** Implemented (base image: main, aithena: PR #1259)
-**Context:** OpenVINO offline loading fails even with `snapshot_download()` caching
-
-## Problem
-
-The first fix (calling `snapshot_download()` before `SentenceTransformer()`) didn't work. While `snapshot_download()` caches model files, `optimum-intel`'s OpenVINO loading path makes an API call (`tree/main?recursive=True`) that is NOT covered by the snapshot cache. The offline verification step we added caught this failure at build time.
-
-## Decision
-
-1. **Save models to a known local directory** using `model.save('/models/sentence_transformers/{model_name}')` instead of relying on HF Hub cache.
-2. **Load from local path at runtime** — when a directory exists at the expected path, pass it to `SentenceTransformer()` instead of the model name. Loading from a local directory bypasses ALL HF Hub API calls.
-3. **Remove `snapshot_download()`** — unnecessary when saving to a local directory.
-4. **Keep the offline verification step** — validates the local path loads correctly with `HF_HUB_OFFLINE=1`.
-
-## Rationale
-
-- A local directory path is the ONLY reliable way to get zero HF Hub calls with `optimum-intel` + openvino
-- `SentenceTransformer('/path/to/model')` never touches the Hub — no metadata, no tree listings, no API calls
-- Backward-compatible: if the local path doesn't exist (no base image), falls back to hub download
-- The offline verification step caught the `snapshot_download()` failure, proving its value as a build-time safety net
-
-## Impact
-
-- Base image (`embeddings-server-base`): Dockerfile updated, pushed to main
-- Aithena (`src/embeddings-server/main.py`): Checks for local path before hub fallback (PR #1259)
-- Pattern applies to any future base image that pre-caches HF models for offline use
-
----
-
-# Decision: Similar Books Endpoint: Chunk ID Resilience
-
-**Date:** 2026-03-28  
-**Author:** Parker  
-**Status:** Implemented (PR #1262, #1263; tagged v1.17.0)
-
-## Context
-
-Semantic search returns chunk document IDs (e.g., `abc123_chunk_0000`) to the frontend because embeddings live on chunk documents, not parent book docs. When users click "similar books" from a semantic search result, the UI was sending the chunk ID to the endpoint, which expected a parent book ID.
-
-## Decision
-
-1. **Frontend data enrichment:** Added `parent_id` field to `normalize_book()` response, so the frontend receives both the chunk ID and parent book ID.
-
-2. **Backend resilience:** The `similar_books` endpoint now detects chunk IDs (by checking for `"_chunk_"` in the ID) and automatically resolves them to the parent book ID before proceeding.
-
-## Why This Matters
-
-- **User experience:** "Similar books" works seamlessly from semantic search results
-- **API robustness:** Callers don't need to know whether they have a chunk ID or parent ID
-- **Data model transparency:** The parent/chunk separation is an internal Solr implementation detail that shouldn't leak into the user-facing API
-
-## Files Changed
-
-- `src/solr-search/search_service.py` — `normalize_book()` now returns `parent_id`
-- `src/solr-search/main.py` — `similar_books()` resolves chunk IDs to parent IDs
-- `src/solr-search/tests/test_search_service.py` — test updated for new field
-- `src/aithena-ui/src/pages/SearchPage.tsx` — uses `parent_id` for similar books
-- `src/aithena-ui/src/Components/BookDetailView.tsx` — similar books call updated
-- `src/aithena-ui/src/hooks/search.ts` — type definitions include `parent_id`
-
----
-
-# Decision: GPU Config Design for embeddings-server
-
-**Author:** Parker (Backend Dev)
-**Date:** 2026-03-25
-**Status:** Proposed (PR #1215)
-**Context:** Issues #1152, #1151 — v1.17.0 GPU Acceleration PRD
-
-## Decision
-
-GPU device and backend selection uses two environment variables (`DEVICE`, `BACKEND`) with defaults that produce identical behavior to pre-change code. OpenVINO is an optional Dockerfile build arg, not a runtime dependency.
-
-## Key Design Choices
-
-1. **Kwargs only when non-default:** `DEVICE=cpu` and `BACKEND=torch` pass zero extra kwargs to SentenceTransformer. This guarantees backward compatibility without conditional logic in downstream consumers.
-
-2. **`DEVICE=auto` maps to `None`:** Lets PyTorch's internal device detection run (CUDA > CPU fallback). Useful for environments where GPU availability isn't known at config time.
-
-3. **OpenVINO as build arg:** `INSTALL_OPENVINO=true` installs ~150MB of optional deps into `.venv`. Not in `pyproject.toml` because it's an acceleration backend, not a core dependency. This keeps the default image slim.
-
-4. **Endpoint exposure:** `/health` and `/version` include `device` and `backend` fields so operators can verify GPU config without checking env vars directly.
-
-## Impact
-
-- Docker Compose files may add `DEVICE` and `BACKEND` env vars for GPU-enabled deployments
-- CI/CD pipelines that build embeddings-server can pass `--build-arg INSTALL_OPENVINO=true` for Intel GPU targets
-- No changes needed for existing CPU-only deployments
-
----
-
-# Decision: Three-Mode Pre-release Trigger Pattern
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2026-07-26
-**Status:** Implemented (PR #1248)
-**Context:** Issue #1246
-
-## Problem
-
-The pre-release workflow (`pre-release.yml`) previously had only two activation modes:
-1. `pull_request: branches: [main]` — Dry-run on release PR validation
-2. `workflow_dispatch` — Manual trigger with custom version/RC number
-
-This meant that on every dev push (after PR merge), the team had to manually trigger a workflow dispatch to publish RC containers. This was error-prone and created friction in the release pipeline.
-
-## Decision
-
-Added a third trigger mode: **`push: branches: [dev]`** that automatically builds and publishes RC containers whenever code is merged to dev.
-
-### Three-Mode Design
-
-| Mode | Trigger | Behavior | Use Case |
-|------|---------|----------|----------|
-| **Dev Publish** | `push: branches: [dev]` | Build + push RC containers | Automatic on every merge to dev |
-| **Release Validation** | `pull_request: branches: [main]` | Build only (dry-run) | Validate code builds before release tag |
-| **Manual Override** | `workflow_dispatch` | Build + push with custom version | Backports, off-schedule releases |
-
-### Implementation
-
-**File:** `.github/workflows/pre-release.yml`
-
-1. Added `push: branches: [dev]` to `on:` section
-2. Updated `prepare` job condition to allow `push` events
-3. Existing conditions handle the rest (build-and-push, smoke-test)
-
-## Rationale
-
-1. **Reduces toil:** Eliminates manual workflow dispatch for routine RC builds
-2. **Faster feedback:** Developers get RC containers immediately after merge, not after manual trigger
-3. **Backward compatible:** Existing dry-run and manual override flows unchanged
-4. **Natural condition mapping:** The existing `event_name != 'pull_request'` condition naturally handles both modes
-
-## Impact
-
-- **Dev workflow:** Merging to dev now automatically triggers RC container publication
-- **Release process:** Main branch PRs still validate with dry-run builds (no change)
-- **Manual override:** `workflow_dispatch` still available for special releases (no change)
-- **Smoke tests:** Now run for `push` events (advisory status)
-
----
-
-# Decision: Remove INSTALL_OPENVINO build arg, use system-site-packages
-
-**Author:** Brett (Infrastructure Architect)
-**Date:** 2026-07-26
-**Status:** Implemented (PR #1257)
-**Context:** Juanma request — simplify openvino build pipeline
-
-## Problem
-
-The `INSTALL_OPENVINO=true` build arg caused `uv sync --extra openvino` to reinstall `optimum-intel` and `openvino` inside the .venv, even though the openvino base image already ships those packages at the system Python level. This created duplicate packages, version drift risk, and unnecessary build complexity.
-
-## Decision
-
-Remove `INSTALL_OPENVINO` entirely. Instead, enable `include-system-site-packages = true` in the .venv's `pyvenv.cfg` so it inherits packages from the base image. The `BASE_TAG` build arg is the sole mechanism for selecting the openvino variant.
-
-## Rationale
-
-- Single source of truth: openvino packages come from the base image only
-- Simpler Dockerfile: no conditional RUN block
-- Smaller .venv: no duplicated openvino wheels
-- `BASE_TAG` already selects the right base image — a second build arg was redundant
-
-## Impact
-
-- `docker-compose.intel.override.yml` no longer passes `INSTALL_OPENVINO`
-- CI matrix (`build-containers.yml`) no longer passes `INSTALL_OPENVINO`
-- `pyproject.toml` no longer has `[project.optional-dependencies] openvino`
-- Docs updated to remove `INSTALL_OPENVINO` references
-- **No runtime behavior change** — openvino packages are still available in the container
-
----
-
-# Decision: GPU Base Image Variants & Env-Driven Platform Selection
-
-**Author:** Ripley (Lead)  
-**Date:** 2026-07-27  
-**Status:** Proposed  
-**Requested by:** Juanma (jmservera)  
-**Context:** v1.17.0 GPU acceleration, follows decisions in `brett-embeddings-base-image.md`, `brett-gpu-compose.md`, `parker-gpu-config.md`, `ripley-gpu-prd.md`
-
-### Part 1: embeddings-server-base repo — OpenVINO variant image
-
-**Build two tags** from the `embeddings-server-base` repo:
-
-| Tag | Contents | Size (est.) |
-|---|---|---|
-| `3.12-slim-multilingual-e5-base` | Python 3.12-slim + cached model (~850 MB) | ~1.2 GB |
-| `3.12-slim-multilingual-e5-base-openvino` | Same as above + `optimum-intel` + `openvino` pre-installed | ~1.5 GB |
-
-### Part 2: aithena repo — Dockerfile changes
-
-- `ARG BASE_TAG` replaces the hardcoded base image reference
-- The `INSTALL_OPENVINO` build arg and conditional `pip install` are removed
-- An optional `cp` step makes base-image OpenVINO visible inside `.venv` (safe no-op on CPU image)
-
-### Part 3: aithena repo — docker-compose changes
-
-**Introduce `GPU_PLATFORM` env var** (or explicit `EMBEDDINGS_BASE_TAG`) that controls base image selection.
-
-**Mapping table:**
-
-| `GPU_PLATFORM` | `EMBEDDINGS_BASE_TAG` | `DEVICE` | `BACKEND` | Override file needed? |
-|---|---|---|---|---|
-| `cpu` (default) | `3.12-slim-multilingual-e5-base` | `cpu` | `torch` | No |
-| `nvidia` | `3.12-slim-multilingual-e5-base` | `cuda` | `torch` | Yes — `docker-compose.nvidia.override.yml` |
-| `intel` | `3.12-slim-multilingual-e5-base-openvino` | `xpu` | `openvino` | Yes — `docker-compose.intel.override.yml` |
-
-### Part 4: .env.example additions
-
-```bash
-# ── GPU Platform ──────────────────────────────────────────────────────────────
-# Set these for GPU-accelerated embeddings. Default is CPU-only (no changes needed).
-DEVICE=cpu
-BACKEND=torch
-EMBEDDINGS_BASE_TAG=3.12-slim-multilingual-e5-base
-```
-
-### Part 5: docker-compose.prod.yml changes
-
-Pre-built GHCR image already contains the correct base. CI publishes two image variants:
-- `ghcr.io/jmservera/aithena-embeddings-server:1.17.0` (CPU/NVIDIA — torch only)
-- `ghcr.io/jmservera/aithena-embeddings-server:1.17.0-openvino` (Intel — includes OpenVINO)
-
-## Migration Path
-
-### For existing CPU users
-**Zero changes required.** All defaults remain `cpu`/`torch`/base tag without `-openvino`.
-
-### For existing NVIDIA GPU users
-1. Add to `.env`: `DEVICE=cuda` and `BACKEND=torch`
-2. Keep using `-f docker-compose.nvidia.override.yml` for device passthrough
-
-### For existing Intel GPU users
-1. Add to `.env`: `DEVICE=xpu`, `BACKEND=openvino`, `EMBEDDINGS_BASE_TAG=3.12-slim-multilingual-e5-base-openvino`
-2. Keep using `-f docker-compose.intel.override.yml` for device passthrough
-
----
-
-# Decision: GPU Acceleration PRD for v1.17.0
-
-**Author:** Ripley (Lead)  
-**Date:** 2026-03-25  
-**Status:** Proposed  
-**Impact:** Architecture, release planning, documentation updates  
-**Related Issues:** #1148–#1161 (14 work items), PRD: docs/prd/gpu-acceleration.md
-
-## Problem
-
-The embeddings-server runs on **CPU only**, limiting indexing throughput for users with available GPU hardware (NVIDIA, Intel). Indexing 50,000 documents takes 8–12 hours on CPU; with GPU it could take 2–4 hours (2–4× improvement).
-
-## Decision
-
-**Implement single-image, environment-variable-driven GPU acceleration:**
-
-1. **Single Dockerfile** — One embeddings-server image with torch+cu128, OpenVINO (~150 MB), and sentence-transformers with native device/backend support
-
-2. **Environment Variables for Configuration:**
-   - `DEVICE` (auto/cpu/cuda/xpu) — controls PyTorch device selection; `auto` is default with fallback to CPU
-   - `BACKEND` (torch/openvino) — controls inference engine; `torch` is default for NVIDIA/CPUs, `openvino` for Intel GPUs/CPUs
-
-3. **Docker Compose override files for Hardware-Specific Setup:**
-   - `docker-compose.nvidia.override.yml` activates nvidia-runtime and GPU capability directives
-   - `docker-compose.intel.override.yml` activates /dev/dri device passthrough for Intel GPU
-   - Default (no override) = CPU-only, unchanged behavior
-
-4. **Auto-Fallback Strategy:**
-   - If `DEVICE=auto` and CUDA unavailable → fall back to CPU (graceful, logged)
-   - If `BACKEND=openvino` unavailable → fall back to torch
-
-## Rationale
-
-- Single image with env var configuration is standard Docker practice
-- SentenceTransformer natively supports device/backend parameters (zero code changes)
-- torch+cu128 is already installed (zero cost addition)
-- OpenVINO adds ~150 MB (acceptable)
-
-## Impact
-
-- **Dockerfile:** Add OpenVINO package
-- **Python code:** Modify model initialization to accept DEVICE/BACKEND env vars (4–5 line change)
-- **Docker Compose:** Add override files with device passthrough directives
-- **Documentation:** Add GPU acceleration section to user/admin manuals
-
-## Acceptance Criteria
-
-✅ **Must-Have:**
-- DEVICE env var implemented (auto/cpu/cuda/xpu)
-- BACKEND env var implemented (torch/openvino)
-- OpenVINO integrated (binary size <= 300 MB added)
-- Docker Compose override files for nvidia and intel
-- E2E test on NVIDIA shows 2–4× throughput improvement
-- E2E test on Intel GPU shows 1.5–2× improvement
-- CPU-only deployment backward compatible (zero regressions)
-- User and admin manuals updated with GPU setup instructions
-
----
-
-# Decision: v1.18.0 PRD Batch Decomposition & Milestone Assignment
-
-**Author:** Ripley (Project Lead)  
-**Date:** 2026-03-26  
-**Status:** DECIDED  
-**Requested by:** Juanma (jmservera)
-
-## Context
-
-Four PRDs submitted for decomposition (CI/CD, stress testing, folder facet, BCDR). The milestones referenced (v1.9.0–v1.11.0) are outdated. v1.16.0 just released; v1.17.0 active with 15 GPU issues.
-
-## Decision
-
-All 25 work items (8 CI/CD, 6 stress testing, 4 folder facet, 7 BCDR) assigned to **v1.18.0**, a new infrastructure-focused milestone.
-
-### Milestone Rationale
-
-- **v1.17.0** already has 15 GPU acceleration issues. Adding 25 more infrastructure items = 40-issue milestone with split focus.
-- **v1.18.0** provides a dedicated lane for infrastructure, tooling, and performance work.
-- **Scope:** Non-feature work — operational, testing, and search-infrastructure focused.
-
-### Per-PRD Assignments
-
-| PRD | Issues | Owner | Effort | Type |
-|-----|--------|-------|--------|------|
-| CI/CD Workflow Review | #1188–#1195 (8) | Brett | ~2 weeks | Tooling consolidation |
-| Stress Testing Suite | #1196–#1201 (6) | Parker | ~5 weeks (phased) | Performance infrastructure |
-| Folder Path Facet | #1202–#1205 (4) | Ash (backend), Dallas (UI) | ~2 weeks | Search feature |
-| BCDR Plan | #1206–#1212 (7) | Brett | ~3 weeks | Operational resilience |
-
-## Key Technical Decisions
-
-### 1. Bandit as Hard Blocker
-
-`security-bandit.yml` will enforce Bandit SAST findings as a **required** status check for dev and main PRs (currently non-blocking).
-
-**Rationale:** Prevents critical vulnerabilities from being merged; Bandit is fast (~30s) and rarely produces false positives on this codebase.
-
-### 2. Phase-Gated Stress Testing
-
-Stress testing is strictly phase-gated: Phase 1 (infrastructure setup) must complete before Phase 2–6 benchmarks can run.
-
-**Rationale:** Phase 1 builds shared test fixtures, data generators, Docker stats collectors; all subsequent phases depend on these foundations.
-
-### 3. BCDR Tiers with RPO/RTO Targets
-
-Three-tier backup system:
-- **Critical** (auth DB, collections DB, secrets): RPO < 1 hour, RTO < 5 min, every 30 min
-- **High** (Solr + ZooKeeper): RPO < 24 hours, RTO 15–60 min, daily 2 AM
-- **Medium** (Redis + RabbitMQ): RPO < 4 hours, RTO 5–15 min, daily 3 AM
-
-**Rationale:** Tiered approach keeps backup costs reasonable while protecting against realistic failure scenarios.
-
-### 4. Folder Facet as Zero-Schema Work
-
-Folder path facet requires **zero schema changes** — the `folder_path_s` field is already indexed and stored.
-
-**Rationale:** Backend work is trivial (3-line addition); frontend work is medium (hierarchical tree component); no risk of Solr reindexing or downtime.
-
-## Acceptance Criteria
-
-- [ ] All 25 issues assigned to v1.18.0 milestone
-- [ ] Each issue has clear acceptance criteria and PRD reference
-- [ ] Team routing is clear (Brett: CI/CD + BCDR, Ash: folder facet backend, Dallas: UI, Parker: stress testing)
-- [ ] Phase dependencies documented (stress testing Phase 1 blocks 2–6; BCDR scripts block restore)
-- [ ] User review confirms scope and priorities before squad assignment
-
+Then in Dockerfile: `RUN uv run python scripts/download_models.py` (clean, testable, auditable).

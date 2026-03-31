@@ -1,5 +1,11 @@
 # Parker — History
 
+## Cross-Agent Notes
+
+**2026-03-31 — Brett (Infrastructure Architect):** Recommended Approach 3 (BuildKit `--mount=from` bind mount) for #1325 embeddings-server layer optimization. Analysis shows ~95% reduction (4.1GB → 200MB compressed) with zero tools in runtime. Prerequisite: rebuild base image to own `/app/.venv` with heavy deps (torch, nvidia-*, triton, sentence-transformers). This is a one-time change for both slim and openvino variants. Decision document in decisions.md.
+
+---
+
 ## Core Context (v1.10.0)
 
 **Backend Service Architecture:**
@@ -118,6 +124,16 @@
 **Pattern:** `apiFetch` treats both 401 and 403 as auth failures → clears token → redirect to login → re-authenticate → same 401 → infinite loop. Any new auth gate must either accept JWT or return a non-auth error code.
 
 **Recurring pattern update:** Added to watch-for list: auth gates that only check one credential type (API key) while frontend uses another (JWT). Always verify both code paths.
+
+### Solr Auth Bootstrap (#1287, 2026)
+
+**Root cause (dual):** `solr auth enable` creates the admin user in BasicAuth but doesn't create the user-role mapping, so all RBAC-gated operations fail. Additionally, the readonly user was assigned the `search` role, but security.json uses `readonly` as the role name for read permissions.
+
+**Fix:** Added explicit `set-user-role` call for admin user after `solr auth enable`. Changed readonly role from `["search"]` to `["readonly"]`. Applied to both docker-compose.yml and docker-compose.prod.yml.
+
+**Installer fix:** Added SOLR_ADMIN_USER/PASS and SOLR_READONLY_USER/PASS to the installer's credential generation pipeline, following the same pattern as RabbitMQ (generate on first run, rotate insecure defaults, preserve secure passwords).
+
+**Key lesson:** `solr auth enable` only bootstraps BasicAuth credentials and default RBAC rules — it does NOT assign the admin role to the created user. Always verify role assignments explicitly after enabling auth. Also, role names in `set-user-role` must match exactly what security.json permissions reference.
 
 ### v1.10.0 Wave 0 Bugs (2026-03-20)
 
@@ -399,3 +415,114 @@ if "_chunk_" in document_id:
 - The frontend needs both the chunk ID (for displaying the specific result) AND the parent ID (for feature navigation like "similar books")
 - Backend endpoints should be resilient to receiving either parent or chunk IDs — detect and resolve appropriately
 - The Solr data model separation (metadata on parents, embeddings on chunks) means we need to handle both ID types throughout the stack
+
+### Collection Card Unification (#1233, 2026-03-28)
+**Context:** Collections page used a separate, minimal `CollectionItemCard` while Library used the feature-rich `BookCard`. Issue requested unifying the visual layout.
+
+**Changes:**
+- Backend: Extended `_enrich_collection_items` to fetch `thumbnail_url_s` from Solr and compute `document_url` via `build_document_url()` — requires passing `Request` through the call chain
+- Frontend: Refactored `CollectionItemCard` to reuse BookCard's CSS classes (`book-card-body`, `book-card-thumbnail`, `book-meta`, `open-pdf-btn`) while keeping collection-specific features (NoteEditor, remove button)
+- Added PdfViewer integration to `CollectionDetailPage` by constructing minimal `BookResult` from `CollectionItem`
+
+**Key Learning:**
+- PdfViewer accepts `BookResult` but only uses `document_url`, `title`, and `pages` — can construct a minimal compatible object from `CollectionItem`
+- Reusing CSS classes across components (`.book-card-*` in `CollectionItemCard`) provides visual consistency without needing a shared base component
+- The `_enrich_collection_items` function is the single place where Solr metadata is joined onto collection items — extending it is the correct backend approach
+
+### Shared Auth Library Extraction (#1288, 2026-07-09)
+Extracted password hashing and auth DB schema init from `src/solr-search/auth.py` into `src/aithena-common/` shared package. Installer now imports from `aithena_common` directly instead of `sys.path` hacking into solr-search. Created `installer/pyproject.toml` making the installer a proper uv project.
+
+**Key Learning:**
+- When extracting shared code, keep domain-specific logic (migrations, seeding, JWT) in the service; only move pure utilities (hashing, schema DDL)
+- Re-exported symbols from the shared lib need `# noqa: F401` in the consuming module to avoid ruff unused-import errors
+- The `init_auth_db` in solr-search wraps the common version to add migrations + seeding — clean delegation pattern
+- `uv sync` with editable path sources (`{ path = "...", editable = true }`) works well for monorepo shared packages
+
+## v1.18.1 Release (2026-03-29)
+
+### Issue #1287: Solr auth bootstrap — explicit role assignment
+
+**Completed:** 2026-03-29T10:10:00Z  
+**Tests:** 1026/1026 passing
+
+Fixed Solr's auth bootstrap entrypoint to explicitly assign roles after `solr auth enable`. Corrected readonly role from "search" (doesn't exist in security.json) to "readonly". Added Solr credential generation to installer pipeline.
+
+**Changes:**
+- `docker-compose.yml` + `docker-compose.prod.yml`: After `solr auth enable`, call `set-user-role` to assign `["admin"]` to admin user and `["readonly"]` to readonly user
+- `installer/` — Added Solr credential generation: `SOLR_ADMIN_USER`, `SOLR_ADMIN_PASS`, `SOLR_READONLY_USER`, `SOLR_READONLY_PASS` now generated and rotated on installer run
+
+**Key insight:** Solr auth lifecycle is: `solr auth enable` (create user) → `set-user-role` (assign permissions) → operations work. RBAC setup is now explicit and traceable.
+
+### Issue #1288: Extract Shared Auth Library (aithena-common)
+
+**Completed:** 2026-03-29T10:25:00Z  
+**Status:** All tests pass
+
+Extracted `aithena-common/` as shared Python package containing passwords and auth DB logic. Both installer and solr-search now depend on aithena-common via uv path sources. Removed sys.path hacking from installer.
+
+**Changes:**
+1. Created `src/aithena-common/` with `aithena_common/passwords.py` and `aithena_common/auth_db.py`
+2. Updated installer: Added `pyproject.toml`, removed sys.path manipulation, now uses `--project installer` for fallback
+3. Updated solr-search: Added aithena-common to dependencies; auth module imports from common
+
+**What stays in solr-search:** JWT creation/verification, user CRUD, migrations, seeding, password policy, FastAPI-specific auth logic.
+
+**Architecture:** Dependency inversion applied — all services depend inward on `aithena-common`. No cross-service coupling except via HTTP APIs.
+
+**Key pattern:** When extracting shared code, keep domain-specific logic (migrations, seeding, JWT) in the service; only move pure utilities (hashing, schema DDL). Use re-exports with `# noqa: F401` if needed.
+
+### Dependabot PR Routing in Heartbeat (2026-03-30)
+
+**Root cause:** When `ralph-triage.js` was extracted from inline workflow JS, the Dependabot PR routing logic was lost. The `isUntriagedIssue()` function filters out PRs (`if (issue.pull_request) return false`), so Dependabot PRs were never triaged.
+
+**Fix:** Added parallel Dependabot PR triage pipeline in `ralph-triage.js`:
+- `fetchDependabotPRs()` fetches open PRs from `dependabot[bot]` via Issues API
+- `classifyDependabotPR()` classifies by dependency domain (file patterns + title patterns)
+- Domain classification maps to squad members via routing rules and role-based fallback
+- Updated workflow permissions from `pull-requests: read` to `pull-requests: write`
+
+**Key lesson:** When refactoring inline workflow code into standalone scripts, audit all code paths — not just the primary one. The Dependabot PR path was a secondary code path that got silently dropped. Use the git history of the inline code as a checklist.
+
+**Pattern:** Domain-to-member mapping uses a two-tier strategy: (1) try routing rules from routing.md, (2) fall back to role-based matching from roster in team.md. This makes classification resilient to routing table format changes.
+
+### OpenVINO rc.3 vs rc.23 Container Comparison (2026-03-31)
+
+Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working) and rc.23 (broken). Found the root cause: the Dockerfile `chown` layer changed from `chown -R app:app /app /models` to `chown -R app:app /app && chmod -R a+rX /models`. This makes `/models` owned by `root:root` and non-writable by the `app` user, so any runtime cache/lock writes fail. Python packages and env vars are identical between versions. `model_utils.py` has new OpenVINO device routing logic but this is not the cause. Full findings in `.squad/decisions/inbox/parker-rc-comparison.md`.
+
+**Key lesson:** When optimizing Docker layers to avoid duplicating large directories (e.g. 5 GB model files), the `chmod a+rX` approach makes files readable but not writable. Libraries like OpenVINO and HuggingFace may need write access for runtime caches and lock files. A targeted fix (writable cache subdir + env var) is better than a blanket chown.
+
+### Base Image .venv Migration (#1325, 2026-07-16)
+
+**What:** Updated both Dockerfiles in `jmservera/embeddings-server-base` to install heavy Python packages (torch, sentence-transformers, etc.) into `/app/.venv` instead of system site-packages. This is a prerequisite for the app image to use `uv sync --inexact` (Approach 3 from Brett's BuildKit analysis).
+
+**Key changes:**
+- `pip install` → `uv venv /app/.venv` + `VIRTUAL_ENV=/app/.venv uv pip install --no-cache`
+- uv is BuildKit-mounted transiently (`--mount=from=ghcr.io/astral-sh/uv:0.11.2`), never in the image
+- Added `app:1000` user to both variants for consistent ownership with the app image
+- Openvino variant: replaced `openvino` user with `app:1000`, added `2>/dev/null || true` for idempotent user creation
+- `# syntax=docker/dockerfile:1` as first line enables BuildKit features
+
+**PR:** jmservera/embeddings-server-base#5
+
+**Key lesson:** When migrating from system pip to uv venv in a Docker image, remember that `VIRTUAL_ENV` env var tells `uv pip install` where to put packages — it doesn't auto-detect from the shell. Also, the openvino base image has its own user (`openvino`) that must be replaced, and `groupadd`/`useradd` need `2>/dev/null || true` guards since the uid/gid might already exist.
+
+---
+
+## 2026-03-31T13:16Z — Base Image Dockerfile Refactor Complete
+
+**Status:** ✅ PR jmservera/embeddings-server-base#5 opened. Both Dockerfiles updated. README updated.
+
+**What happened:**
+- Updated `Dockerfile` and `Dockerfile.openvino` to install heavy packages into `/app/.venv` (not system site-packages)
+- Created `app:1000` user (consistent with app image runtime user)
+- Added BuildKit `--mount=from` transient `uv` mounts (no runtime bloat)
+- Created `/models/.cache` with app:app ownership (fixes OpenVINO/HuggingFace cache writes)
+- Breaking change: openvino variant now uses `app:1000` instead of `openvino` user
+
+**Production impact:** ✅ User confirmed rc.32 (OpenVINO cache fix) working in production. No regressions.
+
+**Next step:** This PR must merge first; base images must be published to ghcr.io. Then Brett's app Dockerfile (PR #1328) can be merged.
+
+**Decision:** `.squad/decisions.md` updated with full rationale.
+
+**Cross-reference:** Brett's app image implementation (orchestration log 2026-03-31T13-16Z-brett-buildkit-dockerfile.md) is now unblocked pending this PR merge.
