@@ -1,34 +1,17 @@
+# syntax=docker/dockerfile:1
+
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG BASE_TAG=3.12-slim-multilingual-e5-base
 ARG INSTALL_OPENVINO=false
 
-# ── Stage 1: dependencies (changes when pyproject.toml / uv.lock change) ──
-FROM python:3.12-slim AS dependencies
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-WORKDIR /app
-
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --native-tls
-
-# Optionally install OpenVINO for Intel GPU support
-ARG INSTALL_OPENVINO=false
-RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
-      uv sync --frozen --no-dev --no-install-project --extra openvino --native-tls; \
-    fi
-
-# ── Stage 2: runtime (base image already contains the cached model) ──
-FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG} AS runtime
+FROM ghcr.io/jmservera/embeddings-server-base:${BASE_TAG}
 
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
+ARG INSTALL_OPENVINO
 
 LABEL org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/jmservera/aithena" \
@@ -61,12 +44,18 @@ RUN if ! id -u app >/dev/null 2>&1; then \
       useradd --system --uid 1000 --gid app --create-home app 2>/dev/null || useradd --system --gid app --create-home app; \
     fi
 
-COPY --from=dependencies --chown=app:app /app/.venv /app/.venv
+# Copy lock files first for cache invalidation
+COPY pyproject.toml uv.lock ./
 
-# Relink venv python to the runtime image's interpreter (the build stage
-# used python:3.12-slim at /usr/local/bin/python3 which doesn't exist here).
-RUN REAL_PYTHON="$(readlink -f "$(which python3)")"; \
-    ln -sf "$REAL_PYTHON" /app/.venv/bin/python
+# Install app-specific deps into the base image's .venv using --inexact
+# (preserves heavy pre-installed packages, only adds the delta).
+# uv is bind-mounted from its official image — never installed in the layer.
+RUN --mount=from=ghcr.io/astral-sh/uv:latest,source=/uv,target=/usr/local/bin/uv \
+    if [ "$INSTALL_OPENVINO" = "true" ]; then \
+      uv sync --frozen --no-dev --no-install-project --extra openvino --inexact --native-tls; \
+    else \
+      uv sync --frozen --no-dev --no-install-project --inexact --native-tls; \
+    fi
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
@@ -81,8 +70,8 @@ RUN chown -R app:app /app && chmod -R a+rX /models
 # Writable cache dir for OpenVINO compiled-model cache.
 # OpenVINO tries to create model_cache inside /models/ which is read-only.
 # Redirect via OPENVINO_CACHE_DIR to avoid permission errors (~4 KB layer).
-RUN mkdir -p /tmp/ov_cache && chown app:app /tmp/ov_cache
-ENV OPENVINO_CACHE_DIR=/tmp/ov_cache
+RUN mkdir -p /app/ov_cache && chown app:app /app/ov_cache
+ENV OPENVINO_CACHE_DIR=/app/ov_cache
 
 EXPOSE 8080
 
