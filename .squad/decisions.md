@@ -809,3 +809,79 @@ Both base image Dockerfiles should extract model download/verification logic int
 - `pyproject.toml` — declares these as build-time dependencies or scripts
 
 Then in Dockerfile: `RUN uv run python scripts/download_models.py` (clean, testable, auditable).
+
+---
+
+# Decision: Solr Auth Role Alignment with 9.7 Defaults
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2025-07-25  
+**Issue:** #1332  
+**PR:** #1333
+
+## Context
+
+Solr 9.7's `solr auth enable` assigns all 4 built-in roles (superadmin, admin, search, index) to the created admin user. Our init script was overwriting these with `set-user-role`, breaking security operations.
+
+## Decision
+
+1. **Do NOT call set-user-role for the admin user** — let `solr auth enable` handle role assignment
+2. **Use the built-in "search" role** instead of custom "readonly" for read-only users
+3. **Align security.json** with Solr 9.7's 4-tier role hierarchy
+
+## Rationale
+
+- The superadmin role is required for security-edit operations; stripping it breaks auth management
+- Using built-in roles avoids custom permission mappings and stays aligned with Solr's defaults
+- The "search" role includes collection-admin-read, which "readonly" lacked
+
+## Impact
+
+All environments (dev + prod) are affected. No migration needed — the fix takes effect on next container restart during auth bootstrap.
+
+---
+
+# Decision: Solr 10 Language-Models Module Cannot Replace Embeddings-Server
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2025-07-22  
+**Status:** Decided
+
+## Context
+
+Juanma asked whether Solr 10's `language-models` module could replace our separate `embeddings-server` Docker container, which runs `intfloat/multilingual-e5-base` via sentence-transformers for generating search embeddings.
+
+## Decision
+
+**Keep the current embeddings-server architecture. Do not adopt Solr 10's language-models module for embedding generation.**
+
+## Rationale
+
+After thorough research, the Solr 10 `language-models` module:
+1. Only supports **remote API calls** to cloud providers (OpenAI, Cohere, HuggingFace Inference API, MistralAI) — no local/in-process model execution
+2. Has **no preprocessing hooks** for E5 model prefixes ("query: " / "passage: "), which are required for correct embeddings
+3. Encodes documents **one-by-one** at index time (vs our 50-doc batches), with explicit performance warnings from the module authors
+4. Provides **no GPU support** via its LangChain4j ONNX path (CPU-only, and this path isn't even wired into Solr yet)
+5. In-process ONNX support is tracked in **SOLR-17446** but is not implemented and has no timeline
+
+## What We Should Do Instead
+
+1. **Monitor SOLR-17446** for in-process ONNX support — this would be the trigger to re-evaluate
+2. **Consider upgrading our embeddings-server** to use ONNX Runtime as the Python backend (sentence-transformers v3.2+ supports `backend="onnx"`) for 1.4–2× CPU throughput improvement — this is independent of the Solr module question
+3. **Evaluate Solr 9.7 → 10.0 upgrade** separately for other benefits (not for this module)
+
+## Impact
+
+- No changes needed to current architecture
+- embeddings-server remains the single source of truth for embedding generation
+- Full research report: `docs/research/solr10-language-models-embeddings.md`
+
+---
+
+# User Directive: Screenshots Must Be Updated with Documentation
+
+**Date:** 2026-03-31  
+**By:** jmservera (via Copilot)  
+**Directive:** Next time documentation is updated, screenshots must also be updated  
+**Rationale:** User request — ensure visual consistency between docs and current UI state
+
