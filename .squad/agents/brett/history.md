@@ -154,6 +154,15 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - The `render` group is a host-level Linux concept for GPU DRM access; slim Python images don't have it
 - For WSL2 Intel GPU (`/dev/dxg`), only `video` group is needed
 
+### BuildKit `--mount=from` for Transient Build Tools (Issue #1325)
+- `RUN --mount=from=image,source=/bin,target=/usr/local/bin/tool` bind-mounts a file from another image for the duration of a single RUN command only — it never appears in any image layer
+- This is the preferred pattern for build tools (uv, cargo, etc.) that should not ship in runtime images
+- `COPY --from=image /tool /usr/local/bin/tool` creates a permanent layer — use `--mount=from` instead when the tool is only needed during build
+- Docker COPY always writes the full directory content as a new layer regardless of what exists in the base — it does NOT deduplicate against base layers. This makes multi-stage "build→COPY .venv→runtime" ineffective when both stages share the same base with a pre-populated .venv
+- `uv sync --inexact` preserves existing packages and only installs the delta — combine with `--mount=from` for minimal layers (~200MB vs ~4GB)
+- Requires `# syntax=docker/dockerfile:1` directive for cross-version compatibility; BuildKit is default since Docker 23.0+ and already enabled in CI via `docker/setup-buildx-action`
+- Key file: `src/embeddings-server/Dockerfile`
+
 ## Reskill Notes (2026-07-25)
 
 ### Self-Assessment

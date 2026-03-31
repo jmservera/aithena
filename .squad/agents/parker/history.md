@@ -1,5 +1,11 @@
 # Parker — History
 
+## Cross-Agent Notes
+
+**2026-03-31 — Brett (Infrastructure Architect):** Recommended Approach 3 (BuildKit `--mount=from` bind mount) for #1325 embeddings-server layer optimization. Analysis shows ~95% reduction (4.1GB → 200MB compressed) with zero tools in runtime. Prerequisite: rebuild base image to own `/app/.venv` with heavy deps (torch, nvidia-*, triton, sentence-transformers). This is a one-time change for both slim and openvino variants. Decision document in decisions.md.
+
+---
+
 ## Core Context (v1.10.0)
 
 **Backend Service Architecture:**
