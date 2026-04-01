@@ -1,8 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.18.0 Release Notes](release-notes/v1.18.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.18.1 Release Notes](release-notes/v1.18.1.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), and [v1.18.0 Deployment Updates](#deployment-updates-for-v1180) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), and [v1.18.1 Deployment Updates](#deployment-updates-for-v1181) sections below.
 
 ## System architecture overview
 
@@ -4318,6 +4318,103 @@ Existing deployments can upgrade with a standard `docker compose pull && docker 
 - `docs/user-manual.md` — new Folder Facets section, collections UI fix note
 - `docs/admin-manual.md` — this Deployment Updates section, Backup & DR sections
 - `docs/guides/disaster-recovery-runbook.md` — new comprehensive backup/restore operational guide
+
+---
+
+## Deployment Updates for v1.18.1
+
+### Summary
+
+v1.18.1 is a **patch release** addressing two critical bugs:
+
+1. **Solr Auth Role Assignment (#1332)** — Fixed admin user role overwriting that broke security operations
+2. **Installer CWD Independence (#1330)** — Made `uv run installer/setup.py` work from any directory
+
+**Upgrade path:** `docker compose pull && docker compose up -d --force-recreate solr`
+
+### Solr Auth Role Assignment Fix
+
+**Problem:**  
+Solr's auth bootstrap was overwriting admin user roles, stripping critical permissions needed for security operations (`superadmin`), collection admin read (`search`), and document updates (`index`).
+
+**Root cause:**  
+Solr 9.7's `solr auth enable` automatically assigns all 4 built-in roles to the admin user. The `solr-init` entrypoint was subsequently calling `set-user-role` to overwrite with only `["admin"]`, inadvertently removing the other three roles.
+
+**Fix:**
+- Removed the redundant `set-user-role` call for the admin user
+- Changed readonly user role from custom `"readonly"` to Solr 9.7 built-in `"search"`
+- Updated `security.json` to match Solr 9.7's 4-tier role hierarchy:
+  - `superadmin` — security-edit permissions
+  - `admin` — security-read, config-edit, core/collection admin
+  - `search` — collection-admin-read, read
+  - `index` — update
+
+**Verification after upgrade:**
+```bash
+docker compose exec solr curl -u admin:admin \
+  "http://localhost:8983/solr/admin/authentication" | jq '.authentication.credentials'
+```
+
+The admin user should have roles: `["superadmin", "admin", "search", "index"]`
+
+**Impact:** Admin users now retain full permissions for security operations, collection management, and document indexing.
+
+### Installer CWD Independence Fix
+
+**Problem:**  
+Running `uv run installer/setup.py` from the repository root failed with `ModuleNotFoundError: No module named 'aithena_common'` because `uv` resolves dependencies from the current working directory's `pyproject.toml`, and the repo root lacks one.
+
+**Fix:**  
+Added PEP 723 inline script metadata to `installer/setup.py` so `uv run` knows about the `aithena-common` dependency regardless of CWD.
+
+**Verification:**
+```bash
+# From repo root (now works):
+uv run installer/setup.py --help
+
+# From installer/ directory (existing behavior preserved):
+cd installer && uv run setup.py --help
+```
+
+**Impact:** Users can now run the installer from any directory without encountering import errors.
+
+### Upgrade instructions
+
+**From v1.18.0 → v1.18.1:**
+
+1. Pull the new image:
+   ```bash
+   docker compose pull
+   ```
+
+2. Recreate Solr container (to apply auth role fix):
+   ```bash
+   docker compose up -d --force-recreate solr
+   ```
+
+3. Verify Solr admin roles (see command above)
+
+**From v1.17.x or earlier:**  
+Follow the [v1.18.0 deployment notes](#deployment-updates-for-v1180) first, then apply v1.18.1 updates above.
+
+### Configuration changes
+
+**None required.** The fixes are applied automatically via updated container images and script metadata.
+
+### Data migration
+
+**None required.** Solr's existing security configuration is updated in-place on container restart.
+
+### Breaking changes
+
+**None identified.** Both fixes restore expected behavior without introducing API, configuration, or data format changes.
+
+### Documentation updates
+
+- `docs/release-notes/v1.18.1.md` — new release notes
+- `docs/test-reports/v1.18.1.md` — new test report
+- `docs/user-manual.md` — updated version link, added installer fix note
+- `docs/admin-manual.md` — this Deployment Updates section
 
 ---
 
