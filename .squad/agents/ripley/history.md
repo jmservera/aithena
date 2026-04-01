@@ -267,3 +267,70 @@ Created comprehensive troubleshooting guide for GPU acceleration issues. Covers:
 **Reasoning:** GPU acceleration PRD approved for v1.17.0 (research completed in #1147). Users enabling GPU support need clear diagnostic path for hardware/driver issues. Guide references Admin Manual GPU setup section, completing user-facing documentation.
 
 ---
+
+## Clean Architecture Skill & Audit (2026-03-27)
+
+### Context
+PO directive to adopt Clean Architecture principles across the codebase. Triggered by #1288 (shared auth library extraction) and broader architectural concerns about cross-service coupling.
+
+### Work Completed
+
+1. **Read and synthesized** Uncle Bob's Clean Architecture article. Extracted core principles: Dependency Rule, four-layer model (Entities → Use Cases → Interface Adapters → Frameworks & Drivers), independence of frameworks/UI/database.
+
+2. **Created skill:** `.squad/skills/clean-architecture/SKILL.md` (confidence: low, first observation). Maps Clean Architecture to aithena's specific context — 5 concrete rules (R1-R5), PR review checklist, violation detection patterns, layer mapping for all services.
+
+3. **Audited codebase** — found 7 violations across severity levels:
+   - **V1 (High):** Admin `sys.path` manipulation in production code (`src/admin/src/pages/shared/config.py:22-24`)
+   - **V2 (High):** Duplicated auth logic between admin and solr-search (`parse_ttl_to_seconds`, `AuthenticatedUser`, JWT encode/decode in both services)
+   - **V3 (Medium):** Logging config duplicated across 4 services with feature drift
+   - **V4 (Medium):** `correlation.py` mixes FastAPI framework code with cross-cutting concern
+   - **V5 (Medium):** 30+ solr-search test files use `sys.path.append` instead of proper packaging
+   - **V6-V7 (Low):** Script-level `sys.path` usage in reset_password.py and benchmark tests
+
+4. **Documented findings:** `.squad/decisions/inbox/ripley-clean-architecture-audit.md` with severity ratings, file:line references, and phased remediation plan.
+
+### Key Finding
+`aithena-common` already exists and handles passwords + auth DB — the #1288 foundation is solid. The gap is incomplete adoption: `parse_ttl_to_seconds()`, `AuthenticatedUser`, JWT utils, and logging formatters are still duplicated. Solr-search itself doesn't use `aithena-common` yet. Recommended 4-phase migration plan.
+
+### Pattern Reinforced
+**"Extract shared package early, migrate incrementally."** The `aithena-common` package is architecturally correct. What's missing is a systematic migration of all consumers. This validates the pragmatic incrementalism pattern — ship the package, then migrate service by service.
+
+---
+
+## v1.18.1 Release (2026-03-29)
+
+### Multi-Agent Orchestration & v1.18.1 Release Gate
+
+**Completed:** 2026-03-29T10:10–10:25  
+**Status:** ✅ Complete; PR #1289 created; CI running
+
+Orchestrated multi-agent sprint: Brett (IPEX), Parker (2 issues), Lambert (test coverage), Ripley (Clean Architecture audit). VERSION bumped to 1.18.1. All 1026+ tests passing. SESSION LOG and ORCHESTRATION LOGS created.
+
+**Work Summary:**
+
+- **Brett #1286:** IPEX added to openvino extras. 52 tests pass.
+- **Parker #1287:** Solr role assignment fixed (admin/readonly). Credential generation added to installer. 1026 tests pass.
+- **Parker #1288:** Shared auth library extracted into `aithena-common`. Installer now proper uv project. All tests pass.
+- **Lambert:** 14 proactive tests across 3 files (credentials, IPEX, roles). All pass green.
+- **Ripley:** Clean Architecture audit completed — 7 violations found, skill created, Phase 2 recommendations documented.
+
+**Decisions Merged:** 8 decision inbox files merged into `decisions.md`, deduplicated. Inbox cleared.
+
+**Key Achievement:** Demonstrated scalable multi-agent orchestration with clean dependency resolution — all agents' work integrates seamlessly. Shared auth library foundation (`aithena-common`) established for future Phase 2 expansion.
+
+**Architecture Milestone:** Dependency Inversion Principle applied across all services. `aithena-common` is the single point of shared authority for passwords + auth DB. Violations documented with phased remediation plan (P1–P3).
+
+### Skill Consolidation Audit
+
+**Completed:** 2026-07-25
+**Status:** ✅ Complete
+
+Consolidated skills from 38 to 24 (14 eliminated, target was ≤35). Five merge groups:
+
+1. **CI/PR Gates** (9 → 2): `ci-gate-pattern`, `pr-integration-gate`, `branch-protection-strict-mode`, `milestone-gate-review`, `release-gate` → `ci-pr-gates`; `release-tagging-process`, `multi-release-orchestration`, `milestone-wave-execution`, `phase-gated-execution` → `release-orchestration`
+2. **Security** (4 → 1): `ci-workflow-security`, `workflow-secrets-security`, `security-scanning-baseline`, `logging-security` → `security-patterns`
+3. **Path Metadata** (2 → 1): `path-metadata-heuristics`, `path-metadata-tdd` → `path-metadata`
+4. **Solr** (3 → 1): `solr-parent-chunk-model`, `solr-pdf-indexing`, `solrcloud-docker-operations` → `solr-operations`
+5. **FastAPI** (2 → 1): `fastapi-auth-patterns`, `fastapi-query-params` → `fastapi-patterns`
+
+Each merged skill preserves key patterns, examples, and anti-patterns from all sources while removing duplication. All merged skills are under 300 lines.

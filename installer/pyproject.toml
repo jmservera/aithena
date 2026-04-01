@@ -1,0 +1,20 @@
+[project]
+name = "aithena-installer"
+version = "0.1.0"
+description = "First-run installer for Aithena"
+requires-python = ">=3.12"
+dependencies = [
+    "aithena-common",
+]
+
+[tool.uv.sources]
+aithena-common = { path = "../src/aithena-common" }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [".."]
+testpaths = ["tests"]

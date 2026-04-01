@@ -109,6 +109,13 @@ jobs:
             --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
             --reset
 
+          # Export installer-generated credentials so later steps can use them.
+          # The installer writes random Solr passwords to .env; without this,
+          # the health-check step falls back to hardcoded dev defaults and gets 401.
+          if [ -f .env ]; then
+            grep -E '^(SOLR_ADMIN_USER|SOLR_ADMIN_PASS|SOLR_READONLY_USER|SOLR_READONLY_PASS|ADMIN_API_KEY)=' .env >> "$GITHUB_ENV" || true
+          fi
+
           # Browser E2E runs through the reverse proxy, so we use --profile production
           # in the 'up' command to activate nginx (which e2e.yml assigns to the
           # production profile). profiles: [] does NOT clear profiles due to

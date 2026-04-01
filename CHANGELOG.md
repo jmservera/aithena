@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.1] — 2026-04-02
+
+### Fixed
+
+- **Solr auth roles** — Fixed role assignment to align with Solr 9.7 built-in role hierarchy. The `set-user-role` call was overwriting the admin user's roles to just `["admin"]`, stripping `superadmin`, `search`, and `index` roles. Now uses Solr 9.7's default 4-tier role structure (#1332, #1333)
+- **Installer CWD** — Fixed `setup.py` to work regardless of current working directory by adding inline script metadata (#1331)
+
 ## [1.18.0] — 2026-04-02
 
 ### Fixed
