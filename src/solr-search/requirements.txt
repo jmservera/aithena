@@ -2,5 +2,5 @@
 # Kept as a fallback for tooling that does not support PEP 517 projects.
 fastapi[all]>=0.115.0,<1
 uvicorn[standard]>=0.30.0,<1
-requests==2.33.0
+requests==2.33.1
 redis==7.4.0
