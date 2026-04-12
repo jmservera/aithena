@@ -4,14 +4,14 @@ version = "0.1.0"
 description = "Sentence-transformer embeddings service for Aithena"
 requires-python = ">=3.12"
 dependencies = [
-    "sentence-transformers>=3.4,<6",
+    "sentence-transformers>=5.3.0,<6",
     "fastapi>=0.135,<1",
     "uvicorn[standard]>=0.42,<1",
 ]
 
 [project.optional-dependencies]
 openvino = [
-"sentence-transformers[openvino]>=3.4,<6",
+"sentence-transformers[openvino]>=5.3.0,<6",
     "openvino",
     "optimum-intel",
     "intel-extension-for-pytorch",
