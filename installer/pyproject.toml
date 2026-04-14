@@ -12,7 +12,7 @@ aithena-common = { path = "../src/aithena-common" }
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3",
+    "pytest>=9.0.3",
 ]
 
 [tool.pytest.ini_options]
