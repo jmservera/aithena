@@ -935,12 +935,6 @@ After thorough research, the Solr 10 `language-models` module:
 **Directive:** Next time documentation is updated, screenshots must also be updated  
 **Rationale:** User request — ensure visual consistency between docs and current UI state
 
-## Next Steps
-
-- Squad (Coordinator): Sequential merge of 35 PRs with CI waits
-- Admin team: Validate pandas 3.0 compatibility
-- Embeddings team: Validate sentence-transformers 5.3 compatibility
-
 ---
 
 # Decision: Dependabot Batch Merge Workflow

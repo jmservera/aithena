@@ -217,7 +217,7 @@ jobs:
                     echo "Regenerating package-lock.json..."
                     git checkout --theirs "$conflict"
                     git add "$conflict"
-                    (cd src/aithena-ui && npm install --package-lock-only 2>/dev/null) || true
+                    (cd src/aithena-ui && npm install --package-lock-only --ignore-scripts 2>/dev/null) || true
                     git add "$conflict"
                     ;;
                   *)
@@ -228,7 +228,7 @@ jobs:
               done
 
               if [ "$RESOLVED" = true ] && [ -z "$(git diff --name-only --diff-filter=U 2>/dev/null)" ]; then
-                if git commit --no-edit -m "Merge dependabot PR #${NUMBER}: ${TITLE} (lockfile regenerated)" 2>/dev/null; then
+                if git commit -m "Merge dependabot PR #${NUMBER}: ${TITLE} (lockfile regenerated)" 2>/dev/null; then
                   echo "✅ Merged #${NUMBER} (with lockfile regen)"
                   MERGED_PRS="${MERGED_PRS:+${MERGED_PRS},}${NUMBER}"
                   SUMMARY="${SUMMARY}\n| #${NUMBER} | ✅ merged (lockfile regen) | ${TITLE} |"
