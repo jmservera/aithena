@@ -111,7 +111,7 @@ jobs:
 
           echo "pr-count=${COUNT}" >> "$GITHUB_OUTPUT"
           echo "pr-numbers=${NUMBERS}" >> "$GITHUB_OUTPUT"
-          echo "pr-json=${ELIGIBLE}" >> "$GITHUB_OUTPUT"
+          echo "pr-json=$(echo "$ELIGIBLE" | jq -c '.')" >> "$GITHUB_OUTPUT"
           echo "Found ${COUNT} eligible PRs: ${NUMBERS}"
 
   consolidate:
