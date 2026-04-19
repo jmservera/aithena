@@ -936,31 +936,6 @@ After thorough research, the Solr 10 `language-models` module:
 **Rationale:** User request — ensure visual consistency between docs and current UI state
 
 
----
-
-# Decision: Dependabot Triage — 38 PRs (2026-04-19)
-
-**Author:** Ripley (Lead)  
-**Date:** 2026-04-19T07:12:00Z  
-**Status:** Completed
-
-## Summary
-
-Triaged 38 dependabot PRs across all services (document-indexer, document-lister, embeddings-server, solr-search, admin, aithena-ui, workflows).
-
-## Verdicts
-
-| Category | Count | Details |
-|----------|-------|---------|
-| MERGE | 35 | Patch/minor bumps + approved majors (TS 6.0, CodeQL 4, setup-uv 8.0) |
-| HOLD | 2 | #1390 (pandas 3.0), #1401 (sentence-transformers 5.3) — require manual testing |
-| SKIP | 1 | #1393 (transformers 5.0.0rc3) — pre-release, defer to stable |
-
-## Merge Criteria
-
-**Approved for Immediate Merge:**
-- Patch version bumps (all services)
-- Minor version bumps without API changes
 - Major version upgrades with zero breaking changes for our codebase:
   - TypeScript 5 → 6.0 (aithena-ui only, no type incompatibilities found)
   - CodeQL 2 → 4.35.1 (workflow-only, no service impact)
