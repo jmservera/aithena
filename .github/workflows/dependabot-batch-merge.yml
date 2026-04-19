@@ -229,10 +229,16 @@ jobs:
               done
 
               if [ "$RESOLVED" = true ] && [ -z "$(git diff --name-only --diff-filter=U 2>/dev/null)" ]; then
-                git commit --no-edit -m "Merge dependabot PR #${NUMBER}: ${TITLE} (lockfile regenerated)" 2>/dev/null || true
-                echo "✅ Merged #${NUMBER} (with lockfile regen)"
-                MERGED_PRS="${MERGED_PRS:+${MERGED_PRS},}${NUMBER}"
-                SUMMARY="${SUMMARY}\n| #${NUMBER} | ✅ merged (lockfile regen) | ${TITLE} |"
+                if git commit --no-edit -m "Merge dependabot PR #${NUMBER}: ${TITLE} (lockfile regenerated)" 2>/dev/null; then
+                  echo "✅ Merged #${NUMBER} (with lockfile regen)"
+                  MERGED_PRS="${MERGED_PRS:+${MERGED_PRS},}${NUMBER}"
+                  SUMMARY="${SUMMARY}\n| #${NUMBER} | ✅ merged (lockfile regen) | ${TITLE} |"
+                else
+                  echo "❌ Failed to create merge commit for #${NUMBER} after lockfile regeneration"
+                  git merge --abort 2>/dev/null || git reset --hard HEAD
+                  FAILED_PRS="${FAILED_PRS:+${FAILED_PRS},}${NUMBER}"
+                  SUMMARY="${SUMMARY}\n| #${NUMBER} | ❌ merge commit failed after lockfile regen | ${TITLE} |"
+                fi
               else
                 echo "❌ Cannot resolve conflicts for #${NUMBER}"
                 git merge --abort 2>/dev/null || git reset --hard HEAD
