@@ -135,7 +135,7 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-          token: ${{ github.token }}
+          persist-credentials: false
 
       - name: Configure git
         run: |
@@ -282,7 +282,10 @@ jobs:
         if: steps.merge-branches.outputs.has-changes == 'true'
         env:
           BATCH_BRANCH: ${{ needs.collect-prs.outputs.batch-branch }}
-        run: git push origin "$BATCH_BRANCH" --force-with-lease
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          git push origin "$BATCH_BRANCH" --force-with-lease
 
   # CI runs automatically when the PR is opened (via normal PR triggers on dev).
   # No separate ci-tests job needed — branch protection requires CI to pass before merge.
