@@ -1,0 +1,152 @@
+name: Security Review — GHAS Alerts (Weekly)
+
+# Weekly review of GitHub Advanced Security (GHAS) code scanning alerts.
+# Creates squad-labeled issues for critical/high findings from CodeQL,
+# Bandit, Checkov, and zizmor that don't get auto-fixed by Dependabot.
+#
+# NOTE: Dependabot dependency alerts are handled separately by
+# dependabot-automerge.yml (auto-merges patch/minor PRs).
+# This workflow covers GHAS code scanning alerts only.
+
+on:
+  schedule:
+    # Every Monday at 08:00 UTC
+    - cron: '0 8 * * 1'
+
+  # Manual trigger for on-demand review
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  security-events: read
+
+jobs:
+  review-ghas-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Review GHAS code scanning alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          REPO="${{ github.repository }}"
+          echo "🔍 Reviewing GHAS code scanning alerts for ${REPO}..."
+
+          # Fetch open code scanning alerts (critical/error/high severity)
+          # These come from CodeQL, Bandit, Checkov, zizmor
+          # Surface API errors explicitly — a silent failure here would hide real problems
+          if ! ALERTS=$(gh api "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" \
+            --jq '.[] | select(.rule.security_severity_level == "critical" or .rule.security_severity_level == "high" or .rule.severity == "error") | {number: .number, rule: .rule.id, severity: (.rule.security_severity_level // .rule.severity), tool: .tool.name, description: .rule.description, file: .most_recent_instance.location.path, line: .most_recent_instance.location.start_line, url: .html_url, created: .created_at}'); then
+            echo "❌ Failed to fetch code scanning alerts. Check GITHUB_TOKEN permissions (needs security-events:read)."
+            exit 1
+          fi
+
+          if [ -z "$ALERTS" ]; then
+            echo "✅ No critical/high GHAS alerts found."
+            exit 0
+          fi
+
+          ALERT_COUNT=$(echo "$ALERTS" | jq -s 'length')
+          echo "⚠️ Found ${ALERT_COUNT} alert(s) to review."
+
+          # Process each alert
+          # Ensure the "security" label exists once before the loop (idempotent)
+          gh label create "security" --repo "${REPO}" --description "Security alerts" --color "B60205" --force || {
+            echo "⚠️ Could not create/verify 'security' label. Issue creation may fail."
+          }
+
+          CREATED=0
+          SKIPPED=0
+          FAILED=0
+
+          # Use process substitution to avoid subshell (preserves counter variables)
+          while IFS= read -r alert; do
+            NUMBER=$(echo "$alert" | jq -r '.number')
+            RULE=$(echo "$alert" | jq -r '.rule')
+            SEVERITY=$(echo "$alert" | jq -r '.severity // "unknown"')
+            TOOL=$(echo "$alert" | jq -r '.tool // "unknown"')
+            DESCRIPTION=$(echo "$alert" | jq -r '.description // "No description available"')
+            FILE=$(echo "$alert" | jq -r '.file // "unknown"')
+            LINE=$(echo "$alert" | jq -r '.line // "?"')
+            URL=$(echo "$alert" | jq -r '.url')
+
+            ISSUE_TITLE="🔒 GHAS: ${RULE} in ${FILE} (${TOOL})"
+
+            # Check if issue already exists
+            EXISTING=$(gh issue list --repo "${REPO}" --search "\"${RULE}\" \"${FILE}\"" --label "security" --json number --jq 'length' 2>/dev/null || echo "0")
+            if [ "$EXISTING" -gt 0 ]; then
+              echo "  ⏭️  Alert #${NUMBER}: issue already exists for ${RULE} in ${FILE}"
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            fi
+
+            # Route to squad member by tool
+            case "$TOOL" in
+              CodeQL)
+                # Route by file extension
+                case "$FILE" in
+                  *.py)  SQUAD_LABEL="squad:parker" ;;
+                  *.ts|*.tsx|*.js|*.jsx) SQUAD_LABEL="squad:dallas" ;;
+                  *.yml|*.yaml) SQUAD_LABEL="squad:brett" ;;
+                  *) SQUAD_LABEL="squad:kane" ;;
+                esac
+                ;;
+              Bandit)   SQUAD_LABEL="squad:kane" ;;
+              checkov)  SQUAD_LABEL="squad:brett" ;;
+              zizmor)   SQUAD_LABEL="squad:brett" ;;
+              *)        SQUAD_LABEL="squad" ;;
+            esac
+
+            BODY="## GHAS Code Scanning Alert
+
+| Field | Value |
+|---|---|
+| **Alert** | [#${NUMBER}](${URL}) |
+| **Severity** | \`${SEVERITY}\` |
+| **Tool** | ${TOOL} |
+| **Rule** | \`${RULE}\` |
+| **File** | \`${FILE}:${LINE}\` |
+
+### Description
+
+${DESCRIPTION}
+
+### Action Required
+
+1. Review the alert and the flagged code
+2. Determine if this is a true positive or false positive
+3. If true positive: fix the code and push a PR
+4. If false positive: dismiss the alert with justification
+
+---
+*Created automatically by the weekly GHAS security review workflow.*"
+
+            gh issue create \
+              --repo "${REPO}" \
+              --title "${ISSUE_TITLE}" \
+              --body "${BODY}" \
+              --label "security,${SQUAD_LABEL}" || {
+                echo "  ❌ Failed to create issue for alert #${NUMBER}"
+                FAILED=$((FAILED + 1))
+                continue
+              }
+
+            CREATED=$((CREATED + 1))
+            echo "  ✅ Created issue for GHAS alert #${NUMBER}: ${RULE} in ${FILE}"
+          done < <(echo "$ALERTS" | jq -c '.')
+
+          echo ""
+          echo "🏁 GHAS security review complete. Created: ${CREATED}, Skipped: ${SKIPPED}, Failed: ${FAILED}"
+          if [ "${FAILED}" -gt 0 ]; then
+            echo "⚠️ ${FAILED} issue(s) failed to create — check permissions and labels."
+          fi
