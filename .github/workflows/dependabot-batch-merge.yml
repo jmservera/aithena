@@ -301,8 +301,16 @@ jobs:
     if: needs.consolidate.outputs.has-changes == 'true'
     permissions:
       contents: read
+      issues: write
       pull-requests: write
+      issues: write
     steps:
+      - name: Ensure dependabot:batch label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "dependabot:batch" --repo "$GITHUB_REPOSITORY" --description "Batch dependabot PR" --color "0366d6" --force
+
       - name: Create consolidated PR
         env:
           GH_TOKEN: ${{ github.token }}
