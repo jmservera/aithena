@@ -316,7 +316,7 @@ jobs:
 
           BODY="${BODY}\n\n---"
           BODY="${BODY}\n*Created by the [Dependabot Batch Merge](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) workflow.*"
-          BODY="${BODY}\n*After merging, run the close-dependabot-batch workflow or manually close the included PRs.*"
+          BODY="${BODY}\n*After merging, the close-dependabot-batch workflow closes the included PRs automatically; manually close them only if that cleanup does not complete.*"
 
           echo -e "$BODY" > pr_body.txt
 
