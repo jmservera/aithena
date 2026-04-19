@@ -545,6 +545,7 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
@@ -594,6 +595,7 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
@@ -642,6 +644,7 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
@@ -692,6 +695,8 @@ services:
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
       SOLR_READONLY_USER: ${SOLR_READONLY_USER:-solr_read}
       SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:-SolrRead_dev2024!}
+      SOLR_NUM_SHARDS: ${SOLR_NUM_SHARDS:-1}
+      SOLR_REPLICATION_FACTOR: ${SOLR_REPLICATION_FACTOR:-3}
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
@@ -767,7 +772,7 @@ services:
           fi
 
           if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
-            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=1&replicationFactor=3&waitForFinalState=true&wt=json"
+            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=$${SOLR_NUM_SHARDS:-1}&replicationFactor=$${SOLR_REPLICATION_FACTOR:-3}&waitForFinalState=true&wt=json"
           fi
 
           SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh

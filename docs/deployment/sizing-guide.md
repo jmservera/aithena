@@ -75,9 +75,48 @@ The shipped Compose stack allocates three Solr nodes:
 - `solr`, `solr2`, `solr3`
 - limit: **2 GB RAM per node**
 - reservation: **1 GB RAM per node**
-- collection bootstrap: `numShards=1`, `replicationFactor=3`
+- collection bootstrap: `numShards=1`, `replicationFactor=3` (configurable)
 
 Because the collection currently has one shard with three replicas, each node hosts one replica core for the `books` collection.
+
+### Configurable shards and replication
+
+Both `docker-compose.yml` and `docker-compose.prod.yml` read shard topology from environment variables with sensible defaults:
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOLR_NUM_SHARDS` | `1` | Number of shards to split the collection across |
+| `SOLR_REPLICATION_FACTOR` | `3` | Number of replicas per shard |
+
+Set these in your `.env` file or export them before running `docker compose up`:
+
+```bash
+# Personal deployment (single machine, ≤30K docs)
+SOLR_NUM_SHARDS=1
+SOLR_REPLICATION_FACTOR=1
+
+# Medium deployment (single machine, 30K-100K docs)
+SOLR_NUM_SHARDS=2
+SOLR_REPLICATION_FACTOR=1
+
+# Distributed deployment (multi-node, HA required) — the default
+SOLR_NUM_SHARDS=1
+SOLR_REPLICATION_FACTOR=3
+```
+
+**How to choose:**
+
+| Library size | Shards | Replication | Why |
+|---|---:|---:|---|
+| ≤30K PDFs, single machine | 1 | 1 | One core fits in 8-12 GB; RF=1 avoids 3× disk/RAM waste |
+| 30K-100K PDFs, single machine | 2 | 1 | Splits the vector index across cores for better page-cache utilization |
+| Any size, HA required | 1-2 | 3 | RF=3 survives node failures; requires ≥3 Solr nodes |
+
+**Important notes:**
+
+- These variables only take effect during **initial collection creation**. If the `books` collection already exists, changing them requires deleting and recreating the collection (which re-indexes all documents).
+- `SOLR_REPLICATION_FACTOR` should not exceed the number of Solr nodes in the cluster.
+- For a personal/lite profile with a single Solr node, set `SOLR_REPLICATION_FACTOR=1`. RF>1 with only one node means Solr creates multiple replicas on the same machine, wasting disk without adding fault tolerance.
 
 ### Memory per core
 
