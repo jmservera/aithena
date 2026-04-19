@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), and [v1.18.1 Deployment Updates](#deployment-updates-for-v1181) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), and [v1.19.0 Deployment Updates](#deployment-updates-for-v1190) sections below.
 
 ## System architecture overview
 
@@ -374,8 +374,17 @@ That means every service using `/data/documents` is reading from the same mounte
 
 - `rabbitmq` sets `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000`
 - `embeddings-server` sets `PORT=8085`
-- Solr nodes set `SOLR_MODULES=extraction,langid` and `ZK_HOST=zoo1:2181,zoo2:2181,zoo3:2181`
+- Solr nodes set `SOLR_MODULES=extraction,langid`, `ZK_HOST=zoo1:2181,zoo2:2181,zoo3:2181`, and `SOLR_SECURITY_MANAGER_ENABLED=false` (v1.19.0+, suppresses Solr 9.7 deprecation warning)
 - ZooKeeper nodes set `ZOO_4LW_COMMANDS_WHITELIST`, `ZOO_MY_ID`, and `ZOO_SERVERS`
+
+#### `solr-init` (v1.19.0+)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SOLR_NUM_SHARDS` | `1` | Number of shards for the `books` collection. Only applies at initial collection creation. |
+| `SOLR_REPLICATION_FACTOR` | `3` | Replication factor (number of copies per shard). Only applies at initial collection creation. |
+
+> **Important:** These variables only take effect when `solr-init` creates the collection for the first time. To change topology on an existing deployment you must delete and recreate the collection, which triggers a full re-index. See [Deployment Updates for v1.19.0](#deployment-updates-for-v1190) and the [sizing guide](deployment/sizing-guide.md) for guidance.
 
 ### RabbitMQ startup hardening (v0.5.0)
 
@@ -4417,6 +4426,106 @@ Follow the [v1.18.0 deployment notes](#deployment-updates-for-v1180) first, then
 - `docs/admin-manual.md` — this Deployment Updates section
 
 ---
+
+## Deployment Updates for v1.19.0
+
+### Summary
+
+v1.19.0 is a **minor release** focused on infrastructure flexibility, deprecation cleanup, and dependency updates:
+
+1. **Configurable Solr topology (#1428)** — Solr shards and replication factor are now environment-variable driven
+2. **Deprecation warnings suppressed (#1432)** — Solr 9.7 Security Manager and RabbitMQ 4.x warnings eliminated from container logs
+3. **CI/CD improvements (#1413, #1415)** — Dependabot batch merge workflow and automerge fixes
+4. **Weekly GHAS security review (#1430)** — Automated code scanning alert triage
+5. **38+ dependency updates** — Security and compatibility patches across all services
+
+**Upgrade path:** `docker compose pull && docker compose up -d`
+
+No database migrations, no breaking changes, no data format changes.
+
+### Configurable Solr topology
+
+Previously, the `books` collection was always created with 1 shard and a replication factor of 3 (one replica per Solr node). v1.19.0 makes these values configurable via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOLR_NUM_SHARDS` | `1` | Number of index shards |
+| `SOLR_REPLICATION_FACTOR` | `3` | Number of replicas per shard |
+
+**When to change these values:**
+
+- **Personal/single-node deployment** — Set `SOLR_REPLICATION_FACTOR=1` to save ~⅔ of disk and memory (no redundant replicas needed without multiple nodes)
+- **Large libraries (30K+ documents)** — Consider `SOLR_NUM_SHARDS=2` or higher to distribute the index across nodes for faster queries
+- **Standard 3-node cluster** — The defaults (`1` shard, `3` RF) are appropriate for most deployments up to ~10K documents
+
+**To configure**, add to your `.env` file:
+
+```bash
+# Solr Collection Topology (only applies at initial collection creation)
+SOLR_NUM_SHARDS=1
+SOLR_REPLICATION_FACTOR=1
+```
+
+> **⚠️ These settings only apply when the `books` collection is first created.** If the collection already exists, changing these variables has no effect. To change topology on an existing deployment:
+> 1. Back up your data (see [Backup & Disaster Recovery](#backup--disaster-recovery-v1180))
+> 2. Delete the collection: `docker compose exec solr bin/solr delete -c books`
+> 3. Restart `solr-init`: `docker compose up -d --force-recreate solr-init`
+> 4. Re-index all documents
+
+See the [sizing guide](deployment/sizing-guide.md) for detailed topology recommendations by deployment size.
+
+### Deprecation warnings suppressed
+
+**Solr Security Manager:** Solr 9.7 emits a noisy deprecation warning about the Java Security Manager on every startup. v1.19.0 sets `SOLR_SECURITY_MANAGER_ENABLED=false` on all Solr nodes to suppress this warning. This has no security impact — the Java Security Manager is deprecated in the JDK and Solr plans to remove it in Solr 10.
+
+**RabbitMQ deprecated_features:** The `deprecated_features.permit.management_metrics_collection` setting in `rabbitmq.conf` triggered warnings on RabbitMQ 4.x. This setting has been removed since it is no longer recognized by current RabbitMQ versions.
+
+**Impact on logs:** After upgrading, Solr and RabbitMQ container logs will be significantly cleaner — no more repeated deprecation warnings on startup.
+
+### Upgrade instructions
+
+**From v1.18.1 → v1.19.0:**
+
+1. Pull new images:
+   ```bash
+   docker compose pull
+   ```
+
+2. (Optional) Configure Solr topology in `.env` if you want non-default values — see section above
+
+3. Restart all services:
+   ```bash
+   docker compose up -d
+   ```
+
+4. Verify clean startup logs:
+   ```bash
+   docker compose logs --tail=20 solr
+   docker compose logs --tail=20 rabbitmq
+   ```
+   You should no longer see Security Manager or deprecated_features warnings.
+
+**From v1.17.x or earlier:**
+Follow the [v1.18.0 deployment notes](#deployment-updates-for-v1180) and [v1.18.1 deployment notes](#deployment-updates-for-v1181) first, then apply v1.19.0 updates above.
+
+### Configuration changes
+
+| Change | File | Required action |
+|---|---|---|
+| `SOLR_NUM_SHARDS` / `SOLR_REPLICATION_FACTOR` | `.env` | **Optional.** Only set if you want non-default topology. |
+| `SOLR_SECURITY_MANAGER_ENABLED=false` | `docker-compose.yml` | **Automatic.** Applied via updated compose file. |
+| Removed `deprecated_features` setting | `rabbitmq.conf` | **Automatic.** Applied via updated config file. |
+
+### Data migration
+
+**None required.** The Solr collection schema, index format, and auth database are unchanged. Existing data is fully compatible.
+
+### Breaking changes
+
+**None identified.** All changes are backward-compatible:
+- New Solr topology env vars use the same defaults as before (1 shard, 3 RF)
+- Deprecation suppression is cosmetic (log output only)
+- No API, schema, or data format changes
 
 ## Backup & Disaster Recovery (v1.18.0)
 
