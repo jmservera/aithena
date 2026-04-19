@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.18.0 Release Notes](release-notes/v1.18.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.18.1 Release Notes](release-notes/v1.18.1.md).
 
 **v1.16.0 fixes search experience:** semantic search results now use the same display style as keyword results, keyword match context is truncated to 40 words, page numbers are restored for keyword matches, and thumbnails are now shown for all search modes. See [Search (v1.16.0 fixes)](#searching-for-books) below.
 
@@ -21,6 +21,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 **v1.17.0 adds GPU acceleration for embeddings:** optional GPU support speeds up document indexing 2–4× on NVIDIA GPUs and 1.5–2× on Intel GPUs. GPU is opt-in via environment variables; CPU-only deployments are unaffected. See [GPU Acceleration](#gpu-acceleration-v1170) below.
 
 **v1.18.0 adds folder path facets for hierarchical search filtering:** new "📁 Folder" facet in the search sidebar lets you filter by document location in the library structure. Collections now display books using the same card/list components as the Library, creating a consistent reading experience. See [Folder Facets (v1.18.0)](#folder-facets-v1180) below.
+
+**v1.18.1 patch:** Fixes the installer `ModuleNotFoundError` when running `uv run installer/setup.py` from the repo root (now works from any directory). See [v1.18.1 Release Notes](release-notes/v1.18.1.md).
 
 ## Getting started
 
