@@ -545,6 +545,7 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
@@ -594,6 +595,7 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
@@ -642,6 +644,7 @@ services:
     environment:
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
+      SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
     expose:
