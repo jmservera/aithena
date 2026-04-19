@@ -181,7 +181,6 @@ jobs:
             echo "::group::Merging #${NUMBER}: ${TITLE}"
 
             # Fetch the PR branch
-            git fetch origin "$HEAD" 2>/dev/null
             if ! git fetch origin "$HEAD" 2>/dev/null; then
               echo "❌ Failed to fetch branch ${HEAD}"
               FAILED_PRS="${FAILED_PRS:+${FAILED_PRS},}${NUMBER}"
