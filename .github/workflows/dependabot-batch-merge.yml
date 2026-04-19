@@ -308,7 +308,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh label create "dependabot:batch" --repo "$GITHUB_REPOSITORY" --description "Batch dependabot PR" --color "0366d6" --force 2>/dev/null || true
+          gh label create "dependabot:batch" --repo "$GITHUB_REPOSITORY" --description "Batch dependabot PR" --color "0366d6" --force
 
       - name: Create consolidated PR
         env:
