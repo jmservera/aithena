@@ -935,26 +935,6 @@ After thorough research, the Solr 10 `language-models` module:
 **Directive:** Next time documentation is updated, screenshots must also be updated  
 **Rationale:** User request — ensure visual consistency between docs and current UI state
 
-
-- Major version upgrades with zero breaking changes for our codebase:
-  - TypeScript 5 → 6.0 (aithena-ui only, no type incompatibilities found)
-  - CodeQL 2 → 4.35.1 (workflow-only, no service impact)
-  - setup-uv 4 → 8.0 (workflow-only, no service impact)
-
-**Hold for Validation:**
-- **#1390 (pandas 2.2 → 3.0):** Major DataFrame API refactoring. Admin service must validate:
-  - Deprecated parameter removals
-  - API method signature changes
-  - Type hints compatibility
-  
-- **#1401 (sentence-transformers ≥3.4 → ≥5.3.0):** Core embedding dependency. Embeddings-server must validate:
-  - Pre-trained model weights compatibility
-  - Tokenizer API changes
-  - SentenceTransformer instantiation patterns
-
-**Skip / Closed:**
-- **#1393 (transformers 4.57 → 5.0.0rc3):** Release candidate version unsuitable for stable release. Close as not applicable; re-triage when stable 5.0.0 ships.
-
 ## Next Steps
 
 - Squad (Coordinator): Sequential merge of 35 PRs with CI waits
