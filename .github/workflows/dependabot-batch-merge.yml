@@ -302,12 +302,13 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - name: Ensure dependabot:batch label exists
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh label create "dependabot:batch" --description "Batch dependabot PR" --color "0366d6" --force 2>/dev/null || true
+          gh label create "dependabot:batch" --repo "$GITHUB_REPOSITORY" --description "Batch dependabot PR" --color "0366d6" --force 2>/dev/null || true
 
       - name: Create consolidated PR
         env:
