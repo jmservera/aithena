@@ -2,6 +2,56 @@
 
 ---
 
+# Decision: Dependabot Triage — 38 PRs (2026-04-19)
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-04-19T07:12:00Z  
+**Status:** Completed
+
+## Summary
+
+Triaged 38 dependabot PRs across all services (document-indexer, document-lister, embeddings-server, solr-search, admin, aithena-ui, workflows).
+
+## Verdicts
+
+| Category | Count | Details |
+|----------|-------|---------|
+| MERGE | 35 | Patch/minor bumps + approved majors (TS 6.0, CodeQL 4, setup-uv 8.0) |
+| HOLD | 2 | #1390 (pandas 3.0), #1401 (sentence-transformers 5.3) — require manual testing |
+| SKIP | 1 | #1393 (transformers 5.0.0rc3) — pre-release, defer to stable |
+
+## Merge Criteria
+
+**Approved for Immediate Merge:**
+- Patch version bumps (all services)
+- Minor version bumps without API changes
+- Major version upgrades with zero breaking changes for our codebase:
+  - TypeScript 5 → 6.0 (aithena-ui only, no type incompatibilities found)
+  - CodeQL 2 → 4.35.1 (workflow-only, no service impact)
+  - setup-uv 4 → 8.0 (workflow-only, no service impact)
+
+**Hold for Validation:**
+- **#1390 (pandas 2.2 → 3.0):** Major DataFrame API refactoring. Admin service must validate:
+  - Deprecated parameter removals
+  - API method signature changes
+  - Type hints compatibility
+  
+- **#1401 (sentence-transformers ≥3.4 → ≥5.3.0):** Core embedding dependency. Embeddings-server must validate:
+  - Pre-trained model weights compatibility
+  - Tokenizer API changes
+  - SentenceTransformer instantiation patterns
+
+**Skip / Closed:**
+- **#1393 (transformers 4.57 → 5.0.0rc3):** Release candidate version unsuitable for stable release. Close as not applicable; re-triage when stable 5.0.0 ships.
+
+## Next Steps
+
+- Squad (Coordinator): Sequential merge of 35 PRs with CI waits
+- Admin team: Validate pandas 3.0 compatibility
+- Embeddings team: Validate sentence-transformers 5.3 compatibility
+
+---
+
 # Decision: OpenVINO Embeddings Container Regression Root Cause
 
 **Author:** Parker (Backend Dev)  
@@ -809,3 +859,133 @@ Both base image Dockerfiles should extract model download/verification logic int
 - `pyproject.toml` — declares these as build-time dependencies or scripts
 
 Then in Dockerfile: `RUN uv run python scripts/download_models.py` (clean, testable, auditable).
+
+---
+
+# Decision: Solr Auth Role Alignment with 9.7 Defaults
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2025-07-25  
+**Issue:** #1332  
+**PR:** #1333
+
+## Context
+
+Solr 9.7's `solr auth enable` assigns all 4 built-in roles (superadmin, admin, search, index) to the created admin user. Our init script was overwriting these with `set-user-role`, breaking security operations.
+
+## Decision
+
+1. **Do NOT call set-user-role for the admin user** — let `solr auth enable` handle role assignment
+2. **Use the built-in "search" role** instead of custom "readonly" for read-only users
+3. **Align security.json** with Solr 9.7's 4-tier role hierarchy
+
+## Rationale
+
+- The superadmin role is required for security-edit operations; stripping it breaks auth management
+- Using built-in roles avoids custom permission mappings and stays aligned with Solr's defaults
+- The "search" role includes collection-admin-read, which "readonly" lacked
+
+## Impact
+
+All environments (dev + prod) are affected. No migration needed — the fix takes effect on next container restart during auth bootstrap.
+
+---
+
+# Decision: Solr 10 Language-Models Module Cannot Replace Embeddings-Server
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2025-07-22  
+**Status:** Decided
+
+## Context
+
+Juanma asked whether Solr 10's `language-models` module could replace our separate `embeddings-server` Docker container, which runs `intfloat/multilingual-e5-base` via sentence-transformers for generating search embeddings.
+
+## Decision
+
+**Keep the current embeddings-server architecture. Do not adopt Solr 10's language-models module for embedding generation.**
+
+## Rationale
+
+After thorough research, the Solr 10 `language-models` module:
+1. Only supports **remote API calls** to cloud providers (OpenAI, Cohere, HuggingFace Inference API, MistralAI) — no local/in-process model execution
+2. Has **no preprocessing hooks** for E5 model prefixes ("query: " / "passage: "), which are required for correct embeddings
+3. Encodes documents **one-by-one** at index time (vs our 50-doc batches), with explicit performance warnings from the module authors
+4. Provides **no GPU support** via its LangChain4j ONNX path (CPU-only, and this path isn't even wired into Solr yet)
+5. In-process ONNX support is tracked in **SOLR-17446** but is not implemented and has no timeline
+
+## What We Should Do Instead
+
+1. **Monitor SOLR-17446** for in-process ONNX support — this would be the trigger to re-evaluate
+2. **Consider upgrading our embeddings-server** to use ONNX Runtime as the Python backend (sentence-transformers v3.2+ supports `backend="onnx"`) for 1.4–2× CPU throughput improvement — this is independent of the Solr module question
+3. **Evaluate Solr 9.7 → 10.0 upgrade** separately for other benefits (not for this module)
+
+## Impact
+
+- No changes needed to current architecture
+- embeddings-server remains the single source of truth for embedding generation
+- Full research report: `docs/research/solr10-language-models-embeddings.md`
+
+---
+
+# User Directive: Screenshots Must Be Updated with Documentation
+
+**Date:** 2026-03-31  
+**By:** jmservera (via Copilot)  
+**Directive:** Next time documentation is updated, screenshots must also be updated  
+**Rationale:** User request — ensure visual consistency between docs and current UI state
+
+---
+
+# Decision: Dependabot Batch Merge Workflow
+
+**Author:** Brett (Infra Architect)  
+**Date:** 2026-04-19T07:50:00Z  
+**Status:** Implemented (PR #1413)
+
+## Problem
+
+The existing `dependabot-automerge.yml` workflow had two issues:
+
+1. **Bug:** Author login filter checked `dependabot[bot]` but the correct value from `gh pr list --json author` is `app/dependabot`. This meant zero PRs ever matched — 38 PRs piled up.
+2. **Structural:** The `workflow_run` trigger processes PRs one at a time. Each merge changes `dev`, requiring the next PR to rebase before CI can run. With 35+ PRs, this creates a multi-hour sequential pipeline.
+
+## Solution
+
+### Fix 1: Author login (1-line fix)
+
+Changed `select(.author.login == "dependabot[bot]")` to `select(.author.login == "app/dependabot")` in `dependabot-automerge.yml`. This restores the single-PR auto-merge flow for future PRs.
+
+### Fix 2: New batch merge workflow (`dependabot-batch-merge.yml`)
+
+A new workflow that consolidates multiple dependabot PRs into a single merge:
+
+**Architecture:**
+- **Trigger:** Manual dispatch (with dry-run option) + weekly schedule (Monday 06:00 UTC)
+- **Phase 1 — Collect:** Find all open dependabot PRs targeting `dev`, filter out major version bumps
+- **Phase 2 — Consolidate:** Create `dependabot/batch-YYYY-MM-DD` branch from `dev`, merge each PR branch sequentially with lockfile conflict resolution
+- **Phase 3 — Test:** Run the full CI suite (`ci.yml`) on the consolidated branch
+- **Phase 4 — PR:** Open a single PR to `dev` with summary table of all included updates
+- **Phase 5 — Cleanup:** Close original dependabot PRs with back-reference comment
+
+**Key design decisions:**
+- **Major bumps excluded:** Filtered out during collection; these require manual review per existing team policy
+- **Lockfile conflict resolution:** For Python services using uv, runs `uv lock` to regenerate. For npm (aithena-ui), runs `npm install --package-lock-only`
+- **VERSION bump:** Patch version incremented only when changes exist (e.g., 1.18.1 → 1.18.2)
+- **No `--admin` flag:** All operations use standard `GITHUB_TOKEN` permissions
+- **Security patterns preserved:** All actions pinned by SHA, minimal permissions per job, `read-all` default
+- **Dry-run mode:** `workflow_dispatch` input to preview eligible PRs without creating branches
+
+## Alternatives Considered
+
+1. **Fix auto-merge only, no batch workflow:** Would work for future PRs but doesn't solve the backlog problem efficiently. Sequential rebase-and-merge of 35 PRs would take 6+ hours of CI time.
+2. **GitHub's native dependabot grouped updates:** Dependabot supports `groups` in config, but it creates grouped PRs at PR-creation time — it cannot retroactively group existing PRs.
+3. **Third-party batch merge actions:** Evaluated but rejected for security (SHA-pinning policy) and because our lockfile regeneration needs are project-specific.
+
+## Impact
+
+- Reduces CI runner time by ~80% when processing multiple dependabot PRs (1 CI run vs N)
+- Single review point for batch updates
+- Preserves the existing single-PR auto-merge flow for day-to-day updates
+- Both workflows can coexist: auto-merge handles new PRs promptly, batch-merge handles backlogs
+
