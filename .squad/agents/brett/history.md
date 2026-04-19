@@ -265,3 +265,21 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 **Decision:** `.squad/decisions.md` updated with full analysis and rationale.
 
 **Cross-reference:** Parker's base image work (orchestration log 2026-03-31T13-16Z-parker-base-dockerfiles.md) unblocks next steps.
+
+## 2026-04-19 — Dependabot Batch Merge Workflow
+
+### Bug Fix
+- `dependabot-automerge.yml` line 41: `dependabot[bot]` → `app/dependabot` — the `gh pr list --json author` returns `app/dependabot` as the login, not `dependabot[bot]`. This was the root cause of 38 PRs piling up unmergeable.
+
+### New Workflow: `dependabot-batch-merge.yml`
+- Consolidates N dependabot PRs into a single `dependabot/batch-YYYY-MM-DD` branch
+- Lockfile conflict resolution: `uv lock` for Python services, `npm install --package-lock-only` for aithena-ui
+- Major version bumps excluded automatically (per team policy in decisions.md)
+- VERSION file patch-bumped only when actual changes merged
+- Dry-run mode via workflow_dispatch for safe preview
+- Both workflows coexist: auto-merge for day-to-day, batch-merge for backlogs
+
+### Key Files
+- `.github/workflows/dependabot-automerge.yml` — single-PR auto-merge (fixed)
+- `.github/workflows/dependabot-batch-merge.yml` — new batch workflow
+- `.squad/decisions/inbox/brett-dependabot-batch.md` — design decision

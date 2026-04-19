@@ -38,7 +38,7 @@ jobs:
           PR_JSON=$(gh pr list --repo "$GITHUB_REPOSITORY" \
             --head "$HEAD_BRANCH" --state open \
             --json number,author,title \
-            --jq '.[] | select(.author.login == "dependabot[bot]")' 2>/dev/null || true)
+            --jq '.[] | select(.author.login == "app/dependabot")' 2>/dev/null || true)
 
           if [ -z "$PR_JSON" ]; then
             echo "No open Dependabot PR found for branch $HEAD_BRANCH"
