@@ -102,6 +102,8 @@ Solr 10 is a major release that brings transformative capabilities directly rele
 - `DocumentCategorizerUpdateProcessorFactory` — performs ONNX-based document classification/sentiment analysis at index time
 - Supports HuggingFace, MistralAI, OpenAI, Cohere, and custom endpoints
 
+For embeddings specifically, migration feasibility depends on text-to-vector components (query parser and index-time vectorization processors), not on `DocumentCategorizerUpdateProcessorFactory`.
+
 **Analysis**:
 
 | Factor | Keep embeddings-server | Use language-models module |
