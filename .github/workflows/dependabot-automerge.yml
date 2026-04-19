@@ -7,7 +7,6 @@ on:
   workflow_run: # zizmor: ignore[dangerous-triggers] -- guarded by Dependabot-only checks + minimal permissions
     workflows: ["CI - Unit & Integration Tests"]
     types: [completed]
-    branches: [dev]
 
 permissions: read-all
 
