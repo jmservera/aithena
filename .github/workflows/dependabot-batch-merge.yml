@@ -301,6 +301,7 @@ jobs:
     if: needs.consolidate.outputs.has-changes == 'true'
     permissions:
       contents: read
+      issues: write
       pull-requests: write
       issues: write
     steps:
