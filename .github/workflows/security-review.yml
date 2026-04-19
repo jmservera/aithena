@@ -1,0 +1,108 @@
+name: Security Review (Weekly)
+
+# Weekly review of Dependabot security alerts.
+# Creates squad-labeled issues for critical/high vulnerabilities
+# so they get triaged and assigned to the appropriate squad member.
+
+on:
+  schedule:
+    # Every Monday at 08:00 UTC
+    - cron: '0 8 * * 1'
+
+  # Manual trigger for on-demand review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  security-events: read
+
+jobs:
+  review-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Review Dependabot alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          REPO="${{ github.repository }}"
+          echo "🔍 Reviewing security alerts for ${REPO}..."
+
+          # Fetch open Dependabot alerts (critical and high severity)
+          ALERTS=$(gh api "repos/${REPO}/dependabot/alerts?state=open&severity=critical,high&per_page=100" \
+            --jq '.[] | {number: .number, severity: .security_advisory.severity, summary: .security_advisory.summary, package: .dependency.package.ecosystem + "/" + .dependency.package.name, cve: (.security_advisory.cve_id // "N/A"), url: .html_url}' 2>/dev/null || echo "")
+
+          if [ -z "$ALERTS" ]; then
+            echo "✅ No critical/high Dependabot alerts found."
+            exit 0
+          fi
+
+          echo "⚠️ Found alerts to review:"
+          echo "$ALERTS" | head -20
+
+          # Process each alert — create an issue if one doesn't already exist
+          echo "$ALERTS" | jq -c '.' | while IFS= read -r alert; do
+            NUMBER=$(echo "$alert" | jq -r '.number')
+            SEVERITY=$(echo "$alert" | jq -r '.severity')
+            SUMMARY=$(echo "$alert" | jq -r '.summary')
+            PACKAGE=$(echo "$alert" | jq -r '.package')
+            CVE=$(echo "$alert" | jq -r '.cve')
+            URL=$(echo "$alert" | jq -r '.url')
+
+            ISSUE_TITLE="🔒 Security: ${SUMMARY} (${PACKAGE})"
+
+            # Check if issue already exists (search by title substring)
+            EXISTING=$(gh issue list --repo "${REPO}" --search "${PACKAGE} ${CVE}" --label "security" --json number --jq 'length')
+            if [ "$EXISTING" -gt 0 ]; then
+              echo "  ⏭️  Alert #${NUMBER}: issue already exists for ${PACKAGE}"
+              continue
+            fi
+
+            # Determine squad label based on package ecosystem
+            SQUAD_LABEL="squad"
+            ECOSYSTEM=$(echo "$PACKAGE" | cut -d/ -f1)
+            case "$ECOSYSTEM" in
+              pip|pypi) SQUAD_LABEL="squad:parker" ;;
+              npm)      SQUAD_LABEL="squad:dallas" ;;
+              docker)   SQUAD_LABEL="squad:brett" ;;
+              actions)  SQUAD_LABEL="squad:brett" ;;
+            esac
+
+            BODY="## Security Alert
+
+| Field | Value |
+|---|---|
+| **Alert** | [#${NUMBER}](${URL}) |
+| **Severity** | ${SEVERITY} |
+| **Package** | \`${PACKAGE}\` |
+| **CVE** | ${CVE} |
+| **Summary** | ${SUMMARY} |
+
+### Action Required
+
+1. Review the alert and assess impact on aithena
+2. If a patch is available, update the dependency
+3. If no patch exists, evaluate workarounds or risk acceptance
+
+---
+*Created automatically by the weekly security review workflow.*"
+
+            gh issue create \
+              --repo "${REPO}" \
+              --title "${ISSUE_TITLE}" \
+              --body "${BODY}" \
+              --label "security,${SQUAD_LABEL}" || {
+                echo "  ⚠️  Failed to create issue for alert #${NUMBER} — may need 'security' label to exist"
+              }
+
+            echo "  ✅ Created issue for alert #${NUMBER}: ${PACKAGE} (${SEVERITY})"
+          done
+
+          echo ""
+          echo "🏁 Security review complete."
