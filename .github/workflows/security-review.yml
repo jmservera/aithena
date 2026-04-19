@@ -40,8 +40,12 @@ jobs:
 
           # Fetch open code scanning alerts (critical/error/high severity)
           # These come from CodeQL, Bandit, Checkov, zizmor
-          ALERTS=$(gh api "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" \
-            --jq '.[] | select(.rule.security_severity_level == "critical" or .rule.security_severity_level == "high" or .rule.severity == "error") | {number: .number, rule: .rule.id, severity: (.rule.security_severity_level // .rule.severity), tool: .tool.name, description: .rule.description, file: .most_recent_instance.location.path, line: .most_recent_instance.location.start_line, url: .html_url, created: .created_at}' 2>/dev/null || echo "")
+          # Surface API errors explicitly — a silent failure here would hide real problems
+          if ! ALERTS=$(gh api "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" \
+            --jq '.[] | select(.rule.security_severity_level == "critical" or .rule.security_severity_level == "high" or .rule.severity == "error") | {number: .number, rule: .rule.id, severity: (.rule.security_severity_level // .rule.severity), tool: .tool.name, description: .rule.description, file: .most_recent_instance.location.path, line: .most_recent_instance.location.start_line, url: .html_url, created: .created_at}'); then
+            echo "❌ Failed to fetch code scanning alerts. Check GITHUB_TOKEN permissions (needs security-events:read)."
+            exit 1
+          fi
 
           if [ -z "$ALERTS" ]; then
             echo "✅ No critical/high GHAS alerts found."
@@ -64,8 +68,11 @@ jobs:
 
             ISSUE_TITLE="🔒 GHAS: ${RULE} in ${FILE} (${TOOL})"
 
-            # Check if issue already exists
-            SEARCH_TERM="${RULE} ${FILE}"
+            # Ensure the "security" label exists (idempotent)
+            gh label create "security" --repo "${REPO}" --description "Security alerts" --color "B60205" --force 2>/dev/null || true
+
+            # Check if issue already exists.
+            # If the label search fails for any reason, treat as "no match" so we can proceed.
             EXISTING=$(gh issue list --repo "${REPO}" --search "\"${RULE}\" \"${FILE}\"" --label "security" --json number --jq 'length' 2>/dev/null || echo "0")
             if [ "$EXISTING" -gt 0 ]; then
               echo "  ⏭️  Alert #${NUMBER}: issue already exists for ${RULE} in ${FILE}"
