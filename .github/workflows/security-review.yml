@@ -16,6 +16,10 @@ on:
   # Manual trigger for on-demand review
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write
@@ -56,26 +60,30 @@ jobs:
           echo "⚠️ Found ${ALERT_COUNT} alert(s) to review."
 
           # Process each alert
+          # Ensure the "security" label exists once before the loop (idempotent)
+          gh label create "security" --repo "${REPO}" --description "Security alerts" --color "B60205" --force 2>/dev/null || true
+
+          CREATED=0
+          SKIPPED=0
+          FAILED=0
+
           echo "$ALERTS" | jq -c '.' | while IFS= read -r alert; do
             NUMBER=$(echo "$alert" | jq -r '.number')
             RULE=$(echo "$alert" | jq -r '.rule')
-            SEVERITY=$(echo "$alert" | jq -r '.severity')
-            TOOL=$(echo "$alert" | jq -r '.tool')
-            DESCRIPTION=$(echo "$alert" | jq -r '.description')
-            FILE=$(echo "$alert" | jq -r '.file')
-            LINE=$(echo "$alert" | jq -r '.line')
+            SEVERITY=$(echo "$alert" | jq -r '.severity // "unknown"')
+            TOOL=$(echo "$alert" | jq -r '.tool // "unknown"')
+            DESCRIPTION=$(echo "$alert" | jq -r '.description // "No description available"')
+            FILE=$(echo "$alert" | jq -r '.file // "unknown"')
+            LINE=$(echo "$alert" | jq -r '.line // "?"')
             URL=$(echo "$alert" | jq -r '.url')
 
             ISSUE_TITLE="🔒 GHAS: ${RULE} in ${FILE} (${TOOL})"
 
-            # Ensure the "security" label exists (idempotent)
-            gh label create "security" --repo "${REPO}" --description "Security alerts" --color "B60205" --force 2>/dev/null || true
-
-            # Check if issue already exists.
-            # If the label search fails for any reason, treat as "no match" so we can proceed.
+            # Check if issue already exists
             EXISTING=$(gh issue list --repo "${REPO}" --search "\"${RULE}\" \"${FILE}\"" --label "security" --json number --jq 'length' 2>/dev/null || echo "0")
             if [ "$EXISTING" -gt 0 ]; then
               echo "  ⏭️  Alert #${NUMBER}: issue already exists for ${RULE} in ${FILE}"
+              SKIPPED=$((SKIPPED + 1))
               continue
             fi
 
@@ -124,13 +132,18 @@ ${DESCRIPTION}
               --repo "${REPO}" \
               --title "${ISSUE_TITLE}" \
               --body "${BODY}" \
-              --label "security,${SQUAD_LABEL}" 2>/dev/null || {
-                echo "  ⚠️  Failed to create issue for alert #${NUMBER}"
+              --label "security,${SQUAD_LABEL}" || {
+                echo "  ❌ Failed to create issue for alert #${NUMBER}"
+                FAILED=$((FAILED + 1))
                 continue
               }
 
+            CREATED=$((CREATED + 1))
             echo "  ✅ Created issue for GHAS alert #${NUMBER}: ${RULE} in ${FILE}"
           done
 
           echo ""
-          echo "🏁 GHAS security review complete."
+          echo "🏁 GHAS security review complete. Created: ${CREATED}, Skipped: ${SKIPPED}, Failed: ${FAILED}"
+          if [ "${FAILED}" -gt 0 ]; then
+            echo "⚠️ ${FAILED} issue(s) failed to create — check permissions and labels."
+          fi
