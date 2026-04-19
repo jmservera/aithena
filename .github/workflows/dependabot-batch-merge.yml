@@ -160,7 +160,6 @@ jobs:
           BATCH_BRANCH: ${{ needs.collect-prs.outputs.batch-branch }}
         run: |
           git checkout -b "$BATCH_BRANCH"
-          git push origin "$BATCH_BRANCH"
 
       - name: Merge each PR branch
         id: merge-branches
