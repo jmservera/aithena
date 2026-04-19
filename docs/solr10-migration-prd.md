@@ -10,10 +10,10 @@
 
 ## 1. Executive Summary
 
-Solr 10 is a major release that brings transformative capabilities directly relevant to aithena's architecture: native NLP/embedding generation via ONNX models, GPU-accelerated vector search (cuVS), vector quantization for memory reduction, standalone mode without ZooKeeper, and an overhauled CLI. This PRD analyzes every Solr 10 change against aithena's current 16-service compose topology (12 service roles) to produce a prioritized migration plan.
+Solr 10 is a major release that brings transformative capabilities directly relevant to aithena's architecture: improved vector/ML integration, GPU-accelerated vector search (cuVS), vector quantization for memory reduction, standalone mode without ZooKeeper, and an overhauled CLI. For embeddings specifically, Solr 10's `language-models` module can orchestrate index/query-time text-to-vector generation via remote API providers, but does not currently provide an in-JVM ONNX embedding runtime; see [research notes](research/solr10-language-models-embeddings.md). This PRD analyzes every Solr 10 change against aithena's current 16-service compose topology (12 service roles) to produce a prioritized migration plan.
 
 **Key opportunities:**
-- **Eliminate the embeddings-server** — Solr 10's `language-models` module can generate embeddings at index and query time
+- **Potentially eliminate the embeddings-server** — Solr 10's `language-models` module can generate embeddings at index and query time via remote API providers (see [research notes](research/solr10-language-models-embeddings.md))
 - **Eliminate 3 ZooKeeper nodes** — Standalone mode or simplified single-node SolrCloud removes ZK entirely
 - **Reduce Solr from 3 nodes to 1** — For dev/small deployments; keep 3-node option for production HA
 - **GPU-accelerate vector search** — cuVS codec moves kNN from CPU to GPU (40×+ faster index builds)
@@ -22,7 +22,7 @@ Solr 10 is a major release that brings transformative capabilities directly rele
 
 **Key risks:**
 - Java 21 requirement (current: Java 17 via Solr 9.7)
-- HNSW parameter renames require schema migration
+- HNSW parameter renames may require schema migration if custom values are used
 - CLI double-dash syntax breaks all init scripts
 - `blockUnknown` default change (false→true) affects unauthenticated health checks
 - `language-models` module depends on external API services (latency, cost, privacy)
@@ -89,7 +89,7 @@ Solr 10 is a major release that brings transformative capabilities directly rele
 
 ## 3. Solr 10 Feature Analysis
 
-### 3.1 🟢 Eliminable: Embeddings Server → `language-models` Module
+### 3.1 🟡 Conditionally Eliminable: Embeddings Server → `language-models` Module
 
 **Current**: aithena runs a dedicated Python embeddings-server (FastAPI + sentence-transformers + multilingual-e5-base) that:
 - Serves `POST /v1/embeddings/` for both document-indexer (at index time) and solr-search (at query time)
@@ -120,6 +120,12 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 - **Option A (recommended for on-prem)**: Keep embeddings-server for local/private deployments, but refactor to be optional. The `language-models` module can be used for cloud deployments where privacy isn't a concern.
 - **Option B (cloud-first)**: Replace embeddings-server with the `language-models` module + self-hosted model server (e.g., TEI). This keeps data private while using Solr-native integration.
 - **Option C (full migration)**: For maximum simplification, use the `language-models` module with HuggingFace Inference Endpoints (dedicated, private). Eliminates the embeddings-server entirely.
+
+**Known blockers/constraints** (see [research notes](research/solr10-language-models-embeddings.md)):
+- `language-models` module currently supports only **remote API providers** — no in-JVM E5 model loading
+- No native support for E5's `"query:"` / `"passage:"` prefix convention — would need custom adapter or upstream contribution
+- Index-time vectorization makes per-document API calls vs. embeddings-server's batching, adding latency and cost at scale
+- Full replacement depends on upstream LangChain4j adding local model support or aithena hosting a self-managed inference endpoint
 
 **Migration effort**: 🟡 Medium — requires changes to document-indexer (remove embedding calls, configure Solr URP) and solr-search (replace direct embedding calls with `{!knn_text_to_vector}` query parser).
 
@@ -265,14 +271,14 @@ solr auth enable --type basicAuth \
 
 ### 4.2 🔴 HNSW Parameter Renames
 
-**Impact**: `src/solr/books/managed-schema.xml`
+**Impact**: Conditional. `src/solr/books/managed-schema.xml` currently uses the vector field type defaults and does **not** explicitly set `hnswMaxConnections` / `hnswBeamWidth`.
 
 | Current | Solr 10 |
 |---------|---------|
 | `hnswMaxConnections` | `hnswM` |
 | `hnswBeamWidth` | `hnswEfConstruction` |
 
-**Action**: Update schema field type definitions. Requires reindex.
+**Action**: No schema change is needed for this item unless we explicitly tune HNSW parameters in schema. If we later add these settings, use the Solr 10 names above; a reindex would then be required.
 
 ### 4.3 🔴 `blockUnknown` Default Change
 

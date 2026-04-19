@@ -281,6 +281,7 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 - Tests updated to verify admin roles are NOT overwritten and readonly gets "search" role
 
 **Key learning:** In Solr 9.7, `solr auth enable` handles admin role assignment automatically. Never overwrite with `set-user-role` for the admin user — it strips critical roles. The built-in "search" role replaces custom "readonly" and includes collection-admin-read permissions.
+
 ## 2026-04-19 — Dependabot Batch Merge Workflow
 
 ### Bug Fix
