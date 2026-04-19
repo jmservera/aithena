@@ -268,9 +268,9 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 
 ---
 
-## 2025-07-25 — Solr 9.7 Auth Role Alignment (#1332)
+## 2026-04-02 — Solr 9.7 Auth Role Alignment (#1332)
 
-**Status:** ✅ PR #1333 created targeting dev, milestone v1.18.1.
+**Status:** ✅ PR #1333 created targeting dev (post-v1.18.1 hardening).
 
 **Root cause:** Solr 9.7's `solr auth enable` assigns all 4 built-in roles (superadmin, admin, search, index) to the created user. Our solr-init script was calling `set-user-role` afterward, overwriting these to just `["admin"]`, stripping superadmin (needed for security-edit) and search (needed for collection-admin-read).
 

@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-Solr 10 is a major release that brings transformative capabilities directly relevant to aithena's architecture: native NLP/embedding generation via ONNX models, GPU-accelerated vector search (cuVS), vector quantization for memory reduction, standalone mode without ZooKeeper, and an overhauled CLI. This PRD analyzes every Solr 10 change against aithena's current 15-service architecture to produce a prioritized migration plan.
+Solr 10 is a major release that brings transformative capabilities directly relevant to aithena's architecture: native NLP/embedding generation via ONNX models, GPU-accelerated vector search (cuVS), vector quantization for memory reduction, standalone mode without ZooKeeper, and an overhauled CLI. This PRD analyzes every Solr 10 change against aithena's current 16-service compose topology (12 service roles) to produce a prioritized migration plan.
 
 **Key opportunities:**
 - **Eliminate the embeddings-server** — Solr 10's `language-models` module can generate embeddings at index and query time
@@ -31,7 +31,7 @@ Solr 10 is a major release that brings transformative capabilities directly rele
 
 ## 2. Current Architecture Inventory
 
-### 2.1 Service Map (15 services)
+### 2.1 Service Map (16 compose services / 12 service roles)
 
 | Service | Type | Purpose | Solr 10 Impact |
 |---------|------|---------|----------------|
@@ -99,7 +99,7 @@ Solr 10 is a major release that brings transformative capabilities directly rele
 
 **Solr 10 alternative**: The `language-models` module (renamed from `llm`) integrates LangChain4j to call external embedding APIs:
 - `TextToVectorQParserPlugin` — generates embeddings at query time
-- `DocumentCategorizerUpdateProcessorFactory` — generates embeddings at index time via ONNX models
+- `DocumentCategorizerUpdateProcessorFactory` — performs ONNX-based document classification/sentiment analysis at index time
 - Supports HuggingFace, MistralAI, OpenAI, Cohere, and custom endpoints
 
 **Analysis**:
@@ -234,15 +234,30 @@ Solr 10 is a major release that brings transformative capabilities directly rele
 
 **Impact**: All init scripts in `docker-compose.yml` and `docker-compose.prod.yml`.
 
-| Current (Solr 9.7) | Solr 10 | Location |
-|--------------------|---------|---------| 
-| `solr auth enable -u "user:pass"` | `solr auth enable --credentials "user:pass"` | solr-init entrypoint |
-| `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` | solr-init entrypoint |
-| `--block-unknown false` | `--block-unknown false` (same) | solr-init entrypoint |
-| `--solr-include-file /dev/null` | `--solr-include-file /dev/null` (same) | solr-init entrypoint |
-| `solr zk cp file:... zk:...` | `solr zk cp file:... zk:...` (same but check) | solr-init entrypoint |
-| `solr zk upconfig -z ... -n ... -d ...` | `solr zk upconfig --zk-host ... --name ... --dir ...` | solr-init entrypoint |
-| `solr zk ls /configs -z ...` | `solr zk ls /configs --zk-host ...` | solr-init entrypoint |
+**Current auth bootstrap command shape (both compose files):**
+```bash
+solr auth enable --type basicAuth \
+  -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
+  --block-unknown false \
+  --solr-include-file /dev/null \
+  -z "$ZK_HOST"
+```
+
+**Solr 10 equivalent command shape:**
+```bash
+solr auth enable --type basicAuth \
+  --credentials "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
+  --block-unknown false \
+  --solr-include-file /dev/null \
+  --zk-host "$ZK_HOST"
+```
+
+| Changed flag only | Solr 9.7 | Solr 10 | Location |
+|-------------------|----------|---------|----------|
+| Credentials flag | `-u "user:pass"` | `--credentials "user:pass"` | solr-init entrypoint |
+| ZooKeeper flag | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` | solr-init entrypoint |
+| zk upconfig flags | `-z ... -n ... -d ...` | `--zk-host ... --name ... --dir ...` | solr-init entrypoint |
+| zk ls flag | `-z ...` | `--zk-host ...` | solr-init entrypoint |
 
 **Action**: Update all `solr` CLI invocations in both compose files. Test thoroughly.
 
