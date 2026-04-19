@@ -61,13 +61,16 @@ jobs:
 
           # Process each alert
           # Ensure the "security" label exists once before the loop (idempotent)
-          gh label create "security" --repo "${REPO}" --description "Security alerts" --color "B60205" --force 2>/dev/null || true
+          gh label create "security" --repo "${REPO}" --description "Security alerts" --color "B60205" --force || {
+            echo "⚠️ Could not create/verify 'security' label. Issue creation may fail."
+          }
 
           CREATED=0
           SKIPPED=0
           FAILED=0
 
-          echo "$ALERTS" | jq -c '.' | while IFS= read -r alert; do
+          # Use process substitution to avoid subshell (preserves counter variables)
+          while IFS= read -r alert; do
             NUMBER=$(echo "$alert" | jq -r '.number')
             RULE=$(echo "$alert" | jq -r '.rule')
             SEVERITY=$(echo "$alert" | jq -r '.severity // "unknown"')
@@ -140,7 +143,7 @@ ${DESCRIPTION}
 
             CREATED=$((CREATED + 1))
             echo "  ✅ Created issue for GHAS alert #${NUMBER}: ${RULE} in ${FILE}"
-          done
+          done < <(echo "$ALERTS" | jq -c '.')
 
           echo ""
           echo "🏁 GHAS security review complete. Created: ${CREATED}, Skipped: ${SKIPPED}, Failed: ${FAILED}"
