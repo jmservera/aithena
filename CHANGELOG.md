@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-04-19
+
+### Added
+
+- **Configurable Solr shards and replication** — Solr shards and replication factor are now configurable via environment variables (#1428)
+
+### Fixed
+
+- **Deprecation warnings suppressed** — Suppress Solr Security Manager and RabbitMQ deprecation warnings in container logs (#1432, closes #1367)
+- **CI: Dependabot batch label** — Ensure `dependabot:batch` label exists before PR creation (#1415)
+- **CI: Batch dependabot merge** — Add batch dependabot merge workflow and fix automerge bug (#1413)
+- **CI: E2E health checks** — Source installer-generated Solr credentials for E2E health checks (#1370)
+
+### Documentation
+
+- Solr 10 migration PRD for v2.0 (#1334)
+- Organize PRDs — move completed GPU acceleration, relocate Solr 10 migration (#1429)
+- Release documentation for v1.18.1 (#1371)
+
+### Dependencies
+
+- Batch dependency update (24 PRs) (#1414)
+- Bump pandas 2.2.2 → 3.0.2 in admin (#1417)
+- Bump FastAPI in solr-search and embeddings-server (#1402, #1395)
+- Bump ONNX 1.20.1 → 1.21.0 in embeddings-server (#1372)
+- Bump uvicorn[standard] in solr-search (#1416)
+- Bump GitHub Actions: ruff-action 4.0.0, upload-artifact 7.0.1, build-push-action 7.1.0, github-script 9.0.0, setup-uv 8.0.0, login-action 4.1.0, codeql-action 4.35.1 (#1427, #1426, #1425, #1421, #1418, #1406, #1391)
+- Bump frontend dev dependencies: typescript-eslint, globals, @axe-core/react, jsdom (#1423, #1424, #1422, #1419)
+- Bump ruff in document-lister (#1420), httpx in embeddings-server (#1397)
+
 ## [1.18.1] — 2026-04-02
 
 ### Fixed
