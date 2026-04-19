@@ -15,10 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Deprecation warnings suppressed** — Suppress Solr Security Manager and RabbitMQ deprecation warnings in container logs (#1432, closes #1367)
-- **CI: Dependabot batch label** — Ensure `dependabot:batch` label exists before PR creation (#1415)
-- **CI: Batch dependabot merge** — Add batch dependabot merge workflow and fix automerge bug (#1413)
-- **CI: E2E health checks** — Source installer-generated Solr credentials for E2E health checks (#1370)
+- **Deprecation warnings suppressed** — Suppressed Solr Security Manager and RabbitMQ deprecation warnings in container logs (#1432, closes #1367)
+- **CI: Dependabot batch label** — Ensured `dependabot:batch` label exists before PR creation (#1415)
+- **CI: Batch dependabot merge** — Added batch dependabot merge workflow and fixed automerge bug (#1413)
+- **CI: E2E health checks** — Sourced installer-generated Solr credentials for E2E health checks (#1370)
 
 ### Documentation
 
