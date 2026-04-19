@@ -303,7 +303,6 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-      issues: write
     steps:
       - name: Ensure dependabot:batch label exists
         env:
