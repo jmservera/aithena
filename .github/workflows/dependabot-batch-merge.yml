@@ -249,7 +249,11 @@ jobs:
             echo "::endgroup::"
           done < <(echo "$PR_JSON" | jq -c '.[]')
 
-          MERGED_COUNT=$(echo "$MERGED_PRS" | tr ',' '\n' | grep -c '[0-9]' || echo "0")
+          if [ -n "$MERGED_PRS" ]; then
+            MERGED_COUNT=$(echo "$MERGED_PRS" | awk -F',' '{print NF}')
+          else
+            MERGED_COUNT=0
+          fi
 
           echo "merged-prs=${MERGED_PRS}" >> "$GITHUB_OUTPUT"
           echo "failed-prs=${FAILED_PRS}" >> "$GITHUB_OUTPUT"
