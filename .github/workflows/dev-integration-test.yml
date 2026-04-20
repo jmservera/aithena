@@ -169,15 +169,16 @@ jobs:
                 ZOO_SERVERS: server.1=zoo1:2888:3888;2181
                 ZOO_STANDALONE_ENABLED: "true"
             # Single Solr node depends only on zoo1
+            # !override replaces (not merges) the base depends_on map
             solr:
               environment:
                 ZK_HOST: "zoo1:2181"
-              depends_on:
+              depends_on: !override
                 zoo1:
                   condition: service_healthy
             # Override solr-init to only depend on single Solr node
             solr-init:
-              depends_on:
+              depends_on: !override
                 solr:
                   condition: service_healthy
               environment:
