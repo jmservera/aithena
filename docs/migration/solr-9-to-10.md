@@ -102,7 +102,7 @@ The `add-conf-overlay.sh` script adds at runtime:
 
 ### 1.5 SolrCloud Topology
 
-| Parameter | Dev (`docker-compose.yml`) | Prod (`docker-compose.prod.yml`) |
+| Parameter | Dev (`docker-compose.yml`) | Prod (`docker/compose.prod.yml`) |
 |-----------|---------------------------|----------------------------------|
 | Solr nodes | 3 (`solr`, `solr2`, `solr3`) | 3 (`solr`, `solr2`, `solr3`) |
 | ZooKeeper nodes | 3 (`zoo1`, `zoo2`, `zoo3`) | 3 (`zoo1`, `zoo2`, `zoo3`) |
@@ -139,7 +139,7 @@ All `solr` CLI commands now require full double-dash flags. This breaks every `s
 
 **Affected files**:
 - `docker-compose.yml` — solr-init entrypoint (lines ~710–798)
-- `docker-compose.prod.yml` — solr-init entrypoint (lines ~658–736)
+- `docker/compose.prod.yml` — solr-init entrypoint (lines ~658–736)
 
 ### 2.2 HNSW Parameter Renames (🟢 Low Impact for Us)
 
@@ -275,7 +275,7 @@ Verify that `apt-get install fonts-liberation fonts-dejavu-core` still works on 
 
 #### Step 2.3: Update `solr-init` CLI Commands
 
-**Files**: `docker-compose.yml`, `docker-compose.prod.yml`
+**Files**: `docker-compose.yml`, `docker/compose.prod.yml`
 
 Replace all Solr 9 CLI syntax with Solr 10 double-dash equivalents in the `solr-init` entrypoint:
 
@@ -598,7 +598,7 @@ These are tracked separately and not required for the core Solr 9 → 10 upgrade
 | `src/solr/Dockerfile` | Edit | `FROM solr:9.7` → `FROM solr:10` |
 | `src/solr/books/solrconfig.xml` | Edit | `luceneMatchVersion` 9.10 → 10.0 |
 | `docker-compose.yml` | Edit | solr-init CLI double-dash syntax |
-| `docker-compose.prod.yml` | Edit | solr-init CLI double-dash syntax |
+| `docker/compose.prod.yml` | Edit | solr-init CLI double-dash syntax |
 | `src/solr/security.json` | Verify | Confirm `blockUnknown: false` compat |
 | `src/solr/books/managed-schema.xml` | No change (Phase 1) | HNSW defaults are fine; quantization is Phase 2 |
 | `src/solr-search/` | No change (Phase 1) | Uses `wt=json`, HTTP API unchanged |

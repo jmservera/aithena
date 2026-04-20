@@ -88,8 +88,8 @@ else
 fi
 
 COMPOSE_CMD="docker compose -f ${COMPOSE_DIR}/docker-compose.yml"
-if [[ -f "${COMPOSE_DIR}/docker-compose.prod.yml" ]]; then
-  COMPOSE_CMD="${COMPOSE_CMD} -f ${COMPOSE_DIR}/docker-compose.prod.yml"
+if [[ -f "${COMPOSE_DIR}/docker/compose.prod.yml" ]]; then
+  COMPOSE_CMD="${COMPOSE_CMD} -f ${COMPOSE_DIR}/docker/compose.prod.yml"
 fi
 
 # ---------------------------------------------------------------------------

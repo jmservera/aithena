@@ -276,7 +276,7 @@ jobs:
           mkdir -p release-package/installer
           
           # Core production files
-          cp docker-compose.prod.yml release-package/
+          cp docker/compose.prod.yml release-package/
           cp .env.prod.example release-package/
           cp README.md release-package/
           cp LICENSE release-package/

@@ -14,7 +14,7 @@ This plan defines the step-by-step process for migrating Aithena's production se
 
 **When to use this plan:** After PO confirms A/B test results (issue #877) and approves migration via approval gate in #876.
 
-**Scope:** Production environment (`docker-compose.prod.yml`), full library re-indexing, blue/green cutover strategy, 48-hour monitoring window.
+**Scope:** Production environment (`docker/compose.prod.yml`), full library re-indexing, blue/green cutover strategy, 48-hour monitoring window.
 
 ---
 
@@ -73,7 +73,7 @@ Each step must complete successfully before proceeding. Monitor logs at each sta
 
 ### Step 1: Prepare Production Compose (1 hour, no downtime)
 
-Update `docker-compose.prod.yml` to include e5-base indexing pipeline.
+Update `docker/compose.prod.yml` to include e5-base indexing pipeline.
 
 **Changes:**
 1. **Add `embeddings-server-e5` service** (from dev `docker-compose.yml`)
@@ -100,7 +100,7 @@ Update `docker-compose.prod.yml` to include e5-base indexing pipeline.
 
 3. **Validate compose syntax:**
    ```bash
-   python3 -c "import yaml; yaml.safe_load(open('docker-compose.prod.yml'))"
+   python3 -c "import yaml; yaml.safe_load(open('docker/compose.prod.yml'))"
    ```
 
 4. **Commit and tag:**
@@ -113,7 +113,7 @@ Update `docker-compose.prod.yml` to include e5-base indexing pipeline.
 **Action:** Restart production with both baseline and e5-base indexing.
 
 ```bash
-docker-compose -f docker-compose.prod.yml up -d embeddings-server-e5 document-indexer-e5
+docker-compose -f docker/compose.prod.yml up -d embeddings-server-e5 document-indexer-e5
 ```
 
 **Verification:**
@@ -259,7 +259,7 @@ SOLR_COLLECTION = "books_e5base"  # e5-base candidate (post-migration)
 
 **OR via environment variable (preferred for prod):**
 ```bash
-# docker-compose.prod.yml or kubectl secret:
+# docker/compose.prod.yml or kubectl secret:
 environment:
   - SOLR_COLLECTION=books_e5base
 ```
@@ -267,7 +267,7 @@ environment:
 **Deployment:**
 ```bash
 # Option A: Update environment variable and restart solr-search
-docker-compose -f docker-compose.prod.yml up -d solr-search
+docker-compose -f docker/compose.prod.yml up -d solr-search
 
 # Option B: Deploy via kubectl if using k8s
 kubectl set env deployment/solr-search SOLR_COLLECTION=books_e5base
@@ -339,7 +339,7 @@ docker logs solr-search | tail -20 | grep -i "error\|exception\|connect"
 # View current collection:
 docker exec solr-search python -c "from config import SOLR_COLLECTION; print(SOLR_COLLECTION)"
 
-# Update for production (in docker-compose.prod.yml):
+# Update for production (in docker/compose.prod.yml):
 solr-search:
   environment:
     - SOLR_COLLECTION=books_e5base  # Changed from books
@@ -379,7 +379,7 @@ Execute after Step 7 monitoring period (48 hours) confirms no regressions.
 
 **When:** After 48-hour confidence window (Step 7) and PO sign-off.
 
-**Action: Delete A/B-specific services from `docker-compose.prod.yml`**
+**Action: Delete A/B-specific services from `docker/compose.prod.yml`**
 
 ```yaml
 # Remove entirely:
@@ -428,7 +428,7 @@ def search(..., compare: bool = False):
 1. Bump minor version (e.g., `v1.8.0` → `v1.9.0`)
 2. Update `VERSION` file at repo root
 3. Rebuild and push images with new version tag to GHCR
-4. Update `docker-compose.prod.yml` to reference new version
+4. Update `docker/compose.prod.yml` to reference new version
 
 ```bash
 # In VERSION file:
@@ -492,18 +492,18 @@ def search(..., compare: bool = False):
 **Steps:**
 1. **Stop new indexing** (prevents corruption of baseline):
    ```bash
-   docker-compose -f docker-compose.prod.yml stop document-lister document-indexer-e5
+   docker-compose -f docker/compose.prod.yml stop document-lister document-indexer-e5
    ```
 
 2. **Revert collection config:**
    ```bash
-   # In docker-compose.prod.yml or kubectl secret:
+   # In docker/compose.prod.yml or kubectl secret:
    - SOLR_COLLECTION=books  # Back to baseline
    ```
 
 3. **Restart solr-search:**
    ```bash
-   docker-compose -f docker-compose.prod.yml up -d solr-search
+   docker-compose -f docker/compose.prod.yml up -d solr-search
    ```
 
 4. **Verify baseline is responding:**
@@ -543,7 +543,7 @@ def search(..., compare: bool = False):
 
 ## Appendix A: Environment Configuration
 
-### A.1 docker-compose.prod.yml Additions
+### A.1 docker/compose.prod.yml Additions
 
 ```yaml
 embeddings-server-e5:
@@ -613,7 +613,7 @@ document-indexer-e5:
 ### A.2 Environment Variables for solr-search Post-Migration
 
 ```bash
-# docker-compose.prod.yml (solr-search service)
+# docker/compose.prod.yml (solr-search service)
 environment:
   - SOLR_HOST=solr
   - SOLR_COLLECTION=books_e5base  # Changed from books

@@ -1,11 +1,11 @@
-# docker-compose.e2e.yml
+# docker/compose.e2e.yml
 #
 # Docker Compose override for the E2E test suite.
 #
 # Usage:
 #   export E2E_LIBRARY_PATH=/tmp/aithena-e2e-library
 #   mkdir -p "$E2E_LIBRARY_PATH"
-#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+#   docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
 #   cd e2e && pip install -r requirements.txt && pytest
 #
 # What this override changes vs. the production compose file:
@@ -17,7 +17,7 @@
 #   - solr-search rate limiting is disabled (RATE_LIMIT_REQUESTS_PER_MINUTE=0) to prevent
 #     Playwright browser tests from hitting 429 errors during rapid E2E test execution.
 #   - nginx is disabled to reduce resource usage in dev/CI.
-#   - certbot is not in the base compose (see docker-compose.ssl.yml).
+#   - certbot is not in the base compose (see docker/compose.ssl.yml).
 
 services:
   document-lister:

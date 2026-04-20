@@ -1,12 +1,12 @@
-# docker-compose.ssl.yml
+# docker/compose.ssl.yml
 #
 # SSL/TLS overlay — adds Let's Encrypt certbot and HTTPS support to nginx.
 #
 # Usage (development):
-#   docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+#   docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 #
 # Usage (production / GHCR images):
-#   docker compose -f docker-compose.prod.yml -f docker-compose.ssl.yml up -d
+#   docker compose -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
 #
 # Prerequisites:
 #   sudo mkdir -p /source/volumes/certbot-data/{conf,www}
@@ -18,7 +18,7 @@
 #   - Certbot sidecar container (renews certificates every 12 h)
 #
 # After first deploy, obtain the initial certificate:
-#   docker compose -f docker-compose.yml -f docker-compose.ssl.yml \
+#   docker compose -f docker-compose.yml -f docker/compose.ssl.yml \
 #     run --rm certbot certonly --webroot -w /var/www/certbot \
 #     -d your.domain.com --agree-tos -m you@example.com
 

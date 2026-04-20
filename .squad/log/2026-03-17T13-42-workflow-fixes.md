@@ -8,7 +8,7 @@ Orchestrate Brett's release packaging work (#363), coordinate dependabot/fetch-m
 ### 1. Brett (Infrastructure Architect) — Issue #363 Release Packaging
 - **PR:** #427 (Release packaging workflow)
 - **Mode:** General-purpose agent (background)
-- **Outcome:** ✅ Created docker-compose.prod.yml, .env.prod.example, docs/quickstart.md; PR merged to dev
+- **Outcome:** ✅ Created docker/compose.prod.yml, .env.prod.example, docs/quickstart.md; PR merged to dev
 - **Details:** Implemented release strategy decision with image pull model, installer script, volume convention preservation
 
 ### 2. Coordinator (Administrative) — Issue #349 Dependabot Action SHA

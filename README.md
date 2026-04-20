@@ -195,23 +195,51 @@ python3 -m installer
 # or: python3 installer/setup.py
 ```
 
-The installer prompts for the book library path, admin credentials, and the public origin URL, then writes `.env` and bootstraps the SQLite auth DB. Run it before `docker compose up` so the auth storage directory exists for the bind mount.
+The installer guides you through:
+1. **Environment** — Development or Production
+2. **GPU detection** — auto-detects NVIDIA (`nvidia-smi`) and Intel (`/dev/dri`) GPUs, asks for confirmation
+3. **SSL** — optional Let's Encrypt setup with domain prompt
+4. **Book library path** — where your PDFs live
+5. **Public origin** — auto-suggested based on SSL choice
+6. **Admin credentials** — username and password
+
+It writes `.env`, bootstraps the SQLite auth DB, and generates `./start.sh` with the correct `docker compose -f ...` chain for your configuration.
 
 ### 2. Start All Services
 
 ```bash
-docker compose up -d
+./start.sh
 ```
 
-Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, and `--origin`.
-
-By default, Docker Compose also auto-loads `docker-compose.override.yml`, so local development/debug ports stay published.
-
-Use the production-only surface when you want just the nginx gateway on the host:
+The generated `start.sh` combines the right compose files based on your installer choices. You can also run compose directly:
 
 ```bash
-docker compose -f docker-compose.yml up -d
+# Development (builds from source, debug ports exposed)
+docker compose -f docker-compose.yml -f docker/compose.dev-ports.yml up -d --build
+
+# Production (pre-built GHCR images)
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
+
+# Production + NVIDIA GPU
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-nvidia.yml up -d
+
+# Production + SSL
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
 ```
+
+Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
+
+### Compose File Layout
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Base services (always included) |
+| `docker/compose.prod.yml` | Production — pre-built GHCR images |
+| `docker/compose.dev-ports.yml` | Development — exposes debug ports |
+| `docker/compose.gpu-nvidia.yml` | NVIDIA GPU acceleration |
+| `docker/compose.gpu-intel.yml` | Intel GPU acceleration (OpenVINO) |
+| `docker/compose.ssl.yml` | SSL/TLS with Let's Encrypt |
+| `docker/compose.e2e.yml` | E2E test overrides |
 
 This starts:
 - Redis, RabbitMQ (messaging layer)
@@ -246,7 +274,7 @@ Once `solr-init` completes:
 | Redis Commander | http://localhost/admin/redis/ | Inspect Redis state through a lightweight web UI |
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
 
-When `docker compose up` loads `docker-compose.override.yml` (the default local workflow), these direct debug ports are also available:
+When `docker compose up` loads `docker/compose.dev-ports.yml` (the default local workflow), these direct debug ports are also available:
 
 | Service | Port(s) | Purpose |
 |---------|---------|---------|
@@ -297,10 +325,10 @@ mkdir -p "$E2E_LIBRARY_PATH"
 #### 2. Start the local stack with the E2E override
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
 ```
 
-The override (`docker-compose.e2e.yml`) mounts `E2E_LIBRARY_PATH` as the document library instead of `/home/jmservera/booklibrary`, so the test run is fully isolated from the real corpus. It also sets the document-lister poll interval to 10 seconds for faster feedback.
+The override (`docker/compose.e2e.yml`) mounts `E2E_LIBRARY_PATH` as the document library instead of `/home/jmservera/booklibrary`, so the test run is fully isolated from the real corpus. It also sets the document-lister poll interval to 10 seconds for faster feedback.
 
 #### 3. Install test dependencies
 
@@ -381,7 +409,7 @@ Before tagging a release, verify:
 3. **E2E suite passes:**
    ```bash
    export E2E_LIBRARY_PATH=/tmp/aithena-e2e-library && mkdir -p "$E2E_LIBRARY_PATH"
-   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+   docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
    cd e2e && pip install -r requirements.txt && pytest
    ```
 

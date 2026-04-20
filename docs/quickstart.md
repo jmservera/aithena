@@ -64,8 +64,8 @@ sudo chown -R $USER:$USER /source/volumes
 Pull the images and start all services:
 
 ```bash
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker/compose.prod.yml pull
+docker compose -f docker/compose.prod.yml up -d
 ```
 
 ### 5. Monitor Startup
@@ -73,13 +73,13 @@ docker compose -f docker-compose.prod.yml up -d
 Check service health:
 
 ```bash
-docker compose -f docker-compose.prod.yml ps
+docker compose -f docker/compose.prod.yml ps
 ```
 
 View logs for a specific service:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs -f <service-name>
+docker compose -f docker/compose.prod.yml logs -f <service-name>
 ```
 
 The startup sequence:
@@ -112,15 +112,15 @@ To add TLS, use the SSL overlay:
 sudo mkdir -p /source/volumes/certbot-data/{conf,www}
 
 # Start with SSL enabled
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 
 # Obtain the initial certificate
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml \
+docker compose -f docker-compose.yml -f docker/compose.ssl.yml \
   run --rm certbot certonly --webroot -w /var/www/certbot \
   -d your.domain.com --agree-tos -m you@example.com
 
 # Update src/nginx/default.conf with your domain's HTTPS server block
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml restart nginx
+docker compose -f docker-compose.yml -f docker/compose.ssl.yml restart nginx
 ```
 
 ### Add Documents to the Library
@@ -130,12 +130,12 @@ Place PDF files in the configured book library path (e.g., `/data/booklibrary`).
 Monitor indexing progress:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs -f document-indexer
+docker compose -f docker/compose.prod.yml logs -f document-indexer
 ```
 
 ### Configure Resource Limits
 
-The production compose file includes default resource limits. Adjust these in `docker-compose.prod.yml` based on your workload:
+The production compose file includes default resource limits. Adjust these in `docker/compose.prod.yml` based on your workload:
 
 - **Solr nodes**: 2 GB RAM each (adjust for large collections)
 - **Embeddings server**: 2 GB RAM (adjust based on model size)
@@ -144,7 +144,7 @@ The production compose file includes default resource limits. Adjust these in `d
 After modifying limits, restart the affected service:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --force-recreate <service-name>
+docker compose -f docker/compose.prod.yml up -d --force-recreate <service-name>
 ```
 
 ## Backup and Maintenance
@@ -166,7 +166,7 @@ BACKUP_DIR=/backup/aithena/$(date +%Y%m%d)
 mkdir -p "$BACKUP_DIR"
 
 # Stop indexing to ensure consistency
-docker compose -f docker-compose.prod.yml stop document-indexer document-lister
+docker compose -f docker/compose.prod.yml stop document-indexer document-lister
 
 # Backup volumes
 tar -czf "$BACKUP_DIR/solr-data.tar.gz" /source/volumes/solr-data*
@@ -175,16 +175,16 @@ cp ~/.local/share/aithena/auth/users.db "$BACKUP_DIR/"
 cp .env "$BACKUP_DIR/"
 
 # Resume indexing
-docker compose -f docker-compose.prod.yml start document-indexer document-lister
+docker compose -f docker/compose.prod.yml start document-indexer document-lister
 ```
 
 ### Update to a New Release
 
-1. Stop the current stack: `docker compose -f docker-compose.prod.yml down`
+1. Stop the current stack: `docker compose -f docker/compose.prod.yml down`
 2. Extract the new release package
 3. Copy your `.env` file to the new release directory
-4. Pull updated images: `docker compose -f docker-compose.prod.yml pull`
-5. Start the new version: `docker compose -f docker-compose.prod.yml up -d`
+4. Pull updated images: `docker compose -f docker/compose.prod.yml pull`
+5. Start the new version: `docker compose -f docker/compose.prod.yml up -d`
 
 ## Troubleshooting
 
@@ -193,7 +193,7 @@ docker compose -f docker-compose.prod.yml start document-indexer document-lister
 Check logs for the failing service:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs <service-name>
+docker compose -f docker/compose.prod.yml logs <service-name>
 ```
 
 Common issues:
@@ -217,7 +217,7 @@ All nodes should respond with `imok`.
 Check Solr cluster status:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec solr curl -s 'http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json' | jq .
+docker compose -f docker/compose.prod.yml exec solr curl -s 'http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json' | jq .
 ```
 
 ### Indexing not progressing
@@ -225,13 +225,13 @@ docker compose -f docker-compose.prod.yml exec solr curl -s 'http://localhost:89
 Check RabbitMQ queue status:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec rabbitmq rabbitmqctl list_queues
+docker compose -f docker/compose.prod.yml exec rabbitmq rabbitmqctl list_queues
 ```
 
 Verify `document-lister` is scanning the library:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs document-lister | grep "Scanning"
+docker compose -f docker/compose.prod.yml logs document-lister | grep "Scanning"
 ```
 
 ### Authentication issues

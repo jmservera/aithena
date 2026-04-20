@@ -35,7 +35,7 @@ Implemented ZooKeeper SASL DIGEST-MD5 mutual authentication for Solr cluster sec
    - `src/zookeeper/entrypoint-sasl.sh`
    - `src/solr/entrypoint-sasl.sh`
    - `docker-compose.yml` solr-init task
-   - `docker-compose.prod.yml` solr-init task
+   - `docker/compose.prod.yml` solr-init task
 
 2. **World-Readable JAAS Configs** → Added explicit `chmod 600` after generation in all four locations above
 

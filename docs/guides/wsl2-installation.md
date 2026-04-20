@@ -100,7 +100,7 @@ If using a custom `VOLUMES_ROOT`, you **must** symlink the path so Docker Compos
 sudo ln -s /mnt/data/aithena/volumes /source/volumes
 ```
 
-Alternatively, you can override volume paths via a `docker-compose.override.yml`.
+Alternatively, you can override volume paths via a `docker/compose.dev-ports.yml`.
 
 ## Secondary disk options
 

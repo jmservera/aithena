@@ -184,9 +184,9 @@ RABBITMQ_PASS=...                     # Generate with installer
 REDIS_PASSWORD=...                    # Generate with installer
 ```
 
-### Step 3: Update `docker-compose.prod.yml` Image Versions
+### Step 3: Update `docker/compose.prod.yml` Image Versions
 
-Edit `docker-compose.prod.yml` to specify production images:
+Edit `docker/compose.prod.yml` to specify production images:
 
 ```yaml
 services:
@@ -212,13 +212,13 @@ services:
 ### Step 4: Start Services with Production Compose
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod up --build
+docker compose -f docker/compose.prod.yml --env-file .env.prod up --build
 ```
 
 ### Step 5: Verify Services Are Running
 
 ```bash
-docker compose -f docker-compose.prod.yml ps
+docker compose -f docker/compose.prod.yml ps
 
 # Check health
 curl http://localhost:8080/health          # solr-search
@@ -238,7 +238,7 @@ docker run -it --rm \
 
 **Run full stack with specific version:**
 ```bash
-VERSION=1.3.0 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.3.0 docker compose -f docker/compose.prod.yml up -d
 ```
 
 **Compare development vs. production images:**
@@ -247,11 +247,11 @@ VERSION=1.3.0 docker compose -f docker-compose.prod.yml up -d
 docker compose up -d
 
 # Production (from GHCR)
-VERSION=1.3.0 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.3.0 docker compose -f docker/compose.prod.yml up -d
 
 # View logs
 docker compose logs -f solr-search
-docker compose -f docker-compose.prod.yml logs -f solr-search
+docker compose -f docker/compose.prod.yml logs -f solr-search
 ```
 
 ## CI/CD Authentication

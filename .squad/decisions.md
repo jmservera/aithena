@@ -184,7 +184,7 @@ Add `intel-extension-for-pytorch` to the `[project.optional-dependencies] openvi
 
 - OpenVINO image size will increase (IPEX adds ~50-100MB of compiled extensions)
 - CPU-only builds are completely unaffected
-- Existing Intel GPU override (`docker-compose.intel.override.yml`) works without changes
+- Existing Intel GPU override (`docker/compose.gpu-intel.yml`) works without changes
 
 ---
 

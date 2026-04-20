@@ -115,7 +115,7 @@ done
   cd src/document-indexer && uv run bandit -r . -ll
   cd src/document-lister && uv run bandit -r . -ll
   cd src/embeddings-server && uv run bandit -r . -ll
-  python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))" && python3 -c "import yaml; yaml.safe_load(open('docker-compose.prod.yml'))"
+  python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))" && python3 -c "import yaml; yaml.safe_load(open('docker/compose.prod.yml'))"
   # For Checkov and Zizmor, check GitHub Security tab
   ```
 - [ ] Review and resolve ALL open Dependabot/security alerts (critical and high MUST be fixed; medium/low documented in `docs/security/baseline-exceptions.md`)

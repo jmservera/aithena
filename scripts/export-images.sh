@@ -232,7 +232,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 else
   # Compose files for production
   cp "$REPO_ROOT/docker-compose.yml"      "${PACKAGE_DIR}/compose/"
-  cp "$REPO_ROOT/docker-compose.prod.yml" "${PACKAGE_DIR}/compose/"
+  cp "$REPO_ROOT/docker/compose.prod.yml" "${PACKAGE_DIR}/compose/"
   cp "$REPO_ROOT/.env.example"            "${PACKAGE_DIR}/compose/.env.example"
 
   # Solr configsets
@@ -322,7 +322,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   info "[DRY RUN] Would create: ${ARCHIVE_PATH}"
   info "[DRY RUN] Contents:"
   info "  ${PACKAGE_NAME}/images/   (${TOTAL} image tarballs)"
-  info "  ${PACKAGE_NAME}/compose/  (docker-compose.yml, docker-compose.prod.yml, .env.example)"
+  info "  ${PACKAGE_NAME}/compose/  (docker-compose.yml, docker/compose.prod.yml, .env.example)"
   info "  ${PACKAGE_NAME}/config/   (solr, nginx, rabbitmq configs)"
   info "  ${PACKAGE_NAME}/install.sh"
   info "  ${PACKAGE_NAME}/verify.sh"

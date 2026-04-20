@@ -224,7 +224,7 @@ else
 
   # Copy compose files
   cp "${PACKAGE_DIR}/compose/docker-compose.yml"      "${INSTALL_DIR}/"
-  cp "${PACKAGE_DIR}/compose/docker-compose.prod.yml" "${INSTALL_DIR}/"
+  cp "${PACKAGE_DIR}/compose/docker/compose.prod.yml" "${INSTALL_DIR}/"
 
   # Copy configs preserving directory structure
   mkdir -p "${INSTALL_DIR}/src/solr"
@@ -371,10 +371,10 @@ echo ""
 step "Starting Aithena services..."
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  info "[DRY RUN] Would run: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
+  info "[DRY RUN] Would run: docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d"
 else
   cd "$INSTALL_DIR"
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+  docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 
   info "Services started."
 fi
@@ -395,8 +395,8 @@ else
   info "Waiting up to ${TIMEOUT}s for services to become healthy..."
 
   while [[ "$ELAPSED" -lt "$TIMEOUT" ]]; do
-    HEALTHY_COUNT="$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps --format json 2>/dev/null | grep -c '"healthy"' || true)"
-    TOTAL_SERVICES="$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps --format json 2>/dev/null | wc -l || true)"
+    HEALTHY_COUNT="$(docker compose -f docker-compose.yml -f docker/compose.prod.yml ps --format json 2>/dev/null | grep -c '"healthy"' || true)"
+    TOTAL_SERVICES="$(docker compose -f docker-compose.yml -f docker/compose.prod.yml ps --format json 2>/dev/null | wc -l || true)"
 
     if [[ "$HEALTHY_COUNT" -gt 0 ]]; then
       info "  ${HEALTHY_COUNT}/${TOTAL_SERVICES} services healthy (${ELAPSED}s elapsed)"

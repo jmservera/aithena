@@ -94,7 +94,7 @@ Before merging `dev` into `main`, you can build release candidate images to vali
 
 - **Trigger:** `workflow_dispatch` on the `dev` branch with a `version` input
 - **RC numbering:** Auto-increments from existing tags, or set explicitly
-- **Testing:** Pull RC images locally with `docker-compose.prod.yml` and run validation
+- **Testing:** Pull RC images locally with `docker/compose.prod.yml` and run validation
 
 See [Pre-Release Testing](pre-release-testing.md) for the full step-by-step workflow.
 

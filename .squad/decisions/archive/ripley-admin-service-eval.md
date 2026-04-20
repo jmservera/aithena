@@ -156,7 +156,7 @@ GET  /v1/admin/containers         — System health snapshot
 3. Remove `src/admin/` directory entirely
 4. Update admin-manual.md to reference React UI only
 
-**Fallback:** If issues with React implementation arise (e.g., RabbitMQ API CORS), keep Streamlit admin in `docker-compose.override.yml` as a developer-only tool (not in production builds).
+**Fallback:** If issues with React implementation arise (e.g., RabbitMQ API CORS), keep Streamlit admin in `docker/compose.dev-ports.yml` as a developer-only tool (not in production builds).
 
 ---
 
@@ -180,7 +180,7 @@ GET  /v1/admin/containers         — System health snapshot
 | Requires React dev for RabbitMQ metrics | Already have strong React team (Eva, Sofia) |
 | Loses Streamlit's rapid prototyping | UI is stable; no further rapid iteration expected |
 | Auth module won't be reused | Not a limitation; JWT logic is Streamlit-specific |
-| If React implementation fails | Keep Streamlit in docker-compose.override.yml temporarily |
+| If React implementation fails | Keep Streamlit in docker/compose.dev-ports.yml temporarily |
 
 ---
 

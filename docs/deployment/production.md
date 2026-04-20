@@ -551,7 +551,7 @@ If full system failure:
 ## Enable HTTPS
 
 The base Compose files run HTTP-only on port 80. To add Let's Encrypt TLS via
-certbot, use the `docker-compose.ssl.yml` overlay:
+certbot, use the `docker/compose.ssl.yml` overlay:
 
 1. **Create certbot volume directories:**
 
@@ -563,16 +563,16 @@ certbot, use the `docker-compose.ssl.yml` overlay:
 
    ```bash
    # Development (local build)
-   docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+   docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 
    # Production (GHCR images)
-   docker compose -f docker-compose.prod.yml -f docker-compose.ssl.yml up -d
+   docker compose -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
    ```
 
 3. **Obtain the initial certificate:**
 
    ```bash
-   docker compose -f docker-compose.yml -f docker-compose.ssl.yml \
+   docker compose -f docker-compose.yml -f docker/compose.ssl.yml \
      run --rm certbot certonly --webroot -w /var/www/certbot \
      -d your.domain.com --agree-tos -m you@example.com
    ```
@@ -584,7 +584,7 @@ The certbot sidecar renews certificates automatically every 12 hours, and
 nginx reloads every 6 hours to pick up renewed certificates.
 
 > **Migrating from older setups:** If your deployment previously had certbot
-> in the base compose file, add `-f docker-compose.ssl.yml` to your
+> in the base compose file, add `-f docker/compose.ssl.yml` to your
 > `docker compose` commands to restore the same behavior.
 
 ## Production Hardening Checklist
