@@ -12,7 +12,17 @@ from pydantic import BaseModel
 from quantization import quantize_embedding, validate_quantization_quality
 from sentence_transformers import SentenceTransformer
 
-from config import BACKEND, BUILD_DATE, DEVICE, GIT_COMMIT, MODEL_NAME, PORT, VECTOR_QUANTIZATION, VERSION
+from config import (
+    BACKEND,
+    BUILD_DATE,
+    DEVICE,
+    GIT_COMMIT,
+    MODEL_NAME,
+    PORT,
+    VECTOR_QUANTIZATION,
+    VECTOR_QUANTIZATION_VALIDATE,
+    VERSION,
+)
 from model_utils import apply_prefix, detect_model_family
 
 logging.basicConfig(level=logging.INFO)
@@ -183,7 +193,7 @@ async def embeddings(sentences: EmbeddingsInput):
     for r in encoded:
         original = np.asarray(r)
         quantized, field_name = quantize_embedding(original, VECTOR_QUANTIZATION)
-        if VECTOR_QUANTIZATION != "none":
+        if VECTOR_QUANTIZATION_VALIDATE and VECTOR_QUANTIZATION != "none":
             validate_quantization_quality(original, quantized)
         result.data.append(
             EmbeddingsOutput.EmbeddingsList(

@@ -258,6 +258,8 @@ def build_chunk_doc(
 ) -> dict:
     """Build a Solr JSON document for a single text chunk."""
     chunk_id = f"{parent_id}_chunk_{chunk_index:04d}"
+    # embedding_field is a base name (e.g. "embedding" or "embedding_byte");
+    # the Solr schema expects the "_v" suffix on all vector fields.
     solr_field = f"{embedding_field}_v"
     doc: dict = {
         "id": chunk_id,

@@ -15,7 +15,12 @@ _DEFAULT_FIELD = "embedding"
 
 @dataclass
 class EmbeddingResult:
-    """An embedding vector together with its target Solr field name."""
+    """An embedding vector together with its target Solr field base name.
+
+    ``field_name`` is a base name (e.g. ``"embedding"`` or ``"embedding_byte"``).
+    The indexer appends ``_v`` to produce the actual Solr field name
+    (e.g. ``"embedding_v"``, ``"embedding_byte_v"``).
+    """
 
     vector: list[float]
     field_name: str = _DEFAULT_FIELD

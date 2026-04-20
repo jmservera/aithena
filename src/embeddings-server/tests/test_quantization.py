@@ -28,7 +28,7 @@ def random_embedding():
 
 class TestNoneMode:
     def test_identity(self, random_embedding):
-        result, field = quantize_embedding(random_embedding, "none")
+        result, _ = quantize_embedding(random_embedding, "none")
         np.testing.assert_array_equal(result, random_embedding)
 
     def test_field_name(self, random_embedding):

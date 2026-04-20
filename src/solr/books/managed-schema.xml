@@ -54,7 +54,7 @@
                       at the embeddings-server level before sending; Solr stores as float32)
          - "int8"  → byte vectors stored in knn_vector_768_byte (BYTE encoding, ~4x memory savings)
        When mode is "none" or "fp16", the indexer writes to the `embedding_v` field.
-       When mode is "int8", the indexer writes to the `embedding_byte` field instead. -->
+       When mode is "int8", the indexer writes to the `embedding_byte_v` field instead. -->
   <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <!-- BYTE (int8) vector type — used for "int8" quantization mode.
@@ -525,8 +525,8 @@
   <!-- float32 embedding — used when VECTOR_QUANTIZATION is "none" or "fp16" -->
   <field name="embedding_v" type="knn_vector_768" indexed="true" stored="true"/>
   <!-- int8 (BYTE) embedding — used when VECTOR_QUANTIZATION is "int8".
-       The indexer writes to exactly one of embedding_v or embedding_byte based on config. -->
-  <field name="embedding_byte" type="knn_vector_768_byte" indexed="true" stored="true"/>
+       The indexer writes to exactly one of embedding_v or embedding_byte_v based on config. -->
+  <field name="embedding_byte_v" type="knn_vector_768_byte" indexed="true" stored="true"/>
   <!-- Page tracking for chunk docs (issue: page-aware chunking) -->
   <field name="page_start_i" type="pint" multiValued="false" indexed="true" stored="true"/>
   <field name="page_end_i" type="pint" multiValued="false" indexed="true" stored="true"/>
