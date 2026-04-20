@@ -41,7 +41,10 @@ describe('useAdmin', () => {
   });
 
   it('loads document data on refresh', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => mockFetchResponse(sampleDocuments)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => mockFetchResponse(sampleDocuments))
+    );
     const { result } = renderHook(() => useAdmin());
     await act(async () => {
       await result.current.refresh();
@@ -61,7 +64,10 @@ describe('useAdmin', () => {
   });
 
   it('sets error on API failure with detail', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => mockFetchResponse({ detail: 'Service unavailable' }, 503)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => mockFetchResponse({ detail: 'Service unavailable' }, 503))
+    );
     const { result } = renderHook(() => useAdmin());
     await act(async () => {
       await result.current.refresh();
@@ -152,9 +158,11 @@ describe('useAdmin', () => {
   it('handles API error with no detail field', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(() =>
-        Promise.resolve({ ok: false, status: 500, json: async () => ({ message: 'no detail' }) })
-      )
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve({ ok: false, status: 500, json: async () => ({ message: 'no detail' }) })
+        )
     );
     const { result } = renderHook(() => useAdmin());
     await act(async () => {
