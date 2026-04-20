@@ -7,7 +7,7 @@ This document describes the two supported Solr deployment architectures for Aith
 Aithena supports two fundamentally different Solr deployment topologies:
 
 1. **SolrCloud Distributed** (default in `docker-compose.yml`) — Three-node SolrCloud cluster with three-node ZooKeeper ensemble
-2. **Standalone Solr** — Single Solr node with embedded ZooKeeper (planned for resource-constrained deployments)
+2. **Single-Node SolrCloud** (planned via overlay compose) — Single Solr node with embedded ZooKeeper for resource-constrained deployments. Note: This is SolrCloud in single-node mode, not a true standalone/core mode.
 
 The choice depends on your scale, budget, operational complexity, and high-availability requirements.
 
@@ -45,7 +45,7 @@ The choice depends on your scale, budget, operational complexity, and high-avail
 ### Configuration
 
 **Docker Compose override:** Base `docker-compose.yml`  
-**Environment variable:** `ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"`
+**Environment variable:** `ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"` (shell format)
 
 ### When to Use
 
@@ -86,7 +86,7 @@ The choice depends on your scale, budget, operational complexity, and high-avail
 ### Limitations
 
 🔴 **Operational Complexity:**
-- ZooKeeper quorum management required (no single-node failures tolerated)
+- ZooKeeper quorum management required (3-node ensemble tolerates 1 failure; quorum = 2/3)
 - Distributed debugging (tracing issues across 3 nodes)
 - Leader election and session timeouts can disrupt briefly
 - More services to monitor and troubleshoot
@@ -105,18 +105,20 @@ The choice depends on your scale, budget, operational complexity, and high-avail
 
 Solr stores data in a **single shard with replication factor 3**. Every indexed byte exists on all three nodes.
 
+Vectors calculated as: 300 pages/book × 6 chunks/page × 1 vector/chunk = 1,800 vectors/book
+
 | Books | Vectors | Disk per Node | Physical Total | Search Latency (p95) |
 |-------|---------|---------------|-----------------|---------------------|
-| 500 | 3M | 1–2 GB | 3–6 GB | <300 ms |
-| 5K | 30M | 10–20 GB | 30–60 GB | <500 ms |
-| 30K | 180M | 60–120 GB | 180–360 GB | <2 s (cold pages) |
-| 100K | 600M | 200–400 GB | 600–1,200 GB | <5 s (cold pages) |
+| 500 | 900K | 1–2 GB | 3–6 GB | <300 ms |
+| 5K | 9M | 10–20 GB | 30–60 GB | <500 ms |
+| 30K | 54M | 60–120 GB | 180–360 GB | <2 s (cold pages) |
+| 100K | 180M | 200–400 GB | 600–1,200 GB | <5 s (cold pages) |
 
 > Latency degrades if the working set exceeds available RAM (OS page cache). NVMe SSD storage is critical for large deployments.
 
 ### Operations: Scaling from Single-Node to Distributed
 
-If you start with standalone Solr and outgrow it, migrating to SolrCloud requires:
+If you start with single-node SolrCloud and outgrow it, migrating to distributed SolrCloud requires:
 
 1. **Stop indexing** on the single-node Solr
 2. **Create SolrCloud cluster** with 3+ nodes and ZooKeeper ensemble
@@ -127,19 +129,19 @@ If you start with standalone Solr and outgrow it, migrating to SolrCloud require
 
 ---
 
-## 2. Standalone Solr Topology (Planned for v2.0+)
+## 2. Single-Node SolrCloud Topology (Planned for v2.0+)
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
 │                                                 │
-│   Single Solr Node (all data on one machine)  │
+│   Single Solr Node + Embedded ZooKeeper        │
 │  ┌─────────────────────────────────────────┐  │
-│  │   solr (standalone mode)                │  │
-│  │   :8983                                 │  │
+│  │   solr (single-node SolrCloud)          │  │
+│  │   :8983 (with embedded ZK)              │  │
 │  │                                         │  │
-│  │   • No ZooKeeper                        │  │
+│  │   • ZooKeeper embedded in Solr JVM      │  │
 │  │   • Single-shard, no replication        │  │
 │  │   • 100% query and index traffic here   │  │
 │  │                                         │  │
@@ -150,8 +152,8 @@ If you start with standalone Solr and outgrow it, migrating to SolrCloud require
 
 ### Configuration
 
-**Not yet in `docker-compose.yml`** — planned for future release.  
-**Environment variable:** `ZK_HOST=""` (or absent) — runs in standalone mode
+**Not yet in `docker-compose.yml`** — planned via overlay (`docker/compose.single-node.yml`).  
+**Environment variable:** `ZK_HOST=""` (or absent) — runs in single-node mode. Note: Requires the single-node compose overlay; base compose hardcodes 3-node ZK ensemble.
 
 ### When to Use
 
@@ -216,12 +218,14 @@ If you start with standalone Solr and outgrow it, migrating to SolrCloud require
 
 All data resides on a single node. Memory must accommodate JVM heap + OS page cache for both indexes.
 
+Vectors calculated as: 300 pages/book × 6 chunks/page × 1 vector/chunk = 1,800 vectors/book
+
 | Books | Vectors | Solr HNSW | Text Index | Required RAM |
 |-------|---------|-----------|-----------|--------------|
-| 500 | 3M | 8 GB | 2 GB | 16 GB |
-| 3K | 18M | 40 GB | 10 GB | 64 GB |
-| 10K | 60M | 130 GB | 25 GB | 180 GB |
-| 30K (optimized) | 180M* | 9 GB | 8 GB | 32 GB |
+| 500 | 900K | 8 GB | 2 GB | 16 GB |
+| 3K | 5.4M | 40 GB | 10 GB | 64 GB |
+| 10K | 18M | 130 GB | 25 GB | 180 GB |
+| 30K (optimized) | 54M* | 9 GB | 8 GB | 32 GB |
 
 \* **Optimized** = page-level chunking (6× reduction) + int8 quantization (4× per-vector) + HNSW tuning  
 See [Vector Optimization](#vector-optimization) for details.
@@ -277,7 +281,7 @@ If the single Solr node fails:
 
 ## Comparison Table
 
-| Feature | SolrCloud (Distributed) | Standalone |
+| Feature | SolrCloud (Distributed) | Single-Node |
 |---------|------------------------|-----------|
 | **Nodes** | 3+ (Solr) + 3 (ZK) | 1 |
 | **Replication Factor** | 3 (3 replicas) | None (single copy) |
@@ -324,7 +328,7 @@ Are you starting a new deployment?
 
 ### Use Cases by Deployment Type
 
-#### 🟢 Standalone is Right For:
+#### 🟢 Single-Node is Right For:
 
 - **Personal use:** Self-hosted library for one user
 - **Team (< 500 books):** Small group sharing books
@@ -335,7 +339,7 @@ Are you starting a new deployment?
 
 **Example:** University library with 2,000 historical texts, one IT staff member, budget $500–800/year for cloud VM.
 
-#### 🟡 Mixed Approach (Start Standalone, Plan Migration):
+#### 🟡 Mixed Approach (Start Single-Node, Plan Migration):
 
 - **Growing team:** Expect to exceed 5,000 books in 12–18 months
 - **Moderate HA needs:** Acceptable downtime 1–2 hours/month
@@ -373,34 +377,34 @@ In a future release, selection will be configurable:
 # Deploy SolrCloud (current default)
 SOLR_TOPOLOGY=distributed docker compose up -d
 
-# Deploy Standalone Solr (planned)
-SOLR_TOPOLOGY=standalone docker compose up -d
+# Deploy single-node SolrCloud (planned)
+SOLR_TOPOLOGY=single-node docker compose up -d
 ```
 
 **Implementation status:**
-- ✅ Design documented in `.squad/decisions.md`
-- ⏳ Standalone Compose override in development
+- 🟡 Design being finalized (topology selection framework TBD)
+- ⏳ Single-Node Compose override in development
 - ⏳ Automated topology detection in initialization scripts
-- ⏳ Migration helper scripts (distributed → standalone, vice versa)
+- ⏳ Migration helper scripts (distributed ↔ single-node)
 
 ---
 
-## Migration Path: Distributed ↔ Standalone
+## Migration Path: Distributed ↔ Single-Node
 
 ### Scenario 1: Starting with Distributed, Scale Becomes a Problem
 
 If SolrCloud incurs too much operational overhead for your small deployment:
 
 1. **Export current index** via Solr snapshot or replication
-2. **Build standalone** node in parallel
-3. **Validate** on standalone (run A/B queries)
+2. **Build single-node** node in parallel
+3. **Validate** on single-node (run A/B queries)
 4. **Cutover** (pause indexing, switch traffic, resume)
 
 **Downtime:** 2–4 hours (worst case)
 
-### Scenario 2: Starting with Standalone, Books Exceed Limit
+### Scenario 2: Starting with Single-Node, Books Exceed Limit
 
-If standalone reaches capacity (32 GB RAM, > 30K books):
+If single-node reaches capacity (32 GB RAM, > 30K books):
 
 1. **Pause indexing** to freeze book count
 2. **Deploy SolrCloud cluster** (3+ nodes)
@@ -412,7 +416,7 @@ If standalone reaches capacity (32 GB RAM, > 30K books):
 
 ### Scenario 3: Optimize Single-Node Before Upgrading
 
-If standalone is approaching limits but you want to stay cost-effective:
+If single-node is approaching limits but you want to stay cost-effective:
 
 1. **Implement Phase 1 (page-level chunking):** 6× vector reduction
 2. **Implement Phase 2 (int8 quantization):** 4× per-vector reduction
@@ -439,14 +443,14 @@ Vector quantization reduces memory footprint and affects hardware budgets.
 
 ### Recommended Combinations
 
-**For 32 GB Standalone (Scenario B):**
+**For 32 GB Single-Node (Scenario B):**
 ```
 Page-level chunking: 54M → 9M vectors
 int8 quantization: 768D × 832 B = 7.5 GB HNSW
 Total: ~32 GB (with OS + JVM + text headroom)
 ```
 
-**For 64 GB Standalone (Scenario D, maximum comfort):**
+**For 64 GB Single-Node (Scenario D, maximum comfort):**
 ```
 Page-level chunking: 54M → 9M vectors
 e5-small model: 384D float32 = 15 GB HNSW
@@ -474,7 +478,7 @@ curl -u admin:pass http://localhost:8983/solr/admin/collections?action=CLUSTERST
 # Expected output: 3 live_nodes, books collection with RF=3
 {
   "cluster": {
-    "live_nodes": ["solr1:8983", "solr2:8983", "solr3:8983"],
+    "live_nodes": ["solr:8983", "solr2:8983", "solr3:8983"],
     "collections": {
       "books": {
         "shards": { "shard1": { "replicas": { ... } } },
@@ -487,7 +491,7 @@ curl -u admin:pass http://localhost:8983/solr/admin/collections?action=CLUSTERST
 # If fewer than 2 live nodes, ZooKeeper quorum is lost → immediate action needed
 ```
 
-### Standalone Health Indicators
+### Single-Node Health Indicators
 
 ```bash
 # Check single-node status
@@ -520,10 +524,10 @@ du -sh /source/volumes/solr-data/*
 A: No. Topology changes require re-indexing from source PDFs. Plan 4–24 hours of downtime depending on library size.
 
 **Q: Is SolrCloud required for production?**  
-A: Recommended for >100K books and SLA-driven deployments. Standalone + optimization works for < 30K books if HA is acceptable.
+A: Recommended for >100K books and SLA-driven deployments. Single-node + optimization works for < 30K books if HA is acceptable.
 
 **Q: What's the cost difference?**  
-A: Standalone is ~2.5× cheaper for < 30K books ($800–1,200/year vs $1,800–2,400/year on AWS). Beyond that, marginal cost favors SolrCloud due to linear scaling.
+A: Single-node is ~2.5× cheaper for < 30K books ($800–1,200/year vs $1,800–2,400/year on AWS). Beyond that, marginal cost favors SolrCloud due to linear scaling.
 
 **Q: Can I run both topologies simultaneously?**  
 A: Not in the same Docker Compose stack. You would need separate VMs or clusters. Not a typical use case.
@@ -532,7 +536,7 @@ A: Not in the same Docker Compose stack. You would need separate VMs or clusters
 A: ~1–2 documents/second (PDFs processed sequentially). 30K books ≈ 8–12 hours. Use GPU for 2–3× speedup.
 
 **Q: What if I need > 64GB RAM on a single machine?**  
-A: Standalone is not recommended. Migrate to SolrCloud and distribute shards across nodes.
+A: Single-node is not recommended. Migrate to SolrCloud and distribute shards across nodes.
 
 **Q: Does quantization require re-indexing?**  
 A: Yes. Quantization is applied during embedding generation. Changing it requires re-embedding all chunks.
