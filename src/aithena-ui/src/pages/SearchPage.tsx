@@ -212,7 +212,7 @@ function SearchResultsSection({
         </footer>
       )}
 
-      {selectedBook && <PdfViewer result={selectedBook} onClose={onPdfClose} />}
+      {selectedBook && <PdfViewer result={selectedBook} onClose={onPdfClose} searchQuery={query} />}
     </>
   );
 }
