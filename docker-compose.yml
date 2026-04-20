@@ -190,6 +190,7 @@ services:
       - SOLR_AUTH_USER=${SOLR_ADMIN_USER:-solr_admin}
       - SOLR_AUTH_PASS=${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
       - THUMBNAIL_DIR=/data/thumbnails
+      - INDEXER_CONTROL_PORT=8081
     restart: on-failure
     stop_grace_period: 10s
     deploy:
