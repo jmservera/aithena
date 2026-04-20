@@ -22,10 +22,7 @@ on:
       - dev
       - main
 
-permissions:
-  contents: read
-  security-events: write
-  actions: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,6 +35,9 @@ jobs:
   bandit-scan:
     name: Bandit Python security scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout code
@@ -87,6 +87,9 @@ jobs:
   checkov-scan:
     name: Checkov IaC Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -151,6 +154,9 @@ jobs:
   zizmor-scan:
     name: GitHub Actions Security Scan (zizmor)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     continue-on-error: true
     steps:
       - name: Checkout repository
