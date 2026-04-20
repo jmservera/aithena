@@ -58,11 +58,15 @@ jobs:
           fi
 
   run-integration-tests:
-    name: Run integration & E2E tests
+    name: Integration Test (${{ matrix.topology }})
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        topology: [single-node, distributed]
     permissions:
       contents: read
       issues: write
@@ -123,7 +127,79 @@ jobs:
           # NOTE: Docker Compose deep-merges volume driver_opts, so empty overrides
           # do NOT clear bind-mount paths. We must explicitly set all three keys
           # (type, device, o) to tmpfs to fully replace the production bind mounts.
-          cat > docker-compose.github-actions.yml <<'EOF'
+          if [ "${{ matrix.topology }}" = "single-node" ]; then
+            cat > docker-compose.github-actions.yml <<'EOF'
+          volumes:
+            rabbitmq-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            certbot-data-conf:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            certbot-data-www:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            redis-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            solr-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
+            zoo-data1_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-backup:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            collections-db:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+
+          services:
+            # Single-node Solr: disable solr2 and solr3
+            solr2:
+              profiles: [disabled]
+            solr3:
+              profiles: [disabled]
+            # Single ZooKeeper: disable zoo2 and zoo3
+            zoo2:
+              profiles: [disabled]
+            zoo3:
+              profiles: [disabled]
+            # Reconfigure remaining ZooKeeper node for standalone mode
+            zoo1:
+              environment:
+                ZOO_SERVERS: server.1=zoo1:2888:3888;2181
+                ZOO_STANDALONE_ENABLED: "true"
+            # Single Solr node depends only on zoo1
+            # !override replaces (not merges) the base depends_on map
+            solr:
+              environment:
+                ZK_HOST: "zoo1:2181"
+              depends_on: !override
+                zoo1:
+                  condition: service_healthy
+            # Override solr-init to only depend on single Solr node
+            solr-init:
+              depends_on: !override
+                solr:
+                  condition: service_healthy
+              environment:
+                SOLR_NUM_SHARDS: "1"
+                SOLR_REPLICATION_FACTOR: "1"
+            # Point solr-search at standalone ZooKeeper
+            solr-search:
+              environment:
+                ZOOKEEPER_HOSTS: zoo1:2181
+          EOF
+          else
+            cat > docker-compose.github-actions.yml <<'EOF'
           volumes:
             rabbitmq-data:
               driver: local
@@ -180,6 +256,7 @@ jobs:
               driver: local
               driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
           EOF
+          fi
 
       - name: Generate sample PDF fixtures
         run: |
@@ -206,7 +283,7 @@ jobs:
             --profile production \
             build
 
-      - name: Start full stack
+      - name: Start stack (${{ matrix.topology }})
         env:
           ADMIN_API_KEY: ci-admin-api-key
         run: |
@@ -353,7 +430,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: python-e2e-results
+          name: python-e2e-results-${{ matrix.topology }}
           path: e2e/pytest-results.xml
           if-no-files-found: warn
           retention-days: 30
@@ -362,7 +439,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: playwright-e2e-results
+          name: playwright-e2e-results-${{ matrix.topology }}
           path: |
             e2e/playwright/playwright-report
             e2e/playwright/test-results
@@ -383,7 +460,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: release-screenshots
+          name: release-screenshots-${{ matrix.topology }}
           path: /tmp/release-screenshots/
           if-no-files-found: warn
           retention-days: 90
@@ -421,7 +498,7 @@ jobs:
           max-errors: '0'
           create-issues: 'true'
           milestone: ''
-          artifact-name: integration-test-log-analysis
+          artifact-name: integration-test-log-analysis-${{ matrix.topology }}
 
       - name: Tear down integration stack
         if: always()
@@ -436,7 +513,7 @@ jobs:
           rm -f docker-compose.github-actions.yml
 
   integration-gate:
-    name: Docker Compose integration + E2E
+    name: Integration tests (all topologies)
     if: always()
     needs: [changes, run-integration-tests]
     runs-on: ubuntu-latest
@@ -457,5 +534,5 @@ jobs:
           if [ "$TEST_RESULT" = "skipped" ]; then
             echo "⏭️ Integration tests skipped — no build-relevant changes"
           else
-            echo "✅ Integration tests passed"
+            echo "✅ Integration tests passed (single-node + distributed)"
           fi
