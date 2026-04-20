@@ -4285,6 +4285,66 @@ select:focus-visible,
   font-size: 0.95rem;
 }
 
+/* ── Admin Reindex page ────────────────────────────────────────── */
+
+.admin-reindex-description {
+  max-width: 680px;
+  margin-bottom: 24px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.admin-reindex-steps {
+  margin: 12px 0 16px;
+  padding-left: 20px;
+}
+
+.admin-reindex-steps li {
+  margin-bottom: 6px;
+}
+
+.admin-reindex-warning {
+  color: var(--color-warning, #facc15);
+  font-weight: 600;
+}
+
+.admin-reindex-action {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.admin-reindex-spinner {
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+  margin: 0;
+}
+
+.admin-reindex-result {
+  max-width: 680px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-reindex-result ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.admin-reindex-result--success {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+.admin-reindex-result--error {
+  background: rgba(220, 60, 60, 0.12);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: var(--color-error-soft, #fca5a5);
+}
+
 /* ── Responsive: collapse sidebar on small screens ────────────── */
 
 @media (max-width: 768px) {
