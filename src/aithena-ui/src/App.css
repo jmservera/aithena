@@ -4621,3 +4621,102 @@ select:focus-visible,
     grid-column: 1;
   }
 }
+
+/* ── Infrastructure page ──────────────────────────────────────────────── */
+
+.infra-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.infra-card {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.infra-card--link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.infra-card--link:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+.infra-card-icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.infra-card-body {
+  min-width: 0;
+}
+
+.infra-card-title {
+  margin: 0 0 4px 0;
+  font-size: 0.95em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.infra-card-description {
+  margin: 0;
+  font-size: 0.82em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.infra-connections {
+  margin-top: 8px;
+}
+
+.infra-section-title {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.infra-service-name {
+  font-weight: 500;
+}
+
+.infra-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.infra-badge--ok {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.infra-badge--error {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+@media (max-width: 768px) {
+  .infra-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
