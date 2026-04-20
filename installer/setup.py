@@ -86,7 +86,6 @@ ENV_COMMENTS: list[tuple[str, str]] = [
     ("VERSION", "Container build metadata (defaults to VERSION file)"),
     ("GIT_COMMIT", "Container build metadata (defaults to current HEAD)"),
     ("BUILD_DATE", "Container build metadata timestamp"),
-    ("NGINX_HOST", "Domain name for SSL/TLS (only set when SSL is enabled)"),
 ]
 
 
