@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import requests
 
@@ -8,12 +9,23 @@ logger = logging.getLogger(__name__)
 
 EMBEDDINGS_TIMEOUT = 300
 
+# Default Solr field name when the server does not include field_name
+_DEFAULT_FIELD = "embedding"
+
+
+@dataclass
+class EmbeddingResult:
+    """An embedding vector together with its target Solr field name."""
+
+    vector: list[float]
+    field_name: str = _DEFAULT_FIELD
+
 
 def get_embeddings(
     texts: list[str],
     host: str,
     port: int,
-) -> list[list[float]]:
+) -> list[EmbeddingResult]:
     """Request embeddings for *texts* from the embeddings-server.
 
     Args:
@@ -22,7 +34,8 @@ def get_embeddings(
         port: Port of the embeddings-server.
 
     Returns:
-        A list of embedding vectors, one per input text, in the same order.
+        A list of :class:`EmbeddingResult` objects, one per input text,
+        in the same order.
 
     Raises:
         requests.HTTPError: If the server returns a non-2xx response.
@@ -37,7 +50,13 @@ def get_embeddings(
     response.raise_for_status()
     data = response.json()
 
-    embeddings = [item["embedding"] for item in data["data"]]
-    if len(embeddings) != len(texts):
-        raise ValueError(f"Expected {len(texts)} embeddings, got {len(embeddings)} from {url}")
-    return embeddings
+    results = [
+        EmbeddingResult(
+            vector=item["embedding"],
+            field_name=item.get("field_name", _DEFAULT_FIELD),
+        )
+        for item in data["data"]
+    ]
+    if len(results) != len(texts):
+        raise ValueError(f"Expected {len(texts)} embeddings, got {len(results)} from {url}")
+    return results

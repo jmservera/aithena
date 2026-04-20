@@ -21,3 +21,7 @@ MODEL_NAME = os.environ.get("MODEL_NAME", "intfloat/multilingual-e5-base")
 # BACKEND: torch|openvino — controls inference backend
 DEVICE = os.environ.get("DEVICE", "cpu")
 BACKEND = os.environ.get("BACKEND", "torch")
+
+# Vector quantization mode: none | fp16 | int8
+# Controls precision/size trade-off for stored embeddings.
+VECTOR_QUANTIZATION = os.environ.get("VECTOR_QUANTIZATION", "none").lower()
