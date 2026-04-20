@@ -2694,7 +2694,6 @@ Aithena allows administrators to correct or enrich document metadata directly, w
 ### Prerequisites
 
 - An admin user account (role `admin`)
-- The `ADMIN_API_KEY` environment variable configured in the deployment
 
 ### Single document edit
 
@@ -2702,7 +2701,6 @@ Edit one document at a time from the UI detail view or via the API:
 
 ```
 PATCH /v1/admin/documents/{doc_id}/metadata
-X-API-Key: <your-admin-key>
 Authorization: Bearer <admin-jwt>
 
 {
@@ -2804,7 +2802,7 @@ Whitespace is trimmed automatically. Whitespace-only strings are rejected (422).
 
 | Symptom | Cause | Resolution |
 |---------|-------|------------|
-| 401 on PATCH | Missing or invalid `X-API-Key` header | Verify `ADMIN_API_KEY` in `.env` and include it in the request |
+| 401 on PATCH | Missing or invalid auth token | Verify you are logged in with an admin account and the JWT is present |
 | 403 on PATCH | JWT user is not an admin | Log in with an admin account |
 | 404 on single edit | Document ID not in Solr | Verify the document was indexed; check `doc_id` spelling |
 | 503 on single edit | Redis unavailable | Check Redis health; the Solr update may still have succeeded |
@@ -3181,7 +3179,7 @@ Logs are written to `/var/log/aithena-backup-*.log`.
    ```bash
    # Find a document ID from a search result
    curl -X PATCH "http://localhost/v1/admin/documents/{doc_id}/metadata" \
-     -H "X-API-Key: $ADMIN_API_KEY" \
+     -H "Authorization: Bearer $ADMIN_JWT" \
      -H "Content-Type: application/json" \
      -d '{"year": 1984}'
    ```
@@ -3294,7 +3292,7 @@ v1.11.0 introduces search improvements, thumbnail generation, and a book detail 
 3. **Thumbnail Generation** — During indexing, first-page thumbnails are extracted and stored as `.thumb.jpg` alongside PDFs
 4. **Thumbnail Serving** — nginx serves thumbnails at `/thumbnails/...`; the `thumbnail_url` field is indexed in Solr and returned in search results
 5. **Book Detail Endpoint** — New `GET /v1/books/{id}` endpoint retrieves complete book metadata
-6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; legacy `/admin/streamlit` path now handled by React admin
+6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; all admin routes are served by the React admin portal
 
 ### Critical Upgrade Action: Full Reindex Required
 
@@ -3330,7 +3328,7 @@ The new `GET /v1/books/{id}` endpoint returns full book metadata (title, author,
 
 ### Admin Routing
 
-The dead `admin` upstream has been removed from nginx configuration. The legacy `/admin/streamlit` path is no longer served. Use `/admin/` for the React admin portal.
+The dead `admin` upstream has been removed from nginx configuration. All admin routes are served by the React admin portal at `/admin/`.
 
 ---
 
@@ -3702,15 +3700,132 @@ v1.15.0 includes admin portal enhancements, infrastructure hardening, and operat
 
 ### Admin Portal Redesign
 
-The admin portal (`/admin`) now features a sidebar navigation with organized menu:
+The admin portal (`/admin`) is a React-based operator dashboard with sidebar navigation. It provides access to all admin tools from a single interface.
 
-- **Dashboard** — system overview
-- **Indexing Status** — per-document progress and status information
-- **Log Viewer** — per-service log streaming from the browser
-- **Backups** — existing backup/restore dashboard
-- **Solr Admin** — Solr admin UI with SSO passthrough
+#### Navigation structure
 
-No configuration changes needed — the sidebar is purely a UI improvement.
+The sidebar organizes admin pages into five groups:
+
+| Group | Pages | Routes |
+|---|---|---|
+| **Overview** | Dashboard | `/admin` |
+| **Documents** | Document Manager | `/admin/documents` |
+| **Indexing** | Reindex Library, Indexing Status | `/admin/reindex`, `/admin/indexing-status` |
+| **System** | System Status, Log Viewer, Infrastructure | `/admin/system-status`, `/admin/logs`, `/admin/infrastructure` |
+| **Management** | Users, Backups | `/admin/users`, `/admin/backups` |
+
+The sidebar supports keyboard navigation: use **Arrow Up/Down** to move between items, **Home/End** to jump to the first/last item, and **Enter** to navigate.
+
+#### Dashboard (`/admin`)
+
+The dashboard provides a real-time overview of the system:
+
+- **Document Metrics** — total, queued, processed, and failed document counts
+- **Queue Metrics** — RabbitMQ messages ready, unacknowledged, and total; queue name and consumer count
+- **Infrastructure Status** — summary of healthy vs. total containers, with a table showing each container's name, type, status, and version
+
+Controls:
+- **Auto-refresh** checkbox enables periodic polling
+- **Refresh** button triggers an immediate data fetch
+- **Last refreshed** timestamp shows when data was last fetched
+
+#### Document Manager (`/admin/documents`)
+
+Manages documents across three tabs:
+
+- **Queued** — documents waiting to be indexed, showing path and queued timestamp
+- **Processed** — successfully indexed documents with path, title, author, year, page count, chunk count, and indexed timestamp. Includes a **Clear All** button (with confirmation) to remove processed state so documents are rediscovered
+- **Failed** — documents that failed indexing, with error details (expandable), per-document **Requeue** and **Delete** buttons, and a **Requeue All** bulk action
+
+All tabs include:
+- **Search** — filter documents by file path
+- **Pagination** — 25 documents per page with page navigation
+- Keyboard-accessible tab switching with arrow keys
+
+#### Reindex Library (`/admin/reindex`)
+
+Triggers a full library reindex with a two-step confirmation workflow:
+
+1. Click **Start Reindex** — opens a confirmation dialog explaining the destructive action
+2. Confirm to proceed — the system deletes all documents from the Solr collection, clears Redis tracking state, and allows `document-lister` to rediscover files
+
+The page explains the four-step process and displays a warning that search will be unavailable during reindexing. Results show the collection status and number of Redis keys cleared.
+
+#### Indexing Status (`/admin/indexing-status`)
+
+Shows per-document indexing progress:
+
+- **Summary metrics** — total, queued, processing, processed, failed counts plus total pages and chunks
+- **Processing cards** — documents currently being indexed show progress bars for text indexing and embedding indexing stages
+- **Document table** — all documents with status badge, path, title, text/embedding indexed indicators, page count, chunk count, error details, and timestamp
+- **Status filter** — filter by all, queued, processing, processed, or failed
+- **Auto-refresh** checkbox and manual refresh button
+- **Pagination** — 25 documents per page
+
+#### System Status (`/admin/system-status`)
+
+Displays container health across the stack:
+
+- **Overview metrics** — total containers, healthy count, and containers needing attention
+- **Application Services** — service cards (e.g., solr-search, document-indexer) with status emoji (🟢/🔴/🟠), version, and commit hash
+- **Infrastructure Services** — infrastructure cards (e.g., Redis, RabbitMQ, Solr nodes) with the same status display
+- **Stale data warning** — shows an alert if data hasn't been refreshed recently
+
+#### Log Viewer (`/admin/logs`)
+
+Streams container logs directly from the browser:
+
+- **Service selector** — dropdown to choose which container's logs to view
+- **Tail lines** — configurable number of lines to fetch (e.g., 50, 100, 500)
+- **Auto-refresh** — checkbox with configurable refresh interval
+- **Search filter** — text filter to narrow log output; shows count of matched vs. total lines
+- **Log output** — monospace display with automatic scroll-to-bottom on new content
+
+This reduces the need for SSH access for routine log inspection.
+
+#### Infrastructure (`/admin/infrastructure`)
+
+Provides quick links to management UIs for infrastructure services:
+
+- **Solr Admin** — link to `/admin/solr/` for collection management and document inspection
+- **RabbitMQ Management** — link to `/admin/rabbitmq/` for queue monitoring
+- **Redis Commander** — link to `/admin/redis/` for Redis state inspection
+
+Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, internal endpoint URL, and connection status.
+
+#### Accessibility
+
+The admin portal follows web accessibility best practices:
+
+- All pages use semantic HTML (`<main>`, `<header>`, `<section>`, `<nav>`)
+- ARIA labels on interactive elements, tables, and live regions
+- Keyboard navigation in the sidebar (Arrow keys, Home, End)
+- Tab-based keyboard navigation in the Document Manager
+- Status indicators use both color and text/emoji for color-blind users
+- Error banners use `role="alert"` for screen reader announcements
+- Progress bars include `aria-valuenow`, `aria-valuemin`, `aria-valuemax`
+- Auto-refreshing content uses `aria-live="polite"` regions
+
+#### Screenshots
+
+Screenshots are generated automatically during the release workflow. See `docs/images/admin-dashboard.png` for the dashboard.
+
+<!-- Screenshots are auto-generated by the release workflow -->
+
+No configuration changes needed — the admin portal is purely a UI improvement.
+
+### Admin Portal Troubleshooting
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| Admin pages show "Loading…" indefinitely | Backend API (`solr-search`) is not running or unreachable | Check `docker compose ps solr-search` and verify the service is healthy |
+| Dashboard shows errors for all cards | Auth token expired or invalid | Log out and log back in; verify your account has the `admin` role |
+| Document Manager shows empty tabs | Redis is down or has no tracked documents | Check Redis health; ensure `document-lister` has run at least one scan |
+| Log Viewer shows "Select a service" but dropdown is empty | Container stats endpoint is disabled or unreachable | Verify `EXPOSE_CONTAINER_STATS=true` in your deployment |
+| System Status shows all containers as "down" | Container stats API not enabled | Set `EXPOSE_CONTAINER_STATS=true` and restart `solr-search` |
+| Infrastructure links return 502 | Target service (Solr, RabbitMQ, Redis Commander) is not running | Check `docker compose ps` for the specific service |
+| Reindex completes but documents don't reappear | `document-lister` hasn't run a scan yet | Wait for the next scan (default 60s) or restart the lister |
+| Sidebar navigation not visible | Browser window too narrow or CSS not loaded | Widen the browser window; clear cache and reload |
 
 ### Per-Service Log Viewer
 
