@@ -22,6 +22,7 @@ function StatusDot({ status }: { status: string }) {
   return (
     <span
       className={`dashboard-status-dot ${isUp ? 'dashboard-status-dot--up' : 'dashboard-status-dot--down'}`}
+      role="img"
       aria-label={isUp ? 'healthy' : 'unhealthy'}
     />
   );
