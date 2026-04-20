@@ -37,6 +37,6 @@ rules:
       - release-docs.yml:260
       - release-docs.yml:261
       - release-docs.yml:448
-      - squad-issue-assign.yml:123
+      - squad-routing.yml:302
       - squad-heartbeat.yml:111
       - release.yml:83
