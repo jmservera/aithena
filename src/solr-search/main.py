@@ -2336,6 +2336,8 @@ def admin_list_documents(
         DocumentStatus | None,
         Query(description="Filter documents by indexing status (queued, processed, or failed)."),
     ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number (1-based).")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=500, description="Results per page.")] = 100,
 ) -> dict[str, Any]:
     """List documents tracked in Redis with their indexing status.
 
@@ -2344,10 +2346,22 @@ def admin_list_documents(
     the ``documents`` list to a single status while still receiving full
     counts.
 
+    Supports pagination via ``page`` and ``per_page`` query parameters.
+
     Each document entry includes an opaque ``id`` token that can be passed to
     the ``POST /v1/admin/documents/{doc_id}/requeue`` endpoint.
     """
-    return _load_admin_documents(status_filter=status)
+    result = _load_admin_documents(status_filter=status)
+    docs = result["documents"]
+    total_docs = len(docs)
+    start = (page - 1) * per_page
+    end = start + per_page
+    result["documents"] = docs[start:end]
+    result["page"] = page
+    result["per_page"] = per_page
+    result["total_documents"] = total_docs
+    result["total_pages"] = max(1, (total_docs + per_page - 1) // per_page)
+    return result
 
 
 @app.post(
@@ -3269,6 +3283,397 @@ async def admin_restore_backup(backup_id: str, body: RestoreRequest | None = Non
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return record
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/queue-status (RabbitMQ queue metrics)
+# ---------------------------------------------------------------------------
+
+
+def _fetch_rabbitmq_queue_info(queue_name: str) -> dict[str, Any]:
+    """Query the RabbitMQ Management API for queue metrics."""
+    mgmt_url = (
+        f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"
+        f"{settings.rabbitmq_management_path_prefix}/api/queues/%2F/{queue_name}"
+    )
+    resp = requests.get(
+        mgmt_url,
+        auth=(settings.rabbitmq_user, settings.rabbitmq_pass),
+        timeout=5,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+@app.get(
+    "/v1/admin/queue-status/",
+    include_in_schema=False,
+    name="admin_queue_status_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get("/v1/admin/queue-status", name="admin_queue_status_v1", dependencies=[Depends(require_admin_auth)])
+def admin_queue_status() -> dict[str, Any]:
+    """Return RabbitMQ queue metrics for the dashboard.
+
+    Queries the RabbitMQ Management HTTP API for the configured queue name
+    and returns message counts and consumer information.
+    """
+    queue_name = settings.rabbitmq_queue_name
+    try:
+        data = _fetch_rabbitmq_queue_info(queue_name)
+        return {
+            "queue_name": queue_name,
+            "messages_ready": data.get("messages_ready", 0),
+            "messages_unacknowledged": data.get("messages_unacknowledged", 0),
+            "messages_total": data.get("messages", 0),
+            "consumers": data.get("consumers", 0),
+            "status": "ok",
+        }
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 0
+        if status_code == 404:
+            return {
+                "queue_name": queue_name,
+                "messages_ready": 0,
+                "messages_unacknowledged": 0,
+                "messages_total": 0,
+                "consumers": 0,
+                "status": "queue_not_found",
+            }
+        raise HTTPException(
+            status_code=502,
+            detail=f"RabbitMQ management API error: {exc}",
+        ) from exc
+    except (requests.RequestException, OSError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot reach RabbitMQ management API: {exc}",
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/indexing-status (per-document indexing status)
+# ---------------------------------------------------------------------------
+
+
+IndexingDocStatus = Literal["queued", "processing", "processed", "failed"]
+
+
+def _classify_indexing_status(state: dict[str, Any]) -> IndexingDocStatus:
+    """Return a fine-grained status for the indexing-status endpoint.
+
+    Unlike ``_classify_doc_state`` (which returns queued/processed/failed),
+    this distinguishes *processing* (started but not yet completed).
+    """
+    if state.get("failed"):
+        return "failed"
+    if state.get("processed"):
+        return "processed"
+    if state.get("processing") or state.get("text_indexed"):
+        return "processing"
+    return "queued"
+
+
+def _load_indexing_status(
+    *,
+    status_filter: IndexingDocStatus | None = None,
+    page: int = 1,
+    per_page: int = 100,
+) -> dict[str, Any]:
+    """Scan Redis and return detailed per-document indexing status with summary."""
+    client = _get_admin_redis_client()
+    summary: dict[str, int] = {
+        "total": 0,
+        "queued": 0,
+        "processing": 0,
+        "processed": 0,
+        "failed": 0,
+        "total_pages": 0,
+        "total_chunks": 0,
+    }
+    documents: list[dict[str, Any]] = []
+
+    for key, state, _doc_status in _iter_admin_docs(client):
+        idx_status = _classify_indexing_status(state)
+        summary["total"] += 1
+        summary[idx_status] += 1
+        summary["total_pages"] += int(state.get("page_count", 0) or 0)
+        summary["total_chunks"] += int(state.get("chunk_count", 0) or 0)
+
+        if status_filter is not None and idx_status != status_filter:
+            continue
+
+        path = state.get("path", "")
+        documents.append(
+            {
+                "id": _encode_admin_key(key),
+                "status": idx_status,
+                "path": path,
+                "title": state.get("title"),
+                "text_indexed": bool(state.get("text_indexed")),
+                "embedding_indexed": bool(state.get("embedding_indexed")),
+                "page_count": state.get("page_count"),
+                "chunk_count": state.get("chunk_count"),
+                "error": state.get("error"),
+                "error_stage": state.get("error_stage"),
+                "timestamp": state.get("timestamp"),
+            }
+        )
+
+    total_docs = len(documents)
+    start = (page - 1) * per_page
+    end = start + per_page
+
+    return {
+        "summary": summary,
+        "documents": documents[start:end],
+        "page": page,
+        "per_page": per_page,
+        "total_documents": total_docs,
+        "total_pages": max(1, (total_docs + per_page - 1) // per_page),
+    }
+
+
+@app.get(
+    "/v1/admin/indexing-status/",
+    include_in_schema=False,
+    name="admin_indexing_status_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/indexing-status",
+    name="admin_indexing_status_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_indexing_status(
+    status: Annotated[
+        IndexingDocStatus | None,
+        Query(description="Filter by indexing status."),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number (1-based).")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=500, description="Results per page.")] = 100,
+) -> dict[str, Any]:
+    """Return detailed per-document indexing status with summary metrics.
+
+    Summary counts always reflect the full dataset.  The ``documents`` list
+    honours the optional ``status`` filter and ``page`` / ``per_page``
+    pagination parameters.
+    """
+    return _load_indexing_status(status_filter=status, page=page, per_page=per_page)
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/logs/{service_name} (container logs)
+# ---------------------------------------------------------------------------
+
+_ALLOWED_LOG_SERVICES: frozenset[str] = frozenset(
+    {
+        "solr-search",
+        "embeddings-server",
+        "document-indexer",
+        "document-lister",
+        "aithena-ui",
+        "solr",
+        "redis",
+        "rabbitmq",
+        "nginx",
+    }
+)
+
+
+def _fetch_docker_logs(
+    service_name: str,
+    tail: int = 100,
+    since: str | None = None,
+) -> list[str]:
+    """Fetch container logs via the Docker Engine API.
+
+    Uses the DOCKER_HOST setting to connect (defaults to the Unix socket).
+    Returns log lines as a list of strings.
+    """
+    import urllib.parse
+
+    host = settings.docker_host
+    if host.startswith("unix://"):
+        socket_path = host[len("unix://") :]
+        # Use requests-unixsocket style: http+unix://{encoded_path}/…
+        encoded = urllib.parse.quote(socket_path, safe="")
+        base_url = f"http+unix://{encoded}"
+    elif host.startswith("tcp://"):
+        base_url = host.replace("tcp://", "http://", 1)
+    else:
+        base_url = host
+
+    params: dict[str, str] = {"stdout": "1", "stderr": "1", "tail": str(tail)}
+    if since:
+        params["since"] = since
+
+    # Docker API: list containers filtered by compose service name, then get logs
+    list_url = f"{base_url}/containers/json"
+    list_params = {"filters": json.dumps({"label": [f"com.docker.compose.service={service_name}"]})}
+
+    try:
+        list_resp = requests.get(list_url, params=list_params, timeout=5)
+        list_resp.raise_for_status()
+        containers = list_resp.json()
+    except (requests.RequestException, OSError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot reach Docker API: {exc}",
+        ) from exc
+
+    if not containers:
+        return []
+
+    container_id = containers[0]["Id"]
+    logs_url = f"{base_url}/containers/{container_id}/logs"
+
+    try:
+        logs_resp = requests.get(logs_url, params=params, timeout=10)
+        logs_resp.raise_for_status()
+    except (requests.RequestException, OSError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot fetch logs from Docker API: {exc}",
+        ) from exc
+
+    raw = logs_resp.content
+    lines: list[str] = []
+    offset = 0
+    while offset < len(raw):
+        if offset + 8 <= len(raw):
+            # Docker multiplexed stream header: 8 bytes
+            frame_size = int.from_bytes(raw[offset + 4 : offset + 8], "big")
+            frame_end = offset + 8 + frame_size
+            chunk = raw[offset + 8 : frame_end]
+            for line in chunk.decode("utf-8", errors="replace").splitlines():
+                if line:
+                    lines.append(line)
+            offset = frame_end
+        else:
+            break
+
+    return lines
+
+
+@app.get(
+    "/v1/admin/logs/{service_name}/",
+    include_in_schema=False,
+    name="admin_logs_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/logs/{service_name}",
+    name="admin_logs_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_logs(
+    service_name: str,
+    tail: Annotated[int, Query(ge=1, description="Number of log lines to return.")] = 100,
+    since: Annotated[str | None, Query(description="Return logs since this ISO-8601 timestamp.")] = None,
+) -> dict[str, Any]:
+    """Return recent log lines for a Docker Compose service.
+
+    Uses the Docker Engine API (via socket or HTTP) to retrieve container
+    logs.  Only whitelisted service names are allowed.
+    """
+    if service_name not in _ALLOWED_LOG_SERVICES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown service '{service_name}'. Allowed: {', '.join(sorted(_ALLOWED_LOG_SERVICES))}",
+        )
+
+    effective_tail = min(tail, settings.log_tail_max)
+
+    lines = _fetch_docker_logs(service_name, tail=effective_tail, since=since)
+    return {
+        "service": service_name,
+        "lines": lines,
+        "total_lines": len(lines),
+        "available_services": sorted(_ALLOWED_LOG_SERVICES),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/infrastructure (service connectivity & management URLs)
+# ---------------------------------------------------------------------------
+
+
+def _check_service_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
+    """Return True if the TCP connection succeeds."""
+    return _tcp_check(host, port, timeout=timeout)
+
+
+@app.get(
+    "/v1/admin/infrastructure/",
+    include_in_schema=False,
+    name="admin_infrastructure_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/infrastructure",
+    name="admin_infrastructure_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_infrastructure() -> dict[str, Any]:
+    """Return infrastructure connection details, management UI URLs, and health.
+
+    Checks connectivity to Solr, Redis, RabbitMQ, and the embeddings server,
+    and returns management UI links for browser access.
+    """
+    parsed_solr = urlparse(settings.solr_url)
+    solr_host = parsed_solr.hostname or "solr"
+    solr_port = parsed_solr.port or 8983
+
+    solr_up = _tcp_check(solr_host, solr_port)
+    redis_up = _tcp_check(settings.redis_host, settings.redis_port)
+    rabbitmq_up = _rabbitmq_management_check(
+        settings.rabbitmq_host,
+        settings.rabbitmq_management_port,
+        settings.rabbitmq_user,
+        settings.rabbitmq_pass,
+    )
+    embeddings_up = _embeddings_available(timeout=CONTAINER_VERSION_TIMEOUT)
+
+    services = [
+        {
+            "name": "solr",
+            "status": "up" if solr_up else "down",
+            "admin_url": "/admin/solr/",
+            "description": "Full-text search engine",
+        },
+        {
+            "name": "rabbitmq",
+            "status": "up" if rabbitmq_up else "down",
+            "admin_url": "/admin/rabbitmq/",
+            "description": "Message queue management",
+        },
+        {
+            "name": "redis-commander",
+            "status": "up" if redis_up else "down",
+            "admin_url": "/admin/redis/",
+            "description": "Redis inspection tool",
+        },
+        {
+            "name": "embeddings-server",
+            "status": "up" if embeddings_up else "down",
+            "admin_url": None,
+            "description": "Multilingual embeddings service",
+        },
+    ]
+
+    connections = {
+        "solr": f"{solr_host}:{solr_port}",
+        "redis": f"{settings.redis_host}:{settings.redis_port}",
+        "rabbitmq_amqp": f"{settings.rabbitmq_host}:{settings.rabbitmq_port}",
+        "rabbitmq_mgmt": (f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"),
+        "embeddings": settings.embeddings_url,
+    }
+
+    return {
+        "services": services,
+        "connections": connections,
+    }
 
 
 if __name__ == "__main__":

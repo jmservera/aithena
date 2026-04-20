@@ -298,9 +298,13 @@ services:
       - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}
       - SOLR_AUTH_USER=${SOLR_READONLY_USER:-solr_read}
       - SOLR_AUTH_PASS=${SOLR_READONLY_PASS:-SolrRead_dev2024!}
+      - RABBITMQ_MANAGEMENT_PORT=15672
+      - RABBITMQ_MANAGEMENT_PATH_PREFIX=/admin/rabbitmq
+      - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - document-data:/data/documents
       - collections-db:/data/collections
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - type: bind
         source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
         target: /data/auth
