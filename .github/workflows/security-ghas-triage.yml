@@ -5,16 +5,15 @@ name: Security GHAS Triage — Alert Lifecycle
 #   2. Closes issues when alerts are fixed or dismissed
 #   3. Suppresses re-creation of wontfix-labeled alerts
 #
-# RELATIONSHIP TO OTHER WORKFLOWS:
-#   - security-review.yml: Creates issues for GHAS alerts (one-way, creation only).
-#     This workflow extends that with lifecycle management — closing stale issues
-#     and suppressing dismissed alerts. Both can run safely in parallel because
-#     deduplication uses the shared "ghas-alert" label.
-#   - dependabot-automerge.yml: Handles Dependabot dependency PRs (not code scanning).
+# This workflow consolidates the former security-review.yml (creation-only)
+# with lifecycle management — closing stale issues and suppressing dismissed
+# alerts. Deduplication uses the "ghas-alert" label.
 
 on:
   schedule:
-    # Every Wednesday at 09:00 UTC (offset from security-review.yml's Monday)
+    # Monday: primary weekly review (formerly security-review.yml)
+    - cron: '0 8 * * 1'
+    # Wednesday: mid-week lifecycle reconciliation
     - cron: '0 9 * * 3'
 
   workflow_dispatch:

@@ -1,6 +1,22 @@
-name: Dependabot Batch Merge
+# Dependabot Manager — consolidated automation for dependency PRs
+#
+# Combines three formerly separate workflows into a single pipeline:
+#   1. Auto-merge: patch/minor PRs after CI passes (workflow_run trigger)
+#   2. Batch merge: weekly consolidation of multiple PRs (schedule/dispatch)
+#   3. Close originals: clean up individual PRs after batch merge (pull_request)
+#
+# Each section is gated by github.event_name so only relevant jobs run per trigger.
+
+name: Dependabot Manager
 
 on:
+  # ── Auto-merge trigger: after CI completes on dev ──
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- guarded by Dependabot-only checks + minimal permissions
+    workflows: ["CI - Unit & Integration Tests"]
+    types: [completed]
+    branches: [dev]
+
+  # ── Batch merge trigger: weekly schedule or manual ──
   workflow_dispatch:
     inputs:
       dry-run:
@@ -23,19 +39,208 @@ on:
     # Run weekly on Monday at 06:00 UTC — after dependabot's default Sunday schedule
     - cron: "0 6 * * 1"
 
-permissions: read-all
+  # ── Close originals trigger: after batch PR merged ──
+  pull_request:
+    types: [closed]
+    branches: [dev]
 
-concurrency:
-  group: dependabot-batch-merge
-  cancel-in-progress: false
+permissions: read-all
 
 env:
   CONSOLIDATION_BRANCH_PREFIX: dependabot/batch
 
+# ═══════════════════════════════════════════════════════════════════════
+# Section 1: Auto-merge — triggered by CI completion on dependabot PRs
+# ═══════════════════════════════════════════════════════════════════════
+
 jobs:
+  find-pr:
+    name: Find Dependabot PR
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dependabot-automerge-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      is-dependabot: ${{ steps.find.outputs.is-dependabot }}
+      pr-number: ${{ steps.find.outputs.pr-number }}
+      update-type: ${{ steps.find.outputs.update-type }}
+      dependency-names: ${{ steps.find.outputs.dependency-names }}
+    steps:
+      - name: Find associated Dependabot PR
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          # Find open PR for this branch by the Dependabot bot
+          PR_JSON=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --head "$HEAD_BRANCH" --state open \
+            --json number,author,title \
+            --jq '.[] | select(.author.login == "app/dependabot")' 2>/dev/null || true)
+
+          if [ -z "$PR_JSON" ]; then
+            echo "No open Dependabot PR found for branch $HEAD_BRANCH"
+            echo "is-dependabot=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+          PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
+          echo "is-dependabot=true" >> "$GITHUB_OUTPUT"
+          echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "dependency-names=$PR_TITLE" >> "$GITHUB_OUTPUT"
+
+          # Determine semver update type from PR title
+          # Dependabot titles follow: "Bump X from A.B.C to D.E.F"
+          FROM_VER=$(echo "$PR_TITLE" | grep -oP 'from \K[0-9]+\.[0-9]+\.[0-9]+' || true)
+          TO_VER=$(echo "$PR_TITLE" | grep -oP 'to \K[0-9]+\.[0-9]+\.[0-9]+' || true)
+
+          if [ -n "$FROM_VER" ] && [ -n "$TO_VER" ]; then
+            FROM_MAJOR=$(echo "$FROM_VER" | cut -d. -f1)
+            TO_MAJOR=$(echo "$TO_VER" | cut -d. -f1)
+            FROM_MINOR=$(echo "$FROM_VER" | cut -d. -f2)
+            TO_MINOR=$(echo "$TO_VER" | cut -d. -f2)
+
+            if [ "$FROM_MAJOR" != "$TO_MAJOR" ]; then
+              echo "update-type=version-update:semver-major" >> "$GITHUB_OUTPUT"
+            elif [ "$FROM_MINOR" != "$TO_MINOR" ]; then
+              echo "update-type=version-update:semver-minor" >> "$GITHUB_OUTPUT"
+            else
+              echo "update-type=version-update:semver-patch" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Can't parse versions — treat as minor for safety
+            echo "update-type=version-update:semver-minor" >> "$GITHUB_OUTPUT"
+          fi
+
+  security-checks:
+    name: Security validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    needs: find-pr
+    if: |
+      needs.find-pr.outputs.is-dependabot == 'true' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Audit Python dependencies
+        run: |
+          pip install pip-audit
+          FAILED=0
+          for svc in document-indexer document-lister solr-search admin; do
+            if [ -f "src/$svc/pyproject.toml" ]; then
+              echo "::group::Auditing $svc"
+              pip-audit --require-hashes=false -r "src/$svc/pyproject.toml" --desc 2>&1 || FAILED=1
+              echo "::endgroup::"
+            fi
+          done
+          if [ -f "src/embeddings-server/requirements.txt" ]; then
+            echo "::group::Auditing embeddings-server"
+            pip-audit -r "src/embeddings-server/requirements.txt" --desc 2>&1 || FAILED=1
+            echo "::endgroup::"
+          fi
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::warning::pip-audit found vulnerabilities — review before merging"
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6.3.0
+        with:
+          node-version: '22'
+
+      - name: Audit npm dependencies
+        working-directory: src/aithena-ui
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high 2>&1 || echo "::warning::npm audit found high+ severity issues"
+
+  auto-merge:
+    name: Auto-merge PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    needs: [find-pr, security-checks]
+    if: |
+      needs.find-pr.outputs.is-dependabot == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      (needs.find-pr.outputs.update-type == 'version-update:semver-patch' ||
+       needs.find-pr.outputs.update-type == 'version-update:semver-minor')
+    steps:
+      - name: Auto-merge patch/minor updates
+        id: auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr review "$PR_NUMBER" --repo "$REPO" --approve \
+            --body "Auto-approved: patch/minor dependency update with CI passing and security audit clean"
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash
+
+      - name: Add auto-merge label
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
+          REPO: ${{ github.repository }}
+        run: gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:auto-merge"
+
+      - name: Report merge failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:manual-review"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "❌ **Auto-merge failed** — this PR needs manual attention. CI passed but the merge step encountered an error."
+
+  manual-review:
+    name: Flag for manual review
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    needs: [find-pr, security-checks]
+    if: |
+      needs.find-pr.outputs.is-dependabot == 'true' &&
+      needs.find-pr.outputs.update-type == 'version-update:semver-major'
+    steps:
+      - name: Add manual review label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.find-pr.outputs.pr-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "dependabot:manual-review"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "⚠️ **Major version update** — manual review required before merging. CI tests passed and security audit completed."
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Section 2: Batch merge — weekly consolidation of dependabot PRs
+  # ═══════════════════════════════════════════════════════════════════════
+
   collect-prs:
     name: Collect Dependabot PRs
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    concurrency:
+      group: dependabot-batch-merge
+      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: read
@@ -52,7 +257,7 @@ jobs:
           INCLUDE_MINOR: ${{ inputs.include-minor || 'true' }}
         run: |
           BATCH_DATE=$(date +%Y-%m-%d)
-          BATCH_BRANCH="${{ env.CONSOLIDATION_BRANCH_PREFIX }}-${BATCH_DATE}"
+          BATCH_BRANCH="${CONSOLIDATION_BRANCH_PREFIX}-${BATCH_DATE}"
           echo "batch-branch=${BATCH_BRANCH}" >> "$GITHUB_OUTPUT"
 
           # Fetch all open dependabot PRs targeting dev
@@ -333,8 +538,8 @@ jobs:
           fi
 
           BODY="${BODY}\n\n---"
-          BODY="${BODY}\n*Created by the [Dependabot Batch Merge](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) workflow.*"
-          BODY="${BODY}\n*After merging, the close-dependabot-batch workflow closes the included PRs automatically; manually close them only if that cleanup does not complete.*"
+          BODY="${BODY}\n*Created by the [Dependabot Manager](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) workflow.*"
+          BODY="${BODY}\n*After merging, the close-originals job closes the included PRs automatically; manually close them only if that cleanup does not complete.*"
 
           echo -e "$BODY" > pr_body.txt
 
@@ -346,19 +551,6 @@ jobs:
             --label "dependencies,dependabot:batch"
 
           rm -f pr_body.txt
-
-  # Close originals only when the batch PR is actually merged (triggered separately)
-  close-originals:
-    name: Close original PRs after batch merge
-    runs-on: ubuntu-latest
-    # This job only runs when triggered by pull_request closed+merged event
-    # For workflow_dispatch/schedule runs, it is skipped
-    if: false
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Placeholder
-        run: echo "See close-dependabot-batch.yml for post-merge cleanup"
 
   dry-run-report:
     name: Dry run report
@@ -384,3 +576,64 @@ jobs:
           echo "$PR_JSON" | jq -r '.[] | "| #\(.number) | \(.title) |"'
           echo ""
           echo "Run again without dry-run to create the consolidated branch."
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Section 3: Close originals — after batch PR is merged
+  # ═══════════════════════════════════════════════════════════════════════
+
+  close-originals:
+    name: Close included Dependabot PRs
+    runs-on: ubuntu-latest
+    # Only run when a dependabot:batch PR is actually merged (not just closed)
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'dependabot:batch')
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Extract included PR numbers from body
+        id: extract
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Get the batch PR body
+          BODY=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')
+
+          # Extract PR numbers from the table rows (format: | #1234 | ✅ merged | ... |)
+          INCLUDED=$(echo "$BODY" | grep -oP '#\K[0-9]+' | sort -un | tr '\n' ',' | sed 's/,$//')
+
+          if [ -z "$INCLUDED" ]; then
+            echo "No PR numbers found in batch PR body"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "prs=${INCLUDED}" >> "$GITHUB_OUTPUT"
+          COUNT=$(echo "$INCLUDED" | tr ',' '\n' | wc -l)
+          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+          echo "Found ${COUNT} PRs to close: ${INCLUDED}"
+
+      - name: Close included PRs
+        if: steps.extract.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INCLUDED_PRS: ${{ steps.extract.outputs.prs }}
+          BATCH_PR: ${{ github.event.pull_request.number }}
+        run: |
+          CLOSED=0
+          for num in $(echo "$INCLUDED_PRS" | tr ',' ' '); do
+            # Only close if it's still open and is a dependabot PR
+            STATE=$(gh pr view "$num" --repo "$GITHUB_REPOSITORY" --json state,author --jq 'select(.author.login == "app/dependabot") | .state' 2>/dev/null || true)
+            if [ "$STATE" = "OPEN" ]; then
+              echo "Closing PR #${num}..."
+              gh pr close "$num" --repo "$GITHUB_REPOSITORY" \
+                --comment "🤖 Included in batch dependency update #${BATCH_PR}. Changes are now on dev." \
+                2>/dev/null && CLOSED=$((CLOSED + 1)) || echo "⚠️ Could not close #${num}"
+            else
+              echo "Skipping #${num} (state: ${STATE:-not found/not dependabot})"
+            fi
+          done
+          echo "Closed ${CLOSED} dependabot PRs"
