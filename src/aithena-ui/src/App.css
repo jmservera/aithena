@@ -1741,6 +1741,78 @@ select:focus-visible,
   flex-shrink: 0;
 }
 
+/* ── Admin search bar ─────────────────────────────────────────── */
+
+.admin-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-search-label {
+  display: flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-search-input {
+  flex: 1;
+  max-width: 360px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 0.9em;
+}
+
+.admin-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.admin-search-input:focus {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 1px;
+}
+
+/* ── Failed doc expanded error detail ─────────────────────────── */
+
+.admin-doc-error-toggle {
+  background: none;
+  border: none;
+  color: var(--color-error-soft);
+  font-size: 0.85em;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.admin-doc-error-toggle:hover {
+  text-decoration: underline;
+}
+
+.admin-doc-error-detail {
+  padding: 12px 16px;
+  background: rgba(220, 60, 60, 0.08);
+  border-radius: 6px;
+  margin: 4px 0;
+}
+
+.admin-doc-error-detail pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85em;
+  color: var(--color-error-soft);
+}
+
+.admin-doc-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .stats-main {
   flex: 1;
   overflow-y: auto;
