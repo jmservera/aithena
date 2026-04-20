@@ -204,6 +204,56 @@ describe('PdfViewer', () => {
     expect(iframe).toHaveAttribute('src', expect.stringContaining('#page=42'));
   });
 
+  it('appends search query to iframe URL when searchQuery is provided', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} searchQuery="tresor" />
+      </IntlWrapper>
+    );
+
+    const iframe = screen.getByTitle(/learning react/i);
+    expect(iframe).toHaveAttribute('src', expect.stringContaining('#search=tresor&phrase=true'));
+  });
+
+  it('appends both page and search query when both are provided', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPage} onClose={onClose} searchQuery="tresor" />
+      </IntlWrapper>
+    );
+
+    const iframe = screen.getByTitle(/react deep dive/i);
+    const src = iframe.getAttribute('src')!;
+    expect(src).toContain('#page=42');
+    expect(src).toContain('search=tresor&phrase=true');
+  });
+
+  it('does not append search fragment when searchQuery is empty', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} searchQuery="  " />
+      </IntlWrapper>
+    );
+
+    const iframe = screen.getByTitle(/learning react/i);
+    expect(iframe.getAttribute('src')).not.toContain('search=');
+  });
+
+  it('encodes special characters in searchQuery', () => {
+    const onClose = vi.fn();
+    render(
+      <IntlWrapper>
+        <PdfViewer result={bookWithPdf} onClose={onClose} searchQuery="foo bar" />
+      </IntlWrapper>
+    );
+
+    const iframe = screen.getByTitle(/learning react/i);
+    expect(iframe).toHaveAttribute('src', expect.stringContaining('search=foo%20bar'));
+  });
+
   it('handles absolute document URLs without prepending the base', () => {
     const onClose = vi.fn();
     render(
