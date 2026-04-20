@@ -26,6 +26,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.19.0 patch:** Suppresses startup deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, cleaning up container logs. No user-facing changes. See [v1.19.0 Release Notes](release-notes/v1.19.0.md).
 
+**v2.0.0 — React admin portal:** The Streamlit admin dashboard has been replaced with a modern React single-page application at `/admin/`. The admin interface now has 7 dedicated pages: Dashboard, Document Manager, Reindex Library, Indexing Status, System Status, Infrastructure, and Log Viewer. The installer has been overhauled with GPU auto-detection and SSL setup. See [v2.0.0 Release Notes](release-notes/v2.0.0.md).
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -43,7 +45,7 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - check the Aithena version in the footer (v0.7.0+)
 - check system health in the Status tab
 - view library-wide statistics in the Stats tab
-- open the Admin tab to load the embedded operator dashboard when you need admin tools
+- open the Admin portal at `/admin/` for the full operator dashboard (React SPA in v2.0.0+)
 
 ### How to access it
 
@@ -734,7 +736,9 @@ Hover over the version badge in the bottom-right corner of the footer to see:
 
 If the version displays as "unknown", the admin dashboard may not be running or the version endpoint is unavailable.
 
-## Admin Portal (v1.15.0+)
+## Admin Portal (v1.15.0+ / React SPA in v2.0.0)
+
+> **v2.0.0 update:** The admin dashboard is now a React single-page application served at `/admin/`. The Streamlit-based admin container (`aithena-admin`) has been removed. All admin functionality is now built into `aithena-ui`. Access the admin portal at `http://localhost/admin/` (requires admin role).
 
 The admin portal is a React-based operator dashboard with sidebar navigation. Administrators can access it at `/admin`.
 
