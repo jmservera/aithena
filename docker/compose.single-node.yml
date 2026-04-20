@@ -23,10 +23,11 @@ services:
     profiles: ["distributed-only"]
 
   # Single Solr node depends only on zoo1
+  # !override replaces (not merges) the base depends_on map
   solr:
     environment:
       ZK_HOST: "zoo1:2181"
-    depends_on:
+    depends_on: !override
       zoo1:
         condition: service_healthy
 
@@ -38,7 +39,7 @@ services:
 
   # solr-init only waits for the single Solr node
   solr-init:
-    depends_on:
+    depends_on: !override
       solr:
         condition: service_healthy
     environment:
