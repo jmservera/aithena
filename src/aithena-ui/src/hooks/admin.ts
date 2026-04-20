@@ -18,6 +18,7 @@ export interface AdminDocument {
   year?: number;
   category?: string;
   page_count?: number;
+  chunk_count?: number;
 }
 
 export interface AdminDocumentsResponse {
@@ -48,6 +49,7 @@ export interface UseAdminReturn extends AdminState {
   requeueDocument: (id: string) => Promise<void>;
   requeueAllFailed: () => Promise<void>;
   clearProcessed: () => Promise<void>;
+  deleteDocument: (id: string) => Promise<void>;
 }
 
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
@@ -101,5 +103,22 @@ export function useAdmin(): UseAdminReturn {
     await refresh();
   }, [refresh]);
 
-  return { data, loading, error, refresh, requeueDocument, requeueAllFailed, clearProcessed };
+  const deleteDocument = useCallback(
+    async (id: string) => {
+      await apiRequest(buildApiUrl(`/v1/admin/documents/${id}`), { method: 'DELETE' });
+      await refresh();
+    },
+    [refresh]
+  );
+
+  return {
+    data,
+    loading,
+    error,
+    refresh,
+    requeueDocument,
+    requeueAllFailed,
+    clearProcessed,
+    deleteDocument,
+  };
 }
