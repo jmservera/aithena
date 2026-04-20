@@ -2360,7 +2360,7 @@ def admin_list_documents(
     result["page"] = page
     result["per_page"] = per_page
     result["total_documents"] = total_docs
-    result["total_pages"] = max(1, (total_docs + per_page - 1) // per_page)
+    result["total_pages"] = 0 if total_docs == 0 else (total_docs + per_page - 1) // per_page
     return result
 
 
@@ -3388,8 +3388,8 @@ def _load_indexing_status(
         "processing": 0,
         "processed": 0,
         "failed": 0,
-        "total_pages": 0,
-        "total_chunks": 0,
+        "total_doc_pages": 0,
+        "total_doc_chunks": 0,
     }
     documents: list[dict[str, Any]] = []
 
@@ -3397,8 +3397,8 @@ def _load_indexing_status(
         idx_status = _classify_indexing_status(state)
         summary["total"] += 1
         summary[idx_status] += 1
-        summary["total_pages"] += int(state.get("page_count", 0) or 0)
-        summary["total_chunks"] += int(state.get("chunk_count", 0) or 0)
+        summary["total_doc_pages"] += int(state.get("page_count", 0) or 0)
+        summary["total_doc_chunks"] += int(state.get("chunk_count", 0) or 0)
 
         if status_filter is not None and idx_status != status_filter:
             continue
@@ -3430,7 +3430,7 @@ def _load_indexing_status(
         "page": page,
         "per_page": per_page,
         "total_documents": total_docs,
-        "total_pages": max(1, (total_docs + per_page - 1) // per_page),
+        "total_pages": 0 if total_docs == 0 else (total_docs + per_page - 1) // per_page,
     }
 
 
@@ -3491,14 +3491,15 @@ def _fetch_docker_logs(
     Uses the DOCKER_HOST setting to connect (defaults to the Unix socket).
     Returns log lines as a list of strings.
     """
+    import http.client
+    import socket as _socket
     import urllib.parse
 
     host = settings.docker_host
-    if host.startswith("unix://"):
+    use_unix = host.startswith("unix://")
+    socket_path: str | None = None
+    if use_unix:
         socket_path = host[len("unix://") :]
-        # Use requests-unixsocket style: http+unix://{encoded_path}/…
-        encoded = urllib.parse.quote(socket_path, safe="")
-        base_url = f"http+unix://{encoded}"
     elif host.startswith("tcp://"):
         base_url = host.replace("tcp://", "http://", 1)
     else:
@@ -3506,17 +3507,47 @@ def _fetch_docker_logs(
 
     params: dict[str, str] = {"stdout": "1", "stderr": "1", "tail": str(tail)}
     if since:
-        params["since"] = since
+        # Docker API expects Unix epoch seconds, not ISO-8601
+        from datetime import datetime
+
+        try:
+            dt = datetime.fromisoformat(since)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            params["since"] = str(int(dt.timestamp()))
+        except (ValueError, OSError):
+            params["since"] = since
+
+    def _docker_get(path: str, query_params: dict[str, str], timeout: float = 5) -> http.client.HTTPResponse:
+        """Perform a GET request against the Docker Engine API."""
+        qs = urllib.parse.urlencode(query_params)
+        full_path = f"{path}?{qs}" if qs else path
+        if use_unix:
+            if socket_path is None:  # pragma: no cover – guarded by use_unix flag
+                raise RuntimeError("socket_path must be set for unix transport")
+            sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            sock.connect(socket_path)
+            conn = http.client.HTTPConnection("localhost")
+            conn.sock = sock
+        else:
+            parsed = urllib.parse.urlparse(base_url)
+            conn = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=timeout)
+        conn.request("GET", full_path)
+        return conn.getresponse()
 
     # Docker API: list containers filtered by compose service name, then get logs
-    list_url = f"{base_url}/containers/json"
+    list_path = "/containers/json"
     list_params = {"filters": json.dumps({"label": [f"com.docker.compose.service={service_name}"]})}
 
     try:
-        list_resp = requests.get(list_url, params=list_params, timeout=5)
-        list_resp.raise_for_status()
-        containers = list_resp.json()
-    except (requests.RequestException, OSError) as exc:
+        list_resp = _docker_get(list_path, list_params, timeout=5)
+        if list_resp.status >= 400:
+            raise HTTPException(status_code=502, detail=f"Docker API returned {list_resp.status}")
+        containers = json.loads(list_resp.read())
+    except HTTPException:
+        raise
+    except (OSError, http.client.HTTPException) as exc:
         raise HTTPException(
             status_code=502,
             detail=f"Cannot reach Docker API: {exc}",
@@ -3526,18 +3557,21 @@ def _fetch_docker_logs(
         return []
 
     container_id = containers[0]["Id"]
-    logs_url = f"{base_url}/containers/{container_id}/logs"
+    logs_path = f"/containers/{container_id}/logs"
 
     try:
-        logs_resp = requests.get(logs_url, params=params, timeout=10)
-        logs_resp.raise_for_status()
-    except (requests.RequestException, OSError) as exc:
+        logs_resp = _docker_get(logs_path, params, timeout=10)
+        if logs_resp.status >= 400:
+            raise HTTPException(status_code=502, detail=f"Docker API returned {logs_resp.status}")
+    except HTTPException:
+        raise
+    except (OSError, http.client.HTTPException) as exc:
         raise HTTPException(
             status_code=502,
             detail=f"Cannot fetch logs from Docker API: {exc}",
         ) from exc
 
-    raw = logs_resp.content
+    raw = logs_resp.read()
     lines: list[str] = []
     offset = 0
     while offset < len(raw):
@@ -3597,11 +3631,6 @@ def admin_logs(
 # ---------------------------------------------------------------------------
 # Admin — /v1/admin/infrastructure (service connectivity & management URLs)
 # ---------------------------------------------------------------------------
-
-
-def _check_service_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
-    """Return True if the TCP connection succeeds."""
-    return _tcp_check(host, port, timeout=timeout)
 
 
 @app.get(

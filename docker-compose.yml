@@ -304,6 +304,9 @@ services:
     volumes:
       - document-data:/data/documents
       - collections-db:/data/collections
+      # SECURITY: Docker socket mount grants full Docker API access to this container.
+      # Acceptable for development, but in production consider using a docker-socket-proxy
+      # (e.g. tecnativa/docker-socket-proxy) to restrict API access to read-only operations.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - type: bind
         source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}

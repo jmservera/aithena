@@ -211,8 +211,8 @@ class TestIndexingStatus:
         assert data["summary"]["processing"] == 1
         assert data["summary"]["processed"] == 1
         assert data["summary"]["failed"] == 1
-        assert data["summary"]["total_pages"] == 92  # 50 + 42
-        assert data["summary"]["total_chunks"] == 300  # 200 + 100
+        assert data["summary"]["total_doc_pages"] == 92  # 50 + 42
+        assert data["summary"]["total_doc_chunks"] == 300  # 200 + 100
         assert len(data["documents"]) == 4
 
     def test_indexing_status_filter_failed(self):
