@@ -167,6 +167,26 @@ jobs:
             zoo1:
               environment:
                 ZOO_SERVERS: server.1=zoo1:2888:3888;2181
+                ZOO_STANDALONE_ENABLED: "true"
+            # Single Solr node depends only on zoo1
+            solr:
+              environment:
+                ZK_HOST: "zoo1:2181"
+              depends_on:
+                zoo1:
+                  condition: service_healthy
+            # Override solr-init to only depend on single Solr node
+            solr-init:
+              depends_on:
+                solr:
+                  condition: service_healthy
+              environment:
+                SOLR_NUM_SHARDS: "1"
+                SOLR_REPLICATION_FACTOR: "1"
+            # Point solr-search at standalone ZooKeeper
+            solr-search:
+              environment:
+                ZOOKEEPER_HOSTS: zoo1:2181
           EOF
 
       - name: Generate sample PDF fixtures
