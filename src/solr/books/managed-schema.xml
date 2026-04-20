@@ -46,8 +46,21 @@
        Uses Solr defaults for HNSW tuning. If custom params are needed:
          Solr 9:  hnswMaxConnections="16" hnswBeamWidth="100"
          Solr 10: maxConnections="16" beamWidth="100"
-       See docs/migration/solr-compat-layer.md and src/solr-search/solr_compat.py -->
+       See docs/migration/solr-compat-layer.md and src/solr-search/solr_compat.py
+
+       Vector quantization modes (VECTOR_QUANTIZATION env var):
+         - "none"  → float32 vectors stored in knn_vector_768 (default, highest precision)
+         - "fp16"  → float32 vectors stored in knn_vector_768 (fp16 quantization is applied
+                      at the embeddings-server level before sending; Solr stores as float32)
+         - "int8"  → byte vectors stored in knn_vector_768_byte (BYTE encoding, ~4x memory savings)
+       When mode is "none" or "fp16", the indexer writes to the `embedding_v` field.
+       When mode is "int8", the indexer writes to the `embedding_byte` field instead. -->
+  <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
+  <!-- BYTE (int8) vector type — used for "int8" quantization mode.
+       vectorEncoding="BYTE" stores each dimension as a signed byte [-128, 127].
+       hnswMaxConnections tuned to 12 (vs default 16) for memory savings with byte vectors. -->
+  <fieldType name="knn_vector_768_byte" class="solr.DenseVectorField" vectorDimension="768" vectorEncoding="BYTE" similarityFunction="cosine" knnAlgorithm="hnsw" hnswMaxConnections="12"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">
@@ -509,7 +522,11 @@
   <field name="parent_id_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="chunk_index_i" type="pint" multiValued="false" indexed="true" stored="true"/>
   <field name="chunk_text_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <!-- float32 embedding — used when VECTOR_QUANTIZATION is "none" or "fp16" -->
   <field name="embedding_v" type="knn_vector_768" indexed="true" stored="true"/>
+  <!-- int8 (BYTE) embedding — used when VECTOR_QUANTIZATION is "int8".
+       The indexer writes to exactly one of embedding_v or embedding_byte based on config. -->
+  <field name="embedding_byte" type="knn_vector_768_byte" indexed="true" stored="true"/>
   <!-- Page tracking for chunk docs (issue: page-aware chunking) -->
   <field name="page_start_i" type="pint" multiValued="false" indexed="true" stored="true"/>
   <field name="page_end_i" type="pint" multiValued="false" indexed="true" stored="true"/>
