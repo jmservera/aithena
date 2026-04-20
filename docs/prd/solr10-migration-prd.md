@@ -1,6 +1,6 @@
 # PRD: Solr 10 Migration for Aithena v2.0
 
-> **Status**: Draft — Research & Analysis  
+> **Status**: Migration plan created — see [docs/migration/solr-9-to-10.md](../migration/solr-9-to-10.md)  
 > **Target Release**: v2.0  
 > **Author**: Squad (Copilot)  
 > **Last Updated**: 2026-03-31  
