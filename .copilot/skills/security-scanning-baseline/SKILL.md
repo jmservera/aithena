@@ -17,7 +17,7 @@ Aithena runs three security scanners in CI, all non-blocking with SARIF upload t
 
 ### Bandit (Python SAST)
 - **Config:** `.bandit` (centralized, not CLI flags)
-- **Workflow:** `.github/workflows/security-bandit.yml`
+- **Workflow:** `.github/workflows/security-scanning.yml` (bandit-scan job)
 - **Mode:** `--exit-zero` + `continue-on-error: true` (non-blocking)
 - **Output:** SARIF → GitHub Code Scanning + artifact (30-day retention)
 - **Permissions:** `security-events: write`
@@ -34,13 +34,13 @@ Aithena runs three security scanners in CI, all non-blocking with SARIF upload t
 
 ### Checkov (IaC)
 - **Config:** `.checkov.yml`
-- **Workflow:** `.github/workflows/security-checkov.yml`
+- **Workflow:** `.github/workflows/security-scanning.yml` (checkov-scan job)
 - **Scope:** Dockerfiles + GitHub Actions workflows
 - **Limitation:** Cannot scan `docker-compose.yml` — use manual IaC checklist in OWASP ZAP guide instead
 
 ### Zizmor (GitHub Actions Supply Chain)
 - **Config:** `.zizmor.yml` (baseline exceptions)
-- **Workflow:** `.github/workflows/security-zizmor.yml`
+- **Workflow:** `.github/workflows/security-scanning.yml` (zizmor-scan job)
 - **Action:** `zizmorcore/zizmor-action@v0.1.1`
 - **Triggers:** Push/PR to dev/main, path filter: `.github/workflows/**`
 - **Focus:** template-injection, dangerous-triggers, secrets-outside-env
