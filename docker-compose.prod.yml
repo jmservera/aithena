@@ -710,12 +710,30 @@ services:
             echo "Security already configured, skipping bootstrap."
           fi
 
+          # --- Validate SOLR_NUM_SHARDS and SOLR_REPLICATION_FACTOR ---
+          NUM_SHARDS="$${SOLR_NUM_SHARDS:-1}"
+          REPLICATION_FACTOR="$${SOLR_REPLICATION_FACTOR:-3}"
+
+          if ! echo "$$NUM_SHARDS" | grep -qE '^[1-9][0-9]*$$'; then
+            echo "ERROR: Invalid SOLR_NUM_SHARDS: '$$NUM_SHARDS'. Expected a positive integer." >&2
+            exit 1
+          fi
+
+          if ! echo "$$REPLICATION_FACTOR" | grep -qE '^[1-9][0-9]*$$'; then
+            echo "ERROR: Invalid SOLR_REPLICATION_FACTOR: '$$REPLICATION_FACTOR'. Expected a positive integer." >&2
+            exit 1
+          fi
+
+          if [ "$$REPLICATION_FACTOR" -gt 3 ]; then
+            echo "WARNING: SOLR_REPLICATION_FACTOR=$$REPLICATION_FACTOR exceeds the default 3-node topology. Ensure you have enough Solr nodes." >&2
+          fi
+
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
 
           if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
-            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=$${SOLR_NUM_SHARDS:-1}&replicationFactor=$${SOLR_REPLICATION_FACTOR:-3}&waitForFinalState=true&wt=json"
+            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=$$NUM_SHARDS&replicationFactor=$$REPLICATION_FACTOR&waitForFinalState=true&wt=json"
           fi
 
           SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh
