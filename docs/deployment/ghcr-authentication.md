@@ -25,7 +25,6 @@ ghcr.io/jmservera/aithena-{service}:{VERSION}
 - `embeddings-server` — Embeddings inference service
 - `document-indexer` — Document indexing worker
 - `document-lister` — Library file scanner worker
-- `admin` — Admin dashboard (Streamlit)
 
 ### When You Need Authentication
 
@@ -223,7 +222,6 @@ docker compose -f docker/compose.prod.yml ps
 # Check health
 curl http://localhost:8080/health          # solr-search
 curl http://localhost:8085/health          # embeddings-server
-curl http://localhost:8501/healthz         # admin (Streamlit)
 curl http://localhost/                     # nginx → aithena-ui
 ```
 

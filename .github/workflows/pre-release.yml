@@ -172,11 +172,6 @@ jobs:
             startup_timeout: 120
             tag_suffix: "-openvino"
             docker_env: "-e BACKEND=openvino -e DEVICE=cpu"
-          - image: admin
-            type: http
-            port: "8501"
-            health_endpoint: /admin/streamlit/_stcore/health
-            startup_timeout: 60
           - image: aithena-ui
             type: http
             port: "8080"

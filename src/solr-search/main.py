@@ -2203,7 +2203,7 @@ def admin_metrics_reset() -> dict[str, str]:
 
 DocumentStatus = Literal["queued", "processed", "failed"]
 
-# Column sets per status — mirrors the Streamlit admin dashboard schema.
+# Column sets per status for admin document triage.
 # Canonical field names are defined by document-lister (__main__.py) and
 # document-indexer, which write these JSON fields to Redis.
 _ADMIN_DOC_COLUMNS: dict[str, tuple[str, ...]] = {

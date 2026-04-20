@@ -473,7 +473,7 @@ These issues are **outside the scope** of CI scanner baseline tuning but documen
 - `/admin/solr` (Solr admin UI — full cluster access)
 - `/admin/rabbitmq` (RabbitMQ management — queue manipulation)
 - `/admin/redis` (Redis Commander — data access)
-- `/admin/streamlit` (Streamlit admin app)
+> **Note:** The Streamlit admin service (`/admin/streamlit`) has been removed. The React admin portal at `/admin/` replaces it.
 
 **Risk:** Unauthenticated access to admin interfaces could allow:
 - Data exfiltration (Solr queries, Redis key dumps)

@@ -34,7 +34,6 @@ The Aithena stack consists of **16 containers** in production:
 | **embeddings-server** | API | Yes | python:3.12-slim + ML model | ~2 GB | Vector embeddings |
 | **document-indexer** | Worker | Yes | python:3.12-alpine | ~80 MB | RabbitMQ consumer (indexing) |
 | **document-lister** | Worker | Yes | python:3.12-alpine | ~80 MB | RabbitMQ consumer (listing) |
-| **admin** | Admin UI | Yes | python:3.12-slim (Streamlit) | ~120 MB | Admin dashboard |
 | **nginx** | Reverse proxy | No | nginx:1.27-alpine | ~50 MB | Gateway |
 | **redis** | Cache | No | redis:latest | ~50 MB | Search cache |
 | **rabbitmq** | Queue | No | rabbitmq:4.0-management | ~200 MB | Async messaging |
@@ -171,7 +170,6 @@ From `.github/workflows/release.yml` (matrix build):
 | **embeddings-server** | **8-12 minutes** | ML model download (500MB), large dependencies (torch, transformers) |
 | solr-search | 3-5 minutes | uv dependency resolution, SQLite migrations |
 | aithena-ui | 2-4 minutes | npm install, TypeScript compilation, Vite build |
-| admin | 2-4 minutes | Streamlit dependencies |
 | document-indexer | 2-3 minutes | Small Python service |
 | document-lister | 2-3 minutes | Small Python service |
 

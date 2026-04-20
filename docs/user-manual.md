@@ -506,7 +506,7 @@ The **🛠️ Admin** tab opens an embedded operator dashboard inside the Aithen
 
 ### What it shows
 
-The embedded Streamlit dashboard currently includes:
+The admin dashboard currently includes:
 
 - **Total Documents**, **Queued**, **Processed**, and **Failed** counters
 - **RabbitMQ Queue** metrics for ready, unacknowledged, and total messages

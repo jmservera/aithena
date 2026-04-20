@@ -68,7 +68,7 @@ ENV_COMMENTS: list[tuple[str, str]] = [
     ("AUTH_JWT_TTL", "JWT lifetime accepted by src/solr-search/auth.py (e.g. 24h)"),
     ("AUTH_COOKIE_NAME", "HTTP cookie name used for browser auth"),
     ("AUTH_ADMIN_USERNAME", "Installer-managed bootstrap admin username"),
-    ("AUTH_ADMIN_PASSWORD", "Admin password for the Streamlit admin dashboard"),
+    ("AUTH_ADMIN_PASSWORD", "Bootstrap admin password created by the installer"),
     ("RABBITMQ_USER", "RabbitMQ legacy admin username (kept for backwards compat)"),
     ("RABBITMQ_PASS", "RabbitMQ legacy admin password (kept for backwards compat)"),
     ("RABBITMQ_LISTER_USER", "RabbitMQ user for document-lister (publish to documents exchange)"),

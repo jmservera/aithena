@@ -28,7 +28,7 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Similar Books panel** that appears after opening a PDF and recommends semantically related titles
 - **PDF viewer** that opens from search results and jumps to the matched page when page metadata exists
 - **Upload tab** with drag-and-drop file upload and real-time progress tracking
-- **Admin tab** with an embedded Streamlit dashboard for queue visibility, document management, and system status
+- **Admin portal** with queue visibility, document management, user management, and system status
 - **Status tab** with indexing progress plus Solr, Redis, and RabbitMQ health, refreshing every 10 seconds
 - **Stats tab** with indexed-book totals, page-count statistics, and breakdowns by language, author, year, and category
 - **Container health checks** for all services with automatic restart on failure
@@ -145,7 +145,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 |-----------|-------|--------|
 | [v1.8.0](https://github.com/jmservera/aithena/milestone/22) | UI/UX improvements, design system | Complete |
 | [v1.8.1](https://github.com/jmservera/aithena/milestone/24) | Bug fixes (search, stats, i18n, admin) | Complete |
-| [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Streamlit retirement, infra UI links | Complete |
+| [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Legacy admin retirement, infra UI links | Complete |
 | [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | Complete |
 | [v1.9.1](https://github.com/jmservera/aithena/milestone/28) | Docker build fix | Complete |
 | [v1.10.0](https://github.com/jmservera/aithena/milestone/26) | User collections, metadata editing | Planned |
@@ -386,7 +386,7 @@ See `src/document-indexer/tests/test_metadata.py` for test cases and real librar
 **Phase 3**: Embeddings indexing, hybrid search (keyword + semantic), similar books  
 **Phase 4**: PDF upload, file watcher, admin dashboard, production hardening  
 
-Current branch: `jmservera/solrstreamlitui`
+Current branch: `dev`
 
 ## Release Process Overview
 

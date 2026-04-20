@@ -83,14 +83,13 @@ Expected output: All services should show `Up` or `healthy` status. Key services
 - `solr-search` (search API)
 - `solr`, `solr2`, `solr3` (Solr cluster)
 - `rabbitmq`, `redis` (infrastructure)
-- `streamlit-admin` (admin dashboard)
 
 ### 2. Verify Application is Running
 
 Open a browser and navigate to:
 - **Main UI:** `http://localhost/`
 - **Search API:** `http://localhost/v1/docs` (FastAPI Swagger)
-- **Admin Dashboard:** `http://localhost/admin/streamlit/`
+- **Admin Dashboard:** `http://localhost/admin/`
 
 If any endpoint returns 502/503, check container logs:
 
@@ -252,8 +251,8 @@ To intercept HTTPS traffic (if testing with TLS enabled):
 
 **Navigate to each admin interface:**
 
-#### Streamlit Admin
-- **URL:** `http://localhost/admin/streamlit/`
+#### React Admin
+- **URL:** `http://localhost/admin/`
 - **Actions:**
   - Navigate all pages/tabs
   - Submit any forms
@@ -314,7 +313,6 @@ http://localhost
 │   ├── /documents/{path}
 │   └── /docs (Swagger)
 ├── /admin/
-│   ├── /streamlit/
 │   ├── /solr/
 │   ├── /rabbitmq/
 │   └── /redis/
@@ -406,7 +404,7 @@ Click **Start Scan**
 
 | Service | URL | Port (Override) | Description | Scan Priority |
 |---------|-----|-----------------|-------------|---------------|
-| **Streamlit Admin** | `http://localhost/admin/streamlit/` | 8501 | Admin dashboard | ⭐⭐ Medium |
+| **Streamlit Admin** | `http://localhost/admin/` | 8501 | Admin dashboard | ⭐⭐ Medium |
 | **Solr Admin** | `http://localhost/admin/solr/` | 8983 | Solr management UI | ⭐⭐ Medium |
 | **RabbitMQ Mgmt** | `http://localhost/admin/rabbitmq/` | 15672 | Queue management | ⭐ Low |
 | **Redis Commander** | `http://localhost/admin/redis/` | 8081 | Redis browser | ⭐ Low |
@@ -418,7 +416,6 @@ Click **Start Scan**
 | Port | Service | Risk |
 |------|---------|------|
 | 8080 | solr-search (direct) | Bypasses nginx auth (if added) |
-| 8501 | streamlit-admin (direct) | Bypasses nginx auth |
 | 8983, 8984, 8985 | Solr nodes (direct) | Direct cluster access |
 | 15672 | RabbitMQ management (direct) | Admin UI without nginx |
 | 6379 | Redis (direct) | Unauthenticated data store |
@@ -708,7 +705,7 @@ This report documents the results of a manual OWASP ZAP security audit performed
 
 - ✅ React UI (`http://localhost/`)
 - ✅ Search API (`http://localhost/v1/`)
-- ✅ Admin interfaces (Streamlit, Solr, RabbitMQ, Redis)
+- ✅ Admin interfaces (Solr, RabbitMQ, Redis)
 - ✅ Docker Compose configuration review
 
 ### Out-of-Scope
