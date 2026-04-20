@@ -24,6 +24,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.18.1 patch:** Fixes the installer `ModuleNotFoundError` when running `uv run installer/setup.py` from the repo root (now works from any directory). See [v1.18.1 Release Notes](release-notes/v1.18.1.md).
 
+**v1.19.0 patch:** Suppresses startup deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, cleaning up container logs. No user-facing changes. See [v1.19.0 Release Notes](release-notes/v1.19.0.md).
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
