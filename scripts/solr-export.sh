@@ -178,14 +178,42 @@ parse_args() {
 }
 
 # ---------------------------------------------------------------------------
-# solr_curl — wrapper that adds auth if configured
+# Netrc-based auth helpers — avoid leaking credentials via process list
+# ---------------------------------------------------------------------------
+_SOLR_NETRC=""
+
+create_solr_netrc() {
+    if [[ -n "$SOLR_USER" && -n "$SOLR_PASS" ]]; then
+        _SOLR_NETRC="$(mktemp "${PROJECT_ROOT}/.solr-netrc-XXXXXX")"
+        chmod 0600 "$_SOLR_NETRC"
+        local host
+        host=$(echo "$SOLR_URL" | sed -E 's|^https?://||; s|:[0-9]+.*||; s|/.*||')
+        printf 'machine %s login %s password %s\n' "$host" "$SOLR_USER" "$SOLR_PASS" > "$_SOLR_NETRC"
+    fi
+}
+
+cleanup_solr_netrc() {
+    if [[ -n "$_SOLR_NETRC" && -f "$_SOLR_NETRC" ]]; then
+        rm -f "$_SOLR_NETRC"
+        _SOLR_NETRC=""
+    fi
+}
+
+trap cleanup_solr_netrc EXIT
+
+# ---------------------------------------------------------------------------
+# solr_curl — wrapper that adds auth if configured (via netrc file)
 # ---------------------------------------------------------------------------
 solr_curl() {
     local curl_args=(-sf --max-time 120)
     if [[ -n "$SOLR_USER" && -n "$SOLR_PASS" ]]; then
-        curl_args+=(-u "${SOLR_USER}:${SOLR_PASS}")
+        create_solr_netrc
+        curl_args+=(--netrc-file "$_SOLR_NETRC")
     fi
-    curl "${curl_args[@]}" "$@"
+    local rc=0
+    curl "${curl_args[@]}" "$@" || rc=$?
+    cleanup_solr_netrc
+    return $rc
 }
 
 # ---------------------------------------------------------------------------
@@ -294,10 +322,11 @@ export_data() {
 import json, sys
 data = json.loads(sys.stdin.read())
 docs = data.get('response', {}).get('docs', [])
-for doc in docs:
-    print(json.dumps(doc, ensure_ascii=False))
-print(len(docs), file=sys.stderr)
-" <<< "$response" >> "$output_file" 2>&1 | tail -1) || {
+with open(sys.argv[1], 'a') as f:
+    for doc in docs:
+        f.write(json.dumps(doc, ensure_ascii=False) + '\n')
+print(len(docs))
+" "$output_file" <<< "$response") || {
                 log_error "Failed to parse Solr response on page ${page}"
                 return 1
             }
@@ -362,14 +391,19 @@ export_configset() {
     local http_code
     local curl_args=(-s --max-time 120 -o "$output_file" -w "%{http_code}")
     if [[ -n "$SOLR_USER" && -n "$SOLR_PASS" ]]; then
-        curl_args+=(-u "${SOLR_USER}:${SOLR_PASS}")
+        create_solr_netrc
+        curl_args+=(--netrc-file "$_SOLR_NETRC")
     fi
 
     http_code=$(curl "${curl_args[@]}" \
-        "${SOLR_URL}/api/cluster/configs/${configset_name}?omitHeader=true" 2>&1) || {
+        "${SOLR_URL}/api/cluster/configs/${configset_name}?omitHeader=true" 2>&1)
+    local curl_rc=$?
+    cleanup_solr_netrc
+
+    if [[ $curl_rc -ne 0 ]]; then
         log_error "Failed to download configset ZIP"
         return 1
-    }
+    fi
 
     if [[ "$http_code" != "200" ]]; then
         log_error "Configset download returned HTTP ${http_code}"
@@ -377,10 +411,14 @@ export_configset() {
         return 1
     fi
 
-    # Verify it's a valid ZIP
-    if ! file "$output_file" | grep -qi 'zip'; then
-        log_warn "Downloaded configset may not be a valid ZIP file"
-        EXIT_CODE=2
+    # Verify it's a valid ZIP (if 'file' command is available)
+    if command -v file &>/dev/null; then
+        if ! file "$output_file" | grep -qi 'zip'; then
+            log_warn "Downloaded configset may not be a valid ZIP file"
+            EXIT_CODE=2
+        fi
+    else
+        log_warn "'file' command not found — skipping ZIP validation for configset"
     fi
 
     local zip_size
