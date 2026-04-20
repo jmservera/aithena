@@ -22,6 +22,11 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, U
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from rerank_service import (
+    build_chunk_vector_params,
+    cosine_rerank,
+    extract_grouped_vectors,
+)
 
 import redis as redis_lib
 from admin_auth import require_admin_auth
@@ -141,7 +146,17 @@ T = TypeVar("T")
 SortBy = Literal["score", "title", "author", "year", "category", "language"]
 SortOrder = Literal["asc", "desc"]
 
-VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
+_VALID_ARCHITECTURES = frozenset({"hnsw", "hybrid-rerank"})
+
+# Search modes available per architecture
+_MODES_BY_ARCHITECTURE: dict[str, frozenset[str]] = {
+    "hnsw": frozenset({"keyword", "semantic", "hybrid"}),
+    "hybrid-rerank": frozenset({"keyword", "hybrid"}),
+}
+
+VALID_SEARCH_MODES: frozenset[str] = _MODES_BY_ARCHITECTURE.get(
+    settings.search_architecture, _MODES_BY_ARCHITECTURE["hnsw"]
+)
 EMBEDDINGS_DEGRADED_MESSAGE = "Embeddings unavailable — showing keyword results"
 
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -152,6 +167,17 @@ _INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme",
 
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if settings.search_architecture not in _VALID_ARCHITECTURES:
+        raise ValueError(
+            f"Invalid SEARCH_ARCHITECTURE={settings.search_architecture!r}. "
+            f"Must be one of: {', '.join(sorted(_VALID_ARCHITECTURES))}"
+        )
+    if settings.default_search_mode not in VALID_SEARCH_MODES:
+        logger.warning(
+            "DEFAULT_SEARCH_MODE=%r is not available in %s architecture; falling back to 'keyword'",
+            settings.default_search_mode,
+            settings.search_architecture,
+        )
     if settings.auth_jwt_secret in _INSECURE_JWT_SECRETS:
         logger.warning(
             "AUTH_JWT_SECRET is using an insecure default value. "
@@ -710,6 +736,22 @@ def version() -> dict[str, str]:
     }
 
 
+@app.get("/v1/capabilities", include_in_schema=False, name="capabilities_v1")
+@app.get("/capabilities")
+def capabilities() -> dict[str, Any]:
+    """Return the search capabilities of this deployment.
+
+    The frontend uses this to dynamically show/hide search modes and
+    features based on the configured search architecture.
+    """
+    return {
+        "search_modes": sorted(VALID_SEARCH_MODES),
+        "architecture": settings.search_architecture,
+        "vector_dimensions": 768,
+        "similar_books": settings.search_architecture == "hnsw",
+    }
+
+
 @app.post("/v1/auth/login/", include_in_schema=False, name="auth_login_v1_slash")
 @app.post("/v1/auth/login", name="auth_login_v1")
 def auth_login(credentials: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
@@ -925,7 +967,11 @@ def search(
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid search mode: {mode!r}. Must be one of: keyword, semantic, hybrid.",
+            detail=(
+                f"Invalid search mode: {mode!r}. "
+                f"Available modes for {settings.search_architecture} architecture: "
+                f"{', '.join(sorted(VALID_SEARCH_MODES))}."
+            ),
         )
 
     resolved_page_size = resolve_page_size(limit, page_size)
@@ -1153,6 +1199,26 @@ def _search_hybrid(
     *,
     collection: str | None = None,
 ) -> dict[str, Any]:
+    """Execute hybrid search — delegates to HNSW or rerank based on architecture."""
+    if settings.search_architecture == "hybrid-rerank":
+        return _search_hybrid_rerank(
+            request, q, page, page_size, sort_by, sort_order, sort, filters, collection=collection
+        )
+    return _search_hybrid_hnsw(request, q, page, page_size, sort_by, sort_order, sort, filters, collection=collection)
+
+
+def _search_hybrid_hnsw(
+    request: Request,
+    q: str,
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
+    *,
+    collection: str | None = None,
+) -> dict[str, Any]:
     """Execute BM25 and kNN searches in parallel, then fuse with RRF.
 
     Facets and highlights are sourced from the BM25 (keyword) leg.
@@ -1236,6 +1302,159 @@ def _search_hybrid(
     return {
         "query": q,
         "mode": "hybrid",
+        "sort": {"by": "score", "order": "desc"},
+        "degraded": False,
+        **build_pagination(len(fused), 1, page_size),
+        "results": fused,
+        "facets": parse_facet_counts(kw_payload),
+    }
+
+
+_RERANK_CANDIDATE_LIMIT = 200  # BM25 candidates to rerank
+
+
+def _search_hybrid_rerank(
+    request: Request,
+    q: str,
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
+    *,
+    collection: str | None = None,
+) -> dict[str, Any]:
+    """Hybrid search without HNSW: BM25 → fetch stored vectors → cosine rerank → RRF.
+
+    1. BM25 query returns top-N parent docs (books)
+    2. Fetch first-chunk embeddings for those books from Solr
+    3. Compute cosine similarity between query embedding and chunk vectors
+    4. RRF fusion of BM25 rank and vector similarity rank
+    5. Return top page_size results
+
+    For non-relevance sorts (title, year, etc.), vector reranking is skipped
+    and the search falls back to pure keyword mode.
+    """
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty for hybrid search")
+
+    # Non-relevance sorts bypass vector reranking
+    effective_sort = sort_by if sort is None else sort.split()[0] if sort else sort_by
+    if effective_sort != "score":
+        return _search_keyword(
+            request,
+            q,
+            page,
+            page_size,
+            sort_by,
+            sort_order,
+            sort,
+            filters,
+            collection=collection,
+        )
+
+    candidate_limit = min(_RERANK_CANDIDATE_LIMIT, max(page_size * 10, 50))
+
+    kw_params = build_params_or_400(
+        query=q,
+        page=1,
+        page_size=candidate_limit,
+        sort_by="score",
+        sort_order="desc",
+        sort=None,
+        filters=filters,
+        facet_limit=settings.facet_limit,
+    )
+
+    # Run BM25 query and embedding fetch concurrently
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        kw_future = pool.submit(query_solr, kw_params, collection=collection)
+        emb_future = pool.submit(_fetch_embedding, q, collection=collection)
+
+        kw_payload = kw_future.result()
+        try:
+            query_vector = emb_future.result()
+        except HTTPException as exc:
+            if _should_degrade_to_keyword(exc):
+                return _search_keyword(
+                    request,
+                    q,
+                    page,
+                    page_size,
+                    sort_by,
+                    sort_order,
+                    sort,
+                    filters,
+                    degraded=True,
+                    message=EMBEDDINGS_DEGRADED_MESSAGE,
+                    requested_mode="hybrid",
+                    collection=collection,
+                )
+            raise
+
+    kw_response = kw_payload.get("response", {})
+    kw_highlighting = kw_payload.get("highlighting", {})
+    kw_docs = kw_response.get("docs", [])
+
+    if not kw_docs:
+        return {
+            "query": q,
+            "mode": "hybrid",
+            "architecture": "hybrid-rerank",
+            "sort": {"by": "score", "order": "desc"},
+            "degraded": False,
+            **build_pagination(0, 1, page_size),
+            "results": [],
+            "facets": parse_facet_counts(kw_payload),
+        }
+
+    # Normalize BM25 results
+    kw_results = [
+        normalize_book(doc, kw_highlighting, build_document_url(request, doc.get("file_path_s"))) for doc in kw_docs
+    ]
+    parent_ids = [r["id"] for r in kw_results]
+
+    # Fetch first-chunk embeddings for BM25 candidates
+    vec_params = build_chunk_vector_params(parent_ids, settings.knn_field)
+    vec_payload = query_solr(vec_params, collection=collection)
+    parent_vectors = extract_grouped_vectors(vec_payload, settings.knn_field)
+
+    # Build rerank candidates (only books that have vectors)
+    doc_vectors = [(pid, parent_vectors[pid]) for pid in parent_ids if pid in parent_vectors]
+
+    if not doc_vectors:
+        # No vectors available — fall back to BM25-only results
+        return {
+            "query": q,
+            "mode": "hybrid",
+            "architecture": "hybrid-rerank",
+            "sort": {"by": "score", "order": "desc"},
+            "degraded": True,
+            "message": "No vector embeddings available for reranking — showing keyword results",
+            **build_pagination(len(kw_results), 1, page_size),
+            "results": kw_results[:page_size],
+            "facets": parse_facet_counts(kw_payload),
+        }
+
+    # Cosine rerank and RRF fusion
+    reranked = cosine_rerank(query_vector, doc_vectors)
+
+    # Build semantic-like results from rerank scores
+    result_map = {r["id"]: r for r in kw_results}
+    sem_results = []
+    for doc_id, sim_score in reranked:
+        if doc_id in result_map:
+            entry = dict(result_map[doc_id])
+            entry["score"] = sim_score
+            sem_results.append(entry)
+
+    fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)[:page_size]
+
+    return {
+        "query": q,
+        "mode": "hybrid",
+        "architecture": "hybrid-rerank",
         "sort": {"by": "score", "order": "desc"},
         "degraded": False,
         **build_pagination(len(fused), 1, page_size),
@@ -1363,7 +1582,11 @@ def search_compare(
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid search mode: {mode!r}. Must be one of: keyword, semantic, hybrid.",
+            detail=(
+                f"Invalid search mode: {mode!r}. "
+                f"Available modes for {settings.search_architecture} architecture: "
+                f"{', '.join(sorted(VALID_SEARCH_MODES))}."
+            ),
         )
 
     resolved_page_size = resolve_page_size(limit, page_size)
@@ -1484,7 +1707,15 @@ def similar_books(
     chunk documents (not parent book docs), so we fetch the vector from the
     book's first chunk, run kNN against all other chunks, then deduplicate
     by parent book.
+
+    Requires HNSW architecture — returns 501 in hybrid-rerank mode.
     """
+    if settings.search_architecture != "hnsw":
+        raise HTTPException(
+            status_code=501,
+            detail="Similar books requires HNSW search architecture. "
+            f"Current architecture: {settings.search_architecture}",
+        )
     embedding_field = settings.book_embedding_field
 
     # If document_id looks like a chunk ID, resolve to parent.

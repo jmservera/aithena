@@ -94,6 +94,7 @@ class Settings:
     collection_embeddings_urls: tuple[tuple[str, str], ...]
     comparison_baseline_collection: str
     comparison_candidate_collection: str
+    search_architecture: str = "hnsw"
     docker_host: str = ""
     rabbitmq_management_path_prefix: str = "/admin/rabbitmq"
     log_tail_max: int = 5000
@@ -197,6 +198,7 @@ settings = Settings(
     comparison_baseline_collection=os.environ.get("COMPARISON_BASELINE_COLLECTION", "books"),
     comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books"),
     docker_host=os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock"),
+    search_architecture=os.environ.get("SEARCH_ARCHITECTURE", "hnsw"),
     rabbitmq_management_path_prefix=os.environ.get("RABBITMQ_MANAGEMENT_PATH_PREFIX", "/admin/rabbitmq"),
     log_tail_max=int(os.environ.get("LOG_TAIL_MAX", "5000")),
     ascii_folding=os.environ.get("SOLR_ASCII_FOLDING", "true").lower() == "true",

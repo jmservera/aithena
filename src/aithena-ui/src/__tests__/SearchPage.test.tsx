@@ -8,6 +8,17 @@ import { IntlWrapper } from './test-intl-wrapper';
 import { ToastProvider } from '../contexts/ToastContext';
 import { AuthContext, AuthContextValue } from '../contexts/AuthContext';
 
+vi.mock('../contexts/CapabilitiesContext', () => ({
+  useCapabilities: () => ({
+    searchModes: ['keyword', 'semantic', 'hybrid'],
+    architecture: 'hnsw',
+    vectorDimensions: 768,
+    similarBooks: true,
+    loading: false,
+  }),
+  CapabilitiesProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 const mockAuthValue: AuthContextValue = {
   user: { id: 1, username: 'testuser', role: 'user' },
   token: 'test-token',
