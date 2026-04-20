@@ -1,0 +1,51 @@
+# Single-node topology overlay: 1 Solr + 1 ZooKeeper
+#
+# The base docker-compose.yml runs a distributed topology (3 Solr + 3 ZK).
+# This overlay disables the extra nodes for dev/small deployments and
+# adjusts ZooKeeper and Solr to run standalone.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker/compose.single-node.yml up -d
+#
+# The installer generates start.sh with this overlay when SOLR_TOPOLOGY=single-node.
+
+services:
+  # Scale down to standalone ZooKeeper (no ensemble)
+  zoo1:
+    environment:
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181
+      ZOO_STANDALONE_ENABLED: "true"
+
+  # Disable zoo2 and zoo3
+  zoo2:
+    profiles: ["distributed-only"]
+  zoo3:
+    profiles: ["distributed-only"]
+
+  # Single Solr node depends only on zoo1
+  solr:
+    environment:
+      ZK_HOST: "zoo1:2181"
+    depends_on:
+      zoo1:
+        condition: service_healthy
+
+  # Disable extra Solr nodes
+  solr2:
+    profiles: ["distributed-only"]
+  solr3:
+    profiles: ["distributed-only"]
+
+  # solr-init only waits for the single Solr node
+  solr-init:
+    depends_on:
+      solr:
+        condition: service_healthy
+    environment:
+      SOLR_NUM_SHARDS: "${SOLR_NUM_SHARDS:-1}"
+      SOLR_REPLICATION_FACTOR: "${SOLR_REPLICATION_FACTOR:-1}"
+
+  # Point solr-search at standalone ZooKeeper
+  solr-search:
+    environment:
+      - ZOOKEEPER_HOSTS=zoo1:2181
