@@ -1,0 +1,33 @@
+# docker/compose.gpu-intel.yml
+#
+# GPU acceleration override for Intel GPUs (Arc, iGPU via WSL2).
+#
+# Usage (dev — builds from source with OpenVINO):
+#   docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d --build
+#
+# Production (pulls pre-built OpenVINO image):
+#   docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d
+#
+# Prerequisites:
+#   - Intel GPU with compute-runtime drivers
+#   - /dev/dxg device must be accessible (WSL2)
+#
+# Verify GPU access:
+#   ls -la /dev/dxg
+
+services:
+  embeddings-server:
+    # Override image tag to the pre-built OpenVINO variant (used by docker compose pull / up)
+    image: ghcr.io/jmservera/aithena-embeddings-server:${EMBEDDINGS_VERSION:-${VERSION:-latest}-openvino}
+    # Build args for local dev builds (only used with --build flag; ignored for pre-built images)
+    build:
+      args:
+        INSTALL_OPENVINO: "true"
+        BASE_TAG: "3.12-slim-multilingual-e5-base-openvino"
+    environment:
+      - DEVICE=xpu
+      - BACKEND=openvino
+    devices:
+      - /dev/dxg:/dev/dxg
+    volumes:
+      - /usr/lib/wsl:/usr/lib/wsl:ro

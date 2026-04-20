@@ -1,6 +1,6 @@
 # PRD: Solr 10 Migration for Aithena v2.0
 
-> **Status**: Draft — Research & Analysis  
+> **Status**: Migration plan created — see [docs/migration/solr-9-to-10.md](../migration/solr-9-to-10.md)  
 > **Target Release**: v2.0  
 > **Author**: Squad (Copilot)  
 > **Last Updated**: 2026-03-31  
@@ -143,7 +143,7 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 
 **Recommendation**: Provide **two deployment profiles**:
 1. **`docker-compose.yml` (dev/small)**: Single Solr node, standalone mode, **no ZooKeeper** — saves 1.5GB RAM and 3 containers
-2. **`docker-compose.prod.yml` (production HA)**: 3 Solr nodes + ZooKeeper with Overseer disabled (Solr 10 recommendation for simpler operations)
+2. **`docker/compose.prod.yml` (production HA)**: 3 Solr nodes + ZooKeeper with Overseer disabled (Solr 10 recommendation for simpler operations)
 
 **Migration effort**: 🟡 Medium — solr-init script must handle both modes; configset upload changes from `solr zk upconfig` to file-based config in standalone mode.
 
@@ -240,7 +240,7 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 
 ### 4.1 🔴 CLI Double-Dash Syntax
 
-**Impact**: All init scripts in `docker-compose.yml` and `docker-compose.prod.yml`.
+**Impact**: All init scripts in `docker-compose.yml` and `docker/compose.prod.yml`.
 
 **Current auth bootstrap command shape (both compose files):**
 ```bash
@@ -543,8 +543,8 @@ Vectors: ScalarQuantizedDenseVectorField (int8, 4× memory savings)
 | `src/solr/books/managed-schema.xml` | Rename HNSW params, optionally add quantized field types |
 | `src/solr/security.json` | Align with Solr 10 defaults (already done for Solr 9.7) |
 | `docker-compose.yml` | solr-init CLI syntax, optional standalone mode |
-| `docker-compose.prod.yml` | solr-init CLI syntax, Overseer disabled config |
-| `docker-compose.nvidia.override.yml` | Add cuVS codec support for Solr |
+| `docker/compose.prod.yml` | solr-init CLI syntax, Overseer disabled config |
+| `docker/compose.gpu-nvidia.yml` | Add cuVS codec support for Solr |
 | `src/solr-search/` | `efSearchScaleFactor` support, optional text-to-vector |
 | `src/document-indexer/` | Optional: remove embedding calls if using Solr-native |
 | `src/solr-search/tests/test_solr_init_script.py` | Update CLI syntax assertions |

@@ -142,11 +142,6 @@ jobs:
             startup_timeout: 60
             tag_suffix: "-openvino"
             docker_env: "-e BACKEND=openvino -e DEVICE=cpu"
-          - image: admin
-            type: http
-            port: "8501"
-            health_endpoint: /admin/streamlit/_stcore/health
-            startup_timeout: 60
           - image: aithena-ui
             type: http
             port: "8080"
@@ -276,7 +271,7 @@ jobs:
           mkdir -p release-package/installer
           
           # Core production files
-          cp docker-compose.prod.yml release-package/
+          cp docker/compose.prod.yml release-package/
           cp .env.prod.example release-package/
           cp README.md release-package/
           cp LICENSE release-package/

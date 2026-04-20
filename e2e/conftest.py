@@ -6,7 +6,7 @@ Environment variables (with defaults for the local dev stack):
   SEARCH_API_URL    solr-search base URL, e.g. http://localhost:8080
   E2E_LIBRARY_PATH  Absolute path used as the test book library root.
                     The document-data volume must be bound to the same path
-                    when running the stack with docker-compose.e2e.yml.
+                    when running the stack with docker/compose.e2e.yml.
 """
 
 from __future__ import annotations
@@ -162,7 +162,7 @@ def test_library_root() -> Generator[Path, None, None]:
 
     The directory is created before the session and removed afterwards.
     Set E2E_LIBRARY_PATH to override the location (must match the volume
-    bind-mount used by docker-compose.e2e.yml).
+    bind-mount used by docker/compose.e2e.yml).
     """
     root = Path(E2E_LIBRARY_PATH)
     root.mkdir(parents=True, exist_ok=True)

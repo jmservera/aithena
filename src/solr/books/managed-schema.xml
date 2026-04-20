@@ -42,7 +42,11 @@
   </fieldType>
   <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
   <!-- 768-dim dense vector field type for multilingual-e5-base (replaces distiluse, benchmark #926).
-       HNSW index with cosine similarity for kNN semantic search. -->
+       HNSW index with cosine similarity for kNN semantic search.
+       Uses Solr defaults for HNSW tuning. If custom params are needed:
+         Solr 9:  hnswMaxConnections="16" hnswBeamWidth="100"
+         Solr 10: maxConnections="16" beamWidth="100"
+       See docs/migration/solr-compat-layer.md and src/solr-search/solr_compat.py -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
@@ -509,6 +513,35 @@
   <!-- Page tracking for chunk docs (issue: page-aware chunking) -->
   <field name="page_start_i" type="pint" multiValued="false" indexed="true" stored="true"/>
   <field name="page_end_i" type="pint" multiValued="false" indexed="true" stored="true"/>
+  <!-- Tika metadata fields (v2.0, #1360) — pre-defined to prevent ZK BadVersionException -->
+  <!-- Core Tika metadata -->
+  <field name="resourcename" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="charset" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="author" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="title" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="subject" type="text_general" multiValued="true" indexed="true" stored="true"/>
+  <field name="keywords" type="text_general" multiValued="true" indexed="true" stored="true"/>
+  <field name="encrypt" type="boolean" multiValued="false" indexed="true" stored="true"/>
+  <field name="content_length" type="plong" multiValued="false" indexed="true" stored="true"/>
+  <field name="source_content_type" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="source_charset" type="string" multiValued="false" indexed="true" stored="true"/>
+  <!-- Dublin Core (XMP) metadata -->
+  <field name="dc_creator" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="dc_subject" type="text_general" multiValued="true" indexed="true" stored="true"/>
+  <field name="dc_description" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="dc_language" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="dc_issued" type="pdate" multiValued="false" indexed="true" stored="true"/>
+  <field name="dc_rights" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <!-- PDF encryption metadata -->
+  <field name="pdf_encryptionalgorithmname" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="pdf_encryptionversion" type="pint" multiValued="false" indexed="true" stored="true"/>
+  <field name="pdf_encryptionlength" type="pint" multiValued="false" indexed="true" stored="true"/>
+  <!-- PDF structure metadata -->
+  <field name="pdf_containsmarkedcontent" type="boolean" multiValued="false" indexed="true" stored="true"/>
+  <field name="pdf_structuretree" type="boolean" multiValued="false" indexed="true" stored="true"/>
+  <!-- XMP variants -->
+  <field name="xmpdc_rights" type="text_general" multiValued="false" indexed="true" stored="true"/>
+  <field name="xmpdc_format" type="text_general" multiValued="false" indexed="true" stored="true"/>
   <field name="last_modified" type="pdates"/>
   <field name="last_save_date" type="pdates"/>
   <field name="meta" type="text_general"/>

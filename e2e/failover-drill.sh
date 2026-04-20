@@ -226,7 +226,7 @@ compose config >/dev/null
 log "Starting the full stack"
 compose up -d --build
 
-for service in redis rabbitmq zoo1 zoo2 zoo3 solr solr2 solr3 embeddings-server document-lister document-indexer solr-search streamlit-admin redis-commander aithena-ui nginx; do
+for service in redis rabbitmq zoo1 zoo2 zoo3 solr solr2 solr3 embeddings-server document-lister document-indexer solr-search redis-commander aithena-ui nginx; do
   wait_for_state "$service" healthy 360
 done
 wait_for_state solr-init exited0 180
@@ -259,11 +259,11 @@ assert_json "$REDIS_DOWN_STATUS" "data['indexing'] == {'total_discovered': 0, 'i
 assert_keyword_search_ok
 compose start redis
 wait_for_state redis healthy 120
-compose restart document-lister document-indexer streamlit-admin redis-commander
+compose restart document-lister document-indexer redis-commander aithena-ui
 wait_for_state document-lister healthy 180
 wait_for_state document-indexer healthy 180
-wait_for_state streamlit-admin healthy 180
 wait_for_state redis-commander healthy 180
+wait_for_state aithena-ui healthy 180
 wait_for_status "data['services']['redis'] == 'up'" 120 >/dev/null
 assert_keyword_search_ok
 
@@ -273,10 +273,10 @@ wait_for_status "data['services']['rabbitmq'] == 'down'" 120 >/dev/null
 assert_keyword_search_ok
 compose start rabbitmq
 wait_for_state rabbitmq healthy 180
-compose restart document-lister document-indexer streamlit-admin
+compose restart document-lister document-indexer aithena-ui
 wait_for_state document-lister healthy 180
 wait_for_state document-indexer healthy 180
-wait_for_state streamlit-admin healthy 180
+wait_for_state aithena-ui healthy 180
 wait_for_status "data['services']['rabbitmq'] == 'up'" 120 >/dev/null
 assert_keyword_search_ok
 

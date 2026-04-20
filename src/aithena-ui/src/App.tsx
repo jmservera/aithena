@@ -9,6 +9,7 @@ import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import LoadingSpinner from './Components/LoadingSpinner';
 import ProtectedRoute from './Components/ProtectedRoute';
 import AdminRoute from './Components/AdminRoute';
+import AdminLayout from './Components/AdminLayout';
 import TabNav from './Components/TabNav';
 
 const SearchPage = lazy(() => import('./pages/SearchPage'));
@@ -18,12 +19,18 @@ const CollectionDetailPage = lazy(() => import('./pages/CollectionDetailPage'));
 const UploadPage = lazy(() => import('./pages/UploadPage'));
 const StatusPage = lazy(() => import('./pages/StatusPage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
-const AdminPage = lazy(() => import('./pages/AdminPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const BackupDashboardPage = lazy(() => import('./pages/BackupDashboardPage'));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
+const AdminDocumentsPage = lazy(() => import('./pages/AdminDocumentsPage'));
+const AdminReindexPage = lazy(() => import('./pages/AdminReindexPage'));
+const AdminIndexingStatusPage = lazy(() => import('./pages/AdminIndexingStatusPage'));
+const AdminSystemStatusPage = lazy(() => import('./pages/AdminSystemStatusPage'));
+const AdminLogsPage = lazy(() => import('./pages/AdminLogsPage'));
+const AdminInfrastructurePage = lazy(() => import('./pages/AdminInfrastructurePage'));
 
 function LazyRoute({
   element,
@@ -165,16 +172,6 @@ function App() {
               }
             />
             <Route
-              path="/admin"
-              element={
-                <LazyRoute
-                  element={<AdminPage />}
-                  titleId="loading.admin"
-                  messageId="loading.adminMessage"
-                />
-              }
-            />
-            <Route
               path="/profile"
               element={
                 <LazyRoute
@@ -196,26 +193,17 @@ function App() {
             />
           </Route>
           <Route element={<AdminRoute />}>
-            <Route
-              path="/admin/users"
-              element={
-                <LazyRoute
-                  element={<UserManagementPage />}
-                  titleId="loading.users"
-                  messageId="loading.usersMessage"
-                />
-              }
-            />
-            <Route
-              path="/admin/backups"
-              element={
-                <LazyRoute
-                  element={<BackupDashboardPage />}
-                  titleId="loading.backups"
-                  messageId="loading.backupsMessage"
-                />
-              }
-            />
+            <Route element={<AdminLayout />}>
+              <Route path="/admin" element={<AdminDashboardPage />} />
+              <Route path="/admin/documents" element={<AdminDocumentsPage />} />
+              <Route path="/admin/reindex" element={<AdminReindexPage />} />
+              <Route path="/admin/indexing-status" element={<AdminIndexingStatusPage />} />
+              <Route path="/admin/system-status" element={<AdminSystemStatusPage />} />
+              <Route path="/admin/logs" element={<AdminLogsPage />} />
+              <Route path="/admin/infrastructure" element={<AdminInfrastructurePage />} />
+              <Route path="/admin/users" element={<UserManagementPage />} />
+              <Route path="/admin/backups" element={<BackupDashboardPage />} />
+            </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

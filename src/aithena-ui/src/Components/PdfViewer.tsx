@@ -8,12 +8,13 @@ import { BookResult } from '../hooks/search';
 interface PdfViewerProps {
   result: BookResult;
   onClose: () => void;
+  searchQuery?: string;
 }
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), iframe, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
+const PdfViewer = ({ result, onClose, searchQuery }: PdfViewerProps) => {
   const intl = useIntl();
   const [loadError, setLoadError] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -94,10 +95,14 @@ const PdfViewer = ({ result, onClose }: PdfViewerProps) => {
 
   const pdfUrl = resolveDocumentUrl(result.document_url);
   const pageStart = result.pages?.[0];
+  const trimmedQuery = searchQuery?.trim();
   const pdfUrlWithPage = pdfUrl
-    ? pageStart !== undefined
-      ? `${pdfUrl}#page=${pageStart}`
-      : pdfUrl
+    ? (() => {
+        const fragments: string[] = [];
+        if (pageStart !== undefined) fragments.push(`page=${pageStart}`);
+        if (trimmedQuery) fragments.push(`search=${encodeURIComponent(trimmedQuery)}&phrase=true`);
+        return fragments.length > 0 ? `${pdfUrl}#${fragments.join('&')}` : pdfUrl;
+      })()
     : null;
 
   const overlayClass = `pdf-viewer-overlay${isFullscreen ? ' pdf-viewer-overlay--fullscreen' : ''}`;

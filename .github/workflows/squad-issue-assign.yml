@@ -161,3 +161,65 @@ jobs:
                 core.warning(`Fallback also failed: ${err2.message}`);
               }
             }
+
+      - name: Notify if copilot assignment failed (possible PAT expiry)
+        if: github.event.label.name == 'squad:copilot' && failure()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = '⚠️ COPILOT_ASSIGN_TOKEN may be expired — squad assignment degraded';
+            const timestamp = new Date().toISOString();
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const issueNum = context.payload.issue.number;
+
+            const body = [
+              '## PAT Expiry Alert',
+              '',
+              `The squad-issue-assign workflow failed to assign @copilot to issue #${issueNum}.`,
+              'This usually means \`COPILOT_ASSIGN_TOKEN\` is expired or invalid.',
+              '',
+              '### Details',
+              `- **Trigger issue:** #${issueNum}`,
+              `- **Workflow run:** ${runUrl}`,
+              `- **Timestamp:** ${timestamp}`,
+              '',
+              '### Resolution',
+              '1. Generate a new PAT with issue write permissions',
+              '2. Update the \`COPILOT_ASSIGN_TOKEN\` repository secret',
+              '3. Re-apply the \`squad:copilot\` label to retry',
+              '4. Close this issue once resolved',
+            ].join('\n');
+
+            try {
+              await github.rest.issues.createLabel({
+                owner, repo,
+                name: 'token-expired',
+                color: 'D93F0B',
+                description: 'A PAT or token may be expired',
+              });
+            } catch (e) { /* already exists */ }
+
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner, repo,
+              state: 'open',
+              labels: 'token-expired',
+              per_page: 100,
+            });
+            const match = existing.find(i => i.title === title);
+
+            if (match) {
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: match.number,
+                body: `🔄 **Recurrence** at ${timestamp}\n\nTrigger: issue #${issueNum}\nWorkflow run: ${runUrl}`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner, repo,
+                title,
+                body,
+                labels: ['token-expired'],
+              });
+            }

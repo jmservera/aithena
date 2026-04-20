@@ -81,7 +81,7 @@ Because the collection currently has one shard with three replicas, each node ho
 
 ### Configurable shards and replication
 
-Both `docker-compose.yml` and `docker-compose.prod.yml` read shard topology from environment variables with sensible defaults:
+Both `docker-compose.yml` and `docker/compose.prod.yml` read shard topology from environment variables with sensible defaults:
 
 | Variable | Default | Description |
 |---|---|---|

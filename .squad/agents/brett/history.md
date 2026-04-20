@@ -10,7 +10,7 @@
 - **Graceful shutdown:** `stop_grace_period` 60s (Solr/ZK), 30s (RabbitMQ/Redis), 10s (others)
 - **Dependency ordering:** Always `condition: service_healthy` for critical deps; never bare `depends_on`
 - **Port strategy:** Only nginx publishes host ports (80/443); all others use `expose:` only
-- **Compose overlays:** `docker-compose.ssl.yml` for certbot/TLS; profiles can't add volumes to other services
+- **Compose overlays:** `docker/compose.ssl.yml` for certbot/TLS; profiles can't add volumes to other services
 
 ### Bind-Mount Permissions (Recurring Pattern)
 Bind-mount ownership is **always the host's**. Dockerfile `RUN chown` only applies to the image layer, not bind-mounted paths.
@@ -47,7 +47,7 @@ See skill `solrcloud-docker-operations` for full runbook. Key points:
 ### Release Process & Versioning
 - **Docs-gate-the-tag:** Release docs merged to `dev` BEFORE version tag created
 - **VERSION file:** Source of truth; `buildall.sh` exports `VERSION`, `GIT_COMMIT`, `BUILD_DATE`
-- **GHCR distribution:** `docker-compose.prod.yml` uses image pulls (no build in prod)
+- **GHCR distribution:** `docker/compose.prod.yml` uses image pulls (no build in prod)
 - **Release automation:** `release.yml` on `v*.*.*` tags → build/push → tarball asset
 - **Screenshot pipeline:** integration-test → `release-screenshots` artifact → `update-screenshots.yml` → commits PNGs to `docs/screenshots/` on `dev`
 
@@ -129,11 +129,11 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 ## Learnings
 
 ### GPU Compose Override Pattern
-- Used override files (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
+- Used override files (`docker/compose.gpu-nvidia.yml`, `docker/compose.gpu-intel.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
 - `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
 - NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
 - Intel: `/dev/dri` device passthrough + `video` group_add + `BASE_TAG` build arg (selects openvino base image)
-- Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
+- Key files: `docker/compose.gpu-nvidia.yml`, `docker/compose.gpu-intel.yml`
 
 ### HF Hub Offline Loading — Pre-Cached Local Model Directory
 - `snapshot_download()` does NOT fully cache the API metadata `optimum-intel` needs (`tree/main?recursive=True` endpoint)
@@ -226,7 +226,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - NVIDIA GPU prerequisites, Container Toolkit installation (Ubuntu/Debian), host + Docker verification
 - Intel GPU prerequisites, compute-runtime installation, device verification
 - WSL2 GPU passthrough patterns for both vendors (Windows driver requirement emphasized)
-- Docker Compose override file usage pattern (`-f docker-compose.nvidia.override.yml`)
+- Docker Compose override file usage pattern (`-f docker/compose.gpu-nvidia.yml`)
 - Embeddings-server health endpoint verification with expected GPU output
 - Troubleshooting table: 5 symptoms with diagnosis and resolution
 
@@ -247,7 +247,7 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 
 **Key insight:** IPEX is the required bridge between PyTorch and Intel's XPU runtime. Without it, PyTorch detects Intel GPU hardware but cannot dispatch inference to it. IPEX 2.8.0 resolves cleanly with torch 2.10.0 — no version conflicts.
 
-**Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker-compose.intel.override.yml` continues to work without changes.
+**Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker/compose.gpu-intel.yml` continues to work without changes.
 
 ---
 
@@ -275,7 +275,7 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 **Root cause:** Solr 9.7's `solr auth enable` assigns all 4 built-in roles (superadmin, admin, search, index) to the created user. Our solr-init script was calling `set-user-role` afterward, overwriting these to just `["admin"]`, stripping superadmin (needed for security-edit) and search (needed for collection-admin-read).
 
 **Fix applied:**
-- Removed set-user-role call for admin user in both docker-compose.yml and docker-compose.prod.yml
+- Removed set-user-role call for admin user in both docker-compose.yml and docker/compose.prod.yml
 - Changed readonly user role from custom "readonly" to Solr 9.7 built-in "search" role
 - Updated security.json to use the 4-tier built-in role hierarchy (superadmin > admin > search > index)
 - Tests updated to verify admin roles are NOT overwritten and readonly gets "search" role

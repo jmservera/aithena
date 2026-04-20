@@ -335,7 +335,7 @@ services:
 - Add device passthrough directives for Intel GPU
 - Deliverable: Compose file changes, tested locally
 
-**WI-7**: Create docker-compose.nvidia.override.yml (optional reference)
+**WI-7**: Create docker/compose.gpu-nvidia.yml (optional reference)
 - Provide example override file for NVIDIA users
 - Deliverable: Example file in docs/
 
@@ -670,7 +670,7 @@ embeddings = model.encode(["Hello, world!", "How are you?"])
 
 **For sentence-transformers:** PyTorch models are automatically optimized by OpenVINO when `backend="openvino"` is set.
 
-### C. Example docker-compose.nvidia.override.yml
+### C. Example docker/compose.gpu-nvidia.yml
 
 ```yaml
 version: '3.8'
@@ -691,7 +691,7 @@ services:
 
 **Usage:**
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up
+docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up
 ```
 
 ### D. NVIDIA Container Toolkit Installation

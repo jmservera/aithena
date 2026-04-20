@@ -43,7 +43,7 @@ nvidia-smi
 docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
 
 # 3. Check override file is loaded
-docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml config | grep -A5 DEVICE
+docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml config | grep -A5 DEVICE
 ```
 
 **Solutions:**
@@ -52,7 +52,7 @@ docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml confi
 |-------|-----|
 | `nvidia-smi` fails on host | Install/update NVIDIA drivers |
 | Docker test fails | Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) |
-| Override not in config output | Verify `-f docker-compose.nvidia.override.yml` in your command |
+| Override not in config output | Verify `-f docker/compose.gpu-nvidia.yml` in your command |
 | CUDA version mismatch | Ensure driver supports CUDA 12.x (driver 525.60+) |
 
 ### Intel GPU Not Detected

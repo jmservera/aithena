@@ -473,7 +473,7 @@ These issues are **outside the scope** of CI scanner baseline tuning but documen
 - `/admin/solr` (Solr admin UI — full cluster access)
 - `/admin/rabbitmq` (RabbitMQ management — queue manipulation)
 - `/admin/redis` (Redis Commander — data access)
-- `/admin/streamlit` (Streamlit admin app)
+> **Note:** The Streamlit admin service (`/admin/streamlit`) has been removed. The React admin portal at `/admin/` replaces it.
 
 **Risk:** Unauthenticated access to admin interfaces could allow:
 - Data exfiltration (Solr queries, Redis key dumps)
@@ -534,7 +534,7 @@ These issues are **outside the scope** of CI scanner baseline tuning but documen
 **Status:** Documented in docker-compose  
 **Issue:** N/A (configuration, not vulnerability)
 
-**Details:** `docker-compose.override.yml` exposes 10+ dev ports (Solr, RabbitMQ, Redis, etc.) directly on host
+**Details:** `docker/compose.dev-ports.yml` exposes 10+ dev ports (Solr, RabbitMQ, Redis, etc.) directly on host
 
 **Risk:** Development environment has broad attack surface if run on public network
 

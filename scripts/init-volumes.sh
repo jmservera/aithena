@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Create required Docker volume directories for Aithena.
-# Covers docker-compose.yml and docker-compose.prod.yml.
-# For SSL (docker-compose.ssl.yml), also create certbot dirs manually.
+# Covers docker-compose.yml and docker/compose.prod.yml.
+# For SSL (docker/compose.ssl.yml), also create certbot dirs manually.
 #
 # Usage:
 #   sudo ./scripts/init-volumes.sh              # Uses default /source/volumes

@@ -18,7 +18,7 @@ dependencies = [
 requires-dist = [{ name = "argon2-cffi", specifier = ">=23.1" }]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.3" }]
+dev = [{ name = "pytest", specifier = ">=9.0.3" }]
 
 [[package]]
 name = "aithena-installer"

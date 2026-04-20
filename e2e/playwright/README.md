@@ -25,7 +25,7 @@ If you want the isolated E2E stack described by the existing pytest suite:
 ```bash
 export E2E_LIBRARY_PATH=/tmp/aithena-e2e-library
 mkdir -p "$E2E_LIBRARY_PATH"
-docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
 ```
 
 ## Install

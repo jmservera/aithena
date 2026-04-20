@@ -24,7 +24,7 @@ Aithena runs as a Docker Compose stack built around Solr, a document ingestion p
 | `document-indexer` | Consumes queue items and indexes books into Solr | internal only |
 | `embeddings-server` | Embedding service used by the search stack | internal only; direct `8085` via override |
 | `redis-commander` | Web UI for Redis inspection | proxied through `nginx`; direct `8081` via override |
-| `certbot` | Certificate renewal helper (optional — see `docker-compose.ssl.yml`) | internal only |
+| `certbot` | Certificate renewal helper (optional — see `docker/compose.ssl.yml`) | internal only |
 
 ### Service dependencies
 
@@ -48,6 +48,29 @@ Current shipped behavior:
 - `nginx` also waits for **RabbitMQ** health before exposing the admin surfaces
 
 This reduces startup races where the lister, indexer, or admin tools could come up before the queue or cache was actually ready.
+
+## Host Prerequisites
+
+Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host** (these cannot be set from inside a container).
+
+### Redis memory overcommit
+
+Redis background saves (RDB snapshots) fork the process, which requires the kernel to allow memory overcommit. Without this setting Redis logs `WARNING Memory overcommit must be enabled!` and background saves may fail.
+
+```bash
+# Apply immediately (non-persistent):
+sudo sysctl vm.overcommit_memory=1
+
+# Make persistent across reboots:
+echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/90-redis-overcommit.conf
+sudo sysctl --system
+```
+
+> **Note:** The compose stack sets `stop-writes-on-bgsave-error no` in `src/redis/redis.conf` so Redis remains available even when overcommit is disabled, but applying the host-level setting is still recommended to ensure reliable snapshots.
+
+### ZooKeeper credentials (production hardening)
+
+Solr logs `Using default ZkCredentialsProvider/ZkACLProvider` at startup. This is informational — it means ZooKeeper znodes are world-readable. For production deployments that require ZooKeeper ACL-based access control, see the [Apache Solr ZooKeeper Access Control](https://solr.apache.org/guide/solr/latest/deployment-guide/zookeeper-access-control.html) documentation.
 
 ## Deployment with Docker Compose
 
@@ -77,20 +100,27 @@ python3 -m installer
 #       --admin-user admin --admin-password 'change-me' --origin http://localhost
 ```
 
-The installer writes `.env`, creates the host auth directory used by Docker Compose, generates the JWT secret, and seeds the initial admin account. Re-run it whenever you need to rotate credentials or rebuild auth storage.
+The installer writes `.env`, creates the host auth directory used by Docker Compose, generates the JWT secret, seeds the initial admin account, and generates `./start.sh` with the correct compose file chain. Re-run it whenever you need to rotate credentials or rebuild auth storage.
+
+The installer also asks about:
+- **Environment** — Development (debug ports) or Production (GHCR images)
+- **GPU acceleration** — auto-detects NVIDIA/Intel GPUs
+- **SSL** — optional Let's Encrypt setup with domain
 
 ### 3. Start the stack
 
 ```bash
-docker compose up -d
+./start.sh
 ```
 
-This starts the full stack, including SolrCloud, Redis, RabbitMQ, the indexing services, the search API, and the UI. In the default local workflow, Docker Compose also auto-loads `docker-compose.override.yml`, which republishes debug ports for direct host access.
-
-For a production-style run with only the nginx gateway exposed on the host, use:
+The generated `start.sh` combines the right compose files based on your installer choices (environment, GPU, SSL). You can also run compose directly:
 
 ```bash
-docker compose -f docker-compose.yml up -d
+# Development
+docker compose -f docker-compose.yml -f docker/compose.dev-ports.yml up -d --build
+
+# Production
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 ### 4. Watch initial bootstrap
@@ -119,7 +149,7 @@ Common local URLs:
 | RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
 | Redis Commander | `http://localhost/admin/redis/` | Protected |
 
-Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
+Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker/compose.dev-ports.yml` file is loaded.
 
 ## GPU Acceleration Setup (v1.17.0)
 
@@ -173,7 +203,7 @@ docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
 
 #### Start with NVIDIA
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
 ```
 
 ### Intel GPU Setup
@@ -210,7 +240,7 @@ clinfo | head -20
 
 #### Start with Intel
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d
 ```
 
 ### WSL2 GPU Passthrough (Windows)
@@ -232,7 +262,7 @@ Quick reference:
 2. Run `wsl --update` to ensure latest WSL2 kernel
 3. Inside WSL, add Intel GPU repositories and install runtime packages
 4. Verify: `clinfo | head -20` should show your Intel GPU
-5. Use the Intel override: `docker compose -f docker-compose.prod.yml -f docker-compose.intel.override.yml up -d`
+5. Use the Intel override: `docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
 
 ### Verification
 
@@ -533,7 +563,7 @@ echo "Current tag: v$(cat VERSION)"
 # Version endpoint on solr-search
 curl -s http://localhost:8080/version | jq '.version'
 
-# In Streamlit admin dashboard
+# In admin dashboard
 # Navigate to System Status > Versions tab
 ```
 
@@ -576,7 +606,7 @@ docker-compose up
 
 ### System Status Admin Page
 
-v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
+v0.7.0 adds a new **System Status** page in the admin dashboard:
 
 **Navigation:**
 
@@ -656,7 +686,7 @@ v0.7.0 includes a CI/CD workflow (`.github/workflows/release.yml`) that automate
 
 **Pre-release (RC) testing:**
 
-Before creating a final release, you can build and test release candidate images using the pre-release workflow. This lets you validate RC images locally with `docker-compose.prod.yml` before merging to `main`. See the [Pre-Release Testing](pre-release-testing.md) guide for the full workflow, including how to trigger RC builds, pull images, and run the validation checklist.
+Before creating a final release, you can build and test release candidate images using the pre-release workflow. This lets you validate RC images locally with `docker/compose.prod.yml` before merging to `main`. See the [Pre-Release Testing](pre-release-testing.md) guide for the full workflow, including how to trigger RC builds, pull images, and run the validation checklist.
 
 **To test locally:**
 
@@ -959,6 +989,12 @@ If your deployment exposes the admin page, require the same operational review y
 ### Why this is safe
 
 The indexer uses deterministic document IDs derived from the file path, and chunk IDs are derived from that same parent ID plus the chunk index. Reindexing therefore refreshes the existing documents in place instead of creating duplicates for unchanged files.
+
+## CI/CD Secrets & PAT Management
+
+The repository uses three custom Personal Access Tokens (PATs) in addition to the automatic `GITHUB_TOKEN`. For a full inventory of each secret — required permissions, creation guides, rotation procedures, and consolidation analysis — see the **[PAT Management Guide](operations/pat-management.md)**.
+
+Automated monthly validation is provided by the [`pat-health-check.yml`](../.github/workflows/pat-health-check.yml) workflow, which opens an issue if any token is expired or misconfigured.
 
 ## Troubleshooting common issues
 
@@ -1348,7 +1384,6 @@ Services published to GHCR:
 - `embeddings-server` — Embedding service
 - `document-indexer` — PDF indexing consumer
 - `document-lister` — Library scanner
-- `admin` — Streamlit admin dashboard
 - `nginx` — Reverse proxy
 
 **OCI image labels:**
@@ -1429,7 +1464,7 @@ v1.5.0 provides a production-ready `docker-compose.yml` that uses pre-built GHCR
 | Feature | Dev | Production |
 |---------|-----|-----------|
 | Image source | Local build | GHCR pre-built |
-| Override file | docker-compose.override.yml | None |
+| Override file | docker/compose.dev-ports.yml | None |
 | Debug ports | Published (5173, 8080, 8085, 8501) | Not published |
 | Health checks | Simple, permissive | Strict, production timeouts |
 | Volume mounts | Simple paths | Validated, backed up |
@@ -2281,7 +2316,7 @@ v1.8.1 fixes the authentication flow preventing admin dashboard access.
 
 **What changed:**
 
-- Admin (Streamlit) page authentication flow now works correctly without login redirects.
+- Admin page authentication flow now works correctly without login redirects.
 - Session state persists across admin page navigation.
 
 **Impact on operators:**
@@ -2659,7 +2694,6 @@ Aithena allows administrators to correct or enrich document metadata directly, w
 ### Prerequisites
 
 - An admin user account (role `admin`)
-- The `ADMIN_API_KEY` environment variable configured in the deployment
 
 ### Single document edit
 
@@ -2667,7 +2701,6 @@ Edit one document at a time from the UI detail view or via the API:
 
 ```
 PATCH /v1/admin/documents/{doc_id}/metadata
-X-API-Key: <your-admin-key>
 Authorization: Bearer <admin-jwt>
 
 {
@@ -2769,7 +2802,7 @@ Whitespace is trimmed automatically. Whitespace-only strings are rejected (422).
 
 | Symptom | Cause | Resolution |
 |---------|-------|------------|
-| 401 on PATCH | Missing or invalid `X-API-Key` header | Verify `ADMIN_API_KEY` in `.env` and include it in the request |
+| 401 on PATCH | Missing or invalid auth token | Verify you are logged in with an admin account and the JWT is present |
 | 403 on PATCH | JWT user is not an admin | Log in with an admin account |
 | 404 on single edit | Document ID not in Solr | Verify the document was indexed; check `doc_id` spelling |
 | 503 on single edit | Redis unavailable | Check Redis health; the Solr update may still have succeeded |
@@ -3146,7 +3179,7 @@ Logs are written to `/var/log/aithena-backup-*.log`.
    ```bash
    # Find a document ID from a search result
    curl -X PATCH "http://localhost/v1/admin/documents/{doc_id}/metadata" \
-     -H "X-API-Key: $ADMIN_API_KEY" \
+     -H "Authorization: Bearer $ADMIN_JWT" \
      -H "Content-Type: application/json" \
      -d '{"year": 1984}'
    ```
@@ -3259,7 +3292,7 @@ v1.11.0 introduces search improvements, thumbnail generation, and a book detail 
 3. **Thumbnail Generation** — During indexing, first-page thumbnails are extracted and stored as `.thumb.jpg` alongside PDFs
 4. **Thumbnail Serving** — nginx serves thumbnails at `/thumbnails/...`; the `thumbnail_url` field is indexed in Solr and returned in search results
 5. **Book Detail Endpoint** — New `GET /v1/books/{id}` endpoint retrieves complete book metadata
-6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; `/admin/streamlit` now redirects to `/admin/`
+6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; all admin routes are served by the React admin portal
 
 ### Critical Upgrade Action: Full Reindex Required
 
@@ -3295,7 +3328,7 @@ The new `GET /v1/books/{id}` endpoint returns full book metadata (title, author,
 
 ### Admin Routing
 
-The dead `admin` upstream has been removed from nginx configuration. The `/admin/streamlit` path now redirects to `/admin/`. Existing bookmarks will redirect automatically.
+The dead `admin` upstream has been removed from nginx configuration. All admin routes are served by the React admin portal at `/admin/`.
 
 ---
 
@@ -3520,7 +3553,7 @@ If you need diacritic-sensitive search, set `SOLR_ASCII_FOLDING=false` in `.env`
 For production deployments, use the provided SSL Compose file:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 ```
 
 This configuration:
@@ -3667,15 +3700,132 @@ v1.15.0 includes admin portal enhancements, infrastructure hardening, and operat
 
 ### Admin Portal Redesign
 
-The admin portal (`/admin`) now features a sidebar navigation with organized menu:
+The admin portal (`/admin`) is a React-based operator dashboard with sidebar navigation. It provides access to all admin tools from a single interface.
 
-- **Dashboard** — system overview
-- **Indexing Status** — per-document progress and status information
-- **Log Viewer** — per-service log streaming from the browser
-- **Backups** — existing backup/restore dashboard
-- **Solr Admin** — Solr admin UI with SSO passthrough
+#### Navigation structure
 
-No configuration changes needed — the sidebar is purely a UI improvement.
+The sidebar organizes admin pages into five groups:
+
+| Group | Pages | Routes |
+|---|---|---|
+| **Overview** | Dashboard | `/admin` |
+| **Documents** | Document Manager | `/admin/documents` |
+| **Indexing** | Reindex Library, Indexing Status | `/admin/reindex`, `/admin/indexing-status` |
+| **System** | System Status, Log Viewer, Infrastructure | `/admin/system-status`, `/admin/logs`, `/admin/infrastructure` |
+| **Management** | Users, Backups | `/admin/users`, `/admin/backups` |
+
+The sidebar supports keyboard navigation: use **Arrow Up/Down** to move between items, **Home/End** to jump to the first/last item, and **Enter** to navigate.
+
+#### Dashboard (`/admin`)
+
+The dashboard provides a real-time overview of the system:
+
+- **Document Metrics** — total, queued, processed, and failed document counts
+- **Queue Metrics** — RabbitMQ messages ready, unacknowledged, and total; queue name and consumer count
+- **Infrastructure Status** — summary of healthy vs. total containers, with a table showing each container's name, type, status, and version
+
+Controls:
+- **Auto-refresh** checkbox enables periodic polling
+- **Refresh** button triggers an immediate data fetch
+- **Last refreshed** timestamp shows when data was last fetched
+
+#### Document Manager (`/admin/documents`)
+
+Manages documents across three tabs:
+
+- **Queued** — documents waiting to be indexed, showing path and queued timestamp
+- **Processed** — successfully indexed documents with path, title, author, year, page count, chunk count, and indexed timestamp. Includes a **Clear All** button (with confirmation) to remove processed state so documents are rediscovered
+- **Failed** — documents that failed indexing, with error details (expandable), per-document **Requeue** and **Delete** buttons, and a **Requeue All** bulk action
+
+All tabs include:
+- **Search** — filter documents by file path
+- **Pagination** — 25 documents per page with page navigation
+- Keyboard-accessible tab switching with arrow keys
+
+#### Reindex Library (`/admin/reindex`)
+
+Triggers a full library reindex with a two-step confirmation workflow:
+
+1. Click **Start Reindex** — opens a confirmation dialog explaining the destructive action
+2. Confirm to proceed — the system deletes all documents from the Solr collection, clears Redis tracking state, and allows `document-lister` to rediscover files
+
+The page explains the four-step process and displays a warning that search will be unavailable during reindexing. Results show the collection status and number of Redis keys cleared.
+
+#### Indexing Status (`/admin/indexing-status`)
+
+Shows per-document indexing progress:
+
+- **Summary metrics** — total, queued, processing, processed, failed counts plus total pages and chunks
+- **Processing cards** — documents currently being indexed show progress bars for text indexing and embedding indexing stages
+- **Document table** — all documents with status badge, path, title, text/embedding indexed indicators, page count, chunk count, error details, and timestamp
+- **Status filter** — filter by all, queued, processing, processed, or failed
+- **Auto-refresh** checkbox and manual refresh button
+- **Pagination** — 25 documents per page
+
+#### System Status (`/admin/system-status`)
+
+Displays container health across the stack:
+
+- **Overview metrics** — total containers, healthy count, and containers needing attention
+- **Application Services** — service cards (e.g., solr-search, document-indexer) with status emoji (🟢/🔴/🟠), version, and commit hash
+- **Infrastructure Services** — infrastructure cards (e.g., Redis, RabbitMQ, Solr nodes) with the same status display
+- **Stale data warning** — shows an alert if data hasn't been refreshed recently
+
+#### Log Viewer (`/admin/logs`)
+
+Streams container logs directly from the browser:
+
+- **Service selector** — dropdown to choose which container's logs to view
+- **Tail lines** — configurable number of lines to fetch (e.g., 50, 100, 500)
+- **Auto-refresh** — checkbox with configurable refresh interval
+- **Search filter** — text filter to narrow log output; shows count of matched vs. total lines
+- **Log output** — monospace display with automatic scroll-to-bottom on new content
+
+This reduces the need for SSH access for routine log inspection.
+
+#### Infrastructure (`/admin/infrastructure`)
+
+Provides quick links to management UIs for infrastructure services:
+
+- **Solr Admin** — link to `/admin/solr/` for collection management and document inspection
+- **RabbitMQ Management** — link to `/admin/rabbitmq/` for queue monitoring
+- **Redis Commander** — link to `/admin/redis/` for Redis state inspection
+
+Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, internal endpoint URL, and connection status.
+
+#### Accessibility
+
+The admin portal follows web accessibility best practices:
+
+- All pages use semantic HTML (`<main>`, `<header>`, `<section>`, `<nav>`)
+- ARIA labels on interactive elements, tables, and live regions
+- Keyboard navigation in the sidebar (Arrow keys, Home, End)
+- Tab-based keyboard navigation in the Document Manager
+- Status indicators use both color and text/emoji for color-blind users
+- Error banners use `role="alert"` for screen reader announcements
+- Progress bars include `aria-valuenow`, `aria-valuemin`, `aria-valuemax`
+- Auto-refreshing content uses `aria-live="polite"` regions
+
+#### Screenshots
+
+Screenshots are generated automatically during the release workflow. See `docs/images/admin-dashboard.png` for the dashboard.
+
+<!-- Screenshots are auto-generated by the release workflow -->
+
+No configuration changes needed — the admin portal is purely a UI improvement.
+
+### Admin Portal Troubleshooting
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| Admin pages show "Loading…" indefinitely | Backend API (`solr-search`) is not running or unreachable | Check `docker compose ps solr-search` and verify the service is healthy |
+| Dashboard shows errors for all cards | Auth token expired or invalid | Log out and log back in; verify your account has the `admin` role |
+| Document Manager shows empty tabs | Redis is down or has no tracked documents | Check Redis health; ensure `document-lister` has run at least one scan |
+| Log Viewer shows "Select a service" but dropdown is empty | Container stats endpoint is disabled or unreachable | Verify `EXPOSE_CONTAINER_STATS=true` in your deployment |
+| System Status shows all containers as "down" | Container stats API not enabled | Set `EXPOSE_CONTAINER_STATS=true` and restart `solr-search` |
+| Infrastructure links return 502 | Target service (Solr, RabbitMQ, Redis Commander) is not running | Check `docker compose ps` for the specific service |
+| Reindex completes but documents don't reappear | `document-lister` hasn't run a scan yet | Wait for the next scan (default 60s) or restart the lister |
+| Sidebar navigation not visible | Browser window too narrow or CSS not loaded | Widen the browser window; clear cache and reload |
 
 ### Per-Service Log Viewer
 
@@ -3762,8 +3912,8 @@ When no RC number is specified, the workflow queries ghcr.io for existing RC tag
 Pull and start the RC stack using the production Compose file:
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml pull
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml pull
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
 ```
 
 Substitute `1.16.0-rc.1` with the actual RC tag you want to test. The `VERSION` environment variable overrides the image tag used by the production Compose file.
@@ -3785,12 +3935,12 @@ If an RC reveals a blocking issue:
 
 1. Stop the RC stack:
    ```bash
-   docker compose -f docker-compose.prod.yml down
+   docker compose -f docker/compose.prod.yml down
    ```
 2. Pull and restart the previous release:
    ```bash
-   VERSION=1.15.0 docker compose -f docker-compose.prod.yml pull
-   VERSION=1.15.0 docker compose -f docker-compose.prod.yml up -d
+   VERSION=1.15.0 docker compose -f docker/compose.prod.yml pull
+   VERSION=1.15.0 docker compose -f docker/compose.prod.yml up -d
    ```
 
 ### HF_TOKEN security note

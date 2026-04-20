@@ -1,0 +1,30 @@
+# docker/compose.gpu-nvidia.yml
+#
+# GPU acceleration override for NVIDIA GPUs.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
+#
+# Production:
+#   docker compose -f docker/compose.prod.yml -f docker/compose.gpu-nvidia.yml up -d
+#
+# Prerequisites:
+#   - NVIDIA GPU with CUDA support
+#   - NVIDIA Container Toolkit installed
+#   - nvidia-container-runtime configured as Docker default runtime
+#
+# Verify GPU access:
+#   docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+
+services:
+  embeddings-server:
+    environment:
+      - DEVICE=cuda
+      - BACKEND=torch
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

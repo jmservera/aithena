@@ -46,10 +46,10 @@ Aithena is a multi-service document search platform. Documents flow through an i
                             │   └─────┘   │
                             └─────────────┘
 
-┌──────────────┐     ┌──────────────┐
-│  streamlit-  │     │    redis-    │
-│  admin       │     │  commander   │
-└──────────────┘     └──────────────┘
+┌──────────────┐
+│    redis-    │
+│  commander   │
+└──────────────┘
 ```
 
 **Data flow — Ingestion pipeline:**
@@ -77,7 +77,6 @@ Aithena is a multi-service document search platform. Documents flow through an i
 | **nginx** | 80, 443 | 80, 443 | Nginx 1.15 | Reverse proxy, TLS, auth gateway |
 | **solr-search** | 8080 | 8080 | FastAPI (Python) | Search API, admin API, auth |
 | **aithena-ui** | 80 | — | Static frontend | Search UI |
-| **streamlit-admin** | 8501 | 8501 | Streamlit (Python) | Admin dashboard |
 | **document-lister** | — | — | Python worker | Filesystem scanner, queue producer |
 | **document-indexer** | — | — | Python worker | Queue consumer, PDF indexer |
 | **embeddings-server** | 8080 | 8085 | FastAPI + SentenceTransformers | Text → vector embeddings |
@@ -212,7 +211,6 @@ docker inspect --format='{{json .State.Health}}' $(docker compose ps -q solr-sea
 | **document-lister** | `pgrep -f python` | 30s | 10s | 3 | 10s |
 | **document-indexer** | `pgrep -f python` | 30s | 10s | 3 | 10s |
 | **solr-search** | `wget http://localhost:8080/health` | 30s | 10s | 3 | 30s |
-| **streamlit-admin** | `python urlopen('…/_stcore/health')` | 30s | 10s | 3 | 10s |
 | **redis-commander** | `node http.get(…)` | 30s | 10s | 3 | 10s |
 | **aithena-ui** | `wget http://127.0.0.1:80/` | 30s | 10s | 3 | 10s |
 | **nginx** | `wget http://127.0.0.1:80/health` | 30s | 10s | 3 | 10s |
@@ -752,7 +750,6 @@ docker inspect $(docker compose ps -q solr-search) | jq '.[0].RestartCount'
 | document-lister | 256 MB | 128 MB | — |
 | document-indexer | 512 MB | 256 MB | — |
 | solr-search | 512 MB | 256 MB | 0.5 CPU |
-| streamlit-admin | 512 MB | 256 MB | — |
 | redis-commander | 256 MB | 128 MB | — |
 | aithena-ui | 256 MB | 128 MB | — |
 | nginx | 256 MB | 128 MB | — |

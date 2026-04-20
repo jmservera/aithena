@@ -1,6 +1,6 @@
 services:
   redis:
-    # it is importnant to configure OS memory overcommit
+    # it is important to configure OS memory overcommit
     # https://github.com/nextcloud/all-in-one/discussions/1731
     # run this in your VM:
     # echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/nextcloud-aio-memory-overcommit.conf
@@ -190,6 +190,7 @@ services:
       - SOLR_AUTH_USER=${SOLR_ADMIN_USER:-solr_admin}
       - SOLR_AUTH_PASS=${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
       - THUMBNAIL_DIR=/data/thumbnails
+      - INDEXER_CONTROL_PORT=8081
     restart: on-failure
     stop_grace_period: 10s
     deploy:
@@ -269,6 +270,7 @@ services:
         max-file: "3"
     environment:
       - PORT=8080
+      - SOLR_VERSION=${SOLR_VERSION:-9}
       - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
       - SOLR_ASCII_FOLDING=true
@@ -296,9 +298,16 @@ services:
       - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}
       - SOLR_AUTH_USER=${SOLR_READONLY_USER:-solr_read}
       - SOLR_AUTH_PASS=${SOLR_READONLY_PASS:-SolrRead_dev2024!}
+      - RABBITMQ_MANAGEMENT_PORT=15672
+      - RABBITMQ_MANAGEMENT_PATH_PREFIX=/admin/rabbitmq
+      - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - document-data:/data/documents
       - collections-db:/data/collections
+      # SECURITY: Docker socket mount grants full Docker API access to this container.
+      # Acceptable for development, but in production consider using a docker-socket-proxy
+      # (e.g. tecnativa/docker-socket-proxy) to restrict API access to read-only operations.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - type: bind
         source: ${AUTH_DB_DIR:?AUTH_DB_DIR is not set. Run 'python3 -m installer' to generate auth configuration}
         target: /data/auth
@@ -427,6 +436,7 @@ services:
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_MAX_CLIENT_CNXNS: "60"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
@@ -467,6 +477,7 @@ services:
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_MAX_CLIENT_CNXNS: "60"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
@@ -503,6 +514,7 @@ services:
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_MAX_CLIENT_CNXNS: "60"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
@@ -543,6 +555,7 @@ services:
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
       - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -593,6 +606,7 @@ services:
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
       - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -642,6 +656,7 @@ services:
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
       - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -688,6 +703,7 @@ services:
       solr3:
         condition: service_healthy
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
@@ -766,13 +782,31 @@ services:
             echo "Security already configured, skipping bootstrap."
           fi
 
+          # --- Validate SOLR_NUM_SHARDS and SOLR_REPLICATION_FACTOR ---
+          NUM_SHARDS="$${SOLR_NUM_SHARDS:-1}"
+          REPLICATION_FACTOR="$${SOLR_REPLICATION_FACTOR:-3}"
+
+          if ! echo "$$NUM_SHARDS" | grep -qE '^[1-9][0-9]*$$'; then
+            echo "ERROR: Invalid SOLR_NUM_SHARDS: '$$NUM_SHARDS'. Expected a positive integer." >&2
+            exit 1
+          fi
+
+          if ! echo "$$REPLICATION_FACTOR" | grep -qE '^[1-9][0-9]*$$'; then
+            echo "ERROR: Invalid SOLR_REPLICATION_FACTOR: '$$REPLICATION_FACTOR'. Expected a positive integer." >&2
+            exit 1
+          fi
+
+          if [ "$$REPLICATION_FACTOR" -gt 3 ]; then
+            echo "WARNING: SOLR_REPLICATION_FACTOR=$$REPLICATION_FACTOR exceeds the default 3-node topology. Ensure you have enough Solr nodes." >&2
+          fi
+
           # --- books collection (multilingual-e5-base, 768D) ---
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -qx 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
 
           if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
-            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=$${SOLR_NUM_SHARDS:-1}&replicationFactor=$${SOLR_REPLICATION_FACTOR:-3}&waitForFinalState=true&wt=json"
+            curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=$$NUM_SHARDS&replicationFactor=$$REPLICATION_FACTOR&waitForFinalState=true&wt=json"
           fi
 
           SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh

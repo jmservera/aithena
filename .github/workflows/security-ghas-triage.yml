@@ -1,0 +1,274 @@
+name: Security GHAS Triage — Alert Lifecycle
+
+# Manages the full lifecycle of GHAS code scanning alerts:
+#   1. Creates squad issues for new critical/high findings
+#   2. Closes issues when alerts are fixed or dismissed
+#   3. Suppresses re-creation of wontfix-labeled alerts
+#
+# This workflow consolidates the former security-review.yml (creation-only)
+# with lifecycle management — closing stale issues and suppressing dismissed
+# alerts. Deduplication uses the "ghas-alert" label.
+
+on:
+  schedule:
+    # Monday: primary weekly review (formerly security-review.yml)
+    - cron: '0 8 * * 1'
+    # Wednesday: mid-week lifecycle reconciliation
+    - cron: '0 9 * * 3'
+
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: 'Only process alerts created within this many days (0 = all)'
+        required: false
+        default: '0'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  security-events: read
+
+jobs:
+  triage-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Ensure labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh label create "ghas-alert" --repo "${REPO}" \
+            --description "Auto-created from GHAS code scanning alert" \
+            --color "D93F0B" --force 2>/dev/null || true
+          gh label create "security" --repo "${REPO}" \
+            --description "Security alerts" \
+            --color "B60205" --force 2>/dev/null || true
+
+      - name: Fetch open GHAS alerts
+        id: fetch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          MAX_AGE_DAYS: ${{ inputs.max_age_days || '0' }}
+        run: |
+          set -euo pipefail
+
+          echo "🔍 Fetching GHAS code scanning alerts for ${REPO}..."
+
+          if ! RAW_ALERTS=$(gh api "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" 2>&1); then
+            echo "⚠️ Could not fetch code scanning alerts (API may be unavailable or no alerts exist)."
+            echo "Response: ${RAW_ALERTS}"
+            echo "has_alerts=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Filter to critical/high/error severity
+          ALERTS=$(echo "$RAW_ALERTS" | jq -c '[.[] | select(
+            .rule.security_severity_level == "critical" or
+            .rule.security_severity_level == "high" or
+            .rule.severity == "error"
+          ) | {
+            number: .number,
+            rule: .rule.id,
+            severity: (.rule.security_severity_level // .rule.severity),
+            tool: .tool.name,
+            description: .rule.description,
+            file: .most_recent_instance.location.path,
+            line: .most_recent_instance.location.start_line,
+            url: .html_url,
+            created: .created_at
+          }]')
+
+          # Optional age filter
+          if [ "${MAX_AGE_DAYS}" -gt 0 ] 2>/dev/null; then
+            CUTOFF=$(date -u -d "${MAX_AGE_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
+                     date -u -v-"${MAX_AGE_DAYS}"d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+            if [ -n "$CUTOFF" ]; then
+              ALERTS=$(echo "$ALERTS" | jq -c --arg cutoff "$CUTOFF" \
+                '[.[] | select(.created >= $cutoff)]')
+              echo "📅 Filtered to alerts created after ${CUTOFF}"
+            fi
+          fi
+
+          COUNT=$(echo "$ALERTS" | jq 'length')
+          echo "Found ${COUNT} critical/high alert(s)."
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "has_alerts=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_alerts=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Write alerts to file for next steps
+          echo "$ALERTS" > alerts.json
+
+      - name: Create issues for new alerts
+        if: steps.fetch.outputs.has_alerts == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          CREATED=0
+          SKIPPED=0
+          SUPPRESSED=0
+
+          # Pre-fetch existing ghas-alert issues (open AND closed with wontfix)
+          OPEN_ISSUES=$(gh issue list --repo "${REPO}" --label "ghas-alert" \
+            --state open --json title,number --jq '.' 2>/dev/null || echo "[]")
+          WONTFIX_ISSUES=$(gh issue list --repo "${REPO}" --label "ghas-alert,wontfix" \
+            --state closed --json title,number --jq '.' 2>/dev/null || echo "[]")
+
+          while IFS= read -r alert; do
+            NUMBER=$(echo "$alert" | jq -r '.number')
+            RULE=$(echo "$alert" | jq -r '.rule')
+            SEVERITY=$(echo "$alert" | jq -r '.severity // "unknown"')
+            TOOL=$(echo "$alert" | jq -r '.tool // "unknown"')
+            DESCRIPTION=$(echo "$alert" | jq -r '.description // "No description available"')
+            FILE=$(echo "$alert" | jq -r '.file // "unknown"')
+            LINE=$(echo "$alert" | jq -r '.line // "?"')
+            URL=$(echo "$alert" | jq -r '.url')
+
+            ISSUE_TITLE="[GHAS] ${RULE}: ${DESCRIPTION}"
+            # Truncate title to 256 chars (GitHub limit)
+            ISSUE_TITLE="${ISSUE_TITLE:0:256}"
+
+            # Check for existing open issue (deduplicate by alert number in title)
+            EXISTING=$(echo "$OPEN_ISSUES" | jq --arg rule "$RULE" --arg file "$FILE" \
+              '[.[] | select(.title | contains($rule) and contains("GHAS"))] | length')
+            if [ "$EXISTING" -gt 0 ]; then
+              echo "  ⏭️  Alert #${NUMBER}: issue already exists for ${RULE}"
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            fi
+
+            # Check wontfix suppression — don't recreate dismissed alerts
+            SUPPRESSED_MATCH=$(echo "$WONTFIX_ISSUES" | jq --arg rule "$RULE" \
+              '[.[] | select(.title | contains($rule) and contains("GHAS"))] | length')
+            if [ "$SUPPRESSED_MATCH" -gt 0 ]; then
+              echo "  🚫 Alert #${NUMBER}: suppressed (wontfix) for ${RULE}"
+              SUPPRESSED=$((SUPPRESSED + 1))
+              continue
+            fi
+
+            # Route to squad member based on file type and tool
+            case "$TOOL" in
+              CodeQL)
+                case "$FILE" in
+                  *.py)                    SQUAD_LABEL="squad:parker" ;;
+                  *.ts|*.tsx|*.js|*.jsx)   SQUAD_LABEL="squad:dallas" ;;
+                  *.yml|*.yaml)            SQUAD_LABEL="squad:brett" ;;
+                  *)                       SQUAD_LABEL="squad:kane" ;;
+                esac
+                ;;
+              Bandit)   SQUAD_LABEL="squad:kane" ;;
+              checkov)  SQUAD_LABEL="squad:brett" ;;
+              zizmor)   SQUAD_LABEL="squad:brett" ;;
+              *)        SQUAD_LABEL="squad" ;;
+            esac
+
+            BODY="## GHAS Code Scanning Alert
+
+          | Field | Value |
+          |---|---|
+          | **Alert** | [#${NUMBER}](${URL}) |
+          | **Severity** | \`${SEVERITY}\` |
+          | **Tool** | ${TOOL} |
+          | **Rule** | \`${RULE}\` |
+          | **File** | \`${FILE}:${LINE}\` |
+
+          ### Description
+
+          ${DESCRIPTION}
+
+          ### Suggested Fix Approach
+
+          1. Review the [alert details](${URL}) and the flagged code at \`${FILE}:${LINE}\`
+          2. Determine if this is a true positive or false positive
+          3. If true positive: fix the code and push a PR
+          4. If false positive: dismiss the alert in GHAS with justification, then close this issue with the \`wontfix\` label to suppress future re-creation
+
+          ---
+          *Auto-created by security-ghas-triage workflow. Alert #${NUMBER} from ${TOOL}.*"
+
+            if gh issue create \
+              --repo "${REPO}" \
+              --title "${ISSUE_TITLE}" \
+              --body "${BODY}" \
+              --label "security,ghas-alert,squad,${SQUAD_LABEL}"; then
+              CREATED=$((CREATED + 1))
+              echo "  ✅ Created issue for alert #${NUMBER}: ${RULE} in ${FILE}"
+            else
+              echo "  ❌ Failed to create issue for alert #${NUMBER}"
+            fi
+          done < <(jq -c '.[]' alerts.json)
+
+          echo ""
+          echo "📊 Issue creation: created=${CREATED} skipped=${SKIPPED} suppressed=${SUPPRESSED}"
+
+      - name: Close issues for fixed/dismissed alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          echo "🔄 Checking for issues to close (alerts fixed/dismissed)..."
+
+          # Get all open issues with ghas-alert label
+          OPEN_ISSUES=$(gh issue list --repo "${REPO}" --label "ghas-alert" \
+            --state open --json number,title --jq '.' 2>/dev/null || echo "[]")
+
+          ISSUE_COUNT=$(echo "$OPEN_ISSUES" | jq 'length')
+          if [ "$ISSUE_COUNT" -eq 0 ]; then
+            echo "✅ No open ghas-alert issues to reconcile."
+            exit 0
+          fi
+
+          # Get all open alert rule IDs for comparison
+          if [ -f alerts.json ]; then
+            OPEN_ALERT_RULES=$(jq -r '.[].rule' alerts.json | sort -u)
+          else
+            # Fetch fresh if alerts.json doesn't exist (e.g., fetch step had no alerts)
+            OPEN_ALERT_RULES=$(gh api "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" \
+              --jq '.[].rule.id' 2>/dev/null | sort -u || echo "")
+          fi
+
+          CLOSED=0
+
+          while IFS= read -r issue; do
+            ISSUE_NUM=$(echo "$issue" | jq -r '.number')
+            ISSUE_TITLE=$(echo "$issue" | jq -r '.title')
+
+            # Extract rule ID from title: "[GHAS] rule-id: description"
+            RULE_ID=$(echo "$ISSUE_TITLE" | sed -n 's/^\[GHAS\] \([^:]*\):.*/\1/p')
+            if [ -z "$RULE_ID" ]; then
+              continue
+            fi
+
+            # Check if this rule still has an open alert
+            if echo "$OPEN_ALERT_RULES" | grep -qxF "$RULE_ID"; then
+              continue
+            fi
+
+            # Alert is no longer open — close the issue
+            echo "  🔒 Closing issue #${ISSUE_NUM}: alert for ${RULE_ID} is no longer open"
+            gh issue close "${ISSUE_NUM}" --repo "${REPO}" \
+              --comment "✅ Closing automatically — the GHAS alert for \`${RULE_ID}\` has been fixed or dismissed." || {
+                echo "  ⚠️ Failed to close issue #${ISSUE_NUM}"
+              }
+            CLOSED=$((CLOSED + 1))
+          done < <(echo "$OPEN_ISSUES" | jq -c '.[]')
+
+          echo "📊 Lifecycle: closed=${CLOSED} issues for resolved alerts."

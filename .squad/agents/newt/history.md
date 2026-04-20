@@ -23,7 +23,7 @@
 - Test growth: v1.7.0 (628) → v1.15.0 (1,939, 3× growth from expanded admin+CI)
 
 **Active PRDs (v1.16.0+):**
-1. **Pre-Release Containers** (v1.16.0, 5 issues) — RC workflow before main merge; manual + auto-trigger; local validation with docker-compose.prod.yml
+1. **Pre-Release Containers** (v1.16.0, 5 issues) — RC workflow before main merge; manual + auto-trigger; local validation with docker/compose.prod.yml
 2. **Admin React Migration** (v2.0, 12 issues) — Streamlit → React consolidation; unify auth; eliminate docker.sock security concern; phase-gated across 4 waves
 
 ---
