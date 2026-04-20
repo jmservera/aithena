@@ -67,7 +67,7 @@ RUN --mount=from=ghcr.io/astral-sh/uv:0.11.2,source=/uv,target=/usr/local/bin/uv
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-COPY --chown=app:app main.py model_utils.py /app/
+COPY --chown=app:app main.py model_utils.py quantization.py /app/
 COPY --chown=app:app config /app/config
 
 EXPOSE 8080
