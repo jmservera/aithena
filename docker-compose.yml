@@ -93,6 +93,7 @@ services:
     environment:
       - DEVICE=${DEVICE:-cpu}
       - BACKEND=${BACKEND:-torch}
+      - VECTOR_QUANTIZATION=${VECTOR_QUANTIZATION:-none}
     expose:
       - "8080"
     healthcheck:
