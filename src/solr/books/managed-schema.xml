@@ -42,7 +42,11 @@
   </fieldType>
   <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
   <!-- 768-dim dense vector field type for multilingual-e5-base (replaces distiluse, benchmark #926).
-       HNSW index with cosine similarity for kNN semantic search. -->
+       HNSW index with cosine similarity for kNN semantic search.
+       Uses Solr defaults for HNSW tuning. If custom params are needed:
+         Solr 9:  hnswMaxConnections="16" hnswBeamWidth="100"
+         Solr 10: maxConnections="16" beamWidth="100"
+       See docs/migration/solr-compat-layer.md and src/solr-search/solr_compat.py -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>

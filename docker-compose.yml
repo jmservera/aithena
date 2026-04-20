@@ -269,6 +269,7 @@ services:
         max-file: "3"
     environment:
       - PORT=8080
+      - SOLR_VERSION=${SOLR_VERSION:-9}
       - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
       - SOLR_ASCII_FOLDING=true
@@ -546,6 +547,8 @@ services:
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
       - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -596,6 +599,7 @@ services:
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
       - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -645,6 +649,7 @@ services:
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
       - ./src/solr/log4j2.xml:/opt/solr/server/resources/log4j2.xml:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_SECURITY_MANAGER_ENABLED: "false"
@@ -691,6 +696,7 @@ services:
       solr3:
         condition: service_healthy
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:-solr_admin}
       SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}
