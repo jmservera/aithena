@@ -114,7 +114,7 @@ aithena-offline-v{VERSION}/
 │   └── solr_9.7.tar.gz
 ├── compose/
 │   ├── docker-compose.yml          # Base compose definition
-│   ├── docker-compose.prod.yml     # Production overrides
+│   ├── docker/compose.prod.yml     # Production overrides
 │   └── .env.example                # Environment template
 ├── config/
 │   ├── solr/                       # Solr configsets (books schema)
@@ -217,7 +217,7 @@ After editing, restart services:
 
 ```bash
 cd /opt/aithena
-sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml restart
+sudo docker compose -f docker-compose.yml -f docker/compose.prod.yml restart
 ```
 
 ---
@@ -266,7 +266,7 @@ To update a running offline deployment:
    ```bash
    # Stop current services
    cd /opt/aithena
-   sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+   sudo docker compose -f docker-compose.yml -f docker/compose.prod.yml down
 
    # Extract new package
    cd /tmp
@@ -307,13 +307,13 @@ df -h /var/lib/docker     # Check Docker storage
 ```bash
 # Check which services are down
 cd /opt/aithena
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose -f docker-compose.yml -f docker/compose.prod.yml ps
 
 # View logs for a specific service
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs solr-search
+docker compose -f docker-compose.yml -f docker/compose.prod.yml logs solr-search
 
 # View all logs
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail 50
+docker compose -f docker-compose.yml -f docker/compose.prod.yml logs --tail 50
 ```
 
 ### Permission errors on bind-mount directories

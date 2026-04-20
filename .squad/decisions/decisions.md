@@ -11,7 +11,7 @@
 ZooKeeper AdminServer exposes cluster topology and operational commands via port 8080, creating unnecessary security risk. Not required for SolrCloud operations.
 
 ### Decision
-ZooKeeper AdminServer disabled via `ZOO_CFG_EXTRA: "admin.enableServer=false"` on all 3 ZK nodes in both docker-compose.yml and docker-compose.prod.yml. Port 8080 expose and host mapping removed.
+ZooKeeper AdminServer disabled via `ZOO_CFG_EXTRA: "admin.enableServer=false"` on all 3 ZK nodes in both docker-compose.yml and docker/compose.prod.yml. Port 8080 expose and host mapping removed.
 
 ### Rationale
 - Security hardening — reduces attack surface
@@ -250,7 +250,7 @@ This means Solr cannot authenticate to ZK via SASL, and the entire SolrCloud clu
 ### Files Changed
 
 - `docker-compose.yml` — ZK, Solr, solr-init config
-- `docker-compose.prod.yml` — Same changes for production
+- `docker/compose.prod.yml` — Same changes for production
 - `src/zookeeper/entrypoint-sasl.sh` — chown fix
 - `src/solr/entrypoint-sasl.sh` — path fix
 

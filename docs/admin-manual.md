@@ -24,7 +24,7 @@ Aithena runs as a Docker Compose stack built around Solr, a document ingestion p
 | `document-indexer` | Consumes queue items and indexes books into Solr | internal only |
 | `embeddings-server` | Embedding service used by the search stack | internal only; direct `8085` via override |
 | `redis-commander` | Web UI for Redis inspection | proxied through `nginx`; direct `8081` via override |
-| `certbot` | Certificate renewal helper (optional — see `docker-compose.ssl.yml`) | internal only |
+| `certbot` | Certificate renewal helper (optional — see `docker/compose.ssl.yml`) | internal only |
 
 ### Service dependencies
 
@@ -100,20 +100,27 @@ python3 -m installer
 #       --admin-user admin --admin-password 'change-me' --origin http://localhost
 ```
 
-The installer writes `.env`, creates the host auth directory used by Docker Compose, generates the JWT secret, and seeds the initial admin account. Re-run it whenever you need to rotate credentials or rebuild auth storage.
+The installer writes `.env`, creates the host auth directory used by Docker Compose, generates the JWT secret, seeds the initial admin account, and generates `./start.sh` with the correct compose file chain. Re-run it whenever you need to rotate credentials or rebuild auth storage.
+
+The installer also asks about:
+- **Environment** — Development (debug ports) or Production (GHCR images)
+- **GPU acceleration** — auto-detects NVIDIA/Intel GPUs
+- **SSL** — optional Let's Encrypt setup with domain
 
 ### 3. Start the stack
 
 ```bash
-docker compose up -d
+./start.sh
 ```
 
-This starts the full stack, including SolrCloud, Redis, RabbitMQ, the indexing services, the search API, and the UI. In the default local workflow, Docker Compose also auto-loads `docker-compose.override.yml`, which republishes debug ports for direct host access.
-
-For a production-style run with only the nginx gateway exposed on the host, use:
+The generated `start.sh` combines the right compose files based on your installer choices (environment, GPU, SSL). You can also run compose directly:
 
 ```bash
-docker compose -f docker-compose.yml up -d
+# Development
+docker compose -f docker-compose.yml -f docker/compose.dev-ports.yml up -d --build
+
+# Production
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 ### 4. Watch initial bootstrap
@@ -142,7 +149,7 @@ Common local URLs:
 | RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
 | Redis Commander | `http://localhost/admin/redis/` | Protected |
 
-Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
+Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker/compose.dev-ports.yml` file is loaded.
 
 ## GPU Acceleration Setup (v1.17.0)
 
@@ -196,7 +203,7 @@ docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
 
 #### Start with NVIDIA
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
 ```
 
 ### Intel GPU Setup
@@ -233,7 +240,7 @@ clinfo | head -20
 
 #### Start with Intel
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d
 ```
 
 ### WSL2 GPU Passthrough (Windows)
@@ -255,7 +262,7 @@ Quick reference:
 2. Run `wsl --update` to ensure latest WSL2 kernel
 3. Inside WSL, add Intel GPU repositories and install runtime packages
 4. Verify: `clinfo | head -20` should show your Intel GPU
-5. Use the Intel override: `docker compose -f docker-compose.prod.yml -f docker-compose.intel.override.yml up -d`
+5. Use the Intel override: `docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
 
 ### Verification
 
@@ -679,7 +686,7 @@ v0.7.0 includes a CI/CD workflow (`.github/workflows/release.yml`) that automate
 
 **Pre-release (RC) testing:**
 
-Before creating a final release, you can build and test release candidate images using the pre-release workflow. This lets you validate RC images locally with `docker-compose.prod.yml` before merging to `main`. See the [Pre-Release Testing](pre-release-testing.md) guide for the full workflow, including how to trigger RC builds, pull images, and run the validation checklist.
+Before creating a final release, you can build and test release candidate images using the pre-release workflow. This lets you validate RC images locally with `docker/compose.prod.yml` before merging to `main`. See the [Pre-Release Testing](pre-release-testing.md) guide for the full workflow, including how to trigger RC builds, pull images, and run the validation checklist.
 
 **To test locally:**
 
@@ -1458,7 +1465,7 @@ v1.5.0 provides a production-ready `docker-compose.yml` that uses pre-built GHCR
 | Feature | Dev | Production |
 |---------|-----|-----------|
 | Image source | Local build | GHCR pre-built |
-| Override file | docker-compose.override.yml | None |
+| Override file | docker/compose.dev-ports.yml | None |
 | Debug ports | Published (5173, 8080, 8085, 8501) | Not published |
 | Health checks | Simple, permissive | Strict, production timeouts |
 | Volume mounts | Simple paths | Validated, backed up |
@@ -3549,7 +3556,7 @@ If you need diacritic-sensitive search, set `SOLR_ASCII_FOLDING=false` in `.env`
 For production deployments, use the provided SSL Compose file:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 ```
 
 This configuration:
@@ -3791,8 +3798,8 @@ When no RC number is specified, the workflow queries ghcr.io for existing RC tag
 Pull and start the RC stack using the production Compose file:
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml pull
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml pull
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
 ```
 
 Substitute `1.16.0-rc.1` with the actual RC tag you want to test. The `VERSION` environment variable overrides the image tag used by the production Compose file.
@@ -3814,12 +3821,12 @@ If an RC reveals a blocking issue:
 
 1. Stop the RC stack:
    ```bash
-   docker compose -f docker-compose.prod.yml down
+   docker compose -f docker/compose.prod.yml down
    ```
 2. Pull and restart the previous release:
    ```bash
-   VERSION=1.15.0 docker compose -f docker-compose.prod.yml pull
-   VERSION=1.15.0 docker compose -f docker-compose.prod.yml up -d
+   VERSION=1.15.0 docker compose -f docker/compose.prod.yml pull
+   VERSION=1.15.0 docker compose -f docker/compose.prod.yml up -d
    ```
 
 ### HF_TOKEN security note

@@ -18,9 +18,9 @@ This module tests the full aithena pipeline against a local dev stack:
 
 Prerequisites (see README.md §E2E Tests):
   • The local stack is running:
-      docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+      docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
   • Solr is healthy at http://localhost:8983 (or SOLR_URL).
-  • E2E_LIBRARY_PATH matches the volume bind-mount in docker-compose.e2e.yml.
+  • E2E_LIBRARY_PATH matches the volume bind-mount in docker/compose.e2e.yml.
 """
 
 from __future__ import annotations

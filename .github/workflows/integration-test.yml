@@ -190,8 +190,8 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             config >/dev/null
@@ -200,8 +200,8 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             build
@@ -212,8 +212,8 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             up -d
@@ -302,8 +302,8 @@ jobs:
 
           docker compose \
             -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             ps
@@ -393,8 +393,8 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             logs --no-color
@@ -404,8 +404,8 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             logs --no-color > "$RUNNER_TEMP/compose-logs.txt" 2>&1
@@ -428,8 +428,8 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             down -v --remove-orphans

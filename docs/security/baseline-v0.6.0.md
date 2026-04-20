@@ -534,7 +534,7 @@ These issues are **outside the scope** of CI scanner baseline tuning but documen
 **Status:** Documented in docker-compose  
 **Issue:** N/A (configuration, not vulnerability)
 
-**Details:** `docker-compose.override.yml` exposes 10+ dev ports (Solr, RabbitMQ, Redis, etc.) directly on host
+**Details:** `docker/compose.dev-ports.yml` exposes 10+ dev ports (Solr, RabbitMQ, Redis, etc.) directly on host
 
 **Risk:** Development environment has broad attack surface if run on public network
 

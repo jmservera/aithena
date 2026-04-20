@@ -109,7 +109,7 @@ COPY --from=build /app/dist/ /usr/share/nginx/html/
 **Critical path for release:**
 1. All 6 services build in parallel (GitHub Actions matrix)
 2. Images pushed to GHCR (ghcr.io/jmservera/aithena-{service})
-3. Release tarball created (docker-compose.prod.yml + configs + installer)
+3. Release tarball created (docker/compose.prod.yml + configs + installer)
 4. GitHub release published with artifacts
 
 **No build-time interdependencies** — all services can build independently.
@@ -211,7 +211,7 @@ From Brett's v1.7.1 audit (in history.md):
 - Each service directory gets a `VERSION` file (e.g., `src/solr-search/VERSION`)
 - CI detects changed services via `git diff` between tags
 - Release workflow builds only changed services
-- `docker-compose.prod.yml` pins specific versions per service (e.g., `ghcr.io/.../solr-search:1.14.2`)
+- `docker/compose.prod.yml` pins specific versions per service (e.g., `ghcr.io/.../solr-search:1.14.2`)
 - Root `VERSION` becomes the "release version" (e.g., Aithena v1.11.0 = solr-search:1.14.2 + aithena-ui:1.9.1 + ...)
 
 **Pros:**
@@ -221,7 +221,7 @@ From Brett's v1.7.1 audit (in history.md):
 - ✅ Reduces GHCR storage and bandwidth
 
 **Cons:**
-- ❌ Higher complexity: version matrix in docker-compose.prod.yml
+- ❌ Higher complexity: version matrix in docker/compose.prod.yml
 - ❌ Need to track inter-service compatibility (API contract versioning)
 - ❌ Release notes become per-service (harder to communicate "what's in this release")
 - ❌ Dependency management: if solr-search:1.14.2 requires embeddings-server:1.8.0+, must encode that
@@ -359,7 +359,7 @@ From Brett's v1.7.1 audit (in history.md):
 2. **Docker Compose profiles** — `docker compose --profile api up` to run only API stack
 3. **Remote dev environments** — Use GitHub Codespaces or remote VMs with pre-built images
 
-**Recommended:** Solution #1 (scripts) + Solution #2 (profiles). Update `docker-compose.override.yml` to pull images by default, only build on explicit `--build` flag.
+**Recommended:** Solution #1 (scripts) + Solution #2 (profiles). Update `docker/compose.dev-ports.yml` to pull images by default, only build on explicit `--build` flag.
 
 ### 6.3 CI/CD Parallelization
 
@@ -404,13 +404,13 @@ From Brett's v1.7.1 audit (in history.md):
 
 **Actions:**
 1. ✅ **Move embeddings-server to independent versioning**
-   - Lock at `embeddings-server:1.8.0` in docker-compose.prod.yml
+   - Lock at `embeddings-server:1.8.0` in docker/compose.prod.yml
    - Only bump version when model or code changes (typically quarterly)
    - Effort: 1 week
 
 2. ✅ **Create service-specific dev scripts**
    - `scripts/dev-{service}.sh` for focused development
-   - Update `docker-compose.override.yml` to pull images by default
+   - Update `docker/compose.dev-ports.yml` to pull images by default
    - Effort: 2 days
 
 3. ✅ **Establish API contract testing**
@@ -558,7 +558,7 @@ This approach balances **pragmatism** (short-term wins with low risk) and **scal
 **Acceptance Criteria:**
 - [ ] Each service has `VERSION` file
 - [ ] CI only builds services with changed `VERSION`
-- [ ] `docker-compose.prod.yml` pins specific service versions
+- [ ] `docker/compose.prod.yml` pins specific service versions
 - [ ] API contract tests in place for solr-search ↔ embeddings-server
 - [ ] Release notes template updated
 

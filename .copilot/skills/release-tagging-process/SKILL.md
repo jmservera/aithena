@@ -217,7 +217,7 @@ git push origin v1.4.0
 - [ ] Docs PR merged to `dev` (includes release notes, test report, manuals)
 - [ ] Git tag created with `v{VERSION}` format
 - [ ] GitHub Release created automatically (via release.yml)
-- [ ] Release asset contains docker-compose.prod.yml, .env.prod.example, deployment guide
+- [ ] Release asset contains docker/compose.prod.yml, .env.prod.example, deployment guide
 - [ ] Docker images tagged with version in GHCR
 - [ ] `/version` endpoints return correct version metadata
 
@@ -261,7 +261,7 @@ git push origin v1.4.0
   - 3:00 PM: Create tag v1.4.0
   - 3:10 PM: release.yml builds images, pushes GHCR
   - 3:30 PM: GitHub Release created with tarball asset
-  - 4:00 PM: Users deploy via `docker-compose.prod.yml` from release asset
+  - 4:00 PM: Users deploy via `docker/compose.prod.yml` from release asset
 
 2026-06-15 v1.5.0 (same pattern, faster)
   - Release-docs now cached, generation takes 10 min

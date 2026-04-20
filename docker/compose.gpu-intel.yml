@@ -1,12 +1,12 @@
-# docker-compose.intel.override.yml
+# docker/compose.gpu-intel.yml
 #
 # GPU acceleration override for Intel GPUs (Arc, iGPU via WSL2).
 #
 # Usage (dev — builds from source with OpenVINO):
-#   docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d --build
 #
 # Production (pulls pre-built OpenVINO image):
-#   docker compose -f docker-compose.prod.yml -f docker-compose.intel.override.yml up -d
+#   docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d
 #
 # Prerequisites:
 #   - Intel GPU with compute-runtime drivers

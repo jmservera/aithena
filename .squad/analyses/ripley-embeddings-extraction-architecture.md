@@ -60,11 +60,11 @@ All integration is **stateless HTTP**. No RPC, queue, or database schema couplin
 - Network alias: `embeddings-server`
 - Build args: `VERSION`, `GIT_COMMIT`, `BUILD_DATE`, `HF_TOKEN`
 
-**docker-compose.prod.yml:**
+**docker/compose.prod.yml:**
 - Lines 83-110: Uses image `ghcr.io/jmservera/aithena-embeddings-server:${VERSION:-latest}`
 - Identical constraints and healthcheck
 
-**docker-compose.override.yml:**
+**docker/compose.dev-ports.yml:**
 - Line 11: Service reference only
 
 ### 1.4 CI/CD Workflow References

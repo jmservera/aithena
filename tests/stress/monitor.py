@@ -35,8 +35,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-import docker
 import httpx
+
+import docker
 
 logger = logging.getLogger(__name__)
 

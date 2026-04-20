@@ -1,12 +1,12 @@
-# docker-compose.nvidia.override.yml
+# docker/compose.gpu-nvidia.yml
 #
 # GPU acceleration override for NVIDIA GPUs.
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+#   docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
 #
 # Production:
-#   docker compose -f docker-compose.prod.yml -f docker-compose.nvidia.override.yml up -d
+#   docker compose -f docker/compose.prod.yml -f docker/compose.gpu-nvidia.yml up -d
 #
 # Prerequisites:
 #   - NVIDIA GPU with CUDA support

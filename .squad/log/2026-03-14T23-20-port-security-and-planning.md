@@ -18,7 +18,7 @@ Harden production Docker Compose by removing published host ports for internal s
 
 **Changes:**
 - `docker-compose.yml`: Removed host port bindings for redis, rabbitmq, all Solr nodes, ZooKeeper nodes, streamlit-admin, redis-commander, embeddings-server. Added `expose:` directives instead.
-- `docker-compose.override.yml` (NEW): Restores all debug ports for local `docker compose up`.
+- `docker/compose.dev-ports.yml` (NEW): Restores all debug ports for local `docker compose up`.
 - nginx remains on `80:80` and `443:443` as the sole production entry point.
 
 **Verification:** Confirmed nginx proxies all admin paths (`/admin/streamlit/`, `/admin/solr/`, `/admin/rabbitmq/`, `/admin/redis/`, `/solr/`). Iframe integration confirmed working via same-origin policy.

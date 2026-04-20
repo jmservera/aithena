@@ -107,7 +107,7 @@
 
 **Root cause (triple):** nginx alias pointed to `/data/documents/` instead of `/data/thumbnails/`, nginx container was missing the `thumbnail-data` volume mount, and the search API returned bare relative paths without the `/thumbnails/` prefix — causing the browser to hit the SPA catch-all.
 
-**Fix:** Corrected alias in all three nginx configs (default.conf, default.conf.template, ssl.conf.template). Added `thumbnail-data:/data/thumbnails:ro` to nginx in docker-compose.yml and docker-compose.prod.yml. Added `_thumbnail_url()` helper in search_service.py to prefix relative Solr paths with `/thumbnails/`.
+**Fix:** Corrected alias in all three nginx configs (default.conf, default.conf.template, ssl.conf.template). Added `thumbnail-data:/data/thumbnails:ro` to nginx in docker-compose.yml and docker/compose.prod.yml. Added `_thumbnail_url()` helper in search_service.py to prefix relative Solr paths with `/thumbnails/`.
 
 **Key lesson:** When adding a new nginx static-file location block, verify three things: (1) the alias points to the correct filesystem path, (2) the container mounts the corresponding volume, and (3) the URL returned by the API matches the nginx location pattern. All three must align or the SPA catch-all swallows the request.
 
@@ -129,7 +129,7 @@
 
 **Root cause (dual):** `solr auth enable` creates the admin user in BasicAuth but doesn't create the user-role mapping, so all RBAC-gated operations fail. Additionally, the readonly user was assigned the `search` role, but security.json uses `readonly` as the role name for read permissions.
 
-**Fix:** Added explicit `set-user-role` call for admin user after `solr auth enable`. Changed readonly role from `["search"]` to `["readonly"]`. Applied to both docker-compose.yml and docker-compose.prod.yml.
+**Fix:** Added explicit `set-user-role` call for admin user after `solr auth enable`. Changed readonly role from `["search"]` to `["readonly"]`. Applied to both docker-compose.yml and docker/compose.prod.yml.
 
 **Installer fix:** Added SOLR_ADMIN_USER/PASS and SOLR_READONLY_USER/PASS to the installer's credential generation pipeline, following the same pattern as RabbitMQ (generate on first run, rotate insecure defaults, preserve secure passwords).
 
@@ -448,7 +448,7 @@ Extracted password hashing and auth DB schema init from `src/solr-search/auth.py
 Fixed Solr's auth bootstrap entrypoint to explicitly assign roles after `solr auth enable`. Corrected readonly role from "search" (doesn't exist in security.json) to "readonly". Added Solr credential generation to installer pipeline.
 
 **Changes:**
-- `docker-compose.yml` + `docker-compose.prod.yml`: After `solr auth enable`, call `set-user-role` to assign `["admin"]` to admin user and `["readonly"]` to readonly user
+- `docker-compose.yml` + `docker/compose.prod.yml`: After `solr auth enable`, call `set-user-role` to assign `["admin"]` to admin user and `["readonly"]` to readonly user
 - `installer/` — Added Solr credential generation: `SOLR_ADMIN_USER`, `SOLR_ADMIN_PASS`, `SOLR_READONLY_USER`, `SOLR_READONLY_PASS` now generated and rotated on installer run
 
 **Key insight:** Solr auth lifecycle is: `solr auth enable` (create user) → `set-user-role` (assign permissions) → operations work. RBAC setup is now explicit and traceable.

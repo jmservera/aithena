@@ -72,7 +72,7 @@ Last Updated: [YYYY-MM-DD]
 **Example (Pre-Release Containers):**
 1. Manual trigger works — `gh workflow run pre-release.yml --ref dev` pushes 6 images with `-rc.N` tags
 2. Auto-trigger on release PR — opening PR to main triggers RC build automatically
-3. Local pull works — `VERSION=X.Y.Z-rc.N docker compose -f docker-compose.prod.yml pull` succeeds
+3. Local pull works — `VERSION=X.Y.Z-rc.N docker compose -f docker/compose.prod.yml pull` succeeds
 4. Smoke tests pass — per-container health checks run against RC images in CI
 5. No latest overwrite — RC builds never tag as `latest`, `{major}`, or `{major}.{minor}`
 6. Parity with release — RC uses identical Dockerfiles, build args, base images as release.yml

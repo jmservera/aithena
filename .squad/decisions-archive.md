@@ -1347,7 +1347,7 @@ PRs that only need conflict resolution in existing solr-search/ or aithena-ui/ f
 - ✅ `.env` is already in `.gitignore` (line 123).
 - ❌ No `.env` file exists.
 - ❌ `docker-compose.yml` hardcodes `/home/jmservera/booklibrary` in the `document-data` volume (line 449).
-- ✅ The `docker-compose.e2e.yml` already demonstrates the pattern: `device: "${E2E_LIBRARY_PATH:-/tmp/aithena-e2e-library}"` — this is the exact template to follow.
+- ✅ The `docker/compose.e2e.yml` already demonstrates the pattern: `device: "${E2E_LIBRARY_PATH:-/tmp/aithena-e2e-library}"` — this is the exact template to follow.
 - Other volumes also hardcode paths: `/source/volumes/rabbitmq-data`, `/source/volumes/solr-data`, etc.
 
 **Gap:** Single-line change in `docker-compose.yml` + create a `.env.example` file.
@@ -2814,7 +2814,7 @@ When a running stack is available, capture and replace the placeholder images in
 ## 2026-03-14T23:04: Port Security Hardening Directive
 
 **By:** jmservera (via Copilot coordinator)  
-**What:** Production should only publish nginx ports (80/443). All other container ports (Solr, Redis, RabbitMQ, ZooKeeper, etc.) should use `expose:` only (internal network). Keep port publishing available for development/debugging via docker-compose.override.yml.  
+**What:** Production should only publish nginx ports (80/443). All other container ports (Solr, Redis, RabbitMQ, ZooKeeper, etc.) should use `expose:` only (internal network). Keep port publishing available for development/debugging via docker/compose.dev-ports.yml.  
 **Why:** User request — security hardening. Services behind nginx gateway don't need host-level port bindings in production. Reduces attack surface for production-style deployments while keeping local debugging workflow intact.
 
 ---
@@ -2847,7 +2847,7 @@ When a running stack is available, capture and replace the placeholder images in
 **What changed:**
 - `docker-compose.yml` now publishes host ports only for `nginx` (`80`, `443`).
 - All other formerly published service ports were moved behind the Compose network with `expose:`.
-- New `docker-compose.override.yml` restores direct host access for local debugging (`redis`, `rabbitmq`, `solr-search`, `streamlit-admin`, `redis-commander`, `zoo1`-`zoo3`, `solr`-`solr3`, and `embeddings-server`).
+- New `docker/compose.dev-ports.yml` restores direct host access for local debugging (`redis`, `rabbitmq`, `solr-search`, `streamlit-admin`, `redis-commander`, `zoo1`-`zoo3`, `solr`-`solr3`, and `embeddings-server`).
 
 **Ingress audit:**
 - nginx already proxies the public UI (`/`), search API (`/v1/`, `/documents/`), Solr admin (`/admin/solr/` and `/solr/`), RabbitMQ management (`/admin/rabbitmq/`), Streamlit admin (`/admin/streamlit/`), and Redis Commander (`/admin/redis/`).
@@ -3574,7 +3574,7 @@ The Streamlit admin dashboard (`src/admin/`) provides operations tooling for mon
 4. Update admin-manual.md to reference React UI only
 
 ### Fallback
-If issues with React implementation arise (e.g., RabbitMQ API CORS), keep Streamlit admin in `docker-compose.override.yml` as a developer-only tool (not in production builds).
+If issues with React implementation arise (e.g., RabbitMQ API CORS), keep Streamlit admin in `docker/compose.dev-ports.yml` as a developer-only tool (not in production builds).
 
 ## Trade-off Analysis
 
@@ -3596,7 +3596,7 @@ If issues with React implementation arise (e.g., RabbitMQ API CORS), keep Stream
 | Requires React dev for RabbitMQ metrics | Already have strong React team (Eva, Sofia) |
 | Loses Streamlit's rapid prototyping | UI is stable; no further rapid iteration expected |
 | Auth module won't be reused | Not a limitation; JWT logic is Streamlit-specific |
-| If React implementation fails | Keep Streamlit in docker-compose.override.yml temporarily |
+| If React implementation fails | Keep Streamlit in docker/compose.dev-ports.yml temporarily |
 
 ## Maintenance Cost Reduction
 
@@ -3957,7 +3957,7 @@ Extend the GitHub release workflow to create a tarball (`aithena-v{version}-rele
 
 ```
 aithena-v{version}-release.tar.gz
-├── docker-compose.prod.yml       # Production compose (pulls from GHCR)
+├── docker/compose.prod.yml       # Production compose (pulls from GHCR)
 ├── .env.prod.example             # Environment template with all variables
 ├── README.md                      # Project overview
 ├── LICENSE                        # MIT license
@@ -3987,7 +3987,7 @@ aithena-v{version}-release.tar.gz
 
 #### 1. Image Distribution: GHCR Pull Model
 
-**Chosen:** `docker-compose.prod.yml` uses `image: ghcr.io/jmservera/aithena-{service}:${VERSION}` for all custom services.
+**Chosen:** `docker/compose.prod.yml` uses `image: ghcr.io/jmservera/aithena-{service}:${VERSION}` for all custom services.
 
 **Alternatives Considered:**
 - **Sideload images in tarball:** Rejected — would balloon package size to 5+ GB and complicate updates
@@ -4055,9 +4055,9 @@ validate-tag → build-and-push → package-release → github-release
 
 Both verified via GitHub API to match expected commits.
 
-### docker-compose.prod.yml Differences from docker-compose.yml
+### docker/compose.prod.yml Differences from docker-compose.yml
 
-| Aspect | docker-compose.yml | docker-compose.prod.yml |
+| Aspect | docker-compose.yml | docker/compose.prod.yml |
 |--------|-------------------|------------------------|
 | **Custom services** | `build: ./src/{service}` | `image: ghcr.io/jmservera/aithena-{service}:${VERSION}` |
 | **Standard images** | Same (nginx, solr, zookeeper, redis, rabbitmq) | Same |
@@ -4079,7 +4079,7 @@ Both verified via GitHub API to match expected commits.
 
 ### Negative
 - **Workflow complexity:** Release workflow now has 4 jobs instead of 2 (validate, build, package, release)
-- **Maintenance burden:** Two compose files to keep in sync (docker-compose.yml and docker-compose.prod.yml)
+- **Maintenance burden:** Two compose files to keep in sync (docker-compose.yml and docker/compose.prod.yml)
 - **Config file duplication:** nginx/solr/rabbitmq configs must be in both `src/` and release tarball
 
 ### Mitigations
@@ -4098,7 +4098,7 @@ Before merging PR #427:
 
 After merge, before next release:
 - [ ] Test full release workflow on a tag (e.g., v1.3.1)
-- [ ] Extract tarball and verify `docker compose -f docker-compose.prod.yml pull` works
+- [ ] Extract tarball and verify `docker compose -f docker/compose.prod.yml pull` works
 - [ ] Run installer and verify `.env` file generation
 - [ ] Test cold-start deployment on clean VM
 
@@ -4120,7 +4120,7 @@ After merge, before next release:
 - **Issue:** #363 — Create GitHub Release package with production artifacts
 - **PR:** #427 — Add release packaging infrastructure
 - **Files:**
-  - `docker-compose.prod.yml`
+  - `docker/compose.prod.yml`
   - `.env.prod.example`
   - `docs/quickstart.md`
   - `.github/workflows/release.yml`
@@ -5612,7 +5612,7 @@ GET  /v1/admin/containers         — System health snapshot
 3. Remove `src/admin/` directory entirely
 4. Update admin-manual.md to reference React UI only
 
-**Fallback:** If issues with React implementation arise (e.g., RabbitMQ API CORS), keep Streamlit admin in `docker-compose.override.yml` as a developer-only tool (not in production builds).
+**Fallback:** If issues with React implementation arise (e.g., RabbitMQ API CORS), keep Streamlit admin in `docker/compose.dev-ports.yml` as a developer-only tool (not in production builds).
 
 ---
 
@@ -5636,7 +5636,7 @@ GET  /v1/admin/containers         — System health snapshot
 | Requires React dev for RabbitMQ metrics | Already have strong React team (Eva, Sofia) |
 | Loses Streamlit's rapid prototyping | UI is stable; no further rapid iteration expected |
 | Auth module won't be reused | Not a limitation; JWT logic is Streamlit-specific |
-| If React implementation fails | Keep Streamlit in docker-compose.override.yml temporarily |
+| If React implementation fails | Keep Streamlit in docker/compose.dev-ports.yml temporarily |
 
 ---
 
@@ -7677,7 +7677,7 @@ The nginx `default.conf` file was out of sync with `default.conf.template`:
 ### Guidelines:
 1. **Always edit both** `default.conf` and `default.conf.template` together — they must stay in sync
 2. `default.conf` is the runtime config mounted directly by docker-compose.yml
-3. `default.conf.template` is used for SSL/envsubst builds (docker-compose.ssl.yml)
+3. `default.conf.template` is used for SSL/envsubst builds (docker/compose.ssl.yml)
 4. There is no automated generation step — both files must be manually maintained in sync
 
 ### Why this matters:
@@ -7739,18 +7739,18 @@ The auth system uses an SQLite database at `AUTH_DB_PATH`. As features evolve, t
 
 ## Context
 
-Investigation of docker compose build failure revealed that the `admin` service exists in `docker-compose.yml` (development) but is completely missing from `docker-compose.prod.yml` (production). This caused production deployment failures because the admin dashboard service was undefined.
+Investigation of docker compose build failure revealed that the `admin` service exists in `docker-compose.yml` (development) but is completely missing from `docker/compose.prod.yml` (production). This caused production deployment failures because the admin dashboard service was undefined.
 
 **Service count:**
 - `docker-compose.yml`: 17 services (includes admin)
-- `docker-compose.prod.yml`: 16 services (admin missing)
+- `docker/compose.prod.yml`: 16 services (admin missing)
 
 ## Decision
 
-**Immediate fix:** Add the missing `admin` service to `docker-compose.prod.yml` using the GHCR image pattern.
+**Immediate fix:** Add the missing `admin` service to `docker/compose.prod.yml` using the GHCR image pattern.
 
 **Long-term practice:**
-1. When adding a new service to `docker-compose.yml`, ALWAYS add the corresponding service definition to `docker-compose.prod.yml`
+1. When adding a new service to `docker-compose.yml`, ALWAYS add the corresponding service definition to `docker/compose.prod.yml`
 2. Dev uses `build:` configs, prod uses `image:` configs pointing to GHCR
 3. Service definitions should be kept in sync except for the build vs. image distinction
 
@@ -7763,7 +7763,7 @@ Investigation of docker compose build failure revealed that the `admin` service 
 ## Prevention Mechanism
 
 Consider adding a CI validation step that:
-1. Extracts service names from both `docker-compose.yml` and `docker-compose.prod.yml`
+1. Extracts service names from both `docker-compose.yml` and `docker/compose.prod.yml`
 2. Fails the build if services are present in one but missing from the other (excluding any documented exceptions)
 3. Runs on every PR that touches docker-compose files
 
@@ -7775,7 +7775,7 @@ import sys
 with open('docker-compose.yml') as f:
     dev = set(yaml.safe_load(f)['services'].keys())
     
-with open('docker-compose.prod.yml') as f:
+with open('docker/compose.prod.yml') as f:
     prod = set(yaml.safe_load(f)['services'].keys())
     
 if dev != prod:
@@ -7787,8 +7787,8 @@ if dev != prod:
 
 ## Implementation Checklist
 
-- [ ] Add admin service to docker-compose.prod.yml
-- [ ] Test production config: `docker compose -f docker-compose.prod.yml config`
+- [ ] Add admin service to docker/compose.prod.yml
+- [ ] Test production config: `docker compose -f docker/compose.prod.yml config`
 - [ ] (Optional) Implement CI service parity validation
 - [ ] Document this pattern in `.squad/decisions.md`
 
@@ -7796,7 +7796,7 @@ if dev != prod:
 
 - Issue: docker compose build failure investigation
 - Commit: fa9d831 (admin Dockerfile fix for repo-root context)
-- Files: `docker-compose.yml`, `docker-compose.prod.yml`
+- Files: `docker-compose.yml`, `docker/compose.prod.yml`
 
 ---
 
@@ -8445,7 +8445,7 @@ The nginx `default.conf` file was out of sync with `default.conf.template`:
 ### Guidelines:
 1. **Always edit both** `default.conf` and `default.conf.template` together — they must stay in sync
 2. `default.conf` is the runtime config mounted directly by docker-compose.yml
-3. `default.conf.template` is used for SSL/envsubst builds (docker-compose.ssl.yml)
+3. `default.conf.template` is used for SSL/envsubst builds (docker/compose.ssl.yml)
 4. There is no automated generation step — both files must be manually maintained in sync
 
 ### Why this matters:
@@ -10523,7 +10523,7 @@ Total stack memory increase: ~3.5GB. Hosts running the full A/B stack need at le
 
 ### 5. Dev-only scope
 
-A/B services are in `docker-compose.yml` (base) and `docker-compose.override.yml` (dev ports). `docker-compose.prod.yml` is intentionally NOT modified — production A/B deployment deferred to P3-2.
+A/B services are in `docker-compose.yml` (base) and `docker/compose.dev-ports.yml` (dev ports). `docker/compose.prod.yml` is intentionally NOT modified — production A/B deployment deferred to P3-2.
 
 ---
 
@@ -11097,7 +11097,7 @@ secrets: |
 - No `ports:` mappings for internal services (Redis, ZK, Solr)
 - Services: `redis`, `zoo1`, `zoo2`, `zoo3`, `solr`, `solr2`, `solr3` — all `expose` only
 
-**Dev override (docker-compose.override.yml):**
+**Dev override (docker/compose.dev-ports.yml):**
 - **Explicitly publishes ports to host** for local debugging:
   - Redis: `6379:6379` 
   - ZooKeeper nodes: `2181:2181`, `2182:2181`, `2183:2181`
@@ -11107,7 +11107,7 @@ secrets: |
 - solr-search: `8080:8080`
 - rabbitmq: `5672:5672`, `15672:15672`
 
-**Production (docker-compose.prod.yml):**
+**Production (docker/compose.prod.yml):**
 - Services run on isolated Docker bridge network (`networks: default`)
 - No `ports:` mappings in prod compose
 - Ports are only reachable from other containers on the bridge network
@@ -11136,7 +11136,7 @@ secrets: |
 ```
 
 ### Key Finding
-**In production (docker-compose.prod.yml): Zero port mappings.** 
+**In production (docker/compose.prod.yml): Zero port mappings.** 
 - Services are 100% internal to the Docker bridge
 - External clients cannot reach Redis, ZK, or Solr directly
 - Only solr-search (FastAPI) and admin (Streamlit) have network exposure paths
@@ -11314,7 +11314,7 @@ redis:
 ```
 
 **Compensating Control:**
-- Ensure docker-compose.override.yml is only used locally
+- Ensure docker/compose.dev-ports.yml is only used locally
 - Add pre-commit hook to reject `ports: 6379` in docker-compose.yml
 - Monitor .env for REDIS_PASSWORD (should not exist)
 
@@ -11603,7 +11603,7 @@ SOLR_ADMIN_PASS=SolrAdmin_dev2024!
 
 if grep -q "ports:" docker-compose.yml | grep -E "6379|2181|8983"; then
   echo "ERROR: Do not publish internal service ports in docker-compose.yml"
-  echo "Use docker-compose.override.yml for dev-only port mappings"
+  echo "Use docker/compose.dev-ports.yml for dev-only port mappings"
   exit 1
 fi
 ```
@@ -11656,7 +11656,7 @@ fi
 
 | Risk | Severity | Mitigation |
 |------|----------|-----------|
-| **Misconfiguration:** Dev publishes Redis to host | Medium | Pre-commit hook, code review, docker-compose.override.yml for local only |
+| **Misconfiguration:** Dev publishes Redis to host | Medium | Pre-commit hook, code review, docker/compose.dev-ports.yml for local only |
 | **Container escape:** Attacker in Solr RCE accesses Redis unauth | Low | Already true for ZK (no SASL helped); data is low-sensitivity anyway |
 | **Data visibility:** Internal network traffic unencrypted | Low | Same as now; add TLS in v2.0 if needed |
 | **Malicious container:** Someone adds redis:latest image to network | Low | Image approval process + Checkov scans (existing) |

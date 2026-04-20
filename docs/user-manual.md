@@ -797,7 +797,7 @@ DEVICE=cuda
 ```
 Then start with the NVIDIA override:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
 ```
 
 **For Intel GPUs (including WSL2):**
@@ -807,7 +807,7 @@ BACKEND=openvino
 ```
 Then start with the Intel override:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d
 ```
 
 **No GPU? No problem.** The default configuration (`DEVICE=cpu`, `BACKEND=torch`) works exactly as before — no changes needed.
