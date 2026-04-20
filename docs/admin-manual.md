@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), and [v1.19.0 Deployment Updates](#deployment-updates-for-v1190) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), and [v2.0.0 Deployment Updates](#deployment-updates-for-v200) sections below.
 
 ## System architecture overview
 
@@ -4851,3 +4851,173 @@ Automated cleanup scripts should remove backups older than retention periods to 
 - **Verification:** Test restore procedures monthly to ensure backups are valid
 - **Monitoring:** Monitor backup job completion and storage space usage
 - **Alerting:** Set up alerts if backup jobs fail or storage is running low
+
+## Deployment Updates for v2.0.0
+
+### Summary
+
+v2.0.0 is a **major release** centered on the complete replacement of the Streamlit-based admin dashboard with a modern React single-page application (SPA):
+
+1. **React admin portal** — Full rewrite of the admin dashboard as a React SPA with 7 pages, served at `/admin/` by `aithena-ui`
+2. **`aithena-admin` image removed** — The Streamlit admin container is no longer built or published (**breaking change**)
+3. **Admin REST API** — New endpoints in `solr-search` for pause/resume indexing, container management, and collection statistics
+4. **Installer overhaul (#1448)** — GPU auto-detection (NVIDIA/Intel), SSL setup, dev/prod profiles, compose override management via generated `start.sh`
+5. **Solr 9/10 compatibility** — Forward-compatible schema layer and collection export/import tooling for the upcoming Solr 10 migration
+6. **Security workflows** — CodeQL analysis, GHAS alert triage, PAT expiry detection
+7. **119 integration tests + 38 accessibility tests** for the React admin portal
+
+**⚠️ Breaking changes:** See [Breaking Changes](#v200-breaking-changes) below. Review carefully before upgrading.
+
+### v2.0.0 Breaking Changes
+
+#### 1. `aithena-admin` Docker Image Removed
+
+The `aithena-admin` container image is **no longer built or published** to `ghcr.io/jmservera/aithena-admin`. Any deployment referencing this image must be updated.
+
+**Required actions:**
+- Remove `streamlit-admin` service from `docker-compose.yml` / `compose.prod.yml` / any override files
+- Remove nginx proxy rules pointing to the Streamlit admin (typically `location /admin/` proxied to the old Streamlit container)
+- Update health checks that referenced `/admin/streamlit/_stcore/health` — use `/admin/` instead
+
+The React admin portal is now built into `aithena-ui` and served at `/admin/`. No separate container is needed.
+
+#### 2. Installer Generates `start.sh` with Compose Overrides
+
+The installer (`setup.py`) now generates `start.sh` with a compose override chain instead of a simple `docker compose up` command. Operators who have custom `docker compose` invocations should re-run the installer.
+
+**Required action:** Re-run the installer:
+```bash
+python3 setup.py
+```
+Or manually update your compose commands to include the appropriate override files (see new `start.sh` for the correct chain).
+
+### React Admin Portal
+
+The admin dashboard has been completely rewritten as a React SPA. All 7 pages are served from `/admin/`:
+
+| Page | URL | Description |
+|------|-----|-------------|
+| Dashboard | `/admin/` | System health overview, indexing status, key metrics |
+| Document Manager | `/admin/documents` | Browse, search, and manage indexed documents |
+| Reindex Library | `/admin/reindex` | Trigger full or partial re-indexing |
+| Indexing Status | `/admin/indexing` | Real-time indexing pipeline progress |
+| System Status | `/admin/status` | Service health, versions, configuration |
+| Infrastructure | `/admin/infrastructure` | Container and resource management |
+| Log Viewer | `/admin/logs` | Stream and search service logs |
+
+**Access control:** All admin pages require the `admin` role. Unauthenticated or non-admin requests are redirected to the login page.
+
+**Key technical details:**
+- Client-side routing — all admin pages resolve through a single SPA entry point
+- nginx must proxy `/admin/` to `aithena-ui` (updated in shipped compose files)
+- No Streamlit dependency — the React SPA is bundled with `aithena-ui`
+
+### Admin REST API
+
+New endpoints in `solr-search` (v2.0.0):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/admin/indexing/pause` | Pause the document indexer |
+| `POST` | `/v1/admin/indexing/resume` | Resume the document indexer |
+| `GET` | `/v1/admin/containers` | Container list and status |
+| `GET` | `/v1/admin/collections/stats` | Solr collection statistics |
+
+All admin endpoints require an authenticated admin-role token.
+
+### Installer Overhaul
+
+The installer (`setup.py`) has been significantly enhanced:
+
+- **GPU auto-detection** — Detects NVIDIA and Intel GPUs and generates the appropriate compose override
+- **SSL setup** — Integrates SSL certificate provisioning into the install flow
+- **Dev/prod profiles** — Separate configuration for development and production deployments
+- **`start.sh` generation** — The installer now generates `start.sh` with the full compose override chain (replaces manual `docker compose` commands)
+
+**Upgrade recommendation:** Re-run the installer after upgrading to v2.0.0 to get the updated `start.sh`.
+
+### Solr 9/10 Compatibility
+
+v2.0.0 includes preparatory work for the upcoming Solr 10 migration:
+
+- **Forward-compatible schema layer (#1365)** — Schema changes are forward-compatible with Solr 10 while remaining fully functional on Solr 9
+- **Collection export/import tooling (#1363, #1456)** — New utilities for backing up and restoring Solr collections to support the migration
+
+**Note:** The Solr 10 migration itself is not part of v2.0.0. These changes prepare the ground. Actual Solr 10 upgrade is planned for a future release.
+
+### Upgrade Instructions
+
+**From v1.19.0 → v2.0.0:**
+
+1. **Back up your data:**
+   ```bash
+   # Export Solr collection (new tooling available in v2.0.0)
+   docker compose exec solr bin/solr export -collection books -out /var/solr/data/backup
+   ```
+
+2. **Pull new images:**
+   ```bash
+   docker compose pull
+   ```
+
+3. **Remove the Streamlit admin service** from your compose configuration:
+   - Delete the `streamlit-admin` service block from `docker-compose.yml` or your override files
+   - Remove any Streamlit-specific nginx proxy rules
+   - Remove references to `ghcr.io/jmservera/aithena-admin` from any deployment scripts
+
+4. **Re-run the installer** (recommended):
+   ```bash
+   python3 setup.py
+   ```
+
+5. **Restart all services:**
+   ```bash
+   docker compose up -d
+   # or use the new start.sh if you ran the installer:
+   ./start.sh
+   ```
+
+6. **Verify the React admin portal:**
+   ```bash
+   curl -sf http://localhost/admin/ && echo "✅ React admin accessible"
+   curl -sf http://localhost/v1/health && echo "✅ API healthy"
+   ```
+
+**From v1.18.x or earlier:**
+Follow the [v1.19.0 deployment notes](#deployment-updates-for-v1190) first, then apply v2.0.0 steps above.
+
+### Configuration Changes
+
+| Change | File | Required action |
+|---|---|---|
+| Remove `streamlit-admin` service | `docker-compose.yml` | **Required.** Delete the service definition. |
+| Update nginx `/admin/` proxy | `nginx.conf` | **Required if customized.** Ensure `/admin/` points to `aithena-ui`, not the old Streamlit container. |
+| Re-run installer | `setup.py` | **Recommended.** Regenerates `start.sh` with new compose override chain. |
+| Update health checks | deployment scripts | **Required if used.** Replace Streamlit health URL with `/admin/`. |
+
+### Data Migration
+
+**None required.** The Solr collection schema, index format, and auth database are unchanged. Existing data is fully compatible.
+
+> **Note:** The Solr 9/10 compatibility layer is additive — no schema changes are applied automatically. If you want to trigger a schema update, a full re-index is recommended but not required.
+
+### Container Image Changes
+
+v2.0.0 publishes **5 container images** (down from 6 in v1.x):
+
+| Service | Image | Change |
+|---------|-------|--------|
+| aithena-ui | `ghcr.io/jmservera/aithena-aithena-ui:2.0.0` | Now includes React admin portal |
+| document-indexer | `ghcr.io/jmservera/aithena-document-indexer:2.0.0` | No change |
+| document-lister | `ghcr.io/jmservera/aithena-document-lister:2.0.0` | No change |
+| embeddings-server | `ghcr.io/jmservera/aithena-embeddings-server:2.0.0` | No change |
+| solr-search | `ghcr.io/jmservera/aithena-solr-search:2.0.0` | New admin REST API endpoints |
+| ~~aithena-admin~~ | ~~`ghcr.io/jmservera/aithena-admin`~~ | **REMOVED** |
+
+### Breaking Change Verification Checklist
+
+- [ ] No `streamlit-admin` service in compose files
+- [ ] No references to `ghcr.io/jmservera/aithena-admin` in deployment scripts
+- [ ] nginx `/admin/` proxies to `aithena-ui`, not old Streamlit container
+- [ ] Streamlit health check URLs updated or removed from monitoring
+- [ ] `start.sh` regenerated (or compose commands updated) after installer re-run
