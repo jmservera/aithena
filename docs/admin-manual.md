@@ -49,6 +49,29 @@ Current shipped behavior:
 
 This reduces startup races where the lister, indexer, or admin tools could come up before the queue or cache was actually ready.
 
+## Host Prerequisites
+
+Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host** (these cannot be set from inside a container).
+
+### Redis memory overcommit
+
+Redis background saves (RDB snapshots) fork the process, which requires the kernel to allow memory overcommit. Without this setting Redis logs `WARNING Memory overcommit must be enabled!` and background saves may fail.
+
+```bash
+# Apply immediately (non-persistent):
+sudo sysctl vm.overcommit_memory=1
+
+# Make persistent across reboots:
+echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/90-redis-overcommit.conf
+sudo sysctl --system
+```
+
+> **Note:** The compose stack sets `stop-writes-on-bgsave-error no` in `src/redis/redis.conf` so Redis remains available even when overcommit is disabled, but applying the host-level setting is still recommended to ensure reliable snapshots.
+
+### ZooKeeper credentials (production hardening)
+
+Solr logs `Using default ZkCredentialsProvider/ZkACLProvider` at startup. This is informational — it means ZooKeeper znodes are world-readable. For production deployments that require ZooKeeper ACL-based access control, see the [Apache Solr ZooKeeper Access Control](https://solr.apache.org/guide/solr/latest/deployment-guide/zookeeper-access-control.html) documentation.
+
 ## Deployment with Docker Compose
 
 ### 1. Choose the host library path
