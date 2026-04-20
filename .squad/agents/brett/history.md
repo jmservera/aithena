@@ -123,6 +123,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
 | — | #1286 | Add intel-extension-for-pytorch (IPEX) to openvino extras |
 | — | #1325/PR#1328 | BuildKit --mount=from + --inexact for embeddings-server layer optimization (~95% reduction) |
+| 2026-04-21 | #1496/PR#1504 | Dev integration test workflow using single-node topology |
 
 ---
 
@@ -354,3 +355,22 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 - `.squad/analysis/standalone-solr-capacity-54m-vectors.md` — Baseline (130 GB)
 - `docs/research/standalone-vs-cloud-infrastructure-analysis.md` — Brett's original analysis (cost comparison)
 - `.squad/decisions.md` — Decision added: "32GB RAM Solr Optimization Strategy"
+## 2026-04-21 — Dev Integration Test Workflow (#1496)
+
+**Status:** ✅ PR #1504 created targeting dev.
+
+**What happened:**
+- Created `.github/workflows/dev-integration-test.yml` for faster CI on dev branch
+- Triggers on push to dev and PRs to dev (separate from integration-test.yml which targets main)
+- Uses single-node topology: 1 Solr + 1 ZooKeeper (vs 3-node SolrCloud)
+- Runs same test suite: Python E2E + Playwright browser tests
+- Uses Docker Compose profile overrides to disable solr2, solr3, zoo2, zoo3
+- Timeout: 45 minutes (vs 75 for full integration test)
+- Resource usage: ~6 containers vs 17
+
+**Key pattern:** Docker Compose profiles can disable services at the workflow level via `services: { service_name: { profiles: [disabled] } }` in override files. This is cleaner than maintaining separate compose files for each topology variant.
+
+**Design decisions:**
+- Why single-node for dev? SolrCloud resilience (replication, leader election) isn't needed for dev CI. Faster feedback wins.
+- Why not a separate compose.single-node.yml overlay? Kept the profile override in-CI to avoid maintaining another compose file. Consistent with docker/compose.e2e.yml pattern (minimal, focused overrides).
+- 45-min timeout is conservative; single-node should complete in 30-35 min with cold docker build, 20 min with warm caches.
