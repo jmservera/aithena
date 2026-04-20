@@ -6,11 +6,23 @@ import os
 import sys
 from typing import Literal
 
+import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel
+from quantization import quantize_embedding, validate_quantization_quality
 from sentence_transformers import SentenceTransformer
 
-from config import BACKEND, BUILD_DATE, DEVICE, GIT_COMMIT, MODEL_NAME, PORT, VERSION
+from config import (
+    BACKEND,
+    BUILD_DATE,
+    DEVICE,
+    GIT_COMMIT,
+    MODEL_NAME,
+    PORT,
+    VECTOR_QUANTIZATION,
+    VECTOR_QUANTIZATION_VALIDATE,
+    VERSION,
+)
 from model_utils import apply_prefix, detect_model_family
 
 logging.basicConfig(level=logging.INFO)
@@ -63,12 +75,13 @@ else:
     _source_label = "hub"
 
 logger.info(
-    "Loading embedding model: %s (family=%s, device=%s, backend=%s, source=%s)",
+    "Loading embedding model: %s (family=%s, device=%s, backend=%s, source=%s, quantization=%s)",
     MODEL_NAME,
     model_family,
     DEVICE,
     BACKEND,
     _source_label,
+    VECTOR_QUANTIZATION,
 )
 
 try:
@@ -109,6 +122,7 @@ class EmbeddingsOutput(BaseModel):
 
         object: str = "embedding"
         embedding: list[float] = []
+        field_name: str = "embedding"
 
     class Usage(BaseModel):
         """Usage statistics. Not used, just for compatibility with LLaMA.cpp API."""
@@ -177,7 +191,16 @@ async def embeddings(sentences: EmbeddingsInput):
     texts = apply_prefix(texts, model_family, sentences.input_type)
     encoded = model.encode(texts)
     for r in encoded:
-        result.data.append(EmbeddingsOutput.EmbeddingsList(embedding=list(r)))
+        original = np.asarray(r)
+        quantized, field_name = quantize_embedding(original, VECTOR_QUANTIZATION)
+        if VECTOR_QUANTIZATION_VALIDATE and VECTOR_QUANTIZATION != "none":
+            validate_quantization_quality(original, quantized)
+        result.data.append(
+            EmbeddingsOutput.EmbeddingsList(
+                embedding=[float(x) for x in quantized],
+                field_name=field_name,
+            )
+        )
     return result
 
 

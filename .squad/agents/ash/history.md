@@ -138,3 +138,13 @@
 
 **Verdict:** Cannot replace embeddings-server today. Keep current architecture. Monitor SOLR-17446.
 **Full report:** `docs/research/solr10-language-models-embeddings.md`
+
+### Vector Quantization Schema Support (#1502, 2025-07-22)
+
+**What:** Added `knn_vector_768_byte` field type with `vectorEncoding="BYTE"` and `embedding_byte` field to support int8 quantization mode alongside existing float32 fields.
+
+**Key decisions:**
+- Dual-field approach: `embedding_v` (float32) and `embedding_byte` (int8) coexist; indexer selects based on `VECTOR_QUANTIZATION` env var
+- HNSW tuned to `hnswMaxConnections="12"` for byte field (lower than default 16) to save memory since byte vectors already reduce footprint ~4x
+- Existing fields untouched for full backward compatibility
+- Runtime field selection happens in the indexer (Parker's domain), not in schema

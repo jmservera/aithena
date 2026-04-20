@@ -254,15 +254,19 @@ def build_chunk_doc(
     metadata: dict,
     page_start: int | None = None,
     page_end: int | None = None,
+    embedding_field: str = "embedding",
 ) -> dict:
     """Build a Solr JSON document for a single text chunk."""
     chunk_id = f"{parent_id}_chunk_{chunk_index:04d}"
+    # embedding_field is a base name (e.g. "embedding" or "embedding_byte");
+    # the Solr schema expects the "_v" suffix on all vector fields.
+    solr_field = f"{embedding_field}_v"
     doc: dict = {
         "id": chunk_id,
         "parent_id_s": parent_id,
         "chunk_index_i": chunk_index,
         "chunk_text_t": chunk,
-        "embedding_v": embedding,
+        solr_field: embedding,
         "title_s": metadata["title"],
         "author_s": metadata["author"],
         "file_path_s": metadata["file_path"],
@@ -310,19 +314,22 @@ def index_chunks(
     for batch_start in range(0, len(page_chunks), EMBEDDING_BATCH_SIZE):
         batch = page_chunks[batch_start : batch_start + EMBEDDING_BATCH_SIZE]
         chunks = [chunk for chunk, _, _ in batch]
-        embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
+        embedding_results = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
 
         docs = [
             build_chunk_doc(
                 parent_id,
                 batch_start + idx,
                 chunk,
-                emb,
+                emb_result.vector,
                 metadata,
                 page_start,
                 page_end,
+                embedding_field=emb_result.field_name,
             )
-            for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(batch, embeddings, strict=False))
+            for idx, ((chunk, page_start, page_end), emb_result) in enumerate(
+                zip(batch, embedding_results, strict=False)
+            )
         ]
 
         response = requests.post(
