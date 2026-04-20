@@ -536,11 +536,8 @@
   <field name="pdf_containsmarkedcontent" type="boolean" multiValued="false" indexed="true" stored="true"/>
   <field name="pdf_structuretree" type="boolean" multiValued="false" indexed="true" stored="true"/>
   <!-- XMP variants -->
-  <field name="xmpTPg_NPages" type="plong" multiValued="false" indexed="true" stored="true"/>
   <field name="xmpdc_rights" type="text_general" multiValued="false" indexed="true" stored="true"/>
   <field name="xmpdc_format" type="text_general" multiValued="false" indexed="true" stored="true"/>
-  <!-- Document-indexer language field -->
-  <field name="language_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="last_modified" type="pdates"/>
   <field name="last_save_date" type="pdates"/>
   <field name="meta" type="text_general"/>
