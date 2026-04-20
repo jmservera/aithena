@@ -4804,3 +4804,127 @@ select:focus-visible,
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Log Viewer ───────────────────────────────────────────────────────── */
+
+.logs-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.logs-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.logs-control-group--auto-refresh {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.logs-control-group--search {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.logs-label {
+  font-size: 0.78em;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.logs-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85em;
+}
+
+.logs-select--small {
+  max-width: 80px;
+}
+
+.logs-auto-refresh-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.logs-search-icon {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.logs-search-input {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85em;
+  min-width: 180px;
+}
+
+.logs-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.logs-info-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9em;
+  margin-bottom: 16px;
+}
+
+.logs-output-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.logs-output {
+  flex: 1;
+  margin: 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Menlo', monospace;
+  font-size: 0.82em;
+  line-height: 1.55;
+  overflow-y: auto;
+  max-height: 60vh;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.logs-line {
+  display: block;
+}
+
+.logs-filter-status {
+  padding: 6px 12px;
+  font-size: 0.78em;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: right;
+}
