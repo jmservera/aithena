@@ -526,3 +526,26 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 **Decision:** `.squad/decisions.md` updated with full rationale.
 
 **Cross-reference:** Brett's app image implementation (orchestration log 2026-03-31T13-16Z-brett-buildkit-dockerfile.md) is now unblocked pending this PR merge.
+
+### Vector Quantization (#1502, 2026-04-20)
+
+**Approach:** Added configurable vector quantization (none/fp16/int8) to the embeddings pipeline. Quantization happens server-side in the embeddings-server after model inference, before the response is sent. The document-indexer consumes a `field_name` from the response to route vectors to the correct Solr field.
+
+**Key design decisions:**
+- `VECTOR_QUANTIZATION` env var in embeddings-server config (default: `none` for backward compat)
+- `quantization.py` module with `quantize_embedding()` returning `(vector, solr_field_name)` tuple
+- `validate_quantization_quality()` computes cosine similarity, logs warning if degradation > 0.01
+- Response includes `field_name` per embedding so document-indexer dynamically selects `embedding_v` or `embedding_byte_v`
+- `EmbeddingResult` dataclass in document-indexer's `embeddings.py` replaces plain `list[float]` return type
+- `build_chunk_doc()` now accepts `embedding_field` param to set the correct Solr field dynamically
+
+**File paths:**
+- `src/embeddings-server/config/__init__.py` — VECTOR_QUANTIZATION env var
+- `src/embeddings-server/quantization.py` — quantize_embedding(), validate_quantization_quality()
+- `src/embeddings-server/main.py` — integration in /v1/embeddings/ endpoint
+- `src/document-indexer/document_indexer/embeddings.py` — EmbeddingResult dataclass, field_name parsing
+- `src/document-indexer/document_indexer/__main__.py` — build_chunk_doc() dynamic field, index_chunks() updated
+
+**Testing:** 16 new quantization tests (none identity, fp16 similarity > 0.99, int8 range [-128,127], invalid mode, quality validation). All 76 embeddings-server tests pass. All 203 document-indexer tests pass (4 pre-existing env-specific failures excluded).
+
+**Coordination with Ash:** Ash added `embedding_byte` Solr field type for int8/BYTE encoding in parallel. Our `embedding_byte_v` field name maps to Ash's schema.
