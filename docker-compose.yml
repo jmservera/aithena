@@ -1,6 +1,6 @@
 services:
   redis:
-    # it is importnant to configure OS memory overcommit
+    # it is important to configure OS memory overcommit
     # https://github.com/nextcloud/all-in-one/discussions/1731
     # run this in your VM:
     # echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/nextcloud-aio-memory-overcommit.conf
@@ -427,6 +427,7 @@ services:
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_MAX_CLIENT_CNXNS: "60"
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
@@ -467,6 +468,7 @@ services:
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_MAX_CLIENT_CNXNS: "60"
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
@@ -503,6 +505,7 @@ services:
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "mntr,conf,ruok"
       ZOO_CFG_EXTRA: "admin.enableServer=false"
+      ZOO_MAX_CLIENT_CNXNS: "60"
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
     volumes:
