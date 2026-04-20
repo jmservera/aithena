@@ -169,7 +169,7 @@ Verify the reported version matches the RC tag.
 - [ ] **Indexing pipeline:** Add a test PDF to the book library and verify it gets indexed
   - Check `document-lister` logs: `docker compose -f docker/compose.prod.yml logs document-lister --tail 50`
   - Check `document-indexer` logs: `docker compose -f docker/compose.prod.yml logs document-indexer --tail 50`
-- [ ] **Admin panel:** Access the Streamlit admin dashboard and verify status pages load
+- [ ] **Admin panel:** Access the admin dashboard (`/admin/`) and verify status pages load
 - [ ] **Embeddings:** Verify embeddings-server responds (check admin status page or logs)
 
 ### Regression checks

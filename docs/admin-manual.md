@@ -563,7 +563,7 @@ echo "Current tag: v$(cat VERSION)"
 # Version endpoint on solr-search
 curl -s http://localhost:8080/version | jq '.version'
 
-# In Streamlit admin dashboard
+# In admin dashboard
 # Navigate to System Status > Versions tab
 ```
 
@@ -606,7 +606,7 @@ docker-compose up
 
 ### System Status Admin Page
 
-v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
+v0.7.0 adds a new **System Status** page in the admin dashboard:
 
 **Navigation:**
 
@@ -1384,7 +1384,6 @@ Services published to GHCR:
 - `embeddings-server` — Embedding service
 - `document-indexer` — PDF indexing consumer
 - `document-lister` — Library scanner
-- `admin` — Streamlit admin dashboard
 - `nginx` — Reverse proxy
 
 **OCI image labels:**
@@ -2317,7 +2316,7 @@ v1.8.1 fixes the authentication flow preventing admin dashboard access.
 
 **What changed:**
 
-- Admin (Streamlit) page authentication flow now works correctly without login redirects.
+- Admin page authentication flow now works correctly without login redirects.
 - Session state persists across admin page navigation.
 
 **Impact on operators:**
@@ -3295,7 +3294,7 @@ v1.11.0 introduces search improvements, thumbnail generation, and a book detail 
 3. **Thumbnail Generation** — During indexing, first-page thumbnails are extracted and stored as `.thumb.jpg` alongside PDFs
 4. **Thumbnail Serving** — nginx serves thumbnails at `/thumbnails/...`; the `thumbnail_url` field is indexed in Solr and returned in search results
 5. **Book Detail Endpoint** — New `GET /v1/books/{id}` endpoint retrieves complete book metadata
-6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; `/admin/streamlit` now redirects to `/admin/`
+6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; legacy `/admin/streamlit` path now handled by React admin
 
 ### Critical Upgrade Action: Full Reindex Required
 
@@ -3331,7 +3330,7 @@ The new `GET /v1/books/{id}` endpoint returns full book metadata (title, author,
 
 ### Admin Routing
 
-The dead `admin` upstream has been removed from nginx configuration. The `/admin/streamlit` path now redirects to `/admin/`. Existing bookmarks will redirect automatically.
+The dead `admin` upstream has been removed from nginx configuration. The legacy `/admin/streamlit` path is no longer served. Use `/admin/` for the React admin portal.
 
 ---
 

@@ -412,7 +412,7 @@ Parent 2 [words 250-549]
 
 #### Phase 4: Human Evaluation (5-7 days)
 
-1. **Relevance judgment UI (Streamlit admin panel):**
+1. **Relevance judgment UI (admin panel):**
    - Display query + side-by-side results from both models
    - Annotator rates each result: Highly Relevant (2), Relevant (1), Not Relevant (0)
    - Blind evaluation (model labels hidden)

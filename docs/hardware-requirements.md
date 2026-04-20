@@ -34,7 +34,6 @@ The table below summarizes the Docker Compose resource limits shipped in `docker
 | **document-lister** | 1 | 256 MB | 128 MB | — | 128 MB | 256 MB | No (I/O-bound) |
 | **RabbitMQ** | 1 | 1 GB | 512 MB | — | 512 MB | 1 GB | No |
 | **Redis** | 1 | 512 MB | 256 MB | — | 128 MB | 256 MB–1 GB | No |
-| **admin** (Streamlit) | 1 | 256 MB | 128 MB | — | 128 MB | 256 MB | No |
 | **aithena-ui** (Nginx serving React) | 1 | 256 MB | 128 MB | — | 128 MB | 256 MB | No |
 | **nginx** (reverse proxy) | 1 | 256 MB | 128 MB | — | 64 MB | 128 MB | No |
 | **redis-commander** | 1 | 256 MB | 128 MB | — | 128 MB | 128 MB | No |

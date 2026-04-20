@@ -16,7 +16,7 @@ This document supersedes the Python dependency portion of the v0.6.0 baseline. I
 | `solr-search` | Python 3.11 | `pyproject.toml` + `requirements.txt` (fallback) | `uv.lock` ✅ |
 | `document-indexer` | Python 3.11 | `pyproject.toml` + `requirements.txt` (fallback) | `uv.lock` ✅ |
 | `document-lister` | Python 3.11 | `pyproject.toml` | `uv.lock` ✅ |
-| `admin` (Streamlit) | Python 3.11 | `pyproject.toml` + `src/requirements.txt` (fallback) | `uv.lock` ✅ |
+| `admin` (Streamlit) | Python 3.11 | `pyproject.toml` + `src/requirements.txt` (fallback) | `uv.lock` ✅ | **Removed** — replaced by React admin |
 | `embeddings-server` | Python 3.11 | `requirements.txt` only | ❌ no lockfile |
 
 **Retired services (no longer in repo):**  
@@ -71,7 +71,9 @@ pip-audit --requirement <service>/pyproject.toml -f json
 
 ---
 
-### 3. Pillow — admin (Streamlit)
+### 3. Pillow — admin (Streamlit) — **SERVICE REMOVED**
+
+> **Note:** The Streamlit admin service has been removed from the codebase. The findings below are historical.
 
 | CVE / ID | Package | Old Version | Fixed Version | Severity |
 |----------|---------|-------------|---------------|----------|

@@ -60,7 +60,6 @@ sysctl -p /etc/sysctl.d/aithena-memory-overcommit.conf
 | document-lister | 256MB | 128MB | File system poller |
 | **User Interfaces** | | | |
 | aithena-ui | 256MB | 128MB | React SPA (nginx) |
-| streamlit-admin | 512MB | 256MB | Admin dashboard |
 | redis-commander | 256MB | 128MB | Redis UI |
 | nginx | 256MB | 128MB | Reverse proxy |
 
@@ -112,11 +111,10 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
 
 ### Tier 4: User Interfaces (180-210s)
 10. **aithena-ui** — React search UI (waits for solr-search healthy)
-11. **streamlit-admin** — Admin dashboard (waits for redis + rabbitmq healthy)
-12. **redis-commander** — Redis UI (waits for redis healthy)
+11. **redis-commander** — Redis UI (waits for redis healthy)
 
 ### Tier 5: Ingress (210-240s)
-13. **nginx** — Starts LAST, waits for all upstreams healthy (aithena-ui, solr-search, streamlit-admin, redis-commander, rabbitmq, solr)
+12. **nginx** — Starts LAST, waits for all upstreams healthy (aithena-ui, solr-search, redis-commander, rabbitmq, solr)
 
 ### Expected Startup Time
 
@@ -208,12 +206,12 @@ REDIS_PASSWORD=<strong-random-value>
 
 - `docker-compose.yml` maps `RABBITMQ_USER` / `RABBITMQ_PASS` to RabbitMQ's `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` so the broker, management UI, and admin dashboard stay aligned.
 - `docker-compose.yml` injects `REDIS_PASSWORD` into the Redis container and enables `redis-server --requirepass` automatically when the variable is non-empty.
-- If you manage RabbitMQ credentials in `src/rabbitmq/rabbitmq.conf` instead, set `default_user` / `default_pass` there and keep `.env` in sync so `streamlit-admin`, `document-lister`, `document-indexer`, and `solr-search` still authenticate successfully.
+- If you manage RabbitMQ credentials in `src/rabbitmq/rabbitmq.conf` instead, set `default_user` / `default_pass` there and keep `.env` in sync so `document-lister`, `document-indexer`, and `solr-search` still authenticate successfully.
 
 After any credential rotation:
 
 ```bash
-docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx
+docker compose up -d --force-recreate redis rabbitmq redis-commander document-lister document-indexer solr-search nginx
 ```
 
 ## Health Validation
@@ -270,8 +268,8 @@ docker compose logs document-lister | grep "Found.*documents"
 # Check RabbitMQ queue depth
 docker compose exec rabbitmq rabbitmqctl list_queues name messages | grep shortembeddings
 
-# Check indexing progress via Streamlit admin
-open http://localhost/admin/streamlit/
+# Check indexing progress via admin dashboard
+open http://localhost/admin/
 
 # Query Solr for indexed count
 curl "http://localhost:8983/solr/books/select?q=*:*&rows=0" | jq -r .response.numFound
@@ -332,7 +330,6 @@ Access service metrics via admin interfaces:
 - **Solr Admin**: http://localhost/admin/solr/ (JVM stats, query metrics, core stats)
 - **RabbitMQ Management**: http://localhost/admin/rabbitmq/ (queue depth, message rates, connections; sign in with `RABBITMQ_USER` / `RABBITMQ_PASS` from `.env`)
 - **Redis Commander**: http://localhost/admin/redis/ (keyspace, memory usage, commands/sec; uses `REDIS_PASSWORD` from `.env` when configured)
-- **Streamlit Admin**: http://localhost/admin/streamlit/ (indexing pipeline stats, document counts)
 
 ### Resource Usage
 
@@ -598,8 +595,8 @@ Before going to production, verify:
 - [ ] SSL certificates configured in nginx if public-facing (see [Enable HTTPS](#enable-https) below)
 - [ ] RabbitMQ credentials rotated away from `guest/guest` via `.env` (`RABBITMQ_USER` / `RABBITMQ_PASS`) or matching `default_user` / `default_pass` settings in `src/rabbitmq/rabbitmq.conf`
 - [ ] Redis password set in `.env` (`REDIS_PASSWORD`) so Compose enables `redis-server --requirepass`
-- [ ] Rotated credentials applied with `docker compose up -d --force-recreate redis rabbitmq redis-commander streamlit-admin document-lister document-indexer solr-search nginx`
-- [ ] Admin endpoints protected by the nginx auth gate and login tested via `/admin/streamlit/`, `/admin/rabbitmq/`, and `/admin/redis/`
+- [ ] Rotated credentials applied with `docker compose up -d --force-recreate redis rabbitmq redis-commander document-lister document-indexer solr-search nginx`
+- [ ] Admin endpoints protected by the nginx auth gate and login tested via `/admin/`, `/admin/rabbitmq/`, and `/admin/redis/`
 - [ ] Auth DB directory (`AUTH_DB_DIR`) included in backup rotation
 - [ ] Backup cron job scheduled (daily at 2am: `0 2 * * * /opt/aithena/backup-aithena.sh`)
 - [ ] Monitoring alerts configured (disk space, memory usage, service health)

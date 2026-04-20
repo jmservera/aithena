@@ -96,7 +96,7 @@ The startup sequence:
 Once all services are healthy:
 
 - **Main UI**: `http://your-domain/`
-- **Admin Dashboard**: `http://your-domain/admin/streamlit`
+- **Admin Dashboard**: `http://your-domain/admin/`
 - **API Documentation**: `http://your-domain/api/docs`
 
 Sign in with the admin credentials you configured during installation.
