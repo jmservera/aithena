@@ -983,6 +983,12 @@ If your deployment exposes the admin page, require the same operational review y
 
 The indexer uses deterministic document IDs derived from the file path, and chunk IDs are derived from that same parent ID plus the chunk index. Reindexing therefore refreshes the existing documents in place instead of creating duplicates for unchanged files.
 
+## CI/CD Secrets & PAT Management
+
+The repository uses three custom Personal Access Tokens (PATs) in addition to the automatic `GITHUB_TOKEN`. For a full inventory of each secret — required permissions, creation guides, rotation procedures, and consolidation analysis — see the **[PAT Management Guide](operations/pat-management.md)**.
+
+Automated monthly validation is provided by the [`pat-health-check.yml`](../.github/workflows/pat-health-check.yml) workflow, which opens an issue if any token is expired or misconfigured.
+
 ## Troubleshooting common issues
 
 ### Solr not responding
