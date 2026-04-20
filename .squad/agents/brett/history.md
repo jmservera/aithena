@@ -299,3 +299,58 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 - `.github/workflows/dependabot-automerge.yml` — single-PR auto-merge (fixed)
 - `.github/workflows/dependabot-batch-merge.yml` — new batch workflow
 - `.squad/decisions/inbox/brett-dependabot-batch.md` — design decision
+
+## 2026-04-20 — Vector Search 32GB Optimization Analysis (Ash)
+
+**Session:** Multi-part research with Ash (Search Engineer) on infrastructure scaling constraints.
+
+### Key Findings That Impact Infrastructure Decisions
+
+**Previous infrastructure analysis (2026-04-20, Brett):**
+- Standalone Solr: ~$800–1,200/yr, simple ops
+- SolrCloud 3-node: ~$1,800–2,400/yr, HA guaranteed
+- **Recommendation at the time:** Unclear; depends on whether single-node can handle 30K books (54M vectors)
+
+**New vector optimization analysis (2026-04-20, Ash):**
+- **Baseline:** 54M vectors requires 130–180 GB RAM (unviable on standard cloud VMs)
+- **Optimized (Phase 1 + 2):** 9M vectors + int8 quantization = **9 GB HNSW fits in 32 GB** ✅
+- **Result:** Standalone Solr is NOW VIABLE and cost-optimal
+
+### Infrastructure Decision: STANDALONE SOLR RECOMMENDED
+
+**Rationale:**
+1. Vector optimization reduces HNSW from 130 GB → 9 GB
+2. 32 GB single-node machine is sufficient (2 OS + 8 JVM + 9 HNSW + 8 text + 5 headroom)
+3. Saves 2.5× cost vs SolrCloud (3 nodes + ZK)
+4. Operational simplicity (no quorum management, distributed debugging)
+
+**Prerequisites for go-ahead:**
+- Phase 1 (page-level chunking) must be implemented + validated
+- Phase 2 (int8 quantization) should be scheduled
+
+### Cross-Service Alignment
+
+**Ash's optimization roadmap (.squad/analysis/vector-search-32gb-optimization-roadmap.md):**
+- Confirms HNSW uses mmap + OS page cache, not JVM heap (previous assumption was wrong)
+- 50–75% page cache coverage = sub-second latency on NVMe SSD (tight but usable)
+- Six optimization strategies ranked by impact; Phase 1 + 2 are lowest-effort, highest-confidence
+
+**Timestamp correlation:**
+- Brett's infra analysis: 2026-04-20T18:31Z
+- Ash's optimization roadmap: 2026-04-20T18:53Z
+- Decision merged: 2026-04-20T18:54Z
+
+### Next Steps for Brett
+
+1. **Confirm 32 GB single-node as target hardware spec** (vs SolrCloud)
+2. **Update hardware requirements doc** — currently recommends 130GB; new baseline is 32GB
+3. **Specify NVMe SSD requirement** — performance targets assume NVMe, not HDD
+4. **Monitor vector count growth** — if exceeds 15M vectors, re-evaluate SolrCloud migration
+5. **Plan Phase 2 timeline** — coordinate with Ash on int8 quantization rollout
+
+### Files Referenced
+
+- `.squad/analysis/vector-search-32gb-optimization-roadmap.md` — Full technical analysis
+- `.squad/analysis/standalone-solr-capacity-54m-vectors.md` — Baseline (130 GB)
+- `docs/research/standalone-vs-cloud-infrastructure-analysis.md` — Brett's original analysis (cost comparison)
+- `.squad/decisions.md` — Decision added: "32GB RAM Solr Optimization Strategy"
