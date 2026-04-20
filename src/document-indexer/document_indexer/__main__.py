@@ -233,7 +233,7 @@ def build_literal_params(
     if metadata.get("year") is not None:
         params["literal.year_i"] = str(metadata["year"])
     if metadata.get("language"):
-        params["literal.language_s"] = metadata["language"]
+        params["literal.language_detected_s"] = metadata["language"]
     if page_count is not None:
         params["literal.page_count_i"] = str(page_count)
     if thumbnail_url:
@@ -269,7 +269,7 @@ def build_chunk_doc(
     if metadata.get("year") is not None:
         doc["year_i"] = metadata["year"]
     if metadata.get("language"):
-        doc["language_s"] = metadata["language"]
+        doc["language_detected_s"] = metadata["language"]
     if page_start is not None:
         doc["page_start_i"] = page_start
     if page_end is not None:

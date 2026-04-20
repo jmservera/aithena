@@ -103,12 +103,12 @@ class TestBuildChunkDoc:
     def test_optional_language_included_when_present(self, metadata_stub):
         metadata_stub["language"] = "ca"
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
-        assert doc["language_s"] == "ca"
+        assert doc["language_detected_s"] == "ca"
 
     def test_optional_language_absent_when_none(self, metadata_stub):
         metadata_stub["language"] = None
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
-        assert "language_s" not in doc
+        assert "language_detected_s" not in doc
 
     def test_page_fields_included_when_provided(self, metadata_stub):
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub, page_start=3, page_end=5)
@@ -526,26 +526,26 @@ class TestBuildLiteralParams:
         meta = self._base_metadata()
         meta["language"] = "ca"
         params = build_literal_params(meta, page_count=None)
-        assert params["literal.language_s"] == "ca"
+        assert params["literal.language_detected_s"] == "ca"
 
     def test_language_absent_from_params_when_none(self):
         meta = self._base_metadata()
         meta["language"] = None
         params = build_literal_params(meta, page_count=None)
-        assert "literal.language_s" not in params
+        assert "literal.language_detected_s" not in params
 
     def test_language_absent_from_params_when_missing(self):
         meta = self._base_metadata()
         del meta["language"]
         params = build_literal_params(meta, page_count=None)
-        assert "literal.language_s" not in params
+        assert "literal.language_detected_s" not in params
 
     @pytest.mark.parametrize("lang", ["es", "ca", "fr", "en", "la", "de", "pt", "it", "nl"])
     def test_all_supported_language_codes_are_passed_through(self, lang):
         meta = self._base_metadata()
         meta["language"] = lang
         params = build_literal_params(meta, page_count=None)
-        assert params["literal.language_s"] == lang
+        assert params["literal.language_detected_s"] == lang
 
     def test_thumbnail_url_included_in_params_when_set(self):
         meta = self._base_metadata()
