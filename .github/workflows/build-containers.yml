@@ -38,9 +38,6 @@ jobs:
       fail-fast: false
       matrix:
         service:
-          - image: admin
-            context: .
-            dockerfile: ./src/admin/Dockerfile
           - image: aithena-ui
             context: ./src/aithena-ui
             dockerfile: ./src/aithena-ui/Dockerfile

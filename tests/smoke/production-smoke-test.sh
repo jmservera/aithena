@@ -217,9 +217,8 @@ test_health_endpoints() {
     # Solr-search API /v1/health — exact-match location, no auth required
     check_http "API health endpoint" "http://${HOST}/v1/health"
 
-    # Admin dashboard health (via nginx proxy to streamlit)
-    # Streamlit health endpoint is at /admin/streamlit/_stcore/health
-    check_http "Admin dashboard health" "http://${HOST}/admin/streamlit/_stcore/health"
+    # Admin dashboard health (React SPA served by aithena-ui)
+    check_http "Admin dashboard health" "http://${HOST}/admin/"
 }
 
 # ============================================================================
@@ -290,14 +289,9 @@ test_ui_loads() {
 test_admin_dashboard() {
     log_info "Testing admin dashboard..."
 
-    # Admin dashboard loads (proxied by nginx, behind auth_request with redirect)
-    # Streamlit apps redirect to trailing slash, so we expect 200 or 301/302
-    if check_http "Admin dashboard loads" "http://${HOST}/admin/streamlit/" "200" "-L"; then
+    # Admin dashboard loads (React SPA served by aithena-ui, proxied by nginx)
+    if check_http "Admin dashboard loads" "http://${HOST}/admin/" "200" "-L"; then
         : # Pass already logged
-    elif check_http "Admin dashboard redirects" "http://${HOST}/admin/streamlit" "301" ""; then
-        log_pass "Admin dashboard redirect working"
-    elif check_http "Admin dashboard redirects" "http://${HOST}/admin/streamlit" "302" ""; then
-        log_pass "Admin dashboard redirect working"
     else
         log_fail "Admin dashboard not accessible"
     fi

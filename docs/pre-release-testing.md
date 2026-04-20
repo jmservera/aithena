@@ -28,11 +28,10 @@ dev branch
 
 ### Services
 
-The workflow builds these six container images:
+The workflow builds these five container images:
 
 | Service | Image |
 |---------|-------|
-| admin | `ghcr.io/jmservera/aithena-admin` |
 | aithena-ui | `ghcr.io/jmservera/aithena-aithena-ui` |
 | document-indexer | `ghcr.io/jmservera/aithena-document-indexer` |
 | document-lister | `ghcr.io/jmservera/aithena-document-lister` |
@@ -81,7 +80,7 @@ gh run watch <run-id>
 
 When you omit the `rc_number` input, the workflow automatically determines the next RC number:
 
-1. Queries the GitHub Container Registry for existing tags on `aithena-admin`.
+1. Queries the GitHub Container Registry for existing tags on `aithena-ui`.
 2. Finds all tags matching `{version}-rc.{N}` for the requested version.
 3. Takes the highest `N` found and sets the new RC number to `N + 1`.
 4. If no RC tags exist for this version, starts at `rc.1`.

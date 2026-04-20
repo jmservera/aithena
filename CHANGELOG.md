@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-04-20
+
+### Added
+
+- **React admin portal** — Complete rewrite of the admin dashboard as a React SPA with 7 pages: Dashboard (#1117), Document Manager (#1122), Reindex Library (#1124), Indexing Status (#1125), System Status (#1126), Infrastructure (#1128), and Log Viewer (#1127)
+- **Admin API endpoints** — New REST API in solr-search for admin operations: pause/resume indexing (#1232), container management, collection statistics (#1115)
+- **Admin route scaffolding and auth guard** — Role-based access control for admin pages (#1116)
+- **Accessibility testing** — 38 axe-core WCAG 2.1 AA automated tests for all pages (#1475)
+- **Admin integration tests** — 119 comprehensive hook and component tests (#1131)
+- **CodeQL analysis workflow** — Explicit CodeQL workflow replacing broken default setup (#1129)
+- **GHAS code scanning alert triage** — Automated triage workflow for security alerts (#1431)
+- **PAT expiry detection** — Automated notification when GitHub PATs expire across workflows (#1453)
+- **PAT management guide** — Documentation for PAT types, scopes, and rotation (#1450)
+- **Solr 9/10 schema compatibility layer** — Forward-compatible schema for Solr migration (#1365)
+- **Solr collection export/import tooling** — Backup and restore utilities for Solr collections (#1363, #1456)
+- **PDF search highlighting** — Search text highlighting in the PDF viewer (#1276)
+- **Pause/resume indexing API** — Control API for document-indexer pause and resume (#1232)
+
+### Changed
+
+- **Installer overhaul** — GPU auto-detection (NVIDIA/Intel), SSL setup, dev/prod profiles, compose override management (#1448)
+- **Workflow consolidation (Phase 1)** — Merged 3 dependabot workflows into 1, absorbed security review into GHAS triage. 29 → 26 workflows, −154 lines (#1449)
+- **Solr preflight validation** — Added validation for SOLR_NUM_SHARDS and SOLR_REPLICATION_FACTOR before collection creation (#1443)
+- **Tika metadata fields** — Pre-defined metadata fields and fixed language field mismatch (#1445)
+- **Container warnings suppressed** — Fixed Redis overcommit and ZooKeeper maxCnxns warnings (#1457)
+
+### Removed
+
+- **Streamlit admin service** — Legacy admin dashboard replaced by React admin portal (#1129). The `aithena-admin` container is no longer built or published.
+
+### Documentation
+
+- Admin manual rewritten for React admin portal (#1130)
+- User manual updated for new admin interface (#1130)
+- Solr 9→10 migration plan (#1455)
+- Pygments ReDoS exposure assessment (#1236)
+- Release documentation for v1.19.0 (#1447)
+
+### Breaking Changes
+
+- The `aithena-admin` Docker image is no longer published. Deployments using separate Streamlit admin containers must migrate to the integrated React admin at `/admin/`.
+- The installer (`setup.py`) now generates `start.sh` with compose override chains. Existing manual `docker compose` commands may need updating to match the new override structure.
+
 ## [1.19.0] — 2026-04-19
 
 ### Added
