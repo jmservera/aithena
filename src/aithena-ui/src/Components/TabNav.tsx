@@ -108,7 +108,7 @@ function TabNav() {
       <div className={`tab-nav-links${isMenuOpen ? ' tab-nav-links--open' : ''}`} id={menuId}>
         {isAuthenticated ? (
           <>
-            {TABS.map((tab) => (
+            {TABS.filter((tab) => tab.to !== '/admin' || user?.role === 'admin').map((tab) => (
               <NavLink
                 key={tab.to}
                 to={tab.to}
