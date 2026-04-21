@@ -200,24 +200,34 @@ jobs:
                 - |
                     set -o pipefail
 
+                    MAX_WAIT=120
                     ZK_HOST="zoo1:2181"
                     SOLR_URL="http://solr:8983"
 
-                    # Wait for Solr to be reachable (with or without auth)
+                    echo "[solr-init] Waiting for Solr to be reachable..."
+                    WAITED=0
                     until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1 || curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
+                      WAITED=$$((WAITED + 2))
+                      if [ "$$WAITED" -ge "$$MAX_WAIT" ]; then echo "ERROR: Solr not reachable after $${MAX_WAIT}s" >&2; exit 1; fi
                       sleep 2
                     done
+                    echo "[solr-init] Solr reachable after $${WAITED}s"
 
-                    # Wait for 1 Solr node to join the cluster (single-node mode)
+                    echo "[solr-init] Waiting for 1 Solr node (single-node mode)..."
+                    WAITED=0
                     until [ "$$(curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 1 ] 2>/dev/null || \
                           [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 1 ] 2>/dev/null; do
+                      WAITED=$$((WAITED + 2))
+                      if [ "$$WAITED" -ge "$$MAX_WAIT" ]; then echo "ERROR: Solr node not found after $${MAX_WAIT}s" >&2; exit 1; fi
                       sleep 2
                     done
+                    echo "[solr-init] Solr node joined after $${WAITED}s"
 
                     # --- Security: Bootstrap BasicAuth + RBAC ---
+                    echo "[solr-init] Checking security status..."
                     AUTH_RESP=$$(curl -sS "$$SOLR_URL/solr/admin/authentication" 2>/dev/null || true)
                     if echo "$$AUTH_RESP" | grep -qi 'No authentication'; then
-                      echo "Bootstrapping Solr security..."
+                      echo "[solr-init] Bootstrapping Solr security..."
                       echo '{}' > /tmp/empty-security.json
                       solr zk cp file:/tmp/empty-security.json zk:/security.json -z "$$ZK_HOST"
                       sleep 2
@@ -228,10 +238,18 @@ jobs:
                         --solr-include-file /dev/null \
                         -z "$$ZK_HOST"
 
-                      echo "Waiting for Solr to load security config..."
-                      sleep 5
+                      # Poll for auth readiness instead of blind sleep
+                      echo "[solr-init] Waiting for auth to propagate..."
+                      WAITED=0
+                      until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
+                        WAITED=$$((WAITED + 2))
+                        if [ "$$WAITED" -ge 60 ]; then echo "ERROR: Auth not ready after 60s" >&2; exit 1; fi
+                        sleep 2
+                      done
+                      echo "[solr-init] Auth ready after $${WAITED}s"
 
                       # Add readonly user
+                      echo "[solr-init] Adding readonly user..."
                       curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
                         "$$SOLR_URL/solr/admin/authentication" \
                         -H 'Content-Type: application/json' \
@@ -242,26 +260,29 @@ jobs:
                         -H 'Content-Type: application/json' \
                         -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["search"]}}'
 
-                      echo "Security bootstrap complete."
+                      echo "[solr-init] Security bootstrap complete."
                     else
-                      echo "Security already configured, skipping bootstrap."
+                      echo "[solr-init] Security already configured, skipping bootstrap."
                     fi
 
-                    # --- Validate and create collection ---
+                    # --- Create collection ---
                     NUM_SHARDS="$${SOLR_NUM_SHARDS:-1}"
                     REPLICATION_FACTOR="$${SOLR_REPLICATION_FACTOR:-1}"
 
+                    echo "[solr-init] Uploading configset..."
                     if ! solr zk ls /configs -z "$$ZK_HOST" | grep -qx 'books'; then
                       solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
                     fi
 
+                    echo "[solr-init] Creating collection (shards=$$NUM_SHARDS, replicas=$$REPLICATION_FACTOR)..."
                     if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
                       curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=$$NUM_SHARDS&replicationFactor=$$REPLICATION_FACTOR&waitForFinalState=true&wt=json"
                     fi
 
+                    echo "[solr-init] Applying config overlay..."
                     SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh
 
-                    echo "Solr init complete (single-node mode)"
+                    echo "[solr-init] Solr init complete (single-node mode)"
             # Point solr-search at standalone ZooKeeper
             solr-search:
               environment:
@@ -356,13 +377,27 @@ jobs:
         env:
           ADMIN_API_KEY: ci-admin-api-key
         run: |
-          docker compose \
+          timeout 600 docker compose \
             -f docker-compose.yml \
             -f docker/compose.dev-ports.yml \
             -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
             up -d
+
+      - name: Dump solr-init logs on startup failure
+        if: failure()
+        run: |
+          echo "=== solr-init container logs ==="
+          docker compose \
+            -f docker-compose.yml \
+            -f docker/compose.dev-ports.yml \
+            -f docker/compose.e2e.yml \
+            -f docker-compose.github-actions.yml \
+            --profile production \
+            logs solr-init --no-color 2>&1 || true
+          echo "=== solr-init container state ==="
+          docker inspect aithena-solr-init-1 --format '{{.State.Status}} exit={{.State.ExitCode}}' 2>/dev/null || true
 
       - name: Wait for services to become healthy
         run: |
