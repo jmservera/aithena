@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-04-21
+
+### Added
+
+- **Configurable search architecture** — New `SEARCH_ARCHITECTURE` env var supports `hnsw` (default) or `hybrid-rerank`. Hybrid-rerank uses BM25 + cosine similarity reranking without HNSW indexes, suitable for resource-constrained deployments (#1506)
+- **Capabilities API** — New public `/v1/capabilities` endpoint returns backend configuration (search modes, architecture, vector dimensions) so the UI adapts automatically (#1506)
+- **Rerank service** — Cosine similarity reranking module for hybrid-rerank architecture with precomputed norms and dimension mismatch handling (#1506)
+- **Single-node deployment topology** — Installer support for `SOLR_TOPOLOGY=single-node` (1 Solr + 1 ZooKeeper) alongside distributed (3+3) mode (#1497, #1373)
+- **Configurable vector quantization** — `VECTOR_QUANTIZATION` env var supports `none`, `fp16`, and `int8` quantization for embeddings pipeline (#1502)
+- **Topology documentation** — Architecture docs for single-node vs distributed deployment, capacity planning, and scaling guidance (#1499)
+- **Dev integration test workflow** — Dedicated CI workflow for PRs to dev branch using single-node topology (#1496)
+- **Both-topology CI** — Integration tests run against both single-node and distributed topologies in release CI (#1498)
+
+### Changed
+
+- **Solr init is configurable** — `SOLR_EXPECTED_NODES` and `ZK_HOST` env vars make solr-init work for both single-node and distributed topologies without duplicating entrypoint logic (#1498)
+- **CI uses canonical overlays** — Integration test workflows use `docker/compose.single-node.yml` and `COMPOSE_FILE` env var instead of duplicating service overrides (#1498)
+- **Bounded wait loops** — All solr-init `until` loops have `MAX_WAIT=120` to prevent indefinite hangs in CI (#1498)
+- **UI search mode adaptation** — Search page conditionally shows semantic/hybrid modes and similar books based on backend capabilities (#1506)
+
+### Fixed
+
+- **Credential leak in retry_curl** — Error messages no longer print curl arguments that may contain authentication flags (#1498)
+- **E2E note max length** — Fixed test that sent 5000-char notes against default 1000-char limit (#1498)
+- **Capabilities auth handling** — Capabilities fetch uses `skipUnauthorizedHandler` to prevent spurious logout, and endpoint is public (#1506)
+
 ## [2.0.0] — 2026-04-20
 
 ### Added
