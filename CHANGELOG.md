@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Configurable search architecture** — New `SEARCH_ARCHITECTURE` env var to select HNSW (default) or hybrid-rerank mode. Hybrid-rerank uses BM25 + cosine similarity reranking without HNSW indexes, suitable for resource-constrained deployments (#1506)
+- **Configurable search architecture** — New `SEARCH_ARCHITECTURE` env var supports `hnsw` (default) or `hybrid-rerank`. Hybrid-rerank uses BM25 + cosine similarity reranking without HNSW indexes, suitable for resource-constrained deployments (#1506)
 - **Capabilities API** — New public `/v1/capabilities` endpoint returns backend configuration (search modes, architecture, vector dimensions) so the UI adapts automatically (#1506)
 - **Rerank service** — Cosine similarity reranking module for hybrid-rerank architecture with precomputed norms and dimension mismatch handling (#1506)
 - **Single-node deployment topology** — Installer support for `SOLR_TOPOLOGY=single-node` (1 Solr + 1 ZooKeeper) alongside distributed (3+3) mode (#1497, #1373)
