@@ -22,7 +22,7 @@ retry_curl() {
   until output="$(curl ${AUTH_FLAGS} -fsS "$@" 2>/dev/null)"; do
     attempt=$((attempt + 1))
     if [ "$attempt" -ge "$MAX_RETRIES" ]; then
-      echo "ERROR: retry_curl failed after $MAX_RETRIES attempts for: $*" >&2
+      echo "ERROR: retry_curl failed after $MAX_RETRIES attempts" >&2
       return 1
     fi
     sleep 2
