@@ -714,6 +714,8 @@ services:
       SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:-SolrRead_dev2024!}
       SOLR_NUM_SHARDS: ${SOLR_NUM_SHARDS:-1}
       SOLR_REPLICATION_FACTOR: ${SOLR_REPLICATION_FACTOR:-3}
+      SOLR_EXPECTED_NODES: ${SOLR_EXPECTED_NODES:-3}
+      ZK_HOST: ${ZK_HOST:-zoo1:2181,zoo2:2181,zoo3:2181}
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
@@ -724,8 +726,9 @@ services:
           set -o pipefail
 
           MAX_WAIT=120
-          ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
+          ZK_HOST="$${ZK_HOST:-zoo1:2181,zoo2:2181,zoo3:2181}"
           SOLR_URL="http://solr:8983"
+          EXPECTED_NODES="$${SOLR_EXPECTED_NODES:-3}"
 
           echo "[solr-init] Waiting for Solr to be reachable..."
           WAITED=0
@@ -736,15 +739,15 @@ services:
           done
           echo "[solr-init] Solr reachable after $${WAITED}s"
 
-          echo "[solr-init] Waiting for 3 Solr nodes to join cluster..."
+          echo "[solr-init] Waiting for $$EXPECTED_NODES Solr node(s) to join cluster..."
           WAITED=0
-          until [ "$$(curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null || \
-                [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null; do
+          until [ "$$(curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge "$$EXPECTED_NODES" ] 2>/dev/null || \
+                [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge "$$EXPECTED_NODES" ] 2>/dev/null; do
             WAITED=$$((WAITED + 2))
-            if [ "$$WAITED" -ge "$$MAX_WAIT" ]; then echo "ERROR: 3 Solr nodes not found after $${MAX_WAIT}s" >&2; exit 1; fi
+            if [ "$$WAITED" -ge "$$MAX_WAIT" ]; then echo "ERROR: $$EXPECTED_NODES Solr node(s) not found after $${MAX_WAIT}s" >&2; exit 1; fi
             sleep 2
           done
-          echo "[solr-init] All 3 Solr nodes joined"
+          echo "[solr-init] All $$EXPECTED_NODES Solr node(s) joined"
 
           # --- Security: Bootstrap BasicAuth + RBAC ---
           # Solr 9.7 BasicAuthPlugin requires >=1 user with hashed password
