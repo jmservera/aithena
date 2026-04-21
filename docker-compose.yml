@@ -730,6 +730,7 @@ services:
           SOLR_URL="http://solr:8983"
           EXPECTED_NODES="$${SOLR_EXPECTED_NODES:-3}"
 
+          echo "[solr-init] DEBUG: SOLR_EXPECTED_NODES=$${SOLR_EXPECTED_NODES:-<unset>} EXPECTED_NODES=$$EXPECTED_NODES ZK_HOST=$$ZK_HOST"
           echo "[solr-init] Waiting for Solr to be reachable..."
           WAITED=0
           until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1 || curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
