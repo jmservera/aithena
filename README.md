@@ -189,7 +189,7 @@ Frontend / Search API
 Aithena supports two SolrCloud deployment modes optimized for different scales:
 
 - **SolrCloud Distributed (default)**: 3-node Solr cluster + 3-node ZooKeeper ensemble. Recommended for production (>3K books, high availability required).
-- **Single-Node SolrCloud (planned)**: Single Solr node with embedded ZooKeeper. Ideal for development, testing, and small deployments (<3K books, 32 GB RAM available).
+- **Single-Node SolrCloud**: 1 Solr node + 1 ZooKeeper container via `docker/compose.single-node.yml`. Ideal for development, testing, and small deployments (<3K books, 32 GB RAM available).
 
 See [**Deployment Topologies Guide**](docs/deployment-topologies.md) for detailed architecture, capacity planning, formulas, and migration paths between topologies.
 
