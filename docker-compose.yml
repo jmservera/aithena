@@ -714,8 +714,8 @@ services:
       SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:-SolrRead_dev2024!}
       SOLR_NUM_SHARDS: ${SOLR_NUM_SHARDS:-1}
       SOLR_REPLICATION_FACTOR: ${SOLR_REPLICATION_FACTOR:-3}
-      SOLR_EXPECTED_NODES: ${SOLR_EXPECTED_NODES:-3}
-      ZK_HOST: ${ZK_HOST:-zoo1:2181,zoo2:2181,zoo3:2181}
+      SOLR_EXPECTED_NODES: "3"
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
