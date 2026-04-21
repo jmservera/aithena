@@ -266,18 +266,18 @@ def test_search_hybrid_rerank_no_results(mock_embedding: MagicMock, mock_solr: M
 
 def test_similar_books_blocked_in_hybrid_rerank():
     """Similar books should return 501 when architecture is hybrid-rerank."""
-    from config import settings
+    import main as main_module
 
+    client = get_client()
     with patch.object(
-        type(settings),
+        type(main_module.settings),
         "search_architecture",
-        new_callable=lambda: property(lambda self: "hybrid-rerank"),
+        new_callable=property,
+        fget=lambda self: "hybrid-rerank",
     ):
-        # Can't easily patch frozen dataclass, so test the logic directly
-
-        # The function checks settings.search_architecture at call time
-        # Since settings is a frozen dataclass, we'll verify through the endpoint
-        pass
+        resp = client.get("/v1/books/some-doc-id/similar")
+        assert resp.status_code == 501
+        assert "hybrid-rerank" in resp.json()["detail"]
 
 
 @patch("main.query_solr")
@@ -287,3 +287,16 @@ def test_similar_books_works_in_hnsw(mock_solr: MagicMock):
 
     # Settings default is "hnsw", so similar_books should NOT return 501
     assert settings.search_architecture == "hnsw"
+
+    # Mock Solr to return a document with a vector
+    mock_solr.return_value = {
+        "response": {
+            "numFound": 1,
+            "docs": [{"id": "chunk1", "parent_id_s": "doc1", "chunk_embedding": [0.1] * 768}],
+        }
+    }
+
+    client = get_client()
+    resp = client.get("/v1/books/some-doc-id/similar")
+    # Should not be 501 — may be 200 or 404 depending on Solr mock, but NOT 501
+    assert resp.status_code != 501

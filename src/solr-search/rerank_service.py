@@ -20,7 +20,12 @@ def _norm(v: list[float]) -> float:
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two vectors."""
+    """Compute cosine similarity between two vectors.
+
+    Returns 0.0 if vectors differ in length or either is zero-norm.
+    """
+    if len(a) != len(b):
+        return 0.0
     norm_a = _norm(a)
     norm_b = _norm(b)
     if norm_a == 0.0 or norm_b == 0.0:
@@ -41,9 +46,20 @@ def cosine_rerank(
     Returns:
         List of (doc_id, similarity_score) sorted by descending similarity.
     """
+    query_norm = _norm(query_vector)
+    if query_norm == 0.0:
+        return [(doc_id, 0.0) for doc_id, _ in doc_vectors]
+
     scored = []
     for doc_id, vec in doc_vectors:
-        score = cosine_similarity(query_vector, vec)
+        if len(vec) != len(query_vector):
+            scored.append((doc_id, 0.0))
+            continue
+        doc_norm = _norm(vec)
+        if doc_norm == 0.0:
+            scored.append((doc_id, 0.0))
+            continue
+        score = _dot(query_vector, vec) / (query_norm * doc_norm)
         scored.append((doc_id, score))
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored

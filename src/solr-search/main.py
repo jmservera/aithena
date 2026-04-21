@@ -157,6 +157,13 @@ _MODES_BY_ARCHITECTURE: dict[str, frozenset[str]] = {
 VALID_SEARCH_MODES: frozenset[str] = _MODES_BY_ARCHITECTURE.get(
     settings.search_architecture, _MODES_BY_ARCHITECTURE["hnsw"]
 )
+
+# Effective default search mode — falls back to "keyword" if configured default
+# is not available in the current architecture.
+EFFECTIVE_DEFAULT_SEARCH_MODE: str = (
+    settings.default_search_mode if settings.default_search_mode in VALID_SEARCH_MODES else "keyword"
+)
+
 EMBEDDINGS_DEGRADED_MESSAGE = "Embeddings unavailable — showing keyword results"
 
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -172,11 +179,12 @@ async def lifespan(_app: FastAPI):
             f"Invalid SEARCH_ARCHITECTURE={settings.search_architecture!r}. "
             f"Must be one of: {', '.join(sorted(_VALID_ARCHITECTURES))}"
         )
-    if settings.default_search_mode not in VALID_SEARCH_MODES:
+    if settings.default_search_mode != EFFECTIVE_DEFAULT_SEARCH_MODE:
         logger.warning(
-            "DEFAULT_SEARCH_MODE=%r is not available in %s architecture; falling back to 'keyword'",
+            "DEFAULT_SEARCH_MODE=%r is not available in %s architecture; using %r",
             settings.default_search_mode,
             settings.search_architecture,
+            EFFECTIVE_DEFAULT_SEARCH_MODE,
         )
     if settings.auth_jwt_secret in _INSECURE_JWT_SECRETS:
         logger.warning(
@@ -940,7 +948,7 @@ def search(
     fq_series: str | None = Query(None),
     fq_folder: str | None = Query(None),
     mode: str = Query(
-        settings.default_search_mode,
+        EFFECTIVE_DEFAULT_SEARCH_MODE,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
         enum=list(VALID_SEARCH_MODES),
     ),
@@ -1352,6 +1360,8 @@ def _search_hybrid_rerank(
             sort,
             filters,
             collection=collection,
+            requested_mode="hybrid",
+            message="Non-relevance sort; vector reranking skipped",
         )
 
     candidate_limit = min(_RERANK_CANDIDATE_LIMIT, max(page_size * 10, 50))
@@ -1396,6 +1406,7 @@ def _search_hybrid_rerank(
     kw_response = kw_payload.get("response", {})
     kw_highlighting = kw_payload.get("highlighting", {})
     kw_docs = kw_response.get("docs", [])
+    bm25_total = kw_response.get("numFound", 0)
 
     if not kw_docs:
         return {
@@ -1404,7 +1415,7 @@ def _search_hybrid_rerank(
             "architecture": "hybrid-rerank",
             "sort": {"by": "score", "order": "desc"},
             "degraded": False,
-            **build_pagination(0, 1, page_size),
+            **build_pagination(0, page, page_size),
             "results": [],
             "facets": parse_facet_counts(kw_payload),
         }
@@ -1432,7 +1443,7 @@ def _search_hybrid_rerank(
             "sort": {"by": "score", "order": "desc"},
             "degraded": True,
             "message": "No vector embeddings available for reranking — showing keyword results",
-            **build_pagination(len(kw_results), 1, page_size),
+            **build_pagination(bm25_total, page, page_size),
             "results": kw_results[:page_size],
             "facets": parse_facet_counts(kw_payload),
         }
@@ -1449,7 +1460,9 @@ def _search_hybrid_rerank(
             entry["score"] = sim_score
             sem_results.append(entry)
 
-    fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)[:page_size]
+    fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)
+    start = (page - 1) * page_size
+    page_results = fused[start : start + page_size]
 
     return {
         "query": q,
@@ -1457,8 +1470,8 @@ def _search_hybrid_rerank(
         "architecture": "hybrid-rerank",
         "sort": {"by": "score", "order": "desc"},
         "degraded": False,
-        **build_pagination(len(fused), 1, page_size),
-        "results": fused,
+        **build_pagination(bm25_total, page, page_size),
+        "results": page_results,
         "facets": parse_facet_counts(kw_payload),
     }
 
@@ -1567,7 +1580,7 @@ def search_compare(
     fq_series: str | None = Query(None),
     fq_folder: str | None = Query(None),
     mode: str = Query(
-        settings.default_search_mode,
+        EFFECTIVE_DEFAULT_SEARCH_MODE,
         description="Search mode: keyword, semantic, or hybrid.",
     ),
     _rate_limit: None = Depends(check_search_rate_limit),

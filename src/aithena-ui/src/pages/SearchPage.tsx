@@ -196,7 +196,7 @@ function SearchResultsSection({
         )}
       </section>
 
-      {focusedBookId && capabilities.similarBooks && (
+      {focusedBookId && !capabilities.loading && capabilities.similarBooks && (
         <SimilarBooks documentId={focusedBookId} onSelectBook={onSelectSimilarBook} />
       )}
 
