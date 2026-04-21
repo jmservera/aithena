@@ -42,6 +42,7 @@ export function CapabilitiesProvider({ children }: { children: ReactNode }) {
       try {
         const resp = await apiFetch(buildApiUrl('/v1/capabilities'), {
           skipAuth: true,
+          skipUnauthorizedHandler: true,
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();

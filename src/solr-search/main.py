@@ -243,6 +243,9 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         "/v1/auth/validate/",
         "/v1/metrics",
         "/v1/metrics/",
+        "/v1/capabilities",
+        "/v1/capabilities/",
+        "/capabilities",
         "/docs",
         "/redoc",
         "/openapi.json",
@@ -1461,6 +1464,8 @@ def _search_hybrid_rerank(
             sem_results.append(entry)
 
     fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)
+    # Cap pagination to the rerank window — pages beyond it would be empty
+    rerank_total = min(bm25_total, candidate_limit)
     start = (page - 1) * page_size
     page_results = fused[start : start + page_size]
 
@@ -1470,7 +1475,7 @@ def _search_hybrid_rerank(
         "architecture": "hybrid-rerank",
         "sort": {"by": "score", "order": "desc"},
         "degraded": False,
-        **build_pagination(bm25_total, page, page_size),
+        **build_pagination(rerank_total, page, page_size),
         "results": page_results,
         "facets": parse_facet_counts(kw_payload),
     }
