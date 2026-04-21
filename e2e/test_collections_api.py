@@ -432,7 +432,7 @@ class TestCollectionItems:
     def test_update_item_note_max_length(
         self, auth_headers, create_collection, sample_document_id
     ):
-        """PUT with a 5000-char note succeeds."""
+        """PUT with a note at the default max length (1000) succeeds."""
         col = create_collection(_unique("longnote"))
 
         requests.post(
@@ -447,7 +447,7 @@ class TestCollectionItems:
         ).json()
         item_id = detail["items"][0]["id"]
 
-        long_note = "N" * 5000
+        long_note = "N" * 1000
         resp = requests.put(
             f"{COLLECTIONS_ENDPOINT}/{col['id']}/items/{item_id}",
             json={"note": long_note},
