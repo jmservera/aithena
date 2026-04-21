@@ -121,7 +121,7 @@ class EmbeddingsOutput(BaseModel):
         """The list of embeddings."""
 
         object: str = "embedding"
-        embedding: list[float] = []
+        embedding: list[int | float] = []
         field_name: str = "embedding"
 
     class Usage(BaseModel):
@@ -197,7 +197,7 @@ async def embeddings(sentences: EmbeddingsInput):
             validate_quantization_quality(original, quantized)
         result.data.append(
             EmbeddingsOutput.EmbeddingsList(
-                embedding=[float(x) for x in quantized],
+                embedding=[int(x) if quantized.dtype == np.int8 else float(x) for x in quantized],
                 field_name=field_name,
             )
         )
