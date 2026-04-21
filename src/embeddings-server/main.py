@@ -121,7 +121,7 @@ class EmbeddingsOutput(BaseModel):
         """The list of embeddings."""
 
         object: str = "embedding"
-        embedding: list[float] = []
+        embedding: list[int | float] = []
         field_name: str = "embedding"
 
     class Usage(BaseModel):

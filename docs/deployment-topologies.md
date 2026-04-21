@@ -7,7 +7,7 @@ This document describes the two supported Solr deployment architectures for Aith
 Aithena supports two fundamentally different Solr deployment topologies:
 
 1. **SolrCloud Distributed** (default in `docker-compose.yml`) — Three-node SolrCloud cluster with three-node ZooKeeper ensemble
-2. **Single-Node SolrCloud** (planned via overlay compose) — Single Solr node with embedded ZooKeeper for resource-constrained deployments. Note: This is SolrCloud in single-node mode, not a true standalone/core mode.
+2. **Single-Node SolrCloud** (via `docker/compose.single-node.yml` overlay) — 1 Solr node + 1 ZooKeeper container for resource-constrained deployments. Note: This is SolrCloud in single-node mode, not a true standalone/core mode.
 
 The choice depends on your scale, budget, operational complexity, and high-availability requirements.
 
@@ -129,20 +129,24 @@ If you start with single-node SolrCloud and outgrow it, migrating to distributed
 
 ---
 
-## 2. Single-Node SolrCloud Topology (Planned for v2.0+)
+## 2. Single-Node SolrCloud Topology
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
 │                                                 │
-│   Single Solr Node + Embedded ZooKeeper        │
+│   Single Solr Node + ZooKeeper Container        │
+│  ┌─────────────────────────────────────────┐  │
+│  │   zoo1 (standalone ZooKeeper)           │  │
+│  │   :2181                                 │  │
+│  └─────────────────────────────────────────┘  │
 │  ┌─────────────────────────────────────────┐  │
 │  │   solr (single-node SolrCloud)          │  │
-│  │   :8983 (with embedded ZK)              │  │
+│  │   :8983                                 │  │
 │  │                                         │  │
-│  │   • ZooKeeper embedded in Solr JVM      │  │
-│  │   • Single-shard, no replication        │  │
+│  │   • Connects to zoo1:2181               │  │
+│  │   • Single-shard, replicationFactor=1   │  │
 │  │   • 100% query and index traffic here   │  │
 │  │                                         │  │
 │  └─────────────────────────────────────────┘  │
@@ -152,8 +156,8 @@ If you start with single-node SolrCloud and outgrow it, migrating to distributed
 
 ### Configuration
 
-**Not yet in `docker-compose.yml`** — planned via overlay (`docker/compose.single-node.yml`).  
-**Environment variable:** `ZK_HOST=""` (or absent) — runs in single-node mode. Note: Requires the single-node compose overlay; base compose hardcodes 3-node ZK ensemble.
+Enabled via the single-node compose overlay (`docker/compose.single-node.yml`), which disables extra Solr/ZK nodes and sets `SOLR_EXPECTED_NODES=1`, `ZK_HOST=zoo1:2181`, and `replicationFactor=1`.  
+**Environment variable:** `SOLR_TOPOLOGY=single-node` — set by the installer or manually in `.env`.
 
 ### When to Use
 
@@ -297,7 +301,7 @@ If the single Solr node fails:
 | **Search Latency (cold, 75% cache)** | 500 ms–2 s | 500 ms–2 s |
 | **Index Scaling** | Add shards to grow | Re-optimize or migrate |
 | **Recommended Min Books** | 1,000+ | < 3,000 |
-| **Production Ready** | ✅ Yes (proven) | 🟡 Planned (not yet deployed) |
+| **Production Ready** | ✅ Yes (proven) | ✅ Yes (v2.1+) |
 
 ---
 
@@ -369,22 +373,24 @@ Are you starting a new deployment?
 
 The base `docker-compose.yml` is always **SolrCloud** (3 nodes + ZooKeeper).
 
-### Future: Environment-Based Selection (Planned)
+### Environment-Based Selection
 
-In a future release, selection will be configurable:
+Topology is configured via the `SOLR_TOPOLOGY` environment variable:
 
 ```bash
-# Deploy SolrCloud (current default)
+# Deploy SolrCloud (default)
 SOLR_TOPOLOGY=distributed docker compose up -d
 
-# Deploy single-node SolrCloud (planned)
+# Deploy single-node SolrCloud
 SOLR_TOPOLOGY=single-node docker compose up -d
 ```
 
+The installer sets this variable and generates the appropriate `start.sh` with the correct compose overlay chain.
+
 **Implementation status:**
-- 🟡 Design being finalized (topology selection framework TBD)
-- ⏳ Single-Node Compose override in development
-- ⏳ Automated topology detection in initialization scripts
+- ✅ Single-Node Compose overlay (`docker/compose.single-node.yml`)
+- ✅ Installer topology selection (`--topology` flag or interactive prompt)
+- ✅ CI integration tests for both topologies
 - ⏳ Migration helper scripts (distributed ↔ single-node)
 
 ---
