@@ -989,3 +989,103 @@ A new workflow that consolidates multiple dependabot PRs into a single merge:
 - Preserves the existing single-PR auto-merge flow for day-to-day updates
 - Both workflows can coexist: auto-merge handles new PRs promptly, batch-merge handles backlogs
 
+---
+
+# Decision: 32GB RAM Solr Optimization Strategy (2026-04-20)
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2026-04-20T18:54:00Z  
+**Status:** Pending Squad Review & Infrastructure Alignment
+
+## Context
+
+aithena's target scale: 30K books → 9M pages → 54M embedding vectors (with current chunking: 400w/50w overlap, 6 chunks/page).
+
+**Previous analysis (Ash, 2026-04-20):** Single Solr node would require 130–180 GB RAM for HNSW index + full-text index. Unviable on typical cloud VMs (max 64–128 GB).
+
+**Infrastructure analysis (Brett, 2026-04-20):** Standalone Solr is 2.5× cheaper than SolrCloud (3 nodes + ZK), IF vector optimization is possible.
+
+## Problem Statement
+
+Can we reduce HNSW memory from 130 GB to fit within a 32 GB single-node deployment WITHOUT sacrificing search quality?
+
+## Solution: Multi-Phase Optimization Roadmap
+
+### Phase 1: Page-Level Chunking (No schema change)
+- **Current:** 400 words/chunk, 50-word overlap → ~6 chunks/page → 54M vectors
+- **Change:** 1 vector per page → 9M vectors
+- **Reduction:** 54M → 9M = **6× vector count reduction**
+- **HNSW size:** 130 GB → 28 GB
+- **Quality:** Minimal loss (page is a natural document unit; academic search standard)
+- **Effort:** Medium (re-index + document-indexer config change)
+- **Timeline:** Can implement immediately; no schema migration required
+
+### Phase 2: int8 Quantization (Solr 9.7 compatible)
+- **Schema change:** Add `vectorEncoding="BYTE"` to knn_vector_768 field type
+- **Application change:** Add int8 quantization in embeddings-server output pipeline
+- **Reduction:** 4× per vector (float32: 3,072 bytes → int8: 768 bytes)
+- **HNSW size:** 28 GB → **9 GB**
+- **Quality:** 1–3% recall loss (well within acceptable bounds for book search)
+- **Effort:** Small (schema + embeddings-server pipeline)
+- **Timeline:** Ship in next release; no breaking changes
+- **Prerequisites:** Phase 1 must be completed first
+
+### Phase 3: Model Evaluation (Optional, for max headroom)
+- **Change:** Switch embedding model from multilingual-e5-base (768D) to multilingual-e5-small (384D)
+- **Reduction:** 2× per vector (768D → 384D) + int8 quantization → combined **8× reduction**
+- **HNSW size:** 9 GB → **5.5 GB** (leaves 6.5 GB headroom for growth/cache)
+- **Quality:** ~5% relative loss on benchmarks (minimal for book search with broad topic queries)
+- **Effort:** Large (re-embed corpus + re-index + config change)
+- **Timeline:** Defer to Q3 2026 unless headroom becomes critical
+- **Decision needed:** A/B test e5-small vs e5-base on representative corpus first
+
+### Phase 4: Architecture Evolution (If scale exceeds 30K books)
+- **Option A:** BM25 + vector reranking (two-stage hybrid search, eliminates HNSW)
+- **Option B:** Solr 10 upgrade (ScalarQuantizedDenseVectorField with int4 compression = 8× reduction)
+- **Option C:** Migrate to SolrCloud (distributed sharding across 3–6 nodes)
+- **Decision:** Only if book count exceeds 50K or budget constraints change
+
+## RAM Budget (Scenario B: Phase 1 + Phase 2)
+
+| Component | Size | Notes |
+|-----------|------|-------|
+| OS + system services | 2 GB | Linux kernel + daemons |
+| JVM heap (Solr) | 8 GB | Standard allocation for 54M docs |
+| HNSW page cache (9M vectors × 1KB int8) | 9 GB | OS page cache for mmap'd index |
+| Full-text index cache | 8 GB | BM25 posting lists, doc stores |
+| Headroom (for spikes, GC) | 5 GB | Safety margin |
+| **Total** | **32 GB** | ✅ Fits exactly |
+
+## Implementation Timeline
+
+- **Phase 1:** Immediate (2–3 weeks for re-indexing; recommend Q2 2026)
+- **Phase 2:** Next release (4–6 weeks; recommend Q2–Q3 2026)
+- **Phase 3:** Contingent on Phase 2 results + A/B test (Q3 2026 or later)
+- **Phase 4:** Only if scale exceeds plan or budget changes
+
+## Infrastructure Impact
+
+**Single-node recommendation: APPROVED** (contingent on Phase 1 + Phase 2 implementation)
+- Standalone Solr with 32 GB RAM is viable and cost-optimal
+- No SolrCloud migration needed (saves 2.5× infrastructure cost)
+- Brett's infrastructure analysis assumptions are validated
+
+## Critical Assumptions (Lock Until Verified)
+
+1. **Page-level chunking quality:** Assumption that page-level vectors achieve ≥95% of 400w chunk quality. **Action:** A/B test on sample corpus (1K pages min).
+2. **Quantization loss:** Assumption that int8 quantization loses ≤3% recall. **Action:** Benchmark on queries.
+3. **NVMe requirement:** Performance targets assume NVMe SSD, not HDD. **Action:** Specify SSD in infra requirements.
+4. **HNSW mmap behavior:** Assumption that OS page cache provides acceptable latency at 50% coverage. **Action:** Load test with concurrent queries.
+
+## Decision Points Requiring Squad Alignment
+
+1. **Chunking strategy:** Approve page-level switching? Or maintain 400w for higher fidelity?
+2. **Phase 2 timeline:** Ship int8 quantization in v1.19.0 or defer?
+3. **Model evaluation:** When to A/B test e5-small vs e5-base?
+
+## References
+
+- `.squad/analysis/standalone-solr-capacity-54m-vectors.md` — Baseline capacity analysis (130 GB unoptimized)
+- `.squad/analysis/vector-search-32gb-optimization-roadmap.md` — Full technical roadmap (6 strategies analyzed)
+- `docs/research/standalone-vs-cloud-infrastructure-analysis.md` — Infrastructure cost comparison (standalone wins if vectors are optimized)
+

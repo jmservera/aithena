@@ -93,6 +93,7 @@ services:
     environment:
       - DEVICE=${DEVICE:-cpu}
       - BACKEND=${BACKEND:-torch}
+      - VECTOR_QUANTIZATION=${VECTOR_QUANTIZATION:-none}
     expose:
       - "8080"
     healthcheck:
@@ -713,6 +714,8 @@ services:
       SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:-SolrRead_dev2024!}
       SOLR_NUM_SHARDS: ${SOLR_NUM_SHARDS:-1}
       SOLR_REPLICATION_FACTOR: ${SOLR_REPLICATION_FACTOR:-3}
+      SOLR_EXPECTED_NODES: "3"
+      ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
     volumes:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
@@ -722,19 +725,29 @@ services:
       - |
           set -o pipefail
 
-          ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
+          MAX_WAIT=120
+          ZK_HOST="$${ZK_HOST:-zoo1:2181,zoo2:2181,zoo3:2181}"
           SOLR_URL="http://solr:8983"
+          EXPECTED_NODES="$${SOLR_EXPECTED_NODES:-3}"
 
-          # Wait for Solr to be reachable (with or without auth)
+          echo "[solr-init] Waiting for Solr to be reachable..."
+          WAITED=0
           until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1 || curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
+            WAITED=$$((WAITED + 2))
+            if [ "$$WAITED" -ge "$$MAX_WAIT" ]; then echo "ERROR: Solr not reachable after $${MAX_WAIT}s" >&2; exit 1; fi
             sleep 2
           done
+          echo "[solr-init] Solr reachable after $${WAITED}s"
 
-          # Wait for all 3 Solr nodes to join the cluster
-          until [ "$$(curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null || \
-                [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge 3 ] 2>/dev/null; do
+          echo "[solr-init] Waiting for $$EXPECTED_NODES Solr node(s) to join cluster..."
+          WAITED=0
+          until [ "$$(curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge "$$EXPECTED_NODES" ] 2>/dev/null || \
+                [ "$$(curl -fsS "$$SOLR_URL/solr/admin/collections?action=CLUSTERSTATUS&wt=json" 2>/dev/null | grep -o '"[^"]*:8983_solr"' | sort -u | wc -l | tr -d '[:space:]')" -ge "$$EXPECTED_NODES" ] 2>/dev/null; do
+            WAITED=$$((WAITED + 2))
+            if [ "$$WAITED" -ge "$$MAX_WAIT" ]; then echo "ERROR: $$EXPECTED_NODES Solr node(s) not found after $${MAX_WAIT}s" >&2; exit 1; fi
             sleep 2
           done
+          echo "[solr-init] All $$EXPECTED_NODES Solr node(s) joined"
 
           # --- Security: Bootstrap BasicAuth + RBAC ---
           # Solr 9.7 BasicAuthPlugin requires >=1 user with hashed password
@@ -742,9 +755,10 @@ services:
 
           # Check if security is already bootstrapped
           # Unauthenticated request: returns "No authentication" if unconfigured, 401 if configured
+          echo "[solr-init] Checking security status..."
           AUTH_RESP=$$(curl -sS "$$SOLR_URL/solr/admin/authentication" 2>/dev/null || true)
           if echo "$$AUTH_RESP" | grep -qi 'No authentication'; then
-            echo "Bootstrapping Solr security..."
+            echo "[solr-init] Bootstrapping Solr security..."
             # Seed an empty security.json so "solr auth enable" can update it
             echo '{}' > /tmp/empty-security.json
             solr zk cp file:/tmp/empty-security.json zk:/security.json -z "$$ZK_HOST"
@@ -757,15 +771,22 @@ services:
               --solr-include-file /dev/null \
               -z "$$ZK_HOST"
 
-            echo "Waiting for Solr to load security config..."
-            sleep 5
+            # Poll for auth readiness instead of blind sleep
+            echo "[solr-init] Waiting for auth to propagate..."
+            WAITED=0
+            until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
+              WAITED=$$((WAITED + 2))
+              if [ "$$WAITED" -ge 60 ]; then echo "ERROR: Auth not ready after 60s" >&2; exit 1; fi
+              sleep 2
+            done
+            echo "[solr-init] Auth ready after $${WAITED}s"
 
             # NOTE: solr auth enable (Solr 9.7) already assigns the admin user
             # all built-in roles: ["superadmin", "admin", "search", "index"].
             # Do NOT overwrite with set-user-role — that strips superadmin/search.
 
             # Add readonly user
-            echo "Adding readonly user..."
+            echo "[solr-init] Adding readonly user..."
             curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
               "$$SOLR_URL/solr/admin/authentication" \
               -H 'Content-Type: application/json' \
@@ -777,9 +798,9 @@ services:
               -H 'Content-Type: application/json' \
               -d '{"set-user-role": {"'"$$SOLR_READONLY_USER"'": ["search"]}}'
 
-            echo "Security bootstrap complete."
+            echo "[solr-init] Security bootstrap complete."
           else
-            echo "Security already configured, skipping bootstrap."
+            echo "[solr-init] Security already configured, skipping bootstrap."
           fi
 
           # --- Validate SOLR_NUM_SHARDS and SOLR_REPLICATION_FACTOR ---
@@ -801,17 +822,20 @@ services:
           fi
 
           # --- books collection (multilingual-e5-base, 768D) ---
+          echo "[solr-init] Uploading configset..."
           if ! solr zk ls /configs -z "$$ZK_HOST" | grep -qx 'books'; then
             solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
           fi
 
+          echo "[solr-init] Creating collection (shards=$$NUM_SHARDS, replicas=$$REPLICATION_FACTOR)..."
           if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then
             curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=CREATE&name=books&collection.configName=books&numShards=$$NUM_SHARDS&replicationFactor=$$REPLICATION_FACTOR&waitForFinalState=true&wt=json"
           fi
 
+          echo "[solr-init] Applying config overlay..."
           SOLR_BASE_URL="$$SOLR_URL" SOLR_COLLECTION="books" SOLR_AUTH_USER="$$SOLR_AUTH_USER" SOLR_AUTH_PASS="$$SOLR_AUTH_PASS" sh /scripts/add-conf-overlay.sh
 
-          echo "Solr init complete"
+          echo "[solr-init] Solr init complete"
     networks:
       - default
     restart: "no"

@@ -17,6 +17,7 @@ from document_indexer.__main__ import (
     save_state,
     wait_for_solr_collection,
 )
+from document_indexer.embeddings import EmbeddingResult
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -25,6 +26,7 @@ from document_indexer.__main__ import (
 FAKE_PAGES = [(1, " ".join(["word"] * 500))]
 FAKE_PAGE_CHUNKS = [("chunk1", 1, 1), ("chunk2", 1, 2)]
 FAKE_EMBEDDING = [0.1] * 512
+FAKE_EMB_RESULT = EmbeddingResult(vector=FAKE_EMBEDDING)
 
 
 @pytest.fixture
@@ -144,7 +146,7 @@ class TestIndexChunks:
     @patch("document_indexer.__main__.extract_pdf_text")
     def test_returns_chunk_count(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
-        mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
+        mock_get_embeddings.return_value = [FAKE_EMB_RESULT, FAKE_EMB_RESULT]
         mock_post.return_value = self._mock_response()
 
         with patch("document_indexer.__main__.chunk_text_with_pages", return_value=FAKE_PAGE_CHUNKS):
@@ -158,7 +160,7 @@ class TestIndexChunks:
     def test_posts_json_docs_to_solr(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
         page_chunks = [("chunk one", 1, 1), ("chunk two", 1, 2)]
-        embeddings = [[0.1] * 512, [0.2] * 512]
+        embeddings = [EmbeddingResult(vector=[0.1] * 512), EmbeddingResult(vector=[0.2] * 512)]
         mock_get_embeddings.return_value = embeddings
         mock_post.return_value = self._mock_response()
 
@@ -202,7 +204,7 @@ class TestIndexChunks:
     @patch("document_indexer.__main__.extract_pdf_text")
     def test_propagates_solr_error(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
-        mock_get_embeddings.return_value = [FAKE_EMBEDDING]
+        mock_get_embeddings.return_value = [FAKE_EMB_RESULT]
         mock_post.return_value = self._mock_response(500, "Solr error")
         mock_post.return_value.raise_for_status.side_effect = requests.HTTPError("500 Server Error")
 
@@ -220,7 +222,7 @@ class TestIndexChunks:
     ):
         mock_extract_text.return_value = FAKE_PAGES
         page_chunks = [("chunk one", 2, 3), ("chunk two", 3, 5)]
-        mock_get_embeddings.return_value = [[0.1] * 512, [0.2] * 512]
+        mock_get_embeddings.return_value = [EmbeddingResult(vector=[0.1] * 512), EmbeddingResult(vector=[0.2] * 512)]
         mock_post.return_value = self._mock_response()
 
         with patch("document_indexer.__main__.chunk_text_with_pages", return_value=page_chunks):
@@ -736,7 +738,7 @@ class TestCollectionRouting:
     ):
         """index_chunks posts to the correct Solr collection URL."""
         mock_extract_text.return_value = FAKE_PAGES
-        mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
+        mock_get_embeddings.return_value = [FAKE_EMB_RESULT, FAKE_EMB_RESULT]
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
         mock_post.return_value = resp

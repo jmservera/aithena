@@ -1,0 +1,359 @@
+name: Dev Integration Test (Single-Node)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build: ${{ steps.filter.outputs.build }}
+    steps:
+      - name: Check for build-relevant changes
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO_NAME: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          NON_BUILD='^(\.squad/|\.github/(ISSUE_TEMPLATE|agents)/|docs/|[^/]*\.md$|LICENSE$|\.gitattributes$|\.gitignore$)'
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if ! CHANGED=$(gh api "repos/$REPO_NAME/pulls/$PR_NUMBER/files" \
+              --paginate --jq '.[].filename'); then
+              echo "Failed to fetch changed files — running all checks"
+              echo "build=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BUILD_FILES=$(echo "$CHANGED" | grep -v -E "$NON_BUILD" || true)
+
+          if [ -n "$BUILD_FILES" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Build-relevant changes detected"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ No build-relevant changes — skipping integration tests"
+          fi
+
+  run-integration-tests:
+    name: Run integration & E2E tests
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      issues: write
+    env:
+      E2E_LIBRARY_PATH: /tmp/aithena-e2e-library
+      CI_ADMIN_USERNAME: ci-admin
+      CI_ADMIN_PASSWORD: ci-password-ChangeMe123!
+      BASE_URL: http://localhost
+      FALLBACK_BASE_URL: http://localhost
+      SEARCH_API_URL: http://localhost:8080
+      SOLR_URL: http://localhost:8983/solr/books
+      HF_TOKEN: ${{ secrets.HF_TOKEN || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57  # v8.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6.3.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: e2e/playwright/package-lock.json
+
+      - name: Bootstrap CI auth + compose overrides
+        run: |
+          mkdir -p "$E2E_LIBRARY_PATH"
+          mkdir -p "$RUNNER_TEMP/aithena-auth"
+
+          uv run --project src/solr-search python -m installer \
+            --library-path "$E2E_LIBRARY_PATH" \
+            --admin-user "$CI_ADMIN_USERNAME" \
+            --admin-password "$CI_ADMIN_PASSWORD" \
+            --origin "http://localhost" \
+            --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
+            --reset
+
+          # Export installer-generated credentials so later steps can use them.
+          # The installer writes random Solr passwords to .env; without this,
+          # the health-check step falls back to hardcoded dev defaults and gets 401.
+          if [ -f .env ]; then
+            grep -E '^(SOLR_ADMIN_USER|SOLR_ADMIN_PASS|SOLR_READONLY_USER|SOLR_READONLY_PASS|ADMIN_API_KEY)=' .env >> "$GITHUB_ENV" || true
+          fi
+
+          # Reuse the canonical single-node overlay so CI exercises the same
+          # compose wiring as local/installer deployments. The CI-only file
+          # below provides tmpfs volumes for faster, ephemeral storage.
+          echo "COMPOSE_FILE=docker-compose.yml:docker/compose.single-node.yml:docker/compose.dev-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
+          cat > docker-compose.github-actions.yml <<'EOF'
+          volumes:
+            rabbitmq-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            certbot-data-conf:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            certbot-data-www:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            redis-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            solr-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
+            zoo-data1_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-backup:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            collections-db:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+          EOF
+
+      - name: Generate sample PDF fixtures
+        run: |
+          python3 e2e/create-sample-docs.py "$E2E_LIBRARY_PATH"
+          find "$E2E_LIBRARY_PATH" -maxdepth 2 -type f -name '*.pdf' -printf '%P\n' | sort
+
+      - name: Validate merged Docker Compose config
+        run: |
+          docker compose --profile production config >/dev/null
+
+      - name: Build all container images
+        run: |
+          docker compose --profile production build
+
+      - name: Start single-node stack
+        env:
+          ADMIN_API_KEY: ci-admin-api-key
+        run: |
+          docker compose --profile production up -d
+
+      - name: Wait for services to become healthy
+        run: |
+          # Solr admin credentials (defaults from docker-compose.yml)
+          SOLR_ADMIN_USER="${SOLR_ADMIN_USER:-solr_admin}"
+          SOLR_ADMIN_PASS="${SOLR_ADMIN_PASS:-SolrAdmin_dev2024!}"
+
+          wait_for_url() {
+            local url="$1"
+            local label="$2"
+            local attempts="${3:-60}"
+            local sleep_seconds="${4:-5}"
+            local auth="${5:-}"
+
+            for ((attempt=1; attempt<=attempts; attempt+=1)); do
+              if [ -n "$auth" ]; then
+                curl_result=$(curl --fail --silent --show-error -u "$auth" "$url" 2>&1) && {
+                  echo "$label is ready ($url)"
+                  return 0
+                }
+              else
+                curl_result=$(curl --fail --silent --show-error "$url" 2>&1) && {
+                  echo "$label is ready ($url)"
+                  return 0
+                }
+              fi
+
+              echo "[$attempt/$attempts] Waiting for $label at $url"
+              sleep "$sleep_seconds"
+            done
+
+            echo "$label did not become ready in time ($url)" >&2
+            return 1
+          }
+
+          wait_for_solr_cluster() {
+            local attempts="${1:-30}"
+            local sleep_seconds="${2:-10}"
+
+            for ((attempt=1; attempt<=attempts; attempt+=1)); do
+              status=$(curl --fail --silent \
+                -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}" \
+                "http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json" \
+                2>/dev/null) || true
+
+              if echo "$status" | python3 -c "
+          import json, sys
+          try:
+              data = json.load(sys.stdin)
+              colls = data.get('cluster', {}).get('collections', {})
+              books = colls.get('books', {})
+              shards = books.get('shards', {})
+              if not shards:
+                  sys.exit(1)
+              for shard_name, shard in shards.items():
+                  for replica_name, replica in shard.get('replicas', {}).items():
+                      if replica.get('state') != 'active':
+                          sys.exit(1)
+              sys.exit(0)
+          except Exception:
+              sys.exit(1)
+          "; then
+                echo "Solr cluster healthy — all replicas active"
+                return 0
+              fi
+
+              echo "[$attempt/$attempts] Waiting for all Solr replicas to become active..."
+              sleep "$sleep_seconds"
+            done
+
+            echo "Solr cluster did not become fully active in time" >&2
+            return 1
+          }
+
+          # Solr endpoints require basic auth after security bootstrap
+          SOLR_AUTH="${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}"
+          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr" 90 5 "$SOLR_AUTH"
+          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection" 90 5 "$SOLR_AUTH"
+          wait_for_solr_cluster 30 10
+          wait_for_url "http://localhost:8080/health" "solr-search API"
+          wait_for_url "http://localhost/health" "nginx"
+          wait_for_url "http://localhost/search" "Aithena UI"
+
+          docker compose --profile production ps
+
+      - name: Install Python E2E dependencies
+        working-directory: e2e
+        run: pip install -r requirements.txt
+
+      - name: Run Python E2E tests
+        working-directory: e2e
+        env:
+          E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
+          E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
+          RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
+        run: |
+          if ! sudo chmod -R a+rwX "$E2E_LIBRARY_PATH" 2>/dev/null; then
+            echo "Warning: Failed to adjust permissions on E2E_LIBRARY_PATH: $E2E_LIBRARY_PATH"
+            ls -ld "$E2E_LIBRARY_PATH" 2>/dev/null || true
+            stat "$E2E_LIBRARY_PATH" 2>/dev/null || true
+          fi
+          ADMIN_API_KEY=$(grep '^ADMIN_API_KEY=' ../.env 2>/dev/null | cut -d= -f2 || true)
+          export ADMIN_API_KEY="${ADMIN_API_KEY:-ci-admin-api-key}"
+          pytest -v --junitxml=pytest-results.xml
+
+      - name: Install Playwright dependencies
+        working-directory: e2e/playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright browser tests
+        working-directory: e2e/playwright
+        env:
+          E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
+          E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
+        run: |
+          export E2E_AUTH_COOKIE_NAME=aithena_auth
+          export E2E_API_TOKEN="$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$(python3 -c 'import json, os; print(json.dumps({"username": os.environ["E2E_USERNAME"], "password": os.environ["E2E_PASSWORD"]}))')" \
+            http://localhost/v1/auth/login | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')"
+          npx playwright test
+
+      - name: Upload Python E2E results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: python-e2e-results
+          path: e2e/pytest-results.xml
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload Playwright report and screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: playwright-e2e-results
+          path: |
+            e2e/playwright/playwright-report
+            e2e/playwright/test-results
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Dump Compose logs on failure
+        if: failure()
+        run: |
+          docker compose --profile production logs --no-color
+
+      - name: Gather Docker Compose logs for analysis
+        if: always()
+        run: |
+          docker compose --profile production logs --no-color > "$RUNNER_TEMP/compose-logs.txt" 2>&1
+
+      - name: Tear down integration stack
+        if: always()
+        run: |
+          docker compose --profile production down -v --remove-orphans
+          rm -f docker-compose.github-actions.yml
+
+  integration-gate:
+    name: Dev integration tests (single-node)
+    if: always()
+    needs: [changes, run-integration-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          TEST_RESULT: ${{ needs.run-integration-tests.result }}
+        run: |
+          if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
+            echo "❌ Change detection failed"
+            exit 1
+          fi
+          if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
+            echo "❌ Integration tests failed"
+            exit 1
+          fi
+          if [ "$TEST_RESULT" = "skipped" ]; then
+            echo "⏭️ Integration tests skipped — no build-relevant changes"
+          else
+            echo "✅ Integration tests passed (single-node)"
+          fi
