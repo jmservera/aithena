@@ -14,9 +14,17 @@ fi
 collection_endpoint="${SOLR_BASE_URL%/}/api/collections/${SOLR_COLLECTION}/config"
 backup_endpoint="${SOLR_BASE_URL%/}/api/cluster/backup-repositories"
 
+MAX_RETRIES="${MAX_RETRIES:-60}"
+
 retry_curl() {
   output=""
+  attempt=0
   until output="$(curl ${AUTH_FLAGS} -fsS "$@" 2>/dev/null)"; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge "$MAX_RETRIES" ]; then
+      echo "ERROR: retry_curl failed after $MAX_RETRIES attempts" >&2
+      return 1
+    fi
     sleep 2
   done
   printf '%s' "$output"

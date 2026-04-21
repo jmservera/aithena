@@ -117,8 +117,10 @@ jobs:
             grep -E '^(SOLR_ADMIN_USER|SOLR_ADMIN_PASS|SOLR_READONLY_USER|SOLR_READONLY_PASS|ADMIN_API_KEY)=' .env >> "$GITHUB_ENV" || true
           fi
 
-          # Single-node topology override: disable solr2, solr3, zoo2, zoo3 using profiles
-          # and tmpfs volumes for faster startup.
+          # Reuse the canonical single-node overlay so CI exercises the same
+          # compose wiring as local/installer deployments. The CI-only file
+          # below provides tmpfs volumes for faster, ephemeral storage.
+          echo "COMPOSE_FILE=docker-compose.yml:docker/compose.single-node.yml:docker/compose.dev-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
           cat > docker-compose.github-actions.yml <<'EOF'
           volumes:
             rabbitmq-data:
@@ -151,43 +153,6 @@ jobs:
             collections-db:
               driver: local
               driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
-
-          services:
-            # Single-node Solr: disable solr2 and solr3
-            solr2:
-              profiles: [disabled]
-            solr3:
-              profiles: [disabled]
-            # Single ZooKeeper: disable zoo2 and zoo3
-            zoo2:
-              profiles: [disabled]
-            zoo3:
-              profiles: [disabled]
-            # Reconfigure remaining ZooKeeper node for standalone mode
-            zoo1:
-              environment:
-                ZOO_SERVERS: server.1=zoo1:2888:3888;2181
-                ZOO_STANDALONE_ENABLED: "true"
-            # Single Solr node depends only on zoo1
-            # !override replaces (not merges) the base depends_on map
-            solr:
-              environment:
-                ZK_HOST: "zoo1:2181"
-              depends_on: !override
-                zoo1:
-                  condition: service_healthy
-            # Override solr-init to only depend on single Solr node
-            solr-init:
-              depends_on: !override
-                solr:
-                  condition: service_healthy
-              environment:
-                SOLR_NUM_SHARDS: "1"
-                SOLR_REPLICATION_FACTOR: "1"
-            # Point solr-search at standalone ZooKeeper
-            solr-search:
-              environment:
-                ZOOKEEPER_HOSTS: zoo1:2181
           EOF
 
       - name: Generate sample PDF fixtures
@@ -197,35 +162,17 @@ jobs:
 
       - name: Validate merged Docker Compose config
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            config >/dev/null
+          docker compose --profile production config >/dev/null
 
       - name: Build all container images
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            build
+          docker compose --profile production build
 
       - name: Start single-node stack
         env:
           ADMIN_API_KEY: ci-admin-api-key
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            up -d
+          docker compose --profile production up -d
 
       - name: Wait for services to become healthy
         run: |
@@ -309,13 +256,7 @@ jobs:
           wait_for_url "http://localhost/health" "nginx"
           wait_for_url "http://localhost/search" "Aithena UI"
 
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            ps
+          docker compose --profile production ps
 
       - name: Install Python E2E dependencies
         working-directory: e2e
@@ -379,35 +320,17 @@ jobs:
       - name: Dump Compose logs on failure
         if: failure()
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            logs --no-color
+          docker compose --profile production logs --no-color
 
       - name: Gather Docker Compose logs for analysis
         if: always()
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            logs --no-color > "$RUNNER_TEMP/compose-logs.txt" 2>&1
+          docker compose --profile production logs --no-color > "$RUNNER_TEMP/compose-logs.txt" 2>&1
 
       - name: Tear down integration stack
         if: always()
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            down -v --remove-orphans
+          docker compose --profile production down -v --remove-orphans
           rm -f docker-compose.github-actions.yml
 
   integration-gate:
