@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), and [v2.0.0 Deployment Updates](#deployment-updates-for-v200) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.1.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.1.0:** configurable search architecture (HNSW vs hybrid-rerank, new `SEARCH_ARCHITECTURE` env var), configurable vector quantization (`VECTOR_QUANTIZATION=none|fp16|int8`), single-node Docker Compose overlay (`docker/compose.single-node.yml`), single-user mode (`AUTH_ENABLED=false`), installer topology selection (`--topology`), dev integration test workflow, and release CI topology matrix. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), and [v2.1.0 Deployment Updates](#deployment-updates-for-v210) sections below.
 
 ## System architecture overview
 
@@ -5021,3 +5021,511 @@ v2.0.0 publishes **5 container images** (down from 6 in v1.x):
 - [ ] nginx `/admin/` proxies to `aithena-ui`, not old Streamlit container
 - [ ] Streamlit health check URLs updated or removed from monitoring
 - [ ] `start.sh` regenerated (or compose commands updated) after installer re-run
+
+## Deployment Updates for v2.1.0
+
+### Summary
+
+v2.1.0 is a **minor release** focused on deployment flexibility and resource optimization:
+
+1. **Configurable search architecture** — New `SEARCH_ARCHITECTURE=hnsw|hybrid-rerank` environment variable. HNSW mode (default) maintains current behavior. Hybrid-rerank mode eliminates HNSW vector RAM (9-28GB savings) using BM25 pre-filter + numpy cosine reranking.
+2. **Configurable vector quantization** — New `VECTOR_QUANTIZATION=none|fp16|int8` environment variable reduces HNSW RAM from ~28GB (float32) to ~14GB (fp16) or ~9GB (int8) for 9M vectors.
+3. **Single-node Docker Compose topology** — New `docker/compose.single-node.yml` overlay replaces 3 ZK + 3 Solr (~12GB) with 1 ZK + 1 Solr (~4GB).
+4. **Single-user mode** — New `AUTH_ENABLED=false` setting disables authentication for local development and CI.
+5. **Installer topology selection** — New `--topology single-node|distributed` and `--no-auth` flags.
+6. **CI/CD improvements** — Dev integration test workflow (single-node, <20 min) and release CI matrix (both topologies, both auth modes).
+7. **Deployment topologies documentation** — New `docs/deployment-topologies.md`.
+
+**⚠️ No breaking changes** for operators keeping default settings (`SEARCH_ARCHITECTURE=hnsw`, `VECTOR_QUANTIZATION=none`, `AUTH_ENABLED=true`).
+
+---
+
+### New Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SEARCH_ARCHITECTURE` | `hnsw` | Search mode: `hnsw` (full kNN vector search with HNSW index, 9-28GB RAM) or `hybrid-rerank` (BM25 pre-filter + numpy cosine rerank, zero HNSW RAM). Switching requires reindexing. |
+| `VECTOR_QUANTIZATION` | `none` | Vector encoding: `none` (float32, ~28GB HNSW), `fp16` (float16, ~14GB HNSW, <1% quality loss), `int8` (BYTE, ~9GB HNSW, <3% quality loss). Switching requires reindexing. |
+| `AUTH_ENABLED` | `true` | Authentication mode: `true` (multi-user with auth DB) or `false` (single-user, no auth). For local development and CI only. |
+
+---
+
+### Single-Node Topology Configuration
+
+**Use case:** Reduce infrastructure footprint from ~12GB (3 ZK + 3 Solr) to ~4GB (1 ZK + 1 Solr). Suitable for personal use, development, or <50K documents.
+
+**Distributed topology (default in v2.0.0):**
+- 3 ZooKeeper nodes
+- 3 Solr nodes
+- ~12GB RAM total
+- High availability, automatic failover
+- Best for production (>50K documents)
+
+**Single-node topology (new in v2.1.0):**
+- 1 ZooKeeper node
+- 1 Solr node
+- ~4GB RAM total
+- No high availability (single point of failure)
+- Best for personal use, development, <50K documents
+
+**How to use:**
+
+```bash
+# Single-node topology
+docker compose -f docker-compose.yml -f docker/compose.single-node.yml up -d
+
+# Distributed topology (default)
+docker compose up -d
+```
+
+**Installer support:**
+
+```bash
+# New install with single-node topology
+python3 setup.py --topology single-node
+
+# New install with distributed topology
+python3 setup.py --topology distributed
+```
+
+The installer generates `.env` with the correct `SOLR_NUM_SHARDS` and `SOLR_REPLICATION_FACTOR` settings and includes a compose command hint in the generated file.
+
+**All services unchanged** except Solr cluster. RBAC, authentication, and all features remain fully functional in single-node mode.
+
+See [Deployment Topologies Documentation](../deployment-topologies.md) for detailed resource requirements and migration instructions.
+
+---
+
+### Hybrid-Rerank Mode Configuration
+
+**Use case:** Reduce HNSW vector RAM from 9-28GB to zero at 30K book scale. Suitable for memory-constrained deployments.
+
+**How hybrid-rerank mode works:**
+
+1. **BM25 pre-filtering** — Traditional keyword search finds top-200 candidates
+2. **Stored vector retrieval** — Vectors retrieved from Solr (stored as docValues, not HNSW index)
+3. **Numpy cosine reranking** — CPU-based similarity computation between query and candidate vectors
+4. **RRF fusion** — Reciprocal rank fusion combines keyword and semantic scores
+
+**Trade-offs:**
+
+- ✅ **Zero HNSW RAM** — No HNSW index built or loaded (9-28GB savings)
+- ✅ **Full RBAC and auth** — All features except semantic search remain functional
+- ❌ **Semantic search mode hidden** — Only Keyword and Hybrid modes available in UI
+- ❌ **Similar Books disabled** — Requires HNSW kNN for fast similarity search
+- ⚠️ **Search quality depends on BM25** — Pre-filtering must return relevant candidates for reranking to work well
+
+**Configuration:**
+
+```bash
+# Update .env
+SEARCH_ARCHITECTURE=hybrid-rerank
+
+# Restart services
+docker compose down
+docker compose up -d
+
+# Trigger reindexing (required)
+curl -X POST http://localhost/v1/admin/reindex
+```
+
+**Capabilities endpoint:**
+
+New `/v1/capabilities` endpoint returns backend configuration:
+
+```bash
+curl -s http://localhost/v1/capabilities | jq .
+```
+
+HNSW mode response:
+```json
+{
+  "search_modes": ["keyword", "semantic", "hybrid"],
+  "architecture": "hnsw",
+  "vector_quantization": "none",
+  "vector_dimensions": 768
+}
+```
+
+Hybrid-rerank mode response:
+```json
+{
+  "search_modes": ["keyword", "hybrid"],
+  "architecture": "hybrid-rerank",
+  "vector_quantization": "none",
+  "vector_dimensions": 768
+}
+```
+
+The UI fetches capabilities at startup and dynamically shows/hides search modes based on the response.
+
+**⚠️ Reindexing requirement:** Switching from HNSW to hybrid-rerank (or vice versa) requires reindexing because the HNSW graph must be built (for HNSW) or discarded (for hybrid-rerank).
+
+**Best practices:**
+
+- Deploy hybrid-rerank mode in staging first
+- Run search quality benchmarks (compare nDCG/MRR vs HNSW baseline)
+- Confirm search quality is acceptable for your use case before promoting to production
+- Monitor BM25 pre-filtering effectiveness (if top-200 candidates are too narrow, reranking quality will degrade)
+
+---
+
+### Vector Quantization Configuration
+
+**Use case:** Reduce HNSW RAM by 50-68% with minimal search quality loss.
+
+**Quantization modes:**
+
+| Mode | Encoding | HNSW RAM (9M vectors) | Search Quality Loss | Use Case |
+|------|----------|----------------------|---------------------|----------|
+| `none` (default) | float32 | ~28GB | 0% (baseline) | Maximum search quality |
+| `fp16` | float16 | ~14GB | <1% | Recommended for production (50% RAM savings) |
+| `int8` | BYTE | ~9GB | <3% | Cost-constrained deployments (68% RAM savings) |
+
+**Configuration:**
+
+```bash
+# Update .env
+VECTOR_QUANTIZATION=fp16  # or int8
+
+# Restart services
+docker compose down
+docker compose up -d
+
+# Trigger reindexing (required)
+curl -X POST http://localhost/v1/admin/reindex
+```
+
+**Implementation details:**
+
+- Embeddings server validates quantization quality at startup (logs warning if cosine similarity degrades beyond threshold)
+- Solr schema includes `knn_vector_768_byte` field type with `vectorEncoding="BYTE"` for int8 mode
+- HNSW index is built with quantized vectors — switching quantization modes requires rebuilding the index
+
+**Quality validation:**
+
+The embeddings server computes cosine similarity between original (float32) and quantized (fp16/int8) vectors at startup. If similarity degrades beyond a threshold, a warning is logged. This is informational only — the service continues to run.
+
+**Best practices:**
+
+- Use `fp16` for production — 50% RAM savings with negligible quality loss (<1%)
+- Use `int8` for cost-constrained deployments — 68% RAM savings with acceptable quality loss (<3%)
+- Run search quality benchmarks in staging before production deployment
+- Monitor search quality after switching quantization modes (spot-check search results)
+
+**⚠️ Reindexing requirement:** Switching quantization modes requires reindexing because the HNSW graph uses a different field in Solr (`knn_vector_768` for float32/fp16, `knn_vector_768_byte` for int8).
+
+---
+
+### Single-User Mode (`AUTH_ENABLED=false`)
+
+**Use case:** Simplify local development and CI environments by disabling authentication entirely.
+
+**Multi-user mode (`AUTH_ENABLED=true`, default):**
+- Auth database required
+- User/password prompts at first login
+- JWT secret required for session tokens
+- ADMIN_API_KEY required for admin endpoints
+- Role-based access control enforced (admin, user, viewer)
+
+**Single-user mode (`AUTH_ENABLED=false`):**
+- No auth database
+- No user/password prompts
+- No JWT secret
+- No ADMIN_API_KEY
+- All API endpoints publicly accessible (no authentication or authorization checks)
+
+**Configuration:**
+
+```bash
+# Update .env
+AUTH_ENABLED=false
+
+# Restart services
+docker compose down
+docker compose up -d
+```
+
+**Installer support:**
+
+```bash
+# New install with single-user mode
+python3 setup.py --no-auth
+# or: python3 setup.py --single-user
+
+# The installer skips auth setup and sets AUTH_ENABLED=false in .env
+```
+
+**⚠️ Security warning:** Single-user mode disables **all** authentication and authorization. Only use in trusted environments:
+- Local development (behind a firewall, no public access)
+- CI/CD environments (ephemeral infrastructure)
+- Single-user personal deployments (no multi-tenancy required)
+
+**Never use single-user mode in production** unless you have external authentication (e.g., VPN, OAuth proxy, network-level access control).
+
+---
+
+### Installer `--topology` Flag
+
+**Use case:** Streamline initial deployment with sensible defaults.
+
+**New installer flag:**
+
+```bash
+# Single-node topology (default for new installs)
+python3 setup.py --topology single-node
+# Sets SOLR_NUM_SHARDS=1, SOLR_REPLICATION_FACTOR=1 in .env
+# Generates compose command hint for single-node overlay
+
+# Distributed topology
+python3 setup.py --topology distributed
+# Prompts for shards/replicas (default: 1 shard, 3 replicas)
+# Generates compose command hint for default compose file
+```
+
+**Generated `.env` includes compose command hint:**
+
+```bash
+# For single-node topology:
+# docker compose -f docker-compose.yml -f docker/compose.single-node.yml up -d
+
+# For distributed topology:
+# docker compose up -d
+```
+
+**Backward compatible:** Existing `.env` files continue to work without modification. Re-running the installer is optional.
+
+---
+
+### Upgrade Instructions from v2.0.0
+
+**For operators keeping default settings (recommended):**
+
+1. **Pull new images:**
+   ```bash
+   docker compose pull
+   ```
+
+2. **Restart services:**
+   ```bash
+   docker compose up -d
+   ```
+
+3. **Verify health:**
+   ```bash
+   curl -sf http://localhost/v1/health && echo "✅ API healthy"
+   curl -sf http://localhost/v1/capabilities && echo "✅ Capabilities endpoint responding"
+   ```
+
+**No configuration changes required.** All new environment variables default to v2.0.0 behavior:
+- `SEARCH_ARCHITECTURE=hnsw` (current HNSW-based search)
+- `VECTOR_QUANTIZATION=none` (float32 vectors)
+- `AUTH_ENABLED=true` (multi-user authentication)
+
+---
+
+**For operators switching to hybrid-rerank mode:**
+
+1. **Update `.env`:**
+   ```bash
+   SEARCH_ARCHITECTURE=hybrid-rerank
+   ```
+
+2. **Restart services:**
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+
+3. **Trigger reindexing:**
+   ```bash
+   curl -X POST http://localhost/v1/admin/reindex
+   ```
+
+4. **Verify capabilities:**
+   ```bash
+   curl -s http://localhost/v1/capabilities | jq .
+   # Expected: {"architecture": "hybrid-rerank", "search_modes": ["keyword", "hybrid"], ...}
+   ```
+
+**⚠️ Important:** Semantic search mode will be hidden in the UI. Similar Books feature will be disabled. Search quality depends on BM25 pre-filtering. Validate in staging before production deployment.
+
+---
+
+**For operators switching to single-node topology:**
+
+1. **Update compose command:**
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.single-node.yml up -d
+   ```
+
+   Or re-run the installer with `--topology single-node` to regenerate `start.sh`:
+   ```bash
+   python3 setup.py --topology single-node
+   ./start.sh
+   ```
+
+2. **Existing data is preserved.** Solr will replicate data to the new single-node cluster automatically.
+
+3. **Verify health:**
+   ```bash
+   curl -sf http://localhost/v1/health && echo "✅ API healthy"
+   ```
+
+See [Deployment Topologies Documentation](../deployment-topologies.md) for detailed migration instructions and rollback procedures.
+
+---
+
+### Configuration Changes
+
+| Change | Affected file | Required action |
+|---|---|---|
+| New `SEARCH_ARCHITECTURE` env var | `.env` | **Optional.** Defaults to `hnsw` (current behavior). Set to `hybrid-rerank` to eliminate HNSW RAM. Requires reindexing. |
+| New `VECTOR_QUANTIZATION` env var | `.env` | **Optional.** Defaults to `none` (float32). Set to `fp16` or `int8` to reduce HNSW RAM. Requires reindexing. |
+| New `AUTH_ENABLED` env var | `.env` | **Optional.** Defaults to `true` (multi-user). Set to `false` for local development/CI only. |
+| Single-node compose overlay | `docker/compose.single-node.yml` | **Optional.** Use `-f docker/compose.single-node.yml` to enable. No changes to existing compose files. |
+| Installer `--topology` flag | `installer/setup.py` | **Optional.** Streamlines initial deployment. Existing `.env` files work without re-running installer. |
+
+---
+
+### Data Migration
+
+**None required** for operators keeping default settings (`SEARCH_ARCHITECTURE=hnsw`, `VECTOR_QUANTIZATION=none`, `AUTH_ENABLED=true`).
+
+**Reindexing required** if:
+- Changing `SEARCH_ARCHITECTURE` from `hnsw` to `hybrid-rerank` (or vice versa) — HNSW graph must be built or discarded
+- Changing `VECTOR_QUANTIZATION` from `none` to `fp16` or `int8` (or between fp16 and int8) — HNSW graph must be rebuilt with quantized vectors
+
+**No reindexing required** if:
+- Switching to single-node topology (Solr handles data replication automatically)
+- Toggling `AUTH_ENABLED` between `true` and `false` (auth is independent of index data)
+
+**Reindexing procedure:**
+
+```bash
+# Via admin portal: navigate to Reindex Library page and click "Start Reindex"
+
+# Via API:
+curl -X POST http://localhost/v1/admin/reindex
+
+# Monitor indexing progress via admin portal or API:
+curl -s http://localhost/v1/admin/indexing/status | jq .
+```
+
+---
+
+### Breaking Changes
+
+**None** for default configuration. All new features are opt-in:
+- `SEARCH_ARCHITECTURE` defaults to `hnsw` (current behavior)
+- `VECTOR_QUANTIZATION` defaults to `none` (float32, current behavior)
+- `AUTH_ENABLED` defaults to `true` (multi-user authentication)
+- Default installer topology is `single-node` for **new installs**, but existing deployments retain their configuration
+
+Operators who want to switch to hybrid-rerank mode, enable quantization, disable authentication, or change topologies must explicitly update their `.env` or re-run the installer.
+
+---
+
+### Deployment Validation Checklist
+
+After deploying v2.1.0, validate the following:
+
+- [ ] **Health checks:**
+  - [ ] `GET /v1/health` returns healthy status
+  - [ ] `GET /v1/capabilities` returns expected configuration
+  - [ ] All services report healthy in `docker compose ps`
+
+- [ ] **Capabilities endpoint:**
+  - [ ] `GET /v1/capabilities` returns correct `architecture` (hnsw or hybrid-rerank)
+  - [ ] `search_modes` array matches expected modes for chosen architecture
+  - [ ] `vector_quantization` matches `.env` setting (none, fp16, or int8)
+
+- [ ] **Search functionality:**
+  - [ ] Search returns results for all enabled search modes
+  - [ ] If HNSW mode: all three modes (Keyword, Semantic, Hybrid) work correctly
+  - [ ] If hybrid-rerank mode: only Keyword and Hybrid modes visible in UI (Semantic hidden)
+  - [ ] Similar Books feature works (HNSW mode) or is disabled (hybrid-rerank mode)
+
+- [ ] **Core functionality (regression check):**
+  - [ ] Document upload and indexing succeed
+  - [ ] PDF viewer opens with search highlighting
+  - [ ] User authentication works (if `AUTH_ENABLED=true`)
+  - [ ] Admin portal functions correctly (all 7 pages)
+  - [ ] No startup errors in container logs
+
+- [ ] **Topology validation (if single-node):**
+  - [ ] Solr cluster healthy with 1 ZK + 1 Solr node
+  - [ ] RBAC and authentication work as expected
+  - [ ] Search performance acceptable for deployment scale
+
+- [ ] **Auth mode validation (if single-user):**
+  - [ ] API endpoints accessible without tokens
+  - [ ] Admin portal accessible without login
+  - [ ] UI does not render auth flows
+
+---
+
+### Known Issues and Limitations
+
+1. **Hybrid-rerank mode limitations:**
+   - Semantic search mode is hidden from UI
+   - Similar Books feature is disabled
+   - Search quality depends on BM25 pre-filtering effectiveness
+   - Best suited for memory-constrained deployments with <50K documents
+
+2. **Vector quantization quality:**
+   - fp16 and int8 modes introduce small quality degradation (<1-3%)
+   - Embeddings server logs quality validation warnings (informational only)
+   - Operators should benchmark search quality in staging before production deployment
+
+3. **Single-node topology limitations:**
+   - No high availability (single point of failure)
+   - No automatic failover
+   - Not recommended for production deployments >50K documents
+
+4. **Single-user mode security:**
+   - Disables all authentication and authorization
+   - All API endpoints publicly accessible
+   - Only use in trusted environments (local development, CI, behind firewall)
+
+5. **Reindexing requirement:**
+   - Switching search architecture or vector quantization requires reindexing
+   - Plan for indexing downtime when changing these settings
+   - Monitor indexing progress via admin portal or API
+
+---
+
+### Rollback Procedure
+
+To roll back to v2.0.0:
+
+1. **Stop the stack:**
+   ```bash
+   docker compose down
+   ```
+
+2. **Switch to v2.0.0 images:**
+   ```bash
+   # Update .env: VERSION=2.0.0
+   docker compose pull
+   docker compose up -d
+   ```
+
+3. **Restore v2.0.0 configuration (if changed):**
+   - Remove `SEARCH_ARCHITECTURE`, `VECTOR_QUANTIZATION`, `AUTH_ENABLED` from `.env` (or set to defaults)
+   - Remove `-f docker/compose.single-node.yml` from compose command if used
+
+4. **No data migration rollback needed:**
+   - v2.1.0 makes no schema or volume changes with default settings
+   - If you changed `SEARCH_ARCHITECTURE` or `VECTOR_QUANTIZATION`, reindexing may be needed to restore HNSW graph (depends on rollback requirements)
+
+**Important:** If you switched to hybrid-rerank mode or changed quantization in v2.1.0, rolling back to v2.0.0 will restore HNSW mode with float32 vectors. You may need to reindex to rebuild the HNSW graph if it was discarded during the upgrade.
+
+---
+
+### Additional Resources
+
+- [Deployment Topologies Documentation](../deployment-topologies.md) — New in v2.1.0
+- [v2.1.0 Release Notes](../release-notes/v2.1.0.md) — Complete release documentation
+- [v2.1.0 Test Report](../test-reports/v2.1.0.md) — Validation checklist and staging requirements
+- [v2.0.0 Deployment Updates](#deployment-updates-for-v200) — Previous release
