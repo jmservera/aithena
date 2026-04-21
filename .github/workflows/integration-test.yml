@@ -266,27 +266,6 @@ jobs:
           python3 e2e/create-sample-docs.py "$E2E_LIBRARY_PATH"
           find "$E2E_LIBRARY_PATH" -maxdepth 2 -type f -name '*.pdf' -printf '%P\n' | sort
 
-      - name: Dump override file for debugging
-        run: |
-          echo "=== docker-compose.github-actions.yml ==="
-          cat docker-compose.github-actions.yml
-          echo "=== solr-init section from merged config ==="
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            config 2>&1 | sed -n '/^  solr-init:/,/^  [a-z]/p' | head -40
-          echo "=== grep SOLR_EXPECTED ==="
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            config 2>&1 | grep SOLR_EXPECTED || echo "SOLR_EXPECTED not found"
-
       - name: Validate merged Docker Compose config
         run: |
           docker compose \
@@ -306,25 +285,6 @@ jobs:
             -f docker-compose.github-actions.yml \
             --profile production \
             build
-
-      - name: Verify solr-init config
-        run: |
-          echo "=== solr-init merged config ==="
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            config --no-interpolate 2>&1 | sed -n '/^  solr-init:/,/^  [a-z]/p' | head -30
-          echo "=== SOLR_EXPECTED_NODES ==="
-          docker compose \
-            -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
-            -f docker/compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            config --no-interpolate 2>&1 | grep -i "SOLR_EXPECTED_NODES" || echo "NOT FOUND"
 
       - name: Start stack (${{ matrix.topology }})
         env:

@@ -184,6 +184,8 @@ jobs:
               environment:
                 SOLR_NUM_SHARDS: "1"
                 SOLR_REPLICATION_FACTOR: "1"
+                SOLR_EXPECTED_NODES: "1"
+                ZK_HOST: "zoo1:2181"
             # Point solr-search at standalone ZooKeeper
             solr-search:
               environment:
