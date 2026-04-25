@@ -1,0 +1,174 @@
+# Consolidated Security Scanning
+#
+# This workflow combines all security scanners into a single pipeline:
+#   - Bandit: Python SAST scanning for security issues in source code.
+#   - Checkov: Scans Dockerfiles and GitHub Actions workflows for IaC
+#     misconfigurations (CIS benchmarks, best practices, supply-chain policies).
+#   - zizmor: Focuses on GitHub Actions-specific supply-chain risks such as
+#     template injection and dangerous triggers.
+#
+# All jobs run in parallel and upload SARIF results to GitHub Code Scanning.
+
+name: Security Scanning
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # Bandit – Python SAST scanner
+  # ──────────────────────────────────────────────────────────────────────
+  bandit-scan:
+    name: Bandit Python security scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[sarif]
+
+      - name: Run Bandit scan
+        run: |
+          # Run bandit with configuration from .bandit file
+          # -r: recursive scan
+          # -f sarif: output SARIF format for GitHub Code Scanning
+          # -o: output file
+          # Exits non-zero on findings — this is intentional so security
+          # issues block merges (required status check)
+          bandit -c .bandit -r . -f sarif -o bandit-results.sarif
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13  # v4.35.1
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+
+      - name: Upload SARIF as artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: always()
+        with:
+          name: bandit-sarif
+          path: bandit-results.sarif
+          retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Checkov – IaC misconfiguration scanner
+  # Covers: Dockerfiles, GitHub Actions workflows (CIS benchmarks)
+  # ──────────────────────────────────────────────────────────────────────
+  checkov-scan:
+    name: Checkov IaC Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov on Dockerfiles
+        id: checkov-dockerfiles
+        run: |
+          checkov --framework dockerfile \
+            --directory . \
+            --config-file .checkov.yml \
+            --output cli \
+            --output sarif \
+            --output-file-path . \
+            --soft-fail
+        continue-on-error: true
+
+      - name: Run Checkov on GitHub Actions workflows
+        id: checkov-actions
+        run: |
+          checkov --framework github_actions \
+            --directory .github/workflows \
+            --config-file .checkov.yml \
+            --output cli \
+            --output sarif \
+            --output-file-path . \
+            --soft-fail
+        continue-on-error: true
+
+      - name: Upload Checkov SARIF results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13  # v4.35.1
+        with:
+          sarif_file: results_sarif.sarif
+          category: checkov-iac
+        continue-on-error: true
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Checkov IaC Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Scan completed (non-blocking mode)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed results in the Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** This scan runs with \`soft_fail: true\` and will not block CI/CD pipelines." >> $GITHUB_STEP_SUMMARY
+
+  # ──────────────────────────────────────────────────────────────────────
+  # zizmor – GitHub Actions supply-chain security scanner
+  # Covers: template injection, dangerous triggers, unpinned actions
+  # ──────────────────────────────────────────────────────────────────────
+  zizmor-scan:
+    name: GitHub Actions Security Scan (zizmor)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor security scan
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8  # v0.5.2
+        with:
+          # SARIF output automatically uploaded to GitHub Code Scanning
+          # Focuses on P0 findings: template-injection and dangerous-triggers
+          advanced-security: true
+          config: .zizmor.yml

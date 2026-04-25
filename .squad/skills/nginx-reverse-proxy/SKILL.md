@@ -100,7 +100,7 @@ SSL/TLS (certbot) is optional. The base compose file runs HTTP-only. SSL is adde
 docker compose up -d
 
 # With SSL:
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 ```
 
 **Why overlay instead of profiles:** Docker Compose profiles can disable the certbot service but can't conditionally add volume mounts or port bindings to nginx. The overlay cleanly isolates:
@@ -121,5 +121,5 @@ docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
 
 - `src/nginx/` — nginx configuration files
 - `docker-compose.yml` — nginx service definition and dependencies
-- `docker-compose.ssl.yml` — SSL overlay with certbot
+- `docker/compose.ssl.yml` — SSL overlay with certbot
 - Skill `docker-health-checks` — health check patterns for all services

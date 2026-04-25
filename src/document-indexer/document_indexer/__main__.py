@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import gc
 import hashlib
 import json
@@ -25,6 +26,7 @@ from . import (
     EMBEDDINGS_PORT,
     EXCHANGE_NAME,
     GIT_COMMIT,
+    INDEXER_CONTROL_PORT,
     MAX_PDF_PAGES,
     QUEUE_NAME,
     RABBITMQ_HOST,
@@ -41,6 +43,7 @@ from . import (
     VERSION,
 )
 from .chunker import chunk_text_with_pages
+from .control import IndexerControl, install_signal_handlers, start_control_server
 from .embeddings import get_embeddings
 from .logging_config import setup_logging
 from .metadata import extract_metadata
@@ -55,6 +58,7 @@ SOLR_STARTUP_DELAY = 5
 SOLR_STARTUP_ATTEMPTS = 60
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 queue = None
+indexer_control: IndexerControl | None = None
 
 
 def _rabbitmq_connection_parameters() -> pika.ConnectionParameters:
@@ -233,7 +237,7 @@ def build_literal_params(
     if metadata.get("year") is not None:
         params["literal.year_i"] = str(metadata["year"])
     if metadata.get("language"):
-        params["literal.language_s"] = metadata["language"]
+        params["literal.language_detected_s"] = metadata["language"]
     if page_count is not None:
         params["literal.page_count_i"] = str(page_count)
     if thumbnail_url:
@@ -250,15 +254,19 @@ def build_chunk_doc(
     metadata: dict,
     page_start: int | None = None,
     page_end: int | None = None,
+    embedding_field: str = "embedding",
 ) -> dict:
     """Build a Solr JSON document for a single text chunk."""
     chunk_id = f"{parent_id}_chunk_{chunk_index:04d}"
+    # embedding_field is a base name (e.g. "embedding" or "embedding_byte");
+    # the Solr schema expects the "_v" suffix on all vector fields.
+    solr_field = f"{embedding_field}_v"
     doc: dict = {
         "id": chunk_id,
         "parent_id_s": parent_id,
         "chunk_index_i": chunk_index,
         "chunk_text_t": chunk,
-        "embedding_v": embedding,
+        solr_field: embedding,
         "title_s": metadata["title"],
         "author_s": metadata["author"],
         "file_path_s": metadata["file_path"],
@@ -269,7 +277,7 @@ def build_chunk_doc(
     if metadata.get("year") is not None:
         doc["year_i"] = metadata["year"]
     if metadata.get("language"):
-        doc["language_s"] = metadata["language"]
+        doc["language_detected_s"] = metadata["language"]
     if page_start is not None:
         doc["page_start_i"] = page_start
     if page_end is not None:
@@ -306,19 +314,22 @@ def index_chunks(
     for batch_start in range(0, len(page_chunks), EMBEDDING_BATCH_SIZE):
         batch = page_chunks[batch_start : batch_start + EMBEDDING_BATCH_SIZE]
         chunks = [chunk for chunk, _, _ in batch]
-        embeddings = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
+        embedding_results = get_embeddings(chunks, host=EMBEDDINGS_HOST, port=EMBEDDINGS_PORT)
 
         docs = [
             build_chunk_doc(
                 parent_id,
                 batch_start + idx,
                 chunk,
-                emb,
+                emb_result.vector,
                 metadata,
                 page_start,
                 page_end,
+                embedding_field=emb_result.field_name,
             )
-            for idx, ((chunk, page_start, page_end), emb) in enumerate(zip(batch, embeddings, strict=False))
+            for idx, ((chunk, page_start, page_end), emb_result) in enumerate(
+                zip(batch, embedding_results, strict=False)
+            )
         ]
 
         response = requests.post(
@@ -518,6 +529,9 @@ def callback(
         extra={"file_path": file_path, "remaining_messages": remaining, "correlation_id": correlation_id},
     )
 
+    if indexer_control is not None:
+        indexer_control.begin_processing(file_path)
+
     try:
         metadata = index_document(Path(file_path))
         logger.info(
@@ -549,19 +563,73 @@ def callback(
     finally:
         gc.collect()
         channel.basic_ack(delivery_tag=method.delivery_tag)
+        if indexer_control is not None:
+            indexer_control.end_processing()
 
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))
-def consume() -> None:
+def consume(control: IndexerControl | None = None) -> None:
     connection = pika.BlockingConnection(_rabbitmq_connection_parameters())
     channel = connection.channel()
     get_queue(channel)
-    channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
+
+    if control is None:
+        # Legacy mode: simple blocking consume
+        channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
+        try:
+            channel.start_consuming()
+        except pika.exceptions.ConnectionClosedByBroker:
+            logger.warning("RabbitMQ closed the connection.")
+        return
+
+    consumer_tag: str | None = None
+
+    def _start_consuming() -> str:
+        nonlocal consumer_tag
+        consumer_tag = channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
+        logger.info("Consumer registered (tag=%s)", consumer_tag)
+        return consumer_tag
+
+    def _stop_consuming() -> None:
+        nonlocal consumer_tag
+        if consumer_tag is not None:
+            try:
+                channel.basic_cancel(consumer_tag)
+                logger.info("Consumer cancelled (tag=%s)", consumer_tag)
+            except Exception:
+                logger.debug("Error cancelling consumer", exc_info=True)
+            consumer_tag = None
+
+    # Start consuming unless we restored a paused state
+    if not control.is_paused:
+        _start_consuming()
+    else:
+        logger.info("Starting in paused state — not consuming messages")
+
+    was_paused = control.is_paused
 
     try:
-        channel.start_consuming()
-    except pika.exceptions.ConnectionClosedByBroker:
-        logger.warning("RabbitMQ closed the connection.")
+        while not control.is_shutting_down:
+            # Handle pause/resume transitions
+            if control.is_paused and not was_paused:
+                _stop_consuming()
+                was_paused = True
+                logger.info("Indexer paused — consumer stopped")
+            elif not control.is_paused and was_paused:
+                _start_consuming()
+                was_paused = False
+                logger.info("Indexer resumed — consumer restarted")
+
+            # Process pending events from RabbitMQ (non-blocking)
+            try:
+                connection.process_data_events(time_limit=1)
+            except pika.exceptions.ConnectionClosedByBroker:
+                logger.warning("RabbitMQ closed the connection.")
+                break
+    finally:
+        _stop_consuming()
+        with contextlib.suppress(Exception):
+            connection.close()
 
 
 if __name__ == "__main__":
@@ -578,5 +646,10 @@ if __name__ == "__main__":
         SOLR_COLLECTION,
         extra={"solr_host": SOLR_HOST, "solr_port": SOLR_PORT, "solr_collection": SOLR_COLLECTION},
     )
+
+    indexer_control = IndexerControl(redis_client=redis_client)
+    install_signal_handlers(indexer_control)
+    start_control_server(indexer_control, port=INDEXER_CONTROL_PORT)
+
     wait_for_solr_collection()
-    consume()
+    consume(control=indexer_control)

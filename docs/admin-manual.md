@@ -1,8 +1,8 @@
 # Admin Manual
 
-This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [v1.17.0 Release Notes](release-notes/v1.17.0.md).
+This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), and [v1.17.0 Deployment Updates](#deployment-updates-for-v1170) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), and [v2.0.0 Deployment Updates](#deployment-updates-for-v200) sections below.
 
 ## System architecture overview
 
@@ -24,7 +24,7 @@ Aithena runs as a Docker Compose stack built around Solr, a document ingestion p
 | `document-indexer` | Consumes queue items and indexes books into Solr | internal only |
 | `embeddings-server` | Embedding service used by the search stack | internal only; direct `8085` via override |
 | `redis-commander` | Web UI for Redis inspection | proxied through `nginx`; direct `8081` via override |
-| `certbot` | Certificate renewal helper (optional — see `docker-compose.ssl.yml`) | internal only |
+| `certbot` | Certificate renewal helper (optional — see `docker/compose.ssl.yml`) | internal only |
 
 ### Service dependencies
 
@@ -48,6 +48,29 @@ Current shipped behavior:
 - `nginx` also waits for **RabbitMQ** health before exposing the admin surfaces
 
 This reduces startup races where the lister, indexer, or admin tools could come up before the queue or cache was actually ready.
+
+## Host Prerequisites
+
+Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host** (these cannot be set from inside a container).
+
+### Redis memory overcommit
+
+Redis background saves (RDB snapshots) fork the process, which requires the kernel to allow memory overcommit. Without this setting Redis logs `WARNING Memory overcommit must be enabled!` and background saves may fail.
+
+```bash
+# Apply immediately (non-persistent):
+sudo sysctl vm.overcommit_memory=1
+
+# Make persistent across reboots:
+echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/90-redis-overcommit.conf
+sudo sysctl --system
+```
+
+> **Note:** The compose stack sets `stop-writes-on-bgsave-error no` in `src/redis/redis.conf` so Redis remains available even when overcommit is disabled, but applying the host-level setting is still recommended to ensure reliable snapshots.
+
+### ZooKeeper credentials (production hardening)
+
+Solr logs `Using default ZkCredentialsProvider/ZkACLProvider` at startup. This is informational — it means ZooKeeper znodes are world-readable. For production deployments that require ZooKeeper ACL-based access control, see the [Apache Solr ZooKeeper Access Control](https://solr.apache.org/guide/solr/latest/deployment-guide/zookeeper-access-control.html) documentation.
 
 ## Deployment with Docker Compose
 
@@ -77,20 +100,27 @@ python3 -m installer
 #       --admin-user admin --admin-password 'change-me' --origin http://localhost
 ```
 
-The installer writes `.env`, creates the host auth directory used by Docker Compose, generates the JWT secret, and seeds the initial admin account. Re-run it whenever you need to rotate credentials or rebuild auth storage.
+The installer writes `.env`, creates the host auth directory used by Docker Compose, generates the JWT secret, seeds the initial admin account, and generates `./start.sh` with the correct compose file chain. Re-run it whenever you need to rotate credentials or rebuild auth storage.
+
+The installer also asks about:
+- **Environment** — Development (debug ports) or Production (GHCR images)
+- **GPU acceleration** — auto-detects NVIDIA/Intel GPUs
+- **SSL** — optional Let's Encrypt setup with domain
 
 ### 3. Start the stack
 
 ```bash
-docker compose up -d
+./start.sh
 ```
 
-This starts the full stack, including SolrCloud, Redis, RabbitMQ, the indexing services, the search API, and the UI. In the default local workflow, Docker Compose also auto-loads `docker-compose.override.yml`, which republishes debug ports for direct host access.
-
-For a production-style run with only the nginx gateway exposed on the host, use:
+The generated `start.sh` combines the right compose files based on your installer choices (environment, GPU, SSL). You can also run compose directly:
 
 ```bash
-docker compose -f docker-compose.yml up -d
+# Development
+docker compose -f docker-compose.yml -f docker/compose.dev-ports.yml up -d --build
+
+# Production
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 ### 4. Watch initial bootstrap
@@ -119,7 +149,7 @@ Common local URLs:
 | RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
 | Redis Commander | `http://localhost/admin/redis/` | Protected |
 
-Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker-compose.override.yml` file is loaded.
+Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker/compose.dev-ports.yml` file is loaded.
 
 ## GPU Acceleration Setup (v1.17.0)
 
@@ -173,7 +203,7 @@ docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
 
 #### Start with NVIDIA
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
 ```
 
 ### Intel GPU Setup
@@ -210,7 +240,7 @@ clinfo | head -20
 
 #### Start with Intel
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d
 ```
 
 ### WSL2 GPU Passthrough (Windows)
@@ -232,7 +262,7 @@ Quick reference:
 2. Run `wsl --update` to ensure latest WSL2 kernel
 3. Inside WSL, add Intel GPU repositories and install runtime packages
 4. Verify: `clinfo | head -20` should show your Intel GPU
-5. Use the Intel override: `docker compose -f docker-compose.prod.yml -f docker-compose.intel.override.yml up -d`
+5. Use the Intel override: `docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
 
 ### Verification
 
@@ -374,8 +404,17 @@ That means every service using `/data/documents` is reading from the same mounte
 
 - `rabbitmq` sets `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000`
 - `embeddings-server` sets `PORT=8085`
-- Solr nodes set `SOLR_MODULES=extraction,langid` and `ZK_HOST=zoo1:2181,zoo2:2181,zoo3:2181`
+- Solr nodes set `SOLR_MODULES=extraction,langid`, `ZK_HOST=zoo1:2181,zoo2:2181,zoo3:2181`, and `SOLR_SECURITY_MANAGER_ENABLED=false` (v1.19.0+, suppresses Solr 9.7 deprecation warning)
 - ZooKeeper nodes set `ZOO_4LW_COMMANDS_WHITELIST`, `ZOO_MY_ID`, and `ZOO_SERVERS`
+
+#### `solr-init` (v1.19.0+)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SOLR_NUM_SHARDS` | `1` | Number of shards for the `books` collection. Only applies at initial collection creation. |
+| `SOLR_REPLICATION_FACTOR` | `3` | Replication factor (number of copies per shard). Only applies at initial collection creation. |
+
+> **Important:** These variables only take effect when `solr-init` creates the collection for the first time. To change topology on an existing deployment you must delete and recreate the collection, which triggers a full re-index. See [Deployment Updates for v1.19.0](#deployment-updates-for-v1190) and the [sizing guide](deployment/sizing-guide.md) for guidance.
 
 ### RabbitMQ startup hardening (v0.5.0)
 
@@ -524,7 +563,7 @@ echo "Current tag: v$(cat VERSION)"
 # Version endpoint on solr-search
 curl -s http://localhost:8080/version | jq '.version'
 
-# In Streamlit admin dashboard
+# In admin dashboard
 # Navigate to System Status > Versions tab
 ```
 
@@ -567,7 +606,7 @@ docker-compose up
 
 ### System Status Admin Page
 
-v0.7.0 adds a new **System Status** page in the admin dashboard (Streamlit app):
+v0.7.0 adds a new **System Status** page in the admin dashboard:
 
 **Navigation:**
 
@@ -647,7 +686,7 @@ v0.7.0 includes a CI/CD workflow (`.github/workflows/release.yml`) that automate
 
 **Pre-release (RC) testing:**
 
-Before creating a final release, you can build and test release candidate images using the pre-release workflow. This lets you validate RC images locally with `docker-compose.prod.yml` before merging to `main`. See the [Pre-Release Testing](pre-release-testing.md) guide for the full workflow, including how to trigger RC builds, pull images, and run the validation checklist.
+Before creating a final release, you can build and test release candidate images using the pre-release workflow. This lets you validate RC images locally with `docker/compose.prod.yml` before merging to `main`. See the [Pre-Release Testing](pre-release-testing.md) guide for the full workflow, including how to trigger RC builds, pull images, and run the validation checklist.
 
 **To test locally:**
 
@@ -950,6 +989,12 @@ If your deployment exposes the admin page, require the same operational review y
 ### Why this is safe
 
 The indexer uses deterministic document IDs derived from the file path, and chunk IDs are derived from that same parent ID plus the chunk index. Reindexing therefore refreshes the existing documents in place instead of creating duplicates for unchanged files.
+
+## CI/CD Secrets & PAT Management
+
+The repository uses three custom Personal Access Tokens (PATs) in addition to the automatic `GITHUB_TOKEN`. For a full inventory of each secret — required permissions, creation guides, rotation procedures, and consolidation analysis — see the **[PAT Management Guide](operations/pat-management.md)**.
+
+Automated monthly validation is provided by the [`pat-health-check.yml`](../.github/workflows/pat-health-check.yml) workflow, which opens an issue if any token is expired or misconfigured.
 
 ## Troubleshooting common issues
 
@@ -1339,7 +1384,6 @@ Services published to GHCR:
 - `embeddings-server` — Embedding service
 - `document-indexer` — PDF indexing consumer
 - `document-lister` — Library scanner
-- `admin` — Streamlit admin dashboard
 - `nginx` — Reverse proxy
 
 **OCI image labels:**
@@ -1420,7 +1464,7 @@ v1.5.0 provides a production-ready `docker-compose.yml` that uses pre-built GHCR
 | Feature | Dev | Production |
 |---------|-----|-----------|
 | Image source | Local build | GHCR pre-built |
-| Override file | docker-compose.override.yml | None |
+| Override file | docker/compose.dev-ports.yml | None |
 | Debug ports | Published (5173, 8080, 8085, 8501) | Not published |
 | Health checks | Simple, permissive | Strict, production timeouts |
 | Volume mounts | Simple paths | Validated, backed up |
@@ -2272,7 +2316,7 @@ v1.8.1 fixes the authentication flow preventing admin dashboard access.
 
 **What changed:**
 
-- Admin (Streamlit) page authentication flow now works correctly without login redirects.
+- Admin page authentication flow now works correctly without login redirects.
 - Session state persists across admin page navigation.
 
 **Impact on operators:**
@@ -2650,7 +2694,6 @@ Aithena allows administrators to correct or enrich document metadata directly, w
 ### Prerequisites
 
 - An admin user account (role `admin`)
-- The `ADMIN_API_KEY` environment variable configured in the deployment
 
 ### Single document edit
 
@@ -2658,7 +2701,6 @@ Edit one document at a time from the UI detail view or via the API:
 
 ```
 PATCH /v1/admin/documents/{doc_id}/metadata
-X-API-Key: <your-admin-key>
 Authorization: Bearer <admin-jwt>
 
 {
@@ -2760,7 +2802,7 @@ Whitespace is trimmed automatically. Whitespace-only strings are rejected (422).
 
 | Symptom | Cause | Resolution |
 |---------|-------|------------|
-| 401 on PATCH | Missing or invalid `X-API-Key` header | Verify `ADMIN_API_KEY` in `.env` and include it in the request |
+| 401 on PATCH | Missing or invalid auth token | Verify you are logged in with an admin account and the JWT is present |
 | 403 on PATCH | JWT user is not an admin | Log in with an admin account |
 | 404 on single edit | Document ID not in Solr | Verify the document was indexed; check `doc_id` spelling |
 | 503 on single edit | Redis unavailable | Check Redis health; the Solr update may still have succeeded |
@@ -3137,7 +3179,7 @@ Logs are written to `/var/log/aithena-backup-*.log`.
    ```bash
    # Find a document ID from a search result
    curl -X PATCH "http://localhost/v1/admin/documents/{doc_id}/metadata" \
-     -H "X-API-Key: $ADMIN_API_KEY" \
+     -H "Authorization: Bearer $ADMIN_JWT" \
      -H "Content-Type: application/json" \
      -d '{"year": 1984}'
    ```
@@ -3250,7 +3292,7 @@ v1.11.0 introduces search improvements, thumbnail generation, and a book detail 
 3. **Thumbnail Generation** — During indexing, first-page thumbnails are extracted and stored as `.thumb.jpg` alongside PDFs
 4. **Thumbnail Serving** — nginx serves thumbnails at `/thumbnails/...`; the `thumbnail_url` field is indexed in Solr and returned in search results
 5. **Book Detail Endpoint** — New `GET /v1/books/{id}` endpoint retrieves complete book metadata
-6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; `/admin/streamlit` now redirects to `/admin/`
+6. **Nginx Routing Cleanup** — Removed dead `admin` upstream; all admin routes are served by the React admin portal
 
 ### Critical Upgrade Action: Full Reindex Required
 
@@ -3286,7 +3328,7 @@ The new `GET /v1/books/{id}` endpoint returns full book metadata (title, author,
 
 ### Admin Routing
 
-The dead `admin` upstream has been removed from nginx configuration. The `/admin/streamlit` path now redirects to `/admin/`. Existing bookmarks will redirect automatically.
+The dead `admin` upstream has been removed from nginx configuration. All admin routes are served by the React admin portal at `/admin/`.
 
 ---
 
@@ -3511,7 +3553,7 @@ If you need diacritic-sensitive search, set `SOLR_ASCII_FOLDING=false` in `.env`
 For production deployments, use the provided SSL Compose file:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 ```
 
 This configuration:
@@ -3658,15 +3700,132 @@ v1.15.0 includes admin portal enhancements, infrastructure hardening, and operat
 
 ### Admin Portal Redesign
 
-The admin portal (`/admin`) now features a sidebar navigation with organized menu:
+The admin portal (`/admin`) is a React-based operator dashboard with sidebar navigation. It provides access to all admin tools from a single interface.
 
-- **Dashboard** — system overview
-- **Indexing Status** — per-document progress and status information
-- **Log Viewer** — per-service log streaming from the browser
-- **Backups** — existing backup/restore dashboard
-- **Solr Admin** — Solr admin UI with SSO passthrough
+#### Navigation structure
 
-No configuration changes needed — the sidebar is purely a UI improvement.
+The sidebar organizes admin pages into five groups:
+
+| Group | Pages | Routes |
+|---|---|---|
+| **Overview** | Dashboard | `/admin` |
+| **Documents** | Document Manager | `/admin/documents` |
+| **Indexing** | Reindex Library, Indexing Status | `/admin/reindex`, `/admin/indexing-status` |
+| **System** | System Status, Log Viewer, Infrastructure | `/admin/system-status`, `/admin/logs`, `/admin/infrastructure` |
+| **Management** | Users, Backups | `/admin/users`, `/admin/backups` |
+
+The sidebar supports keyboard navigation: use **Arrow Up/Down** to move between items, **Home/End** to jump to the first/last item, and **Enter** to navigate.
+
+#### Dashboard (`/admin`)
+
+The dashboard provides a real-time overview of the system:
+
+- **Document Metrics** — total, queued, processed, and failed document counts
+- **Queue Metrics** — RabbitMQ messages ready, unacknowledged, and total; queue name and consumer count
+- **Infrastructure Status** — summary of healthy vs. total containers, with a table showing each container's name, type, status, and version
+
+Controls:
+- **Auto-refresh** checkbox enables periodic polling
+- **Refresh** button triggers an immediate data fetch
+- **Last refreshed** timestamp shows when data was last fetched
+
+#### Document Manager (`/admin/documents`)
+
+Manages documents across three tabs:
+
+- **Queued** — documents waiting to be indexed, showing path and queued timestamp
+- **Processed** — successfully indexed documents with path, title, author, year, page count, chunk count, and indexed timestamp. Includes a **Clear All** button (with confirmation) to remove processed state so documents are rediscovered
+- **Failed** — documents that failed indexing, with error details (expandable), per-document **Requeue** and **Delete** buttons, and a **Requeue All** bulk action
+
+All tabs include:
+- **Search** — filter documents by file path
+- **Pagination** — 25 documents per page with page navigation
+- Keyboard-accessible tab switching with arrow keys
+
+#### Reindex Library (`/admin/reindex`)
+
+Triggers a full library reindex with a two-step confirmation workflow:
+
+1. Click **Start Reindex** — opens a confirmation dialog explaining the destructive action
+2. Confirm to proceed — the system deletes all documents from the Solr collection, clears Redis tracking state, and allows `document-lister` to rediscover files
+
+The page explains the four-step process and displays a warning that search will be unavailable during reindexing. Results show the collection status and number of Redis keys cleared.
+
+#### Indexing Status (`/admin/indexing-status`)
+
+Shows per-document indexing progress:
+
+- **Summary metrics** — total, queued, processing, processed, failed counts plus total pages and chunks
+- **Processing cards** — documents currently being indexed show progress bars for text indexing and embedding indexing stages
+- **Document table** — all documents with status badge, path, title, text/embedding indexed indicators, page count, chunk count, error details, and timestamp
+- **Status filter** — filter by all, queued, processing, processed, or failed
+- **Auto-refresh** checkbox and manual refresh button
+- **Pagination** — 25 documents per page
+
+#### System Status (`/admin/system-status`)
+
+Displays container health across the stack:
+
+- **Overview metrics** — total containers, healthy count, and containers needing attention
+- **Application Services** — service cards (e.g., solr-search, document-indexer) with status emoji (🟢/🔴/🟠), version, and commit hash
+- **Infrastructure Services** — infrastructure cards (e.g., Redis, RabbitMQ, Solr nodes) with the same status display
+- **Stale data warning** — shows an alert if data hasn't been refreshed recently
+
+#### Log Viewer (`/admin/logs`)
+
+Streams container logs directly from the browser:
+
+- **Service selector** — dropdown to choose which container's logs to view
+- **Tail lines** — configurable number of lines to fetch (e.g., 50, 100, 500)
+- **Auto-refresh** — checkbox with configurable refresh interval
+- **Search filter** — text filter to narrow log output; shows count of matched vs. total lines
+- **Log output** — monospace display with automatic scroll-to-bottom on new content
+
+This reduces the need for SSH access for routine log inspection.
+
+#### Infrastructure (`/admin/infrastructure`)
+
+Provides quick links to management UIs for infrastructure services:
+
+- **Solr Admin** — link to `/admin/solr/` for collection management and document inspection
+- **RabbitMQ Management** — link to `/admin/rabbitmq/` for queue monitoring
+- **Redis Commander** — link to `/admin/redis/` for Redis state inspection
+
+Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, internal endpoint URL, and connection status.
+
+#### Accessibility
+
+The admin portal follows web accessibility best practices:
+
+- All pages use semantic HTML (`<main>`, `<header>`, `<section>`, `<nav>`)
+- ARIA labels on interactive elements, tables, and live regions
+- Keyboard navigation in the sidebar (Arrow keys, Home, End)
+- Tab-based keyboard navigation in the Document Manager
+- Status indicators use both color and text/emoji for color-blind users
+- Error banners use `role="alert"` for screen reader announcements
+- Progress bars include `aria-valuenow`, `aria-valuemin`, `aria-valuemax`
+- Auto-refreshing content uses `aria-live="polite"` regions
+
+#### Screenshots
+
+Screenshots are generated automatically during the release workflow. See `docs/images/admin-dashboard.png` for the dashboard.
+
+<!-- Screenshots are auto-generated by the release workflow -->
+
+No configuration changes needed — the admin portal is purely a UI improvement.
+
+### Admin Portal Troubleshooting
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| Admin pages show "Loading…" indefinitely | Backend API (`solr-search`) is not running or unreachable | Check `docker compose ps solr-search` and verify the service is healthy |
+| Dashboard shows errors for all cards | Auth token expired or invalid | Log out and log back in; verify your account has the `admin` role |
+| Document Manager shows empty tabs | Redis is down or has no tracked documents | Check Redis health; ensure `document-lister` has run at least one scan |
+| Log Viewer shows "Select a service" but dropdown is empty | Container stats endpoint is disabled or unreachable | Verify `EXPOSE_CONTAINER_STATS=true` in your deployment |
+| System Status shows all containers as "down" | Container stats API not enabled | Set `EXPOSE_CONTAINER_STATS=true` and restart `solr-search` |
+| Infrastructure links return 502 | Target service (Solr, RabbitMQ, Redis Commander) is not running | Check `docker compose ps` for the specific service |
+| Reindex completes but documents don't reappear | `document-lister` hasn't run a scan yet | Wait for the next scan (default 60s) or restart the lister |
+| Sidebar navigation not visible | Browser window too narrow or CSS not loaded | Widen the browser window; clear cache and reload |
 
 ### Per-Service Log Viewer
 
@@ -3753,8 +3912,8 @@ When no RC number is specified, the workflow queries ghcr.io for existing RC tag
 Pull and start the RC stack using the production Compose file:
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml pull
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml pull
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
 ```
 
 Substitute `1.16.0-rc.1` with the actual RC tag you want to test. The `VERSION` environment variable overrides the image tag used by the production Compose file.
@@ -3776,12 +3935,12 @@ If an RC reveals a blocking issue:
 
 1. Stop the RC stack:
    ```bash
-   docker compose -f docker-compose.prod.yml down
+   docker compose -f docker/compose.prod.yml down
    ```
 2. Pull and restart the previous release:
    ```bash
-   VERSION=1.15.0 docker compose -f docker-compose.prod.yml pull
-   VERSION=1.15.0 docker compose -f docker-compose.prod.yml up -d
+   VERSION=1.15.0 docker compose -f docker/compose.prod.yml pull
+   VERSION=1.15.0 docker compose -f docker/compose.prod.yml up -d
    ```
 
 ### HF_TOKEN security note
@@ -4139,3 +4298,726 @@ For a comprehensive troubleshooting guide, see [docs/guides/gpu-troubleshooting.
    ```
 
 For more detailed troubleshooting, see the [GPU Troubleshooting Guide](guides/gpu-troubleshooting.md).
+
+---
+
+## Deployment Updates for v1.18.0
+
+v1.18.0 introduces folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, bug fixes for PDF embedded viewing and collections consistency, and CI/CD hardening. There are no breaking changes from v1.17.0. All features are additive or opt-in.
+
+### Upgrade from v1.17.0
+
+No migration steps required. Standard upgrade procedure:
+
+```bash
+docker compose pull
+docker compose down
+docker compose up -d
+```
+
+All existing deployments (CPU-only and GPU-accelerated) continue to work unchanged.
+
+### Folder Facets (New Feature)
+
+v1.18.0 adds a new "📁 Folder" facet to the search sidebar that enables users to filter results by document location in the library structure.
+
+**What's new:**
+- Automatic folder path extraction during document indexing
+- Hierarchical folder tree rendered in the search sidebar
+- Click-to-filter behavior that includes documents in selected folder and all subfolders (recursive)
+- Counts show number of documents per folder
+- Combinable with existing facets (language, author, year, category)
+
+**Operator action:** None required. This feature is enabled by default and requires no configuration.
+
+**User experience:** Users will see the new "📁 Folder" facet in the search sidebar. Clicking a folder filters results to that folder and its children.
+
+### Backup & Disaster Recovery System (New Feature)
+
+v1.18.0 includes a comprehensive backup and restore system for production deployments.
+
+#### System architecture
+
+**Backup tiers:**
+- **Tier 1 (Critical):** Auth database, collections database, secrets (high frequency, restore priority)
+- **Tier 2 (High):** Solr indices, ZooKeeper coordination (medium frequency)
+- **Tier 3 (Medium):** Redis cache, RabbitMQ persistence (lower frequency, optional)
+
+#### New components
+
+**Backup orchestrator script** (`backup-orchestrator.py`):
+- Schedules and runs backups across all tiers
+- Creates timestamped backup archives
+- Supports dry-run mode for validation
+- Command: `docker compose exec solr-search backup-orchestrator.py --help`
+
+**Restore orchestrator script** (`restore-orchestrator.py`):
+- Lists available backups
+- Previews restore operations in dry-run mode
+- Verifies backup integrity before restore
+- Command: `docker compose exec solr-search restore-orchestrator.py --help`
+
+**Backup admin API endpoints** (protected, admin-only):
+- `POST /v1/admin/backup/now` — trigger on-demand backup
+- `GET /v1/admin/backup/status` — current backup state
+- `GET /v1/admin/backup/history` — list available backups
+- `POST /v1/admin/backup/restore` — initiate restore with preview
+
+**React backup dashboard** (`/admin/backups`):
+- Visual backup tier status cards
+- On-demand backup trigger button
+- Backup history table
+- Restore wizard (select → preview → confirm → progress)
+
+#### Getting started
+
+1. Review the [Disaster Recovery Runbook](guides/disaster-recovery-runbook.md) for operational procedures
+2. Trigger a test backup:
+   ```bash
+   docker compose exec solr-search backup-orchestrator.py --test
+   ```
+3. Access the backup dashboard: `http://localhost/admin/backups` (admin users only)
+4. Set up monthly restore drills using the runbook procedures
+
+**Operator action required:** Set up monthly restore drills to validate backup integrity. See the disaster recovery runbook for procedures.
+
+### Collections Book Card Consistency (Bug Fix)
+
+v1.18.0 fixes collections to display books using the same card/list components as the Library.
+
+**What changed:**
+- Collections now display: title, author, thumbnail, "Open PDF" button
+- Visual styling matches Library search results
+- Collection-specific actions (notes, remove from collection) still visible
+- Consistent user experience across Collections and Library
+
+**Operator action:** None. This is a UI fix that applies automatically.
+
+### PDF Embedded Viewer Fix (Bug Fix)
+
+v1.18.0 fixes PDF embedded viewer that was not loading PDFs in some cases.
+
+**Root cause:** NGINX was returning `X-Frame-Options: deny` on the `/documents/` location, preventing iframe embedding.
+
+**Fix:** Changed X-Frame-Options to `SAMEORIGIN` on the `/documents/` NGINX location.
+
+**Workaround (pre-v1.18.0):** Users could click "Open in new window" to view PDFs.
+
+**Result:** PDFs now load reliably in the embedded viewer.
+
+**Operator action:** None. This is fixed in the NGINX configuration automatically.
+
+### CI/CD Hardening (Internal Infrastructure)
+
+v1.18.0 hardens the CI/CD pipeline with additional required checks:
+
+- Integration tests now block merge if they fail
+- Bandit SAST blocks merge on high-severity findings
+- Frontend linting consolidated into main CI workflow
+- Pre-release validation integrated into main PR workflow
+- Solr startup reliability improved in integration tests
+- Large JavaScript blocks extracted to reusable composite actions
+- Main branch validation added to release workflow
+
+**Operator action:** None. These are internal CI/CD improvements that do not affect deployments.
+
+### Security: GitHub Actions Workflow Protection (v1.18.0)
+
+**What changed:** Build-containers.yml CI workflow now gates secret access (Docker registry credentials) to a dedicated GitHub environment with explicit protection rules.
+
+**Result:** Reduced exposure surface for build secrets.
+
+**Operator action:** None. This improves the security posture of our CI/CD pipeline.
+
+### GPU Post-Release Monitoring Guidance (Documentation Update)
+
+v1.18.0 updates GPU documentation based on v1.17.0 real-world deployment feedback:
+
+- Enhanced GPU monitoring guidance (nvidia-smi, performance metrics)
+- GPU memory utilization monitoring recommendations
+- Hardware-specific tuning tips (NVIDIA vs. Intel)
+- Common production issues and solutions
+
+**Operator action:** If running GPU-accelerated deployments, review the updated GPU sections in this manual and the standalone [GPU Troubleshooting Guide](guides/gpu-troubleshooting.md).
+
+### Stress Testing Infrastructure (New, Optional)
+
+v1.18.0 includes stress-testing infrastructure for operators who want to validate their deployments:
+
+**Test suites:**
+- Data generation (synthetic documents 1K–100K scale)
+- Indexing pipeline stress tests (measure throughput and resource usage)
+- Search latency benchmarks (p50, p95, p99 latency)
+- Concurrent user tests with Locust
+- Browser UI stress tests with Playwright
+
+**Minimum requirements documentation** published covering:
+- Recommended hardware for 10K, 100K, 1M document scales
+- CPU, memory, disk requirements
+- Expected throughput (documents/hour, queries/second)
+
+**Operator action:** Optional. Run stress tests in a non-production environment to establish baselines for your hardware. See the minimum requirements documentation for guidance.
+
+### Backward compatibility
+
+All changes are backward-compatible:
+
+- Folder facets are purely additive (new facet only, no changes to existing facets)
+- Backup/DR is opt-in (existing deployments work without triggering backup jobs)
+- Bug fixes improve user experience with no breaking changes
+- GPU support unchanged (same environment variables from v1.17.0)
+- No new required environment variables
+- No volume layout changes
+- No auth or configuration format changes
+
+Existing deployments can upgrade with a standard `docker compose pull && docker compose down && docker compose up -d`.
+
+### Documentation updates
+
+- `docs/user-manual.md` — new Folder Facets section, collections UI fix note
+- `docs/admin-manual.md` — this Deployment Updates section, Backup & DR sections
+- `docs/guides/disaster-recovery-runbook.md` — new comprehensive backup/restore operational guide
+
+---
+
+## Deployment Updates for v1.18.1
+
+### Summary
+
+v1.18.1 is a **patch release** addressing two critical bugs:
+
+1. **Solr Auth Role Assignment (#1332)** — Fixed admin user role overwriting that broke security operations
+2. **Installer CWD Independence (#1330)** — Made `uv run installer/setup.py` work from any directory
+
+**Upgrade path:** `docker compose pull && docker compose up -d --force-recreate solr`
+
+### Solr Auth Role Assignment Fix
+
+**Problem:**  
+Solr's auth bootstrap was overwriting admin user roles, stripping critical permissions needed for security operations (`superadmin`), collection admin read (`search`), and document updates (`index`).
+
+**Root cause:**  
+Solr 9.7's `solr auth enable` automatically assigns all 4 built-in roles to the admin user. The `solr-init` entrypoint was subsequently calling `set-user-role` to overwrite with only `["admin"]`, inadvertently removing the other three roles.
+
+**Fix:**
+- Removed the redundant `set-user-role` call for the admin user
+- Changed readonly user role from custom `"readonly"` to Solr 9.7 built-in `"search"`
+- Updated `security.json` to match Solr 9.7's 4-tier role hierarchy:
+  - `superadmin` — security-edit permissions
+  - `admin` — security-read, config-edit, core/collection admin
+  - `search` — collection-admin-read, read
+  - `index` — update
+
+**Verification after upgrade:**
+```bash
+docker compose exec solr curl -u admin:admin \
+  "http://localhost:8983/solr/admin/authentication" | jq '.authentication.credentials'
+```
+
+The admin user should have roles: `["superadmin", "admin", "search", "index"]`
+
+**Impact:** Admin users now retain full permissions for security operations, collection management, and document indexing.
+
+### Installer CWD Independence Fix
+
+**Problem:**  
+Running `uv run installer/setup.py` from the repository root failed with `ModuleNotFoundError: No module named 'aithena_common'` because `uv` resolves dependencies from the current working directory's `pyproject.toml`, and the repo root lacks one.
+
+**Fix:**  
+Added PEP 723 inline script metadata to `installer/setup.py` so `uv run` knows about the `aithena-common` dependency regardless of CWD.
+
+**Verification:**
+```bash
+# From repo root (now works):
+uv run installer/setup.py --help
+
+# From installer/ directory (existing behavior preserved):
+cd installer && uv run setup.py --help
+```
+
+**Impact:** Users can now run the installer from any directory without encountering import errors.
+
+### Upgrade instructions
+
+**From v1.18.0 → v1.18.1:**
+
+1. Pull the new image:
+   ```bash
+   docker compose pull
+   ```
+
+2. Recreate Solr container (to apply auth role fix):
+   ```bash
+   docker compose up -d --force-recreate solr
+   ```
+
+3. Verify Solr admin roles (see command above)
+
+**From v1.17.x or earlier:**  
+Follow the [v1.18.0 deployment notes](#deployment-updates-for-v1180) first, then apply v1.18.1 updates above.
+
+### Configuration changes
+
+**None required.** The fixes are applied automatically via updated container images and script metadata.
+
+### Data migration
+
+**None required.** Solr's existing security configuration is updated in-place on container restart.
+
+### Breaking changes
+
+**None identified.** Both fixes restore expected behavior without introducing API, configuration, or data format changes.
+
+### Documentation updates
+
+- `docs/release-notes/v1.18.1.md` — new release notes
+- `docs/test-reports/v1.18.1.md` — new test report
+- `docs/user-manual.md` — updated version link, added installer fix note
+- `docs/admin-manual.md` — this Deployment Updates section
+
+---
+
+## Deployment Updates for v1.19.0
+
+### Summary
+
+v1.19.0 is a **minor release** focused on infrastructure flexibility, deprecation cleanup, and dependency updates:
+
+1. **Configurable Solr topology (#1428)** — Solr shards and replication factor are now environment-variable driven
+2. **Deprecation warnings suppressed (#1432)** — Solr 9.7 Security Manager and RabbitMQ 4.x warnings eliminated from container logs
+3. **CI/CD improvements (#1413, #1415)** — Dependabot batch merge workflow and automerge fixes
+4. **Weekly GHAS security review (#1430)** — Automated code scanning alert triage
+5. **38+ dependency updates** — Security and compatibility patches across all services
+
+**Upgrade path:** `docker compose pull && docker compose up -d`
+
+No database migrations, no breaking changes, no data format changes.
+
+### Configurable Solr topology
+
+Previously, the `books` collection was always created with 1 shard and a replication factor of 3 (one replica per Solr node). v1.19.0 makes these values configurable via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOLR_NUM_SHARDS` | `1` | Number of index shards |
+| `SOLR_REPLICATION_FACTOR` | `3` | Number of replicas per shard |
+
+**When to change these values:**
+
+- **Personal/single-node deployment** — Set `SOLR_REPLICATION_FACTOR=1` to save ~⅔ of disk and memory (no redundant replicas needed without multiple nodes)
+- **Large libraries (30K+ documents)** — Consider `SOLR_NUM_SHARDS=2` or higher to distribute the index across nodes for faster queries
+- **Standard 3-node cluster** — The defaults (`1` shard, `3` RF) are appropriate for most deployments up to ~10K documents
+
+**To configure**, add to your `.env` file:
+
+```bash
+# Solr Collection Topology (only applies at initial collection creation)
+SOLR_NUM_SHARDS=1
+SOLR_REPLICATION_FACTOR=1
+```
+
+> **⚠️ These settings only apply when the `books` collection is first created.** If the collection already exists, changing these variables has no effect. To change topology on an existing deployment:
+> 1. Back up your data (see [Backup & Disaster Recovery](#backup--disaster-recovery-v1180))
+> 2. Delete the collection: `docker compose exec solr bin/solr delete -c books`
+> 3. Restart `solr-init`: `docker compose up -d --force-recreate solr-init`
+> 4. Re-index all documents
+
+See the [sizing guide](deployment/sizing-guide.md) for detailed topology recommendations by deployment size.
+
+### Deprecation warnings suppressed
+
+**Solr Security Manager:** Solr 9.7 emits a noisy deprecation warning about the Java Security Manager on every startup. v1.19.0 sets `SOLR_SECURITY_MANAGER_ENABLED=false` on all Solr nodes to suppress this warning. This has no security impact — the Java Security Manager is deprecated in the JDK and Solr plans to remove it in Solr 10.
+
+**RabbitMQ deprecated_features:** The `deprecated_features.permit.management_metrics_collection` setting in `rabbitmq.conf` triggered warnings on RabbitMQ 4.x. This setting has been removed since it is no longer recognized by current RabbitMQ versions.
+
+**Impact on logs:** After upgrading, Solr and RabbitMQ container logs will be significantly cleaner — no more repeated deprecation warnings on startup.
+
+### Upgrade instructions
+
+**From v1.18.1 → v1.19.0:**
+
+1. Pull new images:
+   ```bash
+   docker compose pull
+   ```
+
+2. (Optional) Configure Solr topology in `.env` if you want non-default values — see section above
+
+3. Restart all services:
+   ```bash
+   docker compose up -d
+   ```
+
+4. Verify clean startup logs:
+   ```bash
+   docker compose logs --tail=20 solr
+   docker compose logs --tail=20 rabbitmq
+   ```
+   You should no longer see Security Manager or deprecated_features warnings.
+
+**From v1.17.x or earlier:**
+Follow the [v1.18.0 deployment notes](#deployment-updates-for-v1180) and [v1.18.1 deployment notes](#deployment-updates-for-v1181) first, then apply v1.19.0 updates above.
+
+### Configuration changes
+
+| Change | File | Required action |
+|---|---|---|
+| `SOLR_NUM_SHARDS` / `SOLR_REPLICATION_FACTOR` | `.env` | **Optional.** Only set if you want non-default topology. |
+| `SOLR_SECURITY_MANAGER_ENABLED=false` | `docker-compose.yml` | **Automatic.** Applied via updated compose file. |
+| Removed `deprecated_features` setting | `rabbitmq.conf` | **Automatic.** Applied via updated config file. |
+
+### Data migration
+
+**None required.** The Solr collection schema, index format, and auth database are unchanged. Existing data is fully compatible.
+
+### Breaking changes
+
+**None identified.** All changes are backward-compatible:
+- New Solr topology env vars use the same defaults as before (1 shard, 3 RF)
+- Deprecation suppression is cosmetic (log output only)
+- No API, schema, or data format changes
+
+## Backup & Disaster Recovery (v1.18.0)
+
+This section provides comprehensive backup and disaster recovery guidance for production deployments.
+
+### System architecture
+
+The backup system uses a three-tier approach based on criticality and recovery priority:
+
+| Tier | Services/Data | Frequency | Recovery Priority | Retention |
+|---|---|---|---|---|
+| **Critical** | Auth database, Collections DB, Secrets | Hourly | 1st (restore first) | 30 days |
+| **High** | Solr indices, ZooKeeper data | Daily | 2nd (restore second) | 14 days |
+| **Medium** | Redis state, RabbitMQ persistence | Weekly | 3rd (restore last) | 7 days |
+
+### Backup components
+
+#### 1. Backup Orchestrator Script
+
+Located at: `.squad/scripts/backup-orchestrator.py` (or similar)
+
+**Usage:**
+```bash
+# Perform a full backup across all tiers
+docker compose exec solr-search backup-orchestrator.py --run
+
+# Test backup without executing (dry-run)
+docker compose exec solr-search backup-orchestrator.py --dry-run
+
+# Backup only critical tier
+docker compose exec solr-search backup-orchestrator.py --tier critical
+
+# Show backup help
+docker compose exec solr-search backup-orchestrator.py --help
+```
+
+**Behavior:**
+- Runs all tiers in sequence with error handling
+- Logs all backup operations to stdout and log files
+- Creates timestamped backup archives in versioned directories
+- Supports partial backups by tier
+
+#### 2. Restore Orchestrator Script
+
+Located at: `.squad/scripts/restore-orchestrator.py` (or similar)
+
+**Usage:**
+```bash
+# List available backups
+docker compose exec solr-search restore-orchestrator.py --list
+
+# Preview restore operation (dry-run)
+docker compose exec solr-search restore-orchestrator.py --backup-id 2024-04-02-120000 --dry-run
+
+# Execute restore
+docker compose exec solr-search restore-orchestrator.py --backup-id 2024-04-02-120000 --execute
+
+# Show restore help
+docker compose exec solr-search restore-orchestrator.py --help
+```
+
+**Behavior:**
+- Lists available backups with creation time and tier information
+- Previews what data would be restored without making changes
+- Verifies backup integrity before restore
+- Restores tiers in reverse priority order (Medium → High → Critical)
+- Post-restore health checks validate system state
+
+#### 3. Backup Admin API
+
+All endpoints are protected (admin-only) and return JSON responses.
+
+**POST /v1/admin/backup/now**
+- Trigger on-demand backup across all tiers
+- Request body: `{"dry_run": false}`
+- Response: `{"status": "running", "job_id": "abc123", "tiers": ["critical", "high", "medium"]}`
+
+**GET /v1/admin/backup/status**
+- Get current backup status
+- Response: `{"status": "idle|running", "current_tier": "critical", "progress": 0-100}`
+
+**GET /v1/admin/backup/history**
+- List available backups
+- Response: `[{"backup_id": "2024-04-02-120000", "timestamp": "2024-04-02T12:00:00Z", "tiers": {...}, "size": "5.2GB"}, ...]`
+
+**POST /v1/admin/backup/restore**
+- Initiate restore operation
+- Request body: `{"backup_id": "2024-04-02-120000", "dry_run": true}`
+- Response: `{"status": "preview|executing", "changes": [...]}`
+
+#### 4. Backup Dashboard
+
+Access at: `http://localhost/admin/backups` (admin users only)
+
+**Dashboard sections:**
+1. **Tier Status Cards** — shows last backup time, status, and health for each tier
+2. **On-Demand Backup** — button to trigger immediate backup
+3. **Backup History** — table showing available backups with timestamps and restore entry points
+4. **Restore Wizard** — multi-step restore UI (select backup → preview changes → confirm → monitor progress)
+
+### Operational procedures
+
+#### Monthly restore drill
+
+Schedule a monthly restore drill to validate backup integrity:
+
+1. Prepare a non-production environment (staging, dev, or isolated VM)
+2. Stop Aithena stack: `docker compose down`
+3. Load the latest backup: `docker compose exec solr-search restore-orchestrator.py --backup-id <latest> --dry-run`
+4. Review preview to confirm expected data
+5. Execute restore: `docker compose exec solr-search restore-orchestrator.py --backup-id <latest> --execute`
+6. Start stack: `docker compose up -d`
+7. Run validation checks (search, login, admin panels)
+8. Document results and any issues
+
+#### Capacity planning
+
+Estimate backup storage requirements based on your library size:
+
+| Documents | Solr Index | Auth/Collections | Total/month |
+|---|---|---|---|
+| 10K | ~2 GB | 50 MB | ~30 GB |
+| 100K | ~20 GB | 500 MB | ~300 GB |
+| 1M | ~200 GB | 5 GB | ~3 TB |
+
+Adjust based on your library's actual document sizes and metadata volume.
+
+#### Archive rotation
+
+Backup retention policy:
+- Critical: 30 days (hourly = ~30 backups/day, 900 total)
+- High: 14 days (daily = 14 backups)
+- Medium: 7 days (weekly = 1 backup)
+
+Automated cleanup scripts should remove backups older than retention periods to manage storage.
+
+### Disaster recovery scenarios
+
+#### Scenario 1: Single document corruption
+
+**Problem:** One document's metadata or content is corrupted.
+
+**Recovery:**
+1. Identify backup before corruption occurred
+2. Preview restore: `restore-orchestrator.py --backup-id <id> --dry-run`
+3. Execute partial restore (if supported) or restore and re-index new documents since backup
+
+#### Scenario 2: Partial data loss (e.g., Solr indices lost)
+
+**Problem:** Solr volumes are corrupted but auth and collections data are intact.
+
+**Recovery:**
+1. Stop stack: `docker compose down`
+2. Remove Solr volumes: `docker volume rm aithena_solr_data aithena_solr2_data aithena_solr3_data`
+3. Restore only High tier: `restore-orchestrator.py --backup-id <id> --tier high --execute`
+4. Start stack: `docker compose up -d`
+
+#### Scenario 3: Complete disaster (all data lost)
+
+**Problem:** Complete data loss due to storage failure.
+
+**Recovery:**
+1. Provision new infrastructure (Docker, volumes, etc.)
+2. Restore from backup: `restore-orchestrator.py --backup-id <id> --execute`
+3. Verify all services (search, auth, admin)
+4. Re-index any documents added after last backup
+
+### Backup storage best practices
+
+- **Dedicated storage:** Store backups on separate storage from running data (different disk/NAS)
+- **Offsite copies:** Periodically copy backups to cloud storage or remote site
+- **Encryption:** Encrypt backup archives if they contain sensitive documents
+- **Verification:** Test restore procedures monthly to ensure backups are valid
+- **Monitoring:** Monitor backup job completion and storage space usage
+- **Alerting:** Set up alerts if backup jobs fail or storage is running low
+
+## Deployment Updates for v2.0.0
+
+### Summary
+
+v2.0.0 is a **major release** centered on the complete replacement of the Streamlit-based admin dashboard with a modern React single-page application (SPA):
+
+1. **React admin portal** — Full rewrite of the admin dashboard as a React SPA with 7 pages, served at `/admin/` by `aithena-ui`
+2. **`aithena-admin` image removed** — The Streamlit admin container is no longer built or published (**breaking change**)
+3. **Admin REST API** — New endpoints in `solr-search` for pause/resume indexing, container management, and collection statistics
+4. **Installer overhaul (#1448)** — GPU auto-detection (NVIDIA/Intel), SSL setup, dev/prod profiles, compose override management via generated `start.sh`
+5. **Solr 9/10 compatibility** — Forward-compatible schema layer and collection export/import tooling for the upcoming Solr 10 migration
+6. **Security workflows** — CodeQL analysis, GHAS alert triage, PAT expiry detection
+7. **119 integration tests + 38 accessibility tests** for the React admin portal
+
+**⚠️ Breaking changes:** See [Breaking Changes](#v200-breaking-changes) below. Review carefully before upgrading.
+
+### v2.0.0 Breaking Changes
+
+#### 1. `aithena-admin` Docker Image Removed
+
+The `aithena-admin` container image is **no longer built or published** to `ghcr.io/jmservera/aithena-admin`. Any deployment referencing this image must be updated.
+
+**Required actions:**
+- Remove `streamlit-admin` service from `docker-compose.yml` / `compose.prod.yml` / any override files
+- Remove nginx proxy rules pointing to the Streamlit admin (typically `location /admin/` proxied to the old Streamlit container)
+- Update health checks that referenced `/admin/streamlit/_stcore/health` — use `/admin/` instead
+
+The React admin portal is now built into `aithena-ui` and served at `/admin/`. No separate container is needed.
+
+#### 2. Installer Generates `start.sh` with Compose Overrides
+
+The installer (`setup.py`) now generates `start.sh` with a compose override chain instead of a simple `docker compose up` command. Operators who have custom `docker compose` invocations should re-run the installer.
+
+**Required action:** Re-run the installer:
+```bash
+python3 setup.py
+```
+Or manually update your compose commands to include the appropriate override files (see new `start.sh` for the correct chain).
+
+### React Admin Portal
+
+The admin dashboard has been completely rewritten as a React SPA. All 7 pages are served from `/admin/`:
+
+| Page | URL | Description |
+|------|-----|-------------|
+| Dashboard | `/admin/` | System health overview, indexing status, key metrics |
+| Document Manager | `/admin/documents` | Browse, search, and manage indexed documents |
+| Reindex Library | `/admin/reindex` | Trigger full or partial re-indexing |
+| Indexing Status | `/admin/indexing` | Real-time indexing pipeline progress |
+| System Status | `/admin/status` | Service health, versions, configuration |
+| Infrastructure | `/admin/infrastructure` | Container and resource management |
+| Log Viewer | `/admin/logs` | Stream and search service logs |
+
+**Access control:** All admin pages require the `admin` role. Unauthenticated or non-admin requests are redirected to the login page.
+
+**Key technical details:**
+- Client-side routing — all admin pages resolve through a single SPA entry point
+- nginx must proxy `/admin/` to `aithena-ui` (updated in shipped compose files)
+- No Streamlit dependency — the React SPA is bundled with `aithena-ui`
+
+### Admin REST API
+
+New endpoints in `solr-search` (v2.0.0):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/admin/indexing/pause` | Pause the document indexer |
+| `POST` | `/v1/admin/indexing/resume` | Resume the document indexer |
+| `GET` | `/v1/admin/containers` | Container list and status |
+| `GET` | `/v1/admin/collections/stats` | Solr collection statistics |
+
+All admin endpoints require an authenticated admin-role token.
+
+### Installer Overhaul
+
+The installer (`setup.py`) has been significantly enhanced:
+
+- **GPU auto-detection** — Detects NVIDIA and Intel GPUs and generates the appropriate compose override
+- **SSL setup** — Integrates SSL certificate provisioning into the install flow
+- **Dev/prod profiles** — Separate configuration for development and production deployments
+- **`start.sh` generation** — The installer now generates `start.sh` with the full compose override chain (replaces manual `docker compose` commands)
+
+**Upgrade recommendation:** Re-run the installer after upgrading to v2.0.0 to get the updated `start.sh`.
+
+### Solr 9/10 Compatibility
+
+v2.0.0 includes preparatory work for the upcoming Solr 10 migration:
+
+- **Forward-compatible schema layer (#1365)** — Schema changes are forward-compatible with Solr 10 while remaining fully functional on Solr 9
+- **Collection export/import tooling (#1363, #1456)** — New utilities for backing up and restoring Solr collections to support the migration
+
+**Note:** The Solr 10 migration itself is not part of v2.0.0. These changes prepare the ground. Actual Solr 10 upgrade is planned for a future release.
+
+### Upgrade Instructions
+
+**From v1.19.0 → v2.0.0:**
+
+1. **Back up your data:**
+   ```bash
+   # Export Solr collection (new tooling available in v2.0.0)
+   docker compose exec solr bin/solr export -collection books -out /var/solr/data/backup
+   ```
+
+2. **Pull new images:**
+   ```bash
+   docker compose pull
+   ```
+
+3. **Remove the Streamlit admin service** from your compose configuration:
+   - Delete the `streamlit-admin` service block from `docker-compose.yml` or your override files
+   - Remove any Streamlit-specific nginx proxy rules
+   - Remove references to `ghcr.io/jmservera/aithena-admin` from any deployment scripts
+
+4. **Re-run the installer** (recommended):
+   ```bash
+   python3 setup.py
+   ```
+
+5. **Restart all services:**
+   ```bash
+   docker compose up -d
+   # or use the new start.sh if you ran the installer:
+   ./start.sh
+   ```
+
+6. **Verify the React admin portal:**
+   ```bash
+   curl -sf http://localhost/admin/ && echo "✅ React admin accessible"
+   curl -sf http://localhost/v1/health && echo "✅ API healthy"
+   ```
+
+**From v1.18.x or earlier:**
+Follow the [v1.19.0 deployment notes](#deployment-updates-for-v1190) first, then apply v2.0.0 steps above.
+
+### Configuration Changes
+
+| Change | File | Required action |
+|---|---|---|
+| Remove `streamlit-admin` service | `docker-compose.yml` | **Required.** Delete the service definition. |
+| Update nginx `/admin/` proxy | `nginx.conf` | **Required if customized.** Ensure `/admin/` points to `aithena-ui`, not the old Streamlit container. |
+| Re-run installer | `setup.py` | **Recommended.** Regenerates `start.sh` with new compose override chain. |
+| Update health checks | deployment scripts | **Required if used.** Replace Streamlit health URL with `/admin/`. |
+
+### Data Migration
+
+**None required.** The Solr collection schema, index format, and auth database are unchanged. Existing data is fully compatible.
+
+> **Note:** The Solr 9/10 compatibility layer is additive — no schema changes are applied automatically. If you want to trigger a schema update, a full re-index is recommended but not required.
+
+### Container Image Changes
+
+v2.0.0 publishes **5 container images** (down from 6 in v1.x):
+
+| Service | Image | Change |
+|---------|-------|--------|
+| aithena-ui | `ghcr.io/jmservera/aithena-aithena-ui:2.0.0` | Now includes React admin portal |
+| document-indexer | `ghcr.io/jmservera/aithena-document-indexer:2.0.0` | No change |
+| document-lister | `ghcr.io/jmservera/aithena-document-lister:2.0.0` | No change |
+| embeddings-server | `ghcr.io/jmservera/aithena-embeddings-server:2.0.0` | No change |
+| solr-search | `ghcr.io/jmservera/aithena-solr-search:2.0.0` | New admin REST API endpoints |
+| ~~aithena-admin~~ | ~~`ghcr.io/jmservera/aithena-admin`~~ | **REMOVED** |
+
+### Breaking Change Verification Checklist
+
+- [ ] No `streamlit-admin` service in compose files
+- [ ] No references to `ghcr.io/jmservera/aithena-admin` in deployment scripts
+- [ ] nginx `/admin/` proxies to `aithena-ui`, not old Streamlit container
+- [ ] Streamlit health check URLs updated or removed from monitoring
+- [ ] `start.sh` regenerated (or compose commands updated) after installer re-run

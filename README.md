@@ -28,7 +28,7 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 - **Similar Books panel** that appears after opening a PDF and recommends semantically related titles
 - **PDF viewer** that opens from search results and jumps to the matched page when page metadata exists
 - **Upload tab** with drag-and-drop file upload and real-time progress tracking
-- **Admin tab** with an embedded Streamlit dashboard for queue visibility, document management, and system status
+- **Admin portal** with queue visibility, document management, user management, and system status
 - **Status tab** with indexing progress plus Solr, Redis, and RabbitMQ health, refreshing every 10 seconds
 - **Stats tab** with indexed-book totals, page-count statistics, and breakdowns by language, author, year, and category
 - **Container health checks** for all services with automatic restart on failure
@@ -145,7 +145,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 |-----------|-------|--------|
 | [v1.8.0](https://github.com/jmservera/aithena/milestone/22) | UI/UX improvements, design system | Complete |
 | [v1.8.1](https://github.com/jmservera/aithena/milestone/24) | Bug fixes (search, stats, i18n, admin) | Complete |
-| [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Streamlit retirement, infra UI links | Complete |
+| [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Legacy admin retirement, infra UI links | Complete |
 | [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | Complete |
 | [v1.9.1](https://github.com/jmservera/aithena/milestone/28) | Docker build fix | Complete |
 | [v1.10.0](https://github.com/jmservera/aithena/milestone/26) | User collections, metadata editing | Planned |
@@ -184,6 +184,15 @@ SolrCloud Books Collection (indexed, searchable)
 Frontend / Search API
 ```
 
+### Deployment Topologies
+
+Aithena supports two SolrCloud deployment modes optimized for different scales:
+
+- **SolrCloud Distributed (default)**: 3-node Solr cluster + 3-node ZooKeeper ensemble. Recommended for production (>3K books, high availability required).
+- **Single-Node SolrCloud**: 1 Solr node + 1 ZooKeeper container via `docker/compose.single-node.yml`. Ideal for development, testing, and small deployments (<3K books, 32 GB RAM available).
+
+See [**Deployment Topologies Guide**](docs/deployment-topologies.md) for detailed architecture, capacity planning, formulas, and migration paths between topologies.
+
 ## Quick Start
 
 ### 1. Run the first-run installer
@@ -195,23 +204,51 @@ python3 -m installer
 # or: python3 installer/setup.py
 ```
 
-The installer prompts for the book library path, admin credentials, and the public origin URL, then writes `.env` and bootstraps the SQLite auth DB. Run it before `docker compose up` so the auth storage directory exists for the bind mount.
+The installer guides you through:
+1. **Environment** — Development or Production
+2. **GPU detection** — auto-detects NVIDIA (`nvidia-smi`) and Intel (`/dev/dri`) GPUs, asks for confirmation
+3. **SSL** — optional Let's Encrypt setup with domain prompt
+4. **Book library path** — where your PDFs live
+5. **Public origin** — auto-suggested based on SSL choice
+6. **Admin credentials** — username and password
+
+It writes `.env`, bootstraps the SQLite auth DB, and generates `./start.sh` with the correct `docker compose -f ...` chain for your configuration.
 
 ### 2. Start All Services
 
 ```bash
-docker compose up -d
+./start.sh
 ```
 
-Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, and `--origin`.
-
-By default, Docker Compose also auto-loads `docker-compose.override.yml`, so local development/debug ports stay published.
-
-Use the production-only surface when you want just the nginx gateway on the host:
+The generated `start.sh` combines the right compose files based on your installer choices. You can also run compose directly:
 
 ```bash
-docker compose -f docker-compose.yml up -d
+# Development (builds from source, debug ports exposed)
+docker compose -f docker-compose.yml -f docker/compose.dev-ports.yml up -d --build
+
+# Production (pre-built GHCR images)
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
+
+# Production + NVIDIA GPU
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-nvidia.yml up -d
+
+# Production + SSL
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
 ```
+
+Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
+
+### Compose File Layout
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Base services (always included) |
+| `docker/compose.prod.yml` | Production — pre-built GHCR images |
+| `docker/compose.dev-ports.yml` | Development — exposes debug ports |
+| `docker/compose.gpu-nvidia.yml` | NVIDIA GPU acceleration |
+| `docker/compose.gpu-intel.yml` | Intel GPU acceleration (OpenVINO) |
+| `docker/compose.ssl.yml` | SSL/TLS with Let's Encrypt |
+| `docker/compose.e2e.yml` | E2E test overrides |
 
 This starts:
 - Redis, RabbitMQ (messaging layer)
@@ -246,7 +283,7 @@ Once `solr-init` completes:
 | Redis Commander | http://localhost/admin/redis/ | Inspect Redis state through a lightweight web UI |
 | Redis CLI | `redis-cli` | Check `processed` & `failed` keys |
 
-When `docker compose up` loads `docker-compose.override.yml` (the default local workflow), these direct debug ports are also available:
+When `docker compose up` loads `docker/compose.dev-ports.yml` (the default local workflow), these direct debug ports are also available:
 
 | Service | Port(s) | Purpose |
 |---------|---------|---------|
@@ -297,10 +334,10 @@ mkdir -p "$E2E_LIBRARY_PATH"
 #### 2. Start the local stack with the E2E override
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
 ```
 
-The override (`docker-compose.e2e.yml`) mounts `E2E_LIBRARY_PATH` as the document library instead of `/home/jmservera/booklibrary`, so the test run is fully isolated from the real corpus. It also sets the document-lister poll interval to 10 seconds for faster feedback.
+The override (`docker/compose.e2e.yml`) mounts `E2E_LIBRARY_PATH` as the document library instead of `/home/jmservera/booklibrary`, so the test run is fully isolated from the real corpus. It also sets the document-lister poll interval to 10 seconds for faster feedback.
 
 #### 3. Install test dependencies
 
@@ -358,7 +395,7 @@ See `src/document-indexer/tests/test_metadata.py` for test cases and real librar
 **Phase 3**: Embeddings indexing, hybrid search (keyword + semantic), similar books  
 **Phase 4**: PDF upload, file watcher, admin dashboard, production hardening  
 
-Current branch: `jmservera/solrstreamlitui`
+Current branch: `dev`
 
 ## Release Process Overview
 
@@ -381,7 +418,7 @@ Before tagging a release, verify:
 3. **E2E suite passes:**
    ```bash
    export E2E_LIBRARY_PATH=/tmp/aithena-e2e-library && mkdir -p "$E2E_LIBRARY_PATH"
-   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+   docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
    cd e2e && pip install -r requirements.txt && pytest
    ```
 

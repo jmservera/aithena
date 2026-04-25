@@ -38,7 +38,7 @@ ADMIN_PASSWORD=your-password ./tests/smoke/production-smoke-test.sh
 ### Service Health Checks
 - ✅ Nginx health endpoint
 - ✅ API (solr-search) health endpoint
-- ✅ Admin dashboard (Streamlit) health endpoint
+- ✅ Admin dashboard health endpoint
 
 ### Version Endpoints
 - ✅ API version endpoint
@@ -57,7 +57,7 @@ ADMIN_PASSWORD=your-password ./tests/smoke/production-smoke-test.sh
 
 ### Admin Dashboard
 - ✅ Dashboard accessibility
-- ✅ Streamlit routing
+- ✅ Admin routing
 
 ### Infrastructure Health
 - ✅ Solr cluster status (via API)

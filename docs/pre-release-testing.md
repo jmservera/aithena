@@ -6,7 +6,7 @@ This guide covers the release candidate (RC) workflow for Aithena: triggering RC
 
 ## Overview
 
-Before tagging a final release on `main`, you can build and test release candidate (RC) images directly from the `dev` branch. The pre-release workflow builds all six service containers with an RC tag (e.g., `1.16.0-rc.1`) and pushes them to the GitHub Container Registry. You then pull those images locally with `docker-compose.prod.yml` to run validation.
+Before tagging a final release on `main`, you can build and test release candidate (RC) images directly from the `dev` branch. The pre-release workflow builds all six service containers with an RC tag (e.g., `1.16.0-rc.1`) and pushes them to the GitHub Container Registry. You then pull those images locally with `docker/compose.prod.yml` to run validation.
 
 ```
 dev branch
@@ -28,11 +28,10 @@ dev branch
 
 ### Services
 
-The workflow builds these six container images:
+The workflow builds these five container images:
 
 | Service | Image |
 |---------|-------|
-| admin | `ghcr.io/jmservera/aithena-admin` |
 | aithena-ui | `ghcr.io/jmservera/aithena-aithena-ui` |
 | document-indexer | `ghcr.io/jmservera/aithena-document-indexer` |
 | document-lister | `ghcr.io/jmservera/aithena-document-lister` |
@@ -81,7 +80,7 @@ gh run watch <run-id>
 
 When you omit the `rc_number` input, the workflow automatically determines the next RC number:
 
-1. Queries the GitHub Container Registry for existing tags on `aithena-admin`.
+1. Queries the GitHub Container Registry for existing tags on `aithena-ui`.
 2. Finds all tags matching `{version}-rc.{N}` for the requested version.
 3. Takes the highest `N` found and sets the new RC number to `N + 1`.
 4. If no RC tags exist for this version, starts at `rc.1`.
@@ -112,10 +111,10 @@ Set the `VERSION` environment variable to the full RC tag and pull:
 export VERSION=1.16.0-rc.1
 
 # Pull all service images
-docker compose -f docker-compose.prod.yml pull
+docker compose -f docker/compose.prod.yml pull
 ```
 
-The `docker-compose.prod.yml` file references images as:
+The `docker/compose.prod.yml` file references images as:
 
 ```yaml
 image: ghcr.io/jmservera/aithena-{service}:${VERSION:-latest}
@@ -126,13 +125,13 @@ Setting `VERSION` causes all services to use the matching RC tag.
 ### Start the stack
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
 ```
 
 ### Verify images are correct
 
 ```bash
-docker compose -f docker-compose.prod.yml ps --format "table {{.Name}}\t{{.Image}}\t{{.Status}}"
+docker compose -f docker/compose.prod.yml ps --format "table {{.Name}}\t{{.Image}}\t{{.Status}}"
 ```
 
 Confirm every custom service image shows the expected `-rc.1` tag.
@@ -143,7 +142,7 @@ Run through these checks before approving an RC for final release.
 
 ### Infrastructure health
 
-- [ ] All containers are running: `docker compose -f docker-compose.prod.yml ps`
+- [ ] All containers are running: `docker compose -f docker/compose.prod.yml ps`
 - [ ] `solr-init` completed successfully (exits with code 0)
 - [ ] SolrCloud shows 3 live nodes in the admin UI
 - [ ] RabbitMQ management UI is accessible
@@ -167,9 +166,9 @@ Verify the reported version matches the RC tag.
 - [ ] **Search:** Run a keyword search and verify results appear
 - [ ] **Document viewing:** Open a PDF from search results
 - [ ] **Indexing pipeline:** Add a test PDF to the book library and verify it gets indexed
-  - Check `document-lister` logs: `docker compose -f docker-compose.prod.yml logs document-lister --tail 50`
-  - Check `document-indexer` logs: `docker compose -f docker-compose.prod.yml logs document-indexer --tail 50`
-- [ ] **Admin panel:** Access the Streamlit admin dashboard and verify status pages load
+  - Check `document-lister` logs: `docker compose -f docker/compose.prod.yml logs document-lister --tail 50`
+  - Check `document-indexer` logs: `docker compose -f docker/compose.prod.yml logs document-indexer --tail 50`
+- [ ] **Admin panel:** Access the admin dashboard (`/admin/`) and verify status pages load
 - [ ] **Embeddings:** Verify embeddings-server responds (check admin status page or logs)
 
 ### Regression checks
@@ -185,7 +184,7 @@ If you have the E2E environment configured:
 
 ```bash
 # Run Playwright E2E tests against the RC stack
-docker compose -f docker-compose.e2e.yml up --abort-on-container-exit
+docker compose -f docker/compose.e2e.yml up --abort-on-container-exit
 ```
 
 ## Step 4: After Validation
@@ -209,7 +208,7 @@ docker compose -f docker-compose.e2e.yml up --abort-on-container-exit
 1. **Stop the test stack:**
 
    ```bash
-   VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml down
+   VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml down
    ```
 
 2. **Fix the issue on `dev`** — commit and push the fix.
@@ -224,8 +223,8 @@ docker compose -f docker-compose.e2e.yml up --abort-on-container-exit
 4. **Re-test** by pulling and validating the new RC:
 
    ```bash
-   VERSION=1.16.0-rc.2 docker compose -f docker-compose.prod.yml pull
-   VERSION=1.16.0-rc.2 docker compose -f docker-compose.prod.yml up -d
+   VERSION=1.16.0-rc.2 docker compose -f docker/compose.prod.yml pull
+   VERSION=1.16.0-rc.2 docker compose -f docker/compose.prod.yml up -d
    ```
 
 5. Repeat until the RC passes all checks.
@@ -236,11 +235,11 @@ If an RC introduces issues and you need to revert to a known-good version:
 
 ```bash
 # Stop the RC stack
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml down
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml down
 
 # Start with the last stable release
-VERSION=1.15.0 docker compose -f docker-compose.prod.yml pull
-VERSION=1.15.0 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.15.0 docker compose -f docker/compose.prod.yml pull
+VERSION=1.15.0 docker compose -f docker/compose.prod.yml up -d
 ```
 
 ## Security: HF_TOKEN Handling

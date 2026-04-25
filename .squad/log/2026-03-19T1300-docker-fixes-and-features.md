@@ -45,8 +45,8 @@ Four-agent session closing docker/deployment hardening work from issue #542–#5
 - **Agent:** Brett (Infrastructure Architect)
 - **Status:** ✅ MERGED
 - **Deliverables:**
-  - `docker-compose.ssl.yml` — Isolated TLS/certbot config overlay
-  - HTTP-only default; SSL via `-f docker-compose.ssl.yml` flag
+  - `docker/compose.ssl.yml` — Isolated TLS/certbot config overlay
+  - HTTP-only default; SSL via `-f docker/compose.ssl.yml` flag
   - Updated 4 docs: production.md, quickstart.md, admin-manual.md, failover-runbook.md
 - **Duration:** ~2h implementation + review
 - **Tests:** Compose validation passes; no breaking changes

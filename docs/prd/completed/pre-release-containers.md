@@ -47,10 +47,10 @@ gh workflow run pre-release.yml --ref dev -f rc_number=1
 
 # 3. Pull RC containers locally
 export VERSION=1.16.0-rc.1
-docker compose -f docker-compose.prod.yml pull
+docker compose -f docker/compose.prod.yml pull
 
 # 4. Run the stack
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker/compose.prod.yml up -d
 
 # 5. Run local E2E tests or manual validation
 pytest e2e/ -v
@@ -100,12 +100,12 @@ The same 6 services as the release workflow:
 
 After pushing RC images, run the same per-container smoke tests as the release workflow (health check endpoints, startup validation). This validates the built images before the operator pulls them.
 
-### docker-compose.prod.yml Compatibility
+### docker/compose.prod.yml Compatibility
 
 No changes needed. The existing `${VERSION:-latest}` substitution already supports RC tags:
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
 ```
 
 ### RC Image Retention
@@ -117,7 +117,7 @@ VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
 
 1. **Manual trigger works** — operator can run `gh workflow run pre-release.yml --ref dev` and all 6 images are pushed with `-rc.N` tags.
 2. **Auto-trigger on release PR** — opening/updating a PR to `main` builds RC images automatically.
-3. **Local pull works** — `VERSION=X.Y.Z-rc.N docker compose -f docker-compose.prod.yml pull` succeeds for all services.
+3. **Local pull works** — `VERSION=X.Y.Z-rc.N docker compose -f docker/compose.prod.yml pull` succeeds for all services.
 4. **Smoke tests pass** — per-container health checks run against RC images in CI.
 5. **No latest overwrite** — RC builds never tag images as `latest`, `{major}`, or `{major}.{minor}`.
 6. **Parity with release** — RC build uses identical Dockerfiles, build args, and base images as the release workflow.
@@ -144,7 +144,7 @@ dev branch
   │     └── RC images built automatically (v1.16.0-rc.1)
   │
   ├── Operator pulls RC locally
-  │     └── VERSION=1.16.0-rc.1 docker compose -f docker-compose.prod.yml up -d
+  │     └── VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
   │     └── Manual E2E validation
   │
   ├── Issues found? Fix on dev → new RC (v1.16.0-rc.2)

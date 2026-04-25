@@ -6,6 +6,7 @@ import './normal.css';
 import App from './App.tsx';
 import { RouteErrorBoundary } from './Components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
+import { CapabilitiesProvider } from './contexts/CapabilitiesContext';
 import { I18nProvider } from './contexts/I18nContext';
 import { ToastProvider } from './contexts/ToastContext';
 
@@ -29,11 +30,13 @@ async function bootstrap() {
       <I18nProvider>
         <BrowserRouter>
           <AuthProvider>
-            <ToastProvider>
-              <RouteErrorBoundary>
-                <App />
-              </RouteErrorBoundary>
-            </ToastProvider>
+            <CapabilitiesProvider>
+              <ToastProvider>
+                <RouteErrorBoundary>
+                  <App />
+                </RouteErrorBoundary>
+              </ToastProvider>
+            </CapabilitiesProvider>
           </AuthProvider>
         </BrowserRouter>
       </I18nProvider>

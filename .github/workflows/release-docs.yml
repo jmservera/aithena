@@ -408,6 +408,78 @@ jobs:
 
           echo "✅ Fallback template created at $OUTPUT_FILE"
 
+      - name: Notify if fallback was triggered (possible PAT expiry)
+        if: steps.copilot.outputs.fallback == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = '⚠️ COPILOT_PAT may be expired — release docs used fallback template';
+            const timestamp = new Date().toISOString();
+            const runUrl = `https://github.com/${process.env.REPO}/actions/runs/${process.env.RUN_ID}`;
+            const version = process.env.VERSION;
+
+            const body = [
+              '## PAT Expiry Alert',
+              '',
+              `The release-docs workflow fell back to a template for **v${version}** because Copilot CLI failed.`,
+              'This usually means `COPILOT_PAT` is expired or invalid.',
+              '',
+              '### Details',
+              `- **Version:** v${version}`,
+              `- **Workflow run:** ${runUrl}`,
+              `- **Timestamp:** ${timestamp}`,
+              '',
+              '### Resolution',
+              '1. Generate a new fine-grained PAT with "Copilot Requests" permission',
+              '2. Update the `COPILOT_PAT` repository secret',
+              '3. Re-run the release-docs workflow',
+              '4. Close this issue once resolved',
+            ].join('\n');
+
+            // Ensure the label exists
+            try {
+              await github.rest.issues.createLabel({
+                owner, repo,
+                name: 'token-expired',
+                color: 'D93F0B',
+                description: 'A PAT or token may be expired',
+              });
+            } catch (e) {
+              // Label already exists — ignore
+            }
+
+            // Check for existing open issue with same title
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner, repo,
+              state: 'open',
+              labels: 'token-expired',
+              per_page: 100,
+            });
+            const match = existing.find(i => i.title === title);
+
+            if (match) {
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: match.number,
+                body: `🔄 **Recurrence** at ${timestamp}\n\nWorkflow run: ${runUrl}\nVersion: v${version}`,
+              });
+              core.info(`Updated existing issue #${match.number}`);
+            } else {
+              await github.rest.issues.create({
+                owner, repo,
+                title,
+                body,
+                labels: ['token-expired'],
+              });
+              core.info('Created new token-expired issue');
+            }
+
       # ─────────────────────────────────────────────────────────────
       # Step 6: Create PR with generated documentation
       # ─────────────────────────────────────────────────────────────
@@ -524,6 +596,19 @@ jobs:
             --label "${MILESTONE}"
           
           echo "✅ PR created for review"
+
+      - name: Comment on PR if fallback was used
+        if: steps.copilot.outputs.fallback == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.version.outputs.branch }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PR_NUMBER=$(gh pr view "$BRANCH" --repo "$REPO" --json number --jq '.number' 2>/dev/null || true)
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "⚠️ **Fallback template used** — Copilot CLI was unavailable (possible \`COPILOT_PAT\` expiry). This release documentation for v${VERSION} needs manual completion. See the tracking issue labeled \`token-expired\` for details."
+          fi
 
       # ─────────────────────────────────────────────────────────────
       # Step 7: Summary

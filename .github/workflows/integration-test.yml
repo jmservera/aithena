@@ -58,11 +58,15 @@ jobs:
           fi
 
   run-integration-tests:
-    name: Run integration & E2E tests
+    name: Integration Test (${{ matrix.topology }})
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        topology: [single-node, distributed]
     permissions:
       contents: read
       issues: write
@@ -87,7 +91,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57  # v8.0.0
 
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6.3.0
@@ -109,6 +113,13 @@ jobs:
             --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
             --reset
 
+          # Export installer-generated credentials so later steps can use them.
+          # The installer writes random Solr passwords to .env; without this,
+          # the health-check step falls back to hardcoded dev defaults and gets 401.
+          if [ -f .env ]; then
+            grep -E '^(SOLR_ADMIN_USER|SOLR_ADMIN_PASS|SOLR_READONLY_USER|SOLR_READONLY_PASS|ADMIN_API_KEY)=' .env >> "$GITHUB_ENV" || true
+          fi
+
           # Browser E2E runs through the reverse proxy, so we use --profile production
           # in the 'up' command to activate nginx (which e2e.yml assigns to the
           # production profile). profiles: [] does NOT clear profiles due to
@@ -116,7 +127,47 @@ jobs:
           # NOTE: Docker Compose deep-merges volume driver_opts, so empty overrides
           # do NOT clear bind-mount paths. We must explicitly set all three keys
           # (type, device, o) to tmpfs to fully replace the production bind mounts.
-          cat > docker-compose.github-actions.yml <<'EOF'
+          if [ "${{ matrix.topology }}" = "single-node" ]; then
+            # Reuse the canonical single-node overlay so CI exercises the same
+            # compose wiring as local/installer deployments. The CI-only file
+            # below provides tmpfs volumes for faster, ephemeral storage.
+            echo "COMPOSE_FILE=docker-compose.yml:docker/compose.single-node.yml:docker/compose.dev-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
+            cat > docker-compose.github-actions.yml <<'EOF'
+          volumes:
+            rabbitmq-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            certbot-data-conf:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            certbot-data-www:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=10m" }
+            redis-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=100m" }
+            solr-data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=500m" }
+            zoo-data1_logs:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_data:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-data1_datalog:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            zoo-backup:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+            collections-db:
+              driver: local
+              driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
+          EOF
+          else
+            echo "COMPOSE_FILE=docker-compose.yml:docker/compose.dev-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
+            cat > docker-compose.github-actions.yml <<'EOF'
           volumes:
             rabbitmq-data:
               driver: local
@@ -173,6 +224,7 @@ jobs:
               driver: local
               driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
           EOF
+          fi
 
       - name: Generate sample PDF fixtures
         run: |
@@ -181,35 +233,30 @@ jobs:
 
       - name: Validate merged Docker Compose config
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            config >/dev/null
+          docker compose --profile production config >/dev/null
 
       - name: Build all container images
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            build
+          docker compose --profile production build
 
-      - name: Start full stack
+      - name: Start stack (${{ matrix.topology }})
         env:
           ADMIN_API_KEY: ci-admin-api-key
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            up -d
+          timeout 600 docker compose --profile production up -d
+
+      - name: Dump solr-init logs on startup failure
+        if: failure()
+        run: |
+          echo "=== solr-init container logs ==="
+          docker compose --profile production logs solr-init --no-color 2>&1 || true
+          echo "=== solr-init container state ==="
+          solr_init_id="$(docker compose --profile production ps -q solr-init 2>/dev/null || true)"
+          if [ -n "$solr_init_id" ]; then
+            docker inspect "$solr_init_id" --format '{{.State.Status}} exit={{.State.ExitCode}}' 2>/dev/null || true
+          else
+            echo "solr-init container not found"
+          fi
 
       - name: Wait for services to become healthy
         run: |
@@ -293,13 +340,7 @@ jobs:
           wait_for_url "http://localhost/health" "nginx"
           wait_for_url "http://localhost/search" "Aithena UI"
 
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            ps
+          docker compose --profile production ps
 
       - name: Install Python E2E dependencies
         working-directory: e2e
@@ -344,18 +385,18 @@ jobs:
 
       - name: Upload Python E2E results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: python-e2e-results
+          name: python-e2e-results-${{ matrix.topology }}
           path: e2e/pytest-results.xml
           if-no-files-found: warn
           retention-days: 30
 
       - name: Upload Playwright report and screenshots
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: playwright-e2e-results
+          name: playwright-e2e-results-${{ matrix.topology }}
           path: |
             e2e/playwright/playwright-report
             e2e/playwright/test-results
@@ -374,9 +415,9 @@ jobs:
 
       - name: Upload release screenshots
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: release-screenshots
+          name: release-screenshots-${{ matrix.topology }}
           path: /tmp/release-screenshots/
           if-no-files-found: warn
           retention-days: 90
@@ -384,24 +425,12 @@ jobs:
       - name: Dump Compose logs on failure
         if: failure()
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            logs --no-color
+          docker compose --profile production logs --no-color
 
       - name: Gather Docker Compose logs for analysis
         if: always()
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            logs --no-color > "$RUNNER_TEMP/compose-logs.txt" 2>&1
+          docker compose --profile production logs --no-color > "$RUNNER_TEMP/compose-logs.txt" 2>&1
 
       - name: Run pre-release log analyzer
         if: always() && github.event_name == 'pull_request'
@@ -412,24 +441,18 @@ jobs:
           version-file: ./VERSION
           allowlist-path: ./e2e/pre-release-allowlist.txt
           max-errors: '0'
-          create-issues: 'true'
+          create-issues: ${{ matrix.topology == 'single-node' && 'true' || 'false' }}
           milestone: ''
-          artifact-name: integration-test-log-analysis
+          artifact-name: integration-test-log-analysis-${{ matrix.topology }}
 
       - name: Tear down integration stack
         if: always()
         run: |
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.yml \
-            -f docker-compose.e2e.yml \
-            -f docker-compose.github-actions.yml \
-            --profile production \
-            down -v --remove-orphans
+          docker compose --profile production down -v --remove-orphans
           rm -f docker-compose.github-actions.yml
 
   integration-gate:
-    name: Docker Compose integration + E2E
+    name: Integration tests (all topologies)
     if: always()
     needs: [changes, run-integration-tests]
     runs-on: ubuntu-latest
@@ -450,5 +473,5 @@ jobs:
           if [ "$TEST_RESULT" = "skipped" ]; then
             echo "⏭️ Integration tests skipped — no build-relevant changes"
           else
-            echo "✅ Integration tests passed"
+            echo "✅ Integration tests passed (single-node + distributed)"
           fi

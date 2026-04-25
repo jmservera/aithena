@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-04-21
+
+### Added
+
+- **Configurable search architecture** — New `SEARCH_ARCHITECTURE` env var supports `hnsw` (default) or `hybrid-rerank`. Hybrid-rerank uses BM25 + cosine similarity reranking without HNSW indexes, suitable for resource-constrained deployments (#1506)
+- **Capabilities API** — New public `/v1/capabilities` endpoint returns backend configuration (search modes, architecture, vector dimensions) so the UI adapts automatically (#1506)
+- **Rerank service** — Cosine similarity reranking module for hybrid-rerank architecture with precomputed norms and dimension mismatch handling (#1506)
+- **Single-node deployment topology** — Installer support for `SOLR_TOPOLOGY=single-node` (1 Solr + 1 ZooKeeper) alongside distributed (3+3) mode (#1497, #1373)
+- **Configurable vector quantization** — `VECTOR_QUANTIZATION` env var supports `none`, `fp16`, and `int8` quantization for embeddings pipeline (#1502)
+- **Topology documentation** — Architecture docs for single-node vs distributed deployment, capacity planning, and scaling guidance (#1499)
+- **Dev integration test workflow** — Dedicated CI workflow for PRs to dev branch using single-node topology (#1496)
+- **Both-topology CI** — Integration tests run against both single-node and distributed topologies in release CI (#1498)
+
+### Changed
+
+- **Solr init is configurable** — `SOLR_EXPECTED_NODES` and `ZK_HOST` env vars make solr-init work for both single-node and distributed topologies without duplicating entrypoint logic (#1498)
+- **CI uses canonical overlays** — Integration test workflows use `docker/compose.single-node.yml` and `COMPOSE_FILE` env var instead of duplicating service overrides (#1498)
+- **Bounded wait loops** — All solr-init `until` loops have `MAX_WAIT=120` to prevent indefinite hangs in CI (#1498)
+- **UI search mode adaptation** — Search page conditionally shows semantic/hybrid modes and similar books based on backend capabilities (#1506)
+
+### Fixed
+
+- **Credential leak in retry_curl** — Error messages no longer print curl arguments that may contain authentication flags (#1498)
+- **E2E note max length** — Fixed test that sent 5000-char notes against default 1000-char limit (#1498)
+- **Capabilities auth handling** — Capabilities fetch uses `skipUnauthorizedHandler` to prevent spurious logout, and endpoint is public (#1506)
+
+## [2.0.0] — 2026-04-20
+
+### Added
+
+- **React admin portal** — Complete rewrite of the admin dashboard as a React SPA with 7 pages: Dashboard (#1117), Document Manager (#1122), Reindex Library (#1124), Indexing Status (#1125), System Status (#1126), Infrastructure (#1128), and Log Viewer (#1127)
+- **Admin API endpoints** — New REST API in solr-search for admin operations: pause/resume indexing (#1232), container management, collection statistics (#1115)
+- **Admin route scaffolding and auth guard** — Role-based access control for admin pages (#1116)
+- **Accessibility testing** — 38 axe-core WCAG 2.1 AA automated tests for all pages (#1475)
+- **Admin integration tests** — 119 comprehensive hook and component tests (#1131)
+- **CodeQL analysis workflow** — Explicit CodeQL workflow replacing broken default setup (#1129)
+- **GHAS code scanning alert triage** — Automated triage workflow for security alerts (#1431)
+- **PAT expiry detection** — Automated notification when GitHub PATs expire across workflows (#1453)
+- **PAT management guide** — Documentation for PAT types, scopes, and rotation (#1450)
+- **Solr 9/10 schema compatibility layer** — Forward-compatible schema for Solr migration (#1365)
+- **Solr collection export/import tooling** — Backup and restore utilities for Solr collections (#1363, #1456)
+- **PDF search highlighting** — Search text highlighting in the PDF viewer (#1276)
+- **Pause/resume indexing API** — Control API for document-indexer pause and resume (#1232)
+
+### Changed
+
+- **Installer overhaul** — GPU auto-detection (NVIDIA/Intel), SSL setup, dev/prod profiles, compose override management (#1448)
+- **Workflow consolidation (Phase 1)** — Merged 3 dependabot workflows into 1, absorbed security review into GHAS triage. 29 → 26 workflows, −154 lines (#1449)
+- **Solr preflight validation** — Added validation for SOLR_NUM_SHARDS and SOLR_REPLICATION_FACTOR before collection creation (#1443)
+- **Tika metadata fields** — Pre-defined metadata fields and fixed language field mismatch (#1445)
+- **Container warnings suppressed** — Fixed Redis overcommit and ZooKeeper maxCnxns warnings (#1457)
+
+### Removed
+
+- **Streamlit admin service** — Legacy admin dashboard replaced by React admin portal (#1129). The `aithena-admin` container is no longer built or published.
+
+### Documentation
+
+- Admin manual rewritten for React admin portal (#1130)
+- User manual updated for new admin interface (#1130)
+- Solr 9→10 migration plan (#1455)
+- Pygments ReDoS exposure assessment (#1236)
+- Release documentation for v1.19.0 (#1447)
+
+### Breaking Changes
+
+- The `aithena-admin` Docker image is no longer published. Deployments using separate Streamlit admin containers must migrate to the integrated React admin at `/admin/`.
+- The installer (`setup.py`) now generates `start.sh` with compose override chains. Existing manual `docker compose` commands may need updating to match the new override structure.
+
+## [1.19.0] — 2026-04-19
+
+### Added
+
+- **Configurable Solr shards and replication** — Solr shards and replication factor are now configurable via environment variables (#1428)
+
+### Fixed
+
+- **Deprecation warnings suppressed** — Suppressed Solr Security Manager and RabbitMQ deprecation warnings in container logs (#1432, closes #1367)
+- **CI: Dependabot batch label** — Ensured `dependabot:batch` label exists before PR creation (#1415)
+- **CI: Batch dependabot merge** — Added batch dependabot merge workflow and fixed automerge bug (#1413)
+- **CI: E2E health checks** — Sourced installer-generated Solr credentials for E2E health checks (#1370)
+
+### Documentation
+
+- Solr 10 migration PRD for v2.0 (#1334)
+- Organize PRDs — move completed GPU acceleration, relocate Solr 10 migration (#1429)
+- Release documentation for v1.18.1 (#1371)
+
+### Dependencies
+
+- Batch dependency update (24 PRs) (#1414)
+- Bump pandas 2.2.2 → 3.0.2 in admin (#1417)
+- Bump FastAPI in solr-search and embeddings-server (#1402, #1395)
+- Bump ONNX 1.20.1 → 1.21.0 in embeddings-server (#1372)
+- Bump uvicorn[standard] in solr-search (#1416)
+- Bump GitHub Actions: ruff-action 4.0.0, upload-artifact 7.0.1, build-push-action 7.1.0, github-script 9.0.0, setup-uv 8.0.0, login-action 4.1.0, codeql-action 4.35.1 (#1427, #1426, #1425, #1421, #1418, #1406, #1391)
+- Bump frontend dev dependencies: typescript-eslint, globals, @axe-core/react, jsdom (#1423, #1424, #1422, #1419)
+- Bump ruff in document-lister (#1420), httpx in embeddings-server (#1397)
+
+## [1.18.1] — 2026-04-02
+
+### Fixed
+
+- **Solr auth roles** — Fixed role assignment to align with Solr 9.7 built-in role hierarchy. The `set-user-role` call was overwriting the admin user's roles to just `["admin"]`, stripping `superadmin`, `search`, and `index` roles. Now uses Solr 9.7's default 4-tier role structure (#1332, #1333)
+- **Installer CWD** — Fixed `setup.py` to work regardless of current working directory by adding inline script metadata (#1331)
+
 ## [1.18.0] — 2026-04-02
 
 ### Fixed

@@ -410,3 +410,38 @@ class TestStartupFailure:
             for key in list(sys.modules):
                 if key in ("main", "config"):
                     del sys.modules[key]
+
+
+# ---------------------------------------------------------------------------
+# Int8 quantization — JSON integer serialization
+# ---------------------------------------------------------------------------
+
+
+class TestInt8Serialization:
+    """Verify int8 quantization emits JSON integers (not floats) from the endpoint."""
+
+    def test_int8_embeddings_are_integers(self):
+        """When VECTOR_QUANTIZATION=int8, embedding values should be ints in JSON."""
+        client, _, _, _ = _fresh_import(extra_env={"VECTOR_QUANTIZATION": "int8"})
+        response = client.post(
+            "/v1/embeddings/",
+            json={"input": ["test sentence"]},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        embedding = data["data"][0]["embedding"]
+        for val in embedding:
+            assert isinstance(val, int), f"Expected int, got {type(val).__name__}: {val}"
+
+    def test_none_embeddings_are_floats(self):
+        """When VECTOR_QUANTIZATION=none, embedding values should be floats."""
+        client, _, _, _ = _fresh_import(extra_env={"VECTOR_QUANTIZATION": "none"})
+        response = client.post(
+            "/v1/embeddings/",
+            json={"input": ["test sentence"]},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        embedding = data["data"][0]["embedding"]
+        for val in embedding:
+            assert isinstance(val, float), f"Expected float, got {type(val).__name__}: {val}"

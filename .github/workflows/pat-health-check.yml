@@ -1,0 +1,220 @@
+name: PAT Health Check
+
+on:
+  schedule:
+    # First of each month at 09:00 UTC
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check-tokens:
+    name: Validate PATs and tokens
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check COPILOT_PAT
+        id: copilot-pat
+        env:
+          COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+        run: |
+          if [ -z "$COPILOT_PAT" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret is empty or not configured" >> "$GITHUB_OUTPUT"
+            echo "⚠️ COPILOT_PAT is not configured"
+            exit 0
+          fi
+          # Test with a lightweight GitHub API call
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $COPILOT_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/user)
+          if [ "$STATUS" = "200" ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo "✅ COPILOT_PAT is valid"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "reason=API returned HTTP $STATUS" >> "$GITHUB_OUTPUT"
+            echo "⚠️ COPILOT_PAT returned HTTP $STATUS"
+          fi
+
+      - name: Check COPILOT_ASSIGN_TOKEN
+        id: assign-token
+        env:
+          COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+        run: |
+          if [ -z "$COPILOT_ASSIGN_TOKEN" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret is empty or not configured" >> "$GITHUB_OUTPUT"
+            echo "⚠️ COPILOT_ASSIGN_TOKEN is not configured"
+            exit 0
+          fi
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $COPILOT_ASSIGN_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/user)
+          if [ "$STATUS" = "200" ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo "✅ COPILOT_ASSIGN_TOKEN is valid"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "reason=API returned HTTP $STATUS" >> "$GITHUB_OUTPUT"
+            echo "⚠️ COPILOT_ASSIGN_TOKEN returned HTTP $STATUS"
+          fi
+
+      - name: Check HF_TOKEN
+        id: hf-token
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret is empty or not configured" >> "$GITHUB_OUTPUT"
+            echo "⚠️ HF_TOKEN is not configured"
+            exit 0
+          fi
+          STATUS=$(curl -sI -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $HF_TOKEN" \
+            https://huggingface.co/api/whoami-v2)
+          if [ "$STATUS" = "200" ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo "✅ HF_TOKEN is valid"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "reason=API returned HTTP $STATUS" >> "$GITHUB_OUTPUT"
+            echo "⚠️ HF_TOKEN returned HTTP $STATUS"
+          fi
+
+      - name: Create or update tracking issues
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          COPILOT_PAT_VALID: ${{ steps.copilot-pat.outputs.valid }}
+          COPILOT_PAT_REASON: ${{ steps.copilot-pat.outputs.reason }}
+          ASSIGN_TOKEN_VALID: ${{ steps.assign-token.outputs.valid }}
+          ASSIGN_TOKEN_REASON: ${{ steps.assign-token.outputs.reason }}
+          HF_TOKEN_VALID: ${{ steps.hf-token.outputs.valid }}
+          HF_TOKEN_REASON: ${{ steps.hf-token.outputs.reason }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const timestamp = new Date().toISOString();
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            // Ensure label exists
+            try {
+              await github.rest.issues.createLabel({
+                owner, repo,
+                name: 'token-expired',
+                color: 'D93F0B',
+                description: 'A PAT or token may be expired',
+              });
+            } catch (e) { /* already exists */ }
+
+            // Fetch all open token-expired issues once
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner, repo,
+              state: 'open',
+              labels: 'token-expired',
+              per_page: 100,
+            });
+
+            const tokens = [
+              {
+                name: 'COPILOT_PAT',
+                valid: process.env.COPILOT_PAT_VALID === 'true',
+                reason: process.env.COPILOT_PAT_REASON || '',
+                title: '⚠️ COPILOT_PAT may be expired — release docs used fallback template',
+                impact: 'Copilot CLI will be unavailable for release documentation generation.',
+              },
+              {
+                name: 'COPILOT_ASSIGN_TOKEN',
+                valid: process.env.ASSIGN_TOKEN_VALID === 'true',
+                reason: process.env.ASSIGN_TOKEN_REASON || '',
+                title: '⚠️ COPILOT_ASSIGN_TOKEN may be expired — squad assignment degraded',
+                impact: 'Copilot auto-assignment will fall back to GITHUB_TOKEN with limited permissions.',
+              },
+              {
+                name: 'HF_TOKEN',
+                valid: process.env.HF_TOKEN_VALID === 'true',
+                reason: process.env.HF_TOKEN_REASON || '',
+                title: '⚠️ HF_TOKEN may be expired — HuggingFace API access degraded',
+                impact: 'Embedding model downloads and HuggingFace API calls may fail.',
+              },
+            ];
+
+            for (const token of tokens) {
+              const match = openIssues.find(i => i.title === token.title);
+
+              if (!token.valid) {
+                const body = [
+                  '## PAT Health Check — Failed',
+                  '',
+                  `\`${token.name}\` is invalid or not configured.`,
+                  '',
+                  '### Details',
+                  `- **Reason:** ${token.reason}`,
+                  `- **Impact:** ${token.impact}`,
+                  `- **Health check run:** ${runUrl}`,
+                  `- **Timestamp:** ${timestamp}`,
+                  '',
+                  '### Resolution',
+                  `1. Generate a new token for \`${token.name}\``,
+                  '2. Update the repository secret',
+                  '3. Close this issue once resolved',
+                ].join('\n');
+
+                if (match) {
+                  await github.rest.issues.createComment({
+                    owner, repo,
+                    issue_number: match.number,
+                    body: `🔄 **Still invalid** at ${timestamp}\n\nReason: ${token.reason}\nHealth check: ${runUrl}`,
+                  });
+                  core.info(`Updated existing issue #${match.number} for ${token.name}`);
+                } else {
+                  await github.rest.issues.create({
+                    owner, repo,
+                    title: token.title,
+                    body,
+                    labels: ['token-expired'],
+                  });
+                  core.info(`Created issue for invalid ${token.name}`);
+                }
+              } else if (match) {
+                // Token is now valid — close the tracking issue
+                await github.rest.issues.createComment({
+                  owner, repo,
+                  issue_number: match.number,
+                  body: `✅ **Resolved** — \`${token.name}\` is now valid (checked at ${timestamp}).\n\nHealth check: ${runUrl}`,
+                });
+                await github.rest.issues.update({
+                  owner, repo,
+                  issue_number: match.number,
+                  state: 'closed',
+                  state_reason: 'completed',
+                });
+                core.info(`Closed issue #${match.number} — ${token.name} is valid`);
+              } else {
+                core.info(`${token.name} is valid, no open issue to close`);
+              }
+            }
+
+      - name: Summary
+        if: always()
+        env:
+          COPILOT_PAT_VALID: ${{ steps.copilot-pat.outputs.valid }}
+          ASSIGN_TOKEN_VALID: ${{ steps.assign-token.outputs.valid }}
+          HF_TOKEN_VALID: ${{ steps.hf-token.outputs.valid }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## PAT Health Check Results
+
+          | Token | Status |
+          |-------|--------|
+          | COPILOT_PAT | $([ "$COPILOT_PAT_VALID" = "true" ] && echo "✅ Valid" || echo "❌ Invalid") |
+          | COPILOT_ASSIGN_TOKEN | $([ "$ASSIGN_TOKEN_VALID" = "true" ] && echo "✅ Valid" || echo "❌ Invalid") |
+          | HF_TOKEN | $([ "$HF_TOKEN_VALID" = "true" ] && echo "✅ Valid" || echo "❌ Invalid") |
+
+          _Checked at $(date -u +%Y-%m-%dT%H:%M:%SZ)_
+          EOF

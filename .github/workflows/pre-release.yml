@@ -81,14 +81,14 @@ jobs:
           else
             echo "Auto-detecting next RC number..."
 
-            # Query ghcr.io for existing tags on the admin image
+            # Query ghcr.io for existing tags on the UI image
             # The packages API lists versions for the container
             max_rc=0
 
             # Use GitHub API to list package versions and find existing RC tags
             owner="${REPO%%/*}"
             response=$(gh api \
-              "/users/${owner}/packages/container/aithena-admin/versions" \
+              "/users/${owner}/packages/container/aithena-ui/versions" \
               --paginate \
               --jq ".[].metadata.container.tags[]" 2>/dev/null || true)
 
@@ -172,11 +172,6 @@ jobs:
             startup_timeout: 120
             tag_suffix: "-openvino"
             docker_env: "-e BACKEND=openvino -e DEVICE=cpu"
-          - image: admin
-            type: http
-            port: "8501"
-            health_endpoint: /admin/streamlit/_stcore/health
-            startup_timeout: 60
           - image: aithena-ui
             type: http
             port: "8080"
@@ -188,7 +183,7 @@ jobs:
             type: process
     steps:
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -316,7 +311,7 @@ jobs:
           persist-credentials: false
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

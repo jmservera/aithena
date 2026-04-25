@@ -17,6 +17,7 @@ from document_indexer.__main__ import (
     save_state,
     wait_for_solr_collection,
 )
+from document_indexer.embeddings import EmbeddingResult
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -25,6 +26,7 @@ from document_indexer.__main__ import (
 FAKE_PAGES = [(1, " ".join(["word"] * 500))]
 FAKE_PAGE_CHUNKS = [("chunk1", 1, 1), ("chunk2", 1, 2)]
 FAKE_EMBEDDING = [0.1] * 512
+FAKE_EMB_RESULT = EmbeddingResult(vector=FAKE_EMBEDDING)
 
 
 @pytest.fixture
@@ -103,12 +105,12 @@ class TestBuildChunkDoc:
     def test_optional_language_included_when_present(self, metadata_stub):
         metadata_stub["language"] = "ca"
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
-        assert doc["language_s"] == "ca"
+        assert doc["language_detected_s"] == "ca"
 
     def test_optional_language_absent_when_none(self, metadata_stub):
         metadata_stub["language"] = None
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub)
-        assert "language_s" not in doc
+        assert "language_detected_s" not in doc
 
     def test_page_fields_included_when_provided(self, metadata_stub):
         doc = build_chunk_doc("pid", 0, "text", FAKE_EMBEDDING, metadata_stub, page_start=3, page_end=5)
@@ -144,7 +146,7 @@ class TestIndexChunks:
     @patch("document_indexer.__main__.extract_pdf_text")
     def test_returns_chunk_count(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
-        mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
+        mock_get_embeddings.return_value = [FAKE_EMB_RESULT, FAKE_EMB_RESULT]
         mock_post.return_value = self._mock_response()
 
         with patch("document_indexer.__main__.chunk_text_with_pages", return_value=FAKE_PAGE_CHUNKS):
@@ -158,7 +160,7 @@ class TestIndexChunks:
     def test_posts_json_docs_to_solr(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
         page_chunks = [("chunk one", 1, 1), ("chunk two", 1, 2)]
-        embeddings = [[0.1] * 512, [0.2] * 512]
+        embeddings = [EmbeddingResult(vector=[0.1] * 512), EmbeddingResult(vector=[0.2] * 512)]
         mock_get_embeddings.return_value = embeddings
         mock_post.return_value = self._mock_response()
 
@@ -202,7 +204,7 @@ class TestIndexChunks:
     @patch("document_indexer.__main__.extract_pdf_text")
     def test_propagates_solr_error(self, mock_extract_text, mock_get_embeddings, mock_post, pdf_file, metadata_stub):
         mock_extract_text.return_value = FAKE_PAGES
-        mock_get_embeddings.return_value = [FAKE_EMBEDDING]
+        mock_get_embeddings.return_value = [FAKE_EMB_RESULT]
         mock_post.return_value = self._mock_response(500, "Solr error")
         mock_post.return_value.raise_for_status.side_effect = requests.HTTPError("500 Server Error")
 
@@ -220,7 +222,7 @@ class TestIndexChunks:
     ):
         mock_extract_text.return_value = FAKE_PAGES
         page_chunks = [("chunk one", 2, 3), ("chunk two", 3, 5)]
-        mock_get_embeddings.return_value = [[0.1] * 512, [0.2] * 512]
+        mock_get_embeddings.return_value = [EmbeddingResult(vector=[0.1] * 512), EmbeddingResult(vector=[0.2] * 512)]
         mock_post.return_value = self._mock_response()
 
         with patch("document_indexer.__main__.chunk_text_with_pages", return_value=page_chunks):
@@ -526,26 +528,26 @@ class TestBuildLiteralParams:
         meta = self._base_metadata()
         meta["language"] = "ca"
         params = build_literal_params(meta, page_count=None)
-        assert params["literal.language_s"] == "ca"
+        assert params["literal.language_detected_s"] == "ca"
 
     def test_language_absent_from_params_when_none(self):
         meta = self._base_metadata()
         meta["language"] = None
         params = build_literal_params(meta, page_count=None)
-        assert "literal.language_s" not in params
+        assert "literal.language_detected_s" not in params
 
     def test_language_absent_from_params_when_missing(self):
         meta = self._base_metadata()
         del meta["language"]
         params = build_literal_params(meta, page_count=None)
-        assert "literal.language_s" not in params
+        assert "literal.language_detected_s" not in params
 
     @pytest.mark.parametrize("lang", ["es", "ca", "fr", "en", "la", "de", "pt", "it", "nl"])
     def test_all_supported_language_codes_are_passed_through(self, lang):
         meta = self._base_metadata()
         meta["language"] = lang
         params = build_literal_params(meta, page_count=None)
-        assert params["literal.language_s"] == lang
+        assert params["literal.language_detected_s"] == lang
 
     def test_thumbnail_url_included_in_params_when_set(self):
         meta = self._base_metadata()
@@ -736,7 +738,7 @@ class TestCollectionRouting:
     ):
         """index_chunks posts to the correct Solr collection URL."""
         mock_extract_text.return_value = FAKE_PAGES
-        mock_get_embeddings.return_value = [FAKE_EMBEDDING, FAKE_EMBEDDING]
+        mock_get_embeddings.return_value = [FAKE_EMB_RESULT, FAKE_EMB_RESULT]
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
         mock_post.return_value = resp

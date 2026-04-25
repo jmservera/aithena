@@ -1,6 +1,6 @@
 # User Manual
 
-This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [v1.17.0 Release Notes](release-notes/v1.17.0.md).
+This manual explains how to use Aithena as a reader or library user. For setup, deployment, and service troubleshooting, see the [Admin Manual](admin-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
 **v1.16.0 fixes search experience:** semantic search results now use the same display style as keyword results, keyword match context is truncated to 40 words, page numbers are restored for keyword matches, and thumbnails are now shown for all search modes. See [Search (v1.16.0 fixes)](#searching-for-books) below.
 
@@ -20,6 +20,14 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.17.0 adds GPU acceleration for embeddings:** optional GPU support speeds up document indexing 2–4× on NVIDIA GPUs and 1.5–2× on Intel GPUs. GPU is opt-in via environment variables; CPU-only deployments are unaffected. See [GPU Acceleration](#gpu-acceleration-v1170) below.
 
+**v1.18.0 adds folder path facets for hierarchical search filtering:** new "📁 Folder" facet in the search sidebar lets you filter by document location in the library structure. Collections now display books using the same card/list components as the Library, creating a consistent reading experience. See [Folder Facets (v1.18.0)](#folder-facets-v1180) below.
+
+**v1.18.1 patch:** Fixes the installer `ModuleNotFoundError` when running `uv run installer/setup.py` from the repo root (now works from any directory). See [v1.18.1 Release Notes](release-notes/v1.18.1.md).
+
+**v1.19.0 patch:** Suppresses startup deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, cleaning up container logs. No user-facing changes. See [v1.19.0 Release Notes](release-notes/v1.19.0.md).
+
+**v2.0.0 — React admin portal:** The Streamlit admin dashboard has been replaced with a modern React single-page application at `/admin/`. The admin interface now has 7 dedicated pages: Dashboard, Document Manager, Reindex Library, Indexing Status, System Status, Infrastructure, and Log Viewer. The installer has been overhauled with GPU auto-detection and SSL setup. See [v2.0.0 Release Notes](release-notes/v2.0.0.md).
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -27,7 +35,7 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - sign in with the account created during installation (v0.11.0+)
 - search by keyword, semantic meaning, or a hybrid of both
 - see chunk text previews with page ranges in search results (v1.11.0+)
-- narrow results with facets
+- narrow results with facets including language, author, year, category, and folder location (v1.18.0+)
 - view document thumbnails in search and library results (v1.11.0+; all search modes v1.16.0+)
 - click a result to open a richer book detail view with metadata and similar books (v1.11.0+)
 - open PDFs directly from search results with page-level navigation from keyword matches (v1.11.0+; page links restored v1.16.0+)
@@ -37,7 +45,7 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - check the Aithena version in the footer (v0.7.0+)
 - check system health in the Status tab
 - view library-wide statistics in the Stats tab
-- open the Admin tab to load the embedded operator dashboard when you need admin tools
+- open the Admin portal at `/admin/` for the full operator dashboard (React SPA in v2.0.0+)
 
 ### How to access it
 
@@ -271,6 +279,7 @@ You can filter by:
 - **Author**
 - **Year**
 - **Category**
+- **Folder** (v1.18.0+)
 
 ### How to use them
 
@@ -285,7 +294,41 @@ You can filter by:
 - Counts next to each facet show how many matching books are in that bucket.
 - Changing a filter refreshes the results immediately.
 - When you change a filter, the result list returns to page 1.
-- **Folder filter (v1.10.0+):** Click the "📁 Folder" facet to filter by the directory where documents are stored. This is useful for organizing searches by physical location in your library (e.g., all books in "English/Science Fiction").
+
+## Folder Facets (v1.18.0+)
+
+The **Folder** facet helps you organize and filter searches by the location of documents in your library structure. This is especially useful for large libraries organized by topic, language, or author.
+
+### How folder filtering works
+
+1. In the search sidebar, look for the **📁 Folder** facet (new in v1.18.0)
+2. Click on a folder name to filter results to documents in that folder
+3. The filter automatically includes documents in all subfolders (recursive filtering)
+4. Combine folder filters with other facets (language, author, etc.) for more precise searches
+5. View your active filters in the "Active Filters" section above the results
+6. Remove a folder filter by clicking the ✕ on its filter chip
+
+### Example workflows
+
+**Scenario 1: Narrow by language**
+- Click "📁 Folder" → "English" to see all books in the English section
+- Results automatically include "English/History", "English/Science", etc.
+
+**Scenario 2: Combine with other filters**
+- Click "📁 Folder" → "English" → "Science Fiction"
+- Then click **Year**: "2020–2025"
+- Result: Science Fiction books in English published in the last 5 years
+
+**Scenario 3: Explore library organization**
+- Expand the folder tree to see how your library is organized
+- Use folder filtering to discover sections you might not have known existed
+
+### Folder filter behavior
+
+- **Hierarchical:** Clicking a parent folder shows all documents in that folder and all subfolders
+- **Counts:** The number next to each folder shows how many documents are in that folder (including subfolders)
+- **Multi-select:** You can click multiple folder names to search across different sections
+- **Combinable:** Folder filters work alongside language, author, year, and category filters
 
 ![Filtered search results](images/facet-panel.png)
 
@@ -465,24 +508,24 @@ The **🛠️ Admin** tab opens an embedded operator dashboard inside the Aithen
 
 ### What it shows
 
-The embedded Streamlit dashboard currently includes:
+The admin portal is a React-based dashboard with sidebar navigation, organized into five groups:
 
-- **Total Documents**, **Queued**, **Processed**, and **Failed** counters
-- **RabbitMQ Queue** metrics for ready, unacknowledged, and total messages
-- sidebar access to **Document Manager**, where operators can inspect queued, processed, and failed documents and trigger requeue or clear actions
+- **Overview** — Dashboard with document metrics, queue status, and infrastructure health
+- **Documents** — Document Manager for inspecting queued, processed, and failed documents with search, pagination, requeue, and clear actions
+- **Indexing** — Reindex Library (full reindex with confirmation) and Indexing Status (per-document progress with filters)
+- **System** — System Status (container health), Log Viewer (per-service log streaming), and Infrastructure (links to Solr, RabbitMQ, Redis UIs)
+- **Management** — Users and Backups
 
 ### What to expect
 
 - The Admin tab loads `/admin/` inside the app rather than sending you to a different product.
 - It is mainly intended for operators and library administrators, not day-to-day readers.
-- The admin dashboard now requires an authenticated session; if your session expires, Aithena redirects you back to `/login`.
+- The admin portal requires an authenticated session; if your session expires, Aithena redirects you back to `/login`.
 - If the dashboard cannot load after you sign in, contact your administrator to confirm the admin services are running and your account has been provisioned correctly.
-
-*New in v1.8.1:* The admin dashboard login issue has been fixed. You should now be able to access it without being stuck in a login loop.
 
 ![Admin dashboard](images/admin-dashboard.png)
 
-<!-- TODO: capture screenshot -->
+<!-- Screenshots are auto-generated by the release workflow -->
 
 
 ## Uploading PDFs (v0.6.0+)
@@ -527,6 +570,8 @@ The **Upload** tab lets authenticated users add PDFs to the library without dire
 ## Collections (v1.10.0+)
 
 *Updated in v1.12.1:* Collections now use real backend data by default, with persistent storage and full CRUD support.
+
+*Updated in v1.18.0:* Collections now display books using the same card/list components as the Library, creating a consistent visual style with title, author, thumbnails, and Open PDF buttons.
 
 Collections let you organize, annotate, and revisit documents you find interesting. Think of them as personal reading lists within Aithena.
 
@@ -691,21 +736,25 @@ Hover over the version badge in the bottom-right corner of the footer to see:
 
 If the version displays as "unknown", the admin dashboard may not be running or the version endpoint is unavailable.
 
-## Admin Portal (v1.15.0+)
+## Admin Portal (v1.15.0+ / React SPA in v2.0.0)
 
-The admin portal has been redesigned with a sidebar navigation for easier access to admin tools. Administrators can access it at `/admin`.
+> **v2.0.0 update:** The admin dashboard is now a React single-page application served at `/admin/`. The Streamlit-based admin container (`aithena-admin`) has been removed. All admin functionality is now built into `aithena-ui`. Access the admin portal at `http://localhost/admin/` (requires admin role).
+
+The admin portal is a React-based operator dashboard with sidebar navigation. Administrators can access it at `/admin`.
 
 ### Sidebar Navigation
 
-The admin portal now groups tools into a sidebar menu:
+The admin portal groups tools into a sidebar menu with five sections:
 
-- **Dashboard** — overview of system status and quick actions
-- **Indexing Status** — detailed per-document progress
-- **Log Viewer** — per-service log streaming (see below)
-- **Backups** — backup dashboard and restore wizard
-- **Solr Admin** — embedded Solr admin UI with SSO passthrough
+- **Overview** — Dashboard with system metrics and infrastructure health
+- **Documents** — Document Manager with search, tabs (queued/processed/failed), and bulk actions
+- **Indexing** — Reindex Library and Indexing Status (per-document progress)
+- **System** — System Status (container health), Log Viewer (per-service streaming), and Infrastructure (links to Solr, RabbitMQ, Redis management UIs)
+- **Management** — Users and Backups
 
-All existing admin routes continue to work; the sidebar provides a centralized way to navigate between them.
+The sidebar supports keyboard navigation with Arrow Up/Down, Home/End keys.
+
+For detailed documentation of each admin page, see the [Admin Manual](admin-manual.md#admin-portal-redesign).
 
 ### Per-Service Log Viewer (v1.15.0+)
 
@@ -754,7 +803,7 @@ DEVICE=cuda
 ```
 Then start with the NVIDIA override:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.nvidia.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
 ```
 
 **For Intel GPUs (including WSL2):**
@@ -764,7 +813,7 @@ BACKEND=openvino
 ```
 Then start with the Intel override:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.intel.override.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d
 ```
 
 **No GPU? No problem.** The default configuration (`DEVICE=cpu`, `BACKEND=torch`) works exactly as before — no changes needed.

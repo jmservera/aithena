@@ -10,7 +10,7 @@
 - **Graceful shutdown:** `stop_grace_period` 60s (Solr/ZK), 30s (RabbitMQ/Redis), 10s (others)
 - **Dependency ordering:** Always `condition: service_healthy` for critical deps; never bare `depends_on`
 - **Port strategy:** Only nginx publishes host ports (80/443); all others use `expose:` only
-- **Compose overlays:** `docker-compose.ssl.yml` for certbot/TLS; profiles can't add volumes to other services
+- **Compose overlays:** `docker/compose.ssl.yml` for certbot/TLS; profiles can't add volumes to other services
 
 ### Bind-Mount Permissions (Recurring Pattern)
 Bind-mount ownership is **always the host's**. Dockerfile `RUN chown` only applies to the image layer, not bind-mounted paths.
@@ -47,7 +47,7 @@ See skill `solrcloud-docker-operations` for full runbook. Key points:
 ### Release Process & Versioning
 - **Docs-gate-the-tag:** Release docs merged to `dev` BEFORE version tag created
 - **VERSION file:** Source of truth; `buildall.sh` exports `VERSION`, `GIT_COMMIT`, `BUILD_DATE`
-- **GHCR distribution:** `docker-compose.prod.yml` uses image pulls (no build in prod)
+- **GHCR distribution:** `docker/compose.prod.yml` uses image pulls (no build in prod)
 - **Release automation:** `release.yml` on `v*.*.*` tags → build/push → tarball asset
 - **Screenshot pipeline:** integration-test → `release-screenshots` artifact → `update-screenshots.yml` → commits PNGs to `docs/screenshots/` on `dev`
 
@@ -122,17 +122,19 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 | — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
 | — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
 | — | #1286 | Add intel-extension-for-pytorch (IPEX) to openvino extras |
+| — | #1325/PR#1328 | BuildKit --mount=from + --inexact for embeddings-server layer optimization (~95% reduction) |
+| 2026-04-21 | #1496/PR#1504 | Dev integration test workflow using single-node topology |
 
 ---
 
 ## Learnings
 
 ### GPU Compose Override Pattern
-- Used override files (`docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
+- Used override files (`docker/compose.gpu-nvidia.yml`, `docker/compose.gpu-intel.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
 - `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
 - NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
 - Intel: `/dev/dri` device passthrough + `video` group_add + `BASE_TAG` build arg (selects openvino base image)
-- Key files: `docker-compose.nvidia.override.yml`, `docker-compose.intel.override.yml`
+- Key files: `docker/compose.gpu-nvidia.yml`, `docker/compose.gpu-intel.yml`
 
 ### HF Hub Offline Loading — Pre-Cached Local Model Directory
 - `snapshot_download()` does NOT fully cache the API metadata `optimum-intel` needs (`tree/main?recursive=True` endpoint)
@@ -153,6 +155,24 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - `group_add: [render]` in Docker Compose fails if the `render` group doesn't exist inside the container image
 - The `render` group is a host-level Linux concept for GPU DRM access; slim Python images don't have it
 - For WSL2 Intel GPU (`/dev/dxg`), only `video` group is needed
+
+### BuildKit `--mount=from` for Transient Build Tools (Issue #1325)
+- `RUN --mount=from=image,source=/bin,target=/usr/local/bin/tool` bind-mounts a file from another image for the duration of a single RUN command only — it never appears in any image layer
+- This is the preferred pattern for build tools (uv, cargo, etc.) that should not ship in runtime images
+- `COPY --from=image /tool /usr/local/bin/tool` creates a permanent layer — use `--mount=from` instead when the tool is only needed during build
+- Docker COPY always writes the full directory content as a new layer regardless of what exists in the base — it does NOT deduplicate against base layers. This makes multi-stage "build→COPY .venv→runtime" ineffective when both stages share the same base with a pre-populated .venv
+- `uv sync --inexact` preserves existing packages and only installs the delta — combine with `--mount=from` for minimal layers (~200MB vs ~4GB)
+- Requires `# syntax=docker/dockerfile:1` directive for cross-version compatibility; BuildKit is default since Docker 23.0+ and already enabled in CI via `docker/setup-buildx-action`
+- Key file: `src/embeddings-server/Dockerfile`
+
+### OV Cache Location — /app over /tmp
+- OpenVINO cache dir moved from `/tmp/ov_cache` to `/app/ov_cache` for consistency — owned by `app` user, inside WORKDIR
+- `/tmp` should be avoided for persistent cache in containers (ephemeral, sometimes noexec-mounted)
+
+### Cross-Repo Coordination for Base Image Changes
+- Base image changes (jmservera/embeddings-server-base) and app Dockerfile changes (jmservera/aithena) must be coordinated as a breaking pair
+- Created issue in base repo (embeddings-server-base#4) with full Dockerfile specs for both variants
+- App-side PR is intentionally DRAFT/BLOCKED until base image is updated
 
 ## Reskill Notes (2026-07-25)
 
@@ -207,7 +227,7 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - NVIDIA GPU prerequisites, Container Toolkit installation (Ubuntu/Debian), host + Docker verification
 - Intel GPU prerequisites, compute-runtime installation, device verification
 - WSL2 GPU passthrough patterns for both vendors (Windows driver requirement emphasized)
-- Docker Compose override file usage pattern (`-f docker-compose.nvidia.override.yml`)
+- Docker Compose override file usage pattern (`-f docker/compose.gpu-nvidia.yml`)
 - Embeddings-server health endpoint verification with expected GPU output
 - Troubleshooting table: 5 symptoms with diagnosis and resolution
 
@@ -228,4 +248,129 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 
 **Key insight:** IPEX is the required bridge between PyTorch and Intel's XPU runtime. Without it, PyTorch detects Intel GPU hardware but cannot dispatch inference to it. IPEX 2.8.0 resolves cleanly with torch 2.10.0 — no version conflicts.
 
-**Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker-compose.intel.override.yml` continues to work without changes.
+**Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker/compose.gpu-intel.yml` continues to work without changes.
+
+---
+
+## 2026-03-31T13:16Z — BuildKit Dockerfile Implementation Complete
+
+**Status:** ✅ PR #1328 implemented. All 61 tests passing. Base image PR merged and images published.
+
+**What happened:**
+- Implemented `--mount=from=ghcr.io/astral-sh/uv:0.11.2` bind mount in `src/embeddings-server/Dockerfile`
+- Reduced multi-stage COPY pattern to single-stage build
+- Layer size: 13GB → 37MB (99.7% reduction when base cached)
+- Key flags: `uv sync --inexact --frozen --no-dev` (preserves base packages, installs delta only)
+- uv pinned to specific version tag for reproducibility (no floating `:latest`)
+
+**Decision:** `.squad/decisions.md` updated with full analysis and rationale.
+
+**Cross-reference:** Parker's base image work (orchestration log 2026-03-31T13-16Z-parker-base-dockerfiles.md) unblocks next steps.
+
+---
+
+## 2026-04-02 — Solr 9.7 Auth Role Alignment (#1332)
+
+**Status:** ✅ PR #1333 created targeting dev (post-v1.18.1 hardening).
+
+**Root cause:** Solr 9.7's `solr auth enable` assigns all 4 built-in roles (superadmin, admin, search, index) to the created user. Our solr-init script was calling `set-user-role` afterward, overwriting these to just `["admin"]`, stripping superadmin (needed for security-edit) and search (needed for collection-admin-read).
+
+**Fix applied:**
+- Removed set-user-role call for admin user in both docker-compose.yml and docker/compose.prod.yml
+- Changed readonly user role from custom "readonly" to Solr 9.7 built-in "search" role
+- Updated security.json to use the 4-tier built-in role hierarchy (superadmin > admin > search > index)
+- Tests updated to verify admin roles are NOT overwritten and readonly gets "search" role
+
+**Key learning:** In Solr 9.7, `solr auth enable` handles admin role assignment automatically. Never overwrite with `set-user-role` for the admin user — it strips critical roles. The built-in "search" role replaces custom "readonly" and includes collection-admin-read permissions.
+
+## 2026-04-19 — Dependabot Batch Merge Workflow
+
+### Bug Fix
+- `dependabot-automerge.yml` line 41: `dependabot[bot]` → `app/dependabot` — the `gh pr list --json author` returns `app/dependabot` as the login, not `dependabot[bot]`. This was the root cause of 38 PRs piling up unmergeable.
+
+### New Workflow: `dependabot-batch-merge.yml`
+- Consolidates N dependabot PRs into a single `dependabot/batch-YYYY-MM-DD` branch
+- Lockfile conflict resolution: `uv lock` for Python services, `npm install --package-lock-only` for aithena-ui
+- Major version bumps excluded automatically (per team policy in decisions.md)
+- VERSION file patch-bumped only when actual changes merged
+- Dry-run mode via workflow_dispatch for safe preview
+- Both workflows coexist: auto-merge for day-to-day, batch-merge for backlogs
+
+### Key Files
+- `.github/workflows/dependabot-automerge.yml` — single-PR auto-merge (fixed)
+- `.github/workflows/dependabot-batch-merge.yml` — new batch workflow
+- `.squad/decisions/inbox/brett-dependabot-batch.md` — design decision
+
+## 2026-04-20 — Vector Search 32GB Optimization Analysis (Ash)
+
+**Session:** Multi-part research with Ash (Search Engineer) on infrastructure scaling constraints.
+
+### Key Findings That Impact Infrastructure Decisions
+
+**Previous infrastructure analysis (2026-04-20, Brett):**
+- Standalone Solr: ~$800–1,200/yr, simple ops
+- SolrCloud 3-node: ~$1,800–2,400/yr, HA guaranteed
+- **Recommendation at the time:** Unclear; depends on whether single-node can handle 30K books (54M vectors)
+
+**New vector optimization analysis (2026-04-20, Ash):**
+- **Baseline:** 54M vectors requires 130–180 GB RAM (unviable on standard cloud VMs)
+- **Optimized (Phase 1 + 2):** 9M vectors + int8 quantization = **9 GB HNSW fits in 32 GB** ✅
+- **Result:** Standalone Solr is NOW VIABLE and cost-optimal
+
+### Infrastructure Decision: STANDALONE SOLR RECOMMENDED
+
+**Rationale:**
+1. Vector optimization reduces HNSW from 130 GB → 9 GB
+2. 32 GB single-node machine is sufficient (2 OS + 8 JVM + 9 HNSW + 8 text + 5 headroom)
+3. Saves 2.5× cost vs SolrCloud (3 nodes + ZK)
+4. Operational simplicity (no quorum management, distributed debugging)
+
+**Prerequisites for go-ahead:**
+- Phase 1 (page-level chunking) must be implemented + validated
+- Phase 2 (int8 quantization) should be scheduled
+
+### Cross-Service Alignment
+
+**Ash's optimization roadmap (.squad/analysis/vector-search-32gb-optimization-roadmap.md):**
+- Confirms HNSW uses mmap + OS page cache, not JVM heap (previous assumption was wrong)
+- 50–75% page cache coverage = sub-second latency on NVMe SSD (tight but usable)
+- Six optimization strategies ranked by impact; Phase 1 + 2 are lowest-effort, highest-confidence
+
+**Timestamp correlation:**
+- Brett's infra analysis: 2026-04-20T18:31Z
+- Ash's optimization roadmap: 2026-04-20T18:53Z
+- Decision merged: 2026-04-20T18:54Z
+
+### Next Steps for Brett
+
+1. **Confirm 32 GB single-node as target hardware spec** (vs SolrCloud)
+2. **Update hardware requirements doc** — currently recommends 130GB; new baseline is 32GB
+3. **Specify NVMe SSD requirement** — performance targets assume NVMe, not HDD
+4. **Monitor vector count growth** — if exceeds 15M vectors, re-evaluate SolrCloud migration
+5. **Plan Phase 2 timeline** — coordinate with Ash on int8 quantization rollout
+
+### Files Referenced
+
+- `.squad/analysis/vector-search-32gb-optimization-roadmap.md` — Full technical analysis
+- `.squad/analysis/standalone-solr-capacity-54m-vectors.md` — Baseline (130 GB)
+- `docs/research/standalone-vs-cloud-infrastructure-analysis.md` — Brett's original analysis (cost comparison)
+- `.squad/decisions.md` — Decision added: "32GB RAM Solr Optimization Strategy"
+## 2026-04-21 — Dev Integration Test Workflow (#1496)
+
+**Status:** ✅ PR #1504 created targeting dev.
+
+**What happened:**
+- Created `.github/workflows/dev-integration-test.yml` for faster CI on dev branch
+- Triggers on push to dev and PRs to dev (separate from integration-test.yml which targets main)
+- Uses single-node topology: 1 Solr + 1 ZooKeeper (vs 3-node SolrCloud)
+- Runs same test suite: Python E2E + Playwright browser tests
+- Uses Docker Compose profile overrides to disable solr2, solr3, zoo2, zoo3
+- Timeout: 45 minutes (vs 75 for full integration test)
+- Resource usage: ~6 containers vs 17
+
+**Key pattern:** Docker Compose profiles can disable services at the workflow level via `services: { service_name: { profiles: [disabled] } }` in override files. This is cleaner than maintaining separate compose files for each topology variant.
+
+**Design decisions:**
+- Why single-node for dev? SolrCloud resilience (replication, leader election) isn't needed for dev CI. Faster feedback wins.
+- Why not a separate compose.single-node.yml overlay? Kept the profile override in-CI to avoid maintaining another compose file. Consistent with docker/compose.e2e.yml pattern (minimal, focused overrides).
+- 45-min timeout is conservative; single-node should complete in 30-35 min with cold docker build, 20 min with warm caches.

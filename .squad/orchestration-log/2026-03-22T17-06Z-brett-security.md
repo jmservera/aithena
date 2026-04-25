@@ -10,7 +10,7 @@
 - **Status:** Merged to dev
 - **Changes:**
   - Added `ZOO_CFG_EXTRA: "admin.enableServer=false"` to all 3 ZK nodes
-  - Applied to both docker-compose.yml and docker-compose.prod.yml
+  - Applied to both docker-compose.yml and docker/compose.prod.yml
   - Removed port 8080 expose and host mapping from ZK services
 - **Rationale:** AdminServer exposes cluster topology and operational commands; not needed for SolrCloud operations
 

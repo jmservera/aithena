@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -27,6 +28,7 @@ import { useSearch, BookResult, SearchMode } from '../hooks/search';
 import { onRenderCallback } from '../utils/profiler';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useCapabilities } from '../contexts/CapabilitiesContext';
 import BatchSelectionToolbar from '../Components/BatchSelectionToolbar';
 import BatchEditPanel from '../Components/BatchEditPanel';
 
@@ -129,6 +131,7 @@ function SearchResultsSection({
   onSaveToCollection,
 }: SearchResultsSectionProps) {
   const intl = useIntl();
+  const capabilities = useCapabilities();
   const totalPages = Math.ceil(total / limit);
   const resultsHeadingId = `${resultsRegionId}-heading`;
 
@@ -193,7 +196,7 @@ function SearchResultsSection({
         )}
       </section>
 
-      {focusedBookId && (
+      {focusedBookId && !capabilities.loading && capabilities.similarBooks && (
         <SimilarBooks documentId={focusedBookId} onSelectBook={onSelectSimilarBook} />
       )}
 
@@ -212,7 +215,7 @@ function SearchResultsSection({
         </footer>
       )}
 
-      {selectedBook && <PdfViewer result={selectedBook} onClose={onPdfClose} />}
+      {selectedBook && <PdfViewer result={selectedBook} onClose={onPdfClose} searchQuery={query} />}
     </>
   );
 }
@@ -238,6 +241,13 @@ function SearchPage() {
 
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const capabilities = useCapabilities();
+
+  // Filter mode options based on backend capabilities
+  const availableModeOptions = useMemo(
+    () => MODE_OPTIONS.filter((opt) => capabilities.searchModes.includes(opt.value)),
+    [capabilities.searchModes]
+  );
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -486,7 +496,7 @@ function SearchPage() {
             role="group"
             aria-label={intl.formatMessage({ id: 'search.modeGroupLabel' })}
           >
-            {MODE_OPTIONS.map((option) => (
+            {availableModeOptions.map((option) => (
               <button
                 key={option.value}
                 type="button"

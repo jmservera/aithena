@@ -971,7 +971,7 @@ PRs that only need conflict resolution in existing solr-search/ or aithena-ui/ f
 - ✅ `.env` is already in `.gitignore` (line 123).
 - ❌ No `.env` file exists.
 - ❌ `docker-compose.yml` hardcodes `/home/jmservera/booklibrary` in the `document-data` volume (line 449).
-- ✅ The `docker-compose.e2e.yml` already demonstrates the pattern: `device: "${E2E_LIBRARY_PATH:-/tmp/aithena-e2e-library}"` — this is the exact template to follow.
+- ✅ The `docker/compose.e2e.yml` already demonstrates the pattern: `device: "${E2E_LIBRARY_PATH:-/tmp/aithena-e2e-library}"` — this is the exact template to follow.
 - Other volumes also hardcode paths: `/source/volumes/rabbitmq-data`, `/source/volumes/solr-data`, etc.
 
 **Gap:** Single-line change in `docker-compose.yml` + create a `.env.example` file.
@@ -2438,7 +2438,7 @@ When a running stack is available, capture and replace the placeholder images in
 ## 2026-03-14T23:04: Port Security Hardening Directive
 
 **By:** jmservera (via Copilot coordinator)  
-**What:** Production should only publish nginx ports (80/443). All other container ports (Solr, Redis, RabbitMQ, ZooKeeper, etc.) should use `expose:` only (internal network). Keep port publishing available for development/debugging via docker-compose.override.yml.  
+**What:** Production should only publish nginx ports (80/443). All other container ports (Solr, Redis, RabbitMQ, ZooKeeper, etc.) should use `expose:` only (internal network). Keep port publishing available for development/debugging via docker/compose.dev-ports.yml.  
 **Why:** User request — security hardening. Services behind nginx gateway don't need host-level port bindings in production. Reduces attack surface for production-style deployments while keeping local debugging workflow intact.
 
 ---
@@ -2471,7 +2471,7 @@ When a running stack is available, capture and replace the placeholder images in
 **What changed:**
 - `docker-compose.yml` now publishes host ports only for `nginx` (`80`, `443`).
 - All other formerly published service ports were moved behind the Compose network with `expose:`.
-- New `docker-compose.override.yml` restores direct host access for local debugging (`redis`, `rabbitmq`, `solr-search`, `streamlit-admin`, `redis-commander`, `zoo1`-`zoo3`, `solr`-`solr3`, and `embeddings-server`).
+- New `docker/compose.dev-ports.yml` restores direct host access for local debugging (`redis`, `rabbitmq`, `solr-search`, `streamlit-admin`, `redis-commander`, `zoo1`-`zoo3`, `solr`-`solr3`, and `embeddings-server`).
 
 **Ingress audit:**
 - nginx already proxies the public UI (`/`), search API (`/v1/`, `/documents/`), Solr admin (`/admin/solr/` and `/solr/`), RabbitMQ management (`/admin/rabbitmq/`), Streamlit admin (`/admin/streamlit/`), and Redis Commander (`/admin/redis/`).
@@ -3264,7 +3264,7 @@ Created 30KB+ OWASP ZAP audit guide (`docs/security/owasp-zap-audit-guide.md`) c
 
 ### 1. ZAP Proxy Port: 8090 (Not Default 8080)
 
-**Reason:** aithena's `solr-search` service uses port 8080 (docker-compose.override.yml). Running ZAP on 8090 avoids port conflict while still testing solr-search through nginx proxy.
+**Reason:** aithena's `solr-search` service uses port 8080 (docker/compose.dev-ports.yml). Running ZAP on 8090 avoids port conflict while still testing solr-search through nginx proxy.
 
 ### 2. Manual Explore Phase: 15-30 Minutes
 
@@ -3319,7 +3319,7 @@ Created 30KB+ OWASP ZAP audit guide (`docs/security/owasp-zap-audit-guide.md`) c
 3. Missing X-Content-Type-Options — Acceptable (informational hardening)
 
 **Docker Compose Findings:**
-1. 10+ internal ports exposed in `docker-compose.override.yml` — Dev-only, verified not in production deploy
+1. 10+ internal ports exposed in `docker/compose.dev-ports.yml` — Dev-only, verified not in production deploy
 2. Solr nodes publish 8983-8985 directly — Should be internal-only in prod (document in deployment guide)
 3. Images lack SHA digest pinning — Supply chain risk, recommend SHA pinning for v0.7.0
 4. `redis` image lacks explicit version tag — Recommend `redis:7.2-alpine`
@@ -3328,7 +3328,7 @@ Created 30KB+ OWASP ZAP audit guide (`docs/security/owasp-zap-audit-guide.md`) c
 
 **Verified Accurate:**
 - docker-compose.yml (production config)
-- docker-compose.override.yml (dev port exposures)
+- docker/compose.dev-ports.yml (dev port exposures)
 - nginx/default.conf (proxy routes: /, /v1/, /admin/streamlit/, /admin/solr/, /admin/rabbitmq/, /admin/redis/, /documents/, /solr/)
 - Service ports: nginx (80/443), solr-search (8080), streamlit (8501), Solr (8983-8985), RabbitMQ (15672), Redis (6379), ZooKeeper (18080/2181-2183)
 
@@ -3420,7 +3420,7 @@ Implemented production Docker hardening specification for all 20+ services in do
 ### Impact
 
 - **Operators**: Full production deployment guide with troubleshooting
-- **Developers**: No changes to docker-compose.override.yml (dev workflow intact)
+- **Developers**: No changes to docker/compose.dev-ports.yml (dev workflow intact)
 - **CI/CD**: Longer startup time (3-5min cold start vs 1-2min), but deterministic
 - **Production**: Zero-downtime deployments, predictable resource usage
 

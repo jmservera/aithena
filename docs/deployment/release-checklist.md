@@ -96,7 +96,7 @@ curl -sf http://localhost:8080/health && echo " ✅ solr-search healthy"
 curl -sf http://localhost:8085/health && echo " ✅ embeddings-server healthy"
 
 # 6. Check container logs for startup errors
-for svc in embeddings-server embeddings-server-e5 solr-search document-indexer document-lister admin; do
+for svc in embeddings-server embeddings-server-e5 solr-search document-indexer document-lister; do
   if docker compose logs "$svc" 2>&1 | grep -qi "error\|traceback\|failed\|ModuleNotFoundError"; then
     echo "❌ $svc has errors in startup logs — investigate before releasing"
   fi
@@ -115,7 +115,7 @@ done
   cd src/document-indexer && uv run bandit -r . -ll
   cd src/document-lister && uv run bandit -r . -ll
   cd src/embeddings-server && uv run bandit -r . -ll
-  python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))" && python3 -c "import yaml; yaml.safe_load(open('docker-compose.prod.yml'))"
+  python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))" && python3 -c "import yaml; yaml.safe_load(open('docker/compose.prod.yml'))"
   # For Checkov and Zizmor, check GitHub Security tab
   ```
 - [ ] Review and resolve ALL open Dependabot/security alerts (critical and high MUST be fixed; medium/low documented in `docs/security/baseline-exceptions.md`)
@@ -395,14 +395,13 @@ You should see:
 
 ### [ ] Verify Docker Images Published to GHCR
 
-Check that all 6 images were pushed to GitHub Container Registry:
+Check that all 5 images were pushed to GitHub Container Registry:
 
 ```bash
 gh api /orgs/jmservera/packages?package_type=container
 ```
 
 Look for:
-- `aithena-admin` — tagged `vX.Y.Z`, `X.Y`, `X`, `latest`
 - `aithena-aithena-ui` — tagged `vX.Y.Z`, `X.Y`, `X`, `latest`
 - `aithena-document-indexer` — tagged `vX.Y.Z`, `X.Y`, `X`, `latest`
 - `aithena-document-lister` — tagged `vX.Y.Z`, `X.Y`, `X`, `latest`

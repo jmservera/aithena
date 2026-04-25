@@ -25,7 +25,7 @@ Environment overrides:
   EMBEDDINGS_URL, API_USER, API_PASS
 
 Notes:
-  - Requires Docker Compose and published debug ports from docker-compose.override.yml.
+  - Requires Docker Compose and published debug ports from docker/compose.dev-ports.yml.
   - If API credentials are omitted, keyword/semantic/hybrid latency is measured
     directly against Solr + embeddings-server instead of the protected /v1/search API.
 EOF
@@ -107,7 +107,7 @@ fi
 mkdir -p "$E2E_LIBRARY_PATH"
 mkdir -p "$(dirname "$OUTPUT_JSON")"
 
-compose_cmd=(docker compose -f docker-compose.yml -f docker-compose.e2e.yml)
+compose_cmd=(docker compose -f docker-compose.yml -f docker/compose.e2e.yml)
 startup_started="$(python3 - <<'PY'
 import time
 print(time.time())
@@ -161,7 +161,7 @@ API_USER = os.environ.get("API_USER", "")
 API_PASS = os.environ.get("API_PASS", "")
 DOC_COUNT = int(os.environ["DOC_COUNT"])
 STARTUP_STARTED = float(os.environ["STARTUP_STARTED"])
-COMPOSE_BASE = ["docker", "compose", "-f", "docker-compose.yml", "-f", "docker-compose.e2e.yml"]
+COMPOSE_BASE = ["docker", "compose", "-f", "docker-compose.yml", "-f", "docker/compose.e2e.yml"]
 
 SERVICES_TO_SAMPLE = [
     "redis",

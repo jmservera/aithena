@@ -1,5 +1,11 @@
 # Parker — History
 
+## Cross-Agent Notes
+
+**2026-03-31 — Brett (Infrastructure Architect):** Recommended Approach 3 (BuildKit `--mount=from` bind mount) for #1325 embeddings-server layer optimization. Analysis shows ~95% reduction (4.1GB → 200MB compressed) with zero tools in runtime. Prerequisite: rebuild base image to own `/app/.venv` with heavy deps (torch, nvidia-*, triton, sentence-transformers). This is a one-time change for both slim and openvino variants. Decision document in decisions.md.
+
+---
+
 ## Core Context (v1.10.0)
 
 **Backend Service Architecture:**
@@ -101,7 +107,7 @@
 
 **Root cause (triple):** nginx alias pointed to `/data/documents/` instead of `/data/thumbnails/`, nginx container was missing the `thumbnail-data` volume mount, and the search API returned bare relative paths without the `/thumbnails/` prefix — causing the browser to hit the SPA catch-all.
 
-**Fix:** Corrected alias in all three nginx configs (default.conf, default.conf.template, ssl.conf.template). Added `thumbnail-data:/data/thumbnails:ro` to nginx in docker-compose.yml and docker-compose.prod.yml. Added `_thumbnail_url()` helper in search_service.py to prefix relative Solr paths with `/thumbnails/`.
+**Fix:** Corrected alias in all three nginx configs (default.conf, default.conf.template, ssl.conf.template). Added `thumbnail-data:/data/thumbnails:ro` to nginx in docker-compose.yml and docker/compose.prod.yml. Added `_thumbnail_url()` helper in search_service.py to prefix relative Solr paths with `/thumbnails/`.
 
 **Key lesson:** When adding a new nginx static-file location block, verify three things: (1) the alias points to the correct filesystem path, (2) the container mounts the corresponding volume, and (3) the URL returned by the API matches the nginx location pattern. All three must align or the SPA catch-all swallows the request.
 
@@ -123,7 +129,7 @@
 
 **Root cause (dual):** `solr auth enable` creates the admin user in BasicAuth but doesn't create the user-role mapping, so all RBAC-gated operations fail. Additionally, the readonly user was assigned the `search` role, but security.json uses `readonly` as the role name for read permissions.
 
-**Fix:** Added explicit `set-user-role` call for admin user after `solr auth enable`. Changed readonly role from `["search"]` to `["readonly"]`. Applied to both docker-compose.yml and docker-compose.prod.yml.
+**Fix:** Added explicit `set-user-role` call for admin user after `solr auth enable`. Changed readonly role from `["search"]` to `["readonly"]`. Applied to both docker-compose.yml and docker/compose.prod.yml.
 
 **Installer fix:** Added SOLR_ADMIN_USER/PASS and SOLR_READONLY_USER/PASS to the installer's credential generation pipeline, following the same pattern as RabbitMQ (generate on first run, rotate insecure defaults, preserve secure passwords).
 
@@ -442,7 +448,7 @@ Extracted password hashing and auth DB schema init from `src/solr-search/auth.py
 Fixed Solr's auth bootstrap entrypoint to explicitly assign roles after `solr auth enable`. Corrected readonly role from "search" (doesn't exist in security.json) to "readonly". Added Solr credential generation to installer pipeline.
 
 **Changes:**
-- `docker-compose.yml` + `docker-compose.prod.yml`: After `solr auth enable`, call `set-user-role` to assign `["admin"]` to admin user and `["readonly"]` to readonly user
+- `docker-compose.yml` + `docker/compose.prod.yml`: After `solr auth enable`, call `set-user-role` to assign `["admin"]` to admin user and `["readonly"]` to readonly user
 - `installer/` — Added Solr credential generation: `SOLR_ADMIN_USER`, `SOLR_ADMIN_PASS`, `SOLR_READONLY_USER`, `SOLR_READONLY_PASS` now generated and rotated on installer run
 
 **Key insight:** Solr auth lifecycle is: `solr auth enable` (create user) → `set-user-role` (assign permissions) → operations work. RBAC setup is now explicit and traceable.
@@ -484,3 +490,62 @@ Extracted `aithena-common/` as shared Python package containing passwords and au
 Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working) and rc.23 (broken). Found the root cause: the Dockerfile `chown` layer changed from `chown -R app:app /app /models` to `chown -R app:app /app && chmod -R a+rX /models`. This makes `/models` owned by `root:root` and non-writable by the `app` user, so any runtime cache/lock writes fail. Python packages and env vars are identical between versions. `model_utils.py` has new OpenVINO device routing logic but this is not the cause. Full findings in `.squad/decisions/inbox/parker-rc-comparison.md`.
 
 **Key lesson:** When optimizing Docker layers to avoid duplicating large directories (e.g. 5 GB model files), the `chmod a+rX` approach makes files readable but not writable. Libraries like OpenVINO and HuggingFace may need write access for runtime caches and lock files. A targeted fix (writable cache subdir + env var) is better than a blanket chown.
+
+### Base Image .venv Migration (#1325, 2026-07-16)
+
+**What:** Updated both Dockerfiles in `jmservera/embeddings-server-base` to install heavy Python packages (torch, sentence-transformers, etc.) into `/app/.venv` instead of system site-packages. This is a prerequisite for the app image to use `uv sync --inexact` (Approach 3 from Brett's BuildKit analysis).
+
+**Key changes:**
+- `pip install` → `uv venv /app/.venv` + `VIRTUAL_ENV=/app/.venv uv pip install --no-cache`
+- uv is BuildKit-mounted transiently (`--mount=from=ghcr.io/astral-sh/uv:0.11.2`), never in the image
+- Added `app:1000` user to both variants for consistent ownership with the app image
+- Openvino variant: replaced `openvino` user with `app:1000`, added `2>/dev/null || true` for idempotent user creation
+- `# syntax=docker/dockerfile:1` as first line enables BuildKit features
+
+**PR:** jmservera/embeddings-server-base#5
+
+**Key lesson:** When migrating from system pip to uv venv in a Docker image, remember that `VIRTUAL_ENV` env var tells `uv pip install` where to put packages — it doesn't auto-detect from the shell. Also, the openvino base image has its own user (`openvino`) that must be replaced, and `groupadd`/`useradd` need `2>/dev/null || true` guards since the uid/gid might already exist.
+
+---
+
+## 2026-03-31T13:16Z — Base Image Dockerfile Refactor Complete
+
+**Status:** ✅ PR jmservera/embeddings-server-base#5 opened. Both Dockerfiles updated. README updated.
+
+**What happened:**
+- Updated `Dockerfile` and `Dockerfile.openvino` to install heavy packages into `/app/.venv` (not system site-packages)
+- Created `app:1000` user (consistent with app image runtime user)
+- Added BuildKit `--mount=from` transient `uv` mounts (no runtime bloat)
+- Created `/models/.cache` with app:app ownership (fixes OpenVINO/HuggingFace cache writes)
+- Breaking change: openvino variant now uses `app:1000` instead of `openvino` user
+
+**Production impact:** ✅ User confirmed rc.32 (OpenVINO cache fix) working in production. No regressions.
+
+**Next step:** This PR must merge first; base images must be published to ghcr.io. Then Brett's app Dockerfile (PR #1328) can be merged.
+
+**Decision:** `.squad/decisions.md` updated with full rationale.
+
+**Cross-reference:** Brett's app image implementation (orchestration log 2026-03-31T13-16Z-brett-buildkit-dockerfile.md) is now unblocked pending this PR merge.
+
+### Vector Quantization (#1502, 2026-04-20)
+
+**Approach:** Added configurable vector quantization (none/fp16/int8) to the embeddings pipeline. Quantization happens server-side in the embeddings-server after model inference, before the response is sent. The document-indexer consumes a `field_name` from the response to route vectors to the correct Solr field.
+
+**Key design decisions:**
+- `VECTOR_QUANTIZATION` env var in embeddings-server config (default: `none` for backward compat)
+- `quantization.py` module with `quantize_embedding()` returning `(vector, solr_field_name)` tuple
+- `validate_quantization_quality()` computes cosine similarity, logs warning if degradation > 0.01
+- Response includes `field_name` per embedding so document-indexer dynamically selects `embedding_v` or `embedding_byte_v`
+- `EmbeddingResult` dataclass in document-indexer's `embeddings.py` replaces plain `list[float]` return type
+- `build_chunk_doc()` now accepts `embedding_field` param to set the correct Solr field dynamically
+
+**File paths:**
+- `src/embeddings-server/config/__init__.py` — VECTOR_QUANTIZATION env var
+- `src/embeddings-server/quantization.py` — quantize_embedding(), validate_quantization_quality()
+- `src/embeddings-server/main.py` — integration in /v1/embeddings/ endpoint
+- `src/document-indexer/document_indexer/embeddings.py` — EmbeddingResult dataclass, field_name parsing
+- `src/document-indexer/document_indexer/__main__.py` — build_chunk_doc() dynamic field, index_chunks() updated
+
+**Testing:** 16 new quantization tests (none identity, fp16 similarity > 0.99, int8 range [-128,127], invalid mode, quality validation). All 76 embeddings-server tests pass. All 203 document-indexer tests pass (4 pre-existing env-specific failures excluded).
+
+**Coordination with Ash:** Ash added `embedding_byte` Solr field type for int8/BYTE encoding in parallel. Our `embedding_byte_v` field name maps to Ash's schema.

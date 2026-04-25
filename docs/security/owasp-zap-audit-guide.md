@@ -83,14 +83,13 @@ Expected output: All services should show `Up` or `healthy` status. Key services
 - `solr-search` (search API)
 - `solr`, `solr2`, `solr3` (Solr cluster)
 - `rabbitmq`, `redis` (infrastructure)
-- `streamlit-admin` (admin dashboard)
 
 ### 2. Verify Application is Running
 
 Open a browser and navigate to:
 - **Main UI:** `http://localhost/`
 - **Search API:** `http://localhost/v1/docs` (FastAPI Swagger)
-- **Admin Dashboard:** `http://localhost/admin/streamlit/`
+- **Admin Dashboard:** `http://localhost/admin/`
 
 If any endpoint returns 502/503, check container logs:
 
@@ -252,8 +251,8 @@ To intercept HTTPS traffic (if testing with TLS enabled):
 
 **Navigate to each admin interface:**
 
-#### Streamlit Admin
-- **URL:** `http://localhost/admin/streamlit/`
+#### React Admin
+- **URL:** `http://localhost/admin/`
 - **Actions:**
   - Navigate all pages/tabs
   - Submit any forms
@@ -314,7 +313,6 @@ http://localhost
 │   ├── /documents/{path}
 │   └── /docs (Swagger)
 ├── /admin/
-│   ├── /streamlit/
 │   ├── /solr/
 │   ├── /rabbitmq/
 │   └── /redis/
@@ -406,19 +404,18 @@ Click **Start Scan**
 
 | Service | URL | Port (Override) | Description | Scan Priority |
 |---------|-----|-----------------|-------------|---------------|
-| **Streamlit Admin** | `http://localhost/admin/streamlit/` | 8501 | Admin dashboard | ⭐⭐ Medium |
+| **Streamlit Admin** | `http://localhost/admin/` | 8501 | Admin dashboard | ⭐⭐ Medium |
 | **Solr Admin** | `http://localhost/admin/solr/` | 8983 | Solr management UI | ⭐⭐ Medium |
 | **RabbitMQ Mgmt** | `http://localhost/admin/rabbitmq/` | 15672 | Queue management | ⭐ Low |
 | **Redis Commander** | `http://localhost/admin/redis/` | 8081 | Redis browser | ⭐ Low |
 
-### Development-Only Ports (docker-compose.override.yml)
+### Development-Only Ports (docker/compose.dev-ports.yml)
 
 **⚠️ These ports are exposed in development but should NOT be exposed in production:**
 
 | Port | Service | Risk |
 |------|---------|------|
 | 8080 | solr-search (direct) | Bypasses nginx auth (if added) |
-| 8501 | streamlit-admin (direct) | Bypasses nginx auth |
 | 8983, 8984, 8985 | Solr nodes (direct) | Direct cluster access |
 | 15672 | RabbitMQ management (direct) | Admin UI without nginx |
 | 6379 | Redis (direct) | Unauthenticated data store |
@@ -438,7 +435,7 @@ Click **Start Scan**
 
 **Files to Review:**
 - `docker-compose.yml` (production configuration)
-- `docker-compose.override.yml` (development overrides)
+- `docker/compose.dev-ports.yml` (development overrides)
 
 ### Checklist
 
@@ -449,12 +446,12 @@ Click **Start Scan**
 | Finding | Severity | Status | Notes |
 |---------|----------|--------|-------|
 | Nginx publishes `80:80` and `443:443` | ✅ Expected | ACCEPT | Production ingress |
-| `docker-compose.override.yml` exposes 10+ internal ports (Redis 6379, RabbitMQ 15672, etc.) | ⚠️ High | DOCUMENT | Dev-only; verify not in production |
+| `docker/compose.dev-ports.yml` exposes 10+ internal ports (Redis 6379, RabbitMQ 15672, etc.) | ⚠️ High | DOCUMENT | Dev-only; verify not in production |
 | Solr nodes expose 8983-8985 directly | ⚠️ Medium | DOCUMENT | Should be internal-only in prod |
 
 **Questions to answer:**
 - [ ] Are any ports published in `docker-compose.yml` that should be `expose:` only?
-- [ ] Is `docker-compose.override.yml` excluded from production deployments?
+- [ ] Is `docker/compose.dev-ports.yml` excluded from production deployments?
 - [ ] Are firewall rules configured to block direct access to non-nginx ports in production?
 
 #### 2. Volume Mounts
@@ -548,7 +545,7 @@ Click **Start Scan**
 
 **Reviewed Files:**
 - docker-compose.yml (commit: abc123)
-- docker-compose.override.yml (commit: abc123)
+- docker/compose.dev-ports.yml (commit: abc123)
 
 **Findings:**
 
@@ -560,7 +557,7 @@ Click **Start Scan**
 
 **Recommendations:**
 1. Add explicit version tags to all third-party images
-2. Document that `docker-compose.override.yml` must not be deployed to production
+2. Document that `docker/compose.dev-ports.yml` must not be deployed to production
 3. Implement network segmentation for admin services (future work)
 
 **Reviewed by:** Kane  
@@ -708,7 +705,7 @@ This report documents the results of a manual OWASP ZAP security audit performed
 
 - ✅ React UI (`http://localhost/`)
 - ✅ Search API (`http://localhost/v1/`)
-- ✅ Admin interfaces (Streamlit, Solr, RabbitMQ, Redis)
+- ✅ Admin interfaces (Solr, RabbitMQ, Redis)
 - ✅ Docker Compose configuration review
 
 ### Out-of-Scope
@@ -822,7 +819,7 @@ add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsaf
 **Summary:**
 - ✅ No privileged containers
 - ✅ No hardcoded secrets in Compose files
-- ⚠️ 10+ internal ports exposed in `docker-compose.override.yml` (dev-only; confirmed not deployed to prod)
+- ⚠️ 10+ internal ports exposed in `docker/compose.dev-ports.yml` (dev-only; confirmed not deployed to prod)
 - ⚠️ Image tags lack digest pinning (supply chain risk)
 
 **Recommendations:**
@@ -835,7 +832,7 @@ add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsaf
 
 ### Immediate (Before v0.6.0 Release)
 1. ✅ Document all baseline exceptions in security baseline
-2. ⚠️ Verify `docker-compose.override.yml` is excluded from production deploy scripts
+2. ⚠️ Verify `docker/compose.dev-ports.yml` is excluded from production deploy scripts
 
 ### Short-Term (v0.6.1 or v0.7.0)
 1. Add Content Security Policy header (ZAP-005)

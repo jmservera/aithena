@@ -34,7 +34,6 @@ The table below summarizes the Docker Compose resource limits shipped in `docker
 | **document-lister** | 1 | 256 MB | 128 MB | — | 128 MB | 256 MB | No (I/O-bound) |
 | **RabbitMQ** | 1 | 1 GB | 512 MB | — | 512 MB | 1 GB | No |
 | **Redis** | 1 | 512 MB | 256 MB | — | 128 MB | 256 MB–1 GB | No |
-| **admin** (Streamlit) | 1 | 256 MB | 128 MB | — | 128 MB | 256 MB | No |
 | **aithena-ui** (Nginx serving React) | 1 | 256 MB | 128 MB | — | 128 MB | 256 MB | No |
 | **nginx** (reverse proxy) | 1 | 256 MB | 128 MB | — | 64 MB | 128 MB | No |
 | **redis-commander** | 1 | 256 MB | 128 MB | — | 128 MB | 128 MB | No |
@@ -184,13 +183,13 @@ Only **nginx** is exposed on the host network (port 80 by default, 443 with TLS)
 
 | Requirement | Details |
 |---|---|
-| Inbound | Port 80 (HTTP) and optionally 443 (HTTPS via `docker-compose.ssl.yml`) |
+| Inbound | Port 80 (HTTP) and optionally 443 (HTTPS via `docker/compose.ssl.yml`) |
 | Outbound | **None required at runtime.** All models are baked into Docker images at build time (`HF_HUB_OFFLINE=1`). |
 | Bandwidth | Minimal for the application itself. Largest transfers are PDF uploads (capped at 50 MB by default). |
 
 ### 4.3 Firewall Rules
 
-For a production deployment, only port 80/443 needs to be open to users. If `docker-compose.override.yml` is active (development mode), additional debug ports are exposed — do not use the override in production.
+For a production deployment, only port 80/443 needs to be open to users. If `docker/compose.dev-ports.yml` is active (development mode), additional debug ports are exposed — do not use the override in production.
 
 ---
 
@@ -374,7 +373,7 @@ For local development and testing (not production), a lighter configuration is p
 
 **Development tips:**
 
-- Use `docker-compose.override.yml` for debug port access (ports 8080, 8085, 8983–8985, etc.)
+- Use `docker/compose.dev-ports.yml` for debug port access (ports 8080, 8085, 8983–8985, etc.)
 - Reduce Solr to a single node if resources are constrained (not recommended for testing replication behavior)
 - The embeddings model downloads at build time and is baked into the image — no internet access needed at runtime
 - Monitor resource usage with `docker stats` to identify tight spots on your development machine

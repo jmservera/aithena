@@ -22,6 +22,11 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, U
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from rerank_service import (
+    build_chunk_vector_params,
+    cosine_rerank,
+    extract_grouped_vectors,
+)
 
 import redis as redis_lib
 from admin_auth import require_admin_auth
@@ -141,7 +146,24 @@ T = TypeVar("T")
 SortBy = Literal["score", "title", "author", "year", "category", "language"]
 SortOrder = Literal["asc", "desc"]
 
-VALID_SEARCH_MODES: frozenset[str] = frozenset({"keyword", "semantic", "hybrid"})
+_VALID_ARCHITECTURES = frozenset({"hnsw", "hybrid-rerank"})
+
+# Search modes available per architecture
+_MODES_BY_ARCHITECTURE: dict[str, frozenset[str]] = {
+    "hnsw": frozenset({"keyword", "semantic", "hybrid"}),
+    "hybrid-rerank": frozenset({"keyword", "hybrid"}),
+}
+
+VALID_SEARCH_MODES: frozenset[str] = _MODES_BY_ARCHITECTURE.get(
+    settings.search_architecture, _MODES_BY_ARCHITECTURE["hnsw"]
+)
+
+# Effective default search mode — falls back to "keyword" if configured default
+# is not available in the current architecture.
+EFFECTIVE_DEFAULT_SEARCH_MODE: str = (
+    settings.default_search_mode if settings.default_search_mode in VALID_SEARCH_MODES else "keyword"
+)
+
 EMBEDDINGS_DEGRADED_MESSAGE = "Embeddings unavailable — showing keyword results"
 
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -152,6 +174,18 @@ _INSECURE_JWT_SECRETS = frozenset({"development-only-change-me", "", "changeme",
 
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if settings.search_architecture not in _VALID_ARCHITECTURES:
+        raise ValueError(
+            f"Invalid SEARCH_ARCHITECTURE={settings.search_architecture!r}. "
+            f"Must be one of: {', '.join(sorted(_VALID_ARCHITECTURES))}"
+        )
+    if settings.default_search_mode != EFFECTIVE_DEFAULT_SEARCH_MODE:
+        logger.warning(
+            "DEFAULT_SEARCH_MODE=%r is not available in %s architecture; using %r",
+            settings.default_search_mode,
+            settings.search_architecture,
+            EFFECTIVE_DEFAULT_SEARCH_MODE,
+        )
     if settings.auth_jwt_secret in _INSECURE_JWT_SECRETS:
         logger.warning(
             "AUTH_JWT_SECRET is using an insecure default value. "
@@ -209,6 +243,9 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         "/v1/auth/validate/",
         "/v1/metrics",
         "/v1/metrics/",
+        "/v1/capabilities",
+        "/v1/capabilities/",
+        "/capabilities",
         "/docs",
         "/redoc",
         "/openapi.json",
@@ -710,6 +747,22 @@ def version() -> dict[str, str]:
     }
 
 
+@app.get("/v1/capabilities", include_in_schema=False, name="capabilities_v1")
+@app.get("/capabilities")
+def capabilities() -> dict[str, Any]:
+    """Return the search capabilities of this deployment.
+
+    The frontend uses this to dynamically show/hide search modes and
+    features based on the configured search architecture.
+    """
+    return {
+        "search_modes": sorted(VALID_SEARCH_MODES),
+        "architecture": settings.search_architecture,
+        "vector_dimensions": 768,
+        "similar_books": settings.search_architecture == "hnsw",
+    }
+
+
 @app.post("/v1/auth/login/", include_in_schema=False, name="auth_login_v1_slash")
 @app.post("/v1/auth/login", name="auth_login_v1")
 def auth_login(credentials: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
@@ -898,7 +951,7 @@ def search(
     fq_series: str | None = Query(None),
     fq_folder: str | None = Query(None),
     mode: str = Query(
-        settings.default_search_mode,
+        EFFECTIVE_DEFAULT_SEARCH_MODE,
         description="Search mode: keyword (BM25), semantic (Solr kNN), or hybrid (RRF fusion).",
         enum=list(VALID_SEARCH_MODES),
     ),
@@ -925,7 +978,11 @@ def search(
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid search mode: {mode!r}. Must be one of: keyword, semantic, hybrid.",
+            detail=(
+                f"Invalid search mode: {mode!r}. "
+                f"Available modes for {settings.search_architecture} architecture: "
+                f"{', '.join(sorted(VALID_SEARCH_MODES))}."
+            ),
         )
 
     resolved_page_size = resolve_page_size(limit, page_size)
@@ -1153,6 +1210,26 @@ def _search_hybrid(
     *,
     collection: str | None = None,
 ) -> dict[str, Any]:
+    """Execute hybrid search — delegates to HNSW or rerank based on architecture."""
+    if settings.search_architecture == "hybrid-rerank":
+        return _search_hybrid_rerank(
+            request, q, page, page_size, sort_by, sort_order, sort, filters, collection=collection
+        )
+    return _search_hybrid_hnsw(request, q, page, page_size, sort_by, sort_order, sort, filters, collection=collection)
+
+
+def _search_hybrid_hnsw(
+    request: Request,
+    q: str,
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
+    *,
+    collection: str | None = None,
+) -> dict[str, Any]:
     """Execute BM25 and kNN searches in parallel, then fuse with RRF.
 
     Facets and highlights are sourced from the BM25 (keyword) leg.
@@ -1240,6 +1317,166 @@ def _search_hybrid(
         "degraded": False,
         **build_pagination(len(fused), 1, page_size),
         "results": fused,
+        "facets": parse_facet_counts(kw_payload),
+    }
+
+
+_RERANK_CANDIDATE_LIMIT = 200  # BM25 candidates to rerank
+
+
+def _search_hybrid_rerank(
+    request: Request,
+    q: str,
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+    sort: str | None,
+    filters: dict[str, str],
+    *,
+    collection: str | None = None,
+) -> dict[str, Any]:
+    """Hybrid search without HNSW: BM25 → fetch stored vectors → cosine rerank → RRF.
+
+    1. BM25 query returns top-N parent docs (books)
+    2. Fetch first-chunk embeddings for those books from Solr
+    3. Compute cosine similarity between query embedding and chunk vectors
+    4. RRF fusion of BM25 rank and vector similarity rank
+    5. Return top page_size results
+
+    For non-relevance sorts (title, year, etc.), vector reranking is skipped
+    and the search falls back to pure keyword mode.
+    """
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty for hybrid search")
+
+    # Non-relevance sorts bypass vector reranking
+    effective_sort = sort_by if sort is None else sort.split()[0] if sort else sort_by
+    if effective_sort != "score":
+        return _search_keyword(
+            request,
+            q,
+            page,
+            page_size,
+            sort_by,
+            sort_order,
+            sort,
+            filters,
+            collection=collection,
+            requested_mode="hybrid",
+            message="Non-relevance sort; vector reranking skipped",
+        )
+
+    candidate_limit = min(_RERANK_CANDIDATE_LIMIT, max(page_size * 10, 50))
+
+    kw_params = build_params_or_400(
+        query=q,
+        page=1,
+        page_size=candidate_limit,
+        sort_by="score",
+        sort_order="desc",
+        sort=None,
+        filters=filters,
+        facet_limit=settings.facet_limit,
+    )
+
+    # Run BM25 query and embedding fetch concurrently
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        kw_future = pool.submit(query_solr, kw_params, collection=collection)
+        emb_future = pool.submit(_fetch_embedding, q, collection=collection)
+
+        kw_payload = kw_future.result()
+        try:
+            query_vector = emb_future.result()
+        except HTTPException as exc:
+            if _should_degrade_to_keyword(exc):
+                return _search_keyword(
+                    request,
+                    q,
+                    page,
+                    page_size,
+                    sort_by,
+                    sort_order,
+                    sort,
+                    filters,
+                    degraded=True,
+                    message=EMBEDDINGS_DEGRADED_MESSAGE,
+                    requested_mode="hybrid",
+                    collection=collection,
+                )
+            raise
+
+    kw_response = kw_payload.get("response", {})
+    kw_highlighting = kw_payload.get("highlighting", {})
+    kw_docs = kw_response.get("docs", [])
+    bm25_total = kw_response.get("numFound", 0)
+
+    if not kw_docs:
+        return {
+            "query": q,
+            "mode": "hybrid",
+            "architecture": "hybrid-rerank",
+            "sort": {"by": "score", "order": "desc"},
+            "degraded": False,
+            **build_pagination(0, page, page_size),
+            "results": [],
+            "facets": parse_facet_counts(kw_payload),
+        }
+
+    # Normalize BM25 results
+    kw_results = [
+        normalize_book(doc, kw_highlighting, build_document_url(request, doc.get("file_path_s"))) for doc in kw_docs
+    ]
+    parent_ids = [r["id"] for r in kw_results]
+
+    # Fetch first-chunk embeddings for BM25 candidates
+    vec_params = build_chunk_vector_params(parent_ids, settings.knn_field)
+    vec_payload = query_solr(vec_params, collection=collection)
+    parent_vectors = extract_grouped_vectors(vec_payload, settings.knn_field)
+
+    # Build rerank candidates (only books that have vectors)
+    doc_vectors = [(pid, parent_vectors[pid]) for pid in parent_ids if pid in parent_vectors]
+
+    if not doc_vectors:
+        # No vectors available — fall back to BM25-only results
+        return {
+            "query": q,
+            "mode": "hybrid",
+            "architecture": "hybrid-rerank",
+            "sort": {"by": "score", "order": "desc"},
+            "degraded": True,
+            "message": "No vector embeddings available for reranking — showing keyword results",
+            **build_pagination(bm25_total, page, page_size),
+            "results": kw_results[:page_size],
+            "facets": parse_facet_counts(kw_payload),
+        }
+
+    # Cosine rerank and RRF fusion
+    reranked = cosine_rerank(query_vector, doc_vectors)
+
+    # Build semantic-like results from rerank scores
+    result_map = {r["id"]: r for r in kw_results}
+    sem_results = []
+    for doc_id, sim_score in reranked:
+        if doc_id in result_map:
+            entry = dict(result_map[doc_id])
+            entry["score"] = sim_score
+            sem_results.append(entry)
+
+    fused = reciprocal_rank_fusion(kw_results, sem_results, k=settings.rrf_k)
+    # Cap pagination to the rerank window — pages beyond it would be empty
+    rerank_total = min(bm25_total, candidate_limit)
+    start = (page - 1) * page_size
+    page_results = fused[start : start + page_size]
+
+    return {
+        "query": q,
+        "mode": "hybrid",
+        "architecture": "hybrid-rerank",
+        "sort": {"by": "score", "order": "desc"},
+        "degraded": False,
+        **build_pagination(rerank_total, page, page_size),
+        "results": page_results,
         "facets": parse_facet_counts(kw_payload),
     }
 
@@ -1348,7 +1585,7 @@ def search_compare(
     fq_series: str | None = Query(None),
     fq_folder: str | None = Query(None),
     mode: str = Query(
-        settings.default_search_mode,
+        EFFECTIVE_DEFAULT_SEARCH_MODE,
         description="Search mode: keyword, semantic, or hybrid.",
     ),
     _rate_limit: None = Depends(check_search_rate_limit),
@@ -1363,7 +1600,11 @@ def search_compare(
     if mode not in VALID_SEARCH_MODES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid search mode: {mode!r}. Must be one of: keyword, semantic, hybrid.",
+            detail=(
+                f"Invalid search mode: {mode!r}. "
+                f"Available modes for {settings.search_architecture} architecture: "
+                f"{', '.join(sorted(VALID_SEARCH_MODES))}."
+            ),
         )
 
     resolved_page_size = resolve_page_size(limit, page_size)
@@ -1484,7 +1725,15 @@ def similar_books(
     chunk documents (not parent book docs), so we fetch the vector from the
     book's first chunk, run kNN against all other chunks, then deduplicate
     by parent book.
+
+    Requires HNSW architecture — returns 501 in hybrid-rerank mode.
     """
+    if settings.search_architecture != "hnsw":
+        raise HTTPException(
+            status_code=501,
+            detail="Similar books requires HNSW search architecture. "
+            f"Current architecture: {settings.search_architecture}",
+        )
     embedding_field = settings.book_embedding_field
 
     # If document_id looks like a chunk ID, resolve to parent.
@@ -2203,7 +2452,7 @@ def admin_metrics_reset() -> dict[str, str]:
 
 DocumentStatus = Literal["queued", "processed", "failed"]
 
-# Column sets per status — mirrors the Streamlit admin dashboard schema.
+# Column sets per status for admin document triage.
 # Canonical field names are defined by document-lister (__main__.py) and
 # document-indexer, which write these JSON fields to Redis.
 _ADMIN_DOC_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -2336,6 +2585,8 @@ def admin_list_documents(
         DocumentStatus | None,
         Query(description="Filter documents by indexing status (queued, processed, or failed)."),
     ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number (1-based).")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=500, description="Results per page.")] = 100,
 ) -> dict[str, Any]:
     """List documents tracked in Redis with their indexing status.
 
@@ -2344,10 +2595,22 @@ def admin_list_documents(
     the ``documents`` list to a single status while still receiving full
     counts.
 
+    Supports pagination via ``page`` and ``per_page`` query parameters.
+
     Each document entry includes an opaque ``id`` token that can be passed to
     the ``POST /v1/admin/documents/{doc_id}/requeue`` endpoint.
     """
-    return _load_admin_documents(status_filter=status)
+    result = _load_admin_documents(status_filter=status)
+    docs = result["documents"]
+    total_docs = len(docs)
+    start = (page - 1) * per_page
+    end = start + per_page
+    result["documents"] = docs[start:end]
+    result["page"] = page
+    result["per_page"] = per_page
+    result["total_documents"] = total_docs
+    result["total_pages"] = 0 if total_docs == 0 else (total_docs + per_page - 1) // per_page
+    return result
 
 
 @app.post(
@@ -3269,6 +3532,426 @@ async def admin_restore_backup(backup_id: str, body: RestoreRequest | None = Non
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return record
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/queue-status (RabbitMQ queue metrics)
+# ---------------------------------------------------------------------------
+
+
+def _fetch_rabbitmq_queue_info(queue_name: str) -> dict[str, Any]:
+    """Query the RabbitMQ Management API for queue metrics."""
+    mgmt_url = (
+        f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"
+        f"{settings.rabbitmq_management_path_prefix}/api/queues/%2F/{queue_name}"
+    )
+    resp = requests.get(
+        mgmt_url,
+        auth=(settings.rabbitmq_user, settings.rabbitmq_pass),
+        timeout=5,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+@app.get(
+    "/v1/admin/queue-status/",
+    include_in_schema=False,
+    name="admin_queue_status_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get("/v1/admin/queue-status", name="admin_queue_status_v1", dependencies=[Depends(require_admin_auth)])
+def admin_queue_status() -> dict[str, Any]:
+    """Return RabbitMQ queue metrics for the dashboard.
+
+    Queries the RabbitMQ Management HTTP API for the configured queue name
+    and returns message counts and consumer information.
+    """
+    queue_name = settings.rabbitmq_queue_name
+    try:
+        data = _fetch_rabbitmq_queue_info(queue_name)
+        return {
+            "queue_name": queue_name,
+            "messages_ready": data.get("messages_ready", 0),
+            "messages_unacknowledged": data.get("messages_unacknowledged", 0),
+            "messages_total": data.get("messages", 0),
+            "consumers": data.get("consumers", 0),
+            "status": "ok",
+        }
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 0
+        if status_code == 404:
+            return {
+                "queue_name": queue_name,
+                "messages_ready": 0,
+                "messages_unacknowledged": 0,
+                "messages_total": 0,
+                "consumers": 0,
+                "status": "queue_not_found",
+            }
+        raise HTTPException(
+            status_code=502,
+            detail=f"RabbitMQ management API error: {exc}",
+        ) from exc
+    except (requests.RequestException, OSError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot reach RabbitMQ management API: {exc}",
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/indexing-status (per-document indexing status)
+# ---------------------------------------------------------------------------
+
+
+IndexingDocStatus = Literal["queued", "processing", "processed", "failed"]
+
+
+def _classify_indexing_status(state: dict[str, Any]) -> IndexingDocStatus:
+    """Return a fine-grained status for the indexing-status endpoint.
+
+    Unlike ``_classify_doc_state`` (which returns queued/processed/failed),
+    this distinguishes *processing* (started but not yet completed).
+    """
+    if state.get("failed"):
+        return "failed"
+    if state.get("processed"):
+        return "processed"
+    if state.get("processing") or state.get("text_indexed"):
+        return "processing"
+    return "queued"
+
+
+def _load_indexing_status(
+    *,
+    status_filter: IndexingDocStatus | None = None,
+    page: int = 1,
+    per_page: int = 100,
+) -> dict[str, Any]:
+    """Scan Redis and return detailed per-document indexing status with summary."""
+    client = _get_admin_redis_client()
+    summary: dict[str, int] = {
+        "total": 0,
+        "queued": 0,
+        "processing": 0,
+        "processed": 0,
+        "failed": 0,
+        "total_doc_pages": 0,
+        "total_doc_chunks": 0,
+    }
+    documents: list[dict[str, Any]] = []
+
+    for key, state, _doc_status in _iter_admin_docs(client):
+        idx_status = _classify_indexing_status(state)
+        summary["total"] += 1
+        summary[idx_status] += 1
+        summary["total_doc_pages"] += int(state.get("page_count", 0) or 0)
+        summary["total_doc_chunks"] += int(state.get("chunk_count", 0) or 0)
+
+        if status_filter is not None and idx_status != status_filter:
+            continue
+
+        path = state.get("path", "")
+        documents.append(
+            {
+                "id": _encode_admin_key(key),
+                "status": idx_status,
+                "path": path,
+                "title": state.get("title"),
+                "text_indexed": bool(state.get("text_indexed")),
+                "embedding_indexed": bool(state.get("embedding_indexed")),
+                "page_count": state.get("page_count"),
+                "chunk_count": state.get("chunk_count"),
+                "error": state.get("error"),
+                "error_stage": state.get("error_stage"),
+                "timestamp": state.get("timestamp"),
+            }
+        )
+
+    total_docs = len(documents)
+    start = (page - 1) * per_page
+    end = start + per_page
+
+    return {
+        "summary": summary,
+        "documents": documents[start:end],
+        "page": page,
+        "per_page": per_page,
+        "total_documents": total_docs,
+        "total_pages": 0 if total_docs == 0 else (total_docs + per_page - 1) // per_page,
+    }
+
+
+@app.get(
+    "/v1/admin/indexing-status/",
+    include_in_schema=False,
+    name="admin_indexing_status_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/indexing-status",
+    name="admin_indexing_status_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_indexing_status(
+    status: Annotated[
+        IndexingDocStatus | None,
+        Query(description="Filter by indexing status."),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number (1-based).")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=500, description="Results per page.")] = 100,
+) -> dict[str, Any]:
+    """Return detailed per-document indexing status with summary metrics.
+
+    Summary counts always reflect the full dataset.  The ``documents`` list
+    honours the optional ``status`` filter and ``page`` / ``per_page``
+    pagination parameters.
+    """
+    return _load_indexing_status(status_filter=status, page=page, per_page=per_page)
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/logs/{service_name} (container logs)
+# ---------------------------------------------------------------------------
+
+_ALLOWED_LOG_SERVICES: frozenset[str] = frozenset(
+    {
+        "solr-search",
+        "embeddings-server",
+        "document-indexer",
+        "document-lister",
+        "aithena-ui",
+        "solr",
+        "redis",
+        "rabbitmq",
+        "nginx",
+    }
+)
+
+
+def _fetch_docker_logs(
+    service_name: str,
+    tail: int = 100,
+    since: str | None = None,
+) -> list[str]:
+    """Fetch container logs via the Docker Engine API.
+
+    Uses the DOCKER_HOST setting to connect (defaults to the Unix socket).
+    Returns log lines as a list of strings.
+    """
+    import http.client
+    import socket as _socket
+    import urllib.parse
+
+    host = settings.docker_host
+    use_unix = host.startswith("unix://")
+    socket_path: str | None = None
+    if use_unix:
+        socket_path = host[len("unix://") :]
+    elif host.startswith("tcp://"):
+        base_url = host.replace("tcp://", "http://", 1)
+    else:
+        base_url = host
+
+    params: dict[str, str] = {"stdout": "1", "stderr": "1", "tail": str(tail)}
+    if since:
+        # Docker API expects Unix epoch seconds, not ISO-8601
+        from datetime import datetime
+
+        try:
+            dt = datetime.fromisoformat(since)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            params["since"] = str(int(dt.timestamp()))
+        except (ValueError, OSError):
+            params["since"] = since
+
+    def _docker_get(path: str, query_params: dict[str, str], timeout: float = 5) -> http.client.HTTPResponse:
+        """Perform a GET request against the Docker Engine API."""
+        qs = urllib.parse.urlencode(query_params)
+        full_path = f"{path}?{qs}" if qs else path
+        if use_unix:
+            if socket_path is None:  # pragma: no cover – guarded by use_unix flag
+                raise RuntimeError("socket_path must be set for unix transport")
+            sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            sock.connect(socket_path)
+            conn = http.client.HTTPConnection("localhost")
+            conn.sock = sock
+        else:
+            parsed = urllib.parse.urlparse(base_url)
+            conn = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=timeout)
+        conn.request("GET", full_path)
+        return conn.getresponse()
+
+    # Docker API: list containers filtered by compose service name, then get logs
+    list_path = "/containers/json"
+    list_params = {"filters": json.dumps({"label": [f"com.docker.compose.service={service_name}"]})}
+
+    try:
+        list_resp = _docker_get(list_path, list_params, timeout=5)
+        if list_resp.status >= 400:
+            raise HTTPException(status_code=502, detail=f"Docker API returned {list_resp.status}")
+        containers = json.loads(list_resp.read())
+    except HTTPException:
+        raise
+    except (OSError, http.client.HTTPException) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot reach Docker API: {exc}",
+        ) from exc
+
+    if not containers:
+        return []
+
+    container_id = containers[0]["Id"]
+    logs_path = f"/containers/{container_id}/logs"
+
+    try:
+        logs_resp = _docker_get(logs_path, params, timeout=10)
+        if logs_resp.status >= 400:
+            raise HTTPException(status_code=502, detail=f"Docker API returned {logs_resp.status}")
+    except HTTPException:
+        raise
+    except (OSError, http.client.HTTPException) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot fetch logs from Docker API: {exc}",
+        ) from exc
+
+    raw = logs_resp.read()
+    lines: list[str] = []
+    offset = 0
+    while offset < len(raw):
+        if offset + 8 <= len(raw):
+            # Docker multiplexed stream header: 8 bytes
+            frame_size = int.from_bytes(raw[offset + 4 : offset + 8], "big")
+            frame_end = offset + 8 + frame_size
+            chunk = raw[offset + 8 : frame_end]
+            for line in chunk.decode("utf-8", errors="replace").splitlines():
+                if line:
+                    lines.append(line)
+            offset = frame_end
+        else:
+            break
+
+    return lines
+
+
+@app.get(
+    "/v1/admin/logs/{service_name}/",
+    include_in_schema=False,
+    name="admin_logs_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/logs/{service_name}",
+    name="admin_logs_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_logs(
+    service_name: str,
+    tail: Annotated[int, Query(ge=1, description="Number of log lines to return.")] = 100,
+    since: Annotated[str | None, Query(description="Return logs since this ISO-8601 timestamp.")] = None,
+) -> dict[str, Any]:
+    """Return recent log lines for a Docker Compose service.
+
+    Uses the Docker Engine API (via socket or HTTP) to retrieve container
+    logs.  Only whitelisted service names are allowed.
+    """
+    if service_name not in _ALLOWED_LOG_SERVICES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown service '{service_name}'. Allowed: {', '.join(sorted(_ALLOWED_LOG_SERVICES))}",
+        )
+
+    effective_tail = min(tail, settings.log_tail_max)
+
+    lines = _fetch_docker_logs(service_name, tail=effective_tail, since=since)
+    return {
+        "service": service_name,
+        "lines": lines,
+        "total_lines": len(lines),
+        "available_services": sorted(_ALLOWED_LOG_SERVICES),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin — /v1/admin/infrastructure (service connectivity & management URLs)
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/v1/admin/infrastructure/",
+    include_in_schema=False,
+    name="admin_infrastructure_v1_slash",
+    dependencies=[Depends(require_admin_auth)],
+)
+@app.get(
+    "/v1/admin/infrastructure",
+    name="admin_infrastructure_v1",
+    dependencies=[Depends(require_admin_auth)],
+)
+def admin_infrastructure() -> dict[str, Any]:
+    """Return infrastructure connection details, management UI URLs, and health.
+
+    Checks connectivity to Solr, Redis, RabbitMQ, and the embeddings server,
+    and returns management UI links for browser access.
+    """
+    parsed_solr = urlparse(settings.solr_url)
+    solr_host = parsed_solr.hostname or "solr"
+    solr_port = parsed_solr.port or 8983
+
+    solr_up = _tcp_check(solr_host, solr_port)
+    redis_up = _tcp_check(settings.redis_host, settings.redis_port)
+    rabbitmq_up = _rabbitmq_management_check(
+        settings.rabbitmq_host,
+        settings.rabbitmq_management_port,
+        settings.rabbitmq_user,
+        settings.rabbitmq_pass,
+    )
+    embeddings_up = _embeddings_available(timeout=CONTAINER_VERSION_TIMEOUT)
+
+    services = [
+        {
+            "name": "solr",
+            "status": "up" if solr_up else "down",
+            "admin_url": "/admin/solr/",
+            "description": "Full-text search engine",
+        },
+        {
+            "name": "rabbitmq",
+            "status": "up" if rabbitmq_up else "down",
+            "admin_url": "/admin/rabbitmq/",
+            "description": "Message queue management",
+        },
+        {
+            "name": "redis-commander",
+            "status": "up" if redis_up else "down",
+            "admin_url": "/admin/redis/",
+            "description": "Redis inspection tool",
+        },
+        {
+            "name": "embeddings-server",
+            "status": "up" if embeddings_up else "down",
+            "admin_url": None,
+            "description": "Multilingual embeddings service",
+        },
+    ]
+
+    connections = {
+        "solr": f"{solr_host}:{solr_port}",
+        "redis": f"{settings.redis_host}:{settings.redis_port}",
+        "rabbitmq_amqp": f"{settings.rabbitmq_host}:{settings.rabbitmq_port}",
+        "rabbitmq_mgmt": (f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"),
+        "embeddings": settings.embeddings_url,
+    }
+
+    return {
+        "services": services,
+        "connections": connections,
+    }
 
 
 if __name__ == "__main__":
