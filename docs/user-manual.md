@@ -28,6 +28,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v2.0.0 — React admin portal:** The Streamlit admin dashboard has been replaced with a modern React single-page application at `/admin/`. The admin interface now has 7 dedicated pages: Dashboard, Document Manager, Reindex Library, Indexing Status, System Status, Infrastructure, and Log Viewer. The installer has been overhauled with GPU auto-detection and SSL setup. See [v2.0.0 Release Notes](release-notes/v2.0.0.md).
 
+**v2.1.0 — Configurable search architecture and single-node deployment:** Hybrid-rerank mode eliminates HNSW vector RAM for cost-constrained deployments (new `SEARCH_ARCHITECTURE` env var). Single-node Docker Compose reduces resource requirements from ~12GB to ~4GB. Single-user mode (`AUTH_ENABLED=false`) simplifies local development. See [v2.1.0 Release Notes](release-notes/v2.1.0.md).
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -46,6 +48,7 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - check system health in the Status tab
 - view library-wide statistics in the Stats tab
 - open the Admin portal at `/admin/` for the full operator dashboard (React SPA in v2.0.0+)
+- configure search architecture for memory-constrained deployments (`SEARCH_ARCHITECTURE`, v2.1.0+)
 
 ### How to access it
 
