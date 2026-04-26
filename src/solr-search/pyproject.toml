@@ -5,7 +5,7 @@ description = "Solr-backed FastAPI search service for aithena"
 requires-python = ">=3.12"
 dependencies = [
     "aithena-common",
-    "fastapi[all]>=0.135.3,<1",
+    "fastapi[all]>=0.136.0,<1",
     "uvicorn[standard]>=0.44.0,<1",
     "requests==2.33.1",
     "redis==7.4.0",
