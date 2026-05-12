@@ -2,9 +2,9 @@
 
 A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
-**Current Release:** v1.9.1 — Docker build fix for aithena-ui.  
-**Development:** v1.10.0 milestones active. All PRs target `dev` branch; releases merge `dev` → `main`.  
-**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v1.9.1.md)**
+**Current Release:** v2.1.0 — Configurable search architecture (HNSW/hybrid-rerank), integration tests for both topologies.  
+**Development:** v2.5 milestone active. All PRs target `dev` branch; releases merge `dev` → `main`.  
+**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v2.1.0.md)**
 
 ## What It Does
 
@@ -98,6 +98,22 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 ### Release Notes (newest first)
 
+- [v2.1.0 Release Notes](docs/release-notes/v2.1.0.md) — Configurable search architecture, single-node topology
+- [v2.0.0 Release Notes](docs/release-notes/v2.0.0.md) — Major: React admin portal, installer overhaul
+- [v1.19.0 Release Notes](docs/release-notes/v1.19.0.md)
+- [v1.18.1 Release Notes](docs/release-notes/v1.18.1.md)
+- [v1.18.0 Release Notes](docs/release-notes/v1.18.0.md)
+- [v1.17.1 Release Notes](docs/release-notes/v1.17.1.md)
+- [v1.17.0 Release Notes](docs/release-notes/v1.17.0.md)
+- [v1.16.0 Release Notes](docs/release-notes/v1.16.0.md)
+- [v1.15.0 Release Notes](docs/release-notes/v1.15.0.md)
+- [v1.14.1 Release Notes](docs/release-notes/v1.14.1.md)
+- [v1.13.1 Release Notes](docs/release-notes/v1.13.1.md)
+- [v1.13.0 Release Notes](docs/release-notes/v1.13.0.md)
+- [v1.12.2 Release Notes](docs/release-notes/v1.12.2.md)
+- [v1.12.1 Release Notes](docs/release-notes/v1.12.1.md)
+- [v1.11.0 Release Notes](docs/release-notes/v1.11.0.md)
+- [v1.10.0 Release Notes](docs/release-notes/v1.10.0.md)
 - [v1.9.1 Release Notes](docs/release-notes/v1.9.1.md)
 - [v1.9.0 Release Notes](docs/release-notes/v1.9.0.md)
 - [v1.8.2 Release Notes](docs/release-notes/v1.8.2.md)
@@ -144,12 +160,11 @@ See [Release Process Overview](#release-process-overview) below for full details
 | Milestone | Theme | Status |
 |-----------|-------|--------|
 | [v1.8.0](https://github.com/jmservera/aithena/milestone/22) | UI/UX improvements, design system | Complete |
-| [v1.8.1](https://github.com/jmservera/aithena/milestone/24) | Bug fixes (search, stats, i18n, admin) | Complete |
-| [v1.8.2](https://github.com/jmservera/aithena/milestone/25) | Legacy admin retirement, infra UI links | Complete |
 | [v1.9.0](https://github.com/jmservera/aithena/milestone/23) | Authentication & user management | Complete |
-| [v1.9.1](https://github.com/jmservera/aithena/milestone/28) | Docker build fix | Complete |
-| [v1.10.0](https://github.com/jmservera/aithena/milestone/26) | User collections, metadata editing | Planned |
-| [v1.10.1](https://github.com/jmservera/aithena/milestone/27) | BCDR backup/restore | Planned |
+| [v1.19.0](https://github.com/jmservera/aithena/milestone/42) | Dependency updates, CI fixes | Complete |
+| [v2.0](https://github.com/jmservera/aithena/milestone/39) | React admin portal, installer overhaul | Complete |
+| [v2.1](https://github.com/jmservera/aithena/milestone/46) | Configurable search architecture, integration tests | Complete |
+| [v2.5](https://github.com/jmservera/aithena/milestone/44) | Semantic E2E tests, documentation | Active |
 
 ## Architecture
 

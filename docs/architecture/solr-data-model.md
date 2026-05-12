@@ -86,7 +86,7 @@ Created by `document-indexer` during **Phase 2** (chunking & embedding).
 | `parent_id_s` | `string` | **Foreign key** → parent document `id`. |
 | `chunk_index_i` | `pint` | Sequential position of this chunk (0-based). |
 | `chunk_text_t` | `text_general` | The chunk's text content. |
-| `embedding_v` | `knn_vector_512` | 512-dimensional dense vector (HNSW, cosine). |
+| `embedding_v` | `knn_vector_768` | 768-dimensional dense vector (HNSW, cosine). |
 | `page_start_i` | `pint` | First page this chunk spans. |
 | `page_end_i` | `pint` | Last page this chunk spans. |
 | `title_s` | `string` | Inherited from parent (for display without join). |
@@ -112,8 +112,8 @@ not lost at chunk boundaries.
 ### Embedding generation
 
 Each chunk's text is sent to the **embeddings-server** (`POST /v1/embeddings/`),
-which returns a 512-dimensional vector using the
-`distiluse-base-multilingual-cased-v2` model. The vector is stored in the
+which returns a 768-dimensional vector using the
+`intfloat/multilingual-e5-base` model. The vector is stored in the
 `embedding_v` field, which is configured as a `DenseVectorField` with HNSW
 indexing and cosine similarity.
 
@@ -138,7 +138,7 @@ set. Highlighting uses the unified highlighter on `_text_`.
 
 ```
 User query
-    → embeddings-server → 512-dim vector
+    → embeddings-server → 768-dim vector
     → {!knn f=embedding_v topK=N} on chunk documents
     → returns chunk documents (with parent metadata)
     → normalize_book() maps chunk fields to book-level response

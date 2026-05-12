@@ -549,3 +549,13 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 **Testing:** 16 new quantization tests (none identity, fp16 similarity > 0.99, int8 range [-128,127], invalid mode, quality validation). All 76 embeddings-server tests pass. All 203 document-indexer tests pass (4 pre-existing env-specific failures excluded).
 
 **Coordination with Ash:** Ash added `embedding_byte` Solr field type for int8/BYTE encoding in parallel. Our `embedding_byte_v` field name maps to Ash's schema.
+
+### Local Single-Node E2E Pipeline Audit (2026-05-12)
+
+**Compose chain:** For a real local single-node E2E run, the working compose stack is `docker-compose.yml` + `docker/compose.dev-ports.yml` + `docker/compose.single-node.yml` + `docker/compose.e2e.yml`. `compose.e2e.yml` only swaps the document-data bind mount to `E2E_LIBRARY_PATH`, lowers `POLL_INTERVAL` to 10s, disables search rate limiting, and disables nginx; it does **not** publish `8080`/`8983`, so `compose.dev-ports.yml` is still required for the pytest suite defaults (`SEARCH_API_URL=http://localhost:8080`, `SOLR_URL=http://localhost:8983/solr/books`).
+
+**Installer dependency:** The installer still needs to run first because `solr-search` hard-requires installer-generated auth settings (`AUTH_JWT_SECRET`, auth DB bind mount, admin bootstrap user, Solr/Rabbit credentials). The installer-generated `start.sh` includes dev/prod + GPU + SSL + single-node overlays, but never the E2E overlay, so E2E runs must add `docker/compose.e2e.yml` manually.
+
+**Pipeline shape:** `/v1/upload` writes the PDF into `/data/documents/uploads`, then publishes the absolute path straight to RabbitMQ; it bypasses document-lister for initial enqueue. `document-indexer` then does two phases: (1) parent-book indexing via Solr `/update/extract`, (2) page/chunk extraction + batched calls to `/v1/embeddings/` + chunk writes back to Solr. Redis state is updated with `text_indexed`, `embedding_indexed`, and `chunk_count`; `GET /v1/admin/indexing-status` is the best API to poll in E2E.
+
+**Gap update:** There is now an `e2e/test_semantic_retrieval.py` test that verifies fresh semantic and hybrid retrieval, but it still cheats the user path by POSTing directly to Solr `/update/extract` and publishing directly to RabbitMQ. The remaining missing coverage is a single test that uses `/v1/upload`, waits for `embedding_indexed=true`, then asserts `/v1/search?mode=semantic` and `/v1/search?mode=hybrid` both retrieve the uploaded document.
