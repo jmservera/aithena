@@ -175,21 +175,28 @@ def _wait_for_chunk_docs(
 
 
 def _delete_solr_documents(solr_url: str, doc_id: str) -> None:
-    """Delete a parent document and all of its chunk documents."""
-    requests.post(
-        f"{solr_url}/update",
-        params={"commitWithin": "2000", "wt": "json"},
-        json={"delete": {"query": f"parent_id_s:{doc_id}"}},
-        auth=SOLR_AUTH,
-        timeout=30,
-    )
-    requests.post(
-        f"{solr_url}/update",
-        params={"commitWithin": "2000", "wt": "json"},
-        json={"delete": {"id": doc_id}},
-        auth=SOLR_AUTH,
-        timeout=30,
-    )
+    """Delete a parent document and all of its chunk documents.
+
+    Best-effort: Solr returns 200/4xx for transient auth or collection
+    state issues during teardown.  We log non-2xx responses so failures
+    are visible rather than silently swallowed.
+    """
+    for payload in (
+        {"delete": {"query": f"parent_id_s:{doc_id}"}},
+        {"delete": {"id": doc_id}},
+    ):
+        try:
+            resp = requests.post(
+                f"{solr_url}/update",
+                params={"commitWithin": "2000", "wt": "json"},
+                json=payload,
+                auth=SOLR_AUTH,
+                timeout=30,
+            )
+            if not resp.ok:
+                print(f"WARNING: Solr delete returned {resp.status_code}: {resp.text[:200]}")
+        except requests.RequestException as exc:
+            print(f"WARNING: Solr delete failed: {exc}")
 
 
 def _search(
