@@ -7,9 +7,18 @@ Solr is not directly accessible from the test runner.
 
 Flow:
 1. Upload two PDFs via POST /v1/upload
-2. Wait for documents to appear in search results (keyword mode)
-3. Wait for embeddings to be generated (semantic mode returns results)
+2. Wait until both uploaded titles appear in keyword search (confirms indexing)
+3. Wait until both uploaded titles appear in semantic search (confirms embeddings)
 4. Assert semantic and hybrid search rank the correct document first
+
+Isolation: all assertions filter by category=Uploads (the category assigned
+by the metadata extractor for documents uploaded through /v1/upload), and
+title matching uses prefix comparison because the extractor may append year
+or timestamp suffixes to sanitized filenames.
+
+Cleanup: there is currently no public DELETE-by-id endpoint on the web API,
+so uploaded documents are not removed after the test. Operators can purge
+them manually via the admin requeue/clear workflow.
 
 Environment variables:
   SEARCH_API_URL    solr-search base URL (default: http://localhost:8080)
@@ -22,7 +31,6 @@ from __future__ import annotations
 
 import os
 import time
-import uuid
 
 import pytest
 import requests
@@ -30,10 +38,11 @@ import requests
 SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
 WEB_API_TIMEOUT = int(os.environ.get("WEB_API_TIMEOUT", "300"))
 POLL_INTERVAL = 10
-RUN_ID = uuid.uuid4().hex[:8]
 
-# Category used to isolate test documents from any real data
-TEST_CATEGORY = "WebAPISemanticE2E"
+# All documents uploaded via /v1/upload land under the "Uploads" category
+# (derived by the metadata extractor from the folder path).  We use this
+# category as a filter to isolate our test documents from any real data.
+UPLOADS_CATEGORY = "Uploads"
 
 DOC_CASES = (
     {
@@ -156,32 +165,26 @@ def _wait_for_search_results(
     *,
     query: str,
     mode: str,
-    expected_count: int,
-    category: str | None = None,
+    expected_titles: list[str],
+    category: str | None = UPLOADS_CATEGORY,
     timeout: int = WEB_API_TIMEOUT,
 ) -> dict | None:
-    """Poll search until at least expected_count results appear."""
+    """Poll search until results contain *all* expected title prefixes.
+
+    Tied to specific documents (via title prefix match) rather than just a
+    raw count, so the wait does not green-light early in shared environments
+    where unrelated documents may already match the query.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         resp = _search(api_url, headers, query=query, mode=mode, category=category)
         if resp.status_code == 200:
-            body = resp.json()
-            results = body.get("results", [])
-            if len(results) >= expected_count:
-                return body
+            results = resp.json().get("results", [])
+            titles = [r.get("title") or "" for r in results]
+            if all(any(t.startswith(prefix) for t in titles) for prefix in expected_titles):
+                return resp.json()
         time.sleep(POLL_INTERVAL)
     return None
-
-
-def _delete_via_api(api_url: str, headers: dict[str, str], doc_id: str) -> None:
-    """Delete a document via the admin API (best-effort cleanup)."""
-    api_key = os.environ.get("ADMIN_API_KEY")
-    if api_key:
-        requests.delete(
-            f"{api_url}/v1/admin/documents/{doc_id}",
-            headers={"X-API-Key": api_key},
-            timeout=30,
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +225,13 @@ def uploaded_docs(
     """Upload both test PDFs and wait for them to become searchable.
 
     Returns list of doc metadata dicts with title, query, slug info.
+
+    Note: there is no public DELETE-by-id endpoint on the web API today,
+    so we cannot reliably clean up documents we upload. Tests use the
+    `Uploads` category filter to isolate themselves; lingering uploaded
+    documents do not affect other test runs but will accumulate in dev
+    environments. Operators can purge them via the admin requeue/clear
+    workflow.
     """
     uploaded: list[dict] = []
 
@@ -241,15 +251,18 @@ def uploaded_docs(
             }
         )
 
-    # Wait for keyword search to find both documents (confirms indexing).
-    # Use terms from document *content* (not titles) since keyword mode
-    # searches the content field by default.
+    expected_titles = [case["title"] for case in DOC_CASES]
+
+    # Wait for keyword search to find BOTH uploaded documents (confirms
+    # indexing). Filter by category to isolate from other test data, and
+    # poll for the specific titles we just uploaded — not just a raw count.
     body = _wait_for_search_results(
         api_url,
         auth_headers,
         query="clownfish OR Jezero",
         mode="keyword",
-        expected_count=2,
+        expected_titles=expected_titles,
+        category=UPLOADS_CATEGORY,
         timeout=WEB_API_TIMEOUT,
     )
     if not body:
@@ -258,28 +271,25 @@ def uploaded_docs(
             "The upload→index pipeline may not be running."
         )
 
-    # Wait for semantic search to work (confirms embeddings generated)
+    # Wait for semantic search to return BOTH of our uploaded titles in
+    # response to their own semantic queries — confirms embeddings were
+    # generated for the documents we actually care about.
     semantic_body = _wait_for_search_results(
         api_url,
         auth_headers,
-        query="coral reef marine biology",
+        query="clownfish OR Jezero",
         mode="semantic",
-        expected_count=1,
+        expected_titles=expected_titles,
+        category=UPLOADS_CATEGORY,
         timeout=WEB_API_TIMEOUT,
     )
     if not semantic_body:
         pytest.skip(
-            f"Semantic search returned no results within {WEB_API_TIMEOUT}s. "
+            f"Semantic search did not return uploaded documents within {WEB_API_TIMEOUT}s. "
             "Embeddings may not have been generated yet."
         )
 
     yield uploaded
-
-    # Cleanup: best-effort delete via API
-    for entry in uploaded:
-        doc_id = entry.get("upload_response", {}).get("doc_id", "")
-        if doc_id:
-            _delete_via_api(api_url, auth_headers, doc_id)
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +319,7 @@ class TestWebAPISemanticRetrieval:
         """Semantic queries must rank the intended document first."""
         for case in uploaded_docs:
             wrong_title = next(doc["title"] for doc in uploaded_docs if doc["slug"] != case["slug"])
-            resp = _search(api_url, auth_headers, query=case["query"], mode="semantic", category="Uploads")
+            resp = _search(api_url, auth_headers, query=case["query"], mode="semantic", category=UPLOADS_CATEGORY)
             assert resp.status_code == 200, f"Semantic search failed for {case['slug']}: {resp.status_code} {resp.text}"
 
             body = resp.json()
@@ -333,7 +343,7 @@ class TestWebAPISemanticRetrieval:
         """Hybrid queries must still rank the intended document first."""
         for case in uploaded_docs:
             wrong_title = next(doc["title"] for doc in uploaded_docs if doc["slug"] != case["slug"])
-            resp = _search(api_url, auth_headers, query=case["query"], mode="hybrid", category="Uploads")
+            resp = _search(api_url, auth_headers, query=case["query"], mode="hybrid", category=UPLOADS_CATEGORY)
             assert resp.status_code == 200, f"Hybrid search failed for {case['slug']}: {resp.status_code} {resp.text}"
 
             body = resp.json()
@@ -354,12 +364,15 @@ class TestWebAPISemanticRetrieval:
         auth_headers: dict[str, str],
         uploaded_docs: list[dict],
     ) -> None:
-        """Keyword mode should find the documents by unique terms."""
-        resp = _search(api_url, auth_headers, query="clownfish OR Jezero", mode="keyword", category="Uploads")
+        """Keyword mode should find BOTH documents by their unique terms."""
+        resp = _search(api_url, auth_headers, query="clownfish OR Jezero", mode="keyword", category=UPLOADS_CATEGORY)
         assert resp.status_code == 200
         body = resp.json()
         results = body.get("results", [])
         titles = [r.get("title", "") for r in results]
         found_reef = any(t.startswith("Shallow Atoll Survey") for t in titles)
         found_mars = any(t.startswith("Jezero Core Archive") for t in titles)
-        assert found_reef or found_mars, f"Keyword search didn't find test documents. Titles: {titles}"
+        # Both documents were uploaded — keyword search must find both.
+        assert found_reef and found_mars, (
+            f"Keyword search did not find both test documents. reef={found_reef}, mars={found_mars}, titles={titles}"
+        )
