@@ -30,7 +30,11 @@ RABBITMQ_PASS = os.environ.get("RABBITMQ_ADMIN_PASS", "admin_dev_pass")
 RABBITMQ_QUEUE = os.environ.get("RABBITMQ_QUEUE_NAME", "shortembeddings")
 # Container-visible base path for the document-indexer (matches docker-compose.yml)
 INDEXER_BASE_PATH = os.environ.get("INDEXER_BASE_PATH", "/data/documents")
-INDEX_TIMEOUT = 180
+# Default kept under the per-test pytest-timeout (120s — see e2e/pytest.ini)
+# so a missing override doesn't silently consume the whole budget.  The
+# first test using the module-scoped fixture below applies a generous
+# @pytest.mark.timeout to cover the indexing wait.
+INDEX_TIMEOUT = int(os.environ.get("E2E_INDEX_TIMEOUT", "90"))
 POLL_INTERVAL = 5
 RUN_ID = uuid.uuid4().hex[:8]
 
@@ -320,6 +324,10 @@ def semantic_test_docs(
 class TestSemanticRetrieval:
     """Validate semantic and hybrid search over freshly indexed documents."""
 
+    # The first test that uses the module-scoped semantic_test_docs fixture
+    # triggers the indexing wait (up to 2 * INDEX_TIMEOUT for parent + chunks).
+    # Override the suite-wide pytest-timeout so the indexing wait fits.
+    @pytest.mark.timeout(INDEX_TIMEOUT * 2 + 60)
     def test_semantic_mode_ranks_the_correct_document(
         self,
         api_url: str,

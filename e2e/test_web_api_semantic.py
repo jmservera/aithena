@@ -24,20 +24,35 @@ Environment variables:
   SEARCH_API_URL    solr-search base URL (default: http://localhost:8080)
   E2E_USERNAME      Login username (default: admin)
   E2E_PASSWORD      Login password (required)
-  WEB_API_TIMEOUT   Max seconds to wait for indexing (default: 300)
+  WEB_API_TIMEOUT   Max seconds to wait for indexing (default: 90 — must
+                    fit inside the e2e suite's per-test pytest-timeout of
+                    120s; tests override per-fixture via @pytest.mark.timeout)
 """
 
 from __future__ import annotations
 
 import os
 import time
+import uuid
 
 import pytest
 import requests
 
 SEARCH_API_URL: str = os.environ.get("SEARCH_API_URL", "http://localhost:8080")
-WEB_API_TIMEOUT = int(os.environ.get("WEB_API_TIMEOUT", "300"))
-POLL_INTERVAL = 10
+# Default kept under the per-test pytest-timeout (120s — see e2e/pytest.ini)
+# so a missing override doesn't silently consume the whole budget.  Slow
+# fixtures that need more headroom apply @pytest.mark.timeout(...) directly.
+WEB_API_TIMEOUT = int(os.environ.get("WEB_API_TIMEOUT", "90"))
+POLL_INTERVAL = 5
+
+# Unique per-run marker so test documents don't collide with leftover
+# uploads from previous runs (there is no public DELETE-by-id endpoint
+# on the web API today, so uploaded docs accumulate).
+RUN_ID = uuid.uuid4().hex[:8]
+
+# Use a generous result limit when filtering by category, since previous
+# test runs may have left other "Uploads" documents in the index.
+SEARCH_LIMIT = 50
 
 # All documents uploaded via /v1/upload land under the "Uploads" category
 # (derived by the metadata extractor from the folder path).  We use this
@@ -47,7 +62,7 @@ UPLOADS_CATEGORY = "Uploads"
 DOC_CASES = (
     {
         "slug": "reef",
-        "title": "Shallow Atoll Survey",
+        "title": f"Shallow Atoll Survey {RUN_ID}",
         "author": "Pelagia North",
         "year": "2024",
         "text": (
@@ -59,7 +74,7 @@ DOC_CASES = (
     },
     {
         "slug": "mars",
-        "title": "Jezero Core Archive",
+        "title": f"Jezero Core Archive {RUN_ID}",
         "author": "Aster Vale",
         "year": "2024",
         "text": (
@@ -148,7 +163,7 @@ def _search(
     mode: str,
     category: str | None = None,
 ) -> requests.Response:
-    params: dict[str, str] = {"q": query, "mode": mode, "limit": "5"}
+    params: dict[str, str] = {"q": query, "mode": mode, "limit": str(SEARCH_LIMIT)}
     if category:
         params["fq_category"] = category
     return requests.get(
@@ -310,6 +325,11 @@ def _title_matches(actual_title: str | None, expected_prefix: str) -> bool:
 class TestWebAPISemanticRetrieval:
     """Validate semantic search via the web API (no direct Solr access)."""
 
+    # The first test that uses the module-scoped uploaded_docs fixture
+    # triggers fixture setup, which polls for keyword + semantic indexing
+    # (up to 2 * WEB_API_TIMEOUT). Override the suite-wide pytest-timeout
+    # so the indexing wait fits.
+    @pytest.mark.timeout(WEB_API_TIMEOUT * 2 + 60)
     def test_semantic_search_ranks_correctly(
         self,
         api_url: str,
@@ -370,8 +390,11 @@ class TestWebAPISemanticRetrieval:
         body = resp.json()
         results = body.get("results", [])
         titles = [r.get("title", "") for r in results]
-        found_reef = any(t.startswith("Shallow Atoll Survey") for t in titles)
-        found_mars = any(t.startswith("Jezero Core Archive") for t in titles)
+        # Match the RUN_ID-suffixed titles unique to this test run.
+        reef_title = next(d["title"] for d in uploaded_docs if d["slug"] == "reef")
+        mars_title = next(d["title"] for d in uploaded_docs if d["slug"] == "mars")
+        found_reef = any(_title_matches(t, reef_title) for t in titles)
+        found_mars = any(_title_matches(t, mars_title) for t in titles)
         # Both documents were uploaded — keyword search must find both.
         assert found_reef and found_mars, (
             f"Keyword search did not find both test documents. reef={found_reef}, mars={found_mars}, titles={titles}"
