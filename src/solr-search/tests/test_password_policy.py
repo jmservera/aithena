@@ -18,6 +18,7 @@ from password_policy import MAX_LENGTH, MIN_COMPLEXITY_CATEGORIES, MIN_LENGTH, v
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _is_valid(password: str, username: str = "testuser") -> bool:
     return validate_password(password, username) == []
 
@@ -25,6 +26,7 @@ def _is_valid(password: str, username: str = "testuser") -> bool:
 # ---------------------------------------------------------------------------
 # Length enforcement
 # ---------------------------------------------------------------------------
+
 
 class TestMinLength:
     def test_too_short_returns_violation(self) -> None:
@@ -70,6 +72,7 @@ class TestMaxLength:
 # ---------------------------------------------------------------------------
 # Complexity (3 of 4 categories required)
 # ---------------------------------------------------------------------------
+
 
 class TestComplexity:
     """Tests for the 3-of-4 complexity rule: uppercase, lowercase, digit, special."""
@@ -144,6 +147,7 @@ class TestComplexity:
 # Username-in-password (case-insensitive)
 # ---------------------------------------------------------------------------
 
+
 class TestUsernameInPassword:
     def test_exact_username_in_password(self) -> None:
         violations = validate_password("myParkEr123!", "parker")
@@ -178,6 +182,7 @@ class TestUsernameInPassword:
 # Unicode / international characters
 # ---------------------------------------------------------------------------
 
+
 class TestUnicode:
     def test_unicode_special_chars_count_as_special(self) -> None:
         # ñ is not in [A-Za-z0-9], so it counts as special
@@ -203,6 +208,7 @@ class TestUnicode:
 # Multiple violations
 # ---------------------------------------------------------------------------
 
+
 class TestMultipleViolations:
     def test_short_and_low_complexity(self) -> None:
         violations = validate_password("abc", "other")
@@ -224,6 +230,7 @@ class TestMultipleViolations:
 # Fully valid passwords
 # ---------------------------------------------------------------------------
 
+
 class TestValidPasswords:
     def test_strong_password(self) -> None:
         assert _is_valid("C0rrect-Horse!", "other")
@@ -243,6 +250,7 @@ class TestValidPasswords:
 # ---------------------------------------------------------------------------
 # Return type contract
 # ---------------------------------------------------------------------------
+
 
 class TestReturnContract:
     def test_returns_list_on_valid(self) -> None:
@@ -265,6 +273,7 @@ class TestReturnContract:
 # Constants are sane
 # ---------------------------------------------------------------------------
 
+
 class TestConstants:
     def test_min_length_value(self) -> None:
         assert MIN_LENGTH == 10
@@ -279,6 +288,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_whitespace_only_password(self) -> None:

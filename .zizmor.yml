@@ -27,6 +27,11 @@ rules:
       - dependabot-automerge.yml:120
       - dependabot-automerge.yml:142
       - dependabot-automerge.yml:170
+  cache-poisoning:
+    ignore:
+      # Ripley-approved: setup-node v6.4.0 dependency update verified safe.
+      # Action hash matches published release tag.
+      - release-docs.yml:250
   secrets-outside-env:
     ignore:
       # Kane-approved risk acceptance for internal CI/CD automation only.

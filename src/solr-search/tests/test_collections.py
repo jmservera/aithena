@@ -328,9 +328,7 @@ class TestCollectionsAPI:
         create = client.post("/v1/collections", json={"name": "Books"}, headers=_auth_header(USER_A))
         col_id = create.json()["id"]
 
-        client.post(
-            f"/v1/collections/{col_id}/items", json={"document_ids": ["doc1"]}, headers=_auth_header(USER_A)
-        )
+        client.post(f"/v1/collections/{col_id}/items", json={"document_ids": ["doc1"]}, headers=_auth_header(USER_A))
         resp = client.post(
             f"/v1/collections/{col_id}/items",
             json={"document_ids": ["doc1", "doc2"]},
@@ -350,9 +348,7 @@ class TestCollectionsAPI:
     def test_add_items_empty_list(self, client):
         create = client.post("/v1/collections", json={"name": "Books"}, headers=_auth_header(USER_A))
         col_id = create.json()["id"]
-        resp = client.post(
-            f"/v1/collections/{col_id}/items", json={"document_ids": []}, headers=_auth_header(USER_A)
-        )
+        resp = client.post(f"/v1/collections/{col_id}/items", json={"document_ids": []}, headers=_auth_header(USER_A))
         assert resp.status_code == 422
 
     def test_add_items_too_many(self, client):
@@ -493,10 +489,7 @@ class TestCollectionsMigration:
         import sqlite3
 
         with sqlite3.connect(collections_db) as conn:
-            tables = {
-                r[0]
-                for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            }
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert "collections" in tables
         assert "collection_items" in tables
 

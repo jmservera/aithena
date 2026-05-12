@@ -118,36 +118,26 @@ class TestParseStatsResponseCoercion:
 
     def test_native_float_values(self, base_payload: dict) -> None:
         base_payload["stats"] = {
-            "stats_fields": {
-                "page_count_i": {"min": 1.0, "max": 800.0, "sum": 12000.0, "mean": 157.89}
-            }
+            "stats_fields": {"page_count_i": {"min": 1.0, "max": 800.0, "sum": 12000.0, "mean": 157.89}}
         }
         result = parse_stats_response(base_payload)
         assert result["page_stats"] == {"total": 12000, "avg": 158, "min": 1, "max": 800}
 
     def test_native_int_values(self, base_payload: dict) -> None:
-        base_payload["stats"] = {
-            "stats_fields": {
-                "page_count_i": {"min": 1, "max": 800, "sum": 12000, "mean": 158}
-            }
-        }
+        base_payload["stats"] = {"stats_fields": {"page_count_i": {"min": 1, "max": 800, "sum": 12000, "mean": 158}}}
         result = parse_stats_response(base_payload)
         assert result["page_stats"] == {"total": 12000, "avg": 158, "min": 1, "max": 800}
 
     def test_string_values(self, base_payload: dict) -> None:
         base_payload["stats"] = {
-            "stats_fields": {
-                "page_count_i": {"min": "10", "max": "200", "sum": "500", "mean": "42.5"}
-            }
+            "stats_fields": {"page_count_i": {"min": "10", "max": "200", "sum": "500", "mean": "42.5"}}
         }
         result = parse_stats_response(base_payload)
         assert result["page_stats"] == {"total": 500, "avg": 42, "min": 10, "max": 200}
 
     def test_none_values(self, base_payload: dict) -> None:
         base_payload["stats"] = {
-            "stats_fields": {
-                "page_count_i": {"min": None, "max": None, "sum": None, "mean": None}
-            }
+            "stats_fields": {"page_count_i": {"min": None, "max": None, "sum": None, "mean": None}}
         }
         result = parse_stats_response(base_payload)
         assert result["page_stats"] == {"total": 0, "avg": 0, "min": 0, "max": 0}
@@ -188,9 +178,7 @@ class TestParseStatsResponseCoercion:
     def test_mixed_types_in_stats(self, base_payload: dict) -> None:
         """Some fields string, some float, some int — should all work."""
         base_payload["stats"] = {
-            "stats_fields": {
-                "page_count_i": {"min": 1, "max": "800", "sum": 12000.0, "mean": "157.89"}
-            }
+            "stats_fields": {"page_count_i": {"min": 1, "max": "800", "sum": 12000.0, "mean": "157.89"}}
         }
         result = parse_stats_response(base_payload)
         assert result["page_stats"] == {"total": 12000, "avg": 158, "min": 1, "max": 800}

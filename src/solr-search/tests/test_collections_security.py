@@ -189,9 +189,7 @@ class TestCollectionNameValidation:
     """Validate collection name: 1-255 chars, non-empty after trim."""
 
     def test_empty_name_rejected(self, client, collections_db):
-        resp = client.post(
-            "/v1/collections", json={"name": ""}, headers=_auth_header(USER_A)
-        )
+        resp = client.post("/v1/collections", json={"name": ""}, headers=_auth_header(USER_A))
         assert resp.status_code == 422  # noqa: S101
 
     def test_name_max_length_255_accepted(self, client, collections_db):

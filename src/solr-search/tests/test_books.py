@@ -28,6 +28,7 @@ def get_client():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_book_doc(
     idx: int = 0,
     *,
@@ -60,7 +61,8 @@ def _solr_response(docs: list[dict], num_found: int | None = None, facets: dict 
         },
         "highlighting": {},
         "facet_counts": {
-            "facet_fields": facets or {
+            "facet_fields": facets
+            or {
                 "author_s": [],
                 "category_s": [],
                 "year_i": [],

@@ -57,8 +57,9 @@ def _mock_redis():
 @patch("main._get_redis_pool")
 def test_admin_succeeds_with_correct_x_api_key(mock_pool) -> None:
     """Correct X-API-Key allows the admin request through."""
-    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY), patch(
-        "main._get_admin_redis_client", return_value=_mock_redis()
+    with (
+        patch("admin_auth._get_admin_api_key", return_value=TEST_KEY),
+        patch("main._get_admin_redis_client", return_value=_mock_redis()),
     ):
         client = _client_with_admin_key(TEST_KEY)
         response = client.get(ADMIN_ENDPOINT)
@@ -82,8 +83,9 @@ def test_admin_returns_401_when_wrong_key() -> None:
 @patch("main._get_redis_pool")
 def test_admin_jwt_admin_user_succeeds_without_api_key(mock_pool) -> None:
     """Admin JWT session grants access even without X-API-Key."""
-    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY), patch(
-        "main._get_admin_redis_client", return_value=_mock_redis()
+    with (
+        patch("admin_auth._get_admin_api_key", return_value=TEST_KEY),
+        patch("main._get_admin_redis_client", return_value=_mock_redis()),
     ):
         client = create_authenticated_client()  # admin role by default
         response = client.get(ADMIN_ENDPOINT)
@@ -93,8 +95,9 @@ def test_admin_jwt_admin_user_succeeds_without_api_key(mock_pool) -> None:
 @patch("main._get_redis_pool")
 def test_admin_jwt_admin_user_succeeds_without_api_key_config(mock_pool) -> None:
     """Admin JWT session works even when ADMIN_API_KEY is not configured."""
-    with patch("admin_auth._get_admin_api_key", return_value=None), patch(
-        "main._get_admin_redis_client", return_value=_mock_redis()
+    with (
+        patch("admin_auth._get_admin_api_key", return_value=None),
+        patch("main._get_admin_redis_client", return_value=_mock_redis()),
     ):
         client = create_authenticated_client()  # admin role by default
         response = client.get(ADMIN_ENDPOINT)
@@ -127,8 +130,9 @@ def test_admin_jwt_non_admin_rejected_without_api_key_config() -> None:
 @patch("main._get_redis_pool")
 def test_admin_api_key_takes_precedence_over_jwt(mock_pool) -> None:
     """When both API key and JWT are present, API key is checked first."""
-    with patch("admin_auth._get_admin_api_key", return_value=TEST_KEY), patch(
-        "main._get_admin_redis_client", return_value=_mock_redis()
+    with (
+        patch("admin_auth._get_admin_api_key", return_value=TEST_KEY),
+        patch("main._get_admin_redis_client", return_value=_mock_redis()),
     ):
         client = _client_with_admin_key(TEST_KEY)
         response = client.get(ADMIN_ENDPOINT)

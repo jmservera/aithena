@@ -59,9 +59,7 @@ def apply_pending_migrations(db_path: Path) -> int:
                 continue
 
             description = getattr(migration, "DESCRIPTION", "")
-            logger.info(
-                "Applying migration %d: %s", migration.VERSION, description
-            )
+            logger.info("Applying migration %d: %s", migration.VERSION, description)
             migration.upgrade(connection)
             connection.execute(
                 "INSERT INTO schema_version (version, description) VALUES (?, ?)",

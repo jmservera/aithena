@@ -49,9 +49,5 @@ def upgrade(connection: sqlite3.Connection) -> None:
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_collection_items_collection_id ON collection_items (collection_id)"
     )
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_collection_items_position ON collection_items (position)"
-    )
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_collection_items_document_id ON collection_items (document_id)"
-    )
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_collection_items_position ON collection_items (position)")
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_collection_items_document_id ON collection_items (document_id)")
