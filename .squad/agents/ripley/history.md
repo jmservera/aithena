@@ -334,3 +334,14 @@ Consolidated skills from 38 to 24 (14 eliminated, target was ≤35). Five merge 
 5. **FastAPI** (2 → 1): `fastapi-auth-patterns`, `fastapi-query-params` → `fastapi-patterns`
 
 Each merged skill preserves key patterns, examples, and anti-patterns from all sources while removing duplication. All merged skills are under 300 lines.
+
+## Learnings
+
+### Project Review (2026-05-12)
+
+- **v2.1 shipped, but top-level docs lag behind.** `VERSION` and GitHub Releases are at `2.1.0`, and `CHANGELOG.md` covers the release well, but `README.md` still advertises `v1.9.1` / `v1.10.0` development state.
+- **Search architecture + capabilities are real shipped features.** `SEARCH_ARCHITECTURE` is implemented in `solr-search`, `/v1/capabilities` is live, UI capability gating is wired up, and the full `solr-search` test suite passes.
+- **Quantization naming is now a docs hazard.** The live env var is `VECTOR_QUANTIZATION`, not `EMBEDDING_QUANTIZATION`; stale naming would misconfigure deployments.
+- **Architecture docs need model/schema refresh.** `docs/architecture/solr-data-model.md` still describes 512-dim `distiluse` vectors, while code/schema use 768-dim `multilingual-e5-base` with optional byte-vector quantization.
+- **Auto-generated operational issues need lifecycle reconciliation.** Pre-release warning issues and heartbeat token issues can stay open after later clean runs or tagged releases, creating stale backlog noise unless a success path closes them.
+- **Immediate attention remains security-first.** Open GHAS issue #1519 is the only clearly current urgent issue from the active backlog snapshot.

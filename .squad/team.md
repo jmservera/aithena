@@ -24,6 +24,7 @@
 | Juanma | Product Owner | — | Human |
 | @copilot | Coding Agent | `.squad/agents/copilot/charter.md` | Active |
 | Newt | Product Manager | `.squad/agents/newt/charter.md` | Active |
+| Bishop | Vector Search Specialist | `.squad/agents/bishop/charter.md` | Active |
 
 <!-- copilot-auto-assign: true -->
 
