@@ -8,7 +8,6 @@ on:
 
 permissions:
   issues: write
-  pull-requests: write
   contents: read
 
 jobs:
@@ -135,12 +134,13 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const issue = context.payload.issue || context.payload.pull_request;
-            const issue_number = issue.number;
 
             if (!issue) {
               core.warning('Could not find issue or pull_request in payload');
               return;
             }
+
+            const issue_number = issue.number;
 
             // Get the default branch name (main, master, etc.)
             const { data: repoData } = await github.rest.repos.get({ owner, repo });
@@ -175,6 +175,9 @@ jobs:
                 core.info(`Fallback assigned copilot-swe-agent`);
               } catch (err2) {
                 core.warning(`Fallback also failed: ${err2.message}`);
+                // Fail the step so the PAT-expiry notification step (gated
+                // on failure()) actually runs.
+                core.setFailed(`Could not assign @copilot: ${err2.message}`);
               }
             }
 
@@ -185,26 +188,28 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const triggerItem = context.payload.issue || context.payload.pull_request;
+            const issueNum = triggerItem ? triggerItem.number : 'unknown';
+            const itemType = context.payload.pull_request ? 'PR' : 'issue';
             const title = '⚠️ COPILOT_ASSIGN_TOKEN may be expired — squad assignment degraded';
             const timestamp = new Date().toISOString();
             const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
-            const issueNum = context.payload.issue.number;
 
             const body = [
               '## PAT Expiry Alert',
               '',
-              `The squad-issue-assign workflow failed to assign @copilot to issue #${issueNum}.`,
+              `The squad-issue-assign workflow failed to assign @copilot to ${itemType} #${issueNum}.`,
               'This usually means \`COPILOT_ASSIGN_TOKEN\` is expired or invalid.',
               '',
               '### Details',
-              `- **Trigger issue:** #${issueNum}`,
+              `- **Trigger ${itemType}:** #${issueNum}`,
               `- **Workflow run:** ${runUrl}`,
               `- **Timestamp:** ${timestamp}`,
               '',
               '### Resolution',
               '1. Generate a new PAT with issue write permissions',
               '2. Update the \`COPILOT_ASSIGN_TOKEN\` repository secret',
-              '3. Re-apply the \`squad:copilot\` label to retry',
+              `3. Re-apply the \`squad:copilot\` label to retry`,
               '4. Close this issue once resolved',
             ].join('\n');
 
