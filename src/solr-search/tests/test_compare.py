@@ -354,10 +354,13 @@ class TestComparisonConfig:
     def test_default_candidate_collection(self) -> None:
         assert settings.comparison_candidate_collection == "books"
 
-    @patch.dict(os.environ, {
-        "COMPARISON_BASELINE_COLLECTION": "custom_baseline",
-        "COMPARISON_CANDIDATE_COLLECTION": "custom_candidate",
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "COMPARISON_BASELINE_COLLECTION": "custom_baseline",
+            "COMPARISON_CANDIDATE_COLLECTION": "custom_candidate",
+        },
+    )
     def test_custom_collections_from_env(self) -> None:
         from config import Settings
 
@@ -444,9 +447,7 @@ class TestCompareParallelExecution:
         resp = client.get("/v1/search/compare", params={"q": "test", "mode": "keyword"})
         assert resp.status_code == 200
 
-        collections_called = [
-            call.kwargs.get("collection") for call in mock_solr.call_args_list
-        ]
+        collections_called = [call.kwargs.get("collection") for call in mock_solr.call_args_list]
         assert "books" in collections_called
         assert "books_e5base" in collections_called
 

@@ -110,9 +110,7 @@ class MetricsRegistry:
         ]
         for mode in self._search_modes:
             value = search_requests_total.get(mode, 0)
-            lines.append(
-                f'aithena_search_requests_total{{mode="{_escape_label_value(mode)}"}} {_format_number(value)}'
-            )
+            lines.append(f'aithena_search_requests_total{{mode="{_escape_label_value(mode)}"}} {_format_number(value)}')
 
         lines.extend(
             [

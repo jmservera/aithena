@@ -33,7 +33,7 @@ def client() -> TestClient:
 @pytest.fixture
 def valid_pdf_content() -> bytes:
     """Return minimal valid PDF content."""
-    return b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n"
+    return b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n"
 
 
 @pytest.fixture
@@ -145,9 +145,7 @@ def test_upload_file_too_large(client: TestClient, upload_dir):
         object.__setattr__(main.settings, "max_upload_size_mb", original_limit)
 
 
-def test_upload_filename_sanitization(
-    client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir
-):
+def test_upload_filename_sanitization(client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir):
     """Test that unsafe filenames are sanitized."""
     response = client.post(
         "/v1/upload",
@@ -164,9 +162,7 @@ def test_upload_filename_sanitization(
     assert "\\" not in data["filename"]
 
 
-def test_upload_filename_collision(
-    client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir
-):
+def test_upload_filename_collision(client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir):
     """Test filename collision handling with timestamp."""
     # Create first file
     response1 = client.post(
@@ -235,9 +231,7 @@ def test_upload_storage_failure(client: TestClient, valid_pdf_content: bytes):
         object.__setattr__(main.settings, "upload_dir", original_dir)
 
 
-def test_upload_special_characters_in_filename(
-    client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir
-):
+def test_upload_special_characters_in_filename(client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir):
     """Test filename with special characters is sanitized."""
     response = client.post(
         "/v1/upload",

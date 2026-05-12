@@ -143,14 +143,20 @@ class TestOperationTracking:
     def test_filter_by_type(self):
         backup_service._record_operation(
             OperationRecord(
-                id="op-b", operation="backup", tier="high",
-                status=OperationStatus.completed, started_at="2024-01-15T02:00:00Z",
+                id="op-b",
+                operation="backup",
+                tier="high",
+                status=OperationStatus.completed,
+                started_at="2024-01-15T02:00:00Z",
             )
         )
         backup_service._record_operation(
             OperationRecord(
-                id="op-r", operation="restore", tier="high",
-                status=OperationStatus.completed, started_at="2024-01-15T03:00:00Z",
+                id="op-r",
+                operation="restore",
+                tier="high",
+                status=OperationStatus.completed,
+                started_at="2024-01-15T03:00:00Z",
             )
         )
         assert len(list_operations("backup")) == 1

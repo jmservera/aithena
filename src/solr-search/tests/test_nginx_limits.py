@@ -112,23 +112,17 @@ class TestNginxProxyTimeouts:
         read_timeout = timeouts.get("proxy_read_timeout")
         assert read_timeout is not None, "proxy_read_timeout not found in nginx config"
         assert read_timeout >= 60, (
-            f"proxy_read_timeout ({read_timeout}s) is too low — "
-            f"semantic search and embedding calls can take 30-60s"
+            f"proxy_read_timeout ({read_timeout}s) is too low — semantic search and embedding calls can take 30-60s"
         )
-        assert read_timeout <= 600, (
-            f"proxy_read_timeout ({read_timeout}s) is unreasonably high"
-        )
+        assert read_timeout <= 600, f"proxy_read_timeout ({read_timeout}s) is unreasonably high"
 
     def test_proxy_connect_timeout_is_reasonable(self) -> None:
         timeouts = _parse_timeouts(NGINX_CONF.read_text())
         connect_timeout = timeouts.get("proxy_connect_timeout")
         assert connect_timeout is not None, "proxy_connect_timeout not found in nginx config"
-        assert connect_timeout >= 5, (
-            f"proxy_connect_timeout ({connect_timeout}s) is too low"
-        )
+        assert connect_timeout >= 5, f"proxy_connect_timeout ({connect_timeout}s) is too low"
         assert connect_timeout <= 30, (
-            f"proxy_connect_timeout ({connect_timeout}s) is too high — "
-            f"connections to local services should be fast"
+            f"proxy_connect_timeout ({connect_timeout}s) is too high — connections to local services should be fast"
         )
 
 

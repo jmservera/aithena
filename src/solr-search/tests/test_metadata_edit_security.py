@@ -121,10 +121,12 @@ class TestAdminAuthRequired:
         from main import app
 
         client = TestClient(app)
-        client.headers.update({
-            "Authorization": f"Bearer {token}",
-            "X-API-Key": _TEST_ADMIN_KEY,
-        })
+        client.headers.update(
+            {
+                "Authorization": f"Bearer {token}",
+                "X-API-Key": _TEST_ADMIN_KEY,
+            }
+        )
         resp = client.patch(ENDPOINT, json={"title": "Expired"})
         assert resp.status_code == 401  # noqa: S101
 
@@ -353,8 +355,9 @@ class TestSolrAtomicUpdateSecurity:
         with (
             patch("main._get_redis_pool"),
             patch("main._raw_solr_query", return_value={"response": {"numFound": 1, "docs": []}}),
-            patch("main.requests.post", return_value=MagicMock(status_code=200, raise_for_status=MagicMock()))
-                as mock_post,
+            patch(
+                "main.requests.post", return_value=MagicMock(status_code=200, raise_for_status=MagicMock())
+            ) as mock_post,
             patch("main._get_admin_redis_client", return_value=MagicMock()),
         ):
             client = _client_for(ADMIN_USER)
@@ -370,8 +373,9 @@ class TestSolrAtomicUpdateSecurity:
         with (
             patch("main._get_redis_pool"),
             patch("main._raw_solr_query", return_value={"response": {"numFound": 1, "docs": []}}),
-            patch("main.requests.post", return_value=MagicMock(status_code=200, raise_for_status=MagicMock()))
-                as mock_post,
+            patch(
+                "main.requests.post", return_value=MagicMock(status_code=200, raise_for_status=MagicMock())
+            ) as mock_post,
             patch("main._get_admin_redis_client", return_value=MagicMock()),
         ):
             client = _client_for(ADMIN_USER)
