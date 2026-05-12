@@ -4,7 +4,7 @@ A multilingual book library search engine that indexes PDFs using **Apache Solr*
 
 **Current Release:** v2.1.0 — Configurable search architecture (HNSW/hybrid-rerank), integration tests for both topologies.  
 **Development:** v2.5 milestone active. All PRs target `dev` branch; releases merge `dev` → `main`.  
-**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v2.0.0.md)**
+**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v2.1.0.md)**
 
 ## What It Does
 
@@ -98,6 +98,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 ### Release Notes (newest first)
 
+- [v2.1.0 Release Notes](docs/release-notes/v2.1.0.md) — Configurable search architecture, single-node topology
 - [v2.0.0 Release Notes](docs/release-notes/v2.0.0.md) — Major: React admin portal, installer overhaul
 - [v1.19.0 Release Notes](docs/release-notes/v1.19.0.md)
 - [v1.18.1 Release Notes](docs/release-notes/v1.18.1.md)
@@ -116,6 +117,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 - [v1.9.1 Release Notes](docs/release-notes/v1.9.1.md)
 - [v1.9.0 Release Notes](docs/release-notes/v1.9.0.md)
 - [v1.8.2 Release Notes](docs/release-notes/v1.8.2.md)
+- [v1.8.1 Release Notes](docs/release-notes/v1.8.1.md)
 - [v1.8.0 Release Notes](docs/release-notes/v1.8.0.md)
 - [v1.7.0 Release Notes](docs/release-notes/v1.7.0.md)
 - [v1.6.0 Release Notes](docs/release-notes/v1.6.0.md)
