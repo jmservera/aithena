@@ -3,7 +3,7 @@ ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
 # ---------- build stage ----------
-FROM python:3.12-alpine AS builder
+FROM python:3.14.5-alpine AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
@@ -15,7 +15,7 @@ RUN uv sync --frozen --no-dev --no-install-project --native-tls
 COPY . .
 
 # ---------- runtime stage ----------
-FROM python:3.12-alpine AS runtime
+FROM python:3.14.5-alpine AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
