@@ -2,7 +2,7 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-FROM solr:9.7
+FROM solr:10.0
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
