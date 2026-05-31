@@ -1,13 +1,16 @@
-# Installer Wizard Design Stub (#1578)
+# Installer Wizard Design (#1578)
 
-This PR is a research spike only. See the full proposal in:
+This was a research spike. The architectural proposal — including the open questions resolved by jmservera on 2026-05-31 — lives in:
 
 - `.squad/decisions/inbox/parker-1578-installer-wizard-design.md`
 
-Open questions for inline review:
+**Resolved decisions (summary, see proposal for details):**
 
-1. Which GHCR namespace/image name should host the installer container?
-2. What version-locking strategy should the bootstrap script use?
-3. How should existing `/source/volumes/*` deployments migrate to Docker-managed volumes?
-4. Is the Docker socket mount acceptable for the default installer-container flow?
-5. Should SSL certbot bind mounts be migrated with the base 16 compose volumes?
+1. **Registry:** `ghcr.io/jmservera/aithena-*` (existing release namespace).
+2. **Version-locking:** bootstrap script regenerated each release with the matching versioned installer image tag — no floating `latest`.
+3. **Migration:** none — v2.2.0 starts from scratch. Release notes call out the clean-install policy.
+4. **Volumes:** not a breaking migration; clean-install policy means there is nothing to migrate.
+5. **Docker socket mount:** acceptable for the default flow, documented as a known requirement.
+6. **SSL certbot paths:** same clean-install policy.
+
+Next implementation PR: **Phase 1a — convert Redis + RabbitMQ bind mounts to Docker-managed named volumes**.
