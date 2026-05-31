@@ -817,8 +817,9 @@ services:
             exit 1
           fi
 
-          if [ "$$REPLICATION_FACTOR" -gt 3 ]; then
-            echo "WARNING: SOLR_REPLICATION_FACTOR=$$REPLICATION_FACTOR exceeds the default 3-node topology. Ensure you have enough Solr nodes." >&2
+          if [ "$$REPLICATION_FACTOR" -gt "$$EXPECTED_NODES" ]; then
+            echo "WARNING: SOLR_REPLICATION_FACTOR=$$REPLICATION_FACTOR exceeds available nodes ($$EXPECTED_NODES). Forcing replicationFactor=$$EXPECTED_NODES." >&2
+            REPLICATION_FACTOR="$$EXPECTED_NODES"
           fi
 
           # --- books collection (multilingual-e5-base, 768D) ---
