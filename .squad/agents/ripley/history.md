@@ -369,3 +369,19 @@ Batched 16 low/medium-risk Dependabot PRs into a single PR (#1584), merged to de
 - **Review threads from code scanning**: Each push triggers new code-scanning review threads that must be resolved before merge. The zizmor + CodeQL version comment issues were legitimate — the dependabot commit had stale inline version annotations.
 - **Strict mode + rulesets = must merge base**: When "require up to date" is in a ruleset, must `git merge origin/dev` into the branch and push before merging. Cannot bypass with --admin.
 - **Pre-existing test failures**: document-indexer has 4 failing metadata tests on dev — not caused by dependency bumps, predates this sweep.
+
+### Reskill Retrospective (2026-05-31, Consolidation Pass)
+
+**Status:** ✅ Complete
+
+Consolidated learnings from Ralph 3-round sweep (E2E 429 fix #1588, 4 Docker base bumps, 17-bump batch sweep PR #1608):
+
+1. **Skills:** Bumped `e2e-auth-reuse` from undocumented to **medium confidence** (successful CI validation + production code path in use). Cross-linked `dependabot-batch-merge` (low, tactical) ↔ `dependabot-batch-sweep` (high, strategic) to clarify scope. Warned in both skills about manifest-conflict gotcha that silently reverts bumps when using `--theirs`.
+
+2. **Agent Histories:** Verified that Parker, Lambert, and Brett all have "Local-Test-First Directive (2026-05-31, Round 2)" properly appended — Juanma's requirement that all squad agents test locally before pushing (using available docker + playwright) is now cross-documented.
+
+3. **Decisions:** No contradictions found in `.squad/decisions.md`. All three new items from this session ("Dependabot Batch Sweep 2026-05-31", "E2E Auth Token Reuse Pattern", "Always Test Locally Before Pushing") are clearly documented and non-overlapping.
+
+4. **Skills Created/Merged:** NO new skills created. The worktree batching pattern is already covered in `dependabot-batch-sweep`; local-test-first is a directive (not a skill), captured in decisions.md. Focused on quality over quantity — only 28 skills total, down from 38 in prior consolidation.
+
+5. **Key Pattern Captured:** The manifest-conflict gotcha (`git checkout --theirs` silently reverts prior bumps during multi-branch merges) is now flagged at skill level with explicit cross-reference. This pattern recurred in PR #1608 despite being documented in Parker's history — reinforces that escalating low-confidence patterns to skills + cross-linking prevents re-discovery.

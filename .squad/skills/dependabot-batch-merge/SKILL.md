@@ -108,6 +108,7 @@ Run local verify: 1094 backend + 841 UI tests pass."
 
 ## Related Skills
 
+- `dependabot-batch-sweep` — The high-level strategy for batching multiple dependabot PRs. This skill focuses on tactical manifest-conflict handling during the merge phase of that workflow.
 - `git-workflows` — worktrees, 3-way merges, rebase strategies
 - `python-dependency-management` — uv lock regeneration, pyproject.toml semantics
 - `npm-dependency-management` — npm ci, package-lock.json regeneration
