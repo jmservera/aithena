@@ -385,3 +385,18 @@ Consolidated learnings from Ralph 3-round sweep (E2E 429 fix #1588, 4 Docker bas
 4. **Skills Created/Merged:** NO new skills created. The worktree batching pattern is already covered in `dependabot-batch-sweep`; local-test-first is a directive (not a skill), captured in decisions.md. Focused on quality over quantity — only 28 skills total, down from 38 in prior consolidation.
 
 5. **Key Pattern Captured:** The manifest-conflict gotcha (`git checkout --theirs` silently reverts prior bumps during multi-branch merges) is now flagged at skill level with explicit cross-reference. This pattern recurred in PR #1608 despite being documented in Parker's history — reinforces that escalating low-confidence patterns to skills + cross-linking prevents re-discovery.
+
+---
+
+### PR #1580 Review & Merge (2026-05-31, Ralph PR-Review Round)
+
+**Status:** ✅ Complete
+
+Reviewed jmservera installer false-positive fix (PR #1580). Verdict: **APPROVE** after rebase. 
+
+- **Background:** PR had legitimate content but chronic CI 429 failures masked the signal. Root cause was separate (rate-limit race in E2E auth flow, fixed by #1588).
+- **Action:** Rebased branch onto current dev, force-pushed, all checks passed.
+- **Merge:** Squash-merged to dev (commit c3dae90).
+- **Outcome:** Installer fix shipped; dependent work (v2.2.0 changes) can proceed.
+
+This review exemplifies the "separate signal from noise" principle: the PR itself was good; the CI blocking was infrastructure (not code). Rebasing isolated the two concerns cleanly.

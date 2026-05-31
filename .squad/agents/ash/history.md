@@ -155,3 +155,17 @@ No direct Ash service dependencies in batch PR #1584 (dependencies are in Parker
 - **Solr 10** (#1562) deferred to v2.5 milestone (tracked in #1335) — requires schema/config validation
 - **Python 3.14** — if selected for embeddings-server, requires testing via Parker coordination
 - See `.squad/decisions.md` for full batch summary
+
+---
+
+### PR #1562 Review: Solr 10 Bump Deferred (2026-05-31, Ralph PR-Review Round)
+
+**Status:** 🔴 Closed (Deferred to Epic)
+
+Reviewed dependabot PR #1562 (Solr 9.7→10.0 version bump). Verdict: **CLOSE** — incomplete migration, belongs in v2.5 Solr 10 epic.
+
+- **Issue:** Dockerfile version bump without CLI migration. Solr 10 removes single-dash flags (`-c` → `--collection`). luceneMatchVersion schema bump also missing.
+- **Action:** Closed PR with scope fence comment, routed to #1335 (v2.5 epic planning).
+- **Learning:** Dependabot PRs touching major versions require full integration scope review, not just version number change. Flag for epic routing early.
+
+This decision establishes the precedent: version bumps are coordinated at epic level when they touch multiple services or schema. Improves reliability and prevents broken intermediate states.

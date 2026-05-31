@@ -246,3 +246,61 @@ Parker ran local E2E validation:
 - E2E Auth Token Reuse (#1588): Exemplified this directive, though fallback to CI evidence was acceptable when worktree networking failed
 - Dependabot batch deferred (#1564–#1567): Major version bumps warrant local smoke-test before push
 
+---
+
+# Decision: PR #1562 (Solr 10 Bump) Deferred to v2.5 Solr 10 Epic
+
+**Author:** Ash (via Ralph)  
+**Date:** 2026-05-31  
+**Status:** Accepted  
+**Scope:** Dependencies & Dependencies Planning
+**Related:** PR #1562 (closed), Issue #1335 (v2.5 Solr 10 epic)
+
+## Context
+
+PR #1562 (Dependabot bump: Solr 9.7→10.0) arrived as a Dockerfile-only version increment. Ash reviewed and determined the change is incomplete and premature.
+
+## Decision
+
+**Close PR #1562 without merging.** Defer the full Solr 10 migration to the v2.5 Solr 10 epic (#1335).
+
+## Rationale
+
+1. **Incomplete migration:** Solr 10 removes single-dash CLI flags (e.g., `-c` becomes `--collection`). The PR only bumps the version; it does not update any CLI invocations.
+2. **Schema incompatibility:** `luceneMatchVersion` must be updated to `10.0` in schema definitions; the PR does not touch schema files.
+3. **Integration scope:** Full Solr migration includes multiple services (solr-search, document-indexer) and integration testing. Belongs in coordinated epic planning.
+4. **Reduces risk:** Deferring prevents a broken state (version mismatch + stale schema) from reaching dev.
+
+## Action Taken
+
+- Closed PR #1562 with explanatory comment
+- Updated related issue tracking to route to v2.5 epic
+
+---
+
+# Decision: PR #1518 (v2.1.0 Release Docs Backport) Closed as Superseded
+
+**Author:** Ralph  
+**Date:** 2026-05-31  
+**Status:** Closed  
+**Related:** PR #1518 (closed), Tag v2.1.0, Commit ed0380f
+
+## Context
+
+PR #1518 contained auto-generated v2.1.0 release documentation formatted for the dev branch. The PR arrived after v2.1.0 had already shipped to main (commit ed0380f, tag v2.1.0 exists).
+
+## Decision
+
+**Close PR #1518 without merging.** The release is complete on main; backporting release docs to dev would reintroduce stale content and confusion.
+
+## Rationale
+
+1. **Release already shipped:** v2.1.0 is tagged and live on main. No backport is needed or desired.
+2. **Stale content risk:** Backporting v2.1.0 docs to dev (which is ahead of v2.1.0) would make dev branch documentation ambiguous.
+3. **Standard release process:** Release docs remain on main only; dev docs are generated fresh when the next release cycle begins.
+
+## Action Taken
+
+- Closed PR #1518 with superseded note
+- No follow-up action required
+
