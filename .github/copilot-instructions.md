@@ -70,3 +70,21 @@ If you make a decision that affects other team members, write it to:
 .squad/decisions/inbox/copilot-{brief-slug}.md
 ```
 The Scribe will merge it into the shared decisions file.
+
+## Workflow Tips
+
+These tips capture patterns that have proven effective when working in this repo. Apply them to keep merge sweeps fast and review cycles short.
+
+1. **Don't poll CI with `sleep N && gh run view` loops.** Use `gh pr checks <PR> --watch --interval 30` — it streams check status and exits when done. For long waits, run the watcher in a detached background shell so completion arrives as a notification instead of burning context on sleeps.
+
+2. **Use `squad watch` for persistent assignment polling.** When the heartbeat workflow is unreliable or you're away from the terminal, `squad watch --interval 60` (from `@bradygaster/squad-cli`) keeps picking up assigned issues/PRs.
+
+3. **Enable `SQUAD_WORKTREES=1` for parallel agent work.** When spawning multiple agents (e.g., dependabot batch + PR review fixes in parallel), worktree mode avoids branch-stomping in the main checkout. Without it, fall back to `git worktree add /tmp/aithena-<scope>` manually.
+
+4. **Consult `rubber-duck` before pushing fixes for review comments.** Bot review iteration cycles cost ≈40 min per round-trip (rebase + CI). A 30-second critique pass before each push typically catches the majority of issues a bot reviewer would flag, collapsing 3–4 rounds into 1–2.
+
+5. **Remember: squash-merge does NOT auto-close referenced PRs.** After merging a batched PR that supersedes others, manually run `gh pr close <N> --comment "Superseded by #<batch>" --delete-branch` for each. This is a recurring gotcha during dependabot sweeps.
+
+6. **Resolve review threads via GraphQL `resolveReviewThread`.** Branch protection requires threads resolved before merge. Iterate over `pullRequest.reviewThreads.nodes` and call the mutation per thread ID — `gh pr review` alone does not resolve them.
+
+7. **Standard merge runbook**: resolve threads → rebase on `dev` → wait for required checks → squash-merge → close superseded PRs → delete branches. Each merge into `dev` forces a rebase on the next PR in flight.
