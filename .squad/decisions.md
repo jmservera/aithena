@@ -1091,13 +1091,12 @@ Can we reduce HNSW memory from 130 GB to fit within a 32 GB single-node deployme
 
 ---
 
-# 2026-05-24 Decisions
-
-## Replication Factor Must Clamp to Expected Nodes
+# Decision: Replication Factor Must Clamp to Expected Nodes
 
 **Author:** Parker (Backend Dev)  
 **Date:** 2026-05-24  
-**Issue:** #1544  
+**Status:** Approved  
+**Issue:** #1544 (implemented in PR #1579)
 
 **Decision:** All Solr collection initialization paths must clamp `replicationFactor` to the in-scope `EXPECTED_NODES` value when `SOLR_REPLICATION_FACTOR` is higher than the available topology. Do not only warn and continue with an oversized replication factor.
 
@@ -1105,12 +1104,12 @@ Can we reduce HNSW memory from 130 GB to fit within a 32 GB single-node deployme
 
 ---
 
-## CodeQL-Safe Naming for Sensitive Credential Status Logs
+# Decision: CodeQL-Safe Naming for Sensitive Credential Status Logs
 
 **Author:** Parker (Backend Dev)  
 **Date:** 2026-05-24  
 **Status:** Approved  
-**Issue:** #1576  
+**Issue:** #1576 (implemented in PR #1580)
 
 **Context:** GHAS alert #233 (`py/clear-text-logging-sensitive-data`) flagged the installer summary line that prints `- JWT secret: generated|kept existing`. The printed value is a literal status derived from a boolean, not the secret itself, but the previous local name (`secret_status`) made the false-positive harder for CodeQL to disambiguate.
 
@@ -1120,12 +1119,12 @@ Can we reduce HNSW memory from 130 GB to fit within a 32 GB single-node deployme
 
 ---
 
-## Wizard Installer — Design Proposal (Research Spike for #1578)
+# Decision: Wizard Installer — Design Proposal (Research Spike for #1578)
 
 **Author:** Parker (Backend Dev)  
 **Date:** 2026-05-24  
 **Status:** Proposal — awaiting Ripley + Juanma approval  
-**Issue:** #1578
+**Issue:** #1578 (research spike PR #1581)
 
 ### Current State (verified)
 
