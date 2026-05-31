@@ -160,6 +160,15 @@
 
 ### Redis ConnectionPool Bug (2026-03-16)
 - Password missing from `ConnectionPool()` constructor in solr-search. All other services verified correct.
+
+### Solr ReplicationFactor Capping (#1544, 2026-05-24)
+- Single-node overlays inherit stale `.env` values like `SOLR_REPLICATION_FACTOR=3`, but init cannot create 3 replicas with 1 node. Result: collections with zero active replicas, RED health, cascading overlay failures. Decision: clamp replicationFactor to EXPECTED_NODES in all init paths (not just warn-and-continue).
+
+### CodeQL Taint Analysis and Logging Naming (#1576, 2026-05-24)
+- GHAS flagged "clear-text-logging-sensitive-data" when installer summary printed literal status strings (e.g., "generated|kept existing"). Local variable name (`secret_status`) made CodeQL's taint/name-based pattern harder to disambiguate from actual secret data. Fix: rename sensitive-substring-adjacent variables to operation-state names (e.g., `jwt_rotation_status`), keep comments explicit that only literals are logged.
+
+### Installer Wizard Architecture Research (#1578, 2026-05-24)
+- Current installer requires Python 3.12 + `uv` + `aithena-common` + `argon2-cffi` on host before `.env` can be generated. Proposal: two-layer architecture (host bootstrap shell → versioned installer container) with 6 implementation phases, pending human approval on registry namespace, version-locking, and bind-mount-to-Docker-volume migration strategy for existing deployments.
 - Root lesson: always pass credentials to ConnectionPool, not just to `Redis()`.
 
 ### Logging Security (#302, #299, 2026-03-16)
