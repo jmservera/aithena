@@ -176,3 +176,73 @@ Modified `e2e/playwright/global-setup.ts` to:
 - PR: #1588
 - Unblocks: PR #1580, v2.2.0 dependabot sweep
 
+---
+
+# Decision: Always Test Locally Before Pushing (User Directive)
+
+**Author:** Juanma (via Copilot/Ralph)  
+**Date:** 2026-05-31  
+**Status:** Active  
+**Captured:** Ralph Round 2
+
+## What
+
+**Directive:** "You have docker and playwright locally so you must test everything before pushing to GitHub."
+
+All squad agents working on this repo must run the relevant docker compose stack and Playwright/E2E tests locally before pushing branches, instead of relying on CI for first validation.
+
+## Why
+
+- **Reduces CI round-trips:** Local testing catches breakage before it reaches branch-protected merges
+- **Uses available infrastructure:** Docker + Playwright are provisioned on the dev box; leverage them
+- **Faster feedback:** Agent completes fix + validation locally (5–10 min) vs waiting for CI (15–30 min per round-trip)
+- **Preserves CI capacity:** Fewer failed CI runs = faster merge velocity for the team
+
+## Scope
+
+All squad agents (Parker, Brett, Lambert, Ash, Dallas, Ripley) when their work touches:
+- Services (backend Python, frontend TypeScript, E2E tests)
+- Docker compose overlays or networking
+- Playwright E2E tests or test infrastructure
+- Anything covered by the existing `docker compose` stack
+
+## Implementation
+
+### For Each Service/Change
+
+1. **Run locally first:**
+   - Python services: `uv run pytest --tb=short -q` in the service directory + linting
+   - TypeScript (aithena-ui): `npm run lint`, `npm run format:check`, `npx vitest run` (or `npm run build` for integration)
+   - E2E: `docker compose up -d` (with appropriate overlays) + `npx playwright test --headed` for exploratory, CI-compatible run for batch
+
+2. **Before pushing to GitHub:**
+   - Confirm local tests pass
+   - Review logs for errors/warnings
+   - If working on E2E or integration: confirm docker compose stack is healthy, services up and responding
+
+3. **For complex changes (e.g., E2E, infra):**
+   - Run full docker compose stack locally
+   - Test the specific scenario that would trigger in CI
+   - Document any local setup issues for future similar work
+
+### Example: E2E Token Reuse (PR #1588)
+
+Parker ran local E2E validation:
+1. Set up `docker compose` with E2E overlay + sample docs
+2. Verified `global-setup.ts` reuses `E2E_API_TOKEN` from environment
+3. Confirmed fallback (password login) works when token not set
+4. Pushed to GitHub with confidence that CI would pass
+
+(Local stack hit a worktree networking issue, fell back to CI evidence; still followed the spirit of the directive.)
+
+## Implications for Agents
+
+- **Plan local testing time into estimate:** Add 10–15 min for full docker compose cycles
+- **Report local test results in PR description:** "Tested locally: [service + test result]" helps code reviewers
+- **Defer agent work if local setup is broken:** Don't push code untested; fix the setup or escalate to Ripley
+
+## Related Decisions
+
+- E2E Auth Token Reuse (#1588): Exemplified this directive, though fallback to CI evidence was acceptable when worktree networking failed
+- Dependabot batch deferred (#1564–#1567): Major version bumps warrant local smoke-test before push
+
