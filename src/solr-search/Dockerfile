@@ -3,7 +3,7 @@ ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
 # ---------- build stage ----------
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.14.5-slim-bookworm AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -16,7 +16,7 @@ RUN uv sync --frozen --no-dev --no-install-project --native-tls
 COPY src/solr-search/ .
 
 # ---------- runtime stage ----------
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14.5-slim-bookworm AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
