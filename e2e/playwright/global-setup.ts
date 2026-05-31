@@ -93,38 +93,31 @@ async function writeAuthStorageState(resolvedBaseURL: string): Promise<void> {
       const maxRetries = 1;
 
       while (retries <= maxRetries) {
-        try {
-          const response = await api.post(new URL('/v1/auth/login', `${apiBaseURL}/`).toString(), {
-            data: { username, password },
-            timeout: 15_000,
-          });
+        const response = await api.post(new URL('/v1/auth/login', `${apiBaseURL}/`).toString(), {
+          data: { username, password },
+          timeout: 15_000,
+        });
 
-          if (!response.ok()) {
-            // On 429, retry once with jittered backoff as defense-in-depth
-            if (response.status() === 429 && retries < maxRetries) {
-              const jitter = Math.floor(Math.random() * 2000) + 1000; // 1-3 seconds
-              console.warn(`[playwright] login returned 429, retrying after ${jitter}ms...`);
-              await new Promise((resolve) => setTimeout(resolve, jitter));
-              retries += 1;
-              continue;
-            }
-
-            throw new Error(`API login failed (${response.status()}) at ${response.url()}: ${await response.text()}`);
-          }
-
-          const payload = (await response.json()) as LoginResponse;
-          if (!payload.access_token) {
-            throw new Error(`API login response missing access_token: ${JSON.stringify(payload)}`);
-          }
-
-          accessToken = payload.access_token;
-          break;
-        } catch (error) {
-          if (retries >= maxRetries) {
-            throw error;
-          }
+        // On 429, retry once with jittered backoff as defense-in-depth
+        if (response.status() === 429 && retries < maxRetries) {
+          const jitter = Math.floor(Math.random() * 2000) + 1000; // 1-3 seconds
+          console.warn(`[playwright] login returned 429, retrying after ${jitter}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, jitter));
           retries += 1;
+          continue;
         }
+
+        if (!response.ok()) {
+          throw new Error(`API login failed (${response.status()}) at ${response.url()}: ${await response.text()}`);
+        }
+
+        const payload = (await response.json()) as LoginResponse;
+        if (!payload.access_token) {
+          throw new Error(`API login response missing access_token: ${JSON.stringify(payload)}`);
+        }
+
+        accessToken = payload.access_token;
+        break;
       }
     } finally {
       await api.dispose();
