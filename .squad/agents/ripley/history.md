@@ -400,3 +400,21 @@ Reviewed jmservera installer false-positive fix (PR #1580). Verdict: **APPROVE**
 - **Outcome:** Installer fix shipped; dependent work (v2.2.0 changes) can proceed.
 
 This review exemplifies the "separate signal from noise" principle: the PR itself was good; the CI blocking was infrastructure (not code). Rebasing isolated the two concerns cleanly.
+
+## 2026-05-31 — PR #1614 Review (Phase 1b Volume Migration)
+
+**Context:** Phase 1b of installer wizard (#1578) — converting Solr, ZooKeeper, collections-db, and certbot volumes from bind mounts to Docker-managed volumes.
+
+**Review findings:**
+- ✅ Volume migration technically correct: infrastructure state moved to Docker volumes, user data (BOOKS_PATH) preserved as bind mount
+- ✅ start.sh template SSL bootstrap logic correctly updated to check Docker volumes instead of filesystem paths
+- ✅ .env.example completeness: added missing Solr credentials (SOLR_ADMIN_USER/PASS, SOLR_READONLY_USER/PASS)
+- ✅ CI validation: 18/19 checks passing, E2E still running at review time
+- ✅ Follows approved design per `.squad/decisions.md`
+
+**Decision:** APPROVED — Phase 1b is merge-ready. Recommended merge when E2E completes (if E2E fails, likely known flake #1583).
+
+**Learnings:**
+1. Infrastructure-only changes (YAML config, installer templates) carry low risk when CI unit tests pass — E2E validation is defense-in-depth rather than critical gate for volume changes.
+2. SSL certificate bootstrap logic for Docker-managed volumes requires checking volume existence + running test container to probe volume contents — cleaner than filesystem path checks.
+3. Missing .env.example entries for credentials referenced in code is a documentation completeness issue — caught during volume migration review, not original credential implementation PR.

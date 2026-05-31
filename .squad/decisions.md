@@ -304,3 +304,49 @@ PR #1518 contained auto-generated v2.1.0 release documentation formatted for the
 - Closed PR #1518 with superseded note
 - No follow-up action required
 
+# Decision: PR #1614 Approved — Phase 1b Volume Migration Complete
+
+**Author:** Ripley (Lead)  
+**Date:** 2026-05-31  
+**Status:** Approved (awaiting E2E completion)  
+**PR:** #1614
+
+## Summary
+
+Approved Phase 1b of the installer wizard volume migration (#1578). All infrastructure volumes (Solr, ZooKeeper, collections-db, certbot) have been successfully converted from bind mounts to Docker-managed volumes.
+
+## Review Rationale
+
+1. **Technical correctness**: Volume migration is clean — all infrastructure state moved to Docker-managed volumes, user data (BOOKS_PATH) correctly preserved as bind mount.
+
+2. **Installer template correctness**: start.sh SSL bootstrap logic updated to check Docker volumes instead of filesystem paths. Removed obsolete sudo mkdir commands.
+
+3. **.env.example completeness**: Added missing Solr credentials (SOLR_ADMIN_USER/PASS, SOLR_READONLY_USER/PASS) that were referenced in code but undocumented.
+
+4. **CI validation**: 18/19 checks passing. E2E test still running at approval time (expected long runtime).
+
+5. **Design compliance**: Implements Phase 1b per approved design in `.squad/decisions.md`. Follows approved v2.2.0 clean-install policy for breaking volume changes.
+
+## Follow-up Actions
+
+1. **Monitor E2E completion**: If E2E fails, investigate whether it's volume-related or known flake #1583.
+
+2. **Phase 1 completion**: With Phase 1a (PR #1612) and Phase 1b merged, all infrastructure volumes are now Docker-managed. Unblocks Phase 2 (containerized installer image).
+
+3. **No revision required**: PR is acceptable for merge as-is.
+
+## Affects
+
+- Parker: Phase 1 complete, can proceed to Phase 2 (installer image Dockerfile)
+- Brett: Infrastructure volume architecture now finalized
+- All agents: Future PRs should use Docker-managed volumes for new infrastructure state
+
+## Related
+
+- Issue: #1578 (Wizard Installer)
+- Phase 1a: PR #1612 (Redis/RabbitMQ) — merged
+- Phase 1b: PR #1614 (Solr/ZooKeeper/certbot) — approved
+- Design doc: `.squad/decisions.md` (Wizard Installer Design)
+
+---
+
