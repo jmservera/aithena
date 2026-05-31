@@ -82,3 +82,4 @@ Commit the regenerated lockfile separately with a clear message.
 - **Each push triggers new code-scanning review threads** — resolve all before merge attempt
 - **Pre-commit hooks run tests during cherry-pick --continue** — may modify lockfiles (reset with `git checkout --`)
 - **npm lockfiles auto-merge cleanly** more often than uv.lock; Python lockfiles almost always need regeneration
+- **⚠️ CRITICAL: `--ours`/`--theirs` on manifest files silently reverts earlier bumps** — See `.squad/skills/dependabot-batch-merge` for tactical conflict-resolution patterns. Never resolve conflicts on package.json / pyproject.toml with blanket `--theirs`; manually reconcile all distinct version specs instead.

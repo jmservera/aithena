@@ -3,6 +3,18 @@
 ## Skill ID
 `e2e-auth-reuse`
 
+## Confidence
+**Medium** — Successfully implemented in PR #1588, validated in CI, and confirmed to resolve chronic rate-limit failures (#1583).
+
+## Last Confirmed
+2026-05-31 — PR #1588 merged, CI runs show `[setup] reusing E2E_API_TOKEN from environment (skipping login)` pattern working at scale (28 passed, 22 skipped, 0 failures in ci_e2e_tests workflow run 26717457605).
+
+## Evidence
+- **Issue #1583:** Chronic 429 rate-limit failures in E2E workflows (root cause: back-to-back `/v1/auth/login` calls from same IP)
+- **PR #1588:** Implementation of token-reuse pattern + single-retry defense-in-depth
+- **Files:** `e2e/playwright/global-setup.ts` (lines 71-142) — production code showing pattern in use
+- **CI Validation:** Multiple workflow runs passing with `E2E_API_TOKEN` env var present; fallback path (password login) tested locally and working when env var absent
+
 ## Context
 E2E tests in CI often need authenticated sessions. When the CI workflow mints an auth token (e.g., via curl), downstream test runners should consume that token via environment variable instead of re-authenticating. This avoids rate-limit races and speeds up test setup.
 
@@ -104,3 +116,7 @@ See `e2e/playwright/global-setup.ts` (lines 71-142) for the full implementation 
 
 ## Discovered
 2026-05-31 by Parker (Backend Dev) while fixing CI E2E failures
+
+## Related
+- Pattern complements `.squad/skills/playwright-e2e-aithena` (test infrastructure)
+- Enables "Always Test Locally Before Pushing" directive (`.squad/decisions.md`)
