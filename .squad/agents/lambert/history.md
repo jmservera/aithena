@@ -309,3 +309,7 @@ Tests running in CI should now pull auth tokens from the `E2E_API_TOKEN` environ
 - New skill `.squad/skills/e2e-auth-reuse/SKILL.md` documents the pattern
 
 **Decision:** `.squad/decisions.md` → "E2E Auth Token Reuse Pattern"
+
+### Local-Test-First Directive (2026-05-31, Round 2)
+
+New standing directive from Juanma: "You have docker and playwright locally so you must test everything before pushing to GitHub." For QA/test validation work, this means running E2E and integration tests locally against the docker stack before pushing changes. Lambert's role in E2E validation includes auditing test coverage, monitoring CI results, and flagging flaky tests; the local-test directive reinforces that E2E test changes should always be validated locally with Playwright running against a real docker stack (single-node overlay + E2E overlay) before pushing. Implication: E2E test audits and fixes are integration-level work; plan 10–15 min for local docker setup and test cycles, and report local validation results in PR descriptions to signal confidence.
