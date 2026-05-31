@@ -573,3 +573,12 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 **Pipeline shape:** `/v1/upload` writes the PDF into `/data/documents/uploads`, then publishes the absolute path straight to RabbitMQ; it bypasses document-lister for initial enqueue. `document-indexer` then does two phases: (1) parent-book indexing via Solr `/update/extract`, (2) page/chunk extraction + batched calls to `/v1/embeddings/` + chunk writes back to Solr. Redis state is updated with `text_indexed`, `embedding_indexed`, and `chunk_count`; `GET /v1/admin/indexing-status` is the best API to poll in E2E.
 
 **Gap update:** There is now an `e2e/test_semantic_retrieval.py` test that verifies fresh semantic and hybrid retrieval, but it still cheats the user path by POSTing directly to Solr `/update/extract` and publishing directly to RabbitMQ. The remaining missing coverage is a single test that uses `/v1/upload`, waits for `embedding_indexed=true`, then asserts `/v1/search?mode=semantic` and `/v1/search?mode=hybrid` both retrieve the uploaded document.
+
+### Dependabot Batch Sweep (2026-05-31)
+
+6 Python backend dependencies merged in PR #1584 across solr-search (4), document-indexer (2), document-lister (1):
+- FastAPI, Pydantic, stdlib deps
+- Pattern: cherry-pick + lockfile regen
+- Deferred high-risk items: Python 3.14 (#1565–1567) tracked in #1585 for compatibility validation
+- All checks green
+- See `.squad/decisions.md` for full batch summary
