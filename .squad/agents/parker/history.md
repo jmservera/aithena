@@ -582,3 +582,6 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 - Deferred high-risk items: Python 3.14 (#1565–1567) tracked in #1585 for compatibility validation
 - All checks green
 - See `.squad/decisions.md` for full batch summary
+### E2E Auth Token Reuse (#1583, 2026-05-31)
+
+Fixed chronic 429 rate-limit failures in CI E2E workflows. Root cause: the integration test workflow performed back-to-back `/v1/auth/login` calls (curl mint + Playwright global-setup), tripping solr-search rate limiter. **Fix pattern:** Modified `e2e/playwright/global-setup.ts` to reuse `E2E_API_TOKEN` from environment (already minted by workflow curl) instead of making a second login call. Added defense-in-depth: single retry with jittered backoff (1-3s) on 429 response. **Files:** `e2e/playwright/global-setup.ts` (lines 71-142). **PR:** #1588. This unblocks PR #1580 and the v2.2.0 dependabot sweep.
