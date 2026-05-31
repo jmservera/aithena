@@ -69,53 +69,82 @@ async function findAvailableAppUrl(): Promise<string> {
 }
 
 async function writeAuthStorageState(resolvedBaseURL: string): Promise<void> {
-  const username = process.env.E2E_USERNAME || process.env.CI_ADMIN_USERNAME;
-  const password = process.env.E2E_PASSWORD || process.env.CI_ADMIN_PASSWORD;
+  let accessToken = process.env.E2E_API_TOKEN;
 
-  if (!username || !password) {
-    throw new Error(
-      'Missing Playwright E2E credentials. Set E2E_USERNAME/E2E_PASSWORD or CI_ADMIN_USERNAME/CI_ADMIN_PASSWORD.'
-    );
-  }
+  // If E2E_API_TOKEN is already set (e.g., in CI), reuse it to avoid rate limiting.
+  // Otherwise, fall back to the legacy login flow for local development.
+  if (accessToken) {
+    console.log('[playwright] reusing E2E_API_TOKEN from environment (skipping login)');
+  } else {
+    const username = process.env.E2E_USERNAME || process.env.CI_ADMIN_USERNAME;
+    const password = process.env.E2E_PASSWORD || process.env.CI_ADMIN_PASSWORD;
 
-  const apiBaseURL = getApiBaseUrl(resolvedBaseURL) || DEFAULT_SEARCH_API_URL;
-  const api = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-
-  try {
-    const response = await api.post(new URL('/v1/auth/login', `${apiBaseURL}/`).toString(), {
-      data: { username, password },
-      timeout: 15_000,
-    });
-
-    if (!response.ok()) {
-      throw new Error(`API login failed (${response.status()}) at ${response.url()}: ${await response.text()}`);
+    if (!username || !password) {
+      throw new Error(
+        'Missing Playwright E2E credentials. Set E2E_USERNAME/E2E_PASSWORD or CI_ADMIN_USERNAME/CI_ADMIN_PASSWORD.'
+      );
     }
 
-    const payload = (await response.json()) as LoginResponse;
-    if (!payload.access_token) {
-      throw new Error(`API login response missing access_token: ${JSON.stringify(payload)}`);
-    }
+    const apiBaseURL = getApiBaseUrl(resolvedBaseURL) || DEFAULT_SEARCH_API_URL;
+    const api = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
 
-    await mkdir(AUTH_DIR, { recursive: true });
-    await writeFile(
-      AUTH_STATE_PATH,
-      JSON.stringify(
-        {
-          cookies: [],
-          origins: [
-            {
-              origin: resolvedBaseURL,
-              localStorage: [{ name: AUTH_TOKEN_STORAGE_KEY, value: payload.access_token }],
-            },
-          ],
-        },
-        null,
-        2
-      )
-    );
-  } finally {
-    await api.dispose();
+    try {
+      let retries = 0;
+      const maxRetries = 1;
+
+      while (retries <= maxRetries) {
+        const response = await api.post(new URL('/v1/auth/login', `${apiBaseURL}/`).toString(), {
+          data: { username, password },
+          timeout: 15_000,
+        });
+
+        // On 429, retry once with jittered backoff as defense-in-depth
+        if (response.status() === 429 && retries < maxRetries) {
+          const jitter = Math.floor(Math.random() * 2000) + 1000; // 1-3 seconds
+          console.warn(`[playwright] login returned 429, retrying after ${jitter}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, jitter));
+          retries += 1;
+          continue;
+        }
+
+        if (!response.ok()) {
+          throw new Error(`API login failed (${response.status()}) at ${response.url()}: ${await response.text()}`);
+        }
+
+        const payload = (await response.json()) as LoginResponse;
+        if (!payload.access_token) {
+          throw new Error(`API login response missing access_token: ${JSON.stringify(payload)}`);
+        }
+
+        accessToken = payload.access_token;
+        break;
+      }
+    } finally {
+      await api.dispose();
+    }
   }
+
+  if (!accessToken) {
+    throw new Error('Failed to obtain access token');
+  }
+
+  await mkdir(AUTH_DIR, { recursive: true });
+  await writeFile(
+    AUTH_STATE_PATH,
+    JSON.stringify(
+      {
+        cookies: [],
+        origins: [
+          {
+            origin: resolvedBaseURL,
+            localStorage: [{ name: AUTH_TOKEN_STORAGE_KEY, value: accessToken }],
+          },
+        ],
+      },
+      null,
+      2
+    )
+  );
 }
 
 const SEARCH_READY_TIMEOUT_MS = Number(process.env.SEARCH_READY_TIMEOUT_MS || '120000');
