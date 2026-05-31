@@ -860,8 +860,8 @@ def print_summary(result: SetupResult) -> None:
     print(f"- Auth DB: {result.auth_db_path}")
     print(f"- Admin user: {result.admin_user} ({result.admin_action})")
     # Security note: prints literal rotation status only, NOT the actual JWT secret value.
-    print(f"- JWT secret: {jwt_rotation_status}")  # noqa: S108 — logs status, not sensitive data
-    print(f"- Solr passwords: {solr_rotation_status}")  # noqa: S108 — logs status, not sensitive data
+    print(f"- JWT secret: {jwt_rotation_status}")
+    print(f"- Solr passwords: {solr_rotation_status}")
     print(f"- Environment: {result.environment}")
     print(f"- GPU: {result.gpu}")
     ssl_info = f"enabled ({result.domain})" if result.ssl else "disabled"
