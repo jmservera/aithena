@@ -104,6 +104,9 @@
 <!-- Append learnings below this line -->
 
 - **2026-05-24 (#1544):** Inline Solr init replicationFactor handling in docker-compose.yml must mirror docker/solr-init.sh by clamping SOLR_REPLICATION_FACTOR to EXPECTED_NODES, not merely warning.
+### Installer Wizard Research Spike (#1578, 2026-05-24)
+
+Verified the current installer state for the v2.2.0 zero-dependency installer proposal: `installer/setup.py` is a host-Python wizard, base compose has 16 `/source/volumes/` bind-backed local volumes, SSL adds two certbot bind-backed volumes, and generated `start.sh` references compose overlays that exist in the repo. Proposed approval-gated phase ordering: resolve the storage/volume contract before adding a containerized installer wrapper.
 
 ### Thumbnail Serving Bug (#1137, 2026-03-25)
 
