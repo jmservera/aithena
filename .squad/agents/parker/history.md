@@ -103,6 +103,11 @@
 
 <!-- Append learnings below this line -->
 
+- **2026-05-24 (#1544):** Inline Solr init replicationFactor handling in docker-compose.yml must mirror docker/solr-init.sh by clamping SOLR_REPLICATION_FACTOR to EXPECTED_NODES, not merely warning.
+### Installer Wizard Research Spike (#1578, 2026-05-24)
+
+Verified the current installer state for the v2.2.0 zero-dependency installer proposal: `installer/setup.py` is a host-Python wizard, base compose has 16 `/source/volumes/` bind-backed local volumes, SSL adds two certbot bind-backed volumes, and generated `start.sh` references compose overlays that exist in the repo. Proposed approval-gated phase ordering: resolve the storage/volume contract before adding a containerized installer wrapper.
+
 ### Thumbnail Serving Bug (#1137, 2026-03-25)
 
 **Root cause (triple):** nginx alias pointed to `/data/documents/` instead of `/data/thumbnails/`, nginx container was missing the `thumbnail-data` volume mount, and the search API returned bare relative paths without the `/thumbnails/` prefix — causing the browser to hit the SPA catch-all.
@@ -158,6 +163,15 @@
 
 ### Redis ConnectionPool Bug (2026-03-16)
 - Password missing from `ConnectionPool()` constructor in solr-search. All other services verified correct.
+
+### Solr ReplicationFactor Capping (#1544, 2026-05-24)
+- Single-node overlays inherit stale `.env` values like `SOLR_REPLICATION_FACTOR=3`, but init cannot create 3 replicas with 1 node. Result: collections with zero active replicas, RED health, cascading overlay failures. Decision: clamp replicationFactor to EXPECTED_NODES in all init paths (not just warn-and-continue).
+
+### CodeQL Taint Analysis and Logging Naming (#1576, 2026-05-24)
+- GHAS flagged "clear-text-logging-sensitive-data" when installer summary printed literal status strings (e.g., "generated|kept existing"). Local variable name (`secret_status`) made CodeQL's taint/name-based pattern harder to disambiguate from actual secret data. Fix: rename sensitive-substring-adjacent variables to operation-state names (e.g., `jwt_rotation_status`), keep comments explicit that only literals are logged.
+
+### Installer Wizard Architecture Research (#1578, 2026-05-24)
+- Current installer requires Python 3.12 + `uv` + `aithena-common` + `argon2-cffi` on host before `.env` can be generated. Proposal: two-layer architecture (host bootstrap shell → versioned installer container) with 6 implementation phases, pending human approval on registry namespace, version-locking, and bind-mount-to-Docker-volume migration strategy for existing deployments.
 - Root lesson: always pass credentials to ConnectionPool, not just to `Redis()`.
 
 ### Logging Security (#302, #299, 2026-03-16)
@@ -559,3 +573,15 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 **Pipeline shape:** `/v1/upload` writes the PDF into `/data/documents/uploads`, then publishes the absolute path straight to RabbitMQ; it bypasses document-lister for initial enqueue. `document-indexer` then does two phases: (1) parent-book indexing via Solr `/update/extract`, (2) page/chunk extraction + batched calls to `/v1/embeddings/` + chunk writes back to Solr. Redis state is updated with `text_indexed`, `embedding_indexed`, and `chunk_count`; `GET /v1/admin/indexing-status` is the best API to poll in E2E.
 
 **Gap update:** There is now an `e2e/test_semantic_retrieval.py` test that verifies fresh semantic and hybrid retrieval, but it still cheats the user path by POSTing directly to Solr `/update/extract` and publishing directly to RabbitMQ. The remaining missing coverage is a single test that uses `/v1/upload`, waits for `embedding_indexed=true`, then asserts `/v1/search?mode=semantic` and `/v1/search?mode=hybrid` both retrieve the uploaded document.
+
+### Dependabot Batch Sweep (2026-05-31)
+
+6 Python backend dependencies merged in PR #1584 across solr-search (4), document-indexer (2), document-lister (1):
+- FastAPI, Pydantic, stdlib deps
+- Pattern: cherry-pick + lockfile regen
+- Deferred high-risk items: Python 3.14 (#1565–1567) tracked in #1585 for compatibility validation
+- All checks green
+- See `.squad/decisions.md` for full batch summary
+### E2E Auth Token Reuse (#1583, 2026-05-31)
+
+Fixed chronic 429 rate-limit failures in CI E2E workflows. Root cause: the integration test workflow performed back-to-back `/v1/auth/login` calls (curl mint + Playwright global-setup), tripping solr-search rate limiter. **Fix pattern:** Modified `e2e/playwright/global-setup.ts` to reuse `E2E_API_TOKEN` from environment (already minted by workflow curl) instead of making a second login call. Added defense-in-depth: single retry with jittered backoff (1-3s) on 429 response. **Files:** `e2e/playwright/global-setup.ts` (lines 71-142). **PR:** #1588. This unblocks PR #1580 and the v2.2.0 dependabot sweep.

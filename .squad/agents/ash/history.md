@@ -148,3 +148,10 @@
 - HNSW tuned to `hnswMaxConnections="12"` for byte field (lower than default 16) to save memory since byte vectors already reduce footprint ~4x
 - Existing fields untouched for full backward compatibility
 - Runtime field selection happens in the indexer (Parker's domain), not in schema
+
+### Dependabot Batch Sweep (2026-05-31)
+
+No direct Ash service dependencies in batch PR #1584 (dependencies are in Parker's backend services + Dallas UI deps). Deferred high-risk items:
+- **Solr 10** (#1562) deferred to v2.5 milestone (tracked in #1335) — requires schema/config validation
+- **Python 3.14** — if selected for embeddings-server, requires testing via Parker coordination
+- See `.squad/decisions.md` for full batch summary
