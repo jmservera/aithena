@@ -294,3 +294,18 @@ Wrote proactive test coverage for Brett's #1286 (IPEX addition) and Parker's #12
 - Uses `DEVICE=cpu` (no GPU needed) with `BACKEND=openvino` to test the actual code path
 
 **Key insight:** The existing smoke test matrix entry for openvino *does* check `/health` with `BACKEND=openvino DEVICE=cpu`, which would catch the crash. The new test adds targeted diagnostics (permission audit, writability checks) and automatic issue filing that the matrix approach lacks.
+
+## Cross-Agent Updates
+
+### 2026-05-31 — CI Auth Token Pattern (Parker Round 1)
+
+**Impact:** E2E tests now consume CI-minted tokens
+
+Tests running in CI should now pull auth tokens from the `E2E_API_TOKEN` environment variable (when CI provides it) rather than re-authenticating. This reduces rate-limit collisions on shared test infrastructure.
+
+**For Lambert:** 
+- Playwright E2E tests updated (`e2e/playwright/global-setup.ts`) to check `E2E_API_TOKEN` first
+- Fallback to password-based login for local development still works
+- New skill `.squad/skills/e2e-auth-reuse/SKILL.md` documents the pattern
+
+**Decision:** `.squad/decisions.md` → "E2E Auth Token Reuse Pattern"
