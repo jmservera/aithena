@@ -374,3 +374,17 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 - Why single-node for dev? SolrCloud resilience (replication, leader election) isn't needed for dev CI. Faster feedback wins.
 - Why not a separate compose.single-node.yml overlay? Kept the profile override in-CI to avoid maintaining another compose file. Consistent with docker/compose.e2e.yml pattern (minimal, focused overrides).
 - 45-min timeout is conservative; single-node should complete in 30-35 min with cold docker build, 20 min with warm caches.
+
+## Cross-Agent Updates
+
+### 2026-05-31 — CI Auth Pattern Change (Parker Round 1)
+
+**Impact:** Workflow + test setup now use token reuse pattern
+
+CI workflows now export `E2E_API_TOKEN` (minted via curl) for test runners to consume, avoiding back-to-back `/v1/auth/login` calls that trip the solr-search rate limiter. This pattern now applies to:
+- **Playwright E2E tests** (via `global-setup.ts`)
+- **pytest integration tests** (when CI provides `E2E_API_TOKEN` env var)
+
+**For Brett:** Workflows that mint auth tokens in steps should export them as environment variables for downstream test consumers. See skill `.squad/skills/e2e-auth-reuse/SKILL.md` for pattern.
+
+**Decision:** `.squad/decisions.md` → "E2E Auth Token Reuse Pattern"

@@ -124,4 +124,55 @@ Batched 16 low/medium-risk Dependabot PRs into PR #1584 (squash-merged to dev). 
 ## Affects
 
 All team members doing future dependency sweeps should follow same pattern.
+# Decision: E2E Auth Token Reuse Pattern
+
+**Author:** Parker (Backend Dev)  
+**Date:** 2026-05-31  
+**Status:** Approved (implemented in #1588)
+
+## Context
+
+The integration test workflow was hitting chronic 429 rate limits on every PR because it made two back-to-back `/v1/auth/login` calls from the same source IP:
+
+1. A curl login in the workflow step to mint `E2E_API_TOKEN`
+2. Playwright `global-setup.ts` making another `/v1/auth/login` immediately after
+
+This caused the solr-search rate limiter to trip, blocking every PR's `Run integration & E2E tests` workflow.
+
+## Decision
+
+**When CI workflows mint an auth token via curl (or similar), downstream test runners MUST consume that token via environment variable instead of re-authenticating.**
+
+Specifically:
+- Workflow steps should export minted tokens as environment variables (e.g., `E2E_API_TOKEN`)
+- Test setup code (e.g., Playwright global-setup, pytest fixtures) should check for these env vars first
+- Only fall back to password-based login when the env var is absent (for local development)
+
+## Implementation
+
+Modified `e2e/playwright/global-setup.ts` to:
+1. Check for `E2E_API_TOKEN` in the environment
+2. If present, use it directly to write auth storage state (skip login)
+3. If absent, fall back to the existing username/password login flow
+4. Added defense-in-depth: single retry with jittered backoff (1-3s) on 429 response
+
+## Benefits
+
+- Eliminates rate-limit races in CI (primary goal)
+- Faster test setup (one fewer HTTP round-trip)
+- Clearer separation: workflow owns auth, tests consume tokens
+- Fallback preserves local dev workflow
+
+## Alternatives Considered
+
+1. **Raise CI rate-limit window** (e.g., `AUTH_LOGIN_RATE_LIMIT_MAX=100` in `docker/compose.e2e.yml`)  
+   - ❌ Masks the problem instead of fixing the root cause
+2. **Backoff + retry only** (no token reuse)  
+   - ❌ Still wastes time and risks hitting the limit on slow CI runners
+
+## Related
+
+- Issue: #1583
+- PR: #1588
+- Unblocks: PR #1580, v2.2.0 dependabot sweep
 
