@@ -749,18 +749,8 @@ volumes:
   thumbnail-data:
 
   rabbitmq-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/rabbitmq-data"
 
   redis-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/redis"
   document-data:
     driver: local
     driver_opts:
