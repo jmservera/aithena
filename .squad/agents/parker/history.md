@@ -103,6 +103,8 @@
 
 <!-- Append learnings below this line -->
 
+- **2026-05-24 (#1544):** Inline Solr init replicationFactor handling in docker-compose.yml must mirror docker/solr-init.sh by clamping SOLR_REPLICATION_FACTOR to EXPECTED_NODES, not merely warning.
+
 ### Thumbnail Serving Bug (#1137, 2026-03-25)
 
 **Root cause (triple):** nginx alias pointed to `/data/documents/` instead of `/data/thumbnails/`, nginx container was missing the `thumbnail-data` volume mount, and the search API returned bare relative paths without the `/thumbnails/` prefix — causing the browser to hit the SPA catch-all.
