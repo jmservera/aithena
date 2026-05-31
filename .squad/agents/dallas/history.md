@@ -439,3 +439,11 @@ Four search result display regressions identified during v1.16.0 pre-release:
   - `src/nginx/default.conf`, `default.conf.template`, `ssl.conf.template` — nginx header fixes
   - `src/aithena-ui/src/api.ts` — same-origin URL normalization in resolveDocumentUrl()
   - `src/aithena-ui/src/__tests__/PdfViewer.test.tsx` — new test case
+
+### Dependabot Batch Sweep (2026-05-31)
+
+6 aithena-ui dependencies merged in PR #1584:
+- React, React DOM, Vite, Vitest, ESLint, TypeScript chain
+- Pattern: cherry-pick + lockfile regen
+- No breaking changes; all checks green
+- See `.squad/decisions.md` for full batch summary
