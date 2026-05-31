@@ -79,12 +79,12 @@ These tips capture patterns that have proven effective when working in this repo
 
 2. **Use `squad watch` for persistent assignment polling.** When the heartbeat workflow is unreliable or you're away from the terminal, `squad watch --interval 60` (from `@bradygaster/squad-cli`) keeps picking up assigned issues/PRs.
 
-3. **Enable `SQUAD_WORKTREES=1` for parallel agent work.** When spawning multiple agents (e.g., dependabot batch + PR review fixes in parallel), worktree mode avoids branch-stomping in the main checkout. Without it, fall back to `git worktree add /tmp/aithena-<scope>` manually.
+3. **Enable `SQUAD_WORKTREES=1` for parallel agent work.** When spawning multiple agents (e.g., dependabot batch + PR review fixes in parallel), worktree mode avoids branch-stomping in the main checkout. If you need a worktree manually, follow the convention in `.copilot/skills/git-workflow/SKILL.md` — sibling directories from `origin/dev`, e.g. `git worktree add ../aithena-<issue> -b squad/<issue>-<slug> origin/dev`.
 
-4. **Consult `rubber-duck` before pushing fixes for review comments.** Bot review iteration cycles cost ≈40 min per round-trip (rebase + CI). A 30-second critique pass before each push typically catches the majority of issues a bot reviewer would flag, collapsing 3–4 rounds into 1–2.
+4. **Run a critique pass before pushing review-comment fixes.** Bot review iteration cycles cost ≈40 min per round-trip (rebase + CI). A 30-second self-critique or peer pass (see `.copilot/skills/reviewer-protocol/SKILL.md`) before each push typically catches the majority of issues a bot reviewer would flag, collapsing 3–4 rounds into 1–2. Agents running this CLI can invoke the built-in `rubber-duck` sub-agent for the same effect.
 
 5. **Remember: squash-merge does NOT auto-close referenced PRs.** After merging a batched PR that supersedes others, manually run `gh pr close <N> --comment "Superseded by #<batch>" --delete-branch` for each. This is a recurring gotcha during dependabot sweeps.
 
 6. **Resolve review threads via GraphQL `resolveReviewThread`.** Branch protection requires threads resolved before merge. Iterate over `pullRequest.reviewThreads.nodes` and call the mutation per thread ID — `gh pr review` alone does not resolve them.
 
-7. **Standard merge runbook**: resolve threads → rebase on `dev` → wait for required checks → squash-merge → close superseded PRs → delete branches. Each merge into `dev` forces a rebase on the next PR in flight.
+7. **Standard merge runbook for stacked / batched PRs**: resolve review threads → confirm required checks have passed → `gh pr merge <N> --admin --merge` (or `--squash`) → close superseded PRs → delete branches. **Do not rebase each follow-up PR onto the freshly updated base just to re-trigger CI** when the changes are independent — see `.copilot/skills/branch-protection-strict-mode/SKILL.md` for the `--admin` bypass pattern and the cascading-BEHIND behavior.
