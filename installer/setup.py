@@ -507,12 +507,13 @@ def generate_start_script(
 
     ssl_setup_block = ""
     if ssl and domain:
+        # certbot-data-conf and certbot-data-www are now Docker-managed volumes
+        # Docker will create them automatically when the stack starts
         ssl_setup_block = f"""
-# Ensure certbot directories exist for Let's Encrypt
-sudo mkdir -p /source/volumes/certbot-data/{{conf,www}}
-
 # Bootstrap initial certificate (first run only)
-if [ ! -d "/source/volumes/certbot-data/conf/live/{domain}" ]; then
+# Check if certificate exists in the certbot-data-conf Docker volume
+if ! docker volume inspect certbot-data-conf >/dev/null 2>&1 || \\
+   ! docker run --rm -v certbot-data-conf:/data alpine test -d "/data/live/{domain}" 2>/dev/null; then
   echo "Bootstrapping Let's Encrypt certificate for {domain}..."
   docker compose {compose_chain} run --rm certbot certonly \\
     --webroot -w /var/www/certbot \\
