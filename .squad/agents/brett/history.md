@@ -388,3 +388,7 @@ CI workflows now export `E2E_API_TOKEN` (minted via curl) for test runners to co
 **For Brett:** Workflows that mint auth tokens in steps should export them as environment variables for downstream test consumers. See skill `.squad/skills/e2e-auth-reuse/SKILL.md` for pattern.
 
 **Decision:** `.squad/decisions.md` → "E2E Auth Token Reuse Pattern"
+
+### Local-Test-First Directive (2026-05-31, Round 2)
+
+New standing directive from Juanma: "You have docker and playwright locally so you must test everything before pushing to GitHub." For CI/test infrastructure and Playwright E2E testing, this means running E2E tests locally against the `docker compose` stack before pushing any changes to test runners, fixtures, or E2E configuration. Brett's CI auth workflow exports `E2E_API_TOKEN` for test consumers (used in #1588 fix); future changes to how CI mints or passes auth tokens should be validated locally with Playwright running against the docker stack. Implication: test infrastructure changes are integration-level and deserve local validation alongside CI validation; don't treat them as local-only changes.
