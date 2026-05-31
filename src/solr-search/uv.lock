@@ -1138,7 +1138,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.29" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.34.2" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.47.0,<1" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.48.0,<1" },
 ]
 
 [package.metadata.requires-dev]
