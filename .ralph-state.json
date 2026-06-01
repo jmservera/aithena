@@ -1,0 +1,13 @@
+{
+  "cycle": 1,
+  "round": 1,
+  "status_due_at_round": 3,
+  "last_check": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "issues_scanned": 0,
+  "prs_scanned": 1,
+  "findings": {
+    "v2_2_open_issues": 0,
+    "v2_2_open_prs": 0,
+    "v2_2_status": "CLEAR"
+  }
+}
