@@ -291,6 +291,34 @@ def test_upload_streaming_enforces_size_limit(client: TestClient, upload_dir):
     assert f"{settings.max_upload_size_mb}MB" in response.json()["detail"]
 
 
+def test_upload_rate_limit_preserves_production_default(monkeypatch):
+    """Test upload limiter keeps the historical 10/min default outside CI disables."""
+    import importlib
+    import os
+
+    import config
+
+    original_rate_limit = os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE")
+    original_upload_rate_limit = os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
+    monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+    monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+
+    reloaded_config = importlib.reload(config)
+
+    try:
+        assert reloaded_config.settings.upload_rate_limit_requests_per_minute == 10
+    finally:
+        if original_rate_limit is None:
+            monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", original_rate_limit)
+        if original_upload_rate_limit is None:
+            monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", original_upload_rate_limit)
+        importlib.reload(config)
+
+
 def test_upload_rate_limit_uses_shared_env_default(monkeypatch):
     """Test upload limiter falls back to the shared rate-limit env var."""
     import importlib

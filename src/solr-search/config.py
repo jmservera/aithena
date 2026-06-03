@@ -136,6 +136,16 @@ allow_credentials = (
 
 _allowed_collections = _parse_collection_set(os.environ.get("ALLOWED_COLLECTIONS", "books"))
 
+
+def parse_upload_rate_limit_requests_per_minute() -> int:
+    explicit_limit = os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
+    if explicit_limit:
+        return int(explicit_limit)
+    if os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE") == "0":
+        return 0
+    return 10
+
+
 settings = Settings(
     title=os.environ.get("TITLE", TITLE),
     version=os.environ.get("VERSION", VERSION),
@@ -186,9 +196,7 @@ settings = Settings(
     cb_embeddings_recovery_timeout=float(os.environ.get("CB_EMBEDDINGS_RECOVERY_TIMEOUT", "30")),
     admin_api_key=os.environ.get("ADMIN_API_KEY") or None,
     rate_limit_requests_per_minute=int(os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE", "100")),
-    upload_rate_limit_requests_per_minute=int(
-        os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE", "100"))
-    ),
+    upload_rate_limit_requests_per_minute=parse_upload_rate_limit_requests_per_minute(),
     rabbitmq_management_port=int(os.environ.get("RABBITMQ_MANAGEMENT_PORT", "15672")),
     zookeeper_hosts=os.environ.get("ZOOKEEPER_HOSTS", "zoo1:2181"),
     auth_default_admin_username=os.environ.get("AUTH_DEFAULT_ADMIN_USERNAME", "admin").strip() or "admin",

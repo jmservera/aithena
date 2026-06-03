@@ -327,7 +327,7 @@ New standing directive from Juanma: "You have docker and playwright locally so y
 
 The failed `Dev Integration Test (Single-Node)` path was the Python E2E semantic upload fixture, not Playwright: `test_web_api_semantic.py` uploaded multiple PDFs and hit `429 Too many uploads` on the `mars` case even though CI set `RATE_LIMIT_REQUESTS_PER_MINUTE=0`. Minimal regression checks for Parker's fix are `src/solr-search/tests/test_upload.py -k rate_limit` plus the full `solr-search` verify gate; the important coverage gap was endpoint-level proof that `RateLimiter(max_requests=0)` permits repeated uploads without 429.
 
-### PR #1623 Review Comment Cleanup (2026-06-03T21:25:25.755+00:00)
+### PR #1623 E2E Naming Cleanup (2026-06-03T21:25:25.755+00:00)
 
 Resolved second-round Copilot review comments by keeping E2E test names/docstrings aligned with what they actually assert: thumbnail_url_s metadata propagation, basic PDF metadata/disk availability, semantic-or-keyword response mode, and delete-then-reindex recovery. Removed duplicate corrupt-PDF and oversized-upload E2E checks from `test_error_recovery.py` because `e2e/test_upload_api.py` remains the dedicated upload API validation suite; this avoids an extra 52MB upload in recovery tests.
 
