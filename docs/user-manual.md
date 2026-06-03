@@ -28,7 +28,7 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v2.0.0 — React admin portal:** The Streamlit admin dashboard has been replaced with a modern React single-page application at `/admin/`. The admin interface now has 7 dedicated pages: Dashboard, Document Manager, Reindex Library, Indexing Status, System Status, Infrastructure, and Log Viewer. The installer has been overhauled with GPU auto-detection and SSL setup. See [v2.0.0 Release Notes](release-notes/v2.0.0.md).
 
-**v2.2.0 — Containerized installer:** New users with only Docker installed can now set up Aithena with two commands (`curl -fsSL .../install.sh | bash && ./aithena/start.sh`). The wizard-style installer guides through library path, admin credentials, GPU acceleration, SSL, and topology in ≤6 prompts. No Python or uv pre-installation required. See [v2.2.0 Release Notes](release-notes/v2.2.0.md).
+**v2.2.0 — Maintenance and reliability release:** Production volume handling is safer, CI/E2E rate-limit failures are fixed, and new skeleton E2E coverage validates thumbnails, downloads, and recovery paths. Existing deployments should review the volume migration notes before restarting the stack. See [v2.2.0 Release Notes](release-notes/v2.2.0.md).
 
 ## Getting started
 

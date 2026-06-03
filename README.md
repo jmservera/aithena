@@ -2,9 +2,9 @@
 
 A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
-**Current Release:** v2.1.0 — Configurable search architecture (HNSW/hybrid-rerank), integration tests for both topologies.  
+**Current Release:** v2.2.0 — Volume migration safety, CI/E2E reliability fixes, and expanded E2E skeleton coverage.  
 **Development:** v2.5 milestone active. All PRs target `dev` branch; releases merge `dev` → `main`.  
-**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v2.1.0.md)**
+**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v2.2.0.md)**
 
 ## What It Does
 
@@ -98,6 +98,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 ### Release Notes (newest first)
 
+- [v2.2.0 Release Notes](docs/release-notes/v2.2.0.md) — Volume migration safety, CI/E2E reliability, E2E skeleton coverage
 - [v2.1.0 Release Notes](docs/release-notes/v2.1.0.md) — Configurable search architecture, single-node topology
 - [v2.0.0 Release Notes](docs/release-notes/v2.0.0.md) — Major: React admin portal, installer overhaul
 - [v1.19.0 Release Notes](docs/release-notes/v1.19.0.md)
