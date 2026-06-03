@@ -91,9 +91,7 @@ class TestCorruptDocumentHandling:
             headers=auth_headers,
             timeout=10,
         )
-        assert resp.status_code == 400, (
-            f"Expected 400 for corrupt PDF, got {resp.status_code}: {resp.text}"
-        )
+        assert resp.status_code == 400, f"Expected 400 for corrupt PDF, got {resp.status_code}: {resp.text}"
         assert "Invalid PDF" in resp.text, f"Expected invalid PDF message, got: {resp.text}"
 
     def test_empty_pdf_handled(
@@ -139,15 +137,13 @@ class TestCorruptDocumentHandling:
             headers=auth_headers,
             timeout=60,
         )
-        assert resp.status_code == 413, (
-            f"Expected 413 for oversized file, got {resp.status_code}: {resp.text}"
-        )
+        assert resp.status_code == 413, f"Expected 413 for oversized file, got {resp.status_code}: {resp.text}"
 
 
 class TestServiceFailureRecovery:
     """Validate graceful API error handling and idempotent indexing."""
 
-    def test_search_when_solr_unavailable(
+    def test_search_rejects_unknown_collection(
         self,
         api_url: str,
         api_available: None,
@@ -162,9 +158,7 @@ class TestServiceFailureRecovery:
             headers=auth_headers,
             timeout=10,
         )
-        assert resp.status_code == 400, (
-            f"Expected 400 for unknown collection, got {resp.status_code}: {resp.text}"
-        )
+        assert resp.status_code == 400, f"Expected 400 for unknown collection, got {resp.status_code}: {resp.text}"
 
     def test_semantic_search_fallback_when_embeddings_unavailable(
         self,

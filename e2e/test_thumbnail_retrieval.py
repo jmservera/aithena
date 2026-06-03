@@ -36,9 +36,7 @@ def _build_multipage_pdf(texts: list[str]) -> bytes:
         b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
     ]
     kids = " ".join(f"{obj_id} 0 R" for obj_id in page_obj_ids)
-    objects.append(
-        f"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {page_count} >>\nendobj\n".encode()
-    )
+    objects.append(f"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {page_count} >>\nendobj\n".encode())
 
     for page_id, content_id in zip(page_obj_ids, content_obj_ids, strict=True):
         objects.append(
@@ -58,9 +56,7 @@ def _build_multipage_pdf(texts: list[str]) -> bytes:
             + b"\nendstream\nendobj\n"
         )
 
-    objects.append(
-        f"{font_id} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n".encode()
-    )
+    objects.append(f"{font_id} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n".encode())
 
     header = b"%PDF-1.4\n"
     body = b""
@@ -77,9 +73,7 @@ def _build_multipage_pdf(texts: list[str]) -> bytes:
     for off in offsets:
         xref += f"{off:010d} 00000 n \n".encode()
 
-    trailer = (
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode()
-    )
+    trailer = f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode()
 
     return header + body + xref + trailer
 
@@ -181,7 +175,7 @@ def api_available(api_url: str) -> None:
 class TestThumbnailGeneration:
     """Validate thumbnail metadata handling during document indexing."""
 
-    def test_thumbnail_file_created_after_indexing(
+    def test_thumbnail_url_stored_after_indexing(
         self,
         solr_url: str,
         indexed_fixture_with_thumbnail: dict[str, str],
@@ -241,7 +235,7 @@ class TestThumbnailGeneration:
             _delete_solr_doc(solr_url, doc_id)
             pdf_path.unlink(missing_ok=True)
 
-    def test_thumbnail_api_endpoint_returns_image(
+    def test_book_detail_returns_thumbnail_url(
         self,
         api_url: str,
         api_available: None,
@@ -273,7 +267,7 @@ class TestThumbnailGeneration:
         resp = requests.get(f"{api_url}/v1/books/{missing_id}", headers=auth_headers, timeout=10)
         assert resp.status_code == 404, f"Expected 404 for unknown book id, got {resp.status_code}: {resp.text}"
 
-    def test_thumbnail_caching_headers(
+    def test_thumbnail_url_is_stable_across_requests(
         self,
         api_url: str,
         api_available: None,

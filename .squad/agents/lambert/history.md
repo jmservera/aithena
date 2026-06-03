@@ -95,6 +95,11 @@
 
 ## Learnings
 
+### PR #1623 Review Comment Cleanup (2026-06-03T21:25:25.755+00:00)
+
+- Config reload tests that mutate `os.environ` must restore original env values before the final `importlib.reload(config)`; relying on `monkeypatch` teardown after test return leaves module-level `settings` out of sync during the test cleanup reload.
+- E2E test names should describe the exact assertion being made. For thumbnail tests, distinguish thumbnail URL metadata/stability checks from actual image/file/header retrieval.
+
 ### v1.15.0 Release (March 2026) — Reskill & Consolidation Session
 
 **Test Suite Growth & Maturity:**

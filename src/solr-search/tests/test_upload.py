@@ -294,9 +294,12 @@ def test_upload_streaming_enforces_size_limit(client: TestClient, upload_dir):
 def test_upload_rate_limit_uses_shared_env_default(monkeypatch):
     """Test upload limiter falls back to the shared rate-limit env var."""
     import importlib
+    import os
 
     import config
 
+    original_rate_limit = os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE")
+    original_upload_rate_limit = os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
     monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
     monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
 
@@ -305,8 +308,14 @@ def test_upload_rate_limit_uses_shared_env_default(monkeypatch):
     try:
         assert reloaded_config.settings.upload_rate_limit_requests_per_minute == 0
     finally:
-        monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
-        monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        if original_rate_limit is None:
+            monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", original_rate_limit)
+        if original_upload_rate_limit is None:
+            monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", original_upload_rate_limit)
         importlib.reload(config)
 
 
@@ -327,6 +336,8 @@ def test_upload_rate_limit_disabled_allows_repeated_uploads(
             )
 
             assert response.status_code != 429
+            assert response.status_code == 200
+            assert response.json()["status"] == "accepted"
     finally:
         main.upload_rate_limiter = original_limiter
 
@@ -334,9 +345,12 @@ def test_upload_rate_limit_disabled_allows_repeated_uploads(
 def test_upload_rate_limit_env_override(monkeypatch):
     """Test upload limiter can be configured independently from search limiting."""
     import importlib
+    import os
 
     import config
 
+    original_rate_limit = os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE")
+    original_upload_rate_limit = os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
     monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
     monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", "25")
 
@@ -345,8 +359,14 @@ def test_upload_rate_limit_env_override(monkeypatch):
     try:
         assert reloaded_config.settings.upload_rate_limit_requests_per_minute == 25
     finally:
-        monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
-        monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        if original_rate_limit is None:
+            monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", original_rate_limit)
+        if original_upload_rate_limit is None:
+            monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", original_upload_rate_limit)
         importlib.reload(config)
 
 
