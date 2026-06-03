@@ -4,11 +4,18 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import REQUIRED_METADATA_KEYS
+from tests.conftest import BOOK_LIBRARY_ROOT, REQUIRED_METADATA_KEYS
+
+REAL_LIBRARY_PATHS = [
+    "amades/Auca dels costums de Barcelona amades.pdf",
+    "amades/costumari 1 1 -3 OCR.pdf",
+    "balearics/ESTUDIS_BALEARICS_01.pdf",
+    "bsal/Bolletí societat arqueologica luliana 1885 - 1886.pdf",
+]
 
 REAL_LIBRARY_CASES = [
     pytest.param(
-        "amades/Auca dels costums de Barcelona amades.pdf",
+        REAL_LIBRARY_PATHS[0],
         {
             "title": "Auca dels costums de Barcelona",
             "author": "Amades",
@@ -18,7 +25,7 @@ REAL_LIBRARY_CASES = [
         id="real-amades-author-folder",
     ),
     pytest.param(
-        "amades/costumari 1 1 -3 OCR.pdf",
+        REAL_LIBRARY_PATHS[1],
         {
             "title": "costumari 1 1 -3 OCR",
             "author": "Amades",
@@ -28,7 +35,7 @@ REAL_LIBRARY_CASES = [
         id="real-amades-irregular-numeric",
     ),
     pytest.param(
-        "balearics/ESTUDIS_BALEARICS_01.pdf",
+        REAL_LIBRARY_PATHS[2],
         {
             "title": "ESTUDIS BALEARICS 01",
             "author": "Unknown",
@@ -38,7 +45,7 @@ REAL_LIBRARY_CASES = [
         id="real-balearics-series-folder",
     ),
     pytest.param(
-        "bsal/Bolletí societat arqueologica luliana 1885 - 1886.pdf",
+        REAL_LIBRARY_PATHS[3],
         {
             "title": "Bolletí societat arqueologica luliana 1885 - 1886",
             "author": "Unknown",
@@ -251,7 +258,7 @@ def test_extract_metadata_uses_filename_fallback_for_unknown_patterns(make_docum
 
 
 @pytest.mark.skipif(
-    not Path("/home/jmservera/booklibrary").exists(),
+    not any((BOOK_LIBRARY_ROOT / p).exists() for p in REAL_LIBRARY_PATHS),
     reason="Real library paths are only available on the maintainer machine.",
 )
 @pytest.mark.parametrize(("relative_path", "expected"), REAL_LIBRARY_CASES)
