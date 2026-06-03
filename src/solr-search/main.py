@@ -300,6 +300,9 @@ class RateLimiter:
 
     def is_allowed(self, client_ip: str) -> bool:
         """Check if client is allowed to make a request."""
+        if self.max_requests <= 0:
+            return True
+
         now = time.time()
         cutoff = now - self.window_seconds
 
@@ -317,7 +320,7 @@ class RateLimiter:
             return True
 
 
-upload_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+upload_rate_limiter = RateLimiter(max_requests=settings.upload_rate_limit_requests_per_minute, window_seconds=60)
 login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
 
@@ -3145,7 +3148,7 @@ async def upload_pdf(file: UploadFile, request: Request) -> dict[str, Any]:
         - 502 Bad Gateway: RabbitMQ failure
     """
     # Rate limiting
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     if not upload_rate_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=429, detail="Too many uploads. Please try again later.")
 

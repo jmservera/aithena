@@ -103,6 +103,7 @@
 
 <!-- Append learnings below this line -->
 
+- **2026-06-03T21:25:25.755+00:00 (PR #1623):** `/v1/upload` has its own in-memory `upload_rate_limiter` in `src/solr-search/main.py`, so disabling the shared search limiter with `RATE_LIMIT_REQUESTS_PER_MINUTE=0` is not enough unless upload limiting reads the same CI default or `UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE=0` is set. E2E upload-heavy tests (`e2e/test_web_api_semantic.py`) can exhaust the old hard-coded 10/minute limit before semantic assertions run.
 - **2026-05-24 (#1544):** Inline Solr init replicationFactor handling in docker-compose.yml must mirror docker/solr-init.sh by clamping SOLR_REPLICATION_FACTOR to EXPECTED_NODES, not merely warning.
 ### Installer Wizard Research Spike (#1578, 2026-05-24)
 

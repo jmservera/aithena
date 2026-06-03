@@ -96,6 +96,19 @@ def test_search_returns_results(client):
 
 Mock at the service boundary (Solr, Redis, RabbitMQ), not at the HTTP layer.
 
+## Pattern 6: E2E Rate-Limit Parity
+
+Upload-heavy E2E suites can hit endpoint-specific limiters even when the shared search limiter is disabled. When CI sets `RATE_LIMIT_REQUESTS_PER_MINUTE=0`, either endpoint-specific limits should fall back to that value or CI/compose must set the endpoint-specific env var explicitly too.
+
+For `/v1/upload`, keep these aligned:
+
+```yaml
+RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
+UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
+```
+
+Add unit coverage for both the shared default and endpoint-specific override so future config changes do not reintroduce CI-only 429 failures.
+
 ## Service-Specific Quirks
 
 | Service | Quirk | Workaround |
