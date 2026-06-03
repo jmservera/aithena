@@ -473,3 +473,70 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 - Not user-facing (operational guide for existing users), but improves onboarding for Windows developers
 - Complements v1.17.0 GPU acceleration feature
 - Should be highlighted in setup/deployment sections of PRD or changelog if v1.17.1+ includes this documentation
+
+---
+
+## Release Gate Assessment — PR #1623 (2026-06-03T22:12:30Z)
+
+### Release Status: ✅ APPROVED (PR #1623 Merge Blocker Resolved)
+
+#### Summary
+- **PR:** #1623 (test(e2e): implement skeleton suites)
+- **All CI Checks:** ✅ PASSING (20/20)
+- **E2E Tests:** ✅ SUCCESS (5m41s runtime)
+- **Documentation:** ✅ COMPLETE (CHANGELOG updated)
+- **Milestone:** ✅ CLOSED (6/6 issues)
+- **Release Notes:** ✅ VERIFIED
+
+#### Issue Resolution
+PR #1623 was initially blocked by GitHub ruleset message "A conversation must be resolved before this pull request can be merged."
+- Two addressed but unresolved review threads were still present on outdated comments
+- Ripley resolved the addressed threads after verifying the fixes were present
+- PR #1623 merged successfully into `dev` at 2026-06-03T22:22:32Z
+
+#### Action Required
+- Continue standard release workflow: update release metadata, open dev→main release PR, then tag v2.2.0 after the release PR merges
+
+#### Evidence
+- Release notes: `docs/release-notes/v2.2.0.md` ✅
+- Test report: `docs/test-reports/v2.2.0.md` ✅
+- CHANGELOG: Updated with v2.2.0 section ✅
+- User/Admin manuals: Current ✅
+- Milestone v2.2.0: 0 open, 6 closed ✅
+
+#### Next: Ralph Loop for v2.3
+Once v2.2.0 is released, start Ralph work monitor for next milestone.
+
+
+---
+
+## Release Gate Final Status (2026-06-03T22:20:00Z)
+
+### Work Completed ✅
+1. ✅ E2E tests completed (5m41s runtime, SUCCESS)
+2. ✅ All 20 CI checks verified passing
+3. ✅ Release notes verified complete (`docs/release-notes/v2.2.0.md`)
+4. ✅ Test report verified complete (`docs/test-reports/v2.2.0.md`)
+5. ✅ User/admin manuals verified current
+6. ✅ CHANGELOG.md updated with v2.2.0 section
+7. ✅ Milestone v2.2.0 verified closed (0 open, 6 closed)
+8. ✅ Release-gate assessment recorded in Newt history
+
+### Release Decision
+**v2.2.0 — APPROVED FOR RELEASE (Maintenance Patch)**
+
+All product-gate requirements satisfied. Version upgrade: 2.1.0 → 2.2.0
+
+### Technical Blocker ✅ Resolved
+PR #1623 was blocked by GitHub ruleset: "A conversation must be resolved"
+- Root cause: two addressed Copilot review threads on outdated comments remained unresolved
+- Resolution: Ripley verified the fixes, resolved the stale threads, and merged PR #1623 into `dev`
+- Merge completed: 2026-06-03T22:22:32Z
+
+### Path Forward
+1. Execute phase 2-5 release workflow (release metadata PR → dev→main release PR → tag v2.2.0)
+2. Start Ralph loop for v2.3 milestone after v2.2.0 is released
+
+### Files Modified
+- `CHANGELOG.md` — Added v2.2.0 section with 6 issues
+- `.squad/agents/newt/history.md` — This session notes

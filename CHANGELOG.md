@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-06-03
+
+### Fixed
+
+- **Prod overlay volume migration (Phase 1c)** — Removes lingering bind-mount `driver_opts` from `docker/compose.prod.yml` that were overriding Docker-managed volume declarations. Completes the volume migration work started in Phase 1a (#1616)
+- **Solr-init replication factor safety cap** — Inline heredoc solr-init entrypoint now caps `replicationFactor` to `EXPECTED_NODES`, preventing collection health from going RED on single-node deployments with stale config (#1544)
+- **E2E CI 429 rate-limit failures** — Eliminates chronic Playwright global-setup rate-limit (429) failures by reusing pre-minted `E2E_API_TOKEN` from CI workflow instead of re-authenticating (#1583)
+- **Installer security alert** — Resolved GHAS alert #233 (`py/clear-text-logging-sensitive-data`) by renaming sensitive local variables to remove sensitive substrings, preserving user-facing output (#1576)
+
+### Changed
+
+- **E2E test skeleton suites** — New E2E test coverage for thumbnail metadata, document download, and error recovery scenarios, with deterministic fixtures and JSON run summary artifacts (#1623)
+- **Document-indexer test robustness** — Real-library tests now skip gracefully when local fixtures are unavailable, keeping CI and developer environments stable (#1617)
+
+### Dependencies
+
+- **CI infrastructure token refresh** — Updated `COPILOT_ASSIGN_TOKEN` (expired PAT replaced), restoring Copilot issue auto-assignment workflow (#1574)
+
+### Breaking Changes
+
+None. Existing prod-overlay deployments should review the volume migration steps in upgrade instructions before restarting the stack.
+
 ## [2.1.0] — 2026-04-21
 
 ### Added
