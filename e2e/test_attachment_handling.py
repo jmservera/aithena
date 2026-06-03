@@ -76,10 +76,10 @@ def api_available(api_url: str) -> None:
         )
 
 
-class TestAttachmentExtraction:
+class TestDocumentStorageMetadata:
     """Validate document metadata indexing and retrieval."""
 
-    def test_pdf_with_attachments_indexed(
+    def test_basic_pdf_indexes_without_attachment_metadata(
         self,
         solr_url: str,
         indexed_fixture_doc: str,
@@ -95,7 +95,7 @@ class TestAttachmentExtraction:
         assert doc.get("title_s"), "title_s should be populated for indexed documents."
         assert "attachment_count" not in doc, "Attachment metadata should not be populated for basic PDFs."
 
-    def test_attachment_files_extracted_to_storage(
+    def test_indexed_pdf_file_path_is_available_on_disk(
         self,
         solr_url: str,
         indexed_fixture_doc: str,

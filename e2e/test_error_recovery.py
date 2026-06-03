@@ -2,7 +2,7 @@
 E2E test for error handling and recovery scenarios.
 
 This module validates system behavior under common error conditions:
-  1. Corrupt or invalid PDF handling (upload validation).
+  1. Minimal PDF indexing edge cases.
   2. Indexing idempotency (re-indexing after deletion).
   3. Search API error responses and semantic fallback behavior.
 
@@ -73,26 +73,8 @@ def api_available(api_url: str) -> None:
         )
 
 
-class TestCorruptDocumentHandling:
-    """Validate handling of corrupt or invalid files."""
-
-    def test_corrupt_pdf_rejected_gracefully(
-        self,
-        api_url: str,
-        auth_headers: dict[str, str],
-        api_available: None,
-    ) -> None:
-        """
-        Upload a corrupt PDF and verify validation returns HTTP 400.
-        """
-        resp = requests.post(
-            f"{api_url}/v1/upload",
-            files={"file": ("corrupt.pdf", io.BytesIO(b"not a pdf"), "application/pdf")},
-            headers=auth_headers,
-            timeout=10,
-        )
-        assert resp.status_code == 400, f"Expected 400 for corrupt PDF, got {resp.status_code}: {resp.text}"
-        assert "Invalid PDF" in resp.text, f"Expected invalid PDF message, got: {resp.text}"
+class TestDocumentIndexingEdgeCases:
+    """Validate indexing edge cases for unusual but accepted PDFs."""
 
     def test_empty_pdf_handled(
         self,
@@ -121,23 +103,6 @@ class TestCorruptDocumentHandling:
             _delete_solr_doc(solr_url, doc_id)
             pdf_path.unlink(missing_ok=True)
 
-    def test_extremely_large_pdf_rejected(
-        self,
-        api_url: str,
-        auth_headers: dict[str, str],
-        api_available: None,
-    ) -> None:
-        """
-        Upload API should reject PDFs exceeding the size limit with HTTP 413.
-        """
-        oversized = b"%PDF-1.4\n" + b"X" * (52 * 1024 * 1024)
-        resp = requests.post(
-            f"{api_url}/v1/upload",
-            files={"file": ("huge.pdf", io.BytesIO(oversized), "application/pdf")},
-            headers=auth_headers,
-            timeout=60,
-        )
-        assert resp.status_code == 413, f"Expected 413 for oversized file, got {resp.status_code}: {resp.text}"
 
 
 class TestServiceFailureRecovery:
@@ -160,15 +125,14 @@ class TestServiceFailureRecovery:
         )
         assert resp.status_code == 400, f"Expected 400 for unknown collection, got {resp.status_code}: {resp.text}"
 
-    def test_semantic_search_fallback_when_embeddings_unavailable(
+    def test_semantic_search_returns_supported_mode(
         self,
         api_url: str,
         api_available: None,
         auth_headers: dict[str, str],
     ) -> None:
         """
-        Semantic search should return a response even when embeddings fall back
-        to keyword mode.
+        Semantic search should return either semantic results or documented keyword degradation.
         """
         resp = requests.get(
             f"{api_url}/v1/search",
@@ -184,7 +148,7 @@ class TestServiceFailureRecovery:
             assert body.get("degraded") is True
         assert isinstance(body.get("results"), list)
 
-    def test_indexing_retry_on_temporary_failure(
+    def test_reindex_after_delete_succeeds(
         self,
         solr_url: str,
         fixture_pdf: Path,

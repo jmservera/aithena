@@ -335,7 +335,6 @@ def test_upload_rate_limit_disabled_allows_repeated_uploads(
                 files={"file": (f"disabled-limit-{index}.pdf", valid_pdf_content, "application/pdf")},
             )
 
-            assert response.status_code != 429
             assert response.status_code == 200
             assert response.json()["status"] == "accepted"
     finally:

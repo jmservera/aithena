@@ -1,7 +1,7 @@
 """
-E2E test for thumbnail generation and retrieval.
+E2E test for thumbnail metadata propagation.
 
-This module validates thumbnail metadata handling:
+This module validates thumbnail URL metadata handling:
   1. Index a PDF into Solr (same path as document-indexer).
   2. Store a thumbnail URL for the document (atomic Solr update).
   3. Verify solr-search returns the correct thumbnail_url field.
@@ -172,7 +172,7 @@ def api_available(api_url: str) -> None:
         )
 
 
-class TestThumbnailGeneration:
+class TestThumbnailMetadata:
     """Validate thumbnail metadata handling during document indexing."""
 
     def test_thumbnail_url_stored_after_indexing(
@@ -193,7 +193,7 @@ class TestThumbnailGeneration:
         )
         assert expected.endswith(".thumb.jpg"), f"Thumbnail path should end with .thumb.jpg, got {expected!r}"
 
-    def test_thumbnail_generated_for_multipage_pdf(
+    def test_multipage_pdf_thumbnail_url_metadata_stored(
         self,
         solr_url: str,
         test_library_root: Path,
