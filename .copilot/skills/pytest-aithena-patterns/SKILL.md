@@ -96,6 +96,37 @@ def test_search_returns_results(client):
 
 Mock at the service boundary (Solr, Redis, RabbitMQ), not at the HTTP layer.
 
+## Pattern 6: E2E Rate-Limit Parity
+
+Upload-heavy E2E suites can hit endpoint-specific limiters even when the shared search limiter is disabled. When CI sets `RATE_LIMIT_REQUESTS_PER_MINUTE=0`, either endpoint-specific limits should fall back to that value or CI/compose must set the endpoint-specific env var explicitly too.
+
+For `/v1/upload`, keep these aligned:
+
+```yaml
+RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
+UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
+```
+
+Add unit coverage for both the shared default and endpoint-specific override so future config changes do not reintroduce CI-only 429 failures.
+
+## Pattern 7: Config Reload Env Restoration
+
+When a test mutates environment variables and reloads `config`, save the original env values first and restore them before the final cleanup reload. Do not rely on `monkeypatch` teardown after test return, because module-level `settings` must match the post-test environment during the cleanup reload.
+
+```python
+original_value = os.environ.get("FEATURE_FLAG")
+monkeypatch.setenv("FEATURE_FLAG", "1")
+try:
+    reloaded_config = importlib.reload(config)
+    assert reloaded_config.settings.feature_flag == "1"
+finally:
+    if original_value is None:
+        monkeypatch.delenv("FEATURE_FLAG", raising=False)
+    else:
+        monkeypatch.setenv("FEATURE_FLAG", original_value)
+    importlib.reload(config)
+```
+
 ## Service-Specific Quirks
 
 | Service | Quirk | Workaround |

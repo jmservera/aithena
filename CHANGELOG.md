@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-06-03
+
+v2.2.1 supersedes the published v2.2.0 tag, which predates the final E2E skeleton and release metadata commits. The complete v2.2.0 release content is repeated here intentionally so the patch release notes match the corrected release history.
+
+### Fixed
+
+- **Prod overlay volume migration (Phase 1c)** — Removes lingering bind-mount `driver_opts` from `docker/compose.prod.yml` that were overriding Docker-managed volume declarations. Completes the volume migration work started in Phase 1a (#1616)
+- **Solr-init replication factor safety cap** — Inline heredoc solr-init entrypoint now caps `replicationFactor` to `EXPECTED_NODES`, preventing collection health from going RED on single-node deployments with stale config (#1544)
+- **E2E CI 429 rate-limit failures** — Eliminates chronic Playwright global-setup rate-limit (429) failures by reusing pre-minted `E2E_API_TOKEN` from CI workflow instead of re-authenticating (#1583)
+- **Installer security alert** — Resolved GHAS alert #233 (`py/clear-text-logging-sensitive-data`) by renaming sensitive local variables to remove sensitive substrings, preserving user-facing output (#1576)
+
+### Changed
+
+- **E2E test skeleton suites** — New E2E test coverage for thumbnail metadata, document download, and error recovery scenarios, with deterministic fixtures and JSON run summary artifacts (#1623)
+- **Document-indexer test robustness** — Real-library tests now skip gracefully when local fixtures are unavailable, keeping CI and developer environments stable (#1617)
+- **Patch release test improvements** — Carries the approved v2.2.0 release content forward as v2.2.1 after the final E2E skeleton and metadata/test-gate improvements landed in release history (#1623, #1624)
+
+### Dependencies
+
+- **CI infrastructure token refresh** — Updated `COPILOT_ASSIGN_TOKEN` (expired PAT replaced), restoring Copilot issue auto-assignment workflow (#1574)
+
+### Breaking Changes
+
+No API or schema breaking changes. Deployment upgrade note: existing prod-overlay deployments that previously relied on bind-mounted volume paths must review the volume migration and backup steps before restarting, because storage backing changes can require manual data migration.
+
+## [2.2.0] — 2026-06-03
+
+### Fixed
+
+- **Prod overlay volume migration (Phase 1c)** — Removes lingering bind-mount `driver_opts` from `docker/compose.prod.yml` that were overriding Docker-managed volume declarations. Completes the volume migration work started in Phase 1a (#1616)
+- **Solr-init replication factor safety cap** — Inline heredoc solr-init entrypoint now caps `replicationFactor` to `EXPECTED_NODES`, preventing collection health from going RED on single-node deployments with stale config (#1544)
+- **E2E CI 429 rate-limit failures** — Eliminates chronic Playwright global-setup rate-limit (429) failures by reusing pre-minted `E2E_API_TOKEN` from CI workflow instead of re-authenticating (#1583)
+- **Installer security alert** — Resolved GHAS alert #233 (`py/clear-text-logging-sensitive-data`) by renaming sensitive local variables to remove sensitive substrings, preserving user-facing output (#1576)
+
+### Changed
+
+- **E2E test skeleton suites** — New E2E test coverage for thumbnail metadata, document download, and error recovery scenarios, with deterministic fixtures and JSON run summary artifacts (#1623)
+- **Document-indexer test robustness** — Real-library tests now skip gracefully when local fixtures are unavailable, keeping CI and developer environments stable (#1617)
+
+### Dependencies
+
+- **CI infrastructure token refresh** — Updated `COPILOT_ASSIGN_TOKEN` (expired PAT replaced), restoring Copilot issue auto-assignment workflow (#1574)
+
+### Breaking Changes
+
+- No API or schema breaking changes.
+- Deployment upgrade note: existing prod-overlay deployments that previously relied on bind-mounted volume paths must review the volume migration and backup steps before restarting, because storage backing changes can require manual data migration.
+
 ## [2.1.0] — 2026-04-21
 
 ### Added

@@ -58,8 +58,7 @@ def _mock_solr_ok(mock_get: MagicMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_request(forwarded_for: str | None = None,
-                  client_host: str | None = "192.168.1.1") -> MagicMock:
+def _make_request(forwarded_for: str | None = None, client_host: str | None = "192.168.1.1") -> MagicMock:
     """Create a mock Request with configurable proxy headers."""
     mock_request = MagicMock(spec=Request)
 

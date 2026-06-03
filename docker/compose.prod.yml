@@ -749,107 +749,22 @@ volumes:
   thumbnail-data:
 
   rabbitmq-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/rabbitmq-data"
 
   redis-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/redis"
   document-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "${BOOKS_PATH:-/data/booklibrary}"
   collections-db:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "${COLLECTIONS_DB_DIR:-/source/volumes/collections-db}"
   solr-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/solr-data"
   solr-data2:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/solr-data2"
   solr-data3:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/solr-data3"
   zoo-data1_logs:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data1/logs"
   zoo-data1_data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data1/data"
   zoo-data1_datalog:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data1/datalog"
   zoo-data2_logs:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data2/logs"
   zoo-data2_data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data2/data"
   zoo-data2_datalog:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data2/datalog"
   zoo-data3_logs:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data3/logs"
   zoo-data3_data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data3/data"
   zoo-data3_datalog:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data3/datalog"
   zoo-backup:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-backup"
 networks:
   default:

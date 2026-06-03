@@ -136,9 +136,7 @@ def _request_list_users(client: TestClient, headers: dict[str, str], **_: Any) -
     return client.get("/v1/auth/users", headers=headers)
 
 
-def _request_update_user(
-    client: TestClient, headers: dict[str, str], *, target_id: int, **_: Any
-) -> Any:
+def _request_update_user(client: TestClient, headers: dict[str, str], *, target_id: int, **_: Any) -> Any:
     return client.put(
         f"/v1/auth/users/{target_id}",
         json={"username": "updated-target"},
@@ -146,9 +144,7 @@ def _request_update_user(
     )
 
 
-def _request_delete_user(
-    client: TestClient, headers: dict[str, str], *, target_id: int, **_: Any
-) -> Any:
+def _request_delete_user(client: TestClient, headers: dict[str, str], *, target_id: int, **_: Any) -> Any:
     return client.delete(f"/v1/auth/users/{target_id}", headers=headers)
 
 
@@ -272,9 +268,7 @@ def test_rbac_access_control(
 
     # Apply mocks only for successful requests that reach business logic
     if endpoint_id in _NEEDS_SOLR_MOCK and expected_status == 200:
-        patches.append(
-            patch("main.query_solr", return_value={"response": {"docs": [], "numFound": 0, "start": 0}})
-        )
+        patches.append(patch("main.query_solr", return_value={"response": {"docs": [], "numFound": 0, "start": 0}}))
     if endpoint_id in _NEEDS_UPLOAD_MOCK and expected_status == 200:
         object.__setattr__(settings, "upload_dir", tmp_path / "uploads")
         patches.append(patch("main._publish_to_queue"))
@@ -285,8 +279,7 @@ def test_rbac_access_control(
         resp = _REQUEST_FN[endpoint_id](client, headers, target_id=target_id)
 
         assert resp.status_code == expected_status, (
-            f"{endpoint_id} with role={role!r}: expected {expected_status}, "
-            f"got {resp.status_code}. Body: {resp.text}"
+            f"{endpoint_id} with role={role!r}: expected {expected_status}, got {resp.status_code}. Body: {resp.text}"
         )
 
         if expected_status == 403:
@@ -310,9 +303,7 @@ def test_rbac_access_control(
 class TestUpdateUserSelfEdit:
     """PUT /v1/auth/users/{id}: non-admin users CAN update their own profile."""
 
-    def test_user_can_update_own_username(
-        self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]
-    ) -> None:
+    def test_user_can_update_own_username(self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]) -> None:
         user = seeded_users["user"]
         headers = _auth_header(user)
         resp = client.put(
@@ -336,9 +327,7 @@ class TestUpdateUserSelfEdit:
         assert resp.status_code == 200
         assert resp.json()["username"] == "viewer-new-name"
 
-    def test_user_cannot_change_own_role(
-        self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]
-    ) -> None:
+    def test_user_cannot_change_own_role(self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]) -> None:
         user = seeded_users["user"]
         headers = _auth_header(user)
         resp = client.put(
@@ -353,9 +342,7 @@ class TestUpdateUserSelfEdit:
 class TestDeleteUserEdgeCases:
     """DELETE /v1/auth/users/{id}: admin cannot self-delete."""
 
-    def test_admin_cannot_delete_self(
-        self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]
-    ) -> None:
+    def test_admin_cannot_delete_self(self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]) -> None:
         admin = seeded_users["admin"]
         headers = _auth_header(admin)
         resp = client.delete(f"/v1/auth/users/{admin.id}", headers=headers)
@@ -366,9 +353,7 @@ class TestDeleteUserEdgeCases:
 class TestRbacResponseShape:
     """Verify 403 and 401 responses have correct structure."""
 
-    def test_403_returns_json_with_detail(
-        self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]
-    ) -> None:
+    def test_403_returns_json_with_detail(self, client: TestClient, seeded_users: dict[str, AuthenticatedUser]) -> None:
         viewer = seeded_users["viewer"]
         headers = _auth_header(viewer)
         resp = client.post(
@@ -401,9 +386,7 @@ class TestRbacResponseShape:
             headers=headers,
         )
         resp_list = client.get("/v1/auth/users", headers=headers)
-        resp_delete = client.delete(
-            f"/v1/auth/users/{seeded_users['target'].id}", headers=headers
-        )
+        resp_delete = client.delete(f"/v1/auth/users/{seeded_users['target'].id}", headers=headers)
 
         for resp, name in [
             (resp_register, "register"),

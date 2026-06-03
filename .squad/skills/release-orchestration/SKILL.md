@@ -17,6 +17,19 @@ Apply when planning releases, coordinating multi-release delivery, managing larg
 
 **Core principle:** Release docs must be merged to `dev` BEFORE creating the version tag.
 
+
+### Tag-Collision Preflight
+
+Before dev→main or tagging, verify the target tag does not already exist and no GitHub Release has been published for it:
+
+```bash
+git fetch origin --tags
+git rev-parse vX.Y.Z^{}
+gh release view vX.Y.Z
+```
+
+If the tag/release already exists but does not point at the final release commit that contains the release docs and metadata, stop. Do not move a published tag without an explicit release-remediation decision; ask Newt to approve a new patch version or a tag repair plan.
+
 ### Release Sequence
 1. Close all milestone issues
 2. Trigger `release-docs` workflow (generates release notes + test report)

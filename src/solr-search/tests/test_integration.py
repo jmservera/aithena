@@ -713,8 +713,8 @@ def _similar_happy_side_effect() -> list[MagicMock]:
     """Return mock responses for the 3 Solr calls in the happy path."""
     return [
         _make_mock_response([SOURCE_CHUNK_WITH_EMBEDDING]),  # 1. fetch first chunk
-        _make_mock_response(SIMILAR_CHUNK_HITS),             # 2. kNN search
-        _make_mock_response(SIMILAR_PARENT_DOCS),            # 3. fetch parent metadata
+        _make_mock_response(SIMILAR_CHUNK_HITS),  # 2. kNN search
+        _make_mock_response(SIMILAR_PARENT_DOCS),  # 3. fetch parent metadata
     ]
 
 
@@ -867,8 +867,8 @@ def test_similar_returns_404_when_no_chunks_found(mock_solr_post: MagicMock) -> 
     """If the parent exists but has no indexed chunks yet, return 404."""
     client = get_client()
     mock_solr_post.side_effect = [
-        _make_mock_response([]),                  # no chunks
-        _make_mock_response([SOURCE_PARENT_DOC]), # parent exists
+        _make_mock_response([]),  # no chunks
+        _make_mock_response([SOURCE_PARENT_DOC]),  # parent exists
     ]
 
     response = client.get("/books/source-doc-id/similar")
@@ -1301,11 +1301,7 @@ def test_admin_containers_endpoint_happy_path(
                 "cluster": {
                     "live_nodes": ["node1", "node2", "node3"],
                     "collections": {
-                        "books": {
-                            "shards": {
-                                "shard1": {"replicas": {"replica1": {"index": {"numDocs": 76}}}}
-                            }
-                        }
+                        "books": {"shards": {"shard1": {"replicas": {"replica1": {"index": {"numDocs": 76}}}}}}
                     },
                 }
             }

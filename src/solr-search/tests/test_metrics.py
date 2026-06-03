@@ -64,14 +64,11 @@ def test_metrics_endpoint_returns_prometheus_format(
     assert "# HELP aithena_search_requests_total Total number of search requests by mode." in lines
     assert "# TYPE aithena_search_requests_total counter" in lines
     assert 'aithena_search_requests_total{mode="keyword"} 1' in lines
-    assert 'aithena_indexing_queue_depth 7' in lines
-    assert 'aithena_indexing_failures_total 1' in lines
-    assert 'aithena_embeddings_available 1' in lines
-    assert 'aithena_solr_live_nodes 3' in lines
-    assert any(
-        line.startswith('aithena_search_latency_seconds_bucket{mode="keyword",le="0.25"} 1')
-        for line in lines
-    )
+    assert "aithena_indexing_queue_depth 7" in lines
+    assert "aithena_indexing_failures_total 1" in lines
+    assert "aithena_embeddings_available 1" in lines
+    assert "aithena_solr_live_nodes 3" in lines
+    assert any(line.startswith('aithena_search_latency_seconds_bucket{mode="keyword",le="0.25"} 1') for line in lines)
 
     for line in lines:
         if line.startswith("# "):

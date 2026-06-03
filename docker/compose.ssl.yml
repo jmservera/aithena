@@ -8,9 +8,6 @@
 # Usage (production / GHCR images):
 #   docker compose -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
 #
-# Prerequisites:
-#   sudo mkdir -p /source/volumes/certbot-data/{conf,www}
-#
 # The base compose files run HTTP-only on port 80. This overlay adds:
 #   - Port 443 on nginx
 #   - Certbot volume mounts on nginx (for ACME challenges and TLS certs)
@@ -47,14 +44,4 @@ services:
 
 volumes:
   certbot-data-conf:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/certbot-data/conf"
   certbot-data-www:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/certbot-data/www"

@@ -61,9 +61,7 @@ class TestRedisOverrideStore:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_override_written_on_single_edit(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_override_written_on_single_edit(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         redis_mock = MagicMock()
         with patch("main._get_admin_redis_client", return_value=redis_mock):
@@ -92,9 +90,7 @@ class TestRedisOverrideStore:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_override_maps_all_solr_fields(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_override_maps_all_solr_fields(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         """Updating all five fields stores every mapped Solr field."""
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         redis_mock = MagicMock()
@@ -117,9 +113,7 @@ class TestRedisOverrideStore:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_batch_stores_one_override_per_document(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_batch_stores_one_override_per_document(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         redis_mock = MagicMock()
         ids = ["batch-a", "batch-b", "batch-c"]
@@ -145,9 +139,7 @@ class TestSolrFieldMapping:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_title_maps_to_title_s_and_title_t(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_title_maps_to_title_s_and_title_t(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         with patch("main._get_admin_redis_client", return_value=MagicMock()):
             get_client().patch(SINGLE_ENDPOINT, json={"title": "Mapped"})
@@ -159,9 +151,7 @@ class TestSolrFieldMapping:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_author_maps_to_author_s_and_author_t(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_author_maps_to_author_s_and_author_t(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         with patch("main._get_admin_redis_client", return_value=MagicMock()):
             get_client().patch(SINGLE_ENDPOINT, json={"author": "Asimov"})
@@ -173,9 +163,7 @@ class TestSolrFieldMapping:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_year_maps_to_year_i(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_year_maps_to_year_i(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         with patch("main._get_admin_redis_client", return_value=MagicMock()):
             get_client().patch(SINGLE_ENDPOINT, json={"year": 1965})
@@ -186,9 +174,7 @@ class TestSolrFieldMapping:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_category_maps_to_category_s(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_category_maps_to_category_s(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         with patch("main._get_admin_redis_client", return_value=MagicMock()):
             get_client().patch(SINGLE_ENDPOINT, json={"category": "Fantasy"})
@@ -199,9 +185,7 @@ class TestSolrFieldMapping:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_series_maps_to_series_s(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_series_maps_to_series_s(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         with patch("main._get_admin_redis_client", return_value=MagicMock()):
             get_client().patch(SINGLE_ENDPOINT, json={"series": "Foundation"})
@@ -221,9 +205,7 @@ class TestSolrUnavailability:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_single_edit_solr_timeout(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_single_edit_solr_timeout(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         import requests as req_lib
 
         mock_post.side_effect = req_lib.Timeout("timed out")
@@ -234,9 +216,7 @@ class TestSolrUnavailability:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_single_edit_solr_connection_error(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_single_edit_solr_connection_error(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         import requests as req_lib
 
         mock_post.side_effect = req_lib.ConnectionError("refused")
@@ -247,9 +227,7 @@ class TestSolrUnavailability:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_batch_edit_continues_on_solr_failure(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_batch_edit_continues_on_solr_failure(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         """Batch edit should continue processing remaining docs when one Solr call fails."""
         import requests as req_lib
 
@@ -287,9 +265,7 @@ class TestRedisUnavailability:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_single_edit_redis_down_returns_503(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_single_edit_redis_down_returns_503(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         redis_mock = MagicMock()
         redis_mock.set.side_effect = ConnectionError("Redis down")
@@ -300,9 +276,7 @@ class TestRedisUnavailability:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_batch_edit_redis_failure_reports_partial(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_batch_edit_redis_failure_reports_partial(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         """Batch edit continues after Redis failure on one document."""
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         count = 0
@@ -338,9 +312,7 @@ class TestConcurrentEdits:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_last_write_wins_on_single_document(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_last_write_wins_on_single_document(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         """Two sequential edits to the same doc — last value is what Solr receives last."""
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         redis_mock = MagicMock()
@@ -359,9 +331,7 @@ class TestConcurrentEdits:
     @patch("main._get_redis_pool")
     @patch("main._raw_solr_query", return_value=_solr_found())
     @patch("main.requests.post")
-    def test_batch_and_single_edit_same_document(
-        self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock
-    ) -> None:
+    def test_batch_and_single_edit_same_document(self, mock_post: MagicMock, _q: MagicMock, _p: MagicMock) -> None:
         """A batch edit followed by a single edit — both succeed independently."""
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
         redis_mock = MagicMock()

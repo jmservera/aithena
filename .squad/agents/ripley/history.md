@@ -334,3 +334,94 @@ Consolidated skills from 38 to 24 (14 eliminated, target was ≤35). Five merge 
 5. **FastAPI** (2 → 1): `fastapi-auth-patterns`, `fastapi-query-params` → `fastapi-patterns`
 
 Each merged skill preserves key patterns, examples, and anti-patterns from all sources while removing duplication. All merged skills are under 300 lines.
+
+## Learnings
+
+### Project Review (2026-05-12)
+
+- **v2.1 shipped, but top-level docs lag behind.** `VERSION` and GitHub Releases are at `2.1.0`, and `CHANGELOG.md` covers the release well, but `README.md` still advertises `v1.9.1` / `v1.10.0` development state.
+- **Search architecture + capabilities are real shipped features.** `SEARCH_ARCHITECTURE` is implemented in `solr-search`, `/v1/capabilities` is live, UI capability gating is wired up, and the full `solr-search` test suite passes.
+- **Quantization naming is now a docs hazard.** The live env var is `VECTOR_QUANTIZATION`, not `EMBEDDING_QUANTIZATION`; stale naming would misconfigure deployments.
+- **Architecture docs need model/schema refresh.** `docs/architecture/solr-data-model.md` still describes 512-dim `distiluse` vectors, while code/schema use 768-dim `multilingual-e5-base` with optional byte-vector quantization.
+- **Auto-generated operational issues need lifecycle reconciliation.** Pre-release warning issues and heartbeat token issues can stay open after later clean runs or tagged releases, creating stale backlog noise unless a success path closes them.
+- **Immediate attention remains security-first.** Open GHAS issue #1519 is the only clearly current urgent issue from the active backlog snapshot.
+
+---
+
+## Dependabot Batch Sweep 2026-05-31
+
+### Context
+Batched 16 low/medium-risk Dependabot PRs into a single PR (#1584), merged to dev via squash.
+
+### Work Completed
+- Cherry-picked 16 dependency bumps across 6 services
+- Resolved lockfile conflicts for solr-search (uv.lock needed regeneration after stacking 4 bumps)
+- Fixed stale CodeQL version comments (v3.28.14 → v4.35.5) flagged by copilot-pull-request-reviewer
+- Created tracking issues: #1585 (Python 3.14 eval), #1586 (Node 26 eval)
+- Commented on 5 held-back PRs with reasons and tracking links
+- Closed all 16 superseded PRs with back-reference
+
+### Learnings
+
+### Release Coordination After PR #1623 — 2026-06-03
+
+- PR #1623 reached green CI and all review threads were resolved before merge into `dev`.
+- Newt's release gate approved v2.2.0 after PR #1623, and release metadata PR #1624 merged to `dev` with `VERSION` and `CHANGELOG.md` updated.
+- Release stopped before dev→main/tag because `v2.2.0` already exists and is published on an older `dev` commit; the tag is an ancestor of current `dev`, but it does not contain the final release metadata and PR #1623 history.
+- Do not move the published tag ad hoc. Require Newt approval for an alternate patch version (likely v2.2.1) or an explicit tag-remediation decision before continuing release mechanics.
+- **Lockfile conflicts are routine**: When stacking multiple dependency bumps for the same service, cherry-picking creates lockfile conflicts. Solution: accept theirs, then `uv lock` once at the end.
+- **npm lockfile was auto-consistent**: Despite 6 npm dependency cherry-picks, the package-lock.json auto-merged cleanly. Only uv.lock needed regeneration.
+- **Rulesets ≠ branch protection**: `--admin` does NOT bypass repository rulesets. Must satisfy required status checks + resolve conversations.
+- **E2E flake count**: 4 reruns across 2 workflow runs. Flake #1583 remains chronic.
+- **Review threads from code scanning**: Each push triggers new code-scanning review threads that must be resolved before merge. The zizmor + CodeQL version comment issues were legitimate — the dependabot commit had stale inline version annotations.
+- **Strict mode + rulesets = must merge base**: When "require up to date" is in a ruleset, must `git merge origin/dev` into the branch and push before merging. Cannot bypass with --admin.
+- **Pre-existing test failures**: document-indexer has 4 failing metadata tests on dev — not caused by dependency bumps, predates this sweep.
+
+### Reskill Retrospective (2026-05-31, Consolidation Pass)
+
+**Status:** ✅ Complete
+
+Consolidated learnings from Ralph 3-round sweep (E2E 429 fix #1588, 4 Docker base bumps, 17-bump batch sweep PR #1608):
+
+1. **Skills:** Bumped `e2e-auth-reuse` from undocumented to **medium confidence** (successful CI validation + production code path in use). Cross-linked `dependabot-batch-merge` (low, tactical) ↔ `dependabot-batch-sweep` (high, strategic) to clarify scope. Warned in both skills about manifest-conflict gotcha that silently reverts bumps when using `--theirs`.
+
+2. **Agent Histories:** Verified that Parker, Lambert, and Brett all have "Local-Test-First Directive (2026-05-31, Round 2)" properly appended — Juanma's requirement that all squad agents test locally before pushing (using available docker + playwright) is now cross-documented.
+
+3. **Decisions:** No contradictions found in `.squad/decisions.md`. All three new items from this session ("Dependabot Batch Sweep 2026-05-31", "E2E Auth Token Reuse Pattern", "Always Test Locally Before Pushing") are clearly documented and non-overlapping.
+
+4. **Skills Created/Merged:** NO new skills created. The worktree batching pattern is already covered in `dependabot-batch-sweep`; local-test-first is a directive (not a skill), captured in decisions.md. Focused on quality over quantity — only 28 skills total, down from 38 in prior consolidation.
+
+5. **Key Pattern Captured:** The manifest-conflict gotcha (`git checkout --theirs` silently reverts prior bumps during multi-branch merges) is now flagged at skill level with explicit cross-reference. This pattern recurred in PR #1608 despite being documented in Parker's history — reinforces that escalating low-confidence patterns to skills + cross-linking prevents re-discovery.
+
+---
+
+### PR #1580 Review & Merge (2026-05-31, Ralph PR-Review Round)
+
+**Status:** ✅ Complete
+
+Reviewed jmservera installer false-positive fix (PR #1580). Verdict: **APPROVE** after rebase. 
+
+- **Background:** PR had legitimate content but chronic CI 429 failures masked the signal. Root cause was separate (rate-limit race in E2E auth flow, fixed by #1588).
+- **Action:** Rebased branch onto current dev, force-pushed, all checks passed.
+- **Merge:** Squash-merged to dev (commit c3dae90).
+- **Outcome:** Installer fix shipped; dependent work (v2.2.0 changes) can proceed.
+
+This review exemplifies the "separate signal from noise" principle: the PR itself was good; the CI blocking was infrastructure (not code). Rebasing isolated the two concerns cleanly.
+
+## 2026-05-31 — PR #1614 Review (Phase 1b Volume Migration)
+
+**Context:** Phase 1b of installer wizard (#1578) — converting Solr, ZooKeeper, collections-db, and certbot volumes from bind mounts to Docker-managed volumes.
+
+**Review findings:**
+- ✅ Volume migration technically correct: infrastructure state moved to Docker volumes, user data (BOOKS_PATH) preserved as bind mount
+- ✅ start.sh template SSL bootstrap logic correctly updated to check Docker volumes instead of filesystem paths
+- ✅ .env.example completeness: added missing Solr credentials (SOLR_ADMIN_USER/PASS, SOLR_READONLY_USER/PASS)
+- ✅ CI validation: 18/19 checks passing, E2E still running at review time
+- ✅ Follows approved design per `.squad/decisions.md`
+
+**Decision:** APPROVED — Phase 1b is merge-ready. Recommended merge when E2E completes (if E2E fails, likely known flake #1583).
+
+**Learnings:**
+1. Infrastructure-only changes (YAML config, installer templates) carry low risk when CI unit tests pass — E2E validation is defense-in-depth rather than critical gate for volume changes.
+2. SSL certificate bootstrap logic for Docker-managed volumes requires checking volume existence + running test container to probe volume contents — cleaner than filesystem path checks.
+3. Missing .env.example entries for credentials referenced in code is a documentation completeness issue — caught during volume migration review, not original credential implementation PR.

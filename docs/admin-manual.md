@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), and [v2.0.0 Deployment Updates](#deployment-updates-for-v200) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the prod-overlay volume migration work, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, and fixes a CodeQL security alert in the installer. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), and [v2.2.0 Deployment Updates](#deployment-updates-for-v220) sections below.
 
 ## System architecture overview
 
@@ -5021,3 +5021,137 @@ v2.0.0 publishes **5 container images** (down from 6 in v1.x):
 - [ ] nginx `/admin/` proxies to `aithena-ui`, not old Streamlit container
 - [ ] Streamlit health check URLs updated or removed from monitoring
 - [ ] `start.sh` regenerated (or compose commands updated) after installer re-run
+
+## Deployment Updates for v2.2.0
+
+### Summary
+
+v2.2.0 is a **maintenance release** with volume-migration guidance for operators. Key changes affecting operators:
+
+1. **Prod overlay volume migration (Phase 1c, #1616)** — `docker/compose.prod.yml` is updated to use Docker-managed volumes for the remaining prod-overlay storage paths, and the release notes now reflect that migration work.
+2. **Solr-init replication factor cap (#1544)** — Single-node deployments with a stale `SOLR_REPLICATION_FACTOR` value higher than 1 will no longer produce a RED collection on startup.
+3. **Existing installer path remains the current one** — This release does not add a new remote bootstrap script; continue using the repo's current installer flow (`python3 -m installer` / `python3 installer/setup.py`).
+
+**Breaking Changes:** Existing prod-overlay deployments that rely on bind-mounted storage should expect a manual migration step if they want to preserve data. Do not assume existing bind-mounted state is carried forward automatically.
+
+### Prod Overlay Volume Config (Phase 1c)
+
+**Phase 1c** (issue #1616) updates the prod overlay volume declarations to match the current repo state. Review the overlay before upgrading, because the release notes are intentionally conservative: existing bind-mounted state is not automatically carried into Docker-managed volumes.
+
+**If you use `docker/compose.prod.yml`:**
+
+1. Pull the updated compose file:
+   ```bash
+   git pull origin main
+   ```
+
+2. Validate the merged config and confirm the storage backing you want to keep:
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A3 -E 'document-data:|rabbitmq-data:|redis-data:'
+   ```
+
+3. If you want to preserve existing data, back it up before restarting the stack.
+
+**Migration for existing deployments:**
+
+⚠️ **Important:** Existing deployments that rely on bind-mounted directories (for example `/data/booklibrary` or `/source/volumes/*`) must migrate data manually if you want to keep it. The overlay change does not rewrite or copy old bind-mounted data for you.
+
+**Option A: Preserve existing data (recommended for production)**
+
+1. Back up your data before upgrading:
+   ```bash
+   # Example: back up document library
+   sudo tar czf ~/document-data-backup-$(date +%Y%m%d).tar.gz /data/booklibrary
+
+   # Back up Solr indexes
+   sudo tar czf ~/solr-data-backup-$(date +%Y%m%d).tar.gz /source/volumes/solr-data*
+
+   # Back up ZooKeeper data
+   sudo tar czf ~/zoo-data-backup-$(date +%Y%m%d).tar.gz /source/volumes/zoo-data*
+   ```
+
+2. Upgrade to the new compose file, then restore your backups into the Docker-managed volumes you choose to keep. The compose change does not move old bind-mounted data for you, so the restore step must be done explicitly.
+
+**Option B: Fresh install (acceptable for dev/test environments)**
+
+Simply pull the new compose file and start the stack. All volumes will be created empty. You can then upload documents through the admin UI or place them in the Docker volume location.
+
+**Clean install on a fresh system:**
+
+No action required. Docker will automatically create all volumes when you start the stack for the first time.
+
+> **Note:** The base `docker-compose.yml` already uses Docker-managed volumes for `document-data`. This change only affects the `docker/compose.prod.yml` overlay which previously overrode it with a bind mount.
+
+### Single-Node Solr Deployments
+
+The `solr-init` inline entrypoint in `docker-compose.yml` now caps `SOLR_REPLICATION_FACTOR` to `SOLR_EXPECTED_NODES`, matching the existing safety logic in `docker/solr-init.sh`. No operator action is required. If you previously worked around the bug by manually setting `SOLR_REPLICATION_FACTOR=1` in your `.env`, you may leave that value — the cap will simply be a no-op.
+
+### Installer Path (Current Repo State)
+
+Use the existing installer flow documented in this repository:
+
+```bash
+python3 -m installer
+# or
+python3 installer/setup.py
+```
+
+The current installer path generates `.env`, auth storage, and `start.sh` for the existing Compose stack. Existing deployments can keep using the current manual `docker compose` workflow; re-running the installer is only needed when you want to regenerate runtime files or rotate credentials.
+
+### Upgrade Instructions
+
+**From v2.0.0 or v2.1.0 → v2.2.0:**
+
+1. **Pull new images:**
+   ```bash
+   docker compose pull
+   ```
+
+2. **Update compose files** (if using the prod overlay):
+   ```bash
+   git pull origin main
+   # or manually update docker/compose.prod.yml to remove driver_opts from rabbitmq-data and redis-data
+   ```
+
+3. **Validate prod overlay** (if applicable):
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A5 -B2 "rabbitmq-data\|redis-data"
+   ```
+
+4. **Restart services:**
+   ```bash
+   docker compose up -d
+   # or:
+   ./start.sh
+   ```
+
+5. **Verify:**
+   ```bash
+   curl -sf http://localhost/v1/health && echo "✅ API healthy"
+   curl -sf http://localhost/admin/ && echo "✅ Admin portal accessible"
+   ```
+
+**From v1.19.0 or earlier:**
+Follow the [v2.0.0 deployment notes](#deployment-updates-for-v200) first, then apply v2.2.0 steps above.
+
+### Configuration Changes
+
+| Change | File | Required action |
+|---|---|---|
+| Remove `driver_opts` from prod overlay volumes | `docker/compose.prod.yml` | **Required if using prod overlay.** Pull updated file or remove the `driver_opts` blocks manually from `rabbitmq-data` and `redis-data`. |
+
+### Data Migration
+
+**None required.** The Solr collection schema, index format, and auth database are unchanged.
+
+### Container Image Changes
+
+v2.2.0 publishes the existing service images used by the Compose stack:
+
+| Image | Status |
+|---|---|
+| `ghcr.io/jmservera/aithena-aithena-ui:2.2.0` | Existing |
+| `ghcr.io/jmservera/aithena-document-indexer:2.2.0` | Existing |
+| `ghcr.io/jmservera/aithena-document-lister:2.2.0` | Existing |
+| `ghcr.io/jmservera/aithena-embeddings-server:2.2.0` | Existing |
+| `ghcr.io/jmservera/aithena-solr-search:2.2.0` | Existing |

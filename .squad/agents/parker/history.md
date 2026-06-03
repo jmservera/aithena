@@ -103,6 +103,13 @@
 
 <!-- Append learnings below this line -->
 
+- **2026-06-03T21:25:25.755+00:00 (PR #1623):** `/v1/upload` has its own in-memory `upload_rate_limiter` in `src/solr-search/main.py`, so disabling the shared search limiter with `RATE_LIMIT_REQUESTS_PER_MINUTE=0` is not enough unless upload limiting reads the same CI default or `UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE=0` is set. E2E upload-heavy tests (`e2e/test_web_api_semantic.py`) can exhaust the old hard-coded 10/minute limit before semantic assertions run.
+- **2026-05-24 (#1544):** Inline Solr init replicationFactor handling in docker-compose.yml must mirror docker/solr-init.sh by clamping SOLR_REPLICATION_FACTOR to EXPECTED_NODES, not merely warning.
+### Installer Wizard Research Spike (#1578, 2026-05-24)
+
+Verified the current installer state for the v2.2.0 zero-dependency installer proposal: `installer/setup.py` is a host-Python wizard, base compose has 16 `/source/volumes/` bind-backed local volumes, SSL adds two certbot bind-backed volumes, and generated `start.sh` references compose overlays that exist in the repo. Proposed approval-gated phase ordering: resolve the storage/volume contract before adding a containerized installer wrapper.
+- **2026-05-24 (#1576):** For installer summaries, name local status strings derived from sensitive booleans without `secret`/`password` substrings so CodeQL can distinguish status logging from sensitive value logging.
+
 ### Thumbnail Serving Bug (#1137, 2026-03-25)
 
 **Root cause (triple):** nginx alias pointed to `/data/documents/` instead of `/data/thumbnails/`, nginx container was missing the `thumbnail-data` volume mount, and the search API returned bare relative paths without the `/thumbnails/` prefix — causing the browser to hit the SPA catch-all.
@@ -158,6 +165,15 @@
 
 ### Redis ConnectionPool Bug (2026-03-16)
 - Password missing from `ConnectionPool()` constructor in solr-search. All other services verified correct.
+
+### Solr ReplicationFactor Capping (#1544, 2026-05-24)
+- Single-node overlays inherit stale `.env` values like `SOLR_REPLICATION_FACTOR=3`, but init cannot create 3 replicas with 1 node. Result: collections with zero active replicas, RED health, cascading overlay failures. Decision: clamp replicationFactor to EXPECTED_NODES in all init paths (not just warn-and-continue).
+
+### CodeQL Taint Analysis and Logging Naming (#1576, 2026-05-24)
+- GHAS flagged "clear-text-logging-sensitive-data" when installer summary printed literal status strings (e.g., "generated|kept existing"). Local variable name (`secret_status`) made CodeQL's taint/name-based pattern harder to disambiguate from actual secret data. Fix: rename sensitive-substring-adjacent variables to operation-state names (e.g., `jwt_rotation_status`), keep comments explicit that only literals are logged.
+
+### Installer Wizard Architecture Research (#1578, 2026-05-24)
+- Current installer requires Python 3.12 + `uv` + `aithena-common` + `argon2-cffi` on host before `.env` can be generated. Proposal: two-layer architecture (host bootstrap shell → versioned installer container) with 6 implementation phases, pending human approval on registry namespace, version-locking, and bind-mount-to-Docker-volume migration strategy for existing deployments.
 - Root lesson: always pass credentials to ConnectionPool, not just to `Redis()`.
 
 ### Logging Security (#302, #299, 2026-03-16)
@@ -549,3 +565,47 @@ Performed thorough comparison of embeddings-server OpenVINO images rc.3 (working
 **Testing:** 16 new quantization tests (none identity, fp16 similarity > 0.99, int8 range [-128,127], invalid mode, quality validation). All 76 embeddings-server tests pass. All 203 document-indexer tests pass (4 pre-existing env-specific failures excluded).
 
 **Coordination with Ash:** Ash added `embedding_byte` Solr field type for int8/BYTE encoding in parallel. Our `embedding_byte_v` field name maps to Ash's schema.
+
+### Local Single-Node E2E Pipeline Audit (2026-05-12)
+
+**Compose chain:** For a real local single-node E2E run, the working compose stack is `docker-compose.yml` + `docker/compose.dev-ports.yml` + `docker/compose.single-node.yml` + `docker/compose.e2e.yml`. `compose.e2e.yml` only swaps the document-data bind mount to `E2E_LIBRARY_PATH`, lowers `POLL_INTERVAL` to 10s, disables search rate limiting, and disables nginx; it does **not** publish `8080`/`8983`, so `compose.dev-ports.yml` is still required for the pytest suite defaults (`SEARCH_API_URL=http://localhost:8080`, `SOLR_URL=http://localhost:8983/solr/books`).
+
+**Installer dependency:** The installer still needs to run first because `solr-search` hard-requires installer-generated auth settings (`AUTH_JWT_SECRET`, auth DB bind mount, admin bootstrap user, Solr/Rabbit credentials). The installer-generated `start.sh` includes dev/prod + GPU + SSL + single-node overlays, but never the E2E overlay, so E2E runs must add `docker/compose.e2e.yml` manually.
+
+**Pipeline shape:** `/v1/upload` writes the PDF into `/data/documents/uploads`, then publishes the absolute path straight to RabbitMQ; it bypasses document-lister for initial enqueue. `document-indexer` then does two phases: (1) parent-book indexing via Solr `/update/extract`, (2) page/chunk extraction + batched calls to `/v1/embeddings/` + chunk writes back to Solr. Redis state is updated with `text_indexed`, `embedding_indexed`, and `chunk_count`; `GET /v1/admin/indexing-status` is the best API to poll in E2E.
+
+**Gap update:** There is now an `e2e/test_semantic_retrieval.py` test that verifies fresh semantic and hybrid retrieval, but it still cheats the user path by POSTing directly to Solr `/update/extract` and publishing directly to RabbitMQ. The remaining missing coverage is a single test that uses `/v1/upload`, waits for `embedding_indexed=true`, then asserts `/v1/search?mode=semantic` and `/v1/search?mode=hybrid` both retrieve the uploaded document.
+
+### Dependabot Batch Sweep (2026-05-31)
+
+6 Python backend dependencies merged in PR #1584 across solr-search (4), document-indexer (2), document-lister (1):
+- FastAPI, Pydantic, stdlib deps
+- Pattern: cherry-pick + lockfile regen
+- Deferred high-risk items: Python 3.14 (#1565–1567) tracked in #1585 for compatibility validation
+- All checks green
+- See `.squad/decisions.md` for full batch summary
+### E2E Auth Token Reuse (#1583, 2026-05-31)
+
+Fixed chronic 429 rate-limit failures in CI E2E workflows. Root cause: the integration test workflow performed back-to-back `/v1/auth/login` calls (curl mint + Playwright global-setup), tripping solr-search rate limiter. **Fix pattern:** Modified `e2e/playwright/global-setup.ts` to reuse `E2E_API_TOKEN` from environment (already minted by workflow curl) instead of making a second login call. Added defense-in-depth: single retry with jittered backoff (1-3s) on 429 response. **Files:** `e2e/playwright/global-setup.ts` (lines 71-142). **PR:** #1588. This unblocks PR #1580 and the v2.2.0 dependabot sweep.
+
+### Defense-in-Depth Retry Scope (#1588 Review, 2026-05-31)
+
+**Lesson:** Defense-in-depth retry logic must be narrowly scoped to the specific transient error class it's designed for. When adding retry logic for HTTP 429 (rate limit), the retry path should only trigger on `status() === 429`, not on any error. Wrapping the entire try block with a catch-all retry would inadvertently retry non-transient failures (401, 500, JSON parse errors) that should propagate immediately. **Pattern:** Check the error condition *before* deciding to retry; let all other errors throw.
+
+### E2E Testing & Local Validation
+- **Always test locally before pushing** — Juanma's directive for #1583. Docker + Playwright available locally.
+- **E2E stack compose chain:** `docker-compose.yml:docker/compose.single-node.yml:docker/compose.dev-ports.yml:docker/compose.e2e.yml` (+ optional `docker-compose.github-actions.yml` for CI tmpfs volumes)
+- **Mandatory env vars:** `E2E_LIBRARY_PATH`, `CI_ADMIN_USERNAME`, `CI_ADMIN_PASSWORD`, `SOLR_ADMIN_USER`, `SOLR_ADMIN_PASS` (generated by installer)
+- **Bootstrap sequence:** `uv run --project src/solr-search python -m installer --library-path <path> --admin-user <user> --admin-password <pass> --origin http://localhost --auth-db-path <path> --reset` → `python3 e2e/create-sample-docs.py <path>` → `docker compose up -d`
+- **Local stack gotchas:** Port conflicts (6379 redis, 8080 solr-search) require tearing down other stacks first. Solr networking can be brittle if containers start too fast (ZooKeeper resolution failures). Use `docker compose down -v && docker network prune -f` before retrying.
+- **E2E token pattern (#1583 fix):** CI mints `E2E_API_TOKEN` via curl to `/v1/auth/login` ONCE before Playwright, then `global-setup.ts` reuses it from env (line 72-77) instead of re-authenticating. This avoids the 429 race when parallel workers both hit login. Confirmed working in CI run 26717457605: `[playwright] reusing E2E_API_TOKEN from environment (skipping login)` → 28 passed, 22 skipped, 0 failures.
+- **Time to stack ready:** ~3-5 minutes for single-node (builds included), longer if pulling images. CI uses tmpfs volumes for speed.
+
+
+### Local-Test-First Directive (2026-05-31, Round 2)
+
+New standing directive from Juanma: "You have docker and playwright locally so you must test everything before pushing to GitHub." For backend E2E and integration work, this means running `docker compose up -d` (with appropriate overlays) and confirming both service health and test execution locally before pushing. Parker's E2E token reuse fix (#1588) exemplified this: attempted local docker stack validation before merge (hit worktree networking issues, fell back to CI evidence). Future E2E fixes should assume local testing is mandatory and plan 10–15 min for stack setup + test cycles. Implication: worktree checkouts + compose networking are brittle together; prefer dedicated non-worktree clones for E2E validation in the future.
+
+### Dependabot Batch Merge Conflict Gotcha (2026-05-31, Ralph Round 3)
+
+**Learning:** When merging multiple dependabot branches that touch the same manifest/lockfile (package.json, pyproject.toml), naive conflict resolution with `git checkout --theirs` **silently reverts all earlier merged bumps** from that file. During PR #1608 batch merge, 6 bumps disappeared: uvicorn + pika from solr-search pyproject.toml reverted, and npm bumps from aithena-ui package.json reverted. Copilot reviewer caught this in code review; fix commit 4fd7ed3 manually restored all 6 bumps and re-verified (1094 backend + 841 UI tests pass). **Pattern:** Never use `--theirs`/`--ours` for multi-branch manifest conflicts. Instead: (a) manually identify all distinct bumps from incoming + prior branches, (b) merge them into the manifest, (c) regenerate lockfile, (d) verify locally before pushing. See `.squad/skills/dependabot-batch-merge/SKILL.md` (low confidence, first observation).

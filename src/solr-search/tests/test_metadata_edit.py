@@ -259,9 +259,7 @@ def test_patch_document_not_found_returns_404(mock_solr_query: MagicMock, mock_p
 @patch("main._get_redis_pool")
 @patch("main._raw_solr_query", return_value={"response": {"numFound": 1, "docs": []}})
 @patch("main.requests.post")
-def test_patch_solr_timeout_returns_504(
-    mock_post: MagicMock, mock_solr_query: MagicMock, mock_pool: MagicMock
-) -> None:
+def test_patch_solr_timeout_returns_504(mock_post: MagicMock, mock_solr_query: MagicMock, mock_pool: MagicMock) -> None:
     """Solr timeout during atomic update returns 504."""
     import requests as req_lib
 
@@ -277,9 +275,7 @@ def test_patch_solr_timeout_returns_504(
 @patch("main._get_redis_pool")
 @patch("main._raw_solr_query", return_value={"response": {"numFound": 1, "docs": []}})
 @patch("main.requests.post")
-def test_patch_solr_error_returns_502(
-    mock_post: MagicMock, mock_solr_query: MagicMock, mock_pool: MagicMock
-) -> None:
+def test_patch_solr_error_returns_502(mock_post: MagicMock, mock_solr_query: MagicMock, mock_pool: MagicMock) -> None:
     """Solr connection error during atomic update returns 502."""
     import requests as req_lib
 

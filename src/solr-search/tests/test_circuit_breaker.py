@@ -72,7 +72,6 @@ def _get_test_client():
 
 
 class TestCircuitBreakerStateTransitions:
-
     def _make_breaker(self, **kwargs) -> CircuitBreaker:
         defaults = {
             "name": "test",
@@ -212,7 +211,6 @@ class TestCircuitBreakerStateTransitions:
 
 
 class TestHealthEndpointCircuitBreakers:
-
     def test_health_reports_circuit_breaker_states(self) -> None:
         client = _get_test_client()
         response = client.get("/health")
@@ -227,6 +225,7 @@ class TestHealthEndpointCircuitBreakers:
 
     def test_health_status_ok_when_all_circuits_closed(self) -> None:
         import main
+
         main.redis_circuit.reset()
         main.solr_circuit.reset()
         client = _get_test_client()
@@ -235,6 +234,7 @@ class TestHealthEndpointCircuitBreakers:
 
     def test_health_status_degraded_when_redis_circuit_open(self) -> None:
         import main
+
         main.solr_circuit.reset()
         _trip_breaker(main.redis_circuit, _raise_redis_error)
         try:
@@ -246,6 +246,7 @@ class TestHealthEndpointCircuitBreakers:
 
     def test_health_status_unavailable_when_solr_circuit_open(self) -> None:
         import main
+
         main.redis_circuit.reset()
         _trip_breaker(main.solr_circuit, _raise_request_error)
         try:
@@ -261,10 +262,10 @@ class TestHealthEndpointCircuitBreakers:
 
 
 class TestSolrCircuitBreaker:
-
     @patch("main.requests.post")
     def test_solr_failure_trips_circuit(self, mock_get: MagicMock) -> None:
         import main
+
         main.solr_circuit.reset()
         mock_get.side_effect = requests.ConnectionError("Solr down")
 
@@ -281,6 +282,7 @@ class TestSolrCircuitBreaker:
     @patch("main.requests.post")
     def test_solr_recovers_after_timeout(self, mock_get: MagicMock) -> None:
         import main
+
         original_timeout = main.solr_circuit.recovery_timeout
         main.solr_circuit.recovery_timeout = 0.1
         main.solr_circuit.reset()
@@ -305,10 +307,10 @@ class TestSolrCircuitBreaker:
 
 
 class TestRedisGracefulDegradation:
-
     @patch("main.requests.get")
     def test_status_endpoint_degrades_when_redis_circuit_open(self, mock_get: MagicMock) -> None:
         import main
+
         main.redis_circuit.reset()
         _trip_breaker(main.redis_circuit, _raise_redis_error)
         assert main.redis_circuit.state is CircuitState.OPEN
@@ -326,6 +328,7 @@ class TestRedisGracefulDegradation:
 
     def test_admin_documents_returns_503_when_redis_circuit_open(self) -> None:
         import main
+
         main.redis_circuit.reset()
         _trip_breaker(main.redis_circuit, _raise_redis_error)
         try:

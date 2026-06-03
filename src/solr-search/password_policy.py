@@ -45,12 +45,14 @@ def validate_password(password: str, username: str) -> list[str]:
     if len(password) < MIN_LENGTH:
         violations.append(f"Password must be at least {MIN_LENGTH} characters")
 
-    categories = sum([
-        bool(_UPPER.search(password)),
-        bool(_LOWER.search(password)),
-        bool(_DIGIT.search(password)),
-        bool(_SPECIAL.search(password)),
-    ])
+    categories = sum(
+        [
+            bool(_UPPER.search(password)),
+            bool(_LOWER.search(password)),
+            bool(_DIGIT.search(password)),
+            bool(_SPECIAL.search(password)),
+        ]
+    )
     if categories < MIN_COMPLEXITY_CATEGORIES:
         violations.append(
             f"Password must contain at least {MIN_COMPLEXITY_CATEGORIES} of 4 categories: "

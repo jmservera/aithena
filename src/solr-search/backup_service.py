@@ -287,9 +287,7 @@ async def _execute_backup(operation_id: str, tier: BackupTier, dry_run: bool) ->
         with _lock:
             record = _operations[operation_id]
             if process.returncode == 0:
-                updated = record.model_copy(
-                    update={"status": OperationStatus.completed, "finished_at": now}
-                )
+                updated = record.model_copy(update={"status": OperationStatus.completed, "finished_at": now})
             else:
                 error_msg = stderr.decode(errors="replace").strip() or f"Exit code {process.returncode}"
                 updated = record.model_copy(
@@ -373,9 +371,7 @@ async def _execute_restore(operation_id: str, backup: BackupInfo, dry_run: bool)
         with _lock:
             record = _operations[operation_id]
             if process.returncode == 0:
-                updated = record.model_copy(
-                    update={"status": OperationStatus.completed, "finished_at": now}
-                )
+                updated = record.model_copy(update={"status": OperationStatus.completed, "finished_at": now})
             else:
                 error_msg = stderr.decode(errors="replace").strip() or f"Exit code {process.returncode}"
                 updated = record.model_copy(

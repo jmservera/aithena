@@ -374,3 +374,21 @@ Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.t
 - Why single-node for dev? SolrCloud resilience (replication, leader election) isn't needed for dev CI. Faster feedback wins.
 - Why not a separate compose.single-node.yml overlay? Kept the profile override in-CI to avoid maintaining another compose file. Consistent with docker/compose.e2e.yml pattern (minimal, focused overrides).
 - 45-min timeout is conservative; single-node should complete in 30-35 min with cold docker build, 20 min with warm caches.
+
+## Cross-Agent Updates
+
+### 2026-05-31 — CI Auth Pattern Change (Parker Round 1)
+
+**Impact:** Workflow + test setup now use token reuse pattern
+
+CI workflows now export `E2E_API_TOKEN` (minted via curl) for test runners to consume, avoiding back-to-back `/v1/auth/login` calls that trip the solr-search rate limiter. This pattern now applies to:
+- **Playwright E2E tests** (via `global-setup.ts`)
+- **pytest integration tests** (when CI provides `E2E_API_TOKEN` env var)
+
+**For Brett:** Workflows that mint auth tokens in steps should export them as environment variables for downstream test consumers. See skill `.squad/skills/e2e-auth-reuse/SKILL.md` for pattern.
+
+**Decision:** `.squad/decisions.md` → "E2E Auth Token Reuse Pattern"
+
+### Local-Test-First Directive (2026-05-31, Round 2)
+
+New standing directive from Juanma: "You have docker and playwright locally so you must test everything before pushing to GitHub." For CI/test infrastructure and Playwright E2E testing, this means running E2E tests locally against the `docker compose` stack before pushing any changes to test runners, fixtures, or E2E configuration. Brett's CI auth workflow exports `E2E_API_TOKEN` for test consumers (used in #1588 fix); future changes to how CI mints or passes auth tokens should be validated locally with Playwright running against the docker stack. Implication: test infrastructure changes are integration-level and deserve local validation alongside CI validation; don't treat them as local-only changes.

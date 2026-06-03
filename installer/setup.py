@@ -507,12 +507,13 @@ def generate_start_script(
 
     ssl_setup_block = ""
     if ssl and domain:
+        # certbot-data-conf and certbot-data-www are now Docker-managed volumes
+        # Docker will create them automatically when the stack starts
         ssl_setup_block = f"""
-# Ensure certbot directories exist for Let's Encrypt
-sudo mkdir -p /source/volumes/certbot-data/{{conf,www}}
-
 # Bootstrap initial certificate (first run only)
-if [ ! -d "/source/volumes/certbot-data/conf/live/{domain}" ]; then
+# Check if certificate exists in the certbot-data-conf Docker volume
+if ! docker volume inspect certbot-data-conf >/dev/null 2>&1 || \\
+   ! docker run --rm -v certbot-data-conf:/data alpine test -d "/data/live/{domain}" 2>/dev/null; then
   echo "Bootstrapping Let's Encrypt certificate for {domain}..."
   docker compose {compose_chain} run --rm certbot certonly \\
     --webroot -w /var/www/certbot \\
@@ -853,15 +854,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def print_summary(result: SetupResult) -> None:
-    secret_status = "generated" if result.generated_jwt_secret else "kept existing"
-    solr_status = "generated" if result.generated_solr_passwords else "kept existing"
+    jwt_rotation_status = "generated" if result.generated_jwt_secret else "kept existing"
+    solr_rotation_status = "generated" if result.generated_solr_passwords else "kept existing"
     print("\nAithena setup complete.")
     print(f"- .env: {result.env_path}")
     print(f"- Auth DB: {result.auth_db_path}")
     print(f"- Admin user: {result.admin_user} ({result.admin_action})")
-    # Security note: prints status string only, NOT the actual JWT secret value
-    print(f"- JWT secret: {secret_status}")  # noqa: S108 — logs status, not sensitive data
-    print(f"- Solr passwords: {solr_status}")  # noqa: S108 — logs status, not sensitive data
+    # Security note: prints literal rotation status only, NOT the actual JWT secret value.
+    print(f"- JWT secret: {jwt_rotation_status}")
+    print(f"- Solr passwords: {solr_rotation_status}")
     print(f"- Environment: {result.environment}")
     print(f"- GPU: {result.gpu}")
     ssl_info = f"enabled ({result.domain})" if result.ssl else "disabled"

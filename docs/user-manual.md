@@ -28,6 +28,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v2.0.0 — React admin portal:** The Streamlit admin dashboard has been replaced with a modern React single-page application at `/admin/`. The admin interface now has 7 dedicated pages: Dashboard, Document Manager, Reindex Library, Indexing Status, System Status, Infrastructure, and Log Viewer. The installer has been overhauled with GPU auto-detection and SSL setup. See [v2.0.0 Release Notes](release-notes/v2.0.0.md).
 
+**v2.2.1 — Maintenance patch:** Prod-overlay volume handling is safer for upgrades, Solr single-node startup is more robust, and release/test reliability has improved. This release does not add a new online bootstrap script; follow the setup path in the [Admin Manual](admin-manual.md). See [v2.2.1 Release Notes](release-notes/v2.2.1.md).
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:

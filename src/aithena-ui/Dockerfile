@@ -3,7 +3,7 @@ ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
 # ---------- build stage ----------
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 
 ARG VERSION
 
@@ -22,7 +22,7 @@ ENV VERSION=${VERSION} \
 RUN npm run build
 
 # ---------- runtime stage ----------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31.1-alpine AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT

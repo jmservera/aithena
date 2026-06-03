@@ -45,9 +45,7 @@ class CircuitOpenError(Exception):
     def __init__(self, name: str, remaining_seconds: float) -> None:
         self.name = name
         self.remaining_seconds = remaining_seconds
-        super().__init__(
-            f"Circuit '{name}' is OPEN -- retry in {remaining_seconds:.1f}s"
-        )
+        super().__init__(f"Circuit '{name}' is OPEN -- retry in {remaining_seconds:.1f}s")
 
 
 class CircuitBreaker:
@@ -153,10 +151,7 @@ class CircuitBreaker:
 
     def _maybe_promote(self) -> None:
         """Promote OPEN -> HALF_OPEN when recovery timeout elapsed. Requires lock."""
-        if (
-            self._state is CircuitState.OPEN
-            and time.monotonic() - self._opened_at >= self.recovery_timeout
-        ):
+        if self._state is CircuitState.OPEN and time.monotonic() - self._opened_at >= self.recovery_timeout:
             logger.info(
                 "circuit_breaker.state_change",
                 extra={
@@ -174,8 +169,7 @@ class CircuitBreaker:
             self._last_failure_time = time.monotonic()
 
             if self._state is CircuitState.HALF_OPEN or (
-                self._state is CircuitState.CLOSED
-                and self._failure_count >= self.failure_threshold
+                self._state is CircuitState.CLOSED and self._failure_count >= self.failure_threshold
             ):
                 self._transition_to_open()
 

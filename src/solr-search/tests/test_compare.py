@@ -354,10 +354,13 @@ class TestComparisonConfig:
     def test_default_candidate_collection(self) -> None:
         assert settings.comparison_candidate_collection == "books"
 
-    @patch.dict(os.environ, {
-        "COMPARISON_BASELINE_COLLECTION": "custom_baseline",
-        "COMPARISON_CANDIDATE_COLLECTION": "custom_candidate",
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "COMPARISON_BASELINE_COLLECTION": "custom_baseline",
+            "COMPARISON_CANDIDATE_COLLECTION": "custom_candidate",
+        },
+    )
     def test_custom_collections_from_env(self) -> None:
         from config import Settings
 
@@ -406,6 +409,7 @@ class TestComparisonConfig:
             cb_embeddings_recovery_timeout=30,
             admin_api_key=None,
             rate_limit_requests_per_minute=100,
+            upload_rate_limit_requests_per_minute=100,
             rabbitmq_management_port=15672,
             zookeeper_hosts="zoo1:2181",
             auth_default_admin_username="admin",
@@ -444,9 +448,7 @@ class TestCompareParallelExecution:
         resp = client.get("/v1/search/compare", params={"q": "test", "mode": "keyword"})
         assert resp.status_code == 200
 
-        collections_called = [
-            call.kwargs.get("collection") for call in mock_solr.call_args_list
-        ]
+        collections_called = [call.kwargs.get("collection") for call in mock_solr.call_args_list]
         assert "books" in collections_called
         assert "books_e5base" in collections_called
 

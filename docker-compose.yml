@@ -295,6 +295,7 @@ services:
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-aithena_auth}
       - ADMIN_API_KEY=${ADMIN_API_KEY:-}
       - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-100}
+      - UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE=${UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE:-}
       - ZOOKEEPER_HOSTS=zoo1:2181,zoo2:2181,zoo3:2181
       - COLLECTIONS_DB_PATH=${COLLECTIONS_DB_PATH:-/data/collections/collections.db}
       - SOLR_AUTH_USER=${SOLR_READONLY_USER:-solr_read}
@@ -817,8 +818,9 @@ services:
             exit 1
           fi
 
-          if [ "$$REPLICATION_FACTOR" -gt 3 ]; then
-            echo "WARNING: SOLR_REPLICATION_FACTOR=$$REPLICATION_FACTOR exceeds the default 3-node topology. Ensure you have enough Solr nodes." >&2
+          if [ "$$REPLICATION_FACTOR" -gt "$$EXPECTED_NODES" ]; then
+            echo "WARNING: SOLR_REPLICATION_FACTOR=$$REPLICATION_FACTOR exceeds available nodes ($$EXPECTED_NODES). Forcing replicationFactor=$$EXPECTED_NODES." >&2
+            REPLICATION_FACTOR="$$EXPECTED_NODES"
           fi
 
           # --- books collection (multilingual-e5-base, 768D) ---
@@ -843,18 +845,8 @@ volumes:
   thumbnail-data:
 
   rabbitmq-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/rabbitmq-data"
 
   redis-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/redis"
   document-data:
     driver: local
     driver_opts:
@@ -862,89 +854,19 @@ volumes:
       o: "bind"
       device: "${BOOKS_PATH:-/data/booklibrary}"
   collections-db:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "${COLLECTIONS_DB_DIR:-/source/volumes/collections-db}"
   solr-data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/solr-data"
   solr-data2:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/solr-data2"
   solr-data3:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/solr-data3"
   zoo-data1_logs:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data1/logs"
   zoo-data1_data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data1/data"
   zoo-data1_datalog:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data1/datalog"
   zoo-data2_logs:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data2/logs"
   zoo-data2_data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data2/data"
   zoo-data2_datalog:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data2/datalog"
   zoo-data3_logs:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data3/logs"
   zoo-data3_data:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data3/data"
   zoo-data3_datalog:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-data3/datalog"
   zoo-backup:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "/source/volumes/zoo-backup"
 networks:
   default:
 

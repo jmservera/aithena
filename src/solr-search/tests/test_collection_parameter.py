@@ -109,12 +109,15 @@ def test_config_is_e5_collection_returns_true_for_books() -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch.dict(os.environ, {
-    "ALLOWED_COLLECTIONS": "books,books_e5base",
-    "DEFAULT_COLLECTION": "books",
-    "E5_COLLECTIONS": "books_e5base",
-    "EMBEDDINGS_URL_BOOKS_E5BASE": "http://embeddings-server-e5:8085/v1/embeddings/",
-})
+@patch.dict(
+    os.environ,
+    {
+        "ALLOWED_COLLECTIONS": "books,books_e5base",
+        "DEFAULT_COLLECTION": "books",
+        "E5_COLLECTIONS": "books_e5base",
+        "EMBEDDINGS_URL_BOOKS_E5BASE": "http://embeddings-server-e5:8085/v1/embeddings/",
+    },
+)
 def test_config_e5_collection_parsing() -> None:
     from config import _parse_collection_set, _parse_embeddings_url_overrides
 
@@ -474,9 +477,7 @@ def test_get_query_embedding_with_input_type_query() -> None:
     mock_resp.json.return_value = {"data": [{"embedding": [0.4, 0.5, 0.6]}]}
 
     with patch("requests.post", return_value=mock_resp) as mock_post:
-        result = get_query_embedding(
-            "http://example.com/embed", "test", timeout=10.0, input_type="query"
-        )
+        result = get_query_embedding("http://example.com/embed", "test", timeout=10.0, input_type="query")
 
     assert result == [0.4, 0.5, 0.6]
     call_body = mock_post.call_args.kwargs["json"]

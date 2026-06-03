@@ -228,9 +228,7 @@ def test_admin_list_documents_skips_invalid_json(mock_pool: MagicMock) -> None:
     """Corrupt Redis values are silently skipped."""
     mock_redis = MagicMock()
     mock_redis.scan_iter.return_value = iter([KEY_QUEUED, "bad_key"])
-    mock_redis.get.side_effect = lambda k: (
-        json.dumps(STATE_QUEUED) if k == KEY_QUEUED else "not-json"
-    )
+    mock_redis.get.side_effect = lambda k: json.dumps(STATE_QUEUED) if k == KEY_QUEUED else "not-json"
     with patch("main._get_admin_redis_client", return_value=mock_redis):
         client = get_client()
         response = client.get("/v1/admin/documents")
