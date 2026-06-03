@@ -52,7 +52,8 @@ No API or schema breaking changes. Deployment upgrade note: existing prod-overla
 
 ### Breaking Changes
 
-None. Existing prod-overlay deployments should review the volume migration steps in upgrade instructions before restarting the stack.
+- No API or schema breaking changes.
+- Deployment upgrade note: existing prod-overlay deployments that previously relied on bind-mounted volume paths must review the volume migration and backup steps before restarting, because storage backing changes can require manual data migration.
 
 ## [2.1.0] — 2026-04-21
 
