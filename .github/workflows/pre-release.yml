@@ -61,6 +61,10 @@ jobs:
             version="$INPUT_VERSION"
           elif [[ -f VERSION ]]; then
             version="$(tr -d '[:space:]' < VERSION)"
+            if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-dev$ ]]; then
+              version="${BASH_REMATCH[1]}"
+              echo "Using stable base version for dev pre-release: $version"
+            fi
           else
             echo "::error::No version input and VERSION file not found"
             exit 1
