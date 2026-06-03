@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), and [v2.0.0 Deployment Updates](#deployment-updates-for-v200) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the Docker-managed volume migration for the prod overlay, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, fixes a CodeQL security alert in the installer, and ships a wizard-style containerized installer enabling zero-dependency setup. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), and [v2.2.0 Deployment Updates](#deployment-updates-for-v220) sections below.
 
 ## System architecture overview
 
@@ -5021,3 +5021,121 @@ v2.0.0 publishes **5 container images** (down from 6 in v1.x):
 - [ ] nginx `/admin/` proxies to `aithena-ui`, not old Streamlit container
 - [ ] Streamlit health check URLs updated or removed from monitoring
 - [ ] `start.sh` regenerated (or compose commands updated) after installer re-run
+
+## Deployment Updates for v2.2.0
+
+### Summary
+
+v2.2.0 is a **maintenance release** with no breaking changes. Key changes affecting operators:
+
+1. **Prod overlay volume migration complete (#1613)** — `docker/compose.prod.yml` now uses Docker-managed volumes for `rabbitmq-data` and `redis-data`, matching the base compose file.
+2. **Solr-init replication factor cap (#1544)** — Single-node deployments with a stale `SOLR_REPLICATION_FACTOR` value higher than 1 will no longer produce a RED collection on startup.
+3. **Wizard-style containerized installer (#1578)** — New two-command install path for first-time deployments. Existing deployments are unaffected; re-running the installer is optional.
+
+**Breaking Changes:** None.
+
+### Prod Overlay Volume Config
+
+If you use `docker/compose.prod.yml`, pull the updated file as part of your upgrade. The `rabbitmq-data` and `redis-data` volume declarations no longer carry `driver_opts` bind-mount stubs. After updating:
+
+```bash
+# Validate the merged config
+docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A5 -B2 "rabbitmq-data\|redis-data"
+```
+
+Expected output: volume declarations with no `driver: local` + `driver_opts` block for those two volumes.
+
+> **Note:** This only affects the prod overlay. The base `docker-compose.yml` was already correct.
+
+### Single-Node Solr Deployments
+
+The `solr-init` inline entrypoint in `docker-compose.yml` now caps `SOLR_REPLICATION_FACTOR` to `SOLR_EXPECTED_NODES`, matching the existing safety logic in `docker/solr-init.sh`. No operator action is required. If you previously worked around the bug by manually setting `SOLR_REPLICATION_FACTOR=1` in your `.env`, you may leave that value — the cap will simply be a no-op.
+
+### Containerized Installer (New Deployments)
+
+v2.2.0 ships a wizard-style installer that works on hosts with only Docker installed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmservera/aithena/main/install.sh | bash
+./aithena/start.sh
+```
+
+The installer:
+- Detects Python 3.12 + uv and runs natively if present; otherwise falls back to a Docker container (`ghcr.io/jmservera/aithena-installer:latest`)
+- Runs pre-flight checks (Docker daemon, disk space ≥ 20GB, internet, docker group)
+- Guides through ≤6 prompts: library path, admin credentials, GPU acceleration, SSL, topology, public origin
+- Generates `.env`, auth database, and `start.sh`
+- Optionally pulls images and starts the stack
+- Runs a post-install health check
+
+**Existing deployments:** No need to re-run the installer unless you want to regenerate `start.sh` or switch topology. All existing manual `docker compose` workflows remain valid.
+
+**Configuration options available during install:**
+
+| Option | Prompt | Default |
+|---|---|---|
+| Library path | Where should we look for PDF books? | `~/aithena-library` |
+| Admin credentials | Username / password | `admin` / (prompted) |
+| GPU acceleration | NVIDIA / Intel / none | Auto-detected |
+| SSL | Enable HTTPS with Let's Encrypt? | No |
+| Topology | single-node / distributed | single-node |
+| Public origin | URL users access from | `http://localhost` |
+
+### Upgrade Instructions
+
+**From v2.0.0 or v2.1.0 → v2.2.0:**
+
+1. **Pull new images:**
+   ```bash
+   docker compose pull
+   ```
+
+2. **Update compose files** (if using the prod overlay):
+   ```bash
+   git pull origin main
+   # or manually update docker/compose.prod.yml to remove driver_opts from rabbitmq-data and redis-data
+   ```
+
+3. **Validate prod overlay** (if applicable):
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A5 -B2 "rabbitmq-data\|redis-data"
+   ```
+
+4. **Restart services:**
+   ```bash
+   docker compose up -d
+   # or:
+   ./start.sh
+   ```
+
+5. **Verify:**
+   ```bash
+   curl -sf http://localhost/v1/health && echo "✅ API healthy"
+   curl -sf http://localhost/admin/ && echo "✅ Admin portal accessible"
+   ```
+
+**From v1.19.0 or earlier:**
+Follow the [v2.0.0 deployment notes](#deployment-updates-for-v200) first, then apply v2.2.0 steps above.
+
+### Configuration Changes
+
+| Change | File | Required action |
+|---|---|---|
+| Remove `driver_opts` from prod overlay volumes | `docker/compose.prod.yml` | **Required if using prod overlay.** Pull updated file or remove the `driver_opts` blocks manually from `rabbitmq-data` and `redis-data`. |
+
+### Data Migration
+
+**None required.** The Solr collection schema, index format, and auth database are unchanged.
+
+### Container Image Changes
+
+v2.2.0 publishes **5 container images** (unchanged from v2.0.0) plus a new installer image:
+
+| Image | Change |
+|---|---|
+| `ghcr.io/jmservera/aithena-aithena-ui:2.2.0` | No change |
+| `ghcr.io/jmservera/aithena-document-indexer:2.2.0` | No change |
+| `ghcr.io/jmservera/aithena-document-lister:2.2.0` | No change |
+| `ghcr.io/jmservera/aithena-embeddings-server:2.2.0` | No change |
+| `ghcr.io/jmservera/aithena-solr-search:2.2.0` | No change |
+| `ghcr.io/jmservera/aithena-installer:latest` | **New** — containerized installer image |
