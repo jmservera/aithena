@@ -409,6 +409,7 @@ class TestComparisonConfig:
             cb_embeddings_recovery_timeout=30,
             admin_api_key=None,
             rate_limit_requests_per_minute=100,
+            upload_rate_limit_requests_per_minute=100,
             rabbitmq_management_port=15672,
             zookeeper_hosts="zoo1:2181",
             auth_default_admin_username="admin",

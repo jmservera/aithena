@@ -291,27 +291,134 @@ def test_upload_streaming_enforces_size_limit(client: TestClient, upload_dir):
     assert f"{settings.max_upload_size_mb}MB" in response.json()["detail"]
 
 
+def test_upload_rate_limit_preserves_production_default(monkeypatch):
+    """Test upload limiter keeps the historical 10/min default outside CI disables."""
+    import importlib
+    import os
+
+    import config
+
+    original_rate_limit = os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE")
+    original_upload_rate_limit = os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
+    monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+    monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+
+    reloaded_config = importlib.reload(config)
+
+    try:
+        assert reloaded_config.settings.upload_rate_limit_requests_per_minute == 10
+    finally:
+        if original_rate_limit is None:
+            monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", original_rate_limit)
+        if original_upload_rate_limit is None:
+            monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", original_upload_rate_limit)
+        importlib.reload(config)
+
+
+def test_upload_rate_limit_uses_shared_env_default(monkeypatch):
+    """Test upload limiter falls back to the shared rate-limit env var."""
+    import importlib
+    import os
+
+    import config
+
+    original_rate_limit = os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE")
+    original_upload_rate_limit = os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
+    monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
+    monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+
+    reloaded_config = importlib.reload(config)
+
+    try:
+        assert reloaded_config.settings.upload_rate_limit_requests_per_minute == 0
+    finally:
+        if original_rate_limit is None:
+            monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", original_rate_limit)
+        if original_upload_rate_limit is None:
+            monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", original_upload_rate_limit)
+        importlib.reload(config)
+
+
+def test_upload_rate_limit_disabled_allows_repeated_uploads(
+    client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir
+):
+    """Test that a non-positive upload limit disables throttling for E2E runs."""
+    import main
+
+    original_limiter = main.upload_rate_limiter
+    main.upload_rate_limiter = main.RateLimiter(max_requests=0, window_seconds=60)
+
+    try:
+        for index in range(12):
+            response = client.post(
+                "/v1/upload",
+                files={"file": (f"disabled-limit-{index}.pdf", valid_pdf_content, "application/pdf")},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["status"] == "accepted"
+    finally:
+        main.upload_rate_limiter = original_limiter
+
+
+def test_upload_rate_limit_env_override(monkeypatch):
+    """Test upload limiter can be configured independently from search limiting."""
+    import importlib
+    import os
+
+    import config
+
+    original_rate_limit = os.environ.get("RATE_LIMIT_REQUESTS_PER_MINUTE")
+    original_upload_rate_limit = os.environ.get("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
+    monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
+    monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", "25")
+
+    reloaded_config = importlib.reload(config)
+
+    try:
+        assert reloaded_config.settings.upload_rate_limit_requests_per_minute == 25
+    finally:
+        if original_rate_limit is None:
+            monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", original_rate_limit)
+        if original_upload_rate_limit is None:
+            monkeypatch.delenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", raising=False)
+        else:
+            monkeypatch.setenv("UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE", original_upload_rate_limit)
+        importlib.reload(config)
+
+
 def test_upload_rate_limiting(client: TestClient, valid_pdf_content: bytes, mock_rabbitmq, upload_dir):
     """Test that rate limiting works correctly."""
-    from main import upload_rate_limiter
+    import main
 
-    # Clear any existing rate limit state
-    upload_rate_limiter.requests.clear()
+    original_limiter = main.upload_rate_limiter
+    main.upload_rate_limiter = main.RateLimiter(max_requests=2, window_seconds=60)
+    main.upload_rate_limiter.requests.clear()
 
-    # Make maximum allowed requests (10)
-    for i in range(10):
+    try:
+        for i in range(2):
+            response = client.post(
+                "/v1/upload",
+                files={"file": (f"test{i}.pdf", valid_pdf_content, "application/pdf")},
+            )
+            assert response.status_code != 429
+
         response = client.post(
             "/v1/upload",
-            files={"file": (f"test{i}.pdf", valid_pdf_content, "application/pdf")},
+            files={"file": ("test2.pdf", valid_pdf_content, "application/pdf")},
         )
-        # First 10 should succeed (or fail for other reasons, but not rate limiting)
-        assert response.status_code != 429
 
-    # 11th request should be rate limited
-    response = client.post(
-        "/v1/upload",
-        files={"file": ("test11.pdf", valid_pdf_content, "application/pdf")},
-    )
-
-    assert response.status_code == 429
-    assert "Too many uploads" in response.json()["detail"]
+        assert response.status_code == 429
+        assert "Too many uploads" in response.json()["detail"]
+    finally:
+        main.upload_rate_limiter = original_limiter

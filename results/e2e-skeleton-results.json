@@ -1,0 +1,6 @@
+{
+  "command": "pytest -q e2e/test_thumbnail_retrieval.py e2e/test_attachment_handling.py e2e/test_error_recovery.py",
+  "exit_code": 0,
+  "summary": "======================== 6 passed, 14 skipped in 26.33s ========================",
+  "timestamp": "2026-06-03T18:45:30.172506Z"
+}

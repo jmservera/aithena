@@ -95,6 +95,11 @@
 
 ## Learnings
 
+### PR #1623 Review Comment Cleanup (2026-06-03T21:25:25.755+00:00)
+
+- Config reload tests that mutate `os.environ` must restore original env values before the final `importlib.reload(config)`; relying on `monkeypatch` teardown after test return leaves module-level `settings` out of sync during the test cleanup reload.
+- E2E test names should describe the exact assertion being made. For thumbnail tests, distinguish thumbnail URL metadata/stability checks from actual image/file/header retrieval.
+
 ### v1.15.0 Release (March 2026) — Reskill & Consolidation Session
 
 **Test Suite Growth & Maturity:**
@@ -317,3 +322,12 @@ New standing directive from Juanma: "You have docker and playwright locally so y
 ### Dependabot Batch Merge Conflict Gotcha (2026-05-31, Ralph Round 3)
 
 **Learning:** When merging multiple dependabot branches that touch the same manifest/lockfile (package.json, pyproject.toml), naive conflict resolution with `git checkout --theirs` **silently reverts all earlier merged bumps** from that file. During PR #1608 batch merge, 6 bumps disappeared: uvicorn + pika from solr-search pyproject.toml reverted, and npm bumps from aithena-ui package.json reverted. Copilot reviewer caught this in code review; fix commit 4fd7ed3 manually restored all 6 bumps. **Implication for test QA:** Multi-version dependency changes (major bumps like #1564–#1567 node/python upgrades, or batched minor bumps) may mask subtle test failures during merge conflict resolution. Always run `verify.sh` locally after resolving manifest conflicts, even when the conflict resolution appears clean. See `.squad/skills/dependabot-batch-merge/SKILL.md` (low confidence, first observation).
+
+### PR #1623 Single-Node Upload Rate Limit Failure (2026-06-03T21:25:25.755+00:00)
+
+The failed `Dev Integration Test (Single-Node)` path was the Python E2E semantic upload fixture, not Playwright: `test_web_api_semantic.py` uploaded multiple PDFs and hit `429 Too many uploads` on the `mars` case even though CI set `RATE_LIMIT_REQUESTS_PER_MINUTE=0`. Minimal regression checks for Parker's fix are `src/solr-search/tests/test_upload.py -k rate_limit` plus the full `solr-search` verify gate; the important coverage gap was endpoint-level proof that `RateLimiter(max_requests=0)` permits repeated uploads without 429.
+
+### PR #1623 E2E Naming Cleanup (2026-06-03T21:25:25.755+00:00)
+
+Resolved second-round Copilot review comments by keeping E2E test names/docstrings aligned with what they actually assert: thumbnail_url_s metadata propagation, basic PDF metadata/disk availability, semantic-or-keyword response mode, and delete-then-reindex recovery. Removed duplicate corrupt-PDF and oversized-upload E2E checks from `test_error_recovery.py` because `e2e/test_upload_api.py` remains the dedicated upload API validation suite; this avoids an extra 52MB upload in recovery tests.
+
