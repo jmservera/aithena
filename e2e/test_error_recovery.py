@@ -39,13 +39,14 @@ def _fetch_solr_doc(solr_url: str, doc_id: str, fields: str) -> dict:
 
 
 def _delete_solr_doc(solr_url: str, doc_id: str) -> None:
-    requests.post(
+    resp = requests.post(
         f"{solr_url}/update",
-        params={"commitWithin": "2000", "wt": "json"},
+        params={"commit": "true", "wt": "json"},
         json={"delete": {"id": doc_id}},
         auth=SOLR_AUTH,
         timeout=30,
     )
+    resp.raise_for_status()
 
 
 def _wait_for_absence(solr_url: str, doc_id: str, timeout: int = 30) -> bool:
@@ -66,7 +67,9 @@ def api_available(api_url: str) -> None:
         resp.raise_for_status()
     except Exception as exc:
         pytest.skip(
-            f"solr-search API not reachable at {api_url} — start the stack first (see README.md §E2E Tests). Error: {exc}"
+            "solr-search API not reachable at "
+            f"{api_url} — start the stack first (see README.md §E2E Tests). "
+            f"Error: {exc}"
         )
 
 
@@ -151,7 +154,7 @@ class TestServiceFailureRecovery:
         auth_headers: dict[str, str],
     ) -> None:
         """
-        Invalid Solr collection names should be rejected with HTTP 400.
+        Unknown Solr collection names should be rejected with HTTP 400.
         """
         resp = requests.get(
             f"{api_url}/v1/search",

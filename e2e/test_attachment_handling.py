@@ -13,6 +13,7 @@ Prerequisites:
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urljoin
 
 import pytest
 import requests
@@ -35,13 +36,14 @@ def _fetch_solr_doc(solr_url: str, doc_id: str, fields: str) -> dict:
 
 
 def _delete_solr_doc(solr_url: str, doc_id: str) -> None:
-    requests.post(
+    resp = requests.post(
         f"{solr_url}/update",
-        params={"commitWithin": "2000", "wt": "json"},
+        params={"commit": "true", "wt": "json"},
         json={"delete": {"id": doc_id}},
         auth=SOLR_AUTH,
         timeout=30,
     )
+    resp.raise_for_status()
 
 
 @pytest.fixture(scope="class")
@@ -68,7 +70,9 @@ def api_available(api_url: str) -> None:
         resp.raise_for_status()
     except Exception as exc:
         pytest.skip(
-            f"solr-search API not reachable at {api_url} — start the stack first (see README.md §E2E Tests). Error: {exc}"
+            "solr-search API not reachable at "
+            f"{api_url} — start the stack first (see README.md §E2E Tests). "
+            f"Error: {exc}"
         )
 
 
@@ -129,7 +133,8 @@ class TestAttachmentExtraction:
         doc_url = detail.json().get("document_url")
         assert doc_url, "document_url missing from book detail response."
 
-        resp = requests.get(doc_url, headers=auth_headers, timeout=15)
+        download_url = doc_url if doc_url.startswith(("http://", "https://")) else urljoin(f"{api_url}/", doc_url)
+        resp = requests.get(download_url, headers=auth_headers, timeout=15)
         assert resp.status_code == 200, f"Expected 200 downloading document, got {resp.status_code}: {resp.text}"
         assert resp.headers.get("Content-Type") == "application/pdf"
         content_disp = resp.headers.get("Content-Disposition", "")
@@ -168,14 +173,13 @@ class TestAttachmentSecurity:
         self,
         api_url: str,
         api_available: None,
-        auth_headers: dict[str, str],
     ) -> None:
         """
-        Invalid document tokens should be rejected with 404.
+        Document downloads should require authentication before the token is decoded.
         """
-        resp = requests.get(f"{api_url}/documents/not-a-token", headers=auth_headers, timeout=10)
-        assert resp.status_code == 404, (
-            f"Expected 404 for invalid document token, got {resp.status_code}: {resp.text}"
+        resp = requests.get(f"{api_url}/documents/not-a-token", timeout=10)
+        assert resp.status_code == 401, (
+            f"Expected 401 for missing auth, got {resp.status_code}: {resp.text}"
         )
 
     def test_attachment_path_traversal_prevented(
@@ -187,8 +191,8 @@ class TestAttachmentSecurity:
         """
         Path traversal attempts should be rejected with 404.
         """
-        traversal_token = "..%2F..%2Fetc%2Fpasswd"
-        resp = requests.get(f"{api_url}/documents/{traversal_token}", headers=auth_headers, timeout=10)
+        encoded_path = "..%2F..%2Fetc%2Fpasswd"
+        resp = requests.get(f"{api_url}/documents/{encoded_path}", headers=auth_headers, timeout=10)
         assert resp.status_code == 404, (
             f"Expected 404 for traversal token, got {resp.status_code}: {resp.text}"
         )

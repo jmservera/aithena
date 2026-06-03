@@ -53,11 +53,9 @@ def _build_multipage_pdf(texts: list[str]) -> bytes:
     for content_id, text in zip(content_obj_ids, texts, strict=True):
         stream_body = (f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET").encode()
         objects.append(
-            (
-                f"{content_id} 0 obj\n<< /Length {len(stream_body)} >>\nstream\n".encode()
-                + stream_body
-                + b"\nendstream\nendobj\n"
-            )
+            f"{content_id} 0 obj\n<< /Length {len(stream_body)} >>\nstream\n".encode()
+            + stream_body
+            + b"\nendstream\nendobj\n"
         )
 
     objects.append(
@@ -91,7 +89,7 @@ def _update_solr_fields(solr_url: str, doc_id: str, fields: dict[str, object]) -
     payload.update({name: {"set": value} for name, value in fields.items()})
     resp = requests.post(
         f"{solr_url}/update",
-        params={"commitWithin": "2000", "wt": "json"},
+        params={"commit": "true", "wt": "json"},
         json=[payload],
         auth=SOLR_AUTH,
         timeout=30,
@@ -117,7 +115,7 @@ def _wait_for_solr_field(
     field: str,
     expected: object,
     *,
-    timeout: int = 30,
+    timeout: int = 60,
 ) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -129,13 +127,14 @@ def _wait_for_solr_field(
 
 
 def _delete_solr_doc(solr_url: str, doc_id: str) -> None:
-    requests.post(
+    resp = requests.post(
         f"{solr_url}/update",
-        params={"commitWithin": "2000", "wt": "json"},
+        params={"commit": "true", "wt": "json"},
         json={"delete": {"id": doc_id}},
         auth=SOLR_AUTH,
         timeout=30,
     )
+    resp.raise_for_status()
 
 
 @pytest.fixture(scope="class")
@@ -156,7 +155,10 @@ def indexed_fixture_with_thumbnail(
     thumbnail_relative = f"{relative}.thumb.jpg"
     _update_solr_fields(solr_url, fixture_solr_id, {"thumbnail_url_s": thumbnail_relative})
 
-    _wait_for_solr_field(solr_url, fixture_solr_id, "thumbnail_url_s", thumbnail_relative)
+    updated = _wait_for_solr_field(solr_url, fixture_solr_id, "thumbnail_url_s", thumbnail_relative)
+    assert updated.get("thumbnail_url_s") == thumbnail_relative, (
+        "Fixture thumbnail field did not appear in Solr after the atomic update."
+    )
 
     yield {"doc_id": fixture_solr_id, "thumbnail_relative": thumbnail_relative}
     _delete_solr_doc(solr_url, fixture_solr_id)
@@ -170,7 +172,9 @@ def api_available(api_url: str) -> None:
         resp.raise_for_status()
     except Exception as exc:
         pytest.skip(
-            f"solr-search API not reachable at {api_url} — start the stack first (see README.md §E2E Tests). Error: {exc}"
+            "solr-search API not reachable at "
+            f"{api_url} — start the stack first (see README.md §E2E Tests). "
+            f"Error: {exc}"
         )
 
 
@@ -288,4 +292,6 @@ class TestThumbnailGeneration:
         first_body = first.json()
         second_body = second.json()
         assert first_body.get("thumbnail_url") == second_body.get("thumbnail_url")
-        assert "?" not in (first_body.get("thumbnail_url") or ""), "thumbnail_url should be a stable path without query params"
+        assert "?" not in (first_body.get("thumbnail_url") or ""), (
+            "thumbnail_url should be a stable path without query params"
+        )
