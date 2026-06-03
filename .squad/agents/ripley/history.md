@@ -362,6 +362,13 @@ Batched 16 low/medium-risk Dependabot PRs into a single PR (#1584), merged to de
 - Closed all 16 superseded PRs with back-reference
 
 ### Learnings
+
+### Release Coordination After PR #1623 — 2026-06-03
+
+- PR #1623 reached green CI and all review threads were resolved before merge into `dev`.
+- Newt's release gate approved v2.2.0 after PR #1623, and release metadata PR #1624 merged to `dev` with `VERSION` and `CHANGELOG.md` updated.
+- Release stopped before dev→main/tag because `v2.2.0` already exists and is published on an older `dev` commit; the tag is an ancestor of current `dev`, but it does not contain the final release metadata and PR #1623 history.
+- Do not move the published tag ad hoc. Require Newt approval for an alternate patch version (likely v2.2.1) or an explicit tag-remediation decision before continuing release mechanics.
 - **Lockfile conflicts are routine**: When stacking multiple dependency bumps for the same service, cherry-picking creates lockfile conflicts. Solution: accept theirs, then `uv lock` once at the end.
 - **npm lockfile was auto-consistent**: Despite 6 npm dependency cherry-picks, the package-lock.json auto-merged cleanly. Only uv.lock needed regeneration.
 - **Rulesets ≠ branch protection**: `--admin` does NOT bypass repository rulesets. Must satisfy required status checks + resolve conversations.
