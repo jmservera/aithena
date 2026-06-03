@@ -5028,24 +5028,81 @@ v2.0.0 publishes **5 container images** (down from 6 in v1.x):
 
 v2.2.0 is a **maintenance release** with no breaking changes. Key changes affecting operators:
 
-1. **Prod overlay volume migration complete (#1613)** — `docker/compose.prod.yml` now uses Docker-managed volumes for `rabbitmq-data` and `redis-data`, matching the base compose file.
+1. **Prod overlay volume migration complete (Phase 1c, #1616)** — `docker/compose.prod.yml` now uses Docker-managed volumes for all infrastructure volumes (document-data, collections-db, solr-data*, zoo-data*, zoo-backup), completing the migration started in PR #1612 (Redis/RabbitMQ) and PR #1614 (Solr/ZooKeeper).
 2. **Solr-init replication factor cap (#1544)** — Single-node deployments with a stale `SOLR_REPLICATION_FACTOR` value higher than 1 will no longer produce a RED collection on startup.
 3. **Wizard-style containerized installer (#1578)** — New two-command install path for first-time deployments. Existing deployments are unaffected; re-running the installer is optional.
 
 **Breaking Changes:** None.
 
-### Prod Overlay Volume Config
+### Prod Overlay Volume Config (Phase 1c Complete)
 
-If you use `docker/compose.prod.yml`, pull the updated file as part of your upgrade. The `rabbitmq-data` and `redis-data` volume declarations no longer carry `driver_opts` bind-mount stubs. After updating:
+**Phase 1c** (issue #1616): `docker/compose.prod.yml` now uses Docker-managed volumes for **all** infrastructure volumes, completing the migration started in PR #1612 (Redis/RabbitMQ) and PR #1614 (Solr/ZooKeeper/SSL):
 
-```bash
-# Validate the merged config
-docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A5 -B2 "rabbitmq-data\|redis-data"
-```
+- **document-data** (previously bound to `${BOOKS_PATH:-/data/booklibrary}`)
+- **collections-db** (previously bound to `${COLLECTIONS_DB_DIR:-/source/volumes/collections-db}`)
+- **solr-data, solr-data2, solr-data3** (previously bound to `/source/volumes/solr-data*`)
+- **zoo-data{1,2,3}_{logs,data,datalog}** (previously bound to `/source/volumes/zoo-data*/`)
+- **zoo-backup** (previously bound to `/source/volumes/zoo-backup`)
 
-Expected output: volume declarations with no `driver: local` + `driver_opts` block for those two volumes.
+All volumes are now declared as simple named volumes. Docker will create and manage them automatically when the stack starts.
 
-> **Note:** This only affects the prod overlay. The base `docker-compose.yml` was already correct.
+**If you use `docker/compose.prod.yml`:**
+
+1. Pull the updated compose file:
+   ```bash
+   git pull origin main
+   ```
+
+2. Validate the merged config:
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A2 "document-data:"
+   ```
+   
+   Expected output: `document-data:` with no `driver_opts` block.
+
+**Migration for existing deployments:**
+
+⚠️ **Important:** This change affects data persistence. If you have existing data in bind-mounted directories (e.g., `/data/booklibrary`, `/source/volumes/*`), you must migrate it manually:
+
+**Option A: Preserve existing data (recommended for production)**
+
+1. Back up your data before upgrading:
+   ```bash
+   # Example: back up document library
+   sudo tar czf ~/document-data-backup-$(date +%Y%m%d).tar.gz /data/booklibrary
+   
+   # Back up Solr indexes
+   sudo tar czf ~/solr-data-backup-$(date +%Y%m%d).tar.gz /source/volumes/solr-data*
+   
+   # Back up ZooKeeper data
+   sudo tar czf ~/zoo-data-backup-$(date +%Y%m%d).tar.gz /source/volumes/zoo-data*
+   ```
+
+2. After upgrading and starting the stack with the new compose files, Docker will create empty volumes. Stop the services and restore data:
+   ```bash
+   docker compose down
+   
+   # Find the volume mount point
+   docker volume inspect aithena_document-data | jq -r '.[0].Mountpoint'
+   # Example output: /var/lib/docker/volumes/aithena_document-data/_data
+   
+   # Copy your data to the Docker volume
+   sudo rsync -av /data/booklibrary/ $(docker volume inspect aithena_document-data -f '{{.Mountpoint}}')
+   sudo rsync -av /source/volumes/solr-data/ $(docker volume inspect aithena_solr-data -f '{{.Mountpoint}}')
+   # Repeat for other volumes as needed
+   
+   docker compose up -d
+   ```
+
+**Option B: Fresh install (acceptable for dev/test environments)**
+
+Simply pull the new compose file and start the stack. All volumes will be created empty. You can then upload documents through the admin UI or place them in the Docker volume location.
+
+**Clean install on a fresh system:**
+
+No action required. Docker will automatically create all volumes when you start the stack for the first time.
+
+> **Note:** The base `docker-compose.yml` already uses Docker-managed volumes for `document-data`. This change only affects the `docker/compose.prod.yml` overlay which previously overrode it with a bind mount.
 
 ### Single-Node Solr Deployments
 
