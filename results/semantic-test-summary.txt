@@ -1,0 +1,1 @@
+✅ PASS - Semantic/hybrid search tests validated (2/2 passed). Documents indexed with embeddings and correctly retrieved by abstract queries. Logs: results/semantic-retrieval-test.log

@@ -5051,18 +5051,17 @@ Expected output: volume declarations with no `driver: local` + `driver_opts` blo
 
 The `solr-init` inline entrypoint in `docker-compose.yml` now caps `SOLR_REPLICATION_FACTOR` to `SOLR_EXPECTED_NODES`, matching the existing safety logic in `docker/solr-init.sh`. No operator action is required. If you previously worked around the bug by manually setting `SOLR_REPLICATION_FACTOR=1` in your `.env`, you may leave that value — the cap will simply be a no-op.
 
-### Containerized Installer (New Deployments)
+### Installer Improvements (New Deployments)
 
-v2.2.0 ships a wizard-style installer that works on hosts with only Docker installed:
+v2.2.0 includes improvements to the wizard-style installer that works on any host with Python 3.12+ and uv installed:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jmservera/aithena/main/install.sh | bash
-./aithena/start.sh
+python3 -m installer
+./start.sh
 ```
 
 The installer:
-- Detects Python 3.12 + uv and runs natively if present; otherwise falls back to a Docker container (`ghcr.io/jmservera/aithena-installer:latest`)
-- Runs pre-flight checks (Docker daemon, disk space ≥ 20GB, internet, docker group)
+- Runs pre-flight checks (Python 3.12, uv, disk space ≥ 20GB)
 - Guides through ≤6 prompts: library path, admin credentials, GPU acceleration, SSL, topology, public origin
 - Generates `.env`, auth database, and `start.sh`
 - Optionally pulls images and starts the stack
