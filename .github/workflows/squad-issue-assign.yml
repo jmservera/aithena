@@ -3,11 +3,13 @@ name: Squad Issue Assign
 on:
   issues:
     types: [labeled]
-  pull_request:
+  # PR label routing needs a base-repository write token; do not execute PR-head code here.
+  pull_request_target:
     types: [labeled]
 
 permissions:
   issues: write
+  pull-requests: write
   contents: read
 
 jobs:

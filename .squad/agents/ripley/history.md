@@ -337,6 +337,11 @@ Each merged skill preserves key patterns, examples, and anti-patterns from all s
 
 ## Learnings
 
+### PR #1637 assign-work blocker (2026-06-03T22:02:03.765+00:00)
+
+- PR-label routing is team metadata, not product validation. When `Squad Issue Assign` handles PR labels, it needs the base-repository token context (`pull_request_target`) and explicit PR/issue write permissions.
+- Keep `pull_request_target` routing workflows limited to trusted metadata scripts and base-branch checkout; never execute PR-head code in that context.
+
 ### Project Review (2026-05-12)
 
 - **v2.1 shipped, but top-level docs lag behind.** `VERSION` and GitHub Releases are at `2.1.0`, and `CHANGELOG.md` covers the release well, but `README.md` still advertises `v1.9.1` / `v1.10.0` development state.
