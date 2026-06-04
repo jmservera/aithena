@@ -76,3 +76,7 @@
 - Admin import-safety, E2E stats/API field alignment, and admin logging allowlists improved CI reliability.
 - Lambert strengths: pytest fixtures, resilient Playwright E2E, CI/release gates, coverage audits.
 - Growth areas: deeper Vitest authoring, Locust/stress benchmarking, and documenting Solr auth requirements for E2E setup.
+
+### 2026-06-04T11:12:16.371+00:00 — v2.3.0 Pre-Release Evidence
+- For #1646, tie release test reports to both PR check rollups and focused local commands; avoid claiming exact test counts when GitHub check summaries do not expose them.
+- #1631 evidence hinges on `tests/test-compose-security.sh` plus `tests/test-pre-release-check.sh`: ZooKeeper ports stay private, Solr auth wiring is required, and accepted ZK/Solr config warnings are allowlisted without hiding real crashes or runtime connection failures.

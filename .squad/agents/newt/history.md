@@ -81,3 +81,5 @@
 11. **2026-03-22 — v1.12.1 release:** Branch protection blocks direct release pushes; use PRs for version bumps. CI integration tests can be flaky due to embeddings-server health timeouts, so distinguish infra flake from code regression.
 
 12. **2026-03-22 — Release decision:** v1.14.0 A/B UI should depend on benchmark need: if e5-base quality loss is negligible, skip UI and migrate; only build comparison UI when human quality judgment is needed.
+
+13. **2026-06-04 — v2.3.0 release docs:** Infrastructure maintenance releases require explicit operator-responsibility sections (ZooKeeper ACLs, Redis memory overcommit) in BOTH release notes and admin manual. Accepted-risk posture only holds when published where operators will find it during deployment. Release validation checklist should document framework first (accept blockers and constraints as legit) before test evidence arrives, reducing PM/infra/test interdependencies and making bottlenecks visible early.
