@@ -272,7 +272,7 @@ jobs:
           persist-credentials: false
 
       - name: Validate Compose security posture
-        run: sh tests/test-compose-security.sh
+        run: bash tests/test-compose-security.sh
 
   all-tests-passed:
     name: All tests passed

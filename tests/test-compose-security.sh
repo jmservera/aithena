@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Validate Compose network exposure and Solr auth wiring.
-set -eu
+set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
