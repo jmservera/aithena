@@ -1320,3 +1320,33 @@ The active board after v2.2.1 contains one concrete non-v2.5 follow-up: #1631. T
 - Lambert: test evidence for v2.3.0 release report.
 - Newt: release notes, manual impact review, final release validation checklist.
 - Juanma/Ripley: human final sign-off where required.
+
+
+---
+
+# Decision: Squad-Generated Workflow Security Scanning Exclusion
+
+**Date:** 2026-06-04
+**Author:** Brett (implementation), Copilot directive
+**Status:** Implemented (PR #1650 c7be8d0)
+
+## Context
+
+Generated `squad-*` workflows are maintained upstream and outside project control. However, zizmor code-scanning was flagging them locally, creating noise in security alerts.
+
+## Decision
+
+**User Directive:** Ignore comments and security issues from generated `squad-*` workflows — the project does not control these upstream workflows.
+
+**Technical Implementation:** Configure zizmor-action to exclude `.github/workflows/squad-*.yml` and `.github/workflows/squad-*.yaml` from scanning via repository-owned workflow inputs.
+
+## What Was Done
+
+- Verified locally and with `.squad/scripts/verify.sh`
+- Committed to PR #1650 as c7be8d0
+- zizmor now excludes generated Squad workflows from code-scanning alerts
+
+## Rationale
+
+- Squad workflows are generated upstream; local security noise is not actionable
+- Reduces false-positive alert fatigue for the team
