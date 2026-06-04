@@ -1,3 +1,11 @@
+## Core Context
+
+Product/Board. v2.3.0 milestone created, issues prepared (#1645, #1647, #1648). Board triage complete. Product rescan & scope decisions recorded. v2.3.0 gate issues & release gates decisions merged. Next: v2.3.0 sprint coordination.
+
+---
+
+## Full History
+
 # Newt — History & Learnings (Consolidated 2026-03-25)
 
 ## CORE CONTEXT — Product Essentials
@@ -339,6 +347,10 @@ Full plan available at .squad/decisions.md (v1.10.0 kickoff decision).
 
 5. **Squad links should feel natural, not promotional.** The blog post includes 5 Squad links woven into relevant context (getting started → where the reader would actually need it, brownfield guide → where it solved the author's problem). Links placed at decision points in the narrative feel helpful rather than salesy.
 
+6. **Release gates must precede release-gate issues.** On 2026-06-04, audited v2.3.0 readiness. Found that v2.3.0 development cycle was started (PR #1638, VERSION updated), but GitHub milestone and scope were undefined. Correctly held release-gate issue creation pending Ripley's scope definition rather than creating empty gate issues. This maintains compliance with pattern established v0.8.0→v2.2.1: gates track deliverable completion, not precede scope. Creating gate issues without scope creates acceptance-criteria ambiguity and duplicate triage work.
+
+7. **v2.2.1 signoff is correctly assigned to human (Ripley) without blocking AI work.** Issue #1639 is labeled squad:newt but assigned to jmservera (Ripley) for final human validation. Verified that this setup allows AI agents to work on v2.3.0 development in parallel without waiting for v2.2.1 to ship, while preserving human signoff gate. This is the correct async pattern for release handoff.
+
 ## 2026-03-22: Release v1.12.1 Executed
 
 **Task:** Full release process for v1.12.1 (A/B embedding infrastructure + bug fixes).
@@ -540,3 +552,287 @@ PR #1623 was blocked by GitHub ruleset: "A conversation must be resolved"
 ### Files Modified
 - `CHANGELOG.md` — Added v2.2.0 section with 6 issues
 - `.squad/agents/newt/history.md` — This session notes
+
+---
+
+## 2026-06-03 — v2.3.0 Milestone Planning (Ralph Loop Post-Release)
+
+**Context:** v2.2.1 released successfully. Immediate task: define v2.3.0 milestone board from product perspective.
+
+**Milestone State Analysis:**
+- **v2.2.1:** ✅ Merged 2026-06-03 (maintenance: volume migration Phase 1c, E2E reliability, Solr-init safety)
+- **v2.3.0:** Development cycle started (VERSION = 2.3.0-dev), **BUT no GitHub milestone created yet**
+- **v2.5:** 25 research issues (Solr 10 migration, all labeled `go:needs-research`)
+- **UNASSIGNED:** 4 pre-release warning issues from run #26917585162
+
+**Open Issues Breakdown (29 total):**
+| Category | Count | Status |
+|----------|-------|--------|
+| v2.5 (Solr 10 migration) | 25 | Research phase |
+| Pre-release warnings (unassigned) | 4 | Triage needed |
+| v2.3.0 | 0 | **NOT YET DEFINED** |
+
+**Pre-Release Warning Issues (All Unassigned):**
+- #1631 (sq:brett) — Config warnings (ZooKeeper, Solr, solr-init)
+- #1630 (sq:brett) — Memory warnings  
+- #1629 (sq:parker) — Connection warnings
+- #1628 (sq:brett) — Deprecation warnings
+
+**Critical Gap: Missing v2.3.0 Release Gate Deliverables**
+Per Aithena release standard (enforced since v0.8.0):
+- ❌ Release notes doc template
+- ❌ Test report template
+- ❌ Admin/user manual updates issue
+- ❌ Release validation checklist
+
+**Product Decision Points Identified:**
+1. Should v2.3.0 be feature-full or patch-only? (Affects scope and due date)
+2. Are pre-release warnings v2.3 release blockers or v2.5 tech debt?
+3. Should pre-release run results auto-create issues for all warnings, or only P0+?
+
+**Recommendations for Ripley (Exact Next Actions):**
+1. **Immediate:** Define v2.3.0 scope (features/fixes/infrastructure/patch-only) and create milestone
+2. **Immediate:** Triage #1628–1631: assign to v2.3.0 (if blocker) or v2.5 (if tech debt)
+3. **This week:** Create 4 release follow-up issues (docs, test report, manuals, checklist)
+4. **Optional:** Define policy for pre-release warning auto-creation (suggest: threshold >= 5 warnings or P0+ severity)
+
+**Learnings from v2.2.1 Cycle Applied:**
+1. Release gate enforcement (docs-first pattern) has eliminated release surprises; v2.3.0 must follow same standard
+2. Unassigned issues after release indicate process gap; need to proactively define next-cycle deliverables
+3. v2.5 research stack is healthy (all items have clear "needs-research" label); forward planning is working
+4. Pre-release warning volume (4 from single run) suggests automation opportunity or severity filtering needed
+
+---
+
+## 2026-06-03T22:02 — PR #1637 Review (Release Docs for v2.2.1)
+
+**Context:** Copilot requested Newt review on PR #1637. Ripley indicated PR needs product/release sign-off before merge approval.
+
+**PR Details:**
+- **Status:** OPEN, BLOCKED (CI workflow failures: assign-work FAILURE/SKIPPED)
+- **Changes:** 4 files (367 additions, 1 deletion)
+  - docs/release-notes/v2.2.1.md (NEW)
+  - docs/test-reports/v2.2.1.md (NEW)
+  - docs/admin-manual.md (UPDATE)
+  - docs/user-manual.md (UPDATE)
+- **Checklist:** 7 items, all unchecked
+- **Reviews:** None yet
+
+### Documentation Quality Assessment ✅
+
+**Release Notes (v2.2.1.md) — APPROVED**
+- Well-structured (Summary, Notable Changes, Breaking Changes, Upgrade Instructions, Validation Steps)
+- Accurately documents all 5 core changes: #1616 (prod overlay volumes), #1544 (Solr safety), #1583 (E2E rate-limit), #1617 (fixture skips), #1623 (skeleton suites)
+- Breaking change clearly disclosed: "Prod overlay deployments should back up existing bind-mounted data before restart"
+- Step-by-step upgrade paths with curl validation commands
+- Prerequisites section complete (Docker v20.10+, Compose v2.0+, Python 3.12+)
+- Contributor roles documented (Newt, Ripley, Parker, Lambert, Copilot)
+
+**Test Report (v2.2.1.md) — APPROVED**
+- Verdict: ✅ PASS (maintenance patch, focused scope)
+- Honest limitations disclosure: "CI and PR export artifacts not captured; confidence is documentation-led rather than pipeline-led"
+- 5 repository spot-checks with expected behaviors
+- Evidence trail: all issues (#1616, #1544, #1583, #1617, #1623) referenced and linkable
+- Acknowledges what was NOT validated (PR export data, CI run artifacts)
+- Appropriate scope for maintenance patch
+
+**Admin Manual Update — APPROVED**
+- v2.2.1 added to operator notes header
+- Correctly states: "volumes no longer carry lingering bind-mount override pattern"
+- Maintains existing formatting and section structure
+- No breaking changes introduced in documentation
+
+**User Manual Update — APPROVED**
+- v2.2.1 summary added to release notes section
+- Correctly identifies as "Maintenance patch"
+- Links to detailed release-notes/v2.2.1.md for users who want details
+- Maintains hierarchy and navigation consistency
+
+### Merge Readiness Verdict
+
+**Documentation Quality:** ✅ **APPROVED FOR MERGE**
+- All documentation is comprehensive, accurate, and up-to-date
+- Breaking changes are clearly highlighted
+- No user-facing risk from these docs
+- Test report is honest about limitations (appropriate for maintenance patch)
+
+**Actual Merge Status:** ❌ **BLOCKED — TECHNICAL ISSUE**
+- **CI Blocker:** assign-work workflow failing; GitHub ruleset violation prevents merge
+- **No Reviews Yet:** Needs Ripley (Lead) approval after CI passes
+- **Checklist Items:** 7 items unchecked (these are informational validation items, not code blockers)
+
+### Action Required
+
+1. **For Ripley:** Fix CI assign-work failure, then approve/merge
+2. **For Newt Release Gate:** Created follow-up issue #1639 "Release Validation Checklist: v2.2.1" to capture the human validation items (accuracy, completeness, testing) that should be signed off before shipping to main
+3. **PR #1637:** Document says APPROVE with note "after CI passes"
+
+### Follow-Up Issue Created
+
+**Issue #1639: Release Validation Checklist: v2.2.1**
+- Captures all 7 checklist items as separate GitHub issue (not PR blockers)
+- Allows team to collaborate on validation without blocking the PR merge
+- Links all related issues (#1616, #1544, #1583, #1617, #1623)
+- Assigns to squad for sign-off after PR #1637 merges
+
+### Learnings Applied
+
+1. **Checklist as follow-up, not blocker:** PR checklist items that require human judgment belong in separate GitHub issue, not as PR merge blockers. This keeps automation PRs unblocked while ensuring validation happens.
+2. **Documentation-first release gate remains enforced:** All docs quality requirements still met; no shortcuts taken.
+3. **CI workflow issues separate from product assessment:** assign-work failure is CI/automation concern, not product concern; documented separately.
+4. **Maintenance patch scope appropriate:** Limited changes (#1616, #1544, #1583, #1617, #1623) means focused test report + compact release notes are appropriate; no evidence bloat.
+
+---
+
+## Session: Product Board Rescan (2026-06-04, 00:02 UTC)
+
+### Context
+
+Ralph loop active post-v2.2.1. Recent merges: #1628, #1629, #1630 (pre-release warning issues); #1631 triaged as non-release-blocking; #1637 release docs merged; #1639 tracks human release validation.
+
+### Findings
+
+**v2.2.1 Release Status: ✅ CLEAR**
+- All release gate items complete (notes, tests, manual updates, pre-release warnings triaged)
+- #1639 (Release Validation Checklist) assigned to Ripley + product comment added
+- No product/documentation blockers; ready for deployment
+
+**v2.3.0 Milestone Status: ⚠️ PENDING TEAM INPUT**
+- Development cycle started (PR #1638 merged; VERSION → 2.3.0-dev)
+- GitHub milestone does NOT exist
+- Release scope UNDEFINED (feature? patch? infrastructure? maintenance?)
+- Release gate issues NOT YET CREATED (will be created after scope defined)
+
+**Pre-Release Warning Triage Outcome:**
+- #1628 (deprecation) — CLOSED ✓
+- #1629 (connection) — CLOSED ✓
+- #1630 (memory) — CLOSED ✓
+- #1631 (config) — OPEN, assigned to Brett+Kane, P1, not a release blocker
+
+### Actions Taken (Product-Safe)
+
+1. Added comment to #1639 confirming release readiness
+2. Assigned #1639 to Ripley (jmservera) for final sign-off
+3. Confirmed v2.3.0-dev state in repo
+4. Created decision document in `.squad/decisions/inbox/newt-product-rescan.md`
+
+### Learnings Applied
+
+1. **Scope definition must precede milestone creation:** Without defined scope (feature/patch/infrastructure/maintenance), squad members have no clarity on deliverables. Ripley must define this before Newt creates release-gate issues.
+2. **Pre-release warning triage reduces friction:** Triaging warnings into "blocked" vs. "tech debt" vs. "false positive" categories early (per ripley-next-milestone-triage.md decision) keeps the release path clear while allowing focused development.
+3. **Release gate pattern is self-healing:** The four-item gate (notes + tests + manuals + PM sign-off) successfully caught and routed the #1639 checklist work to a separate issue rather than blocking PR #1637 merge. The pattern is resilient.
+4. **v2.3.0 scope question is not a blocker:** Development can proceed on pre-release warnings (#1631) and v2.5 research work while Ripley defines scope. No parallelism loss.
+
+### Exact Next Action
+
+**Ripley must:**
+1. Define v2.3.0 scope (feature/patch/infrastructure/maintenance?)
+2. Create GitHub v2.3.0 milestone
+3. Return to Newt for release-gate issue creation
+
+**Newt is ready:** Will create four release-gate issues (release notes, test report, manual updates, validation checklist) immediately upon scope confirmation.
+
+**No product side blocker to release or next cycle.**
+
+---
+
+---
+
+## Session: v2.3.0 Release Gate Issues Preparation (2026-06-04, 01:20 UTC)
+
+### Context
+
+Ripley assigned Newt to Issues #1645, #1647, #1648 (v2.3.0 release-gate issues) after confirming v2.3.0 scope: **maintenance/infrastructure hardening cycle** with a 2026-06-11 target. The only implementation item is Issue #1631 (pre-release config/security triage), which Kane approved as medium defense-in-depth accepted risk.
+
+### Work Completed
+
+**Issue #1645 (Release Notes):**
+- Created `docs/release-notes/v2.3.0.md` (6.7 KB)
+- Scope: Maintenance/infrastructure validation; no new user features
+- Key sections:
+  1. Infrastructure & Configuration Security Posture (production constraints: keep ZK internal, maintain Solr auth)
+  2. Upgrade instructions (simple: pull images + restart; no config changes)
+  3. Operator validation steps
+  4. Known issues/limitations (accepted risk documentation)
+
+**Issue #1647 (User/Admin Manual Updates):**
+- Updated `docs/user-manual.md`: Added v2.3.0 summary (maintenance release, no user changes, references release notes)
+- Updated `docs/admin-manual.md`:
+  1. Operator-notes header: Added v2.3.0 with scope summary
+  2. New section "Deployment Updates for v2.3.0": Detailed operator responsibilities, production constraints with YAML examples, upgrade path, config table
+
+**Issue #1648 (Release Validation Checklist):**
+- Reviewed Lambert's test report framework (v2.3.0.md test-reports — draft, awaiting PR #1649 merge + CI evidence)
+- Recorded exact prerequisites for final sign-off
+- Documented blocking condition: PR #1649 ("Keep ZooKeeper private") must merge before test evidence can be collected
+
+**Decision Document Created:**
+- `.squad/decisions/inbox/newt-v230-gate-issues.md` (9.8 KB)
+- Documents all three issues, rationale for each decision, and exact prerequisites for implementation merge
+
+### Key Insights & Learnings
+
+#### 1. Infrastructure Releases Deserve Explicit Operator Constraints
+v2.3.0 showed me that maintenance/infrastructure releases need **operator responsibility statements** in the release notes, not just feature lists. The accepted-risk decision in Issue #1631 (ZK/Solr config posture) only holds if operators enforce constraints like "keep ZooKeeper internal."
+
+**Application:** Future infrastructure releases should include explicit "Operator Responsibilities" sections in release notes + admin manual, with YAML examples if config constraints exist.
+
+#### 2. Production Constraints Are Part of the Product Contract
+Documenting "do not publish ZooKeeper ports" and "maintain Solr BasicAuth" in release notes (not just deployment guides) elevates these from operational tips to **product-level constraints**. PM approval gate should validate that all production constraints are clearly published.
+
+**Application:** Release gate checklist should include: "Are all production constraints for this release clearly documented?" — not just features.
+
+#### 3. Test Report Framework Pattern Scales Well
+Lambert's approach of preparing a framework early (with checklist + prerequisites), then filling in evidence after CI, works because it:
+- Makes PM coordination transparent (exact blockers are known upfront)
+- Decouples documentation prep from implementation completion
+- Provides a clear checklist for implementation teams
+
+**Application:** Recommend this pattern (framework-first, evidence-later) for all future releases with complex test coordination.
+
+#### 4. Maintenance Release Scope Requires PM Alignment Early
+v2.3.0's scope ("maintenance/infrastructure" vs. "feature patch" vs. "emergency fix") determined the entire release gate shape. Without Ripley's explicit scope confirmation, PM work would have been wasteful or misdirected.
+
+**Application:** Enforce scope definition **before** creating release-gate issues. Make this a blocking prerequisite for Ripley in future v2.4+ planning.
+
+### Exact Next Actions (Not in Scope for Newt Now)
+
+1. **Brett (Infra):** Merge PR #1649; pass required CI checks
+2. **Lambert (Tester):** After PR #1649 merge, capture test evidence and complete test report
+3. **Newt (PM):** After test evidence, sign off on Issue #1648 checklist
+4. **Ripley (Lead):** Final approval; merge to main; tag v2.3.0
+
+### Release Gate Status
+
+- **v2.3.0 Milestone:** ✅ Exists; due 2026-06-10
+- **Release Notes:** ✅ Complete and ready for review
+- **User/Admin Manuals:** ✅ Updated; ready for review
+- **Test Report:** ✅ Framework ready; evidence pending PR #1649 merge
+- **No Product/Documentation Blockers:** ✅ All PM-owned items ready
+
+**v2.3.0 is on track for 2026-06-11 target, pending implementation merge.**
+
+### Session Artifacts Created
+
+1. `docs/release-notes/v2.3.0.md` — Release notes with infrastructure validation focus
+2. Updated `docs/user-manual.md` — v2.3.0 summary
+3. Updated `docs/admin-manual.md` — Operator-notes header + "Deployment Updates for v2.3.0" section
+4. `.squad/decisions/inbox/newt-v230-gate-issues.md` — Decision document for squad coordination
+
+---
+
+
+## 2026-06-04: Ralph Loop Completion & v2.3.0 Prep
+
+**Scope:** v2.2.1 shipped; v2.3.0 milestone prepared.
+
+**Status:**
+- ✅ v2.3.0 milestone created (2026-06-11)
+- ✅ Issues prepared (#1645, #1647, #1648)
+- ✅ Board triage complete
+- ✅ Product rescan decisions recorded
+- ✅ v2.3.0 gate issues & release gates decisions merged
+
+**Next:** v2.3.0 sprint assignments under coordinator-only routing.
+
+---
