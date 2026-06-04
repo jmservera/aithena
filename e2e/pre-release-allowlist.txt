@@ -30,6 +30,31 @@ security:*permission denied*/data/thumbnails/*=ignore
 deprecation:*Deprecated*=info
 deprecation:*deprecated*=info
 
+# RabbitMQ 4.0-management emits a known startup deprecation notice for the
+# management_metrics_collection feature even when the project does not set the
+# deprecated_features.permit.management_metrics_collection flag. It is
+# non-actionable during pre-release smoke tests and remains visible as info.
+deprecation:*management_metrics_collection*=info
+deprecation:*will not be permitted by default*future minor version of RabbitMQ*=info
+
 # Connection retries during startup are normal for Docker Compose orchestration
 connection:*retrying*=ignore
 connection:*connection refused*=ignore
+
+# ZooKeeper client/secure/observer ports are intentionally supplied through
+# ZOO_SERVERS in the Compose ensemble, not separate static config keys.
+config:*clientPort is not set*=ignore
+config:*secureClientPort is not set*=ignore
+config:*observerMasterPort is not set*=ignore
+
+# ZooKeeper maxCnxns defaults to unlimited when not explicitly configured.
+# The Compose services set ZOO_MAX_CLIENT_CNXNS=60, so this startup line is
+# informational noise from the image bootstrap path.
+config:*maxCnxns is not configured*=ignore
+
+# Solr's default ZooKeeper credentials/ACL providers leave znodes open inside
+# the private Compose network. This is an accepted dev/CI and default production
+# posture until Brett implements optional ZK ACL hardening; do not hide any
+# other authentication or authorization failures.
+config:*Using default ZkCredentialsProvider*=ignore
+config:*Using default ZkACLProvider*=ignore

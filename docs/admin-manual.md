@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the prod-overlay volume migration work, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, and fixes a CodeQL security alert in the installer. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), and [v2.2.0 Deployment Updates](#deployment-updates-for-v220) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 / v2.2.1 / v2.3.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the prod-overlay volume migration work, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, and fixes a CodeQL security alert in the installer. **v2.2.1** is the follow-up maintenance patch for the 2.2.x line: it removes the remaining prod-overlay bind-mount overrides, preserves the single-node Solr safety guard, and improves release/test reliability. **v2.3.0** is an infrastructure hardening release: enforces host-level Redis memory overcommit, documents ZooKeeper security posture constraints, and improves pre-release validation. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), [v2.2.0 Deployment Updates](#deployment-updates-for-v220), [v2.2.1 Deployment Updates](#deployment-updates-for-v221), and [v2.3.0 Deployment Updates](#deployment-updates-for-v230) sections below.
 
 ## System architecture overview
 
@@ -51,11 +51,11 @@ This reduces startup races where the lister, indexer, or admin tools could come 
 
 ## Host Prerequisites
 
-Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host** (these cannot be set from inside a container).
+Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host**.
 
 ### Redis memory overcommit
 
-Redis background saves (RDB snapshots) fork the process, which requires the kernel to allow memory overcommit. Without this setting Redis logs `WARNING Memory overcommit must be enabled!` and background saves may fail.
+Redis background saves (RDB snapshots) fork the process, which requires the kernel to allow memory overcommit. Without this setting Redis logs `WARNING Memory overcommit must be enabled!` and background saves may fail. The CI workflows set this host sysctl before starting Compose; local and production operators should apply the host-level setting below.
 
 ```bash
 # Apply immediately (non-persistent):
@@ -66,11 +66,13 @@ echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/90-redis-overcommit.con
 sudo sysctl --system
 ```
 
-> **Note:** The compose stack sets `stop-writes-on-bgsave-error no` in `src/redis/redis.conf` so Redis remains available even when overcommit is disabled, but applying the host-level setting is still recommended to ensure reliable snapshots.
+> **Note:** This setting must be applied on the Docker host, not in Compose: `vm.overcommit_memory` is not namespaced by the Linux container runtime and will fail if configured as a service-level `sysctls` entry. The compose stack sets `stop-writes-on-bgsave-error no` in `src/redis/redis.conf` so Redis remains available even when overcommit is disabled, but keeping overcommit enabled is still recommended to ensure reliable snapshots.
 
 ### ZooKeeper credentials (production hardening)
 
-Solr logs `Using default ZkCredentialsProvider/ZkACLProvider` at startup. This is informational — it means ZooKeeper znodes are world-readable. For production deployments that require ZooKeeper ACL-based access control, see the [Apache Solr ZooKeeper Access Control](https://solr.apache.org/guide/solr/latest/deployment-guide/zookeeper-access-control.html) documentation.
+Solr logs `Using default ZkCredentialsProvider/ZkACLProvider` at startup. In the default Docker Compose deployment this is an accepted posture: ZooKeeper is only exposed on the private Compose network, Solr BasicAuth/RBAC protects HTTP APIs, and no ZooKeeper ports should be published to the host.
+
+Security implication: any already-compromised container on the Compose network could read or modify SolrCloud znodes, including configsets and `security.json`. Treat ZooKeeper ACLs as required hardening for regulated or multi-tenant production deployments, and do not publish `2181`, `2888`, or `3888` outside the Compose network. For deployments that require ZooKeeper ACL-based access control, see the [Apache Solr ZooKeeper Access Control](https://solr.apache.org/guide/solr/latest/deployment-guide/zookeeper-access-control.html) documentation.
 
 ## Deployment with Docker Compose
 
@@ -5155,3 +5157,227 @@ v2.2.0 publishes the existing service images used by the Compose stack:
 | `ghcr.io/jmservera/aithena-document-lister:2.2.0` | Existing |
 | `ghcr.io/jmservera/aithena-embeddings-server:2.2.0` | Existing |
 | `ghcr.io/jmservera/aithena-solr-search:2.2.0` | Existing |
+
+## Deployment Updates for v2.2.1
+
+### Summary
+
+v2.2.1 is a **maintenance patch release** for the 2.2.x line and should be treated as the authoritative operator guide for this patch level. Key changes affecting operators:
+
+1. **Prod overlay volume migration follow-up (#1616)** — `docker/compose.prod.yml` removes the remaining bind-mount override pattern for `rabbitmq-data` and `redis-data`, completing the prod-overlay volume cleanup.
+2. **Solr-init replication factor cap (#1544)** — Single-node deployments with stale `SOLR_REPLICATION_FACTOR` values remain protected from RED collection health during startup.
+3. **Release/test reliability improvements (#1583, #1617, #1623)** — CI login flow is less rate-limit-prone, maintainer-only fixture tests skip cleanly when absent, and E2E coverage scaffolding is documented for future expansion.
+
+**Breaking Changes:** None for application behavior or topology. Existing prod-overlay deployments that still rely on bind-mounted state should back up and migrate that data deliberately before restart.
+
+### Prod Overlay Volume Migration Follow-Up
+
+This patch finishes the remaining prod-overlay cleanup in `docker/compose.prod.yml`. The important operator outcome is that `rabbitmq-data` and `redis-data` no longer depend on legacy bind-mount `driver_opts` overrides.
+
+**If you use `docker/compose.prod.yml`:**
+
+1. Update the overlay file to match the v2.2.1 repo state.
+2. Validate the merged config:
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A5 -B2 "rabbitmq-data\|redis-data"
+   ```
+3. If the host still contains data you need from an older bind-mounted deployment, back it up before restart.
+
+**Operational note:**
+
+The cleanup changes the backing-store expectation, not the application schema. Docker-managed volumes are now the intended steady state for these services in the prod overlay.
+
+### Single-Node Solr Deployments
+
+The `solr-init` entrypoint in `docker-compose.yml` retains the replication-factor safety cap introduced in the previous maintenance cycle. On a single-node host, a stale `.env` such as `SOLR_REPLICATION_FACTOR=3` will be reduced to the available node count automatically.
+
+**Operator guidance:**
+
+- No new action is required if you already run with `SOLR_REPLICATION_FACTOR=1`
+- If you maintain shared `.env` files across single-node and multi-node environments, this patch keeps the single-node path safer during upgrades and rebuilds
+
+### Release/Test Reliability Notes
+
+These changes do not alter runtime production configuration, but they matter for release operations:
+
+- **#1583:** Playwright global setup now reuses `E2E_API_TOKEN` when CI has already minted one, reducing avoidable login-rate-limit failures.
+- **#1617:** Real-library document-indexer tests skip when maintainer-only fixtures are not present, reducing false-negative validation failures on clean environments.
+- **#1623:** Release notes now track new E2E scaffolding for thumbnail, download, and recovery coverage, giving the release gate a clearer checklist for future expansion.
+
+### Upgrade Instructions
+
+**From v2.2.0 → v2.2.1:**
+
+1. **Pull the latest service images:**
+   ```bash
+   docker compose pull
+   ```
+
+2. **Refresh the prod overlay if you use it:**
+   ```bash
+   # update docker/compose.prod.yml to match the v2.2.1 repo state
+   ```
+
+3. **Validate the merged volume config:**
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml config | grep -A5 -B2 "rabbitmq-data\|redis-data"
+   ```
+
+4. **Restart services:**
+   ```bash
+   docker compose up -d
+   # or
+   ./start.sh
+   ```
+
+5. **Verify health:**
+   ```bash
+   curl -sf http://localhost/v1/health && echo "✅ API healthy"
+   curl -sf http://localhost/admin/ && echo "✅ Admin portal accessible"
+   ```
+
+**From v2.0.0 or v2.1.0:**
+Follow the [v2.2.0 deployment notes](#deployment-updates-for-v220) first, then apply the v2.2.1 overlay validation above.
+
+### Configuration Changes
+
+| Change | File | Required action |
+|---|---|---|
+| Remove remaining prod-overlay bind-mount overrides for `rabbitmq-data` and `redis-data` | `docker/compose.prod.yml` | **Required if using prod overlay.** Ensure the file matches v2.2.1 before restart. |
+| Keep single-node Solr replication-factor cap aligned across entrypoints | `docker-compose.yml`, `docker/solr-init.sh` | No action required; verify only if you operate a 1-node topology. |
+| Reuse CI-minted API token during Playwright setup | `e2e/playwright/global-setup.ts`, `.github/workflows/*` | No runtime action; relevant for release/CI validation only. |
+
+### Data Migration
+
+**No application-level data migration is required.** Solr schema, auth storage, and API contracts are unchanged.
+
+**However:** if an older prod deployment still depends on bind-mounted Redis, RabbitMQ, or document storage, preserving that state remains a manual backup/restore exercise during migration to Docker-managed volumes.
+
+### Container Image Changes
+
+v2.2.1 publishes the existing service images with the new release tag:
+
+| Image | Status |
+|---|---|
+| `ghcr.io/jmservera/aithena-aithena-ui:2.2.1` | Updated tag |
+| `ghcr.io/jmservera/aithena-document-indexer:2.2.1` | Updated tag |
+| `ghcr.io/jmservera/aithena-document-lister:2.2.1` | Updated tag |
+| `ghcr.io/jmservera/aithena-embeddings-server:2.2.1` | Updated tag |
+| `ghcr.io/jmservera/aithena-solr-search:2.2.1` | Updated tag |
+
+## Deployment Updates for v2.3.0
+
+### Summary
+
+v2.3.0 is a **maintenance release focused on infrastructure hardening and operational clarity.** This release does not add user-facing features or API changes. Key changes affecting operators:
+
+1. **Pre-release deprecation cleanup (#1628)** — Known RabbitMQ deprecation warnings are now classified, reducing alert fatigue during validation.
+2. **Pre-release validation improvements (#1629)** — Pre-release log analysis is more precise, surfacing only actionable warnings.
+3. **Redis memory overcommit requirement (#1630)** — Host-level `vm.overcommit_memory=1` is now enforced in all deployment topologies and documented as a hard requirement.
+4. **ZooKeeper security posture publication (#1631)** — Accepted risk model for default ZooKeeper/Solr configuration is now documented; CI validation prevents accidental port publication.
+
+**Breaking Changes:** None. All services maintain API and schema compatibility.
+
+### Host Prerequisites (Updated for v2.3.0)
+
+#### Redis Memory Overcommit (Updated Requirement)
+
+**v2.3.0 enforces this requirement across all CI and deployment workflows.** The Docker host kernel must allow memory overcommit for Redis background snapshots (RDB save).
+
+**Required host configuration (before starting the Compose stack):**
+
+```bash
+# Apply immediately (non-persistent):
+sudo sysctl vm.overcommit_memory=1
+
+# Make persistent across reboots:
+echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/90-redis-overcommit.conf
+sudo sysctl --system
+```
+
+**Why this matters:**
+
+- CI workflows now validate this setting before starting the integration test stack.
+- Local developers must apply this setting to avoid `WARNING Memory overcommit must be enabled!` and RDB snapshot failures.
+- Production deployments should verify this is applied on the Docker host.
+
+#### ZooKeeper Security Posture (Production Constraint)
+
+**Aithena's default Docker Compose deployment does not enable ZooKeeper ACLs. This is an accepted security posture for non-regulated deployments.**
+
+**Key constraints:**
+
+- ZooKeeper ports (`2181`, `2888`, `3888`) **must NOT be published** outside the Compose network.
+- Solr BasicAuth and role-based access control (RBAC) protect all HTTP APIs.
+- The Compose network boundary is the security perimeter.
+
+**For regulated or multi-tenant deployments:**
+
+If your deployment requires ZooKeeper ACL-based access control, implement it per the [Apache Solr ZooKeeper Access Control guide](https://solr.apache.org/guide/solr/latest/deployment-guide/zookeeper-access-control.html). v2.3.0 CI validation will catch accidental port publication, but explicit ZooKeeper ACL setup must be done by the operator.
+
+### Upgrade Instructions
+
+**From v2.2.1 → v2.3.0:**
+
+1. **Apply/verify host prerequisites (IMPORTANT):**
+   ```bash
+   # Check Redis memory overcommit setting
+   grep vm.overcommit_memory /proc/sys/vm/overcommit_memory
+   # Should return: 1
+   
+   # If not set, apply it now
+   sudo sysctl vm.overcommit_memory=1
+   echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/90-redis-overcommit.conf
+   sudo sysctl --system
+   ```
+
+2. **Pull the latest service images:**
+   ```bash
+   docker compose pull
+   ```
+
+3. **Restart services:**
+   ```bash
+   docker compose up -d
+   # or
+   ./start.sh
+   ```
+
+4. **Verify health:**
+   ```bash
+   curl -sf http://localhost/v1/health | jq .
+   curl -sf http://localhost/admin && echo "✅ Admin portal accessible"
+   
+   # Check Redis memory overcommit is working
+   docker compose logs redis | grep -i "memory overcommit" || echo "✅ No warnings"
+   ```
+
+### Configuration Changes
+
+| Change | File | Required action |
+|---|---|---|
+| Enforce Redis memory overcommit (`vm.overcommit_memory=1`) on Docker host | Host sysctl | **REQUIRED.** Apply before starting Compose. |
+| Classify known RabbitMQ deprecation warnings | `e2e/pre-release-allowlist.txt` | No operator action. Reduces validation noise. |
+| Improve pre-release log analysis heuristics | `e2e/pre-release-check.sh` | No operator action. More precise warning detection. |
+| Document ZooKeeper security posture constraint | `docs/admin-manual.md` | No operator action. Do not publish ZooKeeper ports. |
+
+### Data Migration
+
+**No application-level data migration is required.** Solr schema, auth storage, and API contracts are unchanged.
+
+### Container Image Changes
+
+v2.3.0 publishes the existing service images with the new release tag:
+
+| Image | Status |
+|---|---|
+| `ghcr.io/jmservera/aithena-aithena-ui:2.3.0` | Updated tag |
+| `ghcr.io/jmservera/aithena-document-indexer:2.3.0` | Updated tag |
+| `ghcr.io/jmservera/aithena-document-lister:2.3.0` | Updated tag |
+| `ghcr.io/jmservera/aithena-embeddings-server:2.3.0` | Updated tag |
+| `ghcr.io/jmservera/aithena-solr-search:2.3.0` | Updated tag |
+
+### Known Limitations
+
+- **RabbitMQ deprecation warnings:** Allowlisted in v2.3.0. These are informational and do not indicate functional problems.
+- **Pre-release validation:** No longer surfaces allowlisted warnings, improving signal-to-noise ratio during release operations.
