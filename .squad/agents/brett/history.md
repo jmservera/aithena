@@ -174,6 +174,10 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Created issue in base repo (embeddings-server-base#4) with full Dockerfile specs for both variants
 - App-side PR is intentionally DRAFT/BLOCKED until base image is updated
 
+### PR #1641 Review Follow-up (2026-06-03)
+- Pre-release analyzer fixture labels must stay unique and monotonic after inserting new cases; duplicated numbers make CI output harder to map back to the script.
+- Redis overcommit remains a host/CI-runner `vm.overcommit_memory` prerequisite in this repo; do not document it as a Compose `sysctls` automation unless the compose stack actually adopts that pattern.
+
 ## Reskill Notes (2026-07-25)
 
 ### Self-Assessment

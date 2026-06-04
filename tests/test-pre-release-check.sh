@@ -188,7 +188,7 @@ assert_json_count "1 real finding (others filtered)" "$tmpdir/out.json" 1
 assert_json_field "category=crash" "$tmpdir/out.json" 0 "category" "crash"
 
 # -------------------------------------------------------
-echo "Test 12: Expected Solr startup readiness retries are ignored after startup window"
+echo "Test 13: Expected Solr startup readiness retries are ignored after startup window"
 : > "$tmpdir/solr-startup.txt"
 i=1
 while [ "$i" -le 65 ]; do
@@ -203,7 +203,7 @@ assert_exit "exit code 0 (expected startup retry)" 0 "$rc"
 assert_no_category "no connection findings" "$tmpdir/out.json" "connection"
 
 # -------------------------------------------------------
-echo "Test 13: Reconnect in filenames and URLs is not a connection warning"
+echo "Test 14: Reconnect in filenames and URLs is not a connection warning"
 : > "$tmpdir/reconnect-filename.txt"
 i=1
 while [ "$i" -le 65 ]; do
@@ -219,7 +219,7 @@ assert_exit "exit code 0 (reconnect content only)" 0 "$rc"
 assert_no_category "no connection findings" "$tmpdir/out.json" "connection"
 
 # -------------------------------------------------------
-echo "Test 14: Runtime connection failures are still warnings"
+echo "Test 15: Runtime connection failures are still warnings"
 : > "$tmpdir/runtime-connection.txt"
 i=1
 while [ "$i" -le 65 ]; do
