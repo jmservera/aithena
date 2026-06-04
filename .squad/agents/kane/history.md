@@ -94,6 +94,8 @@
 9. **Pydantic Field constraints** (ge, max_length) are model-level defense that persists across refactors — validate at model first, then runtime
 10. **Password length BEFORE hashing** — Argon2 processes full input, 1MB password = CPU DoS
 11. **CORS allow_credentials=true** needs strict origin validation — misconfigured browser + malicious origin = CSRF risk
+12. **Solr default ZK credentials/ACL providers** are medium-risk defense-in-depth findings, not automatic release blockers, only when ZooKeeper remains private to Compose and Solr HTTP auth is enabled.
+13. **For #1631 acceptance**, default Solr/ZK provider warnings are acceptable only if production Compose keeps ZooKeeper internal, Solr BasicAuth/RBAC remains required, and dev port overrides are treated as local-debug only.
 
 ## Reskill Notes
 
@@ -144,4 +146,3 @@
 **Decision Record:** `.squad/decisions.md` → "Security Analysis: Internal Service Authentication (Redis, ZooKeeper, Solr)"
 
 **Next:** Pending team consensus on compliance implications; network isolation discussion recommended.
-

@@ -131,7 +131,7 @@ jobs:
             # Reuse the canonical single-node overlay so CI exercises the same
             # compose wiring as local/installer deployments. The CI-only file
             # below provides tmpfs volumes for faster, ephemeral storage.
-            echo "COMPOSE_FILE=docker-compose.yml:docker/compose.single-node.yml:docker/compose.dev-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
+            echo "COMPOSE_FILE=docker-compose.yml:docker/compose.single-node.yml:docker/compose.ci-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
             cat > docker-compose.github-actions.yml <<'EOF'
           volumes:
             rabbitmq-data:
@@ -166,7 +166,7 @@ jobs:
               driver_opts: { type: tmpfs, device: tmpfs, o: "size=50m" }
           EOF
           else
-            echo "COMPOSE_FILE=docker-compose.yml:docker/compose.dev-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
+            echo "COMPOSE_FILE=docker-compose.yml:docker/compose.ci-ports.yml:docker/compose.e2e.yml:docker-compose.github-actions.yml" >> "$GITHUB_ENV"
             cat > docker-compose.github-actions.yml <<'EOF'
           volumes:
             rabbitmq-data:

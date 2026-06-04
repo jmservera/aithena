@@ -63,6 +63,10 @@ jobs:
             --auth-db-path "$RUNNER_TEMP/aithena-auth/users.db" \
             --reset
 
+          if [ -f .env ]; then
+            grep -E '^(SOLR_ADMIN_USER|SOLR_ADMIN_PASS|SOLR_READONLY_USER|SOLR_READONLY_PASS|ADMIN_API_KEY)=' .env >> "$GITHUB_ENV" || true
+          fi
+
           cat > docker-compose.github-actions.yml <<'EOF'
           volumes:
             rabbitmq-data:
@@ -127,7 +131,7 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
+            -f docker/compose.ci-ports.yml \
             -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
@@ -140,7 +144,7 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
+            -f docker/compose.ci-ports.yml \
             -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
@@ -150,7 +154,7 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
+            -f docker/compose.ci-ports.yml \
             -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
@@ -163,9 +167,16 @@ jobs:
             local label="$2"
             local attempts="${3:-60}"
             local sleep_seconds="${4:-5}"
+            local auth="${5:-}"
 
             for ((attempt=1; attempt<=attempts; attempt+=1)); do
-              if curl --fail --silent --show-error "$url" >/dev/null; then
+              if [ -n "$auth" ]; then
+                curl_args=(--user "$auth")
+              else
+                curl_args=()
+              fi
+
+              if curl --fail --silent --show-error "${curl_args[@]}" "$url" >/dev/null; then
                 echo "$label is ready ($url)"
                 return 0
               fi
@@ -178,15 +189,21 @@ jobs:
             return 1
           }
 
-          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr"
-          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection"
+          if [ -z "${SOLR_ADMIN_USER:-}" ] || [ -z "${SOLR_ADMIN_PASS:-}" ]; then
+            echo "::error::Missing SOLR_ADMIN_USER or SOLR_ADMIN_PASS from generated .env; cannot run authenticated Solr readiness checks." >&2
+            exit 1
+          fi
+
+          SOLR_AUTH="${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}"
+          wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr" 60 5 "$SOLR_AUTH"
+          wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection" 60 5 "$SOLR_AUTH"
           wait_for_url "http://localhost:8080/health" "solr-search API"
           wait_for_url "http://localhost/health" "nginx"
           wait_for_url "http://localhost/search" "Aithena UI"
 
           docker compose \
             -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
+            -f docker/compose.ci-ports.yml \
             -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
@@ -224,7 +241,7 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
+            -f docker/compose.ci-ports.yml \
             -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
@@ -237,6 +254,7 @@ jobs:
         with:
           compose-logs-path: ${{ runner.temp }}/compose-logs.txt
           version-file: ./VERSION
+          allowlist-path: ./e2e/pre-release-allowlist.txt
           create-issues: 'true'
           milestone: ${{ inputs.milestone }}
 
@@ -257,7 +275,7 @@ jobs:
         run: |
           docker compose \
             -f docker-compose.yml \
-            -f docker/compose.dev-ports.yml \
+            -f docker/compose.ci-ports.yml \
             -f docker/compose.e2e.yml \
             -f docker-compose.github-actions.yml \
             --profile production \
