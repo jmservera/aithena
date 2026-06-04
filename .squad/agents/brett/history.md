@@ -174,6 +174,10 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 - Created issue in base repo (embeddings-server-base#4) with full Dockerfile specs for both variants
 - App-side PR is intentionally DRAFT/BLOCKED until base image is updated
 
+### PR #1641 Review Follow-up (2026-06-03)
+- Pre-release analyzer fixture labels must stay unique and monotonic after inserting new cases; duplicated numbers make CI output harder to map back to the script.
+- Redis overcommit remains a host/CI-runner `vm.overcommit_memory` prerequisite in this repo; do not document it as a Compose `sysctls` automation unless the compose stack actually adopts that pattern.
+
 ## Reskill Notes (2026-07-25)
 
 ### Self-Assessment
@@ -392,3 +396,9 @@ CI workflows now export `E2E_API_TOKEN` (minted via curl) for test runners to co
 ### Local-Test-First Directive (2026-05-31, Round 2)
 
 New standing directive from Juanma: "You have docker and playwright locally so you must test everything before pushing to GitHub." For CI/test infrastructure and Playwright E2E testing, this means running E2E tests locally against the `docker compose` stack before pushing any changes to test runners, fixtures, or E2E configuration. Brett's CI auth workflow exports `E2E_API_TOKEN` for test consumers (used in #1588 fix); future changes to how CI mints or passes auth tokens should be validated locally with Playwright running against the docker stack. Implication: test infrastructure changes are integration-level and deserve local validation alongside CI validation; don't treat them as local-only changes.
+
+### 2026-06-03 — Ralph round 1 next-milestone infra sweep
+- PR #1638 review feedback was valid gatekeeping but already addressed by stripping `X.Y.Z-dev` to `X.Y.Z` inside pre-release RC resolution; unresolved review threads still need an explicit reply plus GraphQL resolution before merge.
+- Issue #1628 showed that analyzer severity can be the right infra lever when upstream images emit non-actionable startup deprecations; keep known RabbitMQ `management_metrics_collection` notices visible as `info`, not warnings.
+- Issue #1630 confirmed Redis overcommit is a host-level `vm.*` sysctl: automate it in CI before Compose startup, and keep local/production host-level docs as the operator path.
+- Issue #1631 must remain Brett+Kane: compose wiring is infra-owned, but Solr/ZooKeeper default credential and ACL warning acceptance is security judgment owned by Kane.

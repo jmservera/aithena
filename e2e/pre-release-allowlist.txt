@@ -30,6 +30,13 @@ security:*permission denied*/data/thumbnails/*=ignore
 deprecation:*Deprecated*=info
 deprecation:*deprecated*=info
 
+# RabbitMQ 4.0-management emits a known startup deprecation notice for the
+# management_metrics_collection feature even when the project does not set the
+# deprecated_features.permit.management_metrics_collection flag. It is
+# non-actionable during pre-release smoke tests and remains visible as info.
+deprecation:*management_metrics_collection*=info
+deprecation:*will not be permitted by default*future minor version of RabbitMQ*=info
+
 # Connection retries during startup are normal for Docker Compose orchestration
 connection:*retrying*=ignore
 connection:*connection refused*=ignore

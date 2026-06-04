@@ -140,7 +140,21 @@ assert_exit "exit code 0 (info only)" 0 "$rc"
 assert_json_field "severity=info" "$tmpdir/out.json" 0 "severity" "info"
 
 # -------------------------------------------------------
-echo "Test 8: --max-errors threshold allows some errors"
+echo "Test 8: RabbitMQ management metrics deprecation stays info-only"
+cat > "$tmpdir/rabbitmq-deprecation.txt" <<'EOF'
+rabbitmq-1 | 2026-06-03 [warning] Deprecated features: `management_metrics_collection`.
+rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor version of RabbitMQ and will be removed from a future major version.
+rabbitmq-1 | 2026-06-03 [warning]     "deprecated_features.permit.management_metrics_collection = true"
+EOF
+sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/rabbitmq-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 0 (info only)" 0 "$rc"
+assert_json_count "3 info findings" "$tmpdir/out.json" 3
+assert_json_field "severity[0]=info" "$tmpdir/out.json" 0 "severity" "info"
+assert_json_field "severity[1]=info" "$tmpdir/out.json" 1 "severity" "info"
+assert_json_field "severity[2]=info" "$tmpdir/out.json" 2 "severity" "info"
+
+# -------------------------------------------------------
+echo "Test 9: --max-errors threshold allows some errors"
 cat > "$tmpdir/multi.txt" <<'EOF'
 app1  | 2024-01-01 FATAL: db connect failed
 app2  | 2024-01-01 out of memory error
@@ -152,17 +166,17 @@ sh "$ANALYZER" --max-errors 1 "$tmpdir/multi.txt" > "$tmpdir/out2.json" 2>/dev/n
 assert_exit "exit code 1 (errors > threshold)" 1 "$rc"
 
 # -------------------------------------------------------
-echo "Test 9: --max-errors 0 is default (any error fails)"
+echo "Test 10: --max-errors 0 is default (any error fails)"
 sh "$ANALYZER" "$tmpdir/multi.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
 assert_exit "exit code 1 (default threshold)" 1 "$rc"
 
 # -------------------------------------------------------
-echo "Test 10: Missing allowlist file is tolerated"
+echo "Test 11: Missing allowlist file is tolerated"
 sh "$ANALYZER" --allowlist "/nonexistent/file.txt" "$tmpdir/clean.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
 assert_exit "exit code 0 (missing allowlist)" 0 "$rc"
 
 # -------------------------------------------------------
-echo "Test 11: Allowlist with real errors still catches them"
+echo "Test 12: Allowlist with real errors still catches them"
 cat > "$tmpdir/mixed.txt" <<'EOF'
 zoo1  | 2024-01-01 insecure quorum communication
 app1  | 2024-01-01 FATAL: unrecoverable error
@@ -174,7 +188,7 @@ assert_json_count "1 real finding (others filtered)" "$tmpdir/out.json" 1
 assert_json_field "category=crash" "$tmpdir/out.json" 0 "category" "crash"
 
 # -------------------------------------------------------
-echo "Test 12: Expected Solr startup readiness retries are ignored after startup window"
+echo "Test 13: Expected Solr startup readiness retries are ignored after startup window"
 : > "$tmpdir/solr-startup.txt"
 i=1
 while [ "$i" -le 65 ]; do
@@ -189,7 +203,7 @@ assert_exit "exit code 0 (expected startup retry)" 0 "$rc"
 assert_no_category "no connection findings" "$tmpdir/out.json" "connection"
 
 # -------------------------------------------------------
-echo "Test 13: Reconnect in filenames and URLs is not a connection warning"
+echo "Test 14: Reconnect in filenames and URLs is not a connection warning"
 : > "$tmpdir/reconnect-filename.txt"
 i=1
 while [ "$i" -le 65 ]; do
@@ -205,7 +219,7 @@ assert_exit "exit code 0 (reconnect content only)" 0 "$rc"
 assert_no_category "no connection findings" "$tmpdir/out.json" "connection"
 
 # -------------------------------------------------------
-echo "Test 14: Runtime connection failures are still warnings"
+echo "Test 15: Runtime connection failures are still warnings"
 : > "$tmpdir/runtime-connection.txt"
 i=1
 while [ "$i" -le 65 ]; do
