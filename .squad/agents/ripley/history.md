@@ -337,6 +337,14 @@ Each merged skill preserves key patterns, examples, and anti-patterns from all s
 
 ## Learnings
 
+
+### v2.2.1 Patch Release Completion (2026-06-03)
+
+- Newt-approved patch path shipped as `v2.2.1` rather than moving the already-published `v2.2.0` tag.
+- Release metadata landed on `dev` before promotion; `dev` merged to `main`; only then was `v2.2.1` tagged and pushed.
+- Release workflow completed successfully: tag validation, container builds, package artifact, smoke tests, and GitHub Release publication all passed.
+- Review threads on release docs were treated as real blockers; README/release notes/changelog were corrected before the dev→main promotion.
+- Next-cycle `VERSION=2.3.0-dev` is prepared in PR #1638 but blocked on an `assign-work` automation permission failure routed to Brett.
 ### PR #1637 assign-work blocker (2026-06-03T22:02:03.765+00:00)
 
 - PR-label routing is team metadata, not product validation. When `Squad Issue Assign` handles PR labels, it needs the base-repository token context (`pull_request_target`) and explicit PR/issue write permissions.

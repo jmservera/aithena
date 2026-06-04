@@ -30,6 +30,18 @@ gh release view vX.Y.Z
 
 If the tag/release already exists but does not point at the final release commit that contains the release docs and metadata, stop. Do not move a published tag without an explicit release-remediation decision; ask Newt to approve a new patch version or a tag repair plan.
 
+
+### Patch Supersession Path
+
+When Newt approves a patch version to supersede an already-published tag:
+
+1. Add the new patch `VERSION` and `CHANGELOG.md` entry on `dev` before promotion.
+2. Explicitly state in release notes/changelog that the patch supersedes the earlier tag, rather than silently duplicating notes.
+3. Treat README, release notes, and changelog consistency review threads as release blockers.
+4. Merge `dev` → `main` only after release PR checks and review threads are clean.
+5. Create and push the new tag only after the superseding metadata is reachable from `main`.
+6. Update `dev` to the next `X.Y.Z-dev` cycle only if the repo workflows accept dev semver; otherwise route the workflow gap before merging.
+
 ### Release Sequence
 1. Close all milestone issues
 2. Trigger `release-docs` workflow (generates release notes + test report)
