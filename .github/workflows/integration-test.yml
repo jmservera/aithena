@@ -235,6 +235,9 @@ jobs:
         run: |
           docker compose --profile production config >/dev/null
 
+      - name: Configure Redis memory overcommit
+        run: sudo sysctl vm.overcommit_memory=1
+
       - name: Build all container images
         run: |
           docker compose --profile production build
