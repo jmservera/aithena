@@ -189,6 +189,11 @@ jobs:
             return 1
           }
 
+          if [ -z "${SOLR_ADMIN_USER:-}" ] || [ -z "${SOLR_ADMIN_PASS:-}" ]; then
+            echo "::error::Missing SOLR_ADMIN_USER or SOLR_ADMIN_PASS from generated .env; cannot run authenticated Solr readiness checks." >&2
+            exit 1
+          fi
+
           SOLR_AUTH="${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}"
           wait_for_url "http://localhost:8983/solr/admin/info/system" "Solr" 60 5 "$SOLR_AUTH"
           wait_for_url "http://localhost:8983/solr/books/admin/ping?distrib=true" "Solr books collection" 60 5 "$SOLR_AUTH"

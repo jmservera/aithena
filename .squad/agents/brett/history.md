@@ -129,6 +129,10 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 
 ## Learnings
 
+### PR #1649 Solr readiness auth fail-fast (2026-06-04T01:20:37.644+00:00)
+
+- Authenticated Solr readiness probes must validate `SOLR_ADMIN_USER` and `SOLR_ADMIN_PASS` before constructing curl credentials; missing installer-exported `.env` values should fail fast with an explicit CI error instead of retrying opaque 401 responses.
+
 ### Issue #1631 CI ZooKeeper exposure follow-up (2026-06-04T01:20:37.644+00:00)
 
 - Use `docker/compose.ci-ports.yml` for CI and pre-release stacks that need host access to Redis/RabbitMQ/Solr/search APIs; keep `docker/compose.dev-ports.yml` local-only because it publishes ZooKeeper client ports for debugging.
