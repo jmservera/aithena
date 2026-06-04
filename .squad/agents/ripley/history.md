@@ -345,6 +345,10 @@ Each merged skill preserves key patterns, examples, and anti-patterns from all s
 - Release workflow completed successfully: tag validation, container builds, package artifact, smoke tests, and GitHub Release publication all passed.
 - Review threads on release docs were treated as real blockers; README/release notes/changelog were corrected before the dev→main promotion.
 - Next-cycle `VERSION=2.3.0-dev` is prepared in PR #1638 but blocked on an `assign-work` automation permission failure routed to Brett.
+### PR #1637 assign-work blocker (2026-06-03T22:02:03.765+00:00)
+
+- PR-label routing is team metadata, not product validation. When `Squad Issue Assign` handles PR labels, it needs the base-repository token context (`pull_request_target`) and explicit PR/issue write permissions.
+- Keep `pull_request_target` routing workflows limited to trusted metadata scripts and base-branch checkout; never execute PR-head code in that context.
 
 ### Project Review (2026-05-12)
 
