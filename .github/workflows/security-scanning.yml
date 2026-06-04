@@ -165,9 +165,27 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Collect zizmor workflow inputs
+        id: zizmor-inputs
+        run: |
+          {
+            echo "inputs<<EOF"
+            find .github/workflows -maxdepth 1 -type f \
+              \( -name "*.yml" -o -name "*.yaml" \) \
+              ! -name "squad-*.yml" \
+              ! -name "squad-*.yaml" \
+              ! -name "sync-squad-labels.yml" \
+              ! -name "sync-squad-labels.yaml" \
+              | sort
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run zizmor security scan
         uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d  # v0.5.6
         with:
+          # Squad workflows are generated upstream; scan all repository-owned
+          # workflows while excluding generated Squad workflow files.
+          inputs: ${{ steps.zizmor-inputs.outputs.inputs }}
           # SARIF output automatically uploaded to GitHub Code Scanning
           # Focuses on P0 findings: template-injection and dangerous-triggers
           advanced-security: true
