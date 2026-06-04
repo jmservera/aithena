@@ -50,6 +50,7 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 
 ## Learnings
 
+- **2026-06-04 — Squad coordinator upgrade:** Squad v0.9.4 upgrade completes coordinator refresh, workflow/skill sync, and template refresh smoothly via `squad upgrade`. Large upgrades may trigger code-scanning alerts in base branches; repository rules need admin bypass or alert dismissal before merge. Address upstream workflow patterns (checkout action pinning, credential handling) during upgrades to maintain security compliance.
 - **2026-06-04 — Solr readiness auth:** Solr readiness probes must validate `SOLR_ADMIN_USER` and `SOLR_ADMIN_PASS` before constructing curl credentials; missing installer-exported `.env` values should produce explicit CI errors, not opaque 401 retry loops.
 - **2026-06-04 — ZooKeeper exposure:** CI/production overlays must keep ZooKeeper ports unpublished while preserving Solr auth env wiring for init and health checks. Add compose config regression tests for both.
 - **2026-06-03 — Pre-release analyzer:** Keep fixture labels unique and monotonic so CI output maps back to scripts. Known RabbitMQ startup deprecation notices can remain `info` when non-actionable.
