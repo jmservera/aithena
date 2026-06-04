@@ -1,17 +1,30 @@
 {
-  "cycle": 1,
+  "cycle": 2,
   "round": 1,
-  "timestamp": "2026-06-01T07:05:59Z",
+  "timestamp": "2026-06-03T22:02:03.765+00:00",
   "status": "monitoring",
   "findings": {
-    "open_issues_unassigned": [
-      {"number": 1616, "title": "Follow-up: migrate docker/compose.prod.yml volumes (Phase 1c)", "state": "needs_routing"}
+    "release": {
+      "version": "v2.2.1",
+      "state": "shipped",
+      "release_pr": 1625,
+      "tag": "v2.2.1",
+      "workflow": "release.yml completed successfully"
+    },
+    "open_prs": [
+      {"number": 1640, "title": "fix: reduce pre-release connection warning noise", "state": "checks_running", "route": "Parker", "issue": 1629},
+      {"number": 1638, "title": "Start v2.3.0 development cycle", "state": "blocked_failed_assign_work", "route": "Brett"},
+      {"number": 1637, "title": "docs: release documentation for v2.2.1", "state": "superseded_by_shipped_release", "route": "Newt"}
     ],
-    "open_prs_v2_2": [
-      {"number": 1618, "title": "docs: release documentation for v2.2.0", "state": "awaiting_review", "reviewer": "newt"}
+    "milestones": [
+      {"title": "v2.5", "open_issues": 25, "closed_issues": 0}
     ],
-    "v2_5_inbox": 24,
-    "blocked_count": 0
+    "first_actionable_work": {
+      "issue": 1629,
+      "pr": 1640,
+      "owner": "Parker",
+      "action": "wait for integration/E2E completion, then review and merge if clean"
+    }
   },
-  "next_action": "continue_monitoring"
+  "next_action": "continue_v2_5_kickoff_after_release_backlog_prs_clear"
 }
