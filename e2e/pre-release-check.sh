@@ -300,6 +300,32 @@ scan_slow_startups() {
   done < "$LOG_FILE"
 }
 
+# Expected startup readiness probes can continue after the coarse startup window
+# in slower CI runs. Keep those out of warning issues while still surfacing
+# runtime dependency failures.
+is_expected_startup_connection_line() {
+  _svc="$1"
+  _lc_line="$2"
+  case "$_svc:$_lc_line" in
+    document-indexer*:*"waiting for solr collection"*) return 0 ;;
+  esac
+  return 1
+}
+
+is_actionable_connection_line() {
+  _lc_line="$1"
+  case "$_lc_line" in
+    *"connection refused"*|*"connection reset"*|*"connection timed out"*) return 0 ;;
+    *"reconnecting"*|*"reconnect attempt"*|*"failed to reconnect"*|*"trying to reconnect"*) return 0 ;;
+    *"retrying"*|*"retry"*"attempt"*)
+      case "$_lc_line" in
+        *"connection"*|*"rabbitmq"*|*"redis"*|*"solr"*|*"amqp"*|*"socket"*|*"broker"*) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
 # --- Category 5: Connection retries (after startup window) ---
 scan_connection_retries() {
   TOTAL_LINES="$(wc -l < "$LOG_FILE")"
@@ -316,11 +342,12 @@ scan_connection_retries() {
     fi
     svc="$(extract_service "$line")"
     lc_line="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
-    case "$lc_line" in
-      *"retrying"*|*"connection refused"*|*"reconnect"*|*"retry"*"attempt"*|*"connection reset"*|*"connection timed out"*)
-        add_finding "connection" "warning" "${svc:-unknown}" "$line" "$LINE_NUM"
-        ;;
-    esac
+    if is_expected_startup_connection_line "${svc:-unknown}" "$lc_line"; then
+      continue
+    fi
+    if is_actionable_connection_line "$lc_line"; then
+      add_finding "connection" "warning" "${svc:-unknown}" "$line" "$LINE_NUM"
+    fi
   done < "$LOG_FILE"
 }
 
