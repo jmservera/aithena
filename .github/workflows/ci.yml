@@ -261,6 +261,19 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b  # v4.0.0
 
+  compose-security-regression:
+    name: Compose security regression
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose security posture
+        run: sh tests/test-compose-security.sh
+
   all-tests-passed:
     name: All tests passed
     if: always()
@@ -273,6 +286,7 @@ jobs:
       - document-lister-tests
       - embeddings-server-tests
       - python-lint
+      - compose-security-regression
     steps:
       - name: Evaluate results
         env:
@@ -283,13 +297,14 @@ jobs:
           LISTER_RESULT: ${{ needs.document-lister-tests.result }}
           EMBEDDINGS_RESULT: ${{ needs.embeddings-server-tests.result }}
           LINT_RESULT: ${{ needs.python-lint.result }}
+          COMPOSE_SECURITY_RESULT: ${{ needs.compose-security-regression.result }}
           BUILD_NEEDED: ${{ needs.changes.outputs.build }}
         run: |
           if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
             echo "❌ Change detection failed"
             exit 1
           fi
-          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT"; do
+          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT" "$COMPOSE_SECURITY_RESULT"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "❌ One or more required jobs failed"
               exit 1

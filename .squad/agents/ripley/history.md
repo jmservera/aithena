@@ -337,6 +337,11 @@ Each merged skill preserves key patterns, examples, and anti-patterns from all s
 
 ## Learnings
 
+### PR #1649 compose regression CI gate (2026-06-04T01:20:37.644+00:00)
+
+- Reviewer-requested regression scripts for infrastructure/security posture must land inside a required CI aggregate before merge; manual green evidence is insufficient when the script protects accepted security posture.
+- For PR #1649, wiring `tests/test-compose-security.sh` into the required `All tests passed` aggregate keeps the gate small while ensuring ZooKeeper port exposure and Solr auth wiring regressions block the PR.
+
 ### PR #1638 assign-work unblock (2026-06-03T22:02:03.765+00:00)
 
 - Reused the PR #1643 routing-workflow permission pattern for PR-label assignment blockers: the base branch now carries `pull_request_target` plus explicit PR write permission for safe metadata-only assignment comments.
