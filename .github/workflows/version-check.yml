@@ -27,6 +27,8 @@ jobs:
           persist-credentials: false
 
       - name: Validate VERSION file
+        env:
+          BASE_REF: ${{ github.base_ref }}
         shell: bash
         run: |
           if [[ ! -f VERSION ]]; then
@@ -35,9 +37,16 @@ jobs:
           fi
 
           version="$(tr -d '[:space:]' < VERSION)"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "VERSION must contain a stable semver (X.Y.Z). Found: $version" >&2
-            exit 1
+          if [[ "$BASE_REF" == "dev" ]]; then
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-dev)?$ ]]; then
+              echo "VERSION must contain semver (X.Y.Z) or next-cycle dev semver (X.Y.Z-dev) on dev. Found: $version" >&2
+              exit 1
+            fi
+          else
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "VERSION must contain a stable semver (X.Y.Z). Found: $version" >&2
+              exit 1
+            fi
           fi
 
           echo "VERSION=$version" >> "$GITHUB_ENV"
