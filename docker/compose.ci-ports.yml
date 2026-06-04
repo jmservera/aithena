@@ -1,0 +1,39 @@
+#
+# CI/pre-release host port override.
+#
+# This mirrors the non-ZooKeeper ports needed by automated tests from
+# docker/compose.dev-ports.yml. ZooKeeper ports stay private to the Compose
+# network per the issue #1631 security posture.
+services:
+  redis:
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  embeddings-server:
+    ports:
+      - "8085:8080"
+
+  solr-search:
+    ports:
+      - "8080:8080"
+
+  redis-commander:
+    ports:
+      - "8081:8081"
+
+  solr:
+    ports:
+      - "8983:8983"
+
+  solr2:
+    ports:
+      - "8984:8983"
+
+  solr3:
+    ports:
+      - "8985:8983"

@@ -235,6 +235,20 @@ assert_json_count "1 connection finding" "$tmpdir/out.json" 1
 assert_json_field "category=connection" "$tmpdir/out.json" 0 "category" "connection"
 
 # -------------------------------------------------------
+echo "Test 16: Allowlist ignores accepted ZooKeeper/Solr config posture"
+cat > "$tmpdir/zk-config.txt" <<'EOF'
+zoo1  | 2026-06-03 clientPort is not set
+zoo1  | 2026-06-03 secureClientPort is not set
+zoo1  | 2026-06-03 observerMasterPort is not set
+zoo1  | 2026-06-03 maxCnxns is not configured
+solr1 | 2026-06-03 Using default ZkCredentialsProvider
+solr1 | 2026-06-03 Using default ZkACLProvider
+EOF
+sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/zk-config.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 0 (accepted ZK/Solr config)" 0 "$rc"
+assert_json_count "0 findings (accepted config posture)" "$tmpdir/out.json" 0
+
+# -------------------------------------------------------
 echo ""
 echo "========================================"
 echo "Results: $PASS passed, $FAIL failed"

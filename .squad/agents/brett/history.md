@@ -129,6 +129,11 @@ Use overlay files (not profiles) when making a sidecar optional affects the main
 
 ## Learnings
 
+### Issue #1631 CI ZooKeeper exposure follow-up (2026-06-04T01:20:37.644+00:00)
+
+- Use `docker/compose.ci-ports.yml` for CI and pre-release stacks that need host access to Redis/RabbitMQ/Solr/search APIs; keep `docker/compose.dev-ports.yml` local-only because it publishes ZooKeeper client ports for debugging.
+- Compose config regression tests should assert both sides of Kane's security posture: ZooKeeper services have no published ports in CI/production overlays, and Solr services keep `SOLR_AUTH_USER`/`SOLR_AUTH_PASS` wired before init/health checks.
+
 ### GPU Compose Override Pattern
 - Used override files (`docker/compose.gpu-nvidia.yml`, `docker/compose.gpu-intel.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
 - `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
