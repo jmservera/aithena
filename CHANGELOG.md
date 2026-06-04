@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-06-04
+
+### Changed
+
+- **Pre-release warning classification** — Narrows release validation noise by allowlisting known RabbitMQ, ZooKeeper, and Solr startup warnings while preserving detection of real runtime failures (#1628, #1629, #1631)
+- **Redis host prerequisite documentation** — Documents and validates the required `vm.overcommit_memory=1` host setting for reliable Redis background saves (#1630)
+- **Release validation evidence** — Adds v2.3.0 release notes, test report, manual review, and validation checklist artifacts for the dev→main promotion gate (#1645, #1646, #1647, #1648)
+
+### Security
+
+- **ZooKeeper exposure guardrail** — Keeps ZooKeeper private in CI validation stacks and adds Compose regression coverage so ZooKeeper ports are not accidentally published outside the Compose network (#1631)
+
+### Breaking Changes
+
+- No API, UI, schema, or data-model breaking changes. Operators should apply the documented Redis host overcommit setting before deployment.
+
 ## [2.2.1] — 2026-06-03
 
 v2.2.1 supersedes the published v2.2.0 tag, which predates the final E2E skeleton and release metadata commits. The complete v2.2.0 release content is repeated here intentionally so the patch release notes match the corrected release history.
