@@ -30,6 +30,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v2.2.1 — Maintenance patch:** Prod-overlay volume handling is safer for upgrades, Solr single-node startup is more robust, and release/test reliability has improved. This release does not add a new online bootstrap script; follow the setup path in the [Admin Manual](admin-manual.md). See [v2.2.1 Release Notes](release-notes/v2.2.1.md).
 
+**v2.3.0 — Infrastructure hardening:** This maintenance release has no user-facing feature changes. Operators must apply `vm.overcommit_memory=1` on the Docker host before starting the stack (required for Redis background saves). ZooKeeper security posture is now formally documented, and known RabbitMQ 4.x deprecation warnings are suppressed. See [v2.3.0 Release Notes](release-notes/v2.3.0.md) and the [Admin Manual](admin-manual.md) for operator requirements.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
