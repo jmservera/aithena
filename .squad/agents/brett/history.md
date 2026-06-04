@@ -1,413 +1,67 @@
 # Brett — History
 
-## Core Context — Infrastructure Patterns
+## Core Context
 
-### Docker Compose Architecture
-- **17 containers:** SolrCloud 3-node cluster + ZooKeeper 3-node ensemble, Redis, RabbitMQ, nginx, 6 Python services, admin UIs
-- **Health checks:** 8+ checks with context-specific `start_period` (10-60s). See skill `docker-health-checks`
-- **Resource limits:** Memory (128m-2g), CPU (0.5-1.0), log rotation (json-file, 10m × 3 files)
-- **Restart policies:** `unless-stopped` (stateful), `on-failure` (stateless workers)
-- **Graceful shutdown:** `stop_grace_period` 60s (Solr/ZK), 30s (RabbitMQ/Redis), 10s (others)
-- **Dependency ordering:** Always `condition: service_healthy` for critical deps; never bare `depends_on`
-- **Port strategy:** Only nginx publishes host ports (80/443); all others use `expose:` only
-- **Compose overlays:** `docker/compose.ssl.yml` for certbot/TLS; profiles can't add volumes to other services
+Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI/CD release plumbing, backup/restore, and infra validation.
 
-### Bind-Mount Permissions (Recurring Pattern)
-Bind-mount ownership is **always the host's**. Dockerfile `RUN chown` only applies to the image layer, not bind-mounted paths.
-- **Solr:** UID 8983 for `/var/solr/data` volumes
-- **Redis:** UID 999 | **RabbitMQ:** UID 100 | **nginx:** UID 101
-- **Python services (app user):** UID 1000 (auth DB, collections DB)
-- **Named volumes** don't have this problem — Docker initializes them from the image layer
-- **Installer/setup scripts** must `chown` bind-mount dirs to match container UIDs
+### Compose Architecture
+- Standard stack: 17 containers (3× SolrCloud, 3× ZooKeeper, Redis, RabbitMQ, nginx, Python services, frontend, admin UIs).
+- Only nginx publishes host ports; services use `expose:`. Use `compose.ci-ports.yml` for CI host access, keep `compose.dev-ports.yml` local-only because it exposes ZooKeeper.
+- Use `depends_on: condition: service_healthy`, explicit memory/CPU limits, json log rotation, role-based restart policies, and service-specific graceful shutdown.
+- Use overlays when optional features change another service's mounts/ports (`ssl`, `gpu`, `e2e`, `ci-ports`). Profiles can disable services but cannot modify other services.
 
-### SolrCloud & ZooKeeper Operations
-See skill `solrcloud-docker-operations` for full runbook. Key points:
-- ZK quorum = 2 of 3 nodes; losing 2 = write outage
-- Solr nodes recover via peer sync, tlog replay, or full replication after restart
-- Collection creation via solr-init one-shot container; consumers poll with exponential backoff
-- Back up ZK state and Solr data independently — Solr disks alone aren't enough for restore
+### Permissions and Stateful Data
+- Bind-mount ownership is the host's; Dockerfile `RUN chown` does not affect mounts. Setup scripts must `chown` dirs to UIDs: Solr 8983, Redis 999, RabbitMQ 100, nginx 101, app 1000.
+- Named volumes avoid many ownership issues because Docker initializes them from the image.
+- RabbitMQ credentials apply only on first Mnesia DB creation; stale volumes retain old credentials. Clear bind-mount data on credential/major upgrades and enable feature flags before 3.x → 4.x.
 
-### nginx Reverse Proxy
-- Routes: `/admin/solr/`, `/rabbitmq/`, `/streamlit/`, `/redis/`, frontend (5173), API (8080)
-- Health endpoint: `GET /health` (200 "healthy", `access_log off`)
-- Starts LAST (`depends_on` all upstreams healthy) to avoid 502 errors
+### Solr, ZooKeeper, and Search Capacity
+- ZK quorum is 2/3; losing 2 nodes causes write outage. Back up ZK state and Solr data independently. `solr-init` creates collections; consumers poll with exponential backoff.
+- Solr 9.7 `solr auth enable` assigns built-in admin roles. Do not `set-user-role` afterward; use built-in `search` for read-only users.
+- Page chunking + int8 quantization cuts 54M-vector HNSW memory from ~130GB to ~9GB, making 32GB standalone Solr viable on NVMe; revisit SolrCloud above ~15M vectors or if HA is mandatory.
 
-### Build Contexts
-| Service | Context | Pattern |
-|---------|---------|---------|
-| admin, solr-search | `.` (repo root) | Shared deps, `src/{service}/` COPY paths |
-| embeddings-server, document-lister, document-indexer, aithena-ui | `./src/{service}` | Isolated, relative paths |
+### nginx and Build Contexts
+- nginx routes `/admin/solr/`, `/rabbitmq/`, `/streamlit/`, `/redis/`, frontend, API; `/health` returns 200 `healthy`. nginx starts last to avoid 502s.
+- Build contexts: `admin`/`solr-search` use repo root; `embeddings-server`, `document-lister`, `document-indexer`, `aithena-ui` use `src/{service}`.
 
-### Docker Image Optimization (Audit Results, v1.7.1 spec)
-- **Total image size:** 2.3 GB → 1.44 GB possible (−38%) via multi-stage builds
-- **Security gap:** Zero non-root users across Python services (P0 fix)
-- **embeddings-server:** Largest at 850 MB; uses pip (not uv), pre-downloads ML model
-- **embeddings-server packaging:** Has both `pyproject.toml`+`uv.lock` AND `requirements.txt`; convention treats it as requirements.txt service
+### Release, CI/CD, and Security
+- Docs merge before version tags. `VERSION` is source of truth; prod compose pulls GHCR images; `v*.*.*` tags build/push images and tarball.
+- Workflow security: secrets via `with:`, `${{ }}` in `env` not `run`, SHA-pin actions, document Checkov skips, upload SARIF.
+- CI split: fast dev checks, full E2E on main/release. `workflow_run` artifact access should use GitHub REST/API.
+- Dependabot: patch/minor auto-merge; batch backlogs, exclude majors, resolve lockfiles, patch-bump VERSION only on real changes.
 
-### Release Process & Versioning
-- **Docs-gate-the-tag:** Release docs merged to `dev` BEFORE version tag created
-- **VERSION file:** Source of truth; `buildall.sh` exports `VERSION`, `GIT_COMMIT`, `BUILD_DATE`
-- **GHCR distribution:** `docker/compose.prod.yml` uses image pulls (no build in prod)
-- **Release automation:** `release.yml` on `v*.*.*` tags → build/push → tarball asset
-- **Screenshot pipeline:** integration-test → `release-screenshots` artifact → `update-screenshots.yml` → commits PNGs to `docs/screenshots/` on `dev`
+### BCDR and Validation
+- Backup tiers: critical SQLite/secrets, high Solr/ZK, medium Redis/RabbitMQ. Auth DB migrations are forward-only with `schema_version`; SQLite `.backup` for snapshots.
+- Collections DB uses `/data/collections/` and `COLLECTIONS_DB_PATH`.
+- Pre-release validation scans compose logs; Redis overcommit is host/CI-runner `vm.overcommit_memory`, not Compose-only unless sysctls are adopted.
+- Stress tests use Docker SDK `container.stats(stream=False)` and `oom`/`die` events with graceful fallback.
 
-### CI/CD & Workflow Security
-- **Secrets:** `with:` parameters only (never step-level `env:`); always `${{ secrets.X }}` syntax
-- **IaC scanning:** Checkov (`.checkov.yml`, soft_fail, SARIF upload); all skip rules documented
-- **Zizmor compliance:** All `${{ }}` expressions in `env:` blocks, not in `run:` blocks
-- **Actions pinning:** All actions SHA-pinned
-- **CI split:** Fast checks (~5 min) on dev PRs; full E2E (60 min) on main/release only
-- **Dependabot:** Auto-merge patch/minor with CI gate; failures get `dependabot:manual-review` label
-- **Cross-workflow artifacts:** Use `actions/github-script` REST API (not `actions/download-artifact`) for `workflow_run` triggers
+## Key Patterns
 
-### BCDR Planning (v1.10.0)
-- **3-tier backup strategy:** Critical (SQLite + secrets), High (Solr + ZK), Medium (Redis + RabbitMQ)
-- **Auth DB migrations:** Forward-only with `schema_version` table; SQLite `.backup` for snapshots
-- **Collections DB:** New volume mount `/data/collections/`, env var `COLLECTIONS_DB_PATH`
-- **Pre-release validation:** `e2e/pre-release-check.sh` scans compose logs for 9 categories; POSIX-compatible
-- **Stress testing:** Docker SDK `container.stats(stream=False)` for metrics; OOM detection via events API
-
----
-
-## Key Learnings (Distilled)
-
-### RabbitMQ Credentials
-Credentials only applied on first Mnesia DB creation. Stale volumes retain old credentials. Must clear bind-mount dirs completely on upgrade. Feature flags must be enabled before 3.x → 4.0 upgrade.
-
-### Health Check Debugging
-- `CMD` = array format (no shell expansion) vs `CMD-SHELL` = string passed to `/bin/sh -c`
-- For Node.js containers without curl/wget, use built-in `http` module with explicit timeout
-- `start_period` must account for worst-case init; pad 2-3x in CI environments
-- Piping to grep in health checks causes SIGPIPE — simplify or avoid
-
-### Compose Overlay vs Profiles
-Use overlay files (not profiles) when making a sidecar optional affects the main service's volume mounts or port bindings. Profiles can't conditionally modify other services.
-
-### GitHub Actions Patterns
-- `workflow_run` event for cross-workflow orchestration; scope to branch + success
-- Heredocs consume stdin in shell steps — use subprocess piping instead
-- GitHub label hierarchies aren't enforced; ensure parent labels via event-driven + periodic audit
-- GitHub Data API requires `workflow` scope for `.github/workflows/` modifications
-
-### Docker SDK for Monitoring
-`container.stats(stream=False)` for structured metrics. Events API with `{"event": ["oom", "die"]}` for OOM detection. Service collectors need graceful fallback (debug-level logging).
-
----
-
-## Completed Work (Summary)
-
-| Date | Issue/PR | What |
-|------|----------|------|
-| 2026-03-14 | — | Joined as Infra Architect; SolrCloud research |
-| 2026-03-16 | #304, #303, #356 | Release-docs fixes, health check timing |
-| 2026-03-17 | #363/PR#427 | Release packaging (GHCR, tarball, prod compose) |
-| 2026-03-17 | PR#403 | RabbitMQ 4.0 upgrade + ZK health check fix |
-| 2026-03-17 | PR#424 | redis-commander health check fix |
-| 2026-03-17 | — | CI test strategy restructuring (fast dev / full E2E) |
-| 2026-03-18 | PR#539 | Squad label sync fix (parent label enforcement) |
-| 2026-03-19 | #531/PR#536, #532/PR#537 | Screenshot pipeline (artifact + commit workflow) |
-| 2026-03-19 | — | Docker Compose diagnostic (auth DB bind-mount UID) |
-| 2026-03-20 | — | Compose build audit; found admin missing from prod.yml |
-| 2026-03-20 | — | v1.10.0 PRD decomposition (19 issues for BCDR + CI/CD) |
-| 2026-07-22 | #557/PR#571 | Auth DB migration framework + backup script |
-| 2026-07-24 | #470/PR#485, #483/PR#486 | Dependabot CI hardening + heartbeat integration |
-| 2026-07-24 | — | Docker build optimization spec (v1.7.1) |
-| 2026-07-25 | #542/PR#544 | Pre-release validation workflow + log analyzer |
-| 2026-07-25 | — | Certbot extraction to ssl overlay |
-| 2026-07-25 | — | setupdev.sh expansion (all dev tools) |
-| 2026-03-16 | — | Cleaned 44 stale branches; enabled auto-delete |
-| 2026-03-22 | #826/PR#847 | nginx static thumbnail serving (volume mount + /thumbnails/ location) |
-| — | #1120 | Extract reusable container build workflow (build-containers.yml) |
-| — | #1123 | Pre-release container workflow (RC tags via build-containers.yml, auto-increment) |
-| — | #1118/PR#TBD | RC smoke tests in pre-release workflow (same matrix as release.yml, advisory) |
-| — | #1153,#1154/PR#1213 | GPU compose override files (NVIDIA + Intel) for embeddings-server |
-| — | #1286 | Add intel-extension-for-pytorch (IPEX) to openvino extras |
-| — | #1325/PR#1328 | BuildKit --mount=from + --inexact for embeddings-server layer optimization (~95% reduction) |
-| 2026-04-21 | #1496/PR#1504 | Dev integration test workflow using single-node topology |
-
----
+- **Health checks:** `CMD-SHELL` for expansion; `CMD` arrays do not expand vars. Node can use built-in `http`. Pad `start_period` 2–3x in CI, avoid grep SIGPIPE, and fail fast on missing auth env.
+- **Overlay selection:** Use overlays for SSL/certbot, GPU, CI ports, prod; profiles only for disabling services/topologies.
+- **GPU deployment:** NVIDIA uses `deploy.resources.reservations.devices`; Intel uses `/dev/dri`, `video` group, OpenVINO base. WSL2 needs Windows host drivers. Avoid `group_add: [render]` unless the group exists in-image.
+- **Embeddings offline loading:** `snapshot_download()` misses metadata needed by `optimum-intel`. Save OpenVINO `SentenceTransformer` to `/models/...` during build, verify with offline env vars, and load local dirs at runtime.
+- **Intel XPU:** `intel-extension-for-pytorch` is required for Intel GPU/XPU dispatch; include it only in OpenVINO extras so CPU/torch builds stay unaffected.
+- **BuildKit optimization:** Use `RUN --mount=from=...` for transient tools; `COPY --from` creates layers and does not deduplicate. `uv sync --inexact --frozen --no-dev` installs only deltas. Use Dockerfile syntax v1.
+- **OpenVINO cache:** Put persistent OV cache under `/app/ov_cache` owned by the app user, not `/tmp`.
+- **Auth in E2E:** CI should mint one `E2E_API_TOKEN` and pass it to Playwright/pytest to avoid rate limiting from repeated login calls. Validate CI/test infrastructure locally with Docker + Playwright before pushing.
+- **Labels and PR hygiene:** GitHub label hierarchy is not enforced; parent labels need event-driven plus periodic sync. Review threads must be resolved through GraphQL `resolveReviewThread`; comments alone do not satisfy branch protection.
 
 ## Learnings
 
-### PR #1649 Solr readiness auth fail-fast (2026-06-04T01:20:37.644+00:00)
-
-- Authenticated Solr readiness probes must validate `SOLR_ADMIN_USER` and `SOLR_ADMIN_PASS` before constructing curl credentials; missing installer-exported `.env` values should fail fast with an explicit CI error instead of retrying opaque 401 responses.
-
-### Issue #1631 CI ZooKeeper exposure follow-up (2026-06-04T01:20:37.644+00:00)
-
-- Use `docker/compose.ci-ports.yml` for CI and pre-release stacks that need host access to Redis/RabbitMQ/Solr/search APIs; keep `docker/compose.dev-ports.yml` local-only because it publishes ZooKeeper client ports for debugging.
-- Compose config regression tests should assert both sides of Kane's security posture: ZooKeeper services have no published ports in CI/production overlays, and Solr services keep `SOLR_AUTH_USER`/`SOLR_AUTH_PASS` wired before init/health checks.
-
-### GPU Compose Override Pattern
-- Used override files (`docker/compose.gpu-nvidia.yml`, `docker/compose.gpu-intel.yml`) rather than profiles — consistent with existing ssl/e2e overlay pattern
-- `DEVICE` and `BACKEND` env vars in base compose default to `cpu`/`torch` for backward compatibility
-- NVIDIA: `deploy.resources.reservations.devices` with `driver: nvidia` and `capabilities: [gpu]`
-- Intel: `/dev/dri` device passthrough + `video` group_add + `BASE_TAG` build arg (selects openvino base image)
-- Key files: `docker/compose.gpu-nvidia.yml`, `docker/compose.gpu-intel.yml`
-
-### HF Hub Offline Loading — Pre-Cached Local Model Directory
-- `snapshot_download()` does NOT fully cache the API metadata `optimum-intel` needs (`tree/main?recursive=True` endpoint)
-- Base images pre-cache models into a local directory during build using `m = SentenceTransformer(name, backend='openvino'); m.save('/models/...')`
-- Runtime: `os.path.isdir(local_path)` → load from disk (zero HF Hub API calls); fall back to hub if missing (backward-compat)
-- Always add an offline verification RUN step (`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -c "SentenceTransformer('/models/...')"`) to fail-fast during build
-- Key files: `embeddings-server-base/Dockerfile`, `src/embeddings-server/main.py`
-
-### IPEX Dependency for Intel XPU (Issue #1286)
-- `intel-extension-for-pytorch` (IPEX) is required in the openvino extras for Intel GPU/XPU inference
-- Without IPEX, PyTorch detects Intel GPU hardware but cannot dispatch to it — inference fails at runtime
-- IPEX 2.8.0 resolved cleanly against torch 2.10.0 and sentence-transformers 5.3.0 (no version conflicts)
-- No Dockerfile or config changes needed — IPEX is pulled in automatically via `uv sync --extra openvino`
-- The CPU/torch variant is unaffected; IPEX is only installed when `INSTALL_OPENVINO=true`
-- Key file: `src/embeddings-server/pyproject.toml`
-
-### Container Group Gotcha
-- `group_add: [render]` in Docker Compose fails if the `render` group doesn't exist inside the container image
-- The `render` group is a host-level Linux concept for GPU DRM access; slim Python images don't have it
-- For WSL2 Intel GPU (`/dev/dxg`), only `video` group is needed
-
-### BuildKit `--mount=from` for Transient Build Tools (Issue #1325)
-- `RUN --mount=from=image,source=/bin,target=/usr/local/bin/tool` bind-mounts a file from another image for the duration of a single RUN command only — it never appears in any image layer
-- This is the preferred pattern for build tools (uv, cargo, etc.) that should not ship in runtime images
-- `COPY --from=image /tool /usr/local/bin/tool` creates a permanent layer — use `--mount=from` instead when the tool is only needed during build
-- Docker COPY always writes the full directory content as a new layer regardless of what exists in the base — it does NOT deduplicate against base layers. This makes multi-stage "build→COPY .venv→runtime" ineffective when both stages share the same base with a pre-populated .venv
-- `uv sync --inexact` preserves existing packages and only installs the delta — combine with `--mount=from` for minimal layers (~200MB vs ~4GB)
-- Requires `# syntax=docker/dockerfile:1` directive for cross-version compatibility; BuildKit is default since Docker 23.0+ and already enabled in CI via `docker/setup-buildx-action`
-- Key file: `src/embeddings-server/Dockerfile`
-
-### OV Cache Location — /app over /tmp
-- OpenVINO cache dir moved from `/tmp/ov_cache` to `/app/ov_cache` for consistency — owned by `app` user, inside WORKDIR
-- `/tmp` should be avoided for persistent cache in containers (ephemeral, sometimes noexec-mounted)
-
-### Cross-Repo Coordination for Base Image Changes
-- Base image changes (jmservera/embeddings-server-base) and app Dockerfile changes (jmservera/aithena) must be coordinated as a breaking pair
-- Created issue in base repo (embeddings-server-base#4) with full Dockerfile specs for both variants
-- App-side PR is intentionally DRAFT/BLOCKED until base image is updated
-
-### PR #1641 Review Follow-up (2026-06-03)
-- Pre-release analyzer fixture labels must stay unique and monotonic after inserting new cases; duplicated numbers make CI output harder to map back to the script.
-- Redis overcommit remains a host/CI-runner `vm.overcommit_memory` prerequisite in this repo; do not document it as a Compose `sysctls` automation unless the compose stack actually adopts that pattern.
-
-## Reskill Notes (2026-07-25)
-
-### Self-Assessment
-- **Strongest areas:** Docker Compose orchestration, health check design, SolrCloud operations, CI/CD workflow security
-- **Growth areas:** Have moved from pure infra into BCDR planning, stress testing, and release automation
-- **Knowledge gaps:** Container runtime security (seccomp/AppArmor profiles), Kubernetes migration path (if ever needed), advanced BuildKit features (cache mounts, heredoc syntax in Dockerfiles)
-
-### What I Consolidated
-- Compressed 599 lines → ~120 lines of Core Context + distilled learnings + work log table
-- Merged 15+ detailed PR entries into pattern summaries (health checks, bind-mounts, workflows)
-- Removed duplicate content already covered by skills (docker-compose-operations, docker-health-checks, solrcloud-docker-operations)
-- Removed verbose screenshot pipeline architecture docs (decision already in `.squad/decisions.md`)
-- Removed stale sprint manifests and queued task tracking
-
-### Skills Coverage
-- `docker-compose-operations` — comprehensive, covers lifecycle and troubleshooting
-- `docker-health-checks` — comprehensive, covers all 8 service patterns
-- `solrcloud-docker-operations` — comprehensive, covers backup/restore/recovery
-- **Gap identified:** nginx patterns scattered across history; build context patterns not in a skill
-- **Gap identified:** Bind-mount permission patterns are the #1 recurring issue but only partially covered in docker-compose-operations
-
-## Additional Historical Context (Summarized)
-
-### Release Process Enhancements
-- **Security mandatory (v1.14.0):** All releases must pass Bandit/Checkov/zizmor/CodeQL with no critical/high findings; Dependabot alerts reviewed; threat assessment on significant features
-- **BCDR Validation (v1.14.0):** Restore scripts support `DRY_RUN=1` for CI mock environments; exit code 2 (warnings) acceptable; pytest markers for infrastructure-dependent tests
-- **Production e5 Migration Plan (2026-03-26):** Blue/green deployment strategy documented; 7-step process with rollback (<5 min); parity verification + 48h monitoring
-
-### Release Optimization Analysis
-- **Asymmetric changes:** v1.8.0–v1.11.0 shows 78% commits in 2 services; embeddings-server (9GB, 1 commit) rebuilt 3× unnecessarily
-- **Recommendation:** Change-detection CI (40% build time savings, 1 week effort, low risk) — detect changed services via `git diff`, skip builds for unchanged, retag images
-
-### Additional Technical Decisions Documented in `.squad/decisions.md`
-- 4-stage Dockerfile optimization for embeddings-server (independent layer caching)
-- Non-root container patterns (Alpine + Debian)
-- HSTS + security headers in nginx SSL config
-- Offline installer architecture (3-stage)
-- A/B testing human evaluation UI (SQLite storage, nDCG@10+MRR metrics)
-- ZooKeeper AdminServer hardening
-
----
-
-## v1.17.0 GPU Acceleration: Admin Manual Documentation (WI-11, 2026-03-25)
-
-### Work Item WI-11: Admin Manual GPU Documentation
-
-**PR #1216 opened (squad/1158-admin-manual-gpu).** Operator documentation for GPU deployment and troubleshooting.
-
-**Content added to admin-manual.md (137 lines):**
-- Architecture section: `DEVICE` and `BACKEND` environment variable reference table
-- NVIDIA GPU prerequisites, Container Toolkit installation (Ubuntu/Debian), host + Docker verification
-- Intel GPU prerequisites, compute-runtime installation, device verification
-- WSL2 GPU passthrough patterns for both vendors (Windows driver requirement emphasized)
-- Docker Compose override file usage pattern (`-f docker/compose.gpu-nvidia.yml`)
-- Embeddings-server health endpoint verification with expected GPU output
-- Troubleshooting table: 5 symptoms with diagnosis and resolution
-
-**Key learning for ops:** WSL2 GPU passthrough differs significantly by vendor:
-- **NVIDIA:** `/dev/dxg` exposed by WSL2 automatically; install drivers on Windows host; install Container Toolkit inside WSL
-- **Intel:** `/dev/dri/renderD128` exposed by WSL2; install drivers on Windows host; container override maps `/dev/dri` into container
-- **Critical:** Both vendors require GPU drivers installed on the Windows host, not inside WSL. This is the #1 failure point.
-
-**Placement:** Section added after "Deployment with Docker Compose" section (logical flow for first-time operators). Appears before "Backup dashboard and restore workflow" section.
-
-## v1.18.1 Release (2026-03-29)
-
-### Issue #1286: Add intel-extension-for-pytorch to OpenVINO extras
-
-**Completed:** 2026-03-29T10:10:00Z
-
-Added `intel-extension-for-pytorch` (IPEX) to `src/embeddings-server/pyproject.toml` openvino extras group. Regenerated `uv.lock`. 52 tests pass.
-
-**Key insight:** IPEX is the required bridge between PyTorch and Intel's XPU runtime. Without it, PyTorch detects Intel GPU hardware but cannot dispatch inference to it. IPEX 2.8.0 resolves cleanly with torch 2.10.0 — no version conflicts.
-
-**Architecture:** Dependency chain: `uv sync --extra openvino` pulls in IPEX automatically. CPU-only builds (without `--extra openvino`) are unaffected. Existing `docker/compose.gpu-intel.yml` continues to work without changes.
-
----
-
-## 2026-03-31T13:16Z — BuildKit Dockerfile Implementation Complete
-
-**Status:** ✅ PR #1328 implemented. All 61 tests passing. Base image PR merged and images published.
-
-**What happened:**
-- Implemented `--mount=from=ghcr.io/astral-sh/uv:0.11.2` bind mount in `src/embeddings-server/Dockerfile`
-- Reduced multi-stage COPY pattern to single-stage build
-- Layer size: 13GB → 37MB (99.7% reduction when base cached)
-- Key flags: `uv sync --inexact --frozen --no-dev` (preserves base packages, installs delta only)
-- uv pinned to specific version tag for reproducibility (no floating `:latest`)
-
-**Decision:** `.squad/decisions.md` updated with full analysis and rationale.
-
-**Cross-reference:** Parker's base image work (orchestration log 2026-03-31T13-16Z-parker-base-dockerfiles.md) unblocks next steps.
-
----
-
-## 2026-04-02 — Solr 9.7 Auth Role Alignment (#1332)
-
-**Status:** ✅ PR #1333 created targeting dev (post-v1.18.1 hardening).
-
-**Root cause:** Solr 9.7's `solr auth enable` assigns all 4 built-in roles (superadmin, admin, search, index) to the created user. Our solr-init script was calling `set-user-role` afterward, overwriting these to just `["admin"]`, stripping superadmin (needed for security-edit) and search (needed for collection-admin-read).
-
-**Fix applied:**
-- Removed set-user-role call for admin user in both docker-compose.yml and docker/compose.prod.yml
-- Changed readonly user role from custom "readonly" to Solr 9.7 built-in "search" role
-- Updated security.json to use the 4-tier built-in role hierarchy (superadmin > admin > search > index)
-- Tests updated to verify admin roles are NOT overwritten and readonly gets "search" role
-
-**Key learning:** In Solr 9.7, `solr auth enable` handles admin role assignment automatically. Never overwrite with `set-user-role` for the admin user — it strips critical roles. The built-in "search" role replaces custom "readonly" and includes collection-admin-read permissions.
-
-## 2026-04-19 — Dependabot Batch Merge Workflow
-
-### Bug Fix
-- `dependabot-automerge.yml` line 41: `dependabot[bot]` → `app/dependabot` — the `gh pr list --json author` returns `app/dependabot` as the login, not `dependabot[bot]`. This was the root cause of 38 PRs piling up unmergeable.
-
-### New Workflow: `dependabot-batch-merge.yml`
-- Consolidates N dependabot PRs into a single `dependabot/batch-YYYY-MM-DD` branch
-- Lockfile conflict resolution: `uv lock` for Python services, `npm install --package-lock-only` for aithena-ui
-- Major version bumps excluded automatically (per team policy in decisions.md)
-- VERSION file patch-bumped only when actual changes merged
-- Dry-run mode via workflow_dispatch for safe preview
-- Both workflows coexist: auto-merge for day-to-day, batch-merge for backlogs
-
-### Key Files
-- `.github/workflows/dependabot-automerge.yml` — single-PR auto-merge (fixed)
-- `.github/workflows/dependabot-batch-merge.yml` — new batch workflow
-- `.squad/decisions/inbox/brett-dependabot-batch.md` — design decision
-
-## 2026-04-20 — Vector Search 32GB Optimization Analysis (Ash)
-
-**Session:** Multi-part research with Ash (Search Engineer) on infrastructure scaling constraints.
-
-### Key Findings That Impact Infrastructure Decisions
-
-**Previous infrastructure analysis (2026-04-20, Brett):**
-- Standalone Solr: ~$800–1,200/yr, simple ops
-- SolrCloud 3-node: ~$1,800–2,400/yr, HA guaranteed
-- **Recommendation at the time:** Unclear; depends on whether single-node can handle 30K books (54M vectors)
-
-**New vector optimization analysis (2026-04-20, Ash):**
-- **Baseline:** 54M vectors requires 130–180 GB RAM (unviable on standard cloud VMs)
-- **Optimized (Phase 1 + 2):** 9M vectors + int8 quantization = **9 GB HNSW fits in 32 GB** ✅
-- **Result:** Standalone Solr is NOW VIABLE and cost-optimal
-
-### Infrastructure Decision: STANDALONE SOLR RECOMMENDED
-
-**Rationale:**
-1. Vector optimization reduces HNSW from 130 GB → 9 GB
-2. 32 GB single-node machine is sufficient (2 OS + 8 JVM + 9 HNSW + 8 text + 5 headroom)
-3. Saves 2.5× cost vs SolrCloud (3 nodes + ZK)
-4. Operational simplicity (no quorum management, distributed debugging)
-
-**Prerequisites for go-ahead:**
-- Phase 1 (page-level chunking) must be implemented + validated
-- Phase 2 (int8 quantization) should be scheduled
-
-### Cross-Service Alignment
-
-**Ash's optimization roadmap (.squad/analysis/vector-search-32gb-optimization-roadmap.md):**
-- Confirms HNSW uses mmap + OS page cache, not JVM heap (previous assumption was wrong)
-- 50–75% page cache coverage = sub-second latency on NVMe SSD (tight but usable)
-- Six optimization strategies ranked by impact; Phase 1 + 2 are lowest-effort, highest-confidence
-
-**Timestamp correlation:**
-- Brett's infra analysis: 2026-04-20T18:31Z
-- Ash's optimization roadmap: 2026-04-20T18:53Z
-- Decision merged: 2026-04-20T18:54Z
-
-### Next Steps for Brett
-
-1. **Confirm 32 GB single-node as target hardware spec** (vs SolrCloud)
-2. **Update hardware requirements doc** — currently recommends 130GB; new baseline is 32GB
-3. **Specify NVMe SSD requirement** — performance targets assume NVMe, not HDD
-4. **Monitor vector count growth** — if exceeds 15M vectors, re-evaluate SolrCloud migration
-5. **Plan Phase 2 timeline** — coordinate with Ash on int8 quantization rollout
-
-### Files Referenced
-
-- `.squad/analysis/vector-search-32gb-optimization-roadmap.md` — Full technical analysis
-- `.squad/analysis/standalone-solr-capacity-54m-vectors.md` — Baseline (130 GB)
-- `docs/research/standalone-vs-cloud-infrastructure-analysis.md` — Brett's original analysis (cost comparison)
-- `.squad/decisions.md` — Decision added: "32GB RAM Solr Optimization Strategy"
-## 2026-04-21 — Dev Integration Test Workflow (#1496)
-
-**Status:** ✅ PR #1504 created targeting dev.
-
-**What happened:**
-- Created `.github/workflows/dev-integration-test.yml` for faster CI on dev branch
-- Triggers on push to dev and PRs to dev (separate from integration-test.yml which targets main)
-- Uses single-node topology: 1 Solr + 1 ZooKeeper (vs 3-node SolrCloud)
-- Runs same test suite: Python E2E + Playwright browser tests
-- Uses Docker Compose profile overrides to disable solr2, solr3, zoo2, zoo3
-- Timeout: 45 minutes (vs 75 for full integration test)
-- Resource usage: ~6 containers vs 17
-
-**Key pattern:** Docker Compose profiles can disable services at the workflow level via `services: { service_name: { profiles: [disabled] } }` in override files. This is cleaner than maintaining separate compose files for each topology variant.
-
-**Design decisions:**
-- Why single-node for dev? SolrCloud resilience (replication, leader election) isn't needed for dev CI. Faster feedback wins.
-- Why not a separate compose.single-node.yml overlay? Kept the profile override in-CI to avoid maintaining another compose file. Consistent with docker/compose.e2e.yml pattern (minimal, focused overrides).
-- 45-min timeout is conservative; single-node should complete in 30-35 min with cold docker build, 20 min with warm caches.
-
-## Cross-Agent Updates
-
-### 2026-05-31 — CI Auth Pattern Change (Parker Round 1)
-
-**Impact:** Workflow + test setup now use token reuse pattern
-
-CI workflows now export `E2E_API_TOKEN` (minted via curl) for test runners to consume, avoiding back-to-back `/v1/auth/login` calls that trip the solr-search rate limiter. This pattern now applies to:
-- **Playwright E2E tests** (via `global-setup.ts`)
-- **pytest integration tests** (when CI provides `E2E_API_TOKEN` env var)
-
-**For Brett:** Workflows that mint auth tokens in steps should export them as environment variables for downstream test consumers. See skill `.squad/skills/e2e-auth-reuse/SKILL.md` for pattern.
-
-**Decision:** `.squad/decisions.md` → "E2E Auth Token Reuse Pattern"
-
-### Local-Test-First Directive (2026-05-31, Round 2)
-
-New standing directive from Juanma: "You have docker and playwright locally so you must test everything before pushing to GitHub." For CI/test infrastructure and Playwright E2E testing, this means running E2E tests locally against the `docker compose` stack before pushing any changes to test runners, fixtures, or E2E configuration. Brett's CI auth workflow exports `E2E_API_TOKEN` for test consumers (used in #1588 fix); future changes to how CI mints or passes auth tokens should be validated locally with Playwright running against the docker stack. Implication: test infrastructure changes are integration-level and deserve local validation alongside CI validation; don't treat them as local-only changes.
-
-### 2026-06-03 — Ralph round 1 next-milestone infra sweep
-- PR #1638 review feedback was valid gatekeeping but already addressed by stripping `X.Y.Z-dev` to `X.Y.Z` inside pre-release RC resolution; unresolved review threads still need an explicit reply plus GraphQL resolution before merge.
-- Issue #1628 showed that analyzer severity can be the right infra lever when upstream images emit non-actionable startup deprecations; keep known RabbitMQ `management_metrics_collection` notices visible as `info`, not warnings.
-- Issue #1630 confirmed Redis overcommit is a host-level `vm.*` sysctl: automate it in CI before Compose startup, and keep local/production host-level docs as the operator path.
-- Issue #1631 must remain Brett+Kane: compose wiring is infra-owned, but Solr/ZooKeeper default credential and ACL warning acceptance is security judgment owned by Kane.
+- **2026-06-04 — Solr readiness auth:** Solr readiness probes must validate `SOLR_ADMIN_USER` and `SOLR_ADMIN_PASS` before constructing curl credentials; missing installer-exported `.env` values should produce explicit CI errors, not opaque 401 retry loops.
+- **2026-06-04 — ZooKeeper exposure:** CI/production overlays must keep ZooKeeper ports unpublished while preserving Solr auth env wiring for init and health checks. Add compose config regression tests for both.
+- **2026-06-03 — Pre-release analyzer:** Keep fixture labels unique and monotonic so CI output maps back to scripts. Known RabbitMQ startup deprecation notices can remain `info` when non-actionable.
+- **2026-05-31 — Local-test-first:** Infrastructure and E2E workflow changes should be tested locally against Docker/Playwright before pushing because local tooling is available.
+- **2026-05-31 — E2E token reuse:** Workflows minting auth tokens should export them for downstream Playwright and pytest consumers; see skill `e2e-auth-reuse`.
+- **2026-04-21 — Dev integration workflow:** Single-node Solr/ZK topology cuts dev CI resource use while running the same E2E suite. Disable extra Solr/ZK services with profile overrides in the workflow.
+- **2026-04-20 — Search capacity:** With page chunking and int8 quantization, 32GB standalone Solr on NVMe is the cost-optimal target; previous 130GB requirement assumed unoptimized vectors.
+- **2026-04-19 — Dependabot backlog:** `gh pr list --json author` reports Dependabot as `app/dependabot`, not `dependabot[bot]`. Batch merge workflows are useful for large dependency backlogs.
+- **2026-04-02 — Solr auth roles:** Solr 9.7 built-in roles should be preserved; overwriting the admin role after `solr auth enable` breaks security-edit and collection-admin-read permissions.
+- **2026-03-31 — Embeddings Dockerfile:** BuildKit uv mount plus `uv sync --inexact` reduced embeddings-server app layer from multi-GB to tens of MB when the base is cached.
+- **2026-03-29 — IPEX:** IPEX 2.8.0 resolves cleanly with torch 2.10.0 and sentence-transformers 5.3.0; no compose changes required when installed via OpenVINO extras.
+- **2026-03-25 — GPU admin docs:** GPU troubleshooting should emphasize host driver installation, vendor-specific WSL2 passthrough, compose override usage, and health endpoint verification.
+- **2026-03-22 — nginx thumbnails:** Static thumbnail serving needs both a volume mount and a dedicated `/thumbnails/` location.
+- **2026-03-20 — Release optimization:** v1.8–v1.11 showed asymmetric changes; change-detection builds can skip unchanged service builds and retag images to save build time.
+- **2026-03-19 — Auth DB permissions:** Docker Compose diagnostics traced auth DB failures to host bind-mount UID ownership; this remains the top recurring local setup issue.

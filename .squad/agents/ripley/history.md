@@ -2,504 +2,108 @@
 
 ## Core Context
 
-**Role:** Project Lead — Architecture, Roadmap, Release Planning, Team Coordination
-
-**Release History (as of 2026-03-20):**
-- **v1.0.1–v1.3.0:** Security, CI/CD, frontend quality, admin consolidation (Streamlit → React)
-- **v1.4.0:** Stats & filtering (fixed book count via Solr grouping)
-- **v1.5.0:** Production infrastructure (Docker tagging, volumes, smoke tests)
-- **v1.6.0:** Internationalization (React-intl, 4 languages, language switcher)
-- **v1.7.0:** Quality infrastructure (CI coverage: +219 tests, Dependabot automation)
-- **v1.7.1–v1.9.0:** SHIPPED (tech debt, UI/UX, user management)
-- **v1.10.0:** IN PROGRESS — 48 issues, 4-wave execution, BCDR + collections + metadata editing
-
-**Architecture (Canonical):**
-1. **SolrCloud 3-node** — Tika PDF extraction, multilingual support, parent/chunk document hierarchy
-2. **Hybrid search** — RRF-based keyword + semantic fusion, `distiluse-base-multilingual-cased-v2` embeddings
-3. **6 services:** solr-search (FastAPI), embeddings-server (FastAPI), document-indexer (RabbitMQ), document-lister (RabbitMQ), aithena-ui (React 18/Vite), admin (Streamlit, deprecated)
-4. **Infrastructure:** Redis, RabbitMQ, Nginx reverse proxy. Fully on-premises, no cloud dependencies.
-5. **Data model (CRITICAL):** Documents have parent/chunk hierarchy. Embeddings live on **chunks**, not parents. kNN queries MUST target chunks. Grouping by `parent_id_s` aggregates to book level.
-
-**Ownership Map:**
-- **Parker:** Backend implementation (Solr, FastAPI, indexing)
-- **Dallas:** Frontend (React, UI/UX), build validation
-- **Brett:** CI/CD, GitHub Actions, Docker, infrastructure
-- **Ash:** Search engineering (Solr schema, embeddings, kNN)
-- **Kane:** Security (CVE triage, RBAC, audits)
-- **Lambert:** Testing (pytest, Vitest, E2E, Playwright)
-- **Newt:** Release planning, documentation, milestones
-- **Copilot:** Well-scoped issue implementation
-- **Ripley:** Architecture, roadmap, team coordination, decision arbitration
-
----
-
-## Critical Patterns (Earned Knowledge)
-
-### 1. Phase-Gated Execution
-Break features into Research → Implementation → Validation → Merge. Work within a phase is parallel; phases are sequential. Prevents sprawl, enables safe parallelization, creates clear hand-offs. **Validated across 10+ milestones.**
-- Skill: `.squad/skills/phase-gated-execution`
-
-### 2. Pragmatic Incrementalism
-Ship the quick win, validate with users, then invest in architecture. Phase 1 delivers value; Phase 2 is data-driven. **Risk:** Requires discipline to revisit Phase 2 commitments.
-- Example: Stats book count — Solr grouping (Phase 1, v1.4.0) shipped; doc_type discriminator (Phase 2) deferred
-
-### 3. Branch Hygiene (MANDATORY)
-Always `git fetch origin && git checkout -b <branch> origin/dev`. Never branch from local state. Cross-branch contamination is a systemic risk in multi-agent repos — it silently reverts recent work.
-- Decision: `.squad/decisions/inbox/ripley-branch-hygiene.md`
-
-### 4. No Silent Degradation
-Error handlers MUST NOT silently change search mode or drop results. Must log WARNING and return clear error. Requires Lead/PO approval for any degradation behavior. Born from PR #700 rejection.
-- Decision: `.squad/decisions/inbox/ripley-no-degradation.md`
-
-### 5. Scientific Debugging
-Bug fixes require reproduction evidence before PR. Root cause analysis before code changes. Agents default to "fix the symptom" under pressure — process guardrails prevent this.
-- Template: `.github/ISSUE_TEMPLATE/bug_report.yml`
-- Checklist: `.squad/templates/pr-checklist.md`
-
-### 6. Documentation-First Releases
-Commit all release artifacts (CHANGELOG, notes, test reports) to dev before tagging. Process: (1) artifacts → (2) VERSION bump → (3) dev→main merge → (4) tag + GitHub Release. Git tags bypass branch protection.
-- Skill: `.squad/skills/release-gate`
-
-### 7. Security Baseline Exceptions
-When a CVE has no patched version, accept baseline exception if runtime mitigation is proven. Document risk assessment, create follow-up issue for proper fix. Applied to ecdsa CVE-2024-23342.
-
-### 8. Wave-Based Milestone Execution
-For large milestones (20+ issues), decompose into waves: Wave 0 (bugs) → Wave 1 (foundations) → Wave 2 (building blocks) → Wave 3 (integration) → Wave 4 (polish). Run retrospective between waves. **Grade improvement: C+ → B+ across waves in v1.10.0.**
-
-### 9. Agent Load Balancing
-Identify bottleneck agents early. Parker was primary on 20+ issues in v1.10.0 — mitigated by delegating BCDR to Brett, search to Ash, CI/CD to Copilot. Single-owner issues prevent confusion.
-
-### 10. Domain Knowledge as First-Class Deliverable
-The parent/chunk document relationship caused the scariest near-miss (PR #701). Undocumented domain knowledge creates invisible risk. Document critical data model relationships BEFORE implementation.
-
----
-
-## Release Planning Methodology
-
-**Milestone Strategy:**
-1. Phase breakdown per milestone (Research → Impl → Validation → Merge)
-2. Single owner per issue with clear acceptance criteria
-3. Dependencies in decisions.md; phase gating enforced
-4. Parallel execution within phases
-
-**Release Gate:** See `.squad/skills/release-gate/SKILL.md`
-- All milestone issues closed (milestone + label verification)
-- All 6 test suites passing
-- Release artifacts committed to dev
-- VERSION bumped, documentation verified, screenshots captured
-- Tag created, GitHub Release published
-
-**Pre-PR Self-Review:** See `.squad/templates/pr-checklist.md`
-- Scope, security, data model impact, error handling, tests, branch hygiene
-
----
-
-## Session Archive (Compressed)
-
-### v1.4.0–v1.7.0 Epic Session (2026-03-18)
-Coordinated 4 consecutive releases in one session. 49 issues closed across 4 milestones. Zero rework. Validated phase-gated execution at scale.
-
-### v1.7.1–v1.8.0 Planning (2026-03-18)
-Planned tech debt (uv migration, Docker multi-stage) and UI/UX (Lucide React icons, design tokens, WCAG AA). Sequential delivery: v1.7.1 → v1.8.0.
-
-### Screenshot Pipeline (2026-03-18)
-Created issues #530–#534 for automated Playwright screenshots in release workflows.
-
-### User Management Design (2026-03-19)
-Designed 3-tier RBAC (admin/user/viewer) for v1.9.0. 12 issues created (#549–#560). Key decisions: phased X-API-Key migration, 128-char password max (Argon2 DoS), stateless JWT sufficient for library app.
-
-### CI Tier Strategy (2026-03-17)
-Found 219 untested tests. Implemented Tier 1 (fast dev CI) + Tier 2 (rigorous release CI). 80% CI time reduction.
-
-### v1.10.0 PRD Decomposition (2026-03-20)
-Decomposed 2 PRDs into 16 issues: User Document Collections (7) + Book Metadata Editing (9). Key: `series_s` field naming, collections in SQLite, metadata overrides in Redis.
-
-### v1.10.0 Kickoff (2026-03-20)
-48 issues, 4-wave plan. Deferred 4 hardening issues. BCDR is critical path (8 sequential steps). Parker bottleneck mitigated via delegation.
-
-### v1.10.0 Retrospective (2026-03-20)
-Wave 0: C+ (PR #700 rejection, silent degradation). Wave 1: B+. 5 decisions made, 8 action items. Implemented R1, R3, R4, R6 via PR #720.
-
-### Docker Build Diagnosis (2026-03-20)
-Inconsistent build context pattern: solr-search and admin use repo-root, others use service-dir. Both work, but noted for future architectural decision.
-
----
-
-## Decision References
-
-Active decisions in `.squad/decisions.md`:
-- Security baseline exceptions (ecdsa, PyJWT migration)
-- Admin consolidation (Streamlit → React)
-- Docs-gate-the-tag release process
-- Docker health check best practices
-- CI Tier 1 + Tier 2 strategy
-- Branch hygiene rule
-- No silent degradation rule
-- Pre-PR self-review checklist
-- v1.10.0 wave plan and deferrals
-- Solr schema coordination (Ash owns all schema changes)
-
----
-
-## Reskill Notes (2026-03-20)
-
-### Self-Assessment
-**What I do well:**
-- Milestone decomposition and wave planning — consistently delivers parallel execution without conflicts
-- Decision documentation — every significant choice gets an ADR with rationale
-- Risk identification — Parker bottleneck, BCDR critical path, and cross-branch contamination caught early
-- Retrospectives — measurable improvement (C+ → B+) across waves
-
-**What I need to improve:**
-- **Faster domain knowledge extraction.** The parent/chunk data model gap should have been documented in v0.5, not discovered as a near-miss in v1.10.0. I should audit for undocumented domain knowledge proactively.
-- **Phase 2 tracking.** Pragmatic incrementalism generates deferred work (doc_type discriminator, PyJWT migration). I need a systematic way to track and schedule deferred Phase 2 items.
-- **Agent coaching.** "Fix the symptom" behavior recurs because agents don't have debugging methodology baked into their workflow. The bug template and PR checklist help, but I should review whether they're actually being followed.
-- **Scope estimation accuracy.** v1.10.0 started at 48 issues — 4 were immediately deferred. Future kickoffs should build in a 10% deferral budget upfront.
-
-### Patterns I'd Tell My Future Self
-1. **When you see 20+ issues on one agent, act immediately.** Delegation isn't optional — it's the difference between a milestone landing on time or not.
-2. **"Research before implementation" is your highest-ROI process.** Every time it was skipped (PR #700, PR #701), things went wrong. Every time it was followed (v0.9.0, v1.6.0 i18n), things went right.
-3. **Process fixes beat training.** Branch hygiene, PR checklists, bug templates — mechanical guardrails work better than verbal instructions for agents.
-4. **Wave retrospectives are non-negotiable for milestones over 15 issues.** The learning velocity between Wave 0 and Wave 1 proved this.
-5. **Document the data model before anyone touches it.** The single most dangerous knowledge gap is always in the data model.
-
----
-
-## Learnings & Skill Consolidation (v1.10.1–v1.14.0 Era)
-
-### Final Ralph Board Check (2026-06-04)
-
-After PR #1649 merged into `dev` at `13ab14d`, the open-PR board was empty: no draft PRs, unresolved review blockers, or open PR CI failures remained. Remaining items were release-gate/async only: v2.3.0 docs and validation issues #1645/#1647/#1648 with Newt, #1646 with Lambert/Newt, human-only v2.2.1 signoff #1639 with Juanma, active post-merge `dev` CI, and deferred v2.5 research issues; Ralph can idle until new actionable failures or assignments appear.
-
-
-### PR #1649 Final Lead Gate (2026-06-04)
-
-Blocked merge despite green required checks because one non-outdated Copilot review thread remained unresolved on `.github/workflows/pre-release-validation.yml`: the Solr readiness auth string should fail fast if `.env` credentials are missing instead of looping on 401s. Next owner is Brett for the infra workflow fix; Ripley can re-run final gate after the thread is addressed and resolved.
-
-### Skills Database Pruning: 49 → 34 High-Confidence Skills
-
-**Aggressive pruning completed (2026-03-21).** Removed 15 unvalidated, one-time, and overlapping skills (ci-coverage-setup, ralph-dependency-check, smoke-testing, i18n-extraction-workflow, reskill, project-conventions, tdd-clean-code, lead-retrospective, dependabot-triage-routing, copilot-review-to-issues, squad-pr-workflow, docker-health-checks, hybrid-search-parent-chunk, hybrid-search-patterns). Consolidated hybrid-search patterns into solr-parent-chunk-model.
-
-**Final 37 skills by category:**
-- **Architecture:** phase-gated-execution, solr-parent-chunk-model (with hybrid search), solr-pdf-indexing, nginx-reverse-proxy, http-wrapper-services
-- **Testing:** pytest-aithena-patterns, vitest-testing-patterns, playwright-e2e-aithena, path-metadata-tdd
-- **Backend:** fastapi-auth-patterns, fastapi-query-params, redis-connection-patterns, pika-rabbitmq-fastapi, logging-security
-- **Frontend:** react-frontend-patterns, accessibility-wcag-react
-- **Infrastructure:** docker-compose-operations, solrcloud-docker-operations, bind-mount-permissions, branch-protection-strict-mode
-- **Security:** security-scanning-baseline, workflow-secrets-security, ci-workflow-security
-- **Release/Quality:** release-gate, release-tagging-process, multi-release-orchestration, pr-integration-gate, ci-gate-pattern, milestone-gate-review, milestone-wave-execution, api-contract-alignment, agent-debugging-discipline, pdf-extraction-dual-tool, path-metadata-heuristics
-- **Patterns/Misc:** aithena-ab-testing-benchmarking, embedding-model-selection, prd-writing-aithena
-
-**Pattern:** Aggressive pruning works better than slow accumulation. Ruthlessly removing unvalidated, one-time, and overlapping content leaves 37 battle-tested patterns (and emerging patterns like A/B testing, embedding selection, and PRD writing) that guide team work.
-
-### Skills Created/Validated (v1.10.1 Reskill)
-
-1. **branch-protection-strict-mode** — Sequential PR merges with GitHub strict branch protection. Use `gh pr merge --admin --merge` to bypass BEHIND states when status checks pass.
-2. **milestone-gate-review** — Security/performance/architecture audit before closing any milestone. First enforced in v1.10.1: 13 issues reviewed, 0 blockers. Gate reviews catch subtle things (e.g., S608 suppressions vs actual SQL injection) that automated linting misses.
-3. **fastapi-query-params** — FastAPI silently ignores undeclared query params. Bug found in #656: `fq_folder` sent but not received. Different from Flask/Express behavior.
-4. **pdf-extraction-dual-tool** — Tika (Solr, full-text + metadata) vs pdfplumber (indexer, per-page chunks) are complementary, not redundant. Tika doesn't expose per-page boundaries; pdfplumber doesn't reliably extract metadata.
-
-**Skill validated:**
-- **fastapi-auth-patterns** — Confirmed in v1.10.1 auth hardening: WWW-Authenticate headers (RFC 7235), if-guards (not exception-driven), role checks enforced.
-
-### v1.11.0 & A/B Testing PRD Research
-
-**Key findings from code research** (2026-03-21, 2026-03-22):
-- **R1 (chunk text preview):** Already 80% done. `chunk_text_t` stored in Solr but not in `SOLR_FIELD_LIST`. Simple retrieval change.
-- **Similar books gap:** Rendered below results but obscured by PDF viewer z-index. Architectural fix: decouple from PDF state.
-- **A/B test bottleneck:** RabbitMQ competing consumers trap. Both indexers on same queue → messages routed to ONE consumer. Requires fanout exchange or separate queues.
-- **Solr schema coupling:** `knn_vector_512` hardcoded. New collection needs `knn_vector_768` field type.
-- **PDF extraction architecture:** Tika handles full-text + metadata (keyword search). pdfplumber handles per-page chunks (semantic search). Neither extracts structure. Sentence-boundary awareness in chunker.py is short-term improvement.
-- **Chunking:** Currently word-count based (400 words, 50-word overlap). No section awareness.
-
-**Decisions:** 3-phase A/B test with PO decision gate. Thumbnail generation deferred to Phase 3/v1.12.0 (requires PDF rendering, not available today).
-
-### v1.10.1 Gate Review Findings (2026-03-21)
-
-**Security:** SQL injection clean (parameterized queries, S608 suppressions justified). Auth RFC 7235 compliant (WWW-Authenticate headers). Shell scripts safe (set -euo pipefail, flock, umask). GitHub Actions hardened (SHA-pinned, persist-credentials: false).
-
-**Performance:** Sequential batch updates ~100s at 5000 docs max load. Acceptable for admin-only scope; async chunking recommended for v1.11+.
-
-**Verdict:** APPROVE, 0 blockers.
-
-### Infrastructure & Extraction Insights (2026-03-22–2026-03-24)
-
-- **Offline audit:** Confirmed fully on-premises. Zero cloud APIs, telemetry, external auth. All services on Docker network. HuggingFace models pre-downloaded.
-- **e5 migration review:** Core migration solid. 10 issues (2 medium, 8 low). Missing: tests for new reindex endpoint. Two blocking: timeout mismatch, dangling scripts/ references.
-- **embeddings-server extraction analysis:** Technically ready for standalone repo. Zero coupling, HTTP-only, OpenAI-compatible API. New registry: `ghcr.io/jmservera/embeddings-server`. Version pinning discipline required.
-
-**Key pattern reinforced:** "Research before implementation" — 20–30 min of code reading catches major issues (RabbitMQ competing consumers, R1 80%-done state, dual-extraction complementarity) that would emerge only during testing/launch without upfront research.
-
----
-
-## Recent Milestones & Decisions (Summary)
-
-### v1.14.0: e5 Model Migration (Complete)
-- e5-base migration reviewed and approved (PR #964)
-- 10 issues identified (2 medium, 8 low), all addressed in follow-ups
-- A/B comparison deferred (e5 benchmarks showed clear superiority)
-- Offline audit confirmed: zero cloud dependencies
-
-### v1.11.0: Search Results Redesign (In Progress)
-- PRD created with 4 user requirements
-- R1+R2 phased as quick wins; R3 main deliverable; R4 deferred
-- Chunking strategy decision pending from PO
-- PDF thumbnails deferred to v1.12.0
-
-### v1.10.1: Collections + BCDR (Released)
-- Gate review: 13 issues, 0 blockers, APPROVE
-- Security hardened: parameterized SQL, RFC 7235 auth, shell script safety
-- BCDR workflows implemented: monthly restore drills, stress tests
-- Performance: sequential batch ops ~100s @ 5000 docs (acceptable for admin-only scope)
-
-### Strategic Decisions in Queue
-1. **Embeddings-Server Extraction** — Technical readiness confirmed. Awaiting jmservera approval to extract to `github.com/jmservera/embeddings-server`. Zero coupling, HTTP-only, semantic versioning discipline.
-2. **A/B Testing as Compose Overlay** — Pattern established: experimental services in separate compose file prevents production drift, trivial cleanup. 
-3. **Release Process Hardening** — Mandatory security + performance review before shipping. 8 security checkpoints + 4 performance checkpoints.
-
----
-
-## v1.17.0: GPU Acceleration Work
-
-### GPU Troubleshooting Guide (WI-12, #1159)
-
-**Completed:** GPU troubleshooting documentation created (PR #1217)
-
-Created comprehensive troubleshooting guide for GPU acceleration issues. Covers:
-- Quick diagnostics (health endpoint checks, container log inspection)
-- NVIDIA GPU detection and configuration (driver checks, Docker GPU access, CUDA version validation)
-- Intel GPU setup (DRI device checks, Intel compute-runtime diagnostics, permission fixes, WSL2 special cases)
-- Container crash scenarios (OOM, missing OpenVINO, compute-runtime version mismatches)
-- Performance validation (GPU utilization during indexing, bottleneck identification)
-- CPU fallback path and environment variable reference
-
-**Reasoning:** GPU acceleration PRD approved for v1.17.0 (research completed in #1147). Users enabling GPU support need clear diagnostic path for hardware/driver issues. Guide references Admin Manual GPU setup section, completing user-facing documentation.
-
----
-
-## Clean Architecture Skill & Audit (2026-03-27)
-
-### Context
-PO directive to adopt Clean Architecture principles across the codebase. Triggered by #1288 (shared auth library extraction) and broader architectural concerns about cross-service coupling.
-
-### Work Completed
-
-1. **Read and synthesized** Uncle Bob's Clean Architecture article. Extracted core principles: Dependency Rule, four-layer model (Entities → Use Cases → Interface Adapters → Frameworks & Drivers), independence of frameworks/UI/database.
-
-2. **Created skill:** `.squad/skills/clean-architecture/SKILL.md` (confidence: low, first observation). Maps Clean Architecture to aithena's specific context — 5 concrete rules (R1-R5), PR review checklist, violation detection patterns, layer mapping for all services.
-
-3. **Audited codebase** — found 7 violations across severity levels:
-   - **V1 (High):** Admin `sys.path` manipulation in production code (`src/admin/src/pages/shared/config.py:22-24`)
-   - **V2 (High):** Duplicated auth logic between admin and solr-search (`parse_ttl_to_seconds`, `AuthenticatedUser`, JWT encode/decode in both services)
-   - **V3 (Medium):** Logging config duplicated across 4 services with feature drift
-   - **V4 (Medium):** `correlation.py` mixes FastAPI framework code with cross-cutting concern
-   - **V5 (Medium):** 30+ solr-search test files use `sys.path.append` instead of proper packaging
-   - **V6-V7 (Low):** Script-level `sys.path` usage in reset_password.py and benchmark tests
-
-4. **Documented findings:** `.squad/decisions/inbox/ripley-clean-architecture-audit.md` with severity ratings, file:line references, and phased remediation plan.
-
-### Key Finding
-`aithena-common` already exists and handles passwords + auth DB — the #1288 foundation is solid. The gap is incomplete adoption: `parse_ttl_to_seconds()`, `AuthenticatedUser`, JWT utils, and logging formatters are still duplicated. Solr-search itself doesn't use `aithena-common` yet. Recommended 4-phase migration plan.
-
-### Pattern Reinforced
-**"Extract shared package early, migrate incrementally."** The `aithena-common` package is architecturally correct. What's missing is a systematic migration of all consumers. This validates the pragmatic incrementalism pattern — ship the package, then migrate service by service.
-
----
-
-## v1.18.1 Release (2026-03-29)
-
-### Multi-Agent Orchestration & v1.18.1 Release Gate
-
-**Completed:** 2026-03-29T10:10–10:25  
-**Status:** ✅ Complete; PR #1289 created; CI running
-
-Orchestrated multi-agent sprint: Brett (IPEX), Parker (2 issues), Lambert (test coverage), Ripley (Clean Architecture audit). VERSION bumped to 1.18.1. All 1026+ tests passing. SESSION LOG and ORCHESTRATION LOGS created.
-
-**Work Summary:**
-
-- **Brett #1286:** IPEX added to openvino extras. 52 tests pass.
-- **Parker #1287:** Solr role assignment fixed (admin/readonly). Credential generation added to installer. 1026 tests pass.
-- **Parker #1288:** Shared auth library extracted into `aithena-common`. Installer now proper uv project. All tests pass.
-- **Lambert:** 14 proactive tests across 3 files (credentials, IPEX, roles). All pass green.
-- **Ripley:** Clean Architecture audit completed — 7 violations found, skill created, Phase 2 recommendations documented.
-
-**Decisions Merged:** 8 decision inbox files merged into `decisions.md`, deduplicated. Inbox cleared.
-
-**Key Achievement:** Demonstrated scalable multi-agent orchestration with clean dependency resolution — all agents' work integrates seamlessly. Shared auth library foundation (`aithena-common`) established for future Phase 2 expansion.
-
-**Architecture Milestone:** Dependency Inversion Principle applied across all services. `aithena-common` is the single point of shared authority for passwords + auth DB. Violations documented with phased remediation plan (P1–P3).
-
-### Skill Consolidation Audit
-
-**Completed:** 2026-07-25
-**Status:** ✅ Complete
-
-Consolidated skills from 38 to 24 (14 eliminated, target was ≤35). Five merge groups:
-
-1. **CI/PR Gates** (9 → 2): `ci-gate-pattern`, `pr-integration-gate`, `branch-protection-strict-mode`, `milestone-gate-review`, `release-gate` → `ci-pr-gates`; `release-tagging-process`, `multi-release-orchestration`, `milestone-wave-execution`, `phase-gated-execution` → `release-orchestration`
-2. **Security** (4 → 1): `ci-workflow-security`, `workflow-secrets-security`, `security-scanning-baseline`, `logging-security` → `security-patterns`
-3. **Path Metadata** (2 → 1): `path-metadata-heuristics`, `path-metadata-tdd` → `path-metadata`
-4. **Solr** (3 → 1): `solr-parent-chunk-model`, `solr-pdf-indexing`, `solrcloud-docker-operations` → `solr-operations`
-5. **FastAPI** (2 → 1): `fastapi-auth-patterns`, `fastapi-query-params` → `fastapi-patterns`
-
-Each merged skill preserves key patterns, examples, and anti-patterns from all sources while removing duplication. All merged skills are under 300 lines.
+**Role:** Project Lead for architecture, roadmap, release planning, coordination, and final gates.
+
+**Architecture:** On-prem book-library search: SolrCloud 3-node for Tika PDF extraction/full-text/metadata; FastAPI search/embeddings; RabbitMQ listing/indexing workers; React/Vite UI; Redis, RabbitMQ, Nginx. No runtime cloud APIs, telemetry, or external auth.
+
+**Search/data model:** Parent/chunk hierarchy. Embeddings live on chunks; kNN must query chunks; group by `parent_id_s` for book results. Hybrid search uses RRF keyword+semantic fusion. Schema moved from 512-dim distiluse to 768-dim multilingual-e5; docs/env names must track code (`VECTOR_QUANTIZATION`). Tika handles full text/metadata; pdfplumber handles per-page chunks. Chunking is word/overlap based; sentence/section awareness remains.
+
+**Ownership:** Parker backend; Dallas UI; Brett infra/CI/Docker; Ash Solr/search/schema; Kane security; Lambert tests; Newt release/docs; Copilot scoped implementation; Ripley architecture/review.
+
+**Release baseline:** v1.x shipped security, CI, admin consolidation, stats/filtering, infra, i18n, UI/UX, BCDR, collections, metadata editing, e5 migration, GPU docs, and Clean Architecture audit; v2.x focuses on release hardening.
+
+## Key Patterns
+
+- **Phase-gated execution:** Research → implementation → validation → merge. Parallelize inside phases only.
+- **Wave milestones:** For 15–20+ issues, run bugs/foundations/build/integration/polish with retrospectives.
+- **Pragmatic incrementalism:** Ship quick value, then track Phase 2 cleanup explicitly.
+- **Load balancing:** 20+ issues on one agent is a bottleneck; redistribute with single owners.
+- **Domain knowledge as deliverable:** Data-model assumptions must be documented before code; parent/chunk confusion was the highest-risk near miss.
+- **Research first:** Short code-reading caught RabbitMQ competing consumers, mostly-built chunk preview, dual-extraction semantics, and schema coupling.
+- **Scientific debugging:** Reproduce, root-cause, then patch. Mechanical guardrails beat verbal coaching.
+- **No silent degradation:** Search/error handlers must not change modes or drop results silently; warn and return clear errors unless Lead/PO approves.
+- **Branch hygiene:** Always branch from fresh `origin/dev`; cross-branch contamination silently reverts work.
+- **Rulesets/threads:** `--admin` does not bypass rulesets; checks and resolved conversations still gate merge. Resolve threads via GraphQL.
+- **Release gate:** Commit artifacts to `dev`, bump `VERSION`, merge dev→main, then tag/publish. Never move published tags; use patch releases with Newt/PO approval.
+- **Docs gate the tag:** README, changelog, notes, manuals, screenshots, and validation evidence must be current before promotion.
+- **Clean Architecture:** Prefer dependency inversion/shared packages over `sys.path` or duplicated framework-bound code. `aithena-common` owns auth/password DB; JWT/TTL/user/logging migration remains.
+- **Schema ownership:** Ash owns Solr schema; schema/query/UI contracts must be coordinated.
+- **Security exceptions:** Unpatched CVEs require mitigation evidence, risk assessment, and follow-up issue.
+- **Actions security:** Least privilege, pinned actions where appropriate, `persist-credentials: false`; no PR-head code in `pull_request_target`.
+- **CI security:** Regression scripts protecting auth/ports/secrets belong in required CI, not manual evidence.
+- **Dependabot batching:** Batch low/medium bumps, regenerate lockfiles once, close superseded PRs manually, and document held-back bumps.
+- **Manifest conflicts:** `git checkout --theirs` can silently revert prior dependency bumps; regenerate `uv.lock` after stacked Python merges.
+- **Flakes:** Separate product signal from infrastructure noise; fix chronic E2E/auth-rate-limit issues centrally.
+- **Generated issues:** Pre-release warnings and heartbeat-token issues need success-path closure to prevent stale backlog.
 
 ## Learnings
 
-### PR #1649 compose regression CI gate (2026-06-04T01:20:37.644+00:00)
+### PR #1649 final gate (2026-06-04)
+- Merge waited for Solr readiness auth fail-fast review thread resolution; green checks alone were insufficient.
+- Missing PR checklists can be appended by Ripley before merge.
+- ZooKeeper exposure and Solr auth regression scripts belong in required `All tests passed`.
 
-- Reviewer-requested regression scripts for infrastructure/security posture must land inside a required CI aggregate before merge; manual green evidence is insufficient when the script protects accepted security posture.
-- For PR #1649, wiring `tests/test-compose-security.sh` into the required `All tests passed` aggregate keeps the gate small while ensuring ZooKeeper port exposure and Solr auth wiring regressions block the PR.
+### Ralph closeout and v2.3.0 setup (2026-06-04)
+- Board ended with no implementation PRs or review blockers; remaining work was release-gate/async only.
+- v2.3.0 was narrow maintenance/infra: #1631 plus release notes, test evidence, manuals, validation.
+- Human-only v2.2.1 signoff (#1639) should not block AI-owned v2.3.0 work.
 
-### PR #1638 assign-work unblock (2026-06-03T22:02:03.765+00:00)
+### v2.2.1 patch release (2026-06-03)
+- Published tags are immutable; shipped v2.2.1 instead of moving v2.2.0.
+- Metadata landed on `dev`, then dev→main, then tag/GitHub Release.
+- Release-doc review threads were real blockers.
 
-- Reused the PR #1643 routing-workflow permission pattern for PR-label assignment blockers: the base branch now carries `pull_request_target` plus explicit PR write permission for safe metadata-only assignment comments.
-- For behind PRs blocked only by stale assignment automation, refresh the branch onto `dev`, retrigger the routing label after confirming review threads are resolved and quality checks are green, then merge only if the new head checks pass.
+### Assignment automation (2026-06-03)
+- PR routing comments need `pull_request_target` plus explicit PR/issue write permissions.
+- Keep that context to trusted metadata scripts and base-branch checkout only.
 
-### v2.2.1 Patch Release Completion (2026-06-03)
+### Pre-release blockers (2026-06-03)
+- `VERSION=*-dev` changes must check every workflow reading `VERSION`.
+- If shared-account identity blocks formal approval, record lead approval in a PR comment.
 
-- Newt-approved patch path shipped as `v2.2.1` rather than moving the already-published `v2.2.0` tag.
-- Release metadata landed on `dev` before promotion; `dev` merged to `main`; only then was `v2.2.1` tagged and pushed.
-- Release workflow completed successfully: tag validation, container builds, package artifact, smoke tests, and GitHub Release publication all passed.
-- Review threads on release docs were treated as real blockers; README/release notes/changelog were corrected before the dev→main promotion.
-- Next-cycle `VERSION=2.3.0-dev` is prepared in PR #1638 but blocked on an `assign-work` automation permission failure routed to Brett.
+### Project review (2026-05-12)
+- v2.1 shipped while docs advertised older versions; docs freshness belongs in gates.
+- `SEARCH_ARCHITECTURE`, `/v1/capabilities`, and UI capability gating are shipped features.
+- Architecture docs must track vector dimensions and quantization env vars.
+- Active security findings outrank release-noise cleanup.
 
-### PR #1637 assign-work blocker (2026-06-03T22:02:03.765+00:00)
+### Dependabot sweeps (2026-05-31)
+- Batch sweeps need lockfile discipline, ruleset compliance, and manual superseded-PR closure.
+- npm locks often merge cleanly; uv locks usually need one final regeneration.
+- Code scanning can add legitimate new threads each push, including stale inline version comments.
+- Document pre-existing `dev` test failures separately.
 
-- PR-label routing is team metadata, not product validation. When `Squad Issue Assign` handles PR labels, it needs the base-repository token context (`pull_request_target`) and explicit PR/issue write permissions.
-- Keep `pull_request_target` routing workflows limited to trusted metadata scripts and base-branch checkout; never execute PR-head code in that context.
-- **2026-06-03T22:02:03.765+00:00 (Ralph board rescan after v2.2.1):** Board is clear of implementation PRs: zero open PRs, no draft/approved/mergeable PRs, and no unresolved PR review threads. Remaining work is async validation only: #1639 is routed to Newt for release checklist ownership, #1631 stays with Brett/Kane as post-release backlog/security posture follow-up, and v2.5 remains a research-heavy planning milestone (25 open issues, all `go:needs-research`). Dev CI had no failed runs in this scan; several post-merge runs were still in progress, so Ralph should idle-watch rather than start implementation.
+### Reskill consolidation (2026-05-31)
+- Skills shrank from 38 to 28; quality beats accumulation.
+- `e2e-auth-reuse` gained confidence after CI and production-path validation.
+- Repeated manifest-conflict rediscovery proved key patterns must move from history into skills.
 
-- **2026-06-03T22:02:03.765+00:00 (PR #1641 / #1628 final gate):** Refreshed Brett's RabbitMQ deprecation allowlist PR against `dev`, re-ran required checks to green, confirmed every review thread was resolved and #1628 was linked for closure, then merged PR #1641 into `dev`; GitHub closed #1628 as completed.
+### PR #1580 review (2026-05-31)
+- Valid installer fix was masked by E2E 429 flake; rebase isolated product change from infra noise.
 
-- **2026-06-03T22:02:03.765+00:00 (Infra PR merge/blocker round):** PR #1642 was refreshed, revalidated with green required checks and no unresolved review threads, then merged to `dev`. PR #1641 could not merge after branch refresh because new unresolved Copilot threads appeared on test numbering and Redis-overcommit decision wording; routed back to Brett. PR #1638 remains blocked by `assign-work`, same class as #1637: Squad Issue Assign found `squad:brett` but GITHUB_TOKEN received 403 creating the PR comment, so the workflow permission/pull-request-comment path needs fixing before rerun and merge.
+### PR #1614 volume migration (2026-05-31)
+- Docker volumes fit Solr/ZooKeeper/collections/certbot; user books stay bind-mounted.
+- SSL bootstrap needs volume existence plus test-container inspection.
+- `.env.example` credential completeness is part of infra review.
 
-- **2026-06-03T22:02:03.765+00:00 (PR #1640 / #1629):** Lead-reviewed Parker's pre-release connection-warning noise fix after Lambert QA approval. Required checks and local `sh tests/test-pre-release-check.sh` passed, review threads were resolved, and PR #1640 was squash-merged to `dev`, closing #1629; GitHub rejected formal approval from the shared authenticated account, so record lead approval in a PR comment before merge when reviewer identity is locked out.
+### Clean Architecture audit (2026-03-27)
+- Found `sys.path`, duplicated auth/JWT/TTL/user/logging, and framework-mixed correlation violations.
+- `aithena-common` validates the direction; migrate consumers incrementally.
 
+### v1.18.1 orchestration (2026-03-29)
+- IPEX extras, Solr roles, credentials, shared auth, tests, and architecture audit integrated with 1026+ tests passing.
+- Clear dependencies plus deduplicated decisions enabled scalable multi-agent orchestration.
 
-### Ralph Round 1 Next-Milestone Triage (2026-06-03)
+### Search/embedding research (2026-03)
+- R1 chunk preview mostly existed (`chunk_text_t`) and needed retrieval wiring.
+- Similar-books UI must decouple from PDF viewer state/z-index.
+- A/B indexers need fanout/separate queues; one queue creates competing consumers.
+- New embedding collections need matching vector fields (`knn_vector_768`, not hardcoded 512).
 
-- After v2.2.1 release, the active board had one open planning milestone (`v2.5`) plus post-release cleanup PRs/issues; no `go:ready` issues were present before triage.
-- Auto-created pre-release warning issues should leave the base `squad` inbox once owner labels and acceptance notes are added; keep `go:yes` plus priority labels so work monitors can pick them up without re-triage.
-- `VERSION=*-dev` cycle-start PRs must check every workflow that reads `VERSION`, not only `version-check.yml`; PR #1638 had green CI but remained blocked by an unresolved review thread about `.github/workflows/pre-release.yml` requiring stable semver on dev.
-- Release-doc automation can create a PR whose body lists files not present in the diff; Newt should verify generated release artifacts before merge or close superseded release-doc PRs after a successful release.
+### v1.10.1 gate/security (2026-03)
+- Parameterized SQL, justified S608 suppressions, RFC 7235 auth, and safe shell patterns passed gate.
+- Sequential admin batches around 100s/5000 docs were acceptable for admin scope; async chunking recommended later.
 
-### Project Review (2026-05-12)
-
-- **v2.1 shipped, but top-level docs lag behind.** `VERSION` and GitHub Releases are at `2.1.0`, and `CHANGELOG.md` covers the release well, but `README.md` still advertises `v1.9.1` / `v1.10.0` development state.
-- **Search architecture + capabilities are real shipped features.** `SEARCH_ARCHITECTURE` is implemented in `solr-search`, `/v1/capabilities` is live, UI capability gating is wired up, and the full `solr-search` test suite passes.
-- **Quantization naming is now a docs hazard.** The live env var is `VECTOR_QUANTIZATION`, not `EMBEDDING_QUANTIZATION`; stale naming would misconfigure deployments.
-- **Architecture docs need model/schema refresh.** `docs/architecture/solr-data-model.md` still describes 512-dim `distiluse` vectors, while code/schema use 768-dim `multilingual-e5-base` with optional byte-vector quantization.
-- **Auto-generated operational issues need lifecycle reconciliation.** Pre-release warning issues and heartbeat token issues can stay open after later clean runs or tagged releases, creating stale backlog noise unless a success path closes them.
-- **Immediate attention remains security-first.** Open GHAS issue #1519 is the only clearly current urgent issue from the active backlog snapshot.
-
----
-
-## Dependabot Batch Sweep 2026-05-31
-
-### Context
-Batched 16 low/medium-risk Dependabot PRs into a single PR (#1584), merged to dev via squash.
-
-### Work Completed
-- Cherry-picked 16 dependency bumps across 6 services
-- Resolved lockfile conflicts for solr-search (uv.lock needed regeneration after stacking 4 bumps)
-- Fixed stale CodeQL version comments (v3.28.14 → v4.35.5) flagged by copilot-pull-request-reviewer
-- Created tracking issues: #1585 (Python 3.14 eval), #1586 (Node 26 eval)
-- Commented on 5 held-back PRs with reasons and tracking links
-- Closed all 16 superseded PRs with back-reference
-
-### Learnings
-
-### PR #1649 Final Lead Gate — 2026-06-04T01:20:37.644+00:00
-
-- Final gate verified PR #1649 for #1631 after Brett's Solr readiness auth fail-fast revision.
-- Required checks were green, merge state was clean, and all review threads were resolved or outdated before merge.
-- The PR checklist was absent from the description, so Ripley appended an explicit checked validation checklist before merging.
-- Linked issue #1631 was already closed and remained the closure target for the PR.
-
-
-### Release Coordination After PR #1623 — 2026-06-03
-
-- PR #1623 reached green CI and all review threads were resolved before merge into `dev`.
-- Newt's release gate approved v2.2.0 after PR #1623, and release metadata PR #1624 merged to `dev` with `VERSION` and `CHANGELOG.md` updated.
-- Release stopped before dev→main/tag because `v2.2.0` already exists and is published on an older `dev` commit; the tag is an ancestor of current `dev`, but it does not contain the final release metadata and PR #1623 history.
-- Do not move the published tag ad hoc. Require Newt approval for an alternate patch version (likely v2.2.1) or an explicit tag-remediation decision before continuing release mechanics.
-- **Lockfile conflicts are routine**: When stacking multiple dependency bumps for the same service, cherry-picking creates lockfile conflicts. Solution: accept theirs, then `uv lock` once at the end.
-- **npm lockfile was auto-consistent**: Despite 6 npm dependency cherry-picks, the package-lock.json auto-merged cleanly. Only uv.lock needed regeneration.
-- **Rulesets ≠ branch protection**: `--admin` does NOT bypass repository rulesets. Must satisfy required status checks + resolve conversations.
-- **E2E flake count**: 4 reruns across 2 workflow runs. Flake #1583 remains chronic.
-- **Review threads from code scanning**: Each push triggers new code-scanning review threads that must be resolved before merge. The zizmor + CodeQL version comment issues were legitimate — the dependabot commit had stale inline version annotations.
-- **Strict mode + rulesets = must merge base**: When "require up to date" is in a ruleset, must `git merge origin/dev` into the branch and push before merging. Cannot bypass with --admin.
-- **Pre-existing test failures**: document-indexer has 4 failing metadata tests on dev — not caused by dependency bumps, predates this sweep.
-
-### Reskill Retrospective (2026-05-31, Consolidation Pass)
-
-**Status:** ✅ Complete
-
-Consolidated learnings from Ralph 3-round sweep (E2E 429 fix #1588, 4 Docker base bumps, 17-bump batch sweep PR #1608):
-
-1. **Skills:** Bumped `e2e-auth-reuse` from undocumented to **medium confidence** (successful CI validation + production code path in use). Cross-linked `dependabot-batch-merge` (low, tactical) ↔ `dependabot-batch-sweep` (high, strategic) to clarify scope. Warned in both skills about manifest-conflict gotcha that silently reverts bumps when using `--theirs`.
-
-2. **Agent Histories:** Verified that Parker, Lambert, and Brett all have "Local-Test-First Directive (2026-05-31, Round 2)" properly appended — Juanma's requirement that all squad agents test locally before pushing (using available docker + playwright) is now cross-documented.
-
-3. **Decisions:** No contradictions found in `.squad/decisions.md`. All three new items from this session ("Dependabot Batch Sweep 2026-05-31", "E2E Auth Token Reuse Pattern", "Always Test Locally Before Pushing") are clearly documented and non-overlapping.
-
-4. **Skills Created/Merged:** NO new skills created. The worktree batching pattern is already covered in `dependabot-batch-sweep`; local-test-first is a directive (not a skill), captured in decisions.md. Focused on quality over quantity — only 28 skills total, down from 38 in prior consolidation.
-
-5. **Key Pattern Captured:** The manifest-conflict gotcha (`git checkout --theirs` silently reverts prior bumps during multi-branch merges) is now flagged at skill level with explicit cross-reference. This pattern recurred in PR #1608 despite being documented in Parker's history — reinforces that escalating low-confidence patterns to skills + cross-linking prevents re-discovery.
-
----
-
-### PR #1580 Review & Merge (2026-05-31, Ralph PR-Review Round)
-
-**Status:** ✅ Complete
-
-Reviewed jmservera installer false-positive fix (PR #1580). Verdict: **APPROVE** after rebase. 
-
-- **Background:** PR had legitimate content but chronic CI 429 failures masked the signal. Root cause was separate (rate-limit race in E2E auth flow, fixed by #1588).
-- **Action:** Rebased branch onto current dev, force-pushed, all checks passed.
-- **Merge:** Squash-merged to dev (commit c3dae90).
-- **Outcome:** Installer fix shipped; dependent work (v2.2.0 changes) can proceed.
-
-This review exemplifies the "separate signal from noise" principle: the PR itself was good; the CI blocking was infrastructure (not code). Rebasing isolated the two concerns cleanly.
-
-## 2026-05-31 — PR #1614 Review (Phase 1b Volume Migration)
-
-**Context:** Phase 1b of installer wizard (#1578) — converting Solr, ZooKeeper, collections-db, and certbot volumes from bind mounts to Docker-managed volumes.
-
-**Review findings:**
-- ✅ Volume migration technically correct: infrastructure state moved to Docker volumes, user data (BOOKS_PATH) preserved as bind mount
-- ✅ start.sh template SSL bootstrap logic correctly updated to check Docker volumes instead of filesystem paths
-- ✅ .env.example completeness: added missing Solr credentials (SOLR_ADMIN_USER/PASS, SOLR_READONLY_USER/PASS)
-- ✅ CI validation: 18/19 checks passing, E2E still running at review time
-- ✅ Follows approved design per `.squad/decisions.md`
-
-**Decision:** APPROVED — Phase 1b is merge-ready. Recommended merge when E2E completes (if E2E fails, likely known flake #1583).
-
-**Learnings:**
-1. Infrastructure-only changes (YAML config, installer templates) carry low risk when CI unit tests pass — E2E validation is defense-in-depth rather than critical gate for volume changes.
-2. SSL certificate bootstrap logic for Docker-managed volumes requires checking volume existence + running test container to probe volume contents — cleaner than filesystem path checks.
-3. Missing .env.example entries for credentials referenced in code is a documentation completeness issue — caught during volume migration review, not original credential implementation PR.
-
-### Ralph Board Cycle — v2.3.0 Setup (2026-06-04)
-
-- Created GitHub milestone `v2.3.0` with target date 2026-06-11 and limited scope: maintenance/infrastructure hardening after v2.2.1.
-- Kept scope intentionally narrow because the current active backlog only supports #1631 as concrete v2.3.0 implementation work; broader feature scope remains TBD and v2.5 Solr 10 research stays in v2.5.
-- Routed #1631 to v2.3.0 as the only hardening item: Brett owns infrastructure/config wiring; Kane owns security acceptance and review. Board verification later showed #1631 closed under the milestone, leaving release-gate work as the active v2.3.0 queue.
-- Created the four standard release-gate issues for v2.3.0: release notes (#1645), test report/evidence (#1646), user/admin manual updates (#1647), and release validation checklist (#1648).
-- Confirmed #1639 is v2.2.1 human final validation/sign-off assigned to jmservera and should not block AI v2.3.0 work.
-
-## 2026-06-04: Ralph Loop Completion & v2.3.0 Milestone
-
-**Scope:** Final Ralph loop concluded; v2.2.1 shipped; v2.3.0 milestone created.
-
-**Status:**
-- ✅ Issues #1628, #1629, #1630, #1631 closed
-- ✅ PRs #1637, #1638, #1640, #1641, #1642, #1649 merged
-- ✅ PR #1639 remains human-only signoff
-- ✅ Coordinator-only directive active for next sprint
-- ✅ v2.3.0 infrastructure/maintenance focus (target 2026-06-11)
-
-**Decisions Recorded:** 5 decisions from Ripley inbox merged (duplicates deduplicated).
-
----
+### Skills pruning (2026-03)
+- Aggressive pruning of unvalidated/overlapping skills produced a more usable set.
+- Consolidated skills should preserve examples and anti-patterns while staying short enough for active work.
