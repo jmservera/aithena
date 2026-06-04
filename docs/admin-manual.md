@@ -51,11 +51,11 @@ This reduces startup races where the lister, indexer, or admin tools could come 
 
 ## Host Prerequisites
 
-Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host** (these cannot be set from inside a container).
+Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host**.
 
 ### Redis memory overcommit
 
-Redis background saves (RDB snapshots) fork the process, which requires the kernel to allow memory overcommit. Without this setting Redis logs `WARNING Memory overcommit must be enabled!` and background saves may fail.
+Redis background saves (RDB snapshots) fork the process, which requires the kernel to allow memory overcommit. Without this setting Redis logs `WARNING Memory overcommit must be enabled!` and background saves may fail. The CI workflows set this host sysctl before starting Compose; local and production operators should apply the host-level setting below.
 
 ```bash
 # Apply immediately (non-persistent):
@@ -66,7 +66,7 @@ echo "vm.overcommit_memory = 1" | sudo tee /etc/sysctl.d/90-redis-overcommit.con
 sudo sysctl --system
 ```
 
-> **Note:** The compose stack sets `stop-writes-on-bgsave-error no` in `src/redis/redis.conf` so Redis remains available even when overcommit is disabled, but applying the host-level setting is still recommended to ensure reliable snapshots.
+> **Note:** This setting must be applied on the Docker host, not in Compose: `vm.overcommit_memory` is not namespaced by the Linux container runtime and will fail if configured as a service-level `sysctls` entry. The compose stack sets `stop-writes-on-bgsave-error no` in `src/redis/redis.conf` so Redis remains available even when overcommit is disabled, but keeping overcommit enabled is still recommended to ensure reliable snapshots.
 
 ### ZooKeeper credentials (production hardening)
 
