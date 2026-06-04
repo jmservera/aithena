@@ -107,3 +107,11 @@
 ### Skills pruning (2026-03)
 - Aggressive pruning of unvalidated/overlapping skills produced a more usable set.
 - Consolidated skills should preserve examples and anti-patterns while staying short enough for active work.
+
+### Nap/Reskill maintenance pass (2026-06-04)
+- Compressed 6 agent histories (parker, newt, ripley, brett, dallas, lambert) from 188KB → 48KB (74% reduction).
+- Charters were already optimized — no action needed (avg 1,344 bytes, all under 2.5KB).
+- Total context savings: 251KB → 81KB (67% reduction, 170KB saved).
+- No new skills created — all patterns already extracted to .squad/skills/ (27 existing skills).
+- Compression preserved all unique insights, consolidated duplicates, removed verbose timestamps/session metadata.
+- Pattern: History bloat happens when detailed session logs aren't consolidated into patterns. Target ≤8KB per history, ≤1.5KB per charter.
