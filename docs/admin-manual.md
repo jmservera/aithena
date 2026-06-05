@@ -147,34 +147,34 @@ Common local URLs:
 | Search API | `http://localhost/v1/search/` | Protected |
 | Status API | `http://localhost/v1/status/` | Protected |
 | Stats API | `http://localhost/v1/stats/` | Protected |
-| Solr admin | `http://localhost/admin/solr/` | Protected |
-| RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
-| Redis Commander | `http://localhost/admin/redis/` | Protected |
+| Solr admin | `http://localhost/admin/solr/` | Admin-only |
+| Solr 10 Security UI | `http://localhost/admin/solr/ui/` | Admin-only; Solr RBAC also applies |
+| RabbitMQ management | `http://localhost/admin/rabbitmq/` | Admin-only |
+| Redis Commander | `http://localhost/admin/redis/` | Admin-only |
 
 Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker/compose.dev-ports.yml` file is loaded.
 
-
 ### Solr 10 Security UI (v2.5)
 
-Aithena now includes an **Admin → Security** scaffold that links to Solr 10's simplified Security UI at `/admin/solr/ui/#/~security`. Use it to manage Solr users and roles without editing `security.json` by hand.
+Aithena includes an **Admin → Security** scaffold that links to Solr 10's built-in Security UI at `/admin/solr/ui/#/~security`, and the Solr admin UI remains available from **Admin → Infrastructure → Solr Admin** or directly at `/admin/solr/ui/`.
 
-To add or remove Solr users and roles:
+Security posture:
 
-1. Sign in to Aithena with an admin account.
-2. Open **Admin → Security** and choose **Open Solr Security UI**.
-3. If Solr prompts for credentials, use the Solr admin credentials configured during bootstrap.
-4. Use Solr's **Users** screen to add, disable, or remove Solr users.
-5. Use Solr's permissions/roles screen to assign least-privilege roles, then verify access with a non-admin test user before relying on the change.
-
-Security and backend dependencies:
-
-- `/admin/security` is available only to Aithena admins.
-- This frontend page only links to Solr's UI; user creation, password changes, and role assignments remain enforced by Solr BasicAuth/RBAC and Solr's CSRF protections.
-- v2.5 release still needs Parker/Kane confirmation that `/admin/solr/` and `/admin/solr/ui/` are admin-role-only at the nginx/backend auth layer, not merely authenticated-user-only.
+- Sign in to Aithena as an `admin`; `/admin/security`, `/admin/solr/`, `/admin/rabbitmq/`, and `/admin/redis/` are gated by nginx via `GET /v1/auth/validate-admin`.
+- Non-admin Aithena users cannot open proxied infrastructure admin tools through nginx.
+- Aithena does not bypass Solr authorization. User creation, password changes, and role assignments remain enforced by Solr BasicAuth/RBAC; use a Solr account with the required `security-edit` permission for state-changing security operations.
+- Browser auth cookies are `HttpOnly` and `SameSite=Lax`; Solr still owns CSRF behavior for its UI forms/API calls.
 - Keep Aithena application users in **Admin → User Management** separate from Solr users/roles. Aithena users control access to the Aithena app and proxied admin surfaces; Solr users control direct Solr API/UI permissions.
 - Do not paste passwords, tokens, or `security.json` contents into tickets or screenshots.
 
-Bootstrap note: continue using the existing Solr bootstrap/auth flow until Parker confirms whether `bin/solr auth` changes simplify initial credential setup for v2.5. Kane must complete the v2.5 Security UI review before release.
+To add or remove Solr users and roles in Solr 10:
+
+1. Sign in to Aithena as an `admin`.
+2. Open **Admin → Security** and choose **Open Solr Security UI**, or open **Admin → Infrastructure → Solr Admin**.
+3. Authenticate to Solr if prompted.
+4. Open the Solr UI security section.
+5. Use the Solr UI controls to add/remove users and assign roles, then verify the resulting permissions before signing out.
+
 
 ## GPU Acceleration Setup (v1.17.0)
 

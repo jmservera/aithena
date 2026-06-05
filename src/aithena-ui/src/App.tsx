@@ -203,7 +203,16 @@ function App() {
               <Route path="/admin/logs" element={<AdminLogsPage />} />
               <Route path="/admin/infrastructure" element={<AdminInfrastructurePage />} />
               <Route path="/admin/users" element={<UserManagementPage />} />
-              <Route path="/admin/security" element={<SecurityPage />} />
+              <Route
+                path="/admin/security"
+                element={
+                  <LazyRoute
+                    element={<SecurityPage />}
+                    titleId="loading.security"
+                    messageId="loading.securityMessage"
+                  />
+                }
+              />
               <Route path="/admin/backups" element={<BackupDashboardPage />} />
             </Route>
           </Route>
