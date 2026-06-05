@@ -298,7 +298,7 @@ Replace all Solr 9 CLI syntax with Solr 10 double-dash equivalents in the `solr-
 
 ```bash
 # Before (Solr 9.7)
-solr zk cp file:/var/solr/data/empty-security.json zk:/security.json -z "$ZK_HOST"
+solr zk cp file:/var/solr/empty-security.json zk:/security.json -z "$ZK_HOST"
 
 solr auth enable --type basicAuth \
   -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
@@ -311,7 +311,7 @@ solr zk upconfig -z "$ZK_HOST" -n books -d /configsets/books
 solr zk ls /configs -z "$ZK_HOST"
 
 # After (Solr 10)
-solr zk cp file:/var/solr/data/empty-security.json zk:/security.json --zk-host "$ZK_HOST"
+solr zk cp file:/var/solr/empty-security.json zk:/security.json --zk-host "$ZK_HOST"
 
 solr auth enable --type basicAuth \
   --credentials "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \

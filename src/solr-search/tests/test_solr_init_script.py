@@ -238,15 +238,15 @@ def test_solr_init_security_seed_uses_writable_solr_data_path(script_name: str, 
 
     assert "/opt/solr/empty-security.json" not in normalized, f"{script_name} must not write under /opt/solr"
     assert seed_lines, f"{script_name} must seed security.json before enabling auth"
-    assert all("/var/solr/data/empty-security.json" in line for line in seed_lines), (
-        f"{script_name} must only use Solr's writable data directory for the seed security.json"
+    assert all("/var/solr/empty-security.json" in line for line in seed_lines), (
+        f"{script_name} must only use Solr's writable home directory for the seed security.json"
     )
-    assert "echo '{}' > /var/solr/data/empty-security.json" in normalized, (
-        f"{script_name} must create the seed security.json in Solr's writable data directory"
+    assert "echo '{}' > /var/solr/empty-security.json" in normalized, (
+        f"{script_name} must create the seed security.json in Solr's writable home directory"
     )
-    assert (
-        'solr zk cp file:/var/solr/data/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized
-    ), f"{script_name} must upload the seed security.json from Solr's writable data directory"
+    assert 'solr zk cp file:/var/solr/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized, (
+        f"{script_name} must upload the seed security.json from Solr's writable home directory"
+    )
 
 
 @pytest.mark.parametrize(
@@ -261,9 +261,9 @@ def test_solr_init_cli_commands_use_compatibility_helpers(script_name: str, scri
     """All solr CLI commands affected by Solr 10 must call version-aware flag helpers."""
     normalized = script.replace("$$", "$")
 
-    assert (
-        'solr zk cp file:/var/solr/data/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized
-    ), f"{script_name} must use the zk-host helper for solr zk cp"
+    assert 'solr zk cp file:/var/solr/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized, (
+        f"{script_name} must use the zk-host helper for solr zk cp"
+    )
     assert re.search(
         r'"\$\(solr_credentials_flag\)" "\$[{]?SOLR_ADMIN_USER[}]?:\$[{]?SOLR_ADMIN_PASS[}]?"',
         normalized,
