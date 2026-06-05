@@ -7,6 +7,10 @@ Tests verify:
 1. ancestor_path and descendent_path field types exist as boilerplate definitions
 2. No concrete fields use ancestor_path or descendent_path types
 3. Dynamic field patterns for these types exist but match no indexed/stored data fields
+
+Note: The Solr managed schema uses the spelling ``descendent_path`` (not
+``descendant_path``). String literals referencing these field names preserve
+that spelling to match the schema exactly.
 """
 
 from __future__ import annotations
@@ -80,8 +84,12 @@ class TestPathHierarchyTokenizerAudit:
         names = _get_field_type_names(schema_root)
         assert "ancestor_path" in names
 
-    def test_descendent_path_field_type_is_defined(self, schema_root: ET.Element) -> None:
-        """descendent_path field type exists in the schema (default Solr boilerplate)."""
+    def test_descendant_path_field_type_is_defined(self, schema_root: ET.Element) -> None:
+        """descendent_path field type exists in the schema (default Solr boilerplate).
+
+        The Solr managed schema uses the spelling ``descendent_path`` — the string
+        literal below matches the schema exactly.
+        """
         names = _get_field_type_names(schema_root)
         assert "descendent_path" in names
 
@@ -90,7 +98,7 @@ class TestPathHierarchyTokenizerAudit:
         tokenizers = _get_tokenizer_names_for_field_type(schema_root, "ancestor_path")
         assert "pathHierarchy" in tokenizers
 
-    def test_descendent_path_uses_path_hierarchy_tokenizer(self, schema_root: ET.Element) -> None:
+    def test_descendant_path_uses_path_hierarchy_tokenizer(self, schema_root: ET.Element) -> None:
         """descendent_path type uses pathHierarchy tokenizer (in index analyzer)."""
         tokenizers = _get_tokenizer_names_for_field_type(schema_root, "descendent_path")
         assert "pathHierarchy" in tokenizers
@@ -109,7 +117,7 @@ class TestPathHierarchyTokenizerAudit:
             "Review the Solr 10 PathHierarchyTokenizer position-increment change impact."
         )
 
-    def test_no_concrete_field_uses_descendent_path_type(self, schema_root: ET.Element) -> None:
+    def test_no_concrete_field_uses_descendant_path_type(self, schema_root: ET.Element) -> None:
         """No concrete <field> element uses the descendent_path field type.
 
         Same rationale as above — confirms no reindexing or query changes are
@@ -128,7 +136,7 @@ class TestPathHierarchyTokenizerAudit:
         assert "*_ancestor_path" in dynamic
         assert dynamic["*_ancestor_path"] == "ancestor_path"
 
-    def test_dynamic_field_pattern_descendent_path_exists(self, schema_root: ET.Element) -> None:
+    def test_dynamic_field_pattern_descendant_path_exists(self, schema_root: ET.Element) -> None:
         """Dynamic field pattern *_descendent_path is registered (expected boilerplate)."""
         dynamic = _get_dynamic_field_types(schema_root)
         assert "*_descendent_path" in dynamic
