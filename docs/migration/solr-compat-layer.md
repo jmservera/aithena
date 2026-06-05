@@ -129,7 +129,7 @@ is ready for use when:
 
 | Variable | Default | Values | Where |
 |----------|---------|--------|-------|
-| `SOLR_VERSION` | `9` | `9`, `10` | `.env.example`, `docker-compose.yml`, opt-in `docker/compose.solr10.yml` |
+| `SOLR_VERSION` | `9` | `9`, `10` | `.env.example`, `docker-compose.yml`, `docker/compose.prod.yml`, opt-in `docker/compose.solr10.yml` |
 
 ---
 
@@ -138,7 +138,7 @@ is ready for use when:
 When switching from Solr 9 to 10:
 
 1. [ ] For validation runs, add `docker/compose.solr10.yml` to `COMPOSE_FILE` so Solr containers build with `SOLR_BASE_IMAGE=solr:10` and run with `SOLR_VERSION=10`
-2. [ ] For final cutover, update `src/solr/Dockerfile` default `SOLR_BASE_IMAGE` from `solr:9.7` to `solr:10`
+2. [ ] For final cutover, update `src/solr/Dockerfile` default `SOLR_BASE_IMAGE` from `solr:9.7` to `solr:10` after the Solr 10 runtime overlay has been validated
 3. [ ] Update `src/solr/books/solrconfig.xml` `luceneMatchVersion` to `10.0`
 4. [ ] Verify CLI commands in `docker-compose.yml` use double-dash syntax
 5. [ ] Upload the updated `books` configset and re-index all data (required after
