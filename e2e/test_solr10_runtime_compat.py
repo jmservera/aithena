@@ -26,7 +26,7 @@ def _require_expected_solr10() -> None:
 
 def _solr_admin_url(solr_url: str, path: str) -> str:
     collection_suffix = "/books"
-    base = solr_url.removesuffix(collection_suffix).rstrip("/")
+    base = solr_url.rstrip("/").removesuffix(collection_suffix).rstrip("/")
     return f"{base}/{path.lstrip('/')}"
 
 
