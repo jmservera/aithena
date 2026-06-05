@@ -358,6 +358,14 @@ class TestInfrastructure:
         assert "rabbitmq_amqp" in data["connections"]
         assert "rabbitmq_mgmt" in data["connections"]
         assert "embeddings" in data["connections"]
+        assert data["solr_admin_url"] == "/admin/solr/"
+        assert data["rabbitmq_admin_url"] == "/admin/rabbitmq/"
+        assert data["redis_admin_url"] == "/admin/redis/"
+
+        security_ui = data["solr_security_ui"]
+        assert security_ui["url"] == "/admin/solr/ui/"
+        assert security_ui["auth_check_url"] == "/v1/auth/validate-admin"
+        assert security_ui["required_aithena_role"] == "admin"
 
     def test_infrastructure_some_down(self):
         def selective_tcp(host, port, timeout=2.0):

@@ -130,6 +130,29 @@ def test_validate_accepts_cookie_auth(client: TestClient, seeded_user: Authentic
     assert response.json()["authenticated"] is True
 
 
+def test_validate_admin_accepts_admin_session(client: TestClient, seeded_user: AuthenticatedUser) -> None:
+    token = create_access_token(seeded_user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
+
+    response = client.get("/v1/auth/validate-admin", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "authenticated": True,
+        "admin": True,
+        "user": {"id": seeded_user.id, "username": seeded_user.username, "role": "admin"},
+    }
+
+
+def test_validate_admin_rejects_non_admin_session(client: TestClient) -> None:
+    non_admin = AuthenticatedUser(id=7, username="reader", role="viewer")
+    token = create_access_token(non_admin, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
+
+    response = client.get("/v1/auth/validate-admin", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Admin access required"}
+
+
 def test_me_returns_current_user_info(client: TestClient, seeded_user: AuthenticatedUser) -> None:
     token = create_access_token(seeded_user, settings.auth_jwt_secret, settings.auth_jwt_ttl_seconds)
 
