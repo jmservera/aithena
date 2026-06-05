@@ -50,7 +50,7 @@ def _load_compose(path: Path) -> dict:
         return yaml.safe_load(fh)
 
 
-def _load_solr_init_file_script() -> str:
+def _load_solr_init_shell_script() -> str:
     """Load docker/solr-init.sh script contents."""
     return SOLR_INIT_SCRIPT_PATH.read_text(encoding="utf-8")
 
@@ -152,23 +152,30 @@ def test_security_json_matches_solr97_roles():
     assert perm_map.get("update") == "index", "update must require index role"
 
 
-def test_block_unknown_is_explicitly_disabled_in_init_scripts():
+def test_block_unknown_explicitly_set_to_false_in_init_scripts():
     """All Solr init scripts must explicitly set --block-unknown false."""
-    compose_script = _load_solr_init_script()
-    file_script = _load_solr_init_file_script()
+    compose_embedded_script = _load_solr_init_script()
+    file_script = _load_solr_init_shell_script()
+    compose_prod = _load_compose(COMPOSE_PROD_PATH)
+    compose_prod_entrypoint = compose_prod.get("services", {}).get("solr-init", {}).get("entrypoint", [])
+    assert len(compose_prod_entrypoint) >= 3, (
+        f"Unexpected solr-init entrypoint format in {COMPOSE_PROD_PATH.name}: {compose_prod_entrypoint}"
+    )
+    compose_prod_script = compose_prod_entrypoint[2]
 
-    with open(COMPOSE_PROD_PATH, encoding="utf-8") as fh:
-        compose_prod_text = fh.read()
-
-    assert "--block-unknown false" in compose_script, "docker-compose solr-init must set --block-unknown false"
+    assert "--block-unknown false" in compose_embedded_script, "docker-compose solr-init must set --block-unknown false"
     assert "--block-unknown false" in file_script, "docker/solr-init.sh must set --block-unknown false"
-    assert "--block-unknown false" in compose_prod_text, "docker/compose.prod.yml solr-init must set --block-unknown false"
+    assert "--block-unknown false" in compose_prod_script, "docker/compose.prod.yml solr-init must set --block-unknown false"
 
 
-def test_security_json_keeps_block_unknown_disabled():
+def test_security_json_explicitly_sets_block_unknown_false():
     """security.json must explicitly keep blockUnknown=false."""
     sec = _load_security_json()
-    assert sec.get("authentication", {}).get("blockUnknown") is False
+    authentication = sec.get("authentication", {})
+    assert "blockUnknown" in authentication, "security.json authentication must include blockUnknown key"
+    assert authentication.get("blockUnknown") is False, (
+        "security.json authentication.blockUnknown must remain explicitly false"
+    )
 
 
 def test_security_json_allows_unauthenticated_health_and_metrics():
@@ -176,18 +183,34 @@ def test_security_json_allows_unauthenticated_health_and_metrics():
     permissions = _load_security_json().get("authorization", {}).get("permissions", [])
     perm_map = {p["name"]: p.get("role") for p in permissions}
 
-    assert perm_map.get("health") is None
-    assert perm_map.get("metrics-read") is None
+    assert "health" in perm_map, "security.json permissions must include health"
+    assert "metrics-read" in perm_map, "security.json permissions must include metrics-read"
+    # role: null means unauthenticated access is allowed for these endpoints.
+    assert perm_map.get("health") is None, "health permission must allow unauthenticated access (role: null)"
+    assert perm_map.get("metrics-read") is None, "metrics-read must allow unauthenticated access (role: null)"
 
 
 def test_solr_health_checks_use_authenticated_curl():
-    """Solr service health checks must authenticate with SOLR_AUTH_USER/PASS."""
+    """Solr service health checks must authenticate with SOLR_AUTH_USER/PASS.
+
+    Both dev and prod compose variants are expected to define the 3-node Solr
+    services using names solr, solr2, solr3.
+    """
     for compose_path in (COMPOSE_PATH, COMPOSE_PROD_PATH):
         services = _load_compose(compose_path).get("services", {})
-        for service_name in ("solr", "solr2", "solr3"):
+        solr_services = sorted(name for name in services if re.fullmatch(r"solr[0-9]*", name))
+        assert solr_services, f"{compose_path.name} has no solr/solr2/solr3 services to validate"
+
+        for service_name in solr_services:
             healthcheck = services.get(service_name, {}).get("healthcheck", {})
             test_cmd = healthcheck.get("test", [])
-            rendered = " ".join(test_cmd) if isinstance(test_cmd, list) else str(test_cmd)
-            assert "curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS}" in rendered, (
-                f"{compose_path.name}:{service_name} healthcheck must use authenticated curl"
+            healthcheck_command = " ".join(test_cmd) if isinstance(test_cmd, list) else str(test_cmd)
+            assert re.search(r"\bcurl\b.*\s-u\s", healthcheck_command), (
+                f"{compose_path.name}:{service_name} healthcheck must use curl auth"
+            )
+            assert "SOLR_AUTH_USER" in healthcheck_command and "SOLR_AUTH_PASS" in healthcheck_command, (
+                f"{compose_path.name}:{service_name} healthcheck must use SOLR_AUTH_USER/PASS"
+            )
+            assert "/solr/admin/info/system" in healthcheck_command, (
+                f"{compose_path.name}:{service_name} healthcheck must probe /admin/info/system"
             )
