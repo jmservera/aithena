@@ -492,6 +492,7 @@ dependencies = [
 openvino = [
     { name = "intel-extension-for-pytorch" },
     { name = "openvino" },
+    { name = "openvino-tokenizers" },
     { name = "optimum-intel" },
     { name = "sentence-transformers", extra = ["openvino"] },
 ]
@@ -509,7 +510,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.135.3,<1" },
     { name = "intel-extension-for-pytorch", marker = "extra == 'openvino'" },
     { name = "openvino", marker = "extra == 'openvino'", specifier = ">=2025.4,<2026" },
-    { name = "optimum-intel", marker = "extra == 'openvino'" },
+    { name = "openvino-tokenizers", marker = "extra == 'openvino'", specifier = ">=2025.4,<2026" },
+    { name = "optimum-intel", marker = "extra == 'openvino'", specifier = ">=1.9" },
     { name = "sentence-transformers", specifier = ">=3.4,<6" },
     { name = "sentence-transformers", extras = ["openvino"], marker = "extra == 'openvino'", specifier = ">=3.4,<6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.42,<1" },
@@ -1372,6 +1374,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/71/8a/89d82f1a9d913fb266c2e6dc2f6030935db24b7152963a8db6c4f039787f/openvino_telemetry-2025.2.0.tar.gz", hash = "sha256:8bf8127218e51e99547bf38b8fb85a8b31c9bf96e6f3a82eb0b3b6a34155977c", size = 18894, upload-time = "2025-07-07T10:29:51.159Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3b/ac/5ab0ca0aa269ad3c73f7bfc3801b10e5f56f75a31bf68c1ae8bd51cf70a4/openvino_telemetry-2025.2.0-py3-none-any.whl", hash = "sha256:bcb667e83a44f202ecf4cfa49281715c6d7e21499daec04ff853b7f964833599", size = 25227, upload-time = "2025-07-07T10:29:50.189Z" },
+]
+
+[[package]]
+name = "openvino-tokenizers"
+version = "2025.4.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "openvino" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ee/bb/9052cda5e8674578988991848df4c25855a68991c75fdcf9baa35e1519b6/openvino_tokenizers-2025.4.1.0-py3-none-macosx_10_15_x86_64.whl", hash = "sha256:8d57a75a2739b7b461f8c0dd62d8f1db01d749ed2f6f617ff40f231109375364", size = 13803911, upload-time = "2025-12-17T16:21:33.778Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/52/9d6ab1583cc10024b7fc6d70956aab3f3d59aee31b6cc2bbeb93104ca571/openvino_tokenizers-2025.4.1.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:95ecfdd6dfb120ba5deae77db8434793f30dc5bb7784cddb42a53dc9918b95dc", size = 13731431, upload-time = "2025-12-17T16:21:36.178Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/f5/69fe7a716be58e3987caf31307c94b7119fb8ae0e4c97b686538fca52e5c/openvino_tokenizers-2025.4.1.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:376c3f8a1a6432de269deb5c244ae4845d8da3bdfb027948e9bcc721af0be1a8", size = 13690019, upload-time = "2025-12-17T16:21:38.115Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/db/ba75616964a1b0a40e0f7f416af418a0314611af27b447bab65edea5a03f/openvino_tokenizers-2025.4.1.0-py3-none-manylinux_2_31_aarch64.whl", hash = "sha256:5e7390e1bbbdb87f10519a2a11c600fb5bd8d4015e7166867eba84e4402a78fe", size = 13602908, upload-time = "2025-12-17T16:21:40.357Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/b1/6a9ba23b05a696498eb37a3f758376aadfc4904028c7a8feb4dccc805d3f/openvino_tokenizers-2025.4.1.0-py3-none-win_amd64.whl", hash = "sha256:3e7c9be755a803e8b69009c51ecefa350b3c4e50097bce1952f15e5710b87034", size = 13992898, upload-time = "2025-12-17T16:21:42.504Z" },
 ]
 
 [[package]]

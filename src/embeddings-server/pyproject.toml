@@ -13,8 +13,9 @@ dependencies = [
 openvino = [
 "sentence-transformers[openvino]>=3.4,<6",
     "openvino>=2025.4,<2026",
-    "optimum-intel",
+    "optimum-intel>=1.9",
     "intel-extension-for-pytorch",
+    "openvino-tokenizers>=2025.4,<2026",
 ]
 
 [dependency-groups]
