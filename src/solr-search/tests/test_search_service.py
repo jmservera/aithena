@@ -433,6 +433,13 @@ def test_build_knn_params_custom_field() -> None:
     assert "author_s:Amades" in params["fq"]
 
 
+def test_int8_quantization_defaults_to_byte_vector_field() -> None:
+    from config import _vector_field_default
+
+    assert _vector_field_default("int8") == "embedding_byte_v"
+    assert _vector_field_default("none") == "embedding_v"
+
+
 def test_build_knn_params_does_not_exclude_chunks() -> None:
     """kNN must search chunk docs because that's where embeddings live."""
     params = build_knn_params([0.1], top_k=5, knn_field="embedding_v")

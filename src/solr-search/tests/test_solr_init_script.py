@@ -145,11 +145,13 @@ def test_security_json_matches_solr97_roles():
 
 
 def test_init_scripts_rewrite_solr10_hnsw_params_for_solr9():
-    """Solr 9 bootstrap must rewrite source Solr 10 HNSW schema names."""
+    """Solr 9 bootstrap must rewrite source Solr 10 vector schema names."""
     for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
         assert 'SOLR_VERSION:-9}" = "9"' in script
         assert 'hnswM="/hnswMaxConnections="' in script
         assert 'hnswEfConstruction="/hnswBeamWidth="' in script
+        assert 'solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField' in script
+        assert 'bits="8"/ vectorEncoding="BYTE' in script
         assert 'solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"' in script or (
             'solr zk upconfig -z "$$ZK_HOST" -n books -d "$$CONFIGSET_DIR"' in script
         )
@@ -169,7 +171,8 @@ def test_solr_import_configset_upload_stages_solr9_hnsw_rewrite():
     staged_root.mkdir(parents=True)
     schema = config_dir / "managed-schema.xml"
     schema.write_text(
-        '<schema><fieldType name="knn_vector_768_byte" class="solr.DenseVectorField" '
+        '<schema><fieldType name="knn_vector_768_byte" '
+        'class="solr.ScalarQuantizedDenseVectorField" bits="8" '
         'hnswM="12" hnswEfConstruction="100"/></schema>',
         encoding="utf-8",
     )
@@ -184,9 +187,14 @@ staged="$(stage_configset_for_solr9 {config_dir} books)"
 test -f "${{staged}}/managed-schema.xml"
 grep -q 'hnswMaxConnections="12"' "${{staged}}/managed-schema.xml"
 grep -q 'hnswBeamWidth="100"' "${{staged}}/managed-schema.xml"
+grep -q 'class="solr.DenseVectorField"' "${{staged}}/managed-schema.xml"
+grep -q 'vectorEncoding="BYTE"' "${{staged}}/managed-schema.xml"
 ! grep -q 'hnswM=' "${{staged}}/managed-schema.xml"
 ! grep -q 'hnswEfConstruction=' "${{staged}}/managed-schema.xml"
+! grep -q 'ScalarQuantizedDenseVectorField' "${{staged}}/managed-schema.xml"
+! grep -q 'bits="8"' "${{staged}}/managed-schema.xml"
 grep -q 'hnswM="12"' {schema}
+grep -q 'ScalarQuantizedDenseVectorField' {schema}
 cleanup_staged_configset "$staged"
 test ! -d "$staged"
 """

@@ -278,6 +278,7 @@ services:
       - BASE_PATH=/data/documents
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
       - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
+      - VECTOR_QUANTIZATION=${VECTOR_QUANTIZATION:-none}
       - DEFAULT_SEARCH_MODE=keyword
       - UPLOAD_DIR=/data/documents/uploads
       - MAX_UPLOAD_SIZE_MB=50
@@ -832,6 +833,8 @@ services:
             sed -i \
               -e 's/hnswM="/hnswMaxConnections="/g' \
               -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
+              -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
+              -e 's/ bits="8"/ vectorEncoding="BYTE"/g' \
               "$$CONFIGSET_DIR/managed-schema.xml"
           fi
 

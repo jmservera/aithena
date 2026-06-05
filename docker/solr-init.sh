@@ -123,6 +123,8 @@ if [ "${SOLR_VERSION:-9}" = "9" ]; then
   sed -i \
     -e 's/hnswM="/hnswMaxConnections="/g' \
     -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
+    -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
+    -e 's/ bits="8"/ vectorEncoding="BYTE"/g' \
     "${CONFIGSET_DIR}/managed-schema.xml"
 fi
 
