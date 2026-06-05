@@ -230,13 +230,38 @@ def test_solr_init_cli_helpers_translate_flags_for_solr_9_and_10(script_name: st
         ("docker/solr-init.sh", _load_solr_init_shell_script()),
     ],
 )
+def test_solr_init_security_seed_uses_writable_solr_data_path(script_name: str, script: str):
+    """Solr init must seed security.json in a writable directory (not /opt/solr)."""
+    normalized = script.replace("$$", "$")
+
+    seed_lines = [line for line in normalized.splitlines() if "empty-security.json" in line]
+
+    assert "/opt/solr/empty-security.json" not in normalized, f"{script_name} must not write under /opt/solr"
+    assert seed_lines, f"{script_name} must seed security.json before enabling auth"
+    # Accept either /tmp (always writable) or /var/solr/data (Solr's data directory when available)
+    assert all(
+        "/tmp/empty-security.json" in line or "/var/solr/data/empty-security.json" in line
+        for line in seed_lines
+    ), (
+        f"{script_name} must use a writable directory for seed security.json"
+    )
+
+
+@pytest.mark.parametrize(
+    ("script_name", "script"),
+    [
+        ("docker-compose.yml", _load_solr_init_script()),
+        ("docker/compose.prod.yml", _load_compose_prod_init_script()),
+        ("docker/solr-init.sh", _load_solr_init_shell_script()),
+    ],
+)
 def test_solr_init_cli_commands_use_compatibility_helpers(script_name: str, script: str):
     """All solr CLI commands affected by Solr 10 must call version-aware flag helpers."""
     normalized = script.replace("$$", "$")
 
-    assert 'solr zk cp file:/opt/solr/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized, (
-        f"{script_name} must use the zk-host helper for solr zk cp"
-    )
+    assert (
+        'solr zk cp file:/var/solr/data/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized
+    ), f"{script_name} must use the zk-host helper for solr zk cp"
     assert re.search(
         r'"\$\(solr_credentials_flag\)" "\$[{]?SOLR_ADMIN_USER[}]?:\$[{]?SOLR_ADMIN_PASS[}]?"',
         normalized,

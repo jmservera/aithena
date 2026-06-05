@@ -87,8 +87,8 @@ AUTH_RESP=$(curl -sS "${SOLR_URL}/solr/admin/authentication" 2>/dev/null || true
 if echo "${AUTH_RESP}" | grep -qi 'No authentication'; then
   echo "Bootstrapping Solr security..."
   # Seed an empty security.json so "solr auth enable" can update it
-  echo '{}' > /opt/solr/empty-security.json
-  solr zk cp file:/opt/solr/empty-security.json zk:/security.json "$(solr_zk_host_flag)" "${ZK_HOST}"
+  echo '{}' > /var/solr/data/empty-security.json
+  solr zk cp file:/var/solr/data/empty-security.json zk:/security.json "$(solr_zk_host_flag)" "${ZK_HOST}"
   sleep 2
 
   # Create admin user with hashed password (also creates default RBAC rules)
