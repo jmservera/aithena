@@ -5,16 +5,19 @@ import { apiFetch, buildApiUrl } from '../api';
 
 export interface ServiceEndpoint {
   name: string;
-  url: string;
+  url?: string;
+  admin_url?: string | null;
   status: string;
-  type: string;
+  type?: string;
+  description?: string;
 }
 
 export interface InfrastructureInfo {
   services: ServiceEndpoint[];
-  solr_admin_url: string;
-  rabbitmq_admin_url: string;
-  redis_admin_url: string;
+  connections?: Record<string, string>;
+  solr_admin_url?: string;
+  rabbitmq_admin_url?: string;
+  redis_admin_url?: string;
 }
 
 /* ── Hook state ───────────────────────────────────────────────────────── */
@@ -91,4 +94,18 @@ export function useAdminInfrastructure(): UseAdminInfrastructureReturn {
   }, []);
 
   return { data, loading, error, refresh };
+}
+
+export function getServiceAdminUrl(
+  data: InfrastructureInfo | null,
+  serviceName: string,
+  fallbackUrl: string
+): string {
+  const service = data?.services.find((item) => item.name === serviceName);
+  return service?.admin_url ?? service?.url ?? fallbackUrl;
+}
+
+export function buildSolrSecurityUrl(solrAdminUrl: string): string {
+  const base = solrAdminUrl.endsWith('/') ? solrAdminUrl : `${solrAdminUrl}/`;
+  return `${base}ui/#/~security`;
 }
