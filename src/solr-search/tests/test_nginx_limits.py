@@ -152,6 +152,12 @@ class TestNginxAdminToolAuth:
         assert "proxy_pass_request_body off;" in block
         assert "proxy_set_header Cookie $http_cookie;" in block
 
+    def test_admin_forbidden_response_keeps_security_headers(self) -> None:
+        block = _location_block(NGINX_CONF.read_text(), "@auth_forbidden")
+        assert 'add_header X-Frame-Options "DENY" always;' in block
+        assert 'add_header X-Content-Type-Options "nosniff" always;' in block
+        assert 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;' in block
+
 
 class TestNginxBodySizeParser:
     """Unit tests for the _parse_body_size_mb helper itself."""
