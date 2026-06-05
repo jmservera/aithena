@@ -56,17 +56,15 @@ def _dependency_by_name(deps: list[str]) -> dict[str, str]:
     return dict(zip(_package_names(deps), deps, strict=True))
 
 
-def _version_tuple(version: str) -> tuple[int, ...]:
-    """Return numeric version parts, ignoring local/build suffixes."""
-    import re
-
-    return tuple(int(part) for part in re.findall(r"\d+", version))
-
-
 def _assert_version_range(version: str, minimum: str, maximum_exclusive: str):
-    actual = _version_tuple(version)
-    assert actual >= _version_tuple(minimum), f"{version} is lower than required minimum {minimum}"
-    assert actual < _version_tuple(maximum_exclusive), f"{version} is outside the supported maximum {maximum_exclusive}"
+    """Assert that version is within [minimum, maximum_exclusive) using PEP 440 ordering."""
+    from packaging.version import Version
+
+    actual = Version(version)
+    min_version = Version(minimum)
+    max_version = Version(maximum_exclusive)
+    assert actual >= min_version, f"{version} is lower than required minimum {minimum}"
+    assert actual < max_version, f"{version} is outside the supported maximum {maximum_exclusive}"
 
 
 def test_pyproject_openvino_extras_includes_ipex():
@@ -150,10 +148,12 @@ def test_uv_lock_openvino_packages_match_supported_series():
     config = _load_openvino_config()
 
     for package in ("openvino", "openvino-tokenizers"):
+        assert package in packages, f"{package} not found in uv.lock — run `uv lock` to regenerate lockfile"
         assert packages[package].startswith(config["base-image-series"]), (
             f"{package} {packages[package]} must match OpenVINO base-image series {config['base-image-series']}"
         )
 
+    assert "optimum-intel" in packages, "optimum-intel not found in uv.lock — run `uv lock` to regenerate lockfile"
     _assert_version_range(
         packages["optimum-intel"],
         config["optimum-intel-min"],
