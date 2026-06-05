@@ -24,6 +24,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 REPO_ROOT = Path(__file__).resolve().parents[3]  # src/solr-search/tests -> repo root
 NGINX_CONF = REPO_ROOT / "src" / "nginx" / "default.conf"
 NGINX_CONF_TEMPLATE = REPO_ROOT / "src" / "nginx" / "default.conf.template"
+NGINX_SSL_CONF_TEMPLATE = REPO_ROOT / "src" / "nginx" / "ssl.conf.template"
+NGINX_ADMIN_AUTH_CONFIGS = (NGINX_CONF, NGINX_CONF_TEMPLATE, NGINX_SSL_CONF_TEMPLATE)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -140,20 +142,24 @@ class TestNginxProxyTimeouts:
 class TestNginxAdminToolAuth:
     """Ensure browser-accessible infrastructure UIs require admin sessions."""
 
+    @pytest.mark.parametrize("conf_path", NGINX_ADMIN_AUTH_CONFIGS, ids=lambda path: path.name)
     @pytest.mark.parametrize("location", ["/admin/solr/", "/solr/", "/admin/rabbitmq/", "/admin/redis/"])
-    def test_admin_tool_locations_use_admin_auth_request(self, location: str) -> None:
-        block = _location_block(NGINX_CONF.read_text(), location)
+    def test_admin_tool_locations_use_admin_auth_request(self, conf_path: Path, location: str) -> None:
+        block = _location_block(conf_path.read_text(), location)
         assert "auth_request /_admin_auth;" in block
         assert "error_page 403 = @auth_forbidden;" in block
+        assert "proxy_set_header Authorization" not in block
 
-    def test_admin_auth_subrequest_uses_validate_admin_endpoint(self) -> None:
-        block = _location_block(NGINX_CONF.read_text(), "= /_admin_auth")
+    @pytest.mark.parametrize("conf_path", NGINX_ADMIN_AUTH_CONFIGS, ids=lambda path: path.name)
+    def test_admin_auth_subrequest_uses_validate_admin_endpoint(self, conf_path: Path) -> None:
+        block = _location_block(conf_path.read_text(), "= /_admin_auth")
         assert "proxy_pass http://solr-search:8080/v1/auth/validate-admin;" in block
         assert "proxy_pass_request_body off;" in block
         assert "proxy_set_header Cookie $http_cookie;" in block
 
-    def test_admin_forbidden_response_keeps_security_headers(self) -> None:
-        block = _location_block(NGINX_CONF.read_text(), "@auth_forbidden")
+    @pytest.mark.parametrize("conf_path", NGINX_ADMIN_AUTH_CONFIGS, ids=lambda path: path.name)
+    def test_admin_forbidden_response_keeps_security_headers(self, conf_path: Path) -> None:
+        block = _location_block(conf_path.read_text(), "@auth_forbidden")
         assert 'add_header X-Frame-Options "DENY" always;' in block
         assert 'add_header X-Content-Type-Options "nosniff" always;' in block
         assert 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;' in block
