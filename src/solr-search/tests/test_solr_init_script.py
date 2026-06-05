@@ -116,7 +116,7 @@ def test_init_script_does_not_overwrite_admin_roles():
 
     # Verify solr auth enable is used for admin bootstrap
     assert "solr auth enable" in script, "solr-init script missing 'solr auth enable' command"
-    assert "-u" in script, "solr-init script missing -u flag in solr auth enable"
+    assert "solr_credentials_flag" in script, "solr-init script must use credentials compatibility helper"
     assert "SOLR_ADMIN_USER" in script, "solr-init script must reference SOLR_ADMIN_USER"
 
     # Verify there is NO set-user-role call for the admin user

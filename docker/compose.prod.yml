@@ -771,7 +771,7 @@ services:
               "$$CONFIGSET_DIR/managed-schema.xml"
           fi
 
-          if ! solr zk ls /configs "$$(solr_zk_host_flag)" "$$ZK_HOST" | grep -q 'books'; then
+          if ! solr zk ls /configs "$$(solr_zk_host_flag)" "$$ZK_HOST" | grep -qx 'books'; then
             solr zk upconfig "$$(solr_zk_host_flag)" "$$ZK_HOST" "$$(solr_name_flag)" books "$$(solr_dir_flag)" "$$CONFIGSET_DIR"
           fi
 
