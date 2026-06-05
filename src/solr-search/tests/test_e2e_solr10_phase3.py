@@ -9,14 +9,9 @@ cuVS codec, and hybrid search quality with AI features.
 
 from __future__ import annotations
 
-import logging
-from pathlib import Path
-
 import pytest
 
-logger = logging.getLogger(__name__)
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
+pytestmark = [pytest.mark.e2e, pytest.mark.phase3, pytest.mark.solr10]
 
 
 class TestPhase3LanguageModels:

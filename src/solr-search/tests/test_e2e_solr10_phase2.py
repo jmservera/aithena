@@ -9,14 +9,9 @@ reduction, quantization search quality maintenance, and efSearchScaleFactor tuni
 
 from __future__ import annotations
 
-import logging
-from pathlib import Path
-
 import pytest
 
-logger = logging.getLogger(__name__)
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
+pytestmark = [pytest.mark.e2e, pytest.mark.phase2, pytest.mark.solr10]
 
 
 class TestPhase2StandaloneMode:
