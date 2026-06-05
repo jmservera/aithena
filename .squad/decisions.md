@@ -1,3 +1,36 @@
+# Decision: PathHierarchyTokenizer Audit — No-Op (v2.5)
+
+**Date:** 2026-06-05
+**Author:** Ash (Search Engineer)
+**Status:** Closed — No-Op
+
+## Context
+
+The Solr 9 → 10 migration PRD (section 4.10) flagged a `PathHierarchyTokenizer` behavior change: token position increments changed from 0 to 1 in Solr 10. The `ancestor_path` and `descendent_path` field types use this tokenizer and required audit.
+
+## Findings
+
+Schema audit of `src/solr/books/managed-schema.xml`:
+
+- `ancestor_path` and `descendent_path` field types are **defined** (lines 6 and 35) as standard Solr boilerplate.
+- Dynamic field patterns `*_ancestor_path` and `*_descendent_path` are **registered** (lines 594–595).
+- **No concrete fields** in the schema use these types.
+- **No application code** (Python, TypeScript, configuration) reads or writes fields matching `*_ancestor_path` or `*_descendent_path`.
+
+## Decision
+
+The `PathHierarchyTokenizer` behavior change in Solr 10 has **no impact** on the aithena books collection. Both field types and their dynamic patterns are unused boilerplate inherited from the default Solr managed schema.
+
+No schema changes, code changes, or reindexing are required.
+
+## References
+
+- PRD section 4.10: `docs/prd/solr10-migration-prd.md`
+- Migration guide section 2.10: `docs/migration/solr-9-to-10.md`
+- Schema: `src/solr/books/managed-schema.xml`
+
+---
+
 # Decision: Dependabot Batch Sweep 2026-05-31
 
 **Date:** 2026-05-31  
