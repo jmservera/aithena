@@ -165,6 +165,15 @@ schema.
 
 **Our impact**: We explicitly set `--block-unknown false` in the init script and have `"blockUnknown": false` in `security.json`. Verify this explicit setting is still honored in Solr 10. Docker health checks authenticate with credentials, so they should work either way.
 
+**v2.5 verification status**:
+- `--block-unknown false` remains explicitly set in all Solr init variants (`docker/solr-init.sh`, `docker-compose.yml`, `docker/compose.prod.yml`)
+- Solr container health checks are authenticated (`curl -sf -u $SOLR_AUTH_USER:$SOLR_AUTH_PASS ...`)
+- `security.json` still allows unauthenticated `health` and `metrics-read` via `role: null`
+
+**Security consideration (decision point)**:
+- Keeping `blockUnknown: false` preserves compatibility with the current unauthenticated health/metrics permissions.
+- Switching to `blockUnknown: true` is stricter and recommended if we require authentication for all probes/endpoints; this would require updating health-check expectations and removing/adjusting unauthenticated permissions.
+
 ### 2.4 Java 21 Requirement (🟡 Medium Impact)
 
 | | Solr 9.7 | Solr 10 |
