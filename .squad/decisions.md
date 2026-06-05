@@ -1414,7 +1414,7 @@ This prevents stale pre-release findings from blocking releases.
 
 **Author:** Brett (Infrastructure) with Ripley & Lambert inputs  
 **Date:** 2026-06-05  
-**Status:** ✅ Implemented — test-side gates plus Brett Dockerfile/workflow verification in PR #1666  
+**Status:** ✅ Implemented — test-side gates plus Brett Dockerfile/workflow verification in PR #1666
 **Failed Run:** 27022717607 | **Fix Run:** 27026253418 (a8a5cb5) | **Issue:** #1662
 
 ## Context

@@ -95,6 +95,10 @@ Before merging `dev` into `main`, you can build release candidate images to vali
 - **Trigger:** `workflow_dispatch` on the `dev` branch with a `version` input
 - **RC numbering:** Auto-increments from existing tags, or set explicitly
 - **Testing:** Pull RC images locally with `docker/compose.prod.yml` and run validation
+- **OpenVINO drift guard:** PRs that touch the OpenVINO Dockerfile, lockfile,
+  runtime verifier, or smoke test run `openvino-release-gate.yml`. The same gate
+  also runs weekly against the current base image to detect upstream base-image
+  drift before the next RC.
 
 See [Pre-Release Testing](pre-release-testing.md) for the full step-by-step workflow.
 

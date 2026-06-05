@@ -4,8 +4,9 @@
 # Validates that the OpenVINO embeddings-server container:
 #   1. Has correct model directory permissions (readable by app user)
 #   2. Has OPENVINO_CACHE_DIR set and writable (regression from rc.3→rc.23)
-#   3. Loads the embedding model with BACKEND=openvino successfully
-#   4. Produces embeddings via the /v1/embeddings/ endpoint
+#   3. Has post-uv-sync OpenVINO package versions matching pyproject constraints
+#   4. Loads the embedding model with BACKEND=openvino successfully
+#   5. Produces embeddings via the /v1/embeddings/ endpoint with the runtime model dimension
 #
 # Usage:
 #   ./e2e/smoke-openvino-permissions.sh <image-ref>
@@ -135,9 +136,46 @@ else
   fail "Container does not run as expected non-root user"
 fi
 
-# ── Test 4: Full model load via health endpoint ──────────────────────────
+# ── Test 4: Installed OpenVINO dependency audit ───────────────────────────
 
-section "Test 4: OpenVINO model loading (BACKEND=openvino DEVICE=cpu)"
+section "Test 4: Installed OpenVINO runtime dependency audit"
+
+RUNTIME_STATUS=0
+RUNTIME_OUTPUT=$(docker run --rm --entrypoint "" "$IMAGE" \
+  sh -c '
+    set -eu
+    PYTHON=/app/.venv/bin/python
+    echo "Python: $($PYTHON --version 2>&1)"
+    echo ""
+    echo "Filtered Python package inventory:"
+    $PYTHON - <<'"'"'PY'"'"'
+from importlib import metadata
+
+for dist in sorted(metadata.distributions(), key=lambda item: item.metadata["Name"].lower()):
+    name = dist.metadata["Name"]
+    if name.lower().startswith(("openvino", "optimum-intel", "tokenizers")):
+        print(f"{name}=={dist.version}")
+PY
+    echo ""
+    if [ -f /app/scripts/verify_openvino_runtime.py ]; then
+      $PYTHON /app/scripts/verify_openvino_runtime.py --pyproject /app/pyproject.toml
+    else
+      echo "Missing /app/scripts/verify_openvino_runtime.py"
+      exit 1
+    fi
+  ' 2>&1) || RUNTIME_STATUS=$?
+
+echo "$RUNTIME_OUTPUT"
+
+if [ "$RUNTIME_STATUS" -eq 0 ]; then
+  pass "OpenVINO installed package versions satisfy pyproject constraints"
+else
+  fail "OpenVINO installed package verification failed"
+fi
+
+# ── Test 5: Full model load via health endpoint ──────────────────────────
+
+section "Test 5: OpenVINO model loading (BACKEND=openvino DEVICE=cpu)"
 
 docker run -d --name "$CONTAINER_NAME" \
   -p "${PORT}:8080" \
@@ -165,6 +203,7 @@ if $healthy; then
   pass "Health endpoint responded after ${elapsed}s"
 
   HEALTH_BODY=$(curl -sf "http://localhost:${PORT}/health" || true)
+  echo "  Health response: $HEALTH_BODY"
   if echo "$HEALTH_BODY" | grep -q '"backend".*"openvino"'; then
     pass "Health response confirms backend=openvino"
   else
@@ -178,11 +217,25 @@ else
   echo "  === End logs ==="
 fi
 
-# ── Test 5: Embedding inference end-to-end ───────────────────────────────
+# ── Test 6: Embedding inference end-to-end ───────────────────────────────
 
-section "Test 5: Embedding inference"
+section "Test 6: Embedding inference"
 
 if $healthy; then
+  MODEL_INFO=$(curl -sf "http://localhost:${PORT}/v1/embeddings/model" 2>&1) || true
+  echo "  Model info response: $MODEL_INFO"
+  EXPECTED_DIM=$(echo "$MODEL_INFO" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+print(data['embedding_dim'])
+" 2>/dev/null) || true
+
+  if [ -n "$EXPECTED_DIM" ]; then
+    pass "Runtime model endpoint reports embedding_dim=${EXPECTED_DIM}"
+  else
+    fail "Could not read embedding_dim from runtime model endpoint"
+  fi
+
   EMBED_RESPONSE=$(curl -sf -X POST "http://localhost:${PORT}/v1/embeddings/" \
     -H "Content-Type: application/json" \
     -d '{"input": "smoke test for openvino permissions"}' 2>&1) || true
@@ -196,10 +249,10 @@ import json, sys
 data = json.load(sys.stdin)
 print(len(data['data'][0]['embedding']))
 " 2>/dev/null) || true
-    if [ "$DIM" = "768" ]; then
-      pass "Embedding dimension is 768 (correct for e5-base)"
+    if [ -n "$EXPECTED_DIM" ] && [ "$DIM" = "$EXPECTED_DIM" ]; then
+      pass "Embedding dimension is ${DIM} (matches runtime model config)"
     else
-      fail "Unexpected embedding dimension: ${DIM:-parse-error} (expected 768)"
+      fail "Unexpected embedding dimension: ${DIM:-parse-error} (expected ${EXPECTED_DIM:-runtime-model-parse-error})"
     fi
   else
     fail "Embedding inference failed: ${EMBED_RESPONSE:-no response}"
