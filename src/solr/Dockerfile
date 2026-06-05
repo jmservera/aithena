@@ -1,8 +1,13 @@
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
+ARG SOLR_BASE_IMAGE=solr:9.7
 
-FROM solr:9.7
+FROM ${SOLR_BASE_IMAGE}
+
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \

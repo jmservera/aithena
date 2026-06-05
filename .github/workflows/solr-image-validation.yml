@@ -1,0 +1,73 @@
+name: Solr Image Validation
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'src/solr/**'
+      - '.github/workflows/build-containers.yml'
+      - '.github/workflows/solr-image-validation.yml'
+      - 'tests/test-solr-image-refs.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  solr10-image:
+    name: Build and smoke Solr 10 image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate Solr 10 image references
+        run: bash tests/test-solr-image-refs.sh
+
+      - name: Build Solr 10 image
+        run: |
+          docker build \
+            --build-arg SOLR_BASE_IMAGE=solr:10 \
+            --build-arg VERSION=ci-solr10 \
+            --build-arg GIT_COMMIT="${GITHUB_SHA}" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t aithena-solr:solr10-ci \
+            src/solr
+
+      - name: Smoke test Solr 10 container
+        run: |
+          container_id="$(docker run -d -e SOLR_MODULES=extraction,langid -p 8983:8983 aithena-solr:solr10-ci solr-foreground)"
+          cleanup() {
+            docker logs "$container_id" || true
+            docker rm -f "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for attempt in {1..60}; do
+            if curl -fsS 'http://localhost:8983/solr/admin/info/system?wt=json' > solr-system.json; then
+              break
+            fi
+            echo "[$attempt/60] Waiting for Solr 10..."
+            sleep 5
+          done
+
+          test -s solr-system.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("solr-system.json").read_text(encoding="utf-8"))
+          lucene = data.get("lucene", {})
+          version = str(lucene.get("solr-spec-version") or lucene.get("solr-impl-version") or "")
+          if not version.startswith("10."):
+              raise SystemExit(f"Expected Solr 10.x from /admin/info/system, got {version!r}")
+          print(f"Solr version validated: {version}")
+          PY
