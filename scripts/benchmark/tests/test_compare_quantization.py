@@ -32,6 +32,12 @@ def _result(query_id: str, mode: str, ids: list[str], latency_ms: float = 10.0) 
     }
 
 
+def _error_result(query_id: str, mode: str, error: str) -> dict:
+    result = _result(query_id, mode, [])
+    result["error"] = error
+    return result
+
+
 def _report(results: list[dict]) -> dict:
     return {
         "timestamp": "2026-06-05T00:00:00Z",
@@ -109,6 +115,39 @@ class TestSummarize:
         assert summary["failures"][0]["query_id"] == "sk-01"
         assert summary["by_mode"]["semantic"]["queries_below_min_recall"] == ["sk-01"]
 
+    def test_summary_fails_when_baseline_has_error(self) -> None:
+        comparisons = compare_reports(
+            _report([_error_result("sk-01", "semantic", "baseline request failed")]),
+            _report([_result("sk-01", "semantic", ["a", "b"])]),
+            top_k=2,
+        )
+
+        summary = summarize(comparisons, min_recall=0.95)
+
+        assert summary["passed"] is False
+        assert summary["by_mode"]["semantic"]["baseline_error_count"] == 1
+        assert summary["failures"][0]["reasons"] == ["baseline_error", "empty_baseline_top_k_ids"]
+        assert summary["failures"][0]["baseline_error"] == "baseline request failed"
+
+    def test_summary_fails_when_baseline_has_no_top_k_ids(self) -> None:
+        comparisons = compare_reports(
+            _report([_result("sk-01", "semantic", [])]),
+            _report([_result("sk-01", "semantic", ["a", "b"])]),
+            top_k=2,
+        )
+
+        summary = summarize(comparisons, min_recall=0.95)
+
+        assert summary["passed"] is False
+        assert summary["by_mode"]["semantic"]["empty_baseline_result_count"] == 1
+        assert summary["failures"][0]["reasons"] == ["empty_baseline_top_k_ids"]
+
+    def test_summary_fails_when_baseline_has_no_comparisons(self) -> None:
+        summary = summarize([], min_recall=0.95)
+
+        assert summary["passed"] is False
+        assert summary["failures"][0]["reasons"] == ["no_baseline_comparisons"]
+
 
 class TestOutput:
     def test_build_output_is_json_serializable(self) -> None:
@@ -141,6 +180,20 @@ class TestOutput:
 
         assert "QUANTIZATION RECALL COMPARISON" in text
         assert "PASS" in text
+
+    def test_format_summary_includes_baseline_failure_counts(self) -> None:
+        comparisons = compare_reports(
+            _report([_error_result("sk-01", "semantic", "baseline request failed")]),
+            _report([_result("sk-01", "semantic", ["a"])]),
+            top_k=1,
+        )
+        output = build_output(Path("baseline.json"), Path("candidate.json"), comparisons, top_k=1, min_recall=0.95)
+
+        text = format_summary(output)
+
+        assert "baseline_errors=1" in text
+        assert "empty_baselines=1" in text
+        assert "FAIL" in text
 
     def test_load_report_rejects_invalid_shape(self, monkeypatch) -> None:
         class FakePath:

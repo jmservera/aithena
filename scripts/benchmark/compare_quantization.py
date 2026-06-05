@@ -159,13 +159,47 @@ def summarize(comparisons: list[Comparison], *, min_recall: float) -> dict[str, 
             "mean_latency_delta_pct": round(statistics.mean(deltas), 4) if deltas else None,
             "candidate_error_count": sum(1 for c in mode_items if c.candidate_error),
             "baseline_error_count": sum(1 for c in mode_items if c.baseline_error),
+            "empty_baseline_result_count": sum(1 for c in mode_items if not c.baseline_ids),
         }
 
-    failures = [
-        {"query_id": c.query_id, "mode": c.mode, "recall_at_k": c.recall_at_k, "error": c.candidate_error}
-        for c in comparisons
-        if c.candidate_error or (c.recall_at_k is not None and c.recall_at_k < min_recall)
-    ]
+    failures: list[dict[str, Any]] = []
+    for c in comparisons:
+        reasons = []
+        if c.baseline_error:
+            reasons.append("baseline_error")
+        if not c.baseline_ids:
+            reasons.append("empty_baseline_top_k_ids")
+        if c.candidate_error:
+            reasons.append("candidate_error")
+        if c.recall_at_k is not None and c.recall_at_k < min_recall:
+            reasons.append("recall_below_threshold")
+
+        if reasons:
+            failures.append(
+                {
+                    "query_id": c.query_id,
+                    "mode": c.mode,
+                    "recall_at_k": c.recall_at_k,
+                    "reasons": reasons,
+                    "error": c.candidate_error or c.baseline_error,
+                    "baseline_error": c.baseline_error,
+                    "candidate_error": c.candidate_error,
+                },
+            )
+
+    if not comparisons:
+        failures.append(
+            {
+                "query_id": None,
+                "mode": None,
+                "recall_at_k": None,
+                "reasons": ["no_baseline_comparisons"],
+                "error": "baseline report has no comparable results",
+                "baseline_error": "baseline report has no comparable results",
+                "candidate_error": None,
+            },
+        )
+
     return {
         "total_comparisons": len(comparisons),
         "min_recall_threshold": min_recall,
@@ -224,6 +258,8 @@ def format_summary(output: dict[str, Any]) -> str:
             f"min_recall={stats['min_recall_at_k']} "
             f"mean_latency_delta_pct={stats['mean_latency_delta_pct']} "
             f"below_threshold={len(stats['queries_below_min_recall'])} "
+            f"baseline_errors={stats['baseline_error_count']} "
+            f"empty_baselines={stats['empty_baseline_result_count']} "
             f"candidate_errors={stats['candidate_error_count']}",
         )
     lines.append("")
