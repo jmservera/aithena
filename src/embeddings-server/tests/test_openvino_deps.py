@@ -62,7 +62,19 @@ def test_pyproject_openvino_extras_includes_optimum_intel():
     assert "optimum-intel" in names, f"optimum-intel missing from extras: {deps}"
 
 
-# ---------- 4. uv.lock contains IPEX ----------
+# ---------- 4. openvino-tokenizers included ----------
+
+
+def test_pyproject_openvino_extras_includes_openvino_tokenizers():
+    """openvino-tokenizers must be included for OpenVINO 2025.x compatibility."""
+    deps = _load_openvino_extras()
+    names = _package_names(deps)
+    assert "openvino-tokenizers" in names, (
+        f"openvino-tokenizers missing from extras — required for OpenVINO 2025.x. Current deps: {deps}"
+    )
+
+
+# ---------- 5. uv.lock contains IPEX ----------
 
 
 def test_uv_lock_contains_ipex():
@@ -77,4 +89,22 @@ def test_uv_lock_contains_ipex():
     assert "intel-extension-for-pytorch" in content, (
         "uv.lock does not contain intel-extension-for-pytorch — "
         "run `uv lock` after adding IPEX to openvino extras (#1286)"
+    )
+
+
+# ---------- 6. uv.lock contains openvino-tokenizers ----------
+
+
+def test_uv_lock_contains_openvino_tokenizers():
+    """If uv.lock exists, it should contain an entry for openvino-tokenizers."""
+    lock_path = Path(__file__).resolve().parents[1] / "uv.lock"
+    if not lock_path.exists():
+        import pytest
+
+        pytest.skip("uv.lock not found — skipping lockfile check")
+
+    content = lock_path.read_text(encoding="utf-8")
+    assert "openvino-tokenizers" in content, (
+        "uv.lock does not contain openvino-tokenizers — "
+        "run `uv lock` after adding openvino-tokenizers to openvino extras"
     )
