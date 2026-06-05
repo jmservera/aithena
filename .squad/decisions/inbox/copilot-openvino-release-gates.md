@@ -1,4 +1,4 @@
-# Brett decision: OpenVINO release gates for base-image drift
+# Decision: OpenVINO release gates for base-image drift
 
 **Author:** Brett (Infrastructure Architect)  
 **Date:** 2026-06-05T17:02:51.834+00:00  

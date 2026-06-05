@@ -39,6 +39,13 @@ def test_openvino_runtime_verifier_rejects_lockfile_drift(monkeypatch: pytest.Mo
     assert any("minor versions differ" in failure for failure in failures)
 
 
+def test_openvino_runtime_verifier_uses_pep440_compatible_release_bounds():
+    assert verify_openvino_runtime._satisfies_specifier("1.4.5", "~=1.4.5")
+    assert verify_openvino_runtime._satisfies_specifier("1.4.99", "~=1.4.5")
+    assert not verify_openvino_runtime._satisfies_specifier("1.5.0", "~=1.4.5")
+    assert not verify_openvino_runtime._satisfies_specifier("2.0.0", "~=1.4.5")
+
+
 class _OpenVinoModule:
     def __init__(self, version: str) -> None:
         self._version = version
