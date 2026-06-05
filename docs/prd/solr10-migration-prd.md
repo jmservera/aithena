@@ -339,11 +339,13 @@ during migration, and perform a full reindex so vector graphs are rebuilt.
 
 **Action**: No code change needed — our auth setup already protects config endpoints via RBAC.
 
-### 4.10 🟡 `PathHierarchyTokenizer` Behavior Change
+### 4.10 ✅ `PathHierarchyTokenizer` Behavior Change
 
 **Impact**: Token position increments changed from 0 to 1.
 
-**Action**: Check if `ancestor_path` or `descendent_path` field types are used in the books schema (they exist as definitions but may not be used by any fields). If unused, no action needed.
+**Audit Result (v2.5)**: Both `ancestor_path` and `descendent_path` field types are defined in `managed-schema.xml` (as default Solr schema boilerplate) and dynamic field patterns `*_ancestor_path` / `*_descendent_path` are registered, but **no concrete fields** use these types and no application code reads or writes `*_ancestor_path` or `*_descendent_path` fields. The behavior change has **no impact** on the books collection.
+
+**Action**: No action needed — confirmed no-op. See `.squad/decisions.md` for the audit decision record.
 
 ---
 
