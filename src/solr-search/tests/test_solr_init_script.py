@@ -21,6 +21,7 @@ COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 COMPOSE_PROD_PATH = REPO_ROOT / "docker" / "compose.prod.yml"
 SOLR_INIT_SCRIPT_PATH = REPO_ROOT / "docker" / "solr-init.sh"
 SECURITY_JSON_PATH = REPO_ROOT / "src" / "solr" / "security.json"
+SOLR_IMPORT_SCRIPT_PATH = REPO_ROOT / "scripts" / "solr-import.sh"
 
 
 def _load_solr_init_script() -> str:
@@ -53,12 +54,6 @@ def _load_compose(path: Path) -> dict:
 def _load_solr_init_shell_script() -> str:
     """Load docker/solr-init.sh script contents."""
     return SOLR_INIT_SCRIPT_PATH.read_text(encoding="utf-8")
-
-
-def _load_shared_solr_init_script() -> str:
-    """Load docker/solr-init.sh."""
-    with open(SOLR_INIT_SCRIPT_PATH, encoding="utf-8") as fh:
-        return fh.read()
 
 
 def _load_solr_import_script() -> str:
@@ -165,7 +160,9 @@ def test_block_unknown_explicitly_set_to_false_in_init_scripts():
 
     assert "--block-unknown false" in compose_embedded_script, "docker-compose solr-init must set --block-unknown false"
     assert "--block-unknown false" in file_script, "docker/solr-init.sh must set --block-unknown false"
-    assert "--block-unknown false" in compose_prod_script, "docker/compose.prod.yml solr-init must set --block-unknown false"
+    assert "--block-unknown false" in compose_prod_script, (
+        "docker/compose.prod.yml solr-init must set --block-unknown false"
+    )
 
 
 def test_security_json_explicitly_sets_block_unknown_false():
