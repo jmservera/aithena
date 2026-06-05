@@ -5,16 +5,19 @@ import { apiFetch, buildApiUrl } from '../api';
 
 export interface ServiceEndpoint {
   name: string;
-  url: string;
+  url?: string;
   status: string;
-  type: string;
+  type?: string;
+  admin_url?: string | null;
+  description?: string;
 }
 
 export interface InfrastructureInfo {
   services: ServiceEndpoint[];
-  solr_admin_url: string;
-  rabbitmq_admin_url: string;
-  redis_admin_url: string;
+  solr_admin_url?: string;
+  rabbitmq_admin_url?: string;
+  redis_admin_url?: string;
+  connections?: Record<string, string>;
 }
 
 /* ── Hook state ───────────────────────────────────────────────────────── */

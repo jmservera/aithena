@@ -29,15 +29,15 @@ function ServiceCard({ icon, title, description, url }: ServiceCardProps) {
 }
 
 function ConnectionRow({ service }: { service: ServiceEndpoint }) {
+  const isHealthy = service.status === 'connected' || service.status === 'up';
+
   return (
     <tr>
       <td className="infra-service-name">{service.name}</td>
-      <td>{service.type}</td>
-      <td>{service.url}</td>
+      <td>{service.type ?? '\u2014'}</td>
+      <td>{service.url ?? '\u2014'}</td>
       <td>
-        <span
-          className={`infra-badge ${service.status === 'connected' ? 'infra-badge--ok' : 'infra-badge--error'}`}
-        >
+        <span className={`infra-badge ${isHealthy ? 'infra-badge--ok' : 'infra-badge--error'}`}>
           {service.status}
         </span>
       </td>
@@ -54,9 +54,18 @@ function AdminInfrastructurePage() {
   const fmt = (id: string, values?: Record<string, string | number>) =>
     intl.formatMessage({ id }, values);
 
-  const solrUrl = data?.solr_admin_url ?? '/admin/solr/';
-  const rabbitmqUrl = data?.rabbitmq_admin_url ?? '/admin/rabbitmq/';
-  const redisUrl = data?.redis_admin_url ?? '/admin/redis/';
+  const serviceAdminUrl = (
+    serviceName: string,
+    legacyUrl: string | undefined,
+    fallbackUrl: string
+  ) =>
+    data?.services.find((service) => service.name === serviceName)?.admin_url ??
+    legacyUrl ??
+    fallbackUrl;
+
+  const solrUrl = serviceAdminUrl('solr', data?.solr_admin_url, '/admin/solr/');
+  const rabbitmqUrl = serviceAdminUrl('rabbitmq', data?.rabbitmq_admin_url, '/admin/rabbitmq/');
+  const redisUrl = serviceAdminUrl('redis-commander', data?.redis_admin_url, '/admin/redis/');
 
   return (
     <main className="admin-page">

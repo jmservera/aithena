@@ -459,6 +459,10 @@ python run_benchmark.py --output post-migration-solr10.json
 | Highlighting | Search with highlighting on `content`, `_text_` | Highlighted snippets |
 | Backup | `curl .../admin/collections?action=BACKUP&...` | Backup created |
 | UI search | Open aithena-ui, perform a search | Results displayed |
+| Security UI access | Open `http://localhost/admin/solr/ui/` as admin | Security screen loads and allows edits |
+| Security UI readonly guard | Login as readonly account and open Security UI | Readonly account cannot perform write operations |
+| Security UI role update | Add/remove a role for a non-admin user via Security UI | Updated permissions enforced on next request |
+| Auth CLI bootstrap | Run `solr auth enable` bootstrap during init | Initial admin auth works; post-bootstrap managed in Security UI |
 
 ---
 
@@ -584,6 +588,7 @@ Compare these metrics before and after migration:
 | Collection export tooling | [#1362](https://github.com/jmservera/aithena/issues/1362) | 🔄 In progress | Phase 4 (optional, for data export) |
 | Collection import tooling | [#1363](https://github.com/jmservera/aithena/issues/1363) | 🔄 In progress | Phase 4 (optional, for data import) |
 | Solr 9/10 compatibility layer | [#1365](https://github.com/jmservera/aithena/issues/1365) | 📋 Planned | Phase 2 (CLI abstraction) |
+| Frontend security UI prerequisite | [#1675](https://github.com/jmservera/aithena/issues/1675) | ⛔ Required before release | v2.5 Solr Security UI rollout |
 
 ### 6.2 Execution Phases
 

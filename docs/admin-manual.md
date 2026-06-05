@@ -148,6 +148,7 @@ Common local URLs:
 | Status API | `http://localhost/v1/status/` | Protected |
 | Stats API | `http://localhost/v1/stats/` | Protected |
 | Solr admin | `http://localhost/admin/solr/` | Protected |
+| Solr security UI | `http://localhost/admin/solr/ui/` | Protected |
 | RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
 | Redis Commander | `http://localhost/admin/redis/` | Protected |
 
@@ -3797,6 +3798,8 @@ Provides quick links to management UIs for infrastructure services:
 
 Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, internal endpoint URL, and connection status.
 
+The frontend prefers backend-provided `admin_url` values from `/v1/admin/infrastructure` when available, then falls back to the default paths above. This keeps UI links aligned with server routing.
+
 #### Accessibility
 
 The admin portal follows web accessibility best practices:
@@ -3846,6 +3849,33 @@ The passthrough uses credentials from `.env`:
 SOLR_ADMIN_USER=admin
 SOLR_ADMIN_PASS=<your-solr-password>
 ```
+
+### Solr 10 Security UI (v2.5)
+
+Solr 10 adds a dedicated Security UI under `/solr/ui/` that is exposed through Aithena at:
+
+- `http://localhost/admin/solr/ui/`
+
+Use this UI for day-to-day Solr user and role administration instead of manually editing `security.json`.
+
+#### Add or remove users via UI
+
+1. Open **Solr Admin** from `/admin/infrastructure` (or browse directly to `/admin/solr/ui/`).
+2. Navigate to **Security**.
+3. In the users section:
+   - Add user: enter username and password, then save.
+   - Remove user: select the user and confirm delete.
+4. Validate with a login/API call using the updated account.
+
+#### Assign roles via UI
+
+1. In **Security** → roles/permissions mapping, select the target user.
+2. Assign or remove roles (`superadmin`, `admin`, `search`, `index`) as required.
+3. Save changes and verify effective permissions using a scoped account (for example, readonly `search` access).
+
+#### Bootstrap guidance (`bin/solr auth`)
+
+For first-time cluster bootstrap, continue using `bin/solr auth enable` in `solr-init` to seed auth and initial admin credentials. After bootstrap, use the Security UI for incremental user/role updates.
 
 ### Document Indexer Improvements
 
