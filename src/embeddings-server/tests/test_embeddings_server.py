@@ -210,6 +210,34 @@ class TestModelInfo:
         _, main_module = app_client
         assert main_module.embedding_dim == DEFAULT_DIM
 
+    def test_expected_embedding_dim_accepts_runtime_dimension(self):
+        """Startup succeeds when EXPECTED_EMBEDDING_DIM matches the loaded model config."""
+        client, main_module, _, _ = _fresh_import(extra_env={"EXPECTED_EMBEDDING_DIM": str(DEFAULT_DIM)})
+        assert main_module.embedding_dim == DEFAULT_DIM
+        assert client.get("/health").json()["embedding_dim"] == DEFAULT_DIM
+
+    def test_expected_embedding_dim_rejects_runtime_drift(self):
+        """Startup fails if model/runtime drift changes the configured embedding dimension."""
+        for key in list(sys.modules):
+            if key in ("main", "config"):
+                del sys.modules[key]
+
+        orig_expected_dim = os.environ.get("EXPECTED_EMBEDDING_DIM")
+        os.environ["EXPECTED_EMBEDDING_DIM"] = "1024"
+        try:
+            with patch("sentence_transformers.SentenceTransformer", return_value=_make_mock_model(DEFAULT_DIM)):
+                with pytest.raises(SystemExit) as exc_info:
+                    import main  # noqa: F401
+                assert exc_info.value.code == 1
+        finally:
+            if orig_expected_dim is None:
+                os.environ.pop("EXPECTED_EMBEDDING_DIM", None)
+            else:
+                os.environ["EXPECTED_EMBEDDING_DIM"] = orig_expected_dim
+            for key in list(sys.modules):
+                if key in ("main", "config"):
+                    del sys.modules[key]
+
 
 class TestVersionEndpoint:
     def test_version_endpoint_returns_build_metadata(self, app_client):
