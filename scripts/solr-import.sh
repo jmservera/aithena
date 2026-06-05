@@ -40,12 +40,13 @@
 #   LOG_FILE                  Log file (default: /var/log/aithena-solr-import.log)
 #   DRY_RUN                   Set to 1 to skip actual writes
 #
-# Schema transformation (Solr 9 → 10):
-#   When the target is Solr 10, HNSW parameters in DenseVectorField definitions
-#   are automatically renamed:
+# JSON payload transformation (Solr 9 → 10):
+#   When the target is Solr 10, HNSW parameter keys that may appear in exported
+#   update payloads are automatically renamed:
 #     hnswMaxConnections  →  hnswM
 #     hnswBeamWidth       →  hnswEfConstruction
-#   Use --no-transform to disable or --transform-schema to force.
+#   Use --no-transform to disable or --transform-schema to force this payload
+#   transformation.
 #
 # Exit codes:
 #   0  Import succeeded
@@ -456,11 +457,11 @@ count_lines() {
 }
 
 # ---------------------------------------------------------------------------
-# transform_batch_for_solr10 — rename HNSW params in document JSON
+# transform_batch_for_solr10 — rename HNSW params in update payload JSON
 # ---------------------------------------------------------------------------
 transform_batch_for_solr10() {
     local input="$1"
-    # Rename HNSW parameters that may appear in exported document data.
+    # Rename HNSW parameter keys that may appear in exported update payloads.
     # The primary renames for Solr 10:
     #   hnswMaxConnections → hnswM
     #   hnswBeamWidth      → hnswEfConstruction

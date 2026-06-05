@@ -178,6 +178,7 @@ class TestDenseVectorFieldType:
         assert result["hnswM"] == 32
         assert result["hnswEfConstruction"] == 200
         assert "hnswMaxConnections" not in result
+        assert "hnswBeamWidth" not in result
 
     def test_custom_field_name_and_dims(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("SOLR_VERSION", "9")
