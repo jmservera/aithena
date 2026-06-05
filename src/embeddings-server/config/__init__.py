@@ -20,7 +20,7 @@ if EXPECTED_EMBEDDING_DIM is not None:
     try:
         EXPECTED_EMBEDDING_DIM = int(EXPECTED_EMBEDDING_DIM)
     except ValueError as exc:
-        raise SystemExit("EXPECTED_EMBEDDING_DIM must be an integer") from exc
+        raise SystemExit(f"EXPECTED_EMBEDDING_DIM must be an integer, got {EXPECTED_EMBEDDING_DIM!r}: {exc}") from exc
 
 # GPU acceleration config (v1.17.0)
 # DEVICE: auto|cpu|cuda|xpu — controls PyTorch device selection

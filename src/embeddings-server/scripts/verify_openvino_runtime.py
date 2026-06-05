@@ -10,6 +10,9 @@ import sys
 import tomllib
 from pathlib import Path
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
+
 REQUIRED_PACKAGES = ("openvino", "optimum-intel", "openvino-tokenizers")
 
 
@@ -17,20 +20,9 @@ def _normalize_package_name(value: str) -> str:
     return value.replace("_", "-").lower()
 
 
-def _version_parts(value: str) -> tuple[int, ...]:
-    match = re.match(r"^\d+(?:\.\d+)*", value)
-    if not match:
-        raise ValueError(f"Version does not start with numeric components: {value}")
-    return tuple(int(part) for part in match.group(0).split("."))
-
-
-def _compare_versions(left: str, right: str) -> int:
-    left_parts = _version_parts(left)
-    right_parts = _version_parts(right)
-    width = max(len(left_parts), len(right_parts))
-    padded_left = left_parts + (0,) * (width - len(left_parts))
-    padded_right = right_parts + (0,) * (width - len(right_parts))
-    return (padded_left > padded_right) - (padded_left < padded_right)
+def _release_parts(value: str) -> tuple[int, ...]:
+    """Extract release version tuple using PEP 440 parsing."""
+    return Version(value).release
 
 
 def _dependency_name(dependency: str) -> str:
@@ -52,34 +44,11 @@ def _load_openvino_dependency_specs(pyproject_path: Path) -> dict[str, str]:
 
 
 def _satisfies_specifier(version: str, specifier: str) -> bool:
+    """Check if version satisfies specifier, including PEP 440 operators like ~= (compatible release)."""
     if not specifier:
         return True
 
-    for constraint in specifier.split(","):
-        if not constraint:
-            continue
-        match = re.match(r"(>=|<=|==|>|<|~=)(.+)", constraint)
-        if not match:
-            raise ValueError(f"Unsupported version constraint: {constraint}")
-        operator, expected = match.groups()
-        comparison = _compare_versions(version, expected)
-        if operator == ">=" and comparison < 0:
-            return False
-        if operator == ">" and comparison <= 0:
-            return False
-        if operator == "<=" and comparison > 0:
-            return False
-        if operator == "<" and comparison >= 0:
-            return False
-        if operator == "==" and comparison != 0:
-            return False
-        if operator == "~=":
-            lower_ok = comparison >= 0
-            upper = str(_version_parts(expected)[0] + 1)
-            upper_ok = _compare_versions(version, upper) < 0
-            if not (lower_ok and upper_ok):
-                return False
-    return True
+    return SpecifierSet(specifier).contains(version, prereleases=True)
 
 
 def _installed_version(package_name: str) -> str:
@@ -121,8 +90,8 @@ def verify_openvino_runtime(pyproject_path: Path) -> list[str]:
     openvino_version = installed.get("openvino")
     tokenizer_version = installed.get("openvino-tokenizers")
     if openvino_version and tokenizer_version:
-        openvino_minor = _version_parts(openvino_version)[:2]
-        tokenizer_minor = _version_parts(tokenizer_version)[:2]
+        openvino_minor = _release_parts(openvino_version)[:2]
+        tokenizer_minor = _release_parts(tokenizer_version)[:2]
         if openvino_minor != tokenizer_minor:
             failures.append(
                 f"openvino and openvino-tokenizers minor versions differ: {openvino_version} vs {tokenizer_version}"
