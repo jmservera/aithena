@@ -63,6 +63,17 @@ def _parse_timeouts(conf_text: str) -> dict[str, int]:
     return timeouts
 
 
+def _location_block(conf_text: str, location: str) -> str:
+    """Return a simple one-level nginx location block body for static config tests."""
+    marker = f"location {location} {{"
+    start = conf_text.find(marker)
+    assert start != -1, f"location {location} not found"
+    body_start = start + len(marker)
+    end = conf_text.find("\n    }", body_start)
+    assert end != -1, f"location {location} is not closed"
+    return conf_text[body_start:end]
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -124,6 +135,22 @@ class TestNginxProxyTimeouts:
         assert connect_timeout <= 30, (
             f"proxy_connect_timeout ({connect_timeout}s) is too high — connections to local services should be fast"
         )
+
+
+class TestNginxAdminToolAuth:
+    """Ensure browser-accessible infrastructure UIs require admin sessions."""
+
+    @pytest.mark.parametrize("location", ["/admin/solr/", "/solr/", "/admin/rabbitmq/", "/admin/redis/"])
+    def test_admin_tool_locations_use_admin_auth_request(self, location: str) -> None:
+        block = _location_block(NGINX_CONF.read_text(), location)
+        assert "auth_request /_admin_auth;" in block
+        assert "error_page 403 = @auth_forbidden;" in block
+
+    def test_admin_auth_subrequest_uses_validate_admin_endpoint(self) -> None:
+        block = _location_block(NGINX_CONF.read_text(), "= /_admin_auth")
+        assert "proxy_pass http://solr-search:8080/v1/auth/validate-admin;" in block
+        assert "proxy_pass_request_body off;" in block
+        assert "proxy_set_header Cookie $http_cookie;" in block
 
 
 class TestNginxBodySizeParser:

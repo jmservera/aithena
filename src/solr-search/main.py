@@ -819,6 +819,22 @@ def auth_validate(request: Request, response: Response) -> dict[str, Any]:
     return {"authenticated": True, "user": user.to_dict()}
 
 
+@app.get("/v1/auth/validate-admin/", include_in_schema=False, name="auth_validate_admin_v1_slash")
+@app.get("/v1/auth/validate-admin", name="auth_validate_admin_v1")
+def auth_validate_admin(request: Request, response: Response) -> dict[str, Any]:
+    """Validate a browser session for nginx-proxied admin tools.
+
+    This endpoint is intentionally JWT/cookie-only (no ADMIN_API_KEY fallback)
+    because nginx auth_request uses it to protect browser-accessible UIs such
+    as Solr's Security UI. Machine API keys must not grant browser UI access.
+    """
+    validation = auth_validate(request, response)
+    user = validation["user"]
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return {"authenticated": True, "admin": True, "user": user}
+
+
 @app.post("/v1/auth/logout/", include_in_schema=False, name="auth_logout_v1_slash")
 @app.post("/v1/auth/logout", name="auth_logout_v1")
 def auth_logout(request: Request, response: Response) -> dict[str, str]:
@@ -3923,6 +3939,7 @@ def admin_infrastructure() -> dict[str, Any]:
             "name": "solr",
             "status": "up" if solr_up else "down",
             "admin_url": "/admin/solr/",
+            "security_ui_url": "/admin/solr/ui/",
             "description": "Full-text search engine",
         },
         {
@@ -3956,6 +3973,18 @@ def admin_infrastructure() -> dict[str, Any]:
     return {
         "services": services,
         "connections": connections,
+        "solr_admin_url": "/admin/solr/",
+        "solr_security_ui": {
+            "url": "/admin/solr/ui/",
+            "admin_url": "/admin/solr/",
+            "auth_check_url": "/v1/auth/validate-admin",
+            "required_aithena_role": "admin",
+            "state_changing_operations": (
+                "Handled by Solr's Security UI and Solr RBAC; Aithena only gates proxy access."
+            ),
+        },
+        "rabbitmq_admin_url": "/admin/rabbitmq/",
+        "redis_admin_url": "/admin/redis/",
     }
 
 
