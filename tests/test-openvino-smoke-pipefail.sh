@@ -4,9 +4,19 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ARTIFACT_DIR="$ROOT/.test-artifacts/openvino-pipefail"
+ARTIFACT_DIR="$ROOT/.test-artifacts/openvino-pipefail.$$"
 mkdir -p "$ARTIFACT_DIR"
-trap 'rm -rf "$ARTIFACT_DIR"' EXIT
+
+cleanup() {
+  local status=$?
+  if [ "$status" -eq 0 ]; then
+    rm -rf "$ARTIFACT_DIR"
+  else
+    echo "Retained artifacts: $ARTIFACT_DIR"
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
 
 PASS=0
 FAIL=0
@@ -24,14 +34,21 @@ if needle not in text:
     raise SystemExit(1)
 
 lines = text.splitlines()
+found = False
+missing_pipefail = False
 for index, line in enumerate(lines):
     if "2>&1 | tee openvino-smoke-output.txt" not in line:
         continue
+    found = True
     start = max(0, index - 8)
     block = "\n".join(lines[start:index])
-    if "set -o pipefail" in block or "set -euo pipefail" in block or "bash -o pipefail" in block:
-        raise SystemExit(0)
-raise SystemExit(1)
+    if not ("set -o pipefail" in block or "set -euo pipefail" in block or "bash -o pipefail" in block):
+        print(f"missing pipefail before tee at line {index + 1}", file=sys.stderr)
+        missing_pipefail = True
+if not found:
+    print("no OpenVINO smoke tee pipeline found", file=sys.stderr)
+    raise SystemExit(1)
+raise SystemExit(1 if missing_pipefail else 0)
 PY
   then
     PASS=$((PASS + 1))
