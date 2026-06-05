@@ -9,11 +9,49 @@ cuVS codec, and hybrid search quality with AI features.
 
 from __future__ import annotations
 
+import importlib.util
 import os
+import sys
+from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.phase3, pytest.mark.solr10]
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+INDEXER_EMBEDDINGS_PATH = REPO_ROOT / "src" / "document-indexer" / "document_indexer" / "embeddings.py"
+
+
+def _load_indexer_embeddings_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("phase3_indexer_embeddings", INDEXER_EMBEDDINGS_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestPhase3ActivePreflight:
+    """Issue #1357 checks that can run before optional AI/GPU fixtures exist."""
+
+    def test_phase3_embedding_result_supports_byte_vector_routing(self) -> None:
+        """Language-model outputs can route quantized vectors to embedding_byte_v."""
+        embeddings = _load_indexer_embeddings_module()
+        result = embeddings.EmbeddingResult(vector=[0.1, 0.2], field_name="embedding_byte")
+
+        assert result.field_name == "embedding_byte"
+        assert f"{result.field_name}_v" == "embedding_byte_v"
+
+    def test_phase3_search_response_fields_support_classification_and_hybrid_quality(self) -> None:
+        """Search responses expose fields needed by categorizer and hybrid quality checks."""
+        import search_service
+
+        assert "category_s" in search_service.SOLR_FIELD_LIST
+        assert "score" in search_service.SOLR_FIELD_LIST
+        assert "category" in search_service.FACET_FIELDS
+        assert "language" in search_service.FACET_FIELDS
 
 
 class TestPhase3LanguageModels:
@@ -21,7 +59,7 @@ class TestPhase3LanguageModels:
 
     @pytest.mark.e2e
     @pytest.mark.phase3
-    def test_phase3_language_models_embeddings(self):
+    def test_phase3_language_models_embeddings(self) -> None:
         """Scenario 1: Language-Models Embedding Generation.
 
         Verify language-models module generates embeddings correctly.
@@ -34,11 +72,11 @@ class TestPhase3LanguageModels:
         - [ ] Cosine similarity to baseline ≥ 95%
         - [ ] Latency acceptable (< 500ms per query)
         """
-        pytest.skip("Requires language-models module fixture (conditional)")
+        pytest.skip("GATED: requires language-models module fixture (conditional)")
 
     @pytest.mark.e2e
     @pytest.mark.phase3
-    def test_phase3_embedding_latency(self):
+    def test_phase3_embedding_latency(self) -> None:
         """Scenario 2: Embedding Generation Latency.
 
         Verify embedding generation latency is acceptable for production.
@@ -49,7 +87,7 @@ class TestPhase3LanguageModels:
         - [ ] No timeout errors
         - [ ] CPU/memory usage acceptable
         """
-        pytest.skip("Requires embeddings-server fixture and latency profiler")
+        pytest.skip("GATED: requires embeddings-server fixture and latency profiler")
 
 
 class TestPhase3GPUAcceleration:
@@ -58,7 +96,7 @@ class TestPhase3GPUAcceleration:
     @pytest.mark.e2e
     @pytest.mark.phase3
     @pytest.mark.skipif(not os.environ.get("CUDA_VISIBLE_DEVICES"), reason="CUDA is not available")
-    def test_phase3_gpu_acceleration(self):
+    def test_phase3_gpu_acceleration(self) -> None:
         """Scenario 3: GPU-Accelerated Indexing.
 
         Verify GPU acceleration speeds up indexing (if GPU available).
@@ -71,12 +109,12 @@ class TestPhase3GPUAcceleration:
         - [ ] Speedup ≥ 2× (GPU at least 2× faster than CPU)
         - [ ] No GPU memory errors
         """
-        pytest.skip("Requires GPU-enabled docker-compose fixture (conditional)")
+        pytest.skip("GATED: requires GPU-enabled docker-compose fixture (conditional)")
 
     @pytest.mark.e2e
     @pytest.mark.phase3
     @pytest.mark.skipif(os.environ.get("E2E_SOLR_ENABLE_CUVS") != "1", reason="cuVS fixture is not enabled")
-    def test_phase3_cuvs_codec_correctness(self):
+    def test_phase3_cuvs_codec_correctness(self) -> None:
         """Scenario 4: cuVS Codec Results Correctness.
 
         Verify cuVS codec produces correct results.
@@ -89,7 +127,7 @@ class TestPhase3GPUAcceleration:
         - [ ] Results match int8 baseline (or documented differences)
         - [ ] No NaN or infinity values in results
         """
-        pytest.skip("Requires cuVS codec fixture (conditional)")
+        pytest.skip("GATED: requires #1670/cuVS codec fixture (conditional)")
 
 
 class TestPhase3DocumentCategorization:
@@ -97,7 +135,7 @@ class TestPhase3DocumentCategorization:
 
     @pytest.mark.e2e
     @pytest.mark.phase3
-    def test_phase3_document_categorizer(self):
+    def test_phase3_document_categorizer(self) -> None:
         """Scenario 5: DocumentCategorizer Classification Accuracy.
 
         Verify document categorization works correctly.
@@ -110,7 +148,7 @@ class TestPhase3DocumentCategorization:
         - [ ] Categories match expected values (e.g., fiction, history, science)
         - [ ] No categorization errors in logs
         """
-        pytest.skip("Requires DocumentCategorizer module fixture (conditional)")
+        pytest.skip("GATED: requires DocumentCategorizer module fixture (conditional)")
 
 
 class TestPhase3HybridSearch:
@@ -118,7 +156,7 @@ class TestPhase3HybridSearch:
 
     @pytest.mark.e2e
     @pytest.mark.phase3
-    def test_phase3_hybrid_search_quality(self):
+    def test_phase3_hybrid_search_quality(self) -> None:
         """Scenario 6: Hybrid Search Quality with AI Features.
 
         Verify hybrid search quality maintained with AI enhancements.
@@ -129,4 +167,4 @@ class TestPhase3HybridSearch:
         - [ ] Hybrid search integrates AI enhancements correctly
         - [ ] No quality regressions below threshold
         """
-        pytest.skip("Requires AI-enhanced hybrid search fixture")
+        pytest.skip("GATED: requires AI-enhanced hybrid search fixture")
