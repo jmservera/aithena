@@ -153,6 +153,29 @@ Common local URLs:
 
 Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker/compose.dev-ports.yml` file is loaded.
 
+
+### Solr 10 Security UI (v2.5)
+
+Aithena now includes an **Admin → Security** scaffold that links to Solr 10's simplified Security UI at `/admin/solr/ui/#/~security`. Use it to manage Solr users and roles without editing `security.json` by hand.
+
+To add or remove Solr users and roles:
+
+1. Sign in to Aithena with an admin account.
+2. Open **Admin → Security** and choose **Open Solr Security UI**.
+3. If Solr prompts for credentials, use the Solr admin credentials configured during bootstrap.
+4. Use Solr's **Users** screen to add, disable, or remove Solr users.
+5. Use Solr's permissions/roles screen to assign least-privilege roles, then verify access with a non-admin test user before relying on the change.
+
+Security and backend dependencies:
+
+- `/admin/security` is available only to Aithena admins.
+- This frontend page only links to Solr's UI; user creation, password changes, and role assignments remain enforced by Solr BasicAuth/RBAC and Solr's CSRF protections.
+- v2.5 release still needs Parker/Kane confirmation that `/admin/solr/` and `/admin/solr/ui/` are admin-role-only at the nginx/backend auth layer, not merely authenticated-user-only.
+- Keep Aithena application users in **Admin → User Management** separate from Solr users/roles. Aithena users control access to the Aithena app and proxied admin surfaces; Solr users control direct Solr API/UI permissions.
+- Do not paste passwords, tokens, or `security.json` contents into tickets or screenshots.
+
+Bootstrap note: continue using the existing Solr bootstrap/auth flow until Parker confirms whether `bin/solr auth` changes simplify initial credential setup for v2.5. Kane must complete the v2.5 Security UI review before release.
+
 ## GPU Acceleration Setup (v1.17.0)
 
 GPU acceleration is opt-in and requires host-level driver installation before Docker can access GPU hardware. This section covers prerequisites, installation, and verification for both NVIDIA and Intel GPUs.

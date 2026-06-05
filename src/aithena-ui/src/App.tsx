@@ -23,6 +23,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const SecurityPage = lazy(() => import('./pages/SecurityPage'));
 const BackupDashboardPage = lazy(() => import('./pages/BackupDashboardPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const AdminDocumentsPage = lazy(() => import('./pages/AdminDocumentsPage'));
@@ -202,6 +203,7 @@ function App() {
               <Route path="/admin/logs" element={<AdminLogsPage />} />
               <Route path="/admin/infrastructure" element={<AdminInfrastructurePage />} />
               <Route path="/admin/users" element={<UserManagementPage />} />
+              <Route path="/admin/security" element={<SecurityPage />} />
               <Route path="/admin/backups" element={<BackupDashboardPage />} />
             </Route>
           </Route>

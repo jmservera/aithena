@@ -1,6 +1,10 @@
 import { useIntl } from 'react-intl';
 import { Database, ExternalLink, MessageSquare, Server, RefreshCw } from 'lucide-react';
-import { useAdminInfrastructure, type ServiceEndpoint } from '../hooks/useAdminInfrastructure';
+import {
+  getServiceAdminUrl,
+  useAdminInfrastructure,
+  type ServiceEndpoint,
+} from '../hooks/useAdminInfrastructure';
 
 /* ── Sub-components ───────────────────────────────────────────────────── */
 
@@ -32,8 +36,8 @@ function ConnectionRow({ service }: { service: ServiceEndpoint }) {
   return (
     <tr>
       <td className="infra-service-name">{service.name}</td>
-      <td>{service.type}</td>
-      <td>{service.url}</td>
+      <td>{service.type ?? service.description ?? 'service'}</td>
+      <td>{service.url ?? service.admin_url ?? '—'}</td>
       <td>
         <span
           className={`infra-badge ${service.status === 'connected' ? 'infra-badge--ok' : 'infra-badge--error'}`}
@@ -54,9 +58,11 @@ function AdminInfrastructurePage() {
   const fmt = (id: string, values?: Record<string, string | number>) =>
     intl.formatMessage({ id }, values);
 
-  const solrUrl = data?.solr_admin_url ?? '/admin/solr/';
-  const rabbitmqUrl = data?.rabbitmq_admin_url ?? '/admin/rabbitmq/';
-  const redisUrl = data?.redis_admin_url ?? '/admin/redis/';
+  const solrUrl = data?.solr_admin_url ?? getServiceAdminUrl(data, 'solr', '/admin/solr/');
+  const rabbitmqUrl =
+    data?.rabbitmq_admin_url ?? getServiceAdminUrl(data, 'rabbitmq', '/admin/rabbitmq/');
+  const redisUrl =
+    data?.redis_admin_url ?? getServiceAdminUrl(data, 'redis-commander', '/admin/redis/');
 
   return (
     <main className="admin-page">
