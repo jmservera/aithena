@@ -86,7 +86,7 @@ class TestSolr10SafePreflight:
         scripts = [
             _solr_init_script(COMPOSE_PATH),
             _solr_init_script(COMPOSE_PROD_PATH),
-            SOLR_INIT_SCRIPT_PATH.read_text(),
+            SOLR_INIT_SCRIPT_PATH.read_text(encoding="utf-8"),
         ]
         rewrite_patterns = (
             's/hnswM="/hnswMaxConnections="/g',
