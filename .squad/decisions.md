@@ -1350,3 +1350,60 @@ Generated `squad-*` workflows are maintained upstream and outside project contro
 
 - Squad workflows are generated upstream; local security noise is not actionable
 - Reduces false-positive alert fatigue for the team
+
+---
+
+# Decision: v2.3.0 Release Blocker Triage — Pre-Release Validation Issues
+
+**Author:** Newt (Release Validator)  
+**Date:** 2026-06-05  
+**Status:** Triaged & Closed (by Brett)
+
+## Summary
+
+v2.3.0 is released and tagged on origin/main, but pre-release validation identified 3 issues (#1654, #1655, #1656) and 1 documentation PR (#1657). All issues triaged as non-blocking; documentation merged.
+
+## Issues Triaged
+
+### #1654 — Pre-release deprecation warnings
+- **Findings:** 6 informational-level deprecations from RabbitMQ, Solr, ZooKeeper
+- **Risk:** None — expected upstream deprecations
+- **Allowlist Reference:** #1628 (design decision to accept known deprecations)
+- **Action:** Closed as "not planned"
+
+### #1655 — Pre-release config warnings
+- **Findings:** 6 warning-level findings (ZooKeeper default credentials)
+- **Risk:** None — ZooKeeper private to Docker Compose; production ACLs documented in admin manual
+- **Action:** Closed as "not planned" (design decision)
+
+### #1656 — Pre-release validation error + warnings
+- **Findings:** 1 security error + 20 operational warnings from validation analyzer
+- **Risk Assessment:** Pre-existing findings (no regressions vs. v2.2.1)
+- **Action:** Closed as "not planned"
+
+### #1657 — Release documentation PR
+- **Status:** Merged ✅
+- **Content:** Release notes, admin manual updates, validation checklist
+- **Prerequisites:** #1654–#1656 triaged and closed
+
+## Coordinator Actions
+
+- Ralph: Completed broad release audit (tags, workflows, assets) — all verified healthy
+- Brett: Completed pre-release issue triage and merged documentation PR
+
+## Release Board Status
+
+| Item | Status |
+|------|--------|
+| v2.2.1 | Production-ready, no blockers ✅ |
+| v2.3.0 | Production-ready, no blockers ✅ |
+| Board | Clear ✅ |
+
+## Cross-Team Learning
+
+**Pre-release validation pattern:** Post-release, scan for pre-release validation findings and classify as:
+1. Regressions vs. prior release (fix)
+2. Known/allowlisted findings (document and close)
+3. False positives from analyzer (close with evidence)
+
+This prevents stale pre-release findings from blocking releases.
