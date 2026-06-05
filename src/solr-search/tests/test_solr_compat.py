@@ -211,5 +211,9 @@ class TestManagedSchemaHnswCompatibility:
             assert "maxConnections" not in field_type.attrib
             assert "beamWidth" not in field_type.attrib
 
-        byte_vector = next(ft for ft in vector_field_types if ft.attrib["name"] == "knn_vector_768_byte")
+        byte_vectors = [
+            field_type for field_type in vector_field_types if field_type.attrib["name"] == "knn_vector_768_byte"
+        ]
+        assert byte_vectors, "managed-schema.xml must define knn_vector_768_byte"
+        byte_vector = byte_vectors[0]
         assert byte_vector.attrib["hnswM"] == "12"

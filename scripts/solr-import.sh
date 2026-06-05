@@ -45,8 +45,9 @@
 #   update payloads are automatically renamed:
 #     hnswMaxConnections  →  hnswM
 #     hnswBeamWidth       →  hnswEfConstruction
-#   Use --no-transform to disable or --transform-schema to force this payload
-#   transformation.
+#   Use --no-transform to disable this payload transformation. The legacy
+#   --transform-schema flag name is retained for compatibility; it also forces
+#   payload key renames.
 #
 # Configset upload transformation (Solr 10 → 9):
 #   When --configset-dir points at a Solr 10 configset and the target is Solr 9,
