@@ -68,6 +68,26 @@ def test_opt_in_unreachable_solr10_fixture_fails(monkeypatch: pytest.MonkeyPatch
         _get_live_solr10_json("http://127.0.0.1:1/solr/books/admin/ping")
 
 
+def test_opt_in_non_json_solr10_fixture_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Once opted in, a non-JSON Solr response must fail with endpoint context."""
+    monkeypatch.setenv(EXPECTED_MAJOR_ENV, "10")
+
+    class _NonJsonResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            raise ValueError("not json")
+
+    def _get_non_json(*_args: Any, **_kwargs: Any) -> _NonJsonResponse:
+        return _NonJsonResponse()
+
+    monkeypatch.setattr(requests, "get", _get_non_json)
+
+    with pytest.raises(pytest.fail.Exception, match="requires Solr to return JSON"):
+        _get_live_solr10_json("http://127.0.0.1:8983/solr/books/admin/ping")
+
+
 def test_live_solr_major_version_is_10(solr_system_info: dict[str, Any]) -> None:
     """The opt-in Solr 10 fixture must actually run Solr 10."""
     version = str(solr_system_info.get("lucene", {}).get("solr-spec-version", ""))
