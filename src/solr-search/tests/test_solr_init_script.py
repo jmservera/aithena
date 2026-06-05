@@ -138,8 +138,8 @@ def test_init_scripts_rewrite_solr10_hnsw_params_for_solr9():
     """Solr 9 bootstrap must rewrite source Solr 10 HNSW schema names."""
     for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
         assert 'SOLR_VERSION:-9}" = "9"' in script
-        assert "hnswM=/hnswMaxConnections=" in script
-        assert "hnswEfConstruction=/hnswBeamWidth=" in script
+        assert 'hnswM="/hnswMaxConnections="' in script
+        assert 'hnswEfConstruction="/hnswBeamWidth="' in script
         assert 'solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"' in script or (
             'solr zk upconfig -z "$$ZK_HOST" -n books -d "$$CONFIGSET_DIR"' in script
         )

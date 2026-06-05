@@ -121,8 +121,8 @@ if [ "${SOLR_VERSION:-9}" = "9" ]; then
   mkdir -p "${CONFIGSET_DIR}"
   cp -R /configsets/books/. "${CONFIGSET_DIR}"/
   sed -i \
-    -e 's/hnswM=/hnswMaxConnections=/g' \
-    -e 's/hnswEfConstruction=/hnswBeamWidth=/g' \
+    -e 's/hnswM="/hnswMaxConnections="/g' \
+    -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
     "${CONFIGSET_DIR}/managed-schema.xml"
 fi
 
