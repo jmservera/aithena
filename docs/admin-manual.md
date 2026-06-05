@@ -3861,7 +3861,7 @@ Use this UI for day-to-day Solr user and role administration instead of manually
 #### Add or remove users via UI
 
 1. Open **Solr Admin** from `/admin/infrastructure` (or browse directly to `/admin/solr/ui/`).
-2. Navigate to **Security**.
+2. In the Solr UI left navigation, open **Security** (shield icon) from the Admin UI menu.
 3. In the users section:
    - Add user: enter username and password, then save.
    - Remove user: select the user and confirm delete.

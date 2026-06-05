@@ -240,6 +240,25 @@ describe('AdminInfrastructurePage', () => {
     expect(redisLink).toHaveAttribute('href', '/custom/redis-commander/');
   });
 
+  it('falls back to legacy URL when service admin_url is null', async () => {
+    const nullAdminUrlData = {
+      ...mockInfrastructure,
+      solr_admin_url: '/legacy/solr/',
+      services: mockInfrastructure.services.map((service) =>
+        service.name === 'solr' ? { ...service, admin_url: null } : service
+      ),
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: nullAdminUrlData }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Solr Admin')).toBeInTheDocument();
+    });
+
+    const solrLink = screen.getByText('Solr Admin').closest('a');
+    expect(solrLink).toHaveAttribute('href', '/legacy/solr/');
+  });
+
   it('treats status up as healthy in connection badges', async () => {
     const dataWithUpStatus = {
       ...mockInfrastructure,

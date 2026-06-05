@@ -54,7 +54,7 @@ function AdminInfrastructurePage() {
   const fmt = (id: string, values?: Record<string, string | number>) =>
     intl.formatMessage({ id }, values);
 
-  const serviceAdminUrl = (
+  const resolveServiceAdminUrl = (
     serviceName: string,
     legacyUrl: string | undefined,
     fallbackUrl: string
@@ -63,9 +63,17 @@ function AdminInfrastructurePage() {
     legacyUrl ??
     fallbackUrl;
 
-  const solrUrl = serviceAdminUrl('solr', data?.solr_admin_url, '/admin/solr/');
-  const rabbitmqUrl = serviceAdminUrl('rabbitmq', data?.rabbitmq_admin_url, '/admin/rabbitmq/');
-  const redisUrl = serviceAdminUrl('redis-commander', data?.redis_admin_url, '/admin/redis/');
+  const solrUrl = resolveServiceAdminUrl('solr', data?.solr_admin_url, '/admin/solr/');
+  const rabbitmqUrl = resolveServiceAdminUrl(
+    'rabbitmq',
+    data?.rabbitmq_admin_url,
+    '/admin/rabbitmq/'
+  );
+  const redisUrl = resolveServiceAdminUrl(
+    'redis-commander',
+    data?.redis_admin_url,
+    '/admin/redis/'
+  );
 
   return (
     <main className="admin-page">
