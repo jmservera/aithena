@@ -48,6 +48,12 @@
 #   Use --no-transform to disable or --transform-schema to force this payload
 #   transformation.
 #
+# Configset upload transformation (Solr 10 → 9):
+#   When --configset-dir points at a Solr 10 configset and the target is Solr 9,
+#   upload a staged copy with HNSW schema attributes renamed back:
+#     hnswM                  →  hnswMaxConnections
+#     hnswEfConstruction     →  hnswBeamWidth
+#
 # Exit codes:
 #   0  Import succeeded
 #   1  Fatal error
@@ -388,15 +394,24 @@ upload_configset() {
         return 1
     fi
 
+    local upload_dir="$config_dir"
+    local staged_dir=""
+    if [[ -n "$SOLR_MAJOR_VERSION" ]] && [[ "$SOLR_MAJOR_VERSION" -eq 9 ]]; then
+        staged_dir=$(stage_configset_for_solr9 "$config_dir" "$config_name") || return 1
+        upload_dir="$staged_dir"
+    fi
+
     if [[ "$DRY_RUN" == "1" ]]; then
-        log_info "[DRY_RUN] Would upload configset '${config_name}' from ${config_dir}"
+        log_info "[DRY_RUN] Would upload configset '${config_name}' from ${upload_dir}"
+        cleanup_staged_configset "$staged_dir"
         return 0
     fi
 
     # Create a ZIP of the configset directory
     local zip_file="${PROJECT_ROOT}/.configset-upload-${TIMESTAMP}.zip"
-    (cd "$config_dir" && zip -r "$zip_file" . -x '.*') &>/dev/null || {
-        log_error "Failed to create configset ZIP from ${config_dir}"
+    (cd "$upload_dir" && zip -r "$zip_file" . -x '.*') &>/dev/null || {
+        cleanup_staged_configset "$staged_dir"
+        log_error "Failed to create configset ZIP from ${upload_dir}"
         return 1
     }
 
@@ -408,11 +423,13 @@ upload_configset() {
         --data-binary "@${zip_file}" \
         "${SOLR_URL}/api/cluster/configs/${config_name}" 2>&1) || {
         rm -f "$zip_file"
+        cleanup_staged_configset "$staged_dir"
         log_error "Failed to upload configset: ${response}"
         return 1
     }
 
     rm -f "$zip_file"
+    cleanup_staged_configset "$staged_dir"
 
     # Check for errors in response
     if echo "$response" | grep -qi '"error"'; then
@@ -421,6 +438,52 @@ upload_configset() {
     fi
 
     log_info "Configset '${config_name}' uploaded successfully"
+}
+
+# ---------------------------------------------------------------------------
+# stage_configset_for_solr9 — rewrite Solr 10-only HNSW schema params for Solr 9
+# ---------------------------------------------------------------------------
+stage_configset_for_solr9() {
+    local config_dir="$1"
+    local config_name="$2"
+    local safe_name
+    safe_name=$(printf '%s' "$config_name" | tr -c 'A-Za-z0-9._-' '_')
+    local staged_dir="${PROJECT_ROOT}/.configset-upload-${safe_name}-${TIMESTAMP}-solr9"
+
+    if [[ -e "$staged_dir" ]]; then
+        log_error "Staged configset path already exists: ${staged_dir}"
+        return 1
+    fi
+
+    mkdir -p "$staged_dir" || {
+        log_error "Failed to create staged configset directory: ${staged_dir}"
+        return 1
+    }
+    cp -R "${config_dir}/." "$staged_dir/" || {
+        cleanup_staged_configset "$staged_dir"
+        log_error "Failed to stage configset from ${config_dir}"
+        return 1
+    }
+
+    local schema_file="${staged_dir}/managed-schema.xml"
+    if [[ -f "$schema_file" ]]; then
+        sed -i \
+            -e 's/hnswM="/hnswMaxConnections="/g' \
+            -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
+            "$schema_file"
+        log_info "Staged Solr 9-compatible configset for upload: ${staged_dir}"
+    else
+        log_warn "Configset has no managed-schema.xml; no Solr 9 HNSW rewrite applied"
+    fi
+
+    printf '%s\n' "$staged_dir"
+}
+
+cleanup_staged_configset() {
+    local staged_dir="${1:-}"
+    if [[ -n "$staged_dir" && "$staged_dir" == "${PROJECT_ROOT}/.configset-upload-"*"-solr9" && -d "$staged_dir" ]]; then
+        rm -rf -- "$staged_dir"
+    fi
 }
 
 # ---------------------------------------------------------------------------
