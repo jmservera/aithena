@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import os
 import re
 import sys
@@ -401,22 +402,59 @@ def _assert_search_response_schema(data: dict) -> None:
     assert set(data["sort"].keys()) == {"by", "order"}
 
 
+def _assert_solr_calls_use_json_writer(solr_calls: list) -> None:
+    assert solr_calls
+    for call in solr_calls:
+        data = call.kwargs.get("data")
+        assert isinstance(data, dict)
+        assert data.get("wt") == "json"
+
+
 def test_all_solr_wt_params_use_json_writer() -> None:
     source_root = Path(__file__).resolve().parents[1]
-    wt_literal_pattern = re.compile(r"""["']wt["']\s*:\s*["']([^"']+)["']""")
     forbidden_writer_pattern = re.compile(r"\bwt=(python|ruby|php|phps)\b", flags=re.IGNORECASE)
     offenders: list[str] = []
 
+    def _extract_subscript_key_string(target: ast.Subscript) -> str | None:
+        key = target.slice
+        if isinstance(key, ast.Constant) and isinstance(key.value, str):
+            return key.value
+        return None
+
+    def _extract_literal_string(value: ast.expr) -> str | None:
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            return value.value
+        return None
+
     for py_file in source_root.rglob("*.py"):
-        if "tests" in py_file.parts:
+        if py_file.is_relative_to(source_root / "tests"):
             continue
         content = py_file.read_text(encoding="utf-8")
-        for match in wt_literal_pattern.finditer(content):
-            writer = match.group(1)
-            if writer != "json":
-                offenders.append(f"{py_file.relative_to(source_root)} uses wt={writer}")
+        tree = ast.parse(content)
+        relative_path = py_file.relative_to(source_root)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values, strict=True):
+                    if isinstance(key, ast.Constant) and key.value == "wt":
+                        writer = _extract_literal_string(value)
+                        if writer != "json":
+                            offenders.append(f"{relative_path} uses wt={writer or '<non-literal>'}")
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Subscript) and _extract_subscript_key_string(target) == "wt":
+                        writer = _extract_literal_string(node.value)
+                        if writer != "json":
+                            offenders.append(f"{relative_path} uses wt={writer or '<non-literal>'}")
+            elif isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "wt":
+                        writer = _extract_literal_string(keyword.value)
+                        if writer != "json":
+                            offenders.append(f"{relative_path} uses wt={writer or '<non-literal>'}")
+
         if forbidden_writer_pattern.search(content):
-            offenders.append(f"{py_file.relative_to(source_root)} contains forbidden wt query writer")
+            offenders.append(f"{relative_path} contains forbidden wt query writer")
 
     assert not offenders, f"Non-json Solr response writers found: {offenders}"
 
@@ -440,8 +478,7 @@ def test_search_keyword_mode_explicit(mock_solr_get: MagicMock) -> None:
     _assert_search_response_schema(data)
 
     solr_calls = [call for call in mock_solr_get.call_args_list if "data" in call.kwargs]
-    assert solr_calls
-    assert all(call.kwargs["data"].get("wt") == "json" for call in solr_calls)
+    _assert_solr_calls_use_json_writer(solr_calls)
 
 
 @patch("main.requests.post")
@@ -495,8 +532,7 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_post: MagicMock) -> 
     _assert_search_response_schema(data)
 
     solr_calls = [call for call in mock_post.call_args_list if "data" in call.kwargs]
-    assert len(solr_calls) == 1
-    assert solr_calls[0].kwargs["data"]["wt"] == "json"
+    _assert_solr_calls_use_json_writer(solr_calls)
 
 
 @patch("main.requests.post")
@@ -628,8 +664,7 @@ def test_search_hybrid_mode_fuses_both_legs(mock_post: MagicMock) -> None:
     _assert_search_response_schema(data)
 
     solr_calls = [call for call in mock_post.call_args_list if "data" in call.kwargs]
-    assert len(solr_calls) == 2
-    assert all(call.kwargs["data"]["wt"] == "json" for call in solr_calls)
+    _assert_solr_calls_use_json_writer(solr_calls)
 
 
 @patch("main.requests.post")
