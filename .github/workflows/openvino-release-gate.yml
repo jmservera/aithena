@@ -68,6 +68,7 @@ jobs:
         env:
           SMOKE_TIMEOUT: '240'
         run: |
+          set -o pipefail
           chmod +x e2e/smoke-openvino-permissions.sh
           ./e2e/smoke-openvino-permissions.sh \
             local/aithena-embeddings-server:openvino-release-gate \

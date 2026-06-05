@@ -50,6 +50,7 @@
         env:
           RC_TAG: ${{ needs.prepare.outputs.full_tag }}-openvino
         run: |
+          set -o pipefail
           chmod +x e2e/smoke-openvino-permissions.sh
           ./e2e/smoke-openvino-permissions.sh \
             "ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}" \
