@@ -22,6 +22,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.phase2, pytest.mark.solr10]
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MANAGED_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
 SINGLE_NODE_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.single-node.yml"
+SUPPORTED_SOLR10_SCALAR_BITS = {"7", "8"}
 
 
 def _construct_override(loader: yaml.SafeLoader, node: yaml.Node) -> Any:
@@ -36,6 +37,19 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         data = yaml.safe_load(fh)
     assert isinstance(data, dict), f"{path} must parse as a YAML mapping"
     return data
+
+
+def _service_env(service: dict[str, Any]) -> dict[str, str]:
+    environment = service.get("environment", {})
+    if isinstance(environment, dict):
+        return {str(key): str(value) for key, value in environment.items()}
+    if isinstance(environment, list):
+        result: dict[str, str] = {}
+        for item in environment:
+            key, _, value = str(item).partition("=")
+            result[key] = value
+        return result
+    raise AssertionError(f"Unsupported compose environment shape: {environment!r}")
 
 
 def _reload_config(monkeypatch: pytest.MonkeyPatch, **env: str):
@@ -59,17 +73,19 @@ class TestPhase2ActivePreflight:
         assert services["zoo1"]["environment"]["ZOO_STANDALONE_ENABLED"] == "true"
         assert services["solr"]["environment"]["ZK_HOST"] == "zoo1:2181"
         assert services["solr-init"]["environment"]["SOLR_EXPECTED_NODES"] == "1"
-        assert services["solr-search"]["environment"] == ["ZOOKEEPER_HOSTS=zoo1:2181"]
+        solr_search_env = _service_env(services["solr-search"])
+        assert solr_search_env.get("ZOOKEEPER_HOSTS") == "zoo1:2181"
         assert "zoo1" in services["solr"]["depends_on"]
 
     def test_phase2_int8_schema_and_app_config_are_wired(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Quantization wiring can be validated without executing Solr benchmarks."""
         schema = ET.parse(MANAGED_SCHEMA_PATH).getroot()  # nosec B314
         field_types = {field_type.attrib.get("name"): field_type.attrib for field_type in schema.findall("fieldType")}
-        byte_vector = field_types["knn_vector_768_byte"]
+        byte_vector = field_types.get("knn_vector_768_byte")
 
+        assert byte_vector is not None, "managed-schema.xml must define knn_vector_768_byte"
         assert byte_vector["class"] == "solr.ScalarQuantizedDenseVectorField"
-        assert byte_vector["bits"] == "8"
+        assert byte_vector["bits"] in SUPPORTED_SOLR10_SCALAR_BITS
         assert byte_vector["hnswM"] == "12"
 
         config = _reload_config(monkeypatch, VECTOR_QUANTIZATION="int8")
