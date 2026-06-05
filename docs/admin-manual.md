@@ -147,11 +147,30 @@ Common local URLs:
 | Search API | `http://localhost/v1/search/` | Protected |
 | Status API | `http://localhost/v1/status/` | Protected |
 | Stats API | `http://localhost/v1/stats/` | Protected |
-| Solr admin | `http://localhost/admin/solr/` | Protected |
-| RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
-| Redis Commander | `http://localhost/admin/redis/` | Protected |
+| Solr admin | `http://localhost/admin/solr/` | Admin-only |
+| Solr 10 Security UI | `http://localhost/admin/solr/ui/` | Admin-only; Solr RBAC also applies |
+| RabbitMQ management | `http://localhost/admin/rabbitmq/` | Admin-only |
+| Redis Commander | `http://localhost/admin/redis/` | Admin-only |
 
 Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker/compose.dev-ports.yml` file is loaded.
+
+### Solr 10 Security UI
+
+Solr 10's Admin UI is proxied at `/admin/solr/ui/` so operators can use Solr's built-in security screens instead of manually editing `security.json`.
+
+Security posture:
+- The nginx proxy requires an authenticated Aithena user with role `admin` via `GET /v1/auth/validate-admin`.
+- Non-admin Aithena users cannot open the Solr, RabbitMQ, or Redis admin tools through nginx.
+- Aithena does not bypass Solr authorization. User creation, password changes, and role assignments remain enforced by Solr BasicAuth/RBAC; use a Solr account with the required `security-edit` permission for state-changing security operations.
+- Browser auth cookies are `HttpOnly` and `SameSite=Lax`; Solr still owns CSRF behavior for its UI forms/API calls.
+
+To add or remove Solr users and roles in Solr 10:
+
+1. Sign in to Aithena as an `admin`.
+2. Open **Admin → Infrastructure → Solr Admin** or go directly to `/admin/solr/ui/`.
+3. Authenticate to Solr if prompted.
+4. Open the Solr UI security section.
+5. Use the Solr UI controls to add/remove users and assign roles, then verify the resulting permissions before signing out.
 
 ## GPU Acceleration Setup (v1.17.0)
 
