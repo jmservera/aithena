@@ -501,6 +501,7 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
@@ -548,6 +549,7 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
@@ -595,6 +597,7 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-9}
       SOLR_MODULES: extraction,langid
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
