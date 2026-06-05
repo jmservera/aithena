@@ -92,10 +92,10 @@ def reset_cached_version() -> None:
 # ---------------------------------------------------------------------------
 
 # Solr 9: hnswMaxConnections / hnswBeamWidth
-# Solr 10: maxConnections / beamWidth
+# Solr 10: hnswM / hnswEfConstruction
 _HNSW_PARAM_MAP: dict[int, dict[str, str]] = {
     9: {"max_connections": "hnswMaxConnections", "beam_width": "hnswBeamWidth"},
-    10: {"max_connections": "maxConnections", "beam_width": "beamWidth"},
+    10: {"max_connections": "hnswM", "beam_width": "hnswEfConstruction"},
 }
 
 

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET  # nosec B405
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import solr_compat
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+MANAGED_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
 
 
 @pytest.fixture(autouse=True)
@@ -124,7 +129,7 @@ class TestHnswParams:
     def test_solr_10_param_names(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("SOLR_VERSION", "10")
         result = solr_compat.hnsw_params(max_connections=16, beam_width=100)
-        assert result == {"maxConnections": 16, "beamWidth": 100}
+        assert result == {"hnswM": 16, "hnswEfConstruction": 100}
 
     def test_custom_values(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("SOLR_VERSION", "9")
@@ -170,9 +175,10 @@ class TestDenseVectorFieldType:
             hnsw_max_connections=32,
             hnsw_beam_width=200,
         )
-        assert result["maxConnections"] == 32
-        assert result["beamWidth"] == 200
+        assert result["hnswM"] == 32
+        assert result["hnswEfConstruction"] == 200
         assert "hnswMaxConnections" not in result
+        assert "hnswBeamWidth" not in result
 
     def test_custom_field_name_and_dims(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("SOLR_VERSION", "9")
@@ -184,3 +190,30 @@ class TestDenseVectorFieldType:
         assert result["name"] == "custom_vector"
         assert result["vectorDimension"] == 384
         assert result["similarityFunction"] == "dot_product"
+
+
+class TestManagedSchemaHnswCompatibility:
+    """Tests for Solr 10 HNSW compatibility in the active configset."""
+
+    def test_managed_schema_uses_solr10_hnsw_param_names(self):
+        schema = ET.parse(MANAGED_SCHEMA_PATH).getroot()  # nosec B314
+        vector_field_types = [
+            field_type
+            for field_type in schema.findall("fieldType")
+            if field_type.attrib.get("class") == "solr.DenseVectorField"
+        ]
+
+        assert vector_field_types, "managed-schema.xml must define DenseVectorField types"
+
+        for field_type in vector_field_types:
+            assert "hnswMaxConnections" not in field_type.attrib
+            assert "hnswBeamWidth" not in field_type.attrib
+            assert "maxConnections" not in field_type.attrib
+            assert "beamWidth" not in field_type.attrib
+
+        byte_vectors = [
+            field_type for field_type in vector_field_types if field_type.attrib["name"] == "knn_vector_768_byte"
+        ]
+        assert byte_vectors, "managed-schema.xml must define knn_vector_768_byte"
+        byte_vector = byte_vectors[0]
+        assert byte_vector.attrib["hnswM"] == "12"
