@@ -54,7 +54,7 @@
 #   upload a staged copy with HNSW and int8 vector schema attributes renamed back:
 #     hnswM                  →  hnswMaxConnections
 #     hnswEfConstruction     →  hnswBeamWidth
-#     ScalarQuantizedDenseVectorField bits="8" → DenseVectorField vectorEncoding="BYTE"
+#     ScalarQuantizedDenseVectorField bits="7" → DenseVectorField vectorEncoding="BYTE"
 #
 # Exit codes:
 #   0  Import succeeded
@@ -473,7 +473,7 @@ stage_configset_for_solr9() {
             -e 's/hnswM="/hnswMaxConnections="/g' \
             -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
             -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
-            -e 's/ bits="8"/ vectorEncoding="BYTE"/g' \
+            -e 's/ bits="7"/ vectorEncoding="BYTE"/g' \
             "$schema_file"
         log_info "Staged Solr 9-compatible configset for upload: ${staged_dir}"
     else

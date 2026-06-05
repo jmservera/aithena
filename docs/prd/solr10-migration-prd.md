@@ -186,10 +186,10 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 | Quantization | Bytes/vector | Memory savings | Accuracy loss |
 |-------------|-------------|---------------|---------------|
 | None (float32) | 3,072 | Baseline | None |
-| Scalar (int8) | 768 | **4× reduction** | Minimal |
+| Scalar (signed byte) | ~768 | **~4× reduction** | Minimal |
 | Binary (1-bit) | 96 | **32× reduction** | Moderate |
 
-**Recommendation**: Use **scalar quantization** (int8) by default — 4× memory savings with minimal accuracy loss. Offer binary quantization as an option for very large collections.
+**Recommendation**: Use **scalar quantization** (signed-byte/7-bit in Solr 10) by default — ~4× memory savings with minimal accuracy loss. Offer binary quantization as an option for very large collections.
 
 **Schema change**:
 ```xml
@@ -201,7 +201,7 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 <!-- Solr 10: Scalar quantized -->
 <fieldType name="knn_vector_768" class="solr.ScalarQuantizedDenseVectorField"
            vectorDimension="768" similarityFunction="cosine"
-           knnAlgorithm="hnsw" bits="8"/>
+           knnAlgorithm="hnsw" bits="7"/>
 ```
 
 **Impact**: For 100K documents × 10 chunks each = 1M vectors:
@@ -450,7 +450,7 @@ during migration, and perform a full reindex so vector graphs are rebuilt.
                        │ zoo1-3 │  (or embedded ZK in single-node SolrCloud)
                        └────────┘
 
-Vectors: ScalarQuantizedDenseVectorField (int8, 4× memory savings)
+Vectors: ScalarQuantizedDenseVectorField (signed-byte bits=7, ~4× memory savings)
 ```
 
 ---

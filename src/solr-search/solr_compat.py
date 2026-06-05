@@ -172,7 +172,7 @@ def scalar_quantized_vector_field_type(
     vector_dimension: int = 768,
     similarity_function: str = "cosine",
     knn_algorithm: str = "hnsw",
-    bits: int = 8,
+    bits: int = 7,
     hnsw_max_connections: int | None = None,
     hnsw_beam_width: int | None = None,
     solr_url: str | None = None,
@@ -180,10 +180,16 @@ def scalar_quantized_vector_field_type(
 ) -> dict[str, Any]:
     """Build the int8 vector field type for the active Solr version.
 
-    Solr 10 uses ``ScalarQuantizedDenseVectorField`` with ``bits=8``. During
+    Solr 10 uses ``ScalarQuantizedDenseVectorField`` with ``bits=7``. Lucene's
+    scalar-quantized codec accepts 4 or 7 bits only; 7 bits is the signed-byte
+    mode and preserves the existing ``VECTOR_QUANTIZATION=int8`` byte-vector
+    storage intent. During
     the Solr 9 compatibility window, the equivalent schema is
     ``DenseVectorField`` with ``vectorEncoding=BYTE``.
     """
+    if bits not in (4, 7):
+        raise ValueError("Solr 10 ScalarQuantizedDenseVectorField bits must be one of: 4, 7")
+
     if is_solr_10(solr_url=solr_url, auth=auth):
         field_type: dict[str, Any] = {
             "name": name,

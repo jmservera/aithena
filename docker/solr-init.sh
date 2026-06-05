@@ -149,7 +149,7 @@ if [ "$(solr_major_version)" = "9" ]; then
     -e 's/hnswM="/hnswMaxConnections="/g' \
     -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
     -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
-    -e 's/ bits="8"/ vectorEncoding="BYTE"/g' \
+    -e 's/ bits="7"/ vectorEncoding="BYTE"/g' \
     "${CONFIGSET_DIR}/managed-schema.xml"
 fi
 

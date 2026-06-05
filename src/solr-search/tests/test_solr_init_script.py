@@ -11,7 +11,9 @@ and verifies that:
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import subprocess  # nosec B404
 from pathlib import Path
 
@@ -21,8 +23,8 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 COMPOSE_PROD_PATH = REPO_ROOT / "docker" / "compose.prod.yml"
-SOLR_INIT_SCRIPT_PATH = REPO_ROOT / "docker" / "solr-init.sh"
 SECURITY_JSON_PATH = REPO_ROOT / "src" / "solr" / "security.json"
+SOLR_INIT_SCRIPT_PATH = REPO_ROOT / "docker" / "solr-init.sh"
 SOLR_IMPORT_SCRIPT_PATH = REPO_ROOT / "scripts" / "solr-import.sh"
 
 
@@ -56,6 +58,12 @@ def _load_compose(path: Path) -> dict:
 def _load_solr_init_shell_script() -> str:
     """Load docker/solr-init.sh script contents."""
     return SOLR_INIT_SCRIPT_PATH.read_text(encoding="utf-8")
+
+
+def _load_shared_solr_init_script() -> str:
+    """Load docker/solr-init.sh."""
+    with open(SOLR_INIT_SCRIPT_PATH, encoding="utf-8") as fh:
+        return fh.read()
 
 
 def _load_solr_import_script() -> str:
@@ -324,3 +332,66 @@ def test_solr_health_checks_use_authenticated_curl():
             assert "/solr/admin/info/system" in healthcheck_command, (
                 f"{compose_path.name}:{service_name} healthcheck must probe /admin/info/system"
             )
+
+    """Solr 9 bootstrap must rewrite source Solr 10 vector schema names."""
+    for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
+        assert 'SOLR_VERSION:-9}" = "9"' in script
+        assert 'hnswM="/hnswMaxConnections="' in script
+        assert 'hnswEfConstruction="/hnswBeamWidth="' in script
+        assert 'solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField' in script
+        assert 'bits="7"/ vectorEncoding="BYTE' in script
+        assert 'solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"' in script or (
+            'solr zk upconfig -z "$$ZK_HOST" -n books -d "$$CONFIGSET_DIR"' in script
+        )
+
+
+def test_solr_import_configset_upload_stages_solr9_hnsw_rewrite():
+    """solr-import --configset-dir must not upload Solr 10 HNSW params to Solr 9."""
+    script = _load_solr_import_script()
+    assert "stage_configset_for_solr9" in script
+    assert 'SOLR_MAJOR_VERSION" -eq 9' in script
+
+    scratch = REPO_ROOT / ".pytest-solr-import-configset" / str(os.getpid())
+    config_dir = scratch / "source-configset"
+    staged_root = scratch / "staged-root"
+    shutil.rmtree(scratch, ignore_errors=True)
+    config_dir.mkdir(parents=True)
+    staged_root.mkdir(parents=True)
+    schema = config_dir / "managed-schema.xml"
+    schema.write_text(
+        '<schema><fieldType name="knn_vector_768_byte" '
+        'class="solr.ScalarQuantizedDenseVectorField" bits="7" '
+        'hnswM="12" hnswEfConstruction="100"/></schema>',
+        encoding="utf-8",
+    )
+
+    try:
+        bash = f"""
+set -euo pipefail
+PROJECT_ROOT={staged_root}
+LOG_FILE=/dev/null
+eval "$(sed '/^main "\\$@"/,$d' scripts/solr-import.sh)"
+staged="$(stage_configset_for_solr9 {config_dir} books)"
+test -f "${{staged}}/managed-schema.xml"
+grep -q 'hnswMaxConnections="12"' "${{staged}}/managed-schema.xml"
+grep -q 'hnswBeamWidth="100"' "${{staged}}/managed-schema.xml"
+grep -q 'class="solr.DenseVectorField"' "${{staged}}/managed-schema.xml"
+grep -q 'vectorEncoding="BYTE"' "${{staged}}/managed-schema.xml"
+! grep -q 'hnswM=' "${{staged}}/managed-schema.xml"
+! grep -q 'hnswEfConstruction=' "${{staged}}/managed-schema.xml"
+! grep -q 'ScalarQuantizedDenseVectorField' "${{staged}}/managed-schema.xml"
+! grep -q 'bits="7"' "${{staged}}/managed-schema.xml"
+grep -q 'hnswM="12"' {schema}
+grep -q 'ScalarQuantizedDenseVectorField' {schema}
+cleanup_staged_configset "$staged"
+test ! -d "$staged"
+"""
+        subprocess.run(  # noqa: S603 - script under test and paths are repo-local fixtures
+            ["/bin/bash", "-c", bash],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)

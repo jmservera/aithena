@@ -345,13 +345,14 @@ These are not required for the core upgrade but can be done after verification:
            vectorDimension="768" similarityFunction="cosine"
            knnAlgorithm="hnsw"/>
 
-<!-- After (scalar quantized) -->
-<fieldType name="knn_vector_768" class="solr.DenseVectorField"
+<!-- After (Solr 10 scalar quantized) -->
+<fieldType name="knn_vector_768" class="solr.ScalarQuantizedDenseVectorField"
            vectorDimension="768" similarityFunction="cosine"
-           knnAlgorithm="hnsw" vectorEncoding="INT8"/>
+           knnAlgorithm="hnsw" bits="7"/>
 ```
 
-> **Note**: Vector quantization requires a full reindex.
+> **Note**: Solr 10 scalar quantization supports `bits="4"` or `bits="7"` only
+> (not `bits="8"`). Vector quantization requires a full reindex.
 
 ### Phase 3: Docker Image Swap
 
