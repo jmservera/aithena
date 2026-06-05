@@ -49,9 +49,9 @@ version-appropriate CLI flags via shell helper functions.
 
 | Solr 9 | Solr 10 | Affected Files |
 |--------|---------|----------------|
-| Default: `false` | Default: `true` | `docker-compose.yml:743`, `src/solr/security.json` |
+| Default: `false` | Default: `true` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh`, `src/solr/security.json` |
 
-**Current state**: We explicitly set `--block-unknown false` in the CLI and
+**Current state**: We explicitly set `--block-unknown false` in each `solr-init` entrypoint and
 `"blockUnknown": false` in `security.json`. Both are already safe for Solr 10.
 
 **Compat approach**: No code change needed — explicit setting overrides defaults.

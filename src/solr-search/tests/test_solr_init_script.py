@@ -231,20 +231,22 @@ def test_solr_init_cli_helpers_translate_flags_for_solr_9_and_10(script_name: st
     ],
 )
 def test_solr_init_security_seed_uses_writable_solr_data_path(script_name: str, script: str):
-    """Solr init must seed security.json in a writable directory (not /opt/solr)."""
+    """Solr 9 init must not seed security.json under unwritable /opt/solr."""
     normalized = script.replace("$$", "$")
 
     seed_lines = [line for line in normalized.splitlines() if "empty-security.json" in line]
 
     assert "/opt/solr/empty-security.json" not in normalized, f"{script_name} must not write under /opt/solr"
     assert seed_lines, f"{script_name} must seed security.json before enabling auth"
-    # Accept either /tmp (always writable) or /var/solr/data (Solr's data directory when available)
-    assert all(
-        "/tmp/empty-security.json" in line or "/var/solr/data/empty-security.json" in line
-        for line in seed_lines
-    ), (
-        f"{script_name} must use a writable directory for seed security.json"
+    assert all("/var/solr/data/empty-security.json" in line for line in seed_lines), (
+        f"{script_name} must only use Solr's writable data directory for the seed security.json"
     )
+    assert "echo '{}' > /var/solr/data/empty-security.json" in normalized, (
+        f"{script_name} must create the seed security.json in Solr's writable data directory"
+    )
+    assert (
+        'solr zk cp file:/var/solr/data/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized
+    ), f"{script_name} must upload the seed security.json from Solr's writable data directory"
 
 
 @pytest.mark.parametrize(
