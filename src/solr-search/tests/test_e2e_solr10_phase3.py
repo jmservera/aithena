@@ -9,6 +9,8 @@ cuVS codec, and hybrid search quality with AI features.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.phase3, pytest.mark.solr10]
@@ -55,7 +57,7 @@ class TestPhase3GPUAcceleration:
 
     @pytest.mark.e2e
     @pytest.mark.phase3
-    @pytest.mark.skipif_no_cuda
+    @pytest.mark.skipif(not os.environ.get("CUDA_VISIBLE_DEVICES"), reason="CUDA is not available")
     def test_phase3_gpu_acceleration(self):
         """Scenario 3: GPU-Accelerated Indexing.
 
@@ -73,7 +75,7 @@ class TestPhase3GPUAcceleration:
 
     @pytest.mark.e2e
     @pytest.mark.phase3
-    @pytest.mark.skipif_no_cuvs
+    @pytest.mark.skipif(os.environ.get("E2E_SOLR_ENABLE_CUVS") != "1", reason="cuVS fixture is not enabled")
     def test_phase3_cuvs_codec_correctness(self):
         """Scenario 4: cuVS Codec Results Correctness.
 

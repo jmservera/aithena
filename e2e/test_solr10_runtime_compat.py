@@ -42,7 +42,10 @@ def _get_live_solr10_json(
         resp.raise_for_status()
     except requests.RequestException as exc:
         pytest.fail(f"{EXPECTED_MAJOR_ENV}=10 requires a reachable Solr 10 fixture at {url}: {exc}")
-    body = resp.json()
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        pytest.fail(f"{EXPECTED_MAJOR_ENV}=10 requires Solr to return JSON at {url}: {exc}")
     assert isinstance(body, dict), f"Expected Solr JSON object, got {type(body)}"
     return body
 

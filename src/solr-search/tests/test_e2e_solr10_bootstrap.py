@@ -72,6 +72,7 @@ class TestSolr10SafePreflight:
         for compose_path in (COMPOSE_PATH, COMPOSE_PROD_PATH):
             services = _load_yaml(compose_path).get("services", {})
             for service_name in (*CLUSTER_SOLR_SERVICES, "solr-init"):
+                assert service_name in services, f"{compose_path.name} is missing service {service_name!r}"
                 env = _service_env(services[service_name])
                 assert env.get("SOLR_VERSION") == "${SOLR_VERSION:-9}", (
                     f"{compose_path.name}:{service_name} must default SOLR_VERSION to 9 "
