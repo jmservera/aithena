@@ -5,7 +5,7 @@
 locust>=2.29,<3.0
 
 # Test framework
-pytest>=8.0,<9.0
+pytest>=9.0.3,<10.0
 pytest-timeout>=2.2,<3.0
 
 # HTTP client
