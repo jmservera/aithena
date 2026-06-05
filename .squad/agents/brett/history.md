@@ -66,3 +66,11 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 - **2026-03-22 — nginx thumbnails:** Static thumbnail serving needs both a volume mount and a dedicated `/thumbnails/` location.
 - **2026-03-20 — Release optimization:** v1.8–v1.11 showed asymmetric changes; change-detection builds can skip unchanged service builds and retag images to save build time.
 - **2026-03-19 — Auth DB permissions:** Docker Compose diagnostics traced auth DB failures to host bind-mount UID ownership; this remains the top recurring local setup issue.
+
+### 2026-06-05 — OpenVINO Smoke Failure Root-Cause & Prevention (Issue #1662)
+- **Context:** Pre-release run 27022717607 smoke test embeddings-server-openvino failed; fix at 27026253418 (a8a5cb5)
+- **Root cause:** `uv sync --inexact` allowed transitive drift; `--frozen` alone did not guarantee built-image correctness
+- **Prevention:** Post-sync version verification inside Dockerfile; Python import + version check fails build if mismatch detected
+- **Rubber Duck critique:** Confirmed verification must run inside the built image, not just CI assumptions
+- **Pattern:** Add Python version-check step after each `uv sync --inexact` in embeddings-server Dockerfiles to catch future drift immediately
+- **Decision:** `.squad/decisions.md` (OpenVINO Smoke Failure section)
