@@ -56,9 +56,10 @@
 | `book_embedding` | `knn_vector_768` | Book-level semantic search (768D, cosine) |
 | `embedding_v` | `knn_vector_768` | Chunk-level embedding for granular search |
 
-**HNSW configuration**: The vector field types use Solr defaults and do not set
-version-specific HNSW attributes. Upload the updated configset and run a full
-reindex when moving an existing collection from Solr 9 to Solr 10.
+**HNSW configuration**: The source configset uses Solr 10 HNSW names. During
+the compatibility window, `solr-init` rewrites those names before uploading to
+Solr 9. Upload the updated configset and run a full reindex when moving an
+existing collection from Solr 9 to Solr 10.
 
 **Key fields** (book metadata, ADR-002):
 - `title_s`/`title_t`, `author_s`/`author_t`, `year_i`, `category_s`, `language_detected_s`, `series_s`
@@ -143,17 +144,18 @@ All `solr` CLI commands now require full double-dash flags. This breaks every `s
 - `docker-compose.yml` — solr-init entrypoint (lines ~710–798)
 - `docker/compose.prod.yml` — solr-init entrypoint (lines ~658–736)
 
-### 2.2 HNSW Parameter Renames (🟢 Guarded by Defaults)
+### 2.2 HNSW Parameter Renames (🟡 Requires Configset Upload + Reindex)
 
 | Solr 9 | Solr 10 |
 |--------|---------|
 | `hnswMaxConnections` | `hnswM` |
 | `hnswBeamWidth` | `hnswEfConstruction` |
 
-**Our impact**: The active configset omits these version-specific attributes, so
-it remains valid on both Solr 9 and Solr 10. If explicit HNSW tuning is restored,
-use the Solr 10 names before uploading to Solr 10 and perform a full reindex so
-HNSW graphs are rebuilt with the updated schema.
+**Our impact**: The byte-vector type uses custom graph tuning. The source
+configset now uses Solr 10 names (`hnswM`, `hnswEfConstruction`); Solr 9
+bootstrap rewrites them during upload. After uploading the updated configset to
+Solr 10, perform a full reindex so HNSW graphs are rebuilt with the Solr 10
+schema.
 
 ### 2.3 `blockUnknown` Default Change (🟡 Medium Impact)
 

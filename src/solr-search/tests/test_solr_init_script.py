@@ -19,6 +19,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 SECURITY_JSON_PATH = REPO_ROOT / "src" / "solr" / "security.json"
+SOLR_INIT_SCRIPT_PATH = REPO_ROOT / "docker" / "solr-init.sh"
 
 
 def _load_solr_init_script() -> str:
@@ -40,6 +41,12 @@ def _load_security_json() -> dict:
     """Load and parse src/solr/security.json."""
     with open(SECURITY_JSON_PATH, encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _load_shared_solr_init_script() -> str:
+    """Load docker/solr-init.sh."""
+    with open(SOLR_INIT_SCRIPT_PATH, encoding="utf-8") as fh:
+        return fh.read()
 
 
 # ---------- 1. Admin role assignment ----------
@@ -125,3 +132,14 @@ def test_security_json_matches_solr97_roles():
     assert perm_map.get("read") == "search", "read must require search role"
     assert perm_map.get("collection-admin-edit") == "admin", "collection-admin-edit must require admin role"
     assert perm_map.get("update") == "index", "update must require index role"
+
+
+def test_init_scripts_rewrite_solr10_hnsw_params_for_solr9():
+    """Solr 9 bootstrap must rewrite source Solr 10 HNSW schema names."""
+    for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
+        assert 'SOLR_VERSION:-9}" = "9"' in script
+        assert "hnswM=/hnswMaxConnections=" in script
+        assert "hnswEfConstruction=/hnswBeamWidth=" in script
+        assert 'solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"' in script or (
+            'solr zk upconfig -z "$$ZK_HOST" -n books -d "$$CONFIGSET_DIR"' in script
+        )

@@ -271,18 +271,18 @@ solr auth enable --type basicAuth \
 
 ### 4.2 🔴 HNSW Parameter Renames
 
-**Impact**: Guarded by defaults. `src/solr/books/managed-schema.xml` omits
-version-specific HNSW tuning attributes on active vector field types, so the
-configset remains valid on both Solr 9 and Solr 10.
+**Impact**: Required for the byte-vector field. `src/solr/books/managed-schema.xml`
+uses defaults for the float32 vector type, but explicitly tunes graph degree for
+the byte-vector type. Solr 10 requires the renamed HNSW schema parameters.
 
 | Current | Solr 10 |
 |---------|---------|
 | `hnswMaxConnections` | `hnswM` |
 | `hnswBeamWidth` | `hnswEfConstruction` |
 
-**Action**: Keep active vector field types free of the Solr 9 names above. If
-explicit HNSW tuning is restored, use the Solr 10 names and perform a full
-reindex so vector graphs are rebuilt.
+**Action**: Use the Solr 10 names above in the source configset, let Solr 9
+bootstrap rewrite them during the compatibility window, upload the configset
+during migration, and perform a full reindex so vector graphs are rebuilt.
 
 ### 4.3 🔴 `blockUnknown` Default Change
 

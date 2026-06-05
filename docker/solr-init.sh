@@ -115,8 +115,19 @@ if [ "${REPLICATION_FACTOR}" -gt "${EXPECTED_NODES}" ]; then
 fi
 
 # ── books collection (multilingual-e5-base, 768D) ────────────────────────────
+CONFIGSET_DIR="/configsets/books"
+if [ "${SOLR_VERSION:-9}" = "9" ]; then
+  CONFIGSET_DIR="/opt/solr/books-configset-solr9"
+  mkdir -p "${CONFIGSET_DIR}"
+  cp -R /configsets/books/. "${CONFIGSET_DIR}"/
+  sed -i \
+    -e 's/hnswM=/hnswMaxConnections=/g' \
+    -e 's/hnswEfConstruction=/hnswBeamWidth=/g' \
+    "${CONFIGSET_DIR}/managed-schema.xml"
+fi
+
 if ! solr zk ls /configs -z "${ZK_HOST}" | grep -qx 'books'; then
-  solr zk upconfig -z "${ZK_HOST}" -n books -d /configsets/books
+  solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"
 fi
 
 if ! curl -fsS -u "${SOLR_AUTH_USER}:${SOLR_AUTH_PASS}" \

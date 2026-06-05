@@ -25,9 +25,9 @@ controlled by the `SOLR_VERSION` environment variable and implemented primarily 
 | `hnswMaxConnections` | `hnswM` | `src/solr/books/managed-schema.xml` |
 | `hnswBeamWidth` | `hnswEfConstruction` | `src/solr/books/managed-schema.xml` |
 
-**Current state**: The active configset omits version-specific HNSW tuning
-attributes, so schema uploads are valid on both Solr 9 and Solr 10. If custom
-tuning is added later, the compat layer provides version-aware names.
+**Current state**: The source configset uses Solr 10 names. During the
+compatibility window, `solr-init` rewrites `hnswM` / `hnswEfConstruction` back
+to the Solr 9 names before uploading the configset to a Solr 9 cluster.
 
 **Compat approach**: `solr_compat.hnsw_params()` returns the correct parameter
 names for the detected Solr version.
@@ -142,5 +142,5 @@ When switching from Solr 9 to 10:
 3. [ ] Update `src/solr/books/solrconfig.xml` `luceneMatchVersion` to `10.0`
 4. [ ] Verify CLI commands in `docker-compose.yml` use double-dash syntax
 5. [ ] Upload the updated `books` configset and re-index all data (required after
-       configset and `luceneMatchVersion` changes)
+       HNSW schema parameter and `luceneMatchVersion` changes)
 6. [ ] Run full test suite

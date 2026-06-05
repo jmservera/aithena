@@ -193,9 +193,9 @@ class TestDenseVectorFieldType:
 
 
 class TestManagedSchemaHnswCompatibility:
-    """Tests for Solr 9/10 HNSW compatibility in the active configset."""
+    """Tests for Solr 10 HNSW compatibility in the active configset."""
 
-    def test_managed_schema_omits_version_specific_hnsw_param_names(self):
+    def test_managed_schema_uses_solr10_hnsw_param_names(self):
         schema = ET.parse(MANAGED_SCHEMA_PATH).getroot()  # nosec B314
         vector_field_types = [
             field_type
@@ -208,5 +208,8 @@ class TestManagedSchemaHnswCompatibility:
         for field_type in vector_field_types:
             assert "hnswMaxConnections" not in field_type.attrib
             assert "hnswBeamWidth" not in field_type.attrib
-            assert "hnswM" not in field_type.attrib
-            assert "hnswEfConstruction" not in field_type.attrib
+            assert "maxConnections" not in field_type.attrib
+            assert "beamWidth" not in field_type.attrib
+
+        byte_vector = next(ft for ft in vector_field_types if ft.attrib["name"] == "knn_vector_768_byte")
+        assert byte_vector.attrib["hnswM"] == "12"
