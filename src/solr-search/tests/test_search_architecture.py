@@ -32,7 +32,11 @@ def test_capabilities_endpoint_returns_search_modes():
     assert "search_modes" in data
     assert "architecture" in data
     assert "vector_dimensions" in data
+    assert "vector_quantization" in data
+    assert "knn_field" in data
     assert data["vector_dimensions"] == 768
+    assert data["vector_quantization"] == "none"
+    assert data["knn_field"] == "embedding_v"
     assert isinstance(data["search_modes"], list)
     assert "keyword" in data["search_modes"]
 

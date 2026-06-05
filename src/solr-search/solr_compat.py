@@ -165,3 +165,51 @@ def dense_vector_field_type(
         field_type.update(hp)
 
     return field_type
+
+
+def scalar_quantized_vector_field_type(
+    name: str = "knn_vector_768_byte",
+    vector_dimension: int = 768,
+    similarity_function: str = "cosine",
+    knn_algorithm: str = "hnsw",
+    bits: int = 8,
+    hnsw_max_connections: int | None = None,
+    hnsw_beam_width: int | None = None,
+    solr_url: str | None = None,
+    auth: tuple[str, str] | None = None,
+) -> dict[str, Any]:
+    """Build the int8 vector field type for the active Solr version.
+
+    Solr 10 uses ``ScalarQuantizedDenseVectorField`` with ``bits=8``. During
+    the Solr 9 compatibility window, the equivalent schema is
+    ``DenseVectorField`` with ``vectorEncoding=BYTE``.
+    """
+    if is_solr_10(solr_url=solr_url, auth=auth):
+        field_type: dict[str, Any] = {
+            "name": name,
+            "class": "solr.ScalarQuantizedDenseVectorField",
+            "vectorDimension": vector_dimension,
+            "bits": bits,
+            "similarityFunction": similarity_function,
+            "knnAlgorithm": knn_algorithm,
+        }
+    else:
+        field_type = {
+            "name": name,
+            "class": "solr.DenseVectorField",
+            "vectorDimension": vector_dimension,
+            "vectorEncoding": "BYTE",
+            "similarityFunction": similarity_function,
+            "knnAlgorithm": knn_algorithm,
+        }
+
+    if hnsw_max_connections is not None or hnsw_beam_width is not None:
+        hp = hnsw_params(
+            max_connections=hnsw_max_connections or 16,
+            beam_width=hnsw_beam_width or 100,
+            solr_url=solr_url,
+            auth=auth,
+        )
+        field_type.update(hp)
+
+    return field_type

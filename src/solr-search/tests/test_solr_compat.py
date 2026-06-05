@@ -192,18 +192,49 @@ class TestDenseVectorFieldType:
         assert result["similarityFunction"] == "dot_product"
 
 
+class TestScalarQuantizedVectorFieldType:
+    """Tests for version-aware int8 vector field definitions."""
+
+    def test_solr_10_uses_scalar_quantized_field(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("SOLR_VERSION", "10")
+        result = solr_compat.scalar_quantized_vector_field_type(hnsw_max_connections=12)
+
+        assert result["name"] == "knn_vector_768_byte"
+        assert result["class"] == "solr.ScalarQuantizedDenseVectorField"
+        assert result["bits"] == 8
+        assert result["vectorDimension"] == 768
+        assert result["similarityFunction"] == "cosine"
+        assert result["hnswM"] == 12
+        assert "vectorEncoding" not in result
+
+    def test_solr_9_uses_dense_vector_byte_encoding(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("SOLR_VERSION", "9")
+        result = solr_compat.scalar_quantized_vector_field_type(hnsw_max_connections=12)
+
+        assert result["class"] == "solr.DenseVectorField"
+        assert result["vectorEncoding"] == "BYTE"
+        assert result["hnswMaxConnections"] == 12
+        assert "bits" not in result
+
+
 class TestManagedSchemaHnswCompatibility:
     """Tests for Solr 10 HNSW compatibility in the active configset."""
 
     def test_managed_schema_uses_solr10_hnsw_param_names(self):
         schema = ET.parse(MANAGED_SCHEMA_PATH).getroot()  # nosec B314
-        vector_field_types = [
+        dense_vector_field_types = [
             field_type
             for field_type in schema.findall("fieldType")
             if field_type.attrib.get("class") == "solr.DenseVectorField"
         ]
+        scalar_vector_field_types = [
+            field_type
+            for field_type in schema.findall("fieldType")
+            if field_type.attrib.get("class") == "solr.ScalarQuantizedDenseVectorField"
+        ]
+        vector_field_types = dense_vector_field_types + scalar_vector_field_types
 
-        assert vector_field_types, "managed-schema.xml must define DenseVectorField types"
+        assert vector_field_types, "managed-schema.xml must define vector field types"
 
         for field_type in vector_field_types:
             assert "hnswMaxConnections" not in field_type.attrib
@@ -212,8 +243,12 @@ class TestManagedSchemaHnswCompatibility:
             assert "beamWidth" not in field_type.attrib
 
         byte_vectors = [
-            field_type for field_type in vector_field_types if field_type.attrib["name"] == "knn_vector_768_byte"
+            field_type for field_type in scalar_vector_field_types if field_type.attrib["name"] == "knn_vector_768_byte"
         ]
         assert byte_vectors, "managed-schema.xml must define knn_vector_768_byte"
         byte_vector = byte_vectors[0]
+        assert byte_vector.attrib["class"] == "solr.ScalarQuantizedDenseVectorField"
+        assert byte_vector.attrib["bits"] == "8"
+        assert byte_vector.attrib["vectorDimension"] == "768"
+        assert byte_vector.attrib["similarityFunction"] == "cosine"
         assert byte_vector.attrib["hnswM"] == "12"

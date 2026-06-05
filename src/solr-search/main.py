@@ -762,6 +762,8 @@ def capabilities() -> dict[str, Any]:
         "search_modes": sorted(VALID_SEARCH_MODES),
         "architecture": settings.search_architecture,
         "vector_dimensions": 768,
+        "vector_quantization": settings.vector_quantization,
+        "knn_field": settings.knn_field,
         "similar_books": settings.search_architecture == "hnsw",
     }
 

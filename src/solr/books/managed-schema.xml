@@ -53,15 +53,17 @@
          - "none"  → float32 vectors stored in knn_vector_768 (default, highest precision)
          - "fp16"  → float32 vectors stored in knn_vector_768 (fp16 quantization is applied
                       at the embeddings-server level before sending; Solr stores as float32)
-         - "int8"  → byte vectors stored in knn_vector_768_byte (BYTE encoding, ~4x memory savings)
+         - "int8"  → scalar-quantized byte vectors stored in knn_vector_768_byte
+                      (~4x memory savings)
        When mode is "none" or "fp16", the indexer writes to the `embedding_v` field.
        When mode is "int8", the indexer writes to the `embedding_byte_v` field instead. -->
   <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
-  <!-- BYTE (int8) vector type — used for "int8" quantization mode.
-       vectorEncoding="BYTE" stores each dimension as a signed byte [-128, 127].
+  <!-- Scalar-quantized int8 vector type — used for "int8" quantization mode.
+       bits="8" stores one byte per dimension. solr-init rewrites this type to
+       DenseVectorField vectorEncoding="BYTE" while Solr 9 is supported.
        hnswM tuned to 12 (vs default 16) for memory savings with byte vectors. -->
-  <fieldType name="knn_vector_768_byte" class="solr.DenseVectorField" vectorDimension="768" vectorEncoding="BYTE" similarityFunction="cosine" knnAlgorithm="hnsw" hnswM="12"/>
+  <fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField" vectorDimension="768" bits="8" similarityFunction="cosine" knnAlgorithm="hnsw" hnswM="12"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">

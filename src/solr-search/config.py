@@ -21,6 +21,23 @@ def _parse_collection_set(raw_value: str) -> frozenset[str]:
     return frozenset(name.strip() for name in raw_value.split(",") if name.strip())
 
 
+_VALID_VECTOR_QUANTIZATION_MODES = {"none", "fp16", "int8"}
+
+
+def _parse_vector_quantization(raw_value: str) -> str:
+    """Normalize VECTOR_QUANTIZATION and reject unsupported modes."""
+    mode = raw_value.strip().lower()
+    if mode not in _VALID_VECTOR_QUANTIZATION_MODES:
+        valid = ", ".join(sorted(_VALID_VECTOR_QUANTIZATION_MODES))
+        raise SystemExit(f"Invalid VECTOR_QUANTIZATION={mode!r}. Valid values: {valid}")
+    return mode
+
+
+def _vector_field_default(quantization: str) -> str:
+    """Return the default Solr vector field for a quantization mode."""
+    return "embedding_byte_v" if _parse_vector_quantization(quantization) == "int8" else "embedding_v"
+
+
 def _parse_embeddings_url_overrides(allowed: frozenset[str]) -> tuple[tuple[str, str], ...]:
     """Build a collection→embeddings-URL map from per-collection env vars.
 
@@ -102,6 +119,7 @@ class Settings:
     solr_auth_user: str | None = None
     solr_auth_pass: str | None = None
     ascii_folding: bool = True
+    vector_quantization: str = "none"
 
     @property
     def select_url(self) -> str:
@@ -135,6 +153,7 @@ allow_credentials = (
 )
 
 _allowed_collections = _parse_collection_set(os.environ.get("ALLOWED_COLLECTIONS", "books"))
+_vector_quantization = _parse_vector_quantization(os.environ.get("VECTOR_QUANTIZATION", "none"))
 
 
 def parse_upload_rate_limit_requests_per_minute() -> int:
@@ -168,8 +187,11 @@ settings = Settings(
     embeddings_timeout=float(os.environ.get("EMBEDDINGS_TIMEOUT", "120")),
     default_search_mode=os.environ.get("DEFAULT_SEARCH_MODE", "keyword"),
     rrf_k=int(os.environ.get("RRF_K", "60")),
-    knn_field=os.environ.get("KNN_FIELD", "embedding_v"),
-    book_embedding_field=os.environ.get("BOOK_EMBEDDING_FIELD", "embedding_v"),
+    knn_field=os.environ.get("KNN_FIELD", _vector_field_default(_vector_quantization)),
+    book_embedding_field=os.environ.get(
+        "BOOK_EMBEDDING_FIELD",
+        _vector_field_default(_vector_quantization),
+    ),
     redis_host=os.environ.get("REDIS_HOST", "redis"),
     redis_port=int(os.environ.get("REDIS_PORT", "6379")),
     redis_queue_name=os.environ.get("REDIS_QUEUE_NAME", os.environ.get("QUEUE_NAME", "shortembeddings")),
@@ -207,6 +229,7 @@ settings = Settings(
     default_collection=os.environ.get("DEFAULT_COLLECTION", "books"),
     e5_collections=_parse_collection_set(os.environ.get("E5_COLLECTIONS", "books")),
     collection_embeddings_urls=_parse_embeddings_url_overrides(_allowed_collections),
+    vector_quantization=_vector_quantization,
     comparison_baseline_collection=os.environ.get("COMPARISON_BASELINE_COLLECTION", "books"),
     comparison_candidate_collection=os.environ.get("COMPARISON_CANDIDATE_COLLECTION", "books"),
     docker_host=os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock"),

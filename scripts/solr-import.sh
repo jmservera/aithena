@@ -51,9 +51,10 @@
 #
 # Configset upload transformation (Solr 10 → 9):
 #   When --configset-dir points at a Solr 10 configset and the target is Solr 9,
-#   upload a staged copy with HNSW schema attributes renamed back:
+#   upload a staged copy with HNSW and int8 vector schema attributes renamed back:
 #     hnswM                  →  hnswMaxConnections
 #     hnswEfConstruction     →  hnswBeamWidth
+#     ScalarQuantizedDenseVectorField bits="8" → DenseVectorField vectorEncoding="BYTE"
 #
 # Exit codes:
 #   0  Import succeeded
@@ -471,6 +472,8 @@ stage_configset_for_solr9() {
         sed -i \
             -e 's/hnswM="/hnswMaxConnections="/g' \
             -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
+            -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
+            -e 's/ bits="8"/ vectorEncoding="BYTE"/g' \
             "$schema_file"
         log_info "Staged Solr 9-compatible configset for upload: ${staged_dir}"
     else
