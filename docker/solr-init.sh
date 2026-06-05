@@ -34,6 +34,31 @@ NUM_SHARDS="${SOLR_NUM_SHARDS:-1}"
 REPLICATION_FACTOR="${SOLR_REPLICATION_FACTOR:-1}"
 EXPECTED_NODES="${SOLR_EXPECTED_NODES:-1}"
 
+solr_major_version() {
+  local version="${SOLR_VERSION:-9}"
+  printf '%s\n' "${version%%.*}"
+}
+
+solr_10_cli() {
+  [ "$(solr_major_version)" -ge 10 ] 2>/dev/null
+}
+
+solr_zk_host_flag() {
+  if solr_10_cli; then printf '%s\n' "--zk-host"; else printf '%s\n' "-z"; fi
+}
+
+solr_credentials_flag() {
+  if solr_10_cli; then printf '%s\n' "--credentials"; else printf '%s\n' "-u"; fi
+}
+
+solr_name_flag() {
+  if solr_10_cli; then printf '%s\n' "--name"; else printf '%s\n' "-n"; fi
+}
+
+solr_dir_flag() {
+  if solr_10_cli; then printf '%s\n' "--dir"; else printf '%s\n' "-d"; fi
+}
+
 # ── Wait for Solr to be reachable (with or without auth) ─────────────────────
 echo "Waiting for Solr at ${SOLR_URL}..."
 until curl -fsS -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}" \
@@ -62,16 +87,16 @@ AUTH_RESP=$(curl -sS "${SOLR_URL}/solr/admin/authentication" 2>/dev/null || true
 if echo "${AUTH_RESP}" | grep -qi 'No authentication'; then
   echo "Bootstrapping Solr security..."
   # Seed an empty security.json so "solr auth enable" can update it
-  echo '{}' > /opt/solr/empty-security.json
-  solr zk cp file:/opt/solr/empty-security.json zk:/security.json -z "${ZK_HOST}"
+  echo '{}' > /var/solr/empty-security.json
+  solr zk cp file:/var/solr/empty-security.json zk:/security.json "$(solr_zk_host_flag)" "${ZK_HOST}"
   sleep 2
 
   # Create admin user with hashed password (also creates default RBAC rules)
   solr auth enable --type basicAuth \
-    -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}" \
+    "$(solr_credentials_flag)" "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}" \
     --block-unknown false \
     --solr-include-file /dev/null \
-    -z "${ZK_HOST}"
+    "$(solr_zk_host_flag)" "${ZK_HOST}"
 
   echo "Waiting for Solr to load security config..."
   sleep 5
@@ -116,7 +141,7 @@ fi
 
 # ── books collection (multilingual-e5-base, 768D) ────────────────────────────
 CONFIGSET_DIR="/configsets/books"
-if [ "${SOLR_VERSION:-9}" = "9" ]; then
+if [ "$(solr_major_version)" = "9" ]; then
   CONFIGSET_DIR="/var/solr/books-configset-solr9"
   mkdir -p "${CONFIGSET_DIR}"
   cp -R /configsets/books/. "${CONFIGSET_DIR}"/
@@ -128,8 +153,8 @@ if [ "${SOLR_VERSION:-9}" = "9" ]; then
     "${CONFIGSET_DIR}/managed-schema.xml"
 fi
 
-if ! solr zk ls /configs -z "${ZK_HOST}" | grep -qx 'books'; then
-  solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"
+if ! solr zk ls /configs "$(solr_zk_host_flag)" "${ZK_HOST}" | grep -qx 'books'; then
+  solr zk upconfig "$(solr_zk_host_flag)" "${ZK_HOST}" "$(solr_name_flag)" books "$(solr_dir_flag)" "${CONFIGSET_DIR}"
 fi
 
 if ! curl -fsS -u "${SOLR_AUTH_USER}:${SOLR_AUTH_PASS}" \

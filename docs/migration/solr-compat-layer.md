@@ -36,22 +36,22 @@ names for the detected Solr version.
 
 | Solr 9 | Solr 10 | Affected Files |
 |--------|---------|----------------|
-| `solr zk cp … -z HOST` | `solr zk cp … --zk-host HOST` | `docker-compose.yml:737` |
-| `solr auth enable -u USER:PASS` | `solr auth enable --credentials USER:PASS` | `docker-compose.yml:741-745` |
-| `solr auth enable -z HOST` | `solr auth enable --zk-host HOST` | `docker-compose.yml:745` |
-| `solr zk ls … -z HOST` | `solr zk ls … --zk-host HOST` | `docker-compose.yml:791` |
-| `solr zk upconfig -z HOST -n NAME -d DIR` | `solr zk upconfig --zk-host HOST --name NAME --dir DIR` | `docker-compose.yml:792` |
+| `solr zk cp … -z HOST` | `solr zk cp … --zk-host HOST` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
+| `solr auth enable -u USER:PASS` | `solr auth enable --credentials USER:PASS` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
+| `solr auth enable -z HOST` | `solr auth enable --zk-host HOST` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
+| `solr zk ls … -z HOST` | `solr zk ls … --zk-host HOST` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
+| `solr zk upconfig -z HOST -n NAME -d DIR` | `solr zk upconfig --zk-host HOST --name NAME --dir DIR` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
 
-**Compat approach**: The `solr-init` entrypoint in `docker-compose.yml` reads
-`SOLR_VERSION` and uses version-appropriate CLI flags via shell helper functions.
+**Compat approach**: The `solr-init` entrypoints read `SOLR_VERSION` and use
+version-appropriate CLI flags via shell helper functions.
 
 ### 3. `blockUnknown` Default Change (MEDIUM impact)
 
 | Solr 9 | Solr 10 | Affected Files |
 |--------|---------|----------------|
-| Default: `false` | Default: `true` | `docker-compose.yml:743`, `src/solr/security.json` |
+| Default: `false` | Default: `true` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh`, `src/solr/security.json` |
 
-**Current state**: We explicitly set `--block-unknown false` in the CLI and
+**Current state**: We explicitly set `--block-unknown false` in each `solr-init` entrypoint and
 `"blockUnknown": false` in `security.json`. Both are already safe for Solr 10.
 
 **Compat approach**: No code change needed — explicit setting overrides defaults.
