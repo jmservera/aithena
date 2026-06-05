@@ -43,9 +43,10 @@
   <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
   <!-- 768-dim dense vector field type for multilingual-e5-base (replaces distiluse, benchmark #926).
        HNSW index with cosine similarity for kNN semantic search.
-       Uses Solr defaults for HNSW tuning. If custom params are needed:
+       Uses Solr defaults for HNSW tuning so the configset remains valid on Solr 9 and Solr 10.
+       If custom params are needed:
          Solr 9:  hnswMaxConnections="16" hnswBeamWidth="100"
-         Solr 10: maxConnections="16" beamWidth="100"
+         Solr 10: hnswM="16" hnswEfConstruction="100"
        See docs/migration/solr-compat-layer.md and src/solr-search/solr_compat.py
 
        Vector quantization modes (VECTOR_QUANTIZATION env var):
@@ -58,9 +59,8 @@
   <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <!-- BYTE (int8) vector type — used for "int8" quantization mode.
-       vectorEncoding="BYTE" stores each dimension as a signed byte [-128, 127].
-       hnswMaxConnections tuned to 12 (vs default 16) for memory savings with byte vectors. -->
-  <fieldType name="knn_vector_768_byte" class="solr.DenseVectorField" vectorDimension="768" vectorEncoding="BYTE" similarityFunction="cosine" knnAlgorithm="hnsw" hnswMaxConnections="12"/>
+       vectorEncoding="BYTE" stores each dimension as a signed byte [-128, 127]. -->
+  <fieldType name="knn_vector_768_byte" class="solr.DenseVectorField" vectorDimension="768" vectorEncoding="BYTE" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">

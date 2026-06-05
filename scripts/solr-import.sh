@@ -43,8 +43,8 @@
 # Schema transformation (Solr 9 → 10):
 #   When the target is Solr 10, HNSW parameters in DenseVectorField definitions
 #   are automatically renamed:
-#     hnswMaxConnections  →  maxConnections
-#     hnswBeamWidth       →  beamWidth
+#     hnswMaxConnections  →  hnswM
+#     hnswBeamWidth       →  hnswEfConstruction
 #   Use --no-transform to disable or --transform-schema to force.
 #
 # Exit codes:
@@ -462,15 +462,15 @@ transform_batch_for_solr10() {
     local input="$1"
     # Rename HNSW parameters that may appear in exported document data.
     # The primary renames for Solr 10:
-    #   hnswMaxConnections → maxConnections
-    #   hnswBeamWidth      → beamWidth
+    #   hnswMaxConnections → hnswM
+    #   hnswBeamWidth      → hnswEfConstruction
     if command -v python3 &>/dev/null; then
         python3 -c "
 import sys
 
 RENAMES = {
-    'hnswMaxConnections': 'maxConnections',
-    'hnswBeamWidth': 'beamWidth',
+    'hnswMaxConnections': 'hnswM',
+    'hnswBeamWidth': 'hnswEfConstruction',
 }
 
 data = sys.stdin.read()
@@ -480,8 +480,8 @@ print(data, end='')
 " <<< "$input"
     else
         echo "$input" | sed \
-            -e 's/hnswMaxConnections/maxConnections/g' \
-            -e 's/hnswBeamWidth/beamWidth/g'
+            -e 's/hnswMaxConnections/hnswM/g' \
+            -e 's/hnswBeamWidth/hnswEfConstruction/g'
     fi
 }
 

@@ -271,14 +271,18 @@ solr auth enable --type basicAuth \
 
 ### 4.2 🔴 HNSW Parameter Renames
 
-**Impact**: Conditional. `src/solr/books/managed-schema.xml` currently uses the vector field type defaults and does **not** explicitly set `hnswMaxConnections` / `hnswBeamWidth`.
+**Impact**: Guarded by defaults. `src/solr/books/managed-schema.xml` omits
+version-specific HNSW tuning attributes on active vector field types, so the
+configset remains valid on both Solr 9 and Solr 10.
 
 | Current | Solr 10 |
 |---------|---------|
 | `hnswMaxConnections` | `hnswM` |
 | `hnswBeamWidth` | `hnswEfConstruction` |
 
-**Action**: No schema change is needed for this item unless we explicitly tune HNSW parameters in schema. If we later add these settings, use the Solr 10 names above; a reindex would then be required.
+**Action**: Keep active vector field types free of the Solr 9 names above. If
+explicit HNSW tuning is restored, use the Solr 10 names and perform a full
+reindex so vector graphs are rebuilt.
 
 ### 4.3 🔴 `blockUnknown` Default Change
 
