@@ -328,7 +328,7 @@ requires-dist = [
     { name = "intel-extension-for-pytorch", marker = "extra == 'openvino'" },
     { name = "openvino", marker = "extra == 'openvino'", specifier = ">=2025.4,<2026" },
     { name = "openvino-tokenizers", marker = "extra == 'openvino'", specifier = ">=2025.4,<2026" },
-    { name = "optimum-intel", marker = "extra == 'openvino'", specifier = ">=1.27" },
+    { name = "optimum-intel", marker = "extra == 'openvino'", specifier = ">=1.27,<2" },
     { name = "sentence-transformers", specifier = ">=3.4,<6" },
     { name = "sentence-transformers", extras = ["openvino"], marker = "extra == 'openvino'", specifier = ">=3.4,<6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.42,<1" },
