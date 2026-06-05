@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import os
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -381,6 +383,82 @@ def _solr_payload(docs: list[dict], facets: dict | None = None) -> dict:
     }
 
 
+def _assert_search_response_schema(data: dict) -> None:
+    required_keys = {
+        "query",
+        "mode",
+        "sort",
+        "degraded",
+        "page",
+        "limit",
+        "page_size",
+        "total",
+        "total_results",
+        "total_pages",
+        "results",
+        "facets",
+    }
+    assert required_keys.issubset(data.keys())
+    assert set(data["sort"].keys()) == {"by", "order"}
+
+
+def _assert_solr_calls_use_json_writer(solr_calls: list) -> None:
+    assert solr_calls
+    for call in solr_calls:
+        data = call.kwargs.get("data")
+        assert isinstance(data, dict)
+        assert data.get("wt") == "json"
+
+
+def test_all_solr_wt_params_use_json_writer() -> None:
+    source_root = Path(__file__).resolve().parents[1]
+    forbidden_writer_pattern = re.compile(r"\bwt=(python|ruby|php|phps)\b", flags=re.IGNORECASE)
+    offenders: list[str] = []
+
+    def _extract_subscript_key_string(target: ast.Subscript) -> str | None:
+        key = target.slice
+        if isinstance(key, ast.Constant) and isinstance(key.value, str):
+            return key.value
+        return None
+
+    def _extract_literal_string(value: ast.expr) -> str | None:
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            return value.value
+        return None
+
+    for py_file in source_root.rglob("*.py"):
+        if py_file.is_relative_to(source_root / "tests"):
+            continue
+        content = py_file.read_text(encoding="utf-8")
+        tree = ast.parse(content)
+        relative_path = py_file.relative_to(source_root)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values, strict=True):
+                    if isinstance(key, ast.Constant) and key.value == "wt":
+                        writer = _extract_literal_string(value)
+                        if writer != "json":
+                            offenders.append(f"{relative_path} uses wt={writer or '<non-literal>'}")
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Subscript) and _extract_subscript_key_string(target) == "wt":
+                        writer = _extract_literal_string(node.value)
+                        if writer != "json":
+                            offenders.append(f"{relative_path} uses wt={writer or '<non-literal>'}")
+            elif isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "wt":
+                        writer = _extract_literal_string(keyword.value)
+                        if writer != "json":
+                            offenders.append(f"{relative_path} uses wt={writer or '<non-literal>'}")
+
+        if forbidden_writer_pattern.search(content):
+            offenders.append(f"{relative_path} contains forbidden wt query writer")
+
+    assert not offenders, f"Non-json Solr response writers found: {offenders}"
+
+
 @patch("main.requests.post")
 def test_search_keyword_mode_explicit(mock_solr_get: MagicMock) -> None:
     """?mode=keyword must behave identically to the default search."""
@@ -397,6 +475,10 @@ def test_search_keyword_mode_explicit(mock_solr_get: MagicMock) -> None:
     assert data["mode"] == "keyword"
     assert len(data["results"]) == 2
     assert "facets" in data
+    _assert_search_response_schema(data)
+
+    solr_calls = [call for call in mock_solr_get.call_args_list if "data" in call.kwargs]
+    _assert_solr_calls_use_json_writer(solr_calls)
 
 
 @patch("main.requests.post")
@@ -447,6 +529,10 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_post: MagicMock) -> 
     # Facets must be empty in semantic mode
     assert data["facets"]["author"] == []
     assert data["facets"]["category"] == []
+    _assert_search_response_schema(data)
+
+    solr_calls = [call for call in mock_post.call_args_list if "data" in call.kwargs]
+    _assert_solr_calls_use_json_writer(solr_calls)
 
 
 @patch("main.requests.post")
@@ -575,6 +661,10 @@ def test_search_hybrid_mode_fuses_both_legs(mock_post: MagicMock) -> None:
     assert len(data["facets"]["author"]) > 0
     # All results capped at page_size
     assert len(data["results"]) <= 5
+    _assert_search_response_schema(data)
+
+    solr_calls = [call for call in mock_post.call_args_list if "data" in call.kwargs]
+    _assert_solr_calls_use_json_writer(solr_calls)
 
 
 @patch("main.requests.post")
