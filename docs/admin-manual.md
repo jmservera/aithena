@@ -160,7 +160,7 @@ Aithena includes an **Admin → Security** scaffold that links to Solr 10's buil
 
 Security posture:
 
-- Sign in to Aithena as an `admin`; `/admin/security`, `/admin/solr/`, `/admin/rabbitmq/`, and `/admin/redis/` are gated by nginx via `GET /v1/auth/validate-admin`.
+- Sign in to Aithena as an `admin`; `/admin/security` is gated by the app's admin route, while `/admin/solr/`, `/admin/rabbitmq/`, and `/admin/redis/` are gated by nginx via `GET /v1/auth/validate-admin`.
 - Non-admin Aithena users cannot open proxied infrastructure admin tools through nginx.
 - Aithena does not bypass Solr authorization. User creation, password changes, and role assignments remain enforced by Solr BasicAuth/RBAC; use a Solr account with the required `security-edit` permission for state-changing security operations.
 - Browser auth cookies are `HttpOnly` and `SameSite=Lax`; Solr still owns CSRF behavior for its UI forms/API calls.

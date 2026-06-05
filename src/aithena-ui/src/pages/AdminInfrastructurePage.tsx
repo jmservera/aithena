@@ -39,7 +39,7 @@ function ConnectionRow({ service }: { service: ServiceEndpoint }) {
   return (
     <tr>
       <td className="infra-service-name">{service.name}</td>
-      <td>{service.type ?? service.description ?? 'service'}</td>
+      <td>{service.type ?? service.description ?? '—'}</td>
       <td>{service.admin_url ?? service.url ?? '—'}</td>
       <td>
         <span className={`infra-badge ${isHealthy ? 'infra-badge--ok' : 'infra-badge--error'}`}>
