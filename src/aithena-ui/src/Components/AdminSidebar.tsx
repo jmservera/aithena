@@ -10,6 +10,7 @@ import {
   ScrollText,
   Link2,
   Users,
+  ShieldCheck,
   DatabaseBackup,
   type LucideIcon,
 } from 'lucide-react';
@@ -61,6 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
     titleId: 'adminSidebar.group.management',
     items: [
       { to: '/admin/users', labelId: 'adminSidebar.users', icon: Users },
+      { to: '/admin/security', labelId: 'adminSidebar.security', icon: ShieldCheck },
       { to: '/admin/backups', labelId: 'adminSidebar.backups', icon: DatabaseBackup },
     ],
   },
