@@ -730,6 +730,31 @@ services:
           MAX_WAIT=120
           ZK_HOST="$${ZK_HOST:-zoo1:2181,zoo2:2181,zoo3:2181}"
           SOLR_URL="http://solr:8983"
+
+          solr_major_version() {
+            local version="$${SOLR_VERSION:-9}"
+            printf '%s\n' "$${version%%.*}"
+          }
+
+          solr_10_cli() {
+            [ "$$(solr_major_version)" -ge 10 ] 2>/dev/null
+          }
+
+          solr_zk_host_flag() {
+            if solr_10_cli; then printf '%s\n' "--zk-host"; else printf '%s\n' "-z"; fi
+          }
+
+          solr_credentials_flag() {
+            if solr_10_cli; then printf '%s\n' "--credentials"; else printf '%s\n' "-u"; fi
+          }
+
+          solr_name_flag() {
+            if solr_10_cli; then printf '%s\n' "--name"; else printf '%s\n' "-n"; fi
+          }
+
+          solr_dir_flag() {
+            if solr_10_cli; then printf '%s\n' "--dir"; else printf '%s\n' "-d"; fi
+          }
           EXPECTED_NODES="$${SOLR_EXPECTED_NODES:-3}"
 
           echo "[solr-init] Waiting for Solr to be reachable..."
@@ -762,16 +787,16 @@ services:
           if echo "$$AUTH_RESP" | grep -qi 'No authentication'; then
             echo "[solr-init] Bootstrapping Solr security..."
             # Seed an empty security.json so "solr auth enable" can update it
-            echo '{}' > /tmp/empty-security.json
-            solr zk cp file:/tmp/empty-security.json zk:/security.json -z "$$ZK_HOST"
+            echo '{}' > /opt/solr/empty-security.json
+            solr zk cp file:/opt/solr/empty-security.json zk:/security.json "$$(solr_zk_host_flag)" "$$ZK_HOST"
             sleep 2
 
             # Create admin user with hashed password (also creates default RBAC rules)
             solr auth enable --type basicAuth \
-              -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              "$$(solr_credentials_flag)" "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
               --block-unknown false \
               --solr-include-file /dev/null \
-              -z "$$ZK_HOST"
+              "$$(solr_zk_host_flag)" "$$ZK_HOST"
 
             # Poll for auth readiness instead of blind sleep
             echo "[solr-init] Waiting for auth to propagate..."
@@ -826,7 +851,7 @@ services:
 
           # --- books collection (multilingual-e5-base, 768D) ---
           CONFIGSET_DIR="/configsets/books"
-          if [ "$${SOLR_VERSION:-9}" = "9" ]; then
+          if [ "$$(solr_major_version)" = "9" ]; then
             CONFIGSET_DIR="/var/solr/books-configset-solr9"
             mkdir -p "$$CONFIGSET_DIR"
             cp -R /configsets/books/. "$$CONFIGSET_DIR"/
@@ -839,8 +864,8 @@ services:
           fi
 
           echo "[solr-init] Uploading configset..."
-          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -qx 'books'; then
-            solr zk upconfig -z "$$ZK_HOST" -n books -d "$$CONFIGSET_DIR"
+          if ! solr zk ls /configs "$$(solr_zk_host_flag)" "$$ZK_HOST" | grep -qx 'books'; then
+            solr zk upconfig "$$(solr_zk_host_flag)" "$$ZK_HOST" "$$(solr_name_flag)" books "$$(solr_dir_flag)" "$$CONFIGSET_DIR"
           fi
 
           echo "[solr-init] Creating collection (shards=$$NUM_SHARDS, replicas=$$REPLICATION_FACTOR)..."

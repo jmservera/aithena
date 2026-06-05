@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess  # nosec B404
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -60,6 +62,45 @@ def _load_solr_import_script() -> str:
     """Load scripts/solr-import.sh."""
     with open(SOLR_IMPORT_SCRIPT_PATH, encoding="utf-8") as fh:
         return fh.read()
+
+
+def _load_compose_prod_init_script() -> str:
+    """Extract the inline entrypoint script for the prod solr-init service."""
+    compose_prod = _load_compose(COMPOSE_PROD_PATH)
+    entrypoint = compose_prod.get("services", {}).get("solr-init", {}).get("entrypoint", [])
+    assert len(entrypoint) >= 3, f"Unexpected solr-init entrypoint format in {COMPOSE_PROD_PATH.name}: {entrypoint}"
+    return entrypoint[2]
+
+
+def _extract_cli_helper_functions(script: str) -> str:
+    """Extract version-aware solr CLI flag helpers from a shell script."""
+    normalized = script.replace("$$", "$")
+    match = re.search(
+        r"solr_major_version\(\) \{.*?solr_dir_flag\(\) \{\n.*?\n\s*\}",
+        normalized,
+        re.DOTALL,
+    )
+    assert match, "solr-init script must define Solr CLI compatibility helper functions"
+    return match.group(0)
+
+
+def _evaluate_cli_flags(script: str, solr_version: str) -> list[str]:
+    helpers = _extract_cli_helper_functions(script)
+    command = f"""
+{helpers}
+SOLR_VERSION={solr_version}
+solr_credentials_flag
+solr_zk_host_flag
+solr_name_flag
+solr_dir_flag
+"""
+    result = subprocess.run(  # noqa: S603
+        ["bash", "-ceu", command],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.splitlines()
 
 
 # ---------- 1. Admin role assignment ----------
@@ -151,18 +192,63 @@ def test_block_unknown_explicitly_set_to_false_in_init_scripts():
     """All Solr init scripts must explicitly set --block-unknown false."""
     compose_embedded_script = _load_solr_init_script()
     file_script = _load_solr_init_shell_script()
-    compose_prod = _load_compose(COMPOSE_PROD_PATH)
-    compose_prod_entrypoint = compose_prod.get("services", {}).get("solr-init", {}).get("entrypoint", [])
-    assert len(compose_prod_entrypoint) >= 3, (
-        f"Unexpected solr-init entrypoint format in {COMPOSE_PROD_PATH.name}: {compose_prod_entrypoint}"
-    )
-    compose_prod_script = compose_prod_entrypoint[2]
+    compose_prod_script = _load_compose_prod_init_script()
 
     assert "--block-unknown false" in compose_embedded_script, "docker-compose solr-init must set --block-unknown false"
     assert "--block-unknown false" in file_script, "docker/solr-init.sh must set --block-unknown false"
     assert "--block-unknown false" in compose_prod_script, (
         "docker/compose.prod.yml solr-init must set --block-unknown false"
     )
+
+
+@pytest.mark.parametrize(
+    ("script_name", "script"),
+    [
+        ("docker-compose.yml", _load_solr_init_script()),
+        ("docker/compose.prod.yml", _load_compose_prod_init_script()),
+        ("docker/solr-init.sh", _load_solr_init_shell_script()),
+    ],
+)
+def test_solr_init_cli_helpers_translate_flags_for_solr_9_and_10(script_name: str, script: str):
+    """solr-init must emit Solr 9 flags by default and Solr 10 long flags when requested."""
+    assert _evaluate_cli_flags(script, "9") == ["-u", "-z", "-n", "-d"], (
+        f"{script_name} must preserve Solr 9 CLI flag compatibility"
+    )
+    assert _evaluate_cli_flags(script, "10") == ["--credentials", "--zk-host", "--name", "--dir"], (
+        f"{script_name} must translate solr CLI flags to Solr 10 double-dash syntax"
+    )
+    assert _evaluate_cli_flags(script, "10.0.0") == ["--credentials", "--zk-host", "--name", "--dir"], (
+        f"{script_name} must accept full Solr 10 version strings"
+    )
+
+
+@pytest.mark.parametrize(
+    ("script_name", "script"),
+    [
+        ("docker-compose.yml", _load_solr_init_script()),
+        ("docker/compose.prod.yml", _load_compose_prod_init_script()),
+        ("docker/solr-init.sh", _load_solr_init_shell_script()),
+    ],
+)
+def test_solr_init_cli_commands_use_compatibility_helpers(script_name: str, script: str):
+    """All solr CLI commands affected by Solr 10 must call version-aware flag helpers."""
+    normalized = script.replace("$$", "$")
+
+    assert 'solr zk cp file:/opt/solr/empty-security.json zk:/security.json "$(solr_zk_host_flag)"' in normalized, (
+        f"{script_name} must use the zk-host helper for solr zk cp"
+    )
+    assert re.search(
+        r'"\$\(solr_credentials_flag\)" "\$[{]?SOLR_ADMIN_USER[}]?:\$[{]?SOLR_ADMIN_PASS[}]?"',
+        normalized,
+    ), f"{script_name} must use the credentials helper for solr auth enable"
+    assert re.search(r'solr zk ls /configs "\$\(solr_zk_host_flag\)" "\$[{]?ZK_HOST[}]?"', normalized), (
+        f"{script_name} must use the zk-host helper for solr zk ls"
+    )
+    assert re.search(
+        r'solr zk upconfig "\$\(solr_zk_host_flag\)" "\$[{]?ZK_HOST[}]?" '
+        r'"\$\(solr_name_flag\)" books "\$\(solr_dir_flag\)" "\$[{]?CONFIGSET_DIR[}]?"',
+        normalized,
+    ), f"{script_name} must use compatibility helpers for solr zk upconfig"
 
 
 def test_security_json_explicitly_sets_block_unknown_false():
