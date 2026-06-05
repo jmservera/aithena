@@ -117,7 +117,7 @@ class TestSolr10SafePreflight:
             's/hnswM="/hnswMaxConnections="/g',
             's/hnswEfConstruction="/hnswBeamWidth="/g',
             's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g',
-            's/ bits="8"/ vectorEncoding="BYTE"/g',
+            's/ bits="7"/ vectorEncoding="BYTE"/g',
         )
 
         for script in scripts:

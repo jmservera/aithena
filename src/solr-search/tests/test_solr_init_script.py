@@ -335,14 +335,17 @@ def test_solr_health_checks_use_authenticated_curl():
 
     """Solr 9 bootstrap must rewrite source Solr 10 vector schema names."""
     for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
-        assert 'SOLR_VERSION:-9}" = "9"' in script
+        assert "SOLR_VERSION:-9}" in script  # solr_major_version() default to 9
         assert 'hnswM="/hnswMaxConnections="' in script
         assert 'hnswEfConstruction="/hnswBeamWidth="' in script
         assert 'solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField' in script
         assert 'bits="7"/ vectorEncoding="BYTE' in script
-        assert 'solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"' in script or (
-            'solr zk upconfig -z "$$ZK_HOST" -n books -d "$$CONFIGSET_DIR"' in script
-        )
+        # solr zk upconfig uses helper functions for version-aware CLI flags
+        upconfig_cmd = 'solr zk upconfig "$$(solr_zk_host_flag)" "$$ZK_HOST"'
+        upconfig_cmd2 = '"$$(solr_name_flag)" books "$$(solr_dir_flag)" "$$CONFIGSET_DIR"'
+        upconfig_cmd_alt = 'solr zk upconfig "$(solr_zk_host_flag)" "${ZK_HOST}"'
+        upconfig_cmd2_alt = '"$(solr_name_flag)" books "$(solr_dir_flag)" "${CONFIGSET_DIR}"'
+        assert (upconfig_cmd + " " + upconfig_cmd2 in script) or (upconfig_cmd_alt + " " + upconfig_cmd2_alt in script)
 
 
 def test_solr_import_configset_upload_stages_solr9_hnsw_rewrite():
