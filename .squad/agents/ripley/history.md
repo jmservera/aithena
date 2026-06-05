@@ -115,3 +115,12 @@
 - No new skills created — all patterns already extracted to .squad/skills/ (27 existing skills).
 - Compression preserved all unique insights, consolidated duplicates, removed verbose timestamps/session metadata.
 - Pattern: History bloat happens when detailed session logs aren't consolidated into patterns. Target ≤8KB per history, ≤1.5KB per charter.
+
+### 2026-06-05 — OpenVINO Post-Mortem Coordination (Issue #1662)
+- **Failed run:** 27022717607 (Pre-release smoke test embeddings-server-openvino)
+- **Successful fix:** 27026253418 (a8a5cb5)
+- **Post-mortem:** Root cause was `uv sync --inexact` drift not caught by CI `--frozen` assumption; prevention is post-sync verification inside built image
+- **Prevention:** Build-time version check (Python import + `__version__` query) fails immediately if transitive versions don't match expectations
+- **Rubber Duck critique:** Confirmed that verification must run inside the built image; CI environment assumptions are insufficient
+- **Decision documented:** `.squad/decisions.md` (OpenVINO Smoke Failure section)
+- **Pattern:** Future GPU/accelerator builds should follow post-sync verification pattern for all critical dependencies

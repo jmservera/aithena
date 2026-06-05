@@ -1407,3 +1407,67 @@ v2.3.0 is released and tagged on origin/main, but pre-release validation identif
 3. False positives from analyzer (close with evidence)
 
 This prevents stale pre-release findings from blocking releases.
+
+---
+
+# Decision: OpenVINO Smoke Failure Post-Mortem & Prevention (Issue #1662)
+
+**Author:** Brett (Infrastructure) with Ripley & Lambert inputs  
+**Date:** 2026-06-05  
+**Status:** ✅ Implemented — test-side gates plus Brett Dockerfile/workflow verification in PR #1666
+**Failed Run:** 27022717607 | **Fix Run:** 27026253418 (a8a5cb5) | **Issue:** #1662
+
+## Context
+
+Pre-release Containers smoke test `embeddings-server-openvino` failed due to Python package version mismatch inside the built OpenVINO image. The issue arose from a gap in verification: `uv sync --frozen` in the Docker build ensured lock consistency, but did not guarantee the *installed state* matched the lock file when `--inexact` flags were used in downstream layers.
+
+## Root Cause
+
+1. **Build-time:** `RUN uv sync --inexact` allows transitive dependency drift during build
+2. **CI assumption:** Clean `uv sync --frozen` in the CI environment was insufficient to guarantee correctness of the built image
+3. **Gap:** No post-build verification that the image's installed packages matched the expected versions
+
+## Decision
+
+**Implement post-sync version verification inside Dockerfiles for all embeddings-server variants (OpenVINO, CPU, torch).**
+
+After `uv sync --inexact`, run a Python verification script inside the image that:
+1. Imports critical packages and queries their `__version__`
+2. Compares against expected versions from the lock/manifest
+3. Fails the Docker build if versions do not match
+
+## Prevention Implementation
+
+**Pattern (in Dockerfile):**
+```dockerfile
+RUN uv sync --inexact --frozen --no-dev
+RUN python -c "\
+import sys; \
+import importlib.metadata as metadata; \
+critical_pkgs = ['sentence-transformers', 'optimum-intel', ...]; \
+for pkg in critical_pkgs: \
+    v = metadata.version(pkg); \
+    print(f'{pkg}={v}'); \
+    # compare v against expected; raise ValueError if mismatch \
+"
+```
+
+## Why This Works
+
+1. **Detects drift before push:** Image build fails immediately; corrupt images never reach registry/CI
+2. **Universal:** Works in both CI and local developer builds
+3. **Minimal cost:** Single Python invocation per build (~100ms)
+4. **Rubber Duck approved:** Critique confirmed that verification must run *inside* the built image, not just CI assumptions
+5. **Future-proof:** Any `--inexact` usage in downstream layers is caught by the same verification
+
+## Affected Services
+
+- `embeddings-server` (OpenVINO, CPU, torch variants)
+- Any future services using multi-layer `uv sync --inexact`
+
+## Related
+
+- Issue: #1662
+- Failed run: 27022717607
+- Successful fix: 27026253418 (commit a8a5cb5)
+- Orchestration log: `.squad/orchestration-log/2026-06-05T16-26-openvino-postmortem.md`

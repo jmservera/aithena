@@ -177,6 +177,38 @@ Verify the reported version matches the RC tag.
 - [ ] File uploads work (if applicable)
 - [ ] Multilingual search returns results for non-English queries
 - [ ] No OOM errors in `document-indexer` logs for large PDFs
+- [ ] **OpenVINO gate:** the `embeddings-server-openvino` RC smoke test passed, including:
+  - Installed package verification after Docker `uv sync --inexact`
+  - `openvino.get_version()` diagnostics
+  - `openvino-tokenizers` and `optimum-intel` versions satisfying `src/embeddings-server/pyproject.toml`
+  - Embedding vector length matching `/v1/embeddings/model` `embedding_dim`
+
+### OpenVINO base-image and lockfile drift guard
+
+The OpenVINO embeddings image intentionally keeps Docker `uv sync --inexact` so the
+large packages preinstalled in `ghcr.io/jmservera/embeddings-server-base:*openvino`
+are preserved instead of reinstalled on every image build. That optimization is
+safe only if the base image and `uv.lock` resolve to compatible OpenVINO package
+versions.
+
+Release gates now enforce that contract in two places:
+
+1. `src/embeddings-server/Dockerfile` runs
+   `/app/.venv/bin/python scripts/verify_openvino_runtime.py` immediately after
+   `uv sync --inexact` for `INSTALL_OPENVINO=true` builds. The build fails if
+   installed `openvino`, `openvino-tokenizers`, or `optimum-intel` do not satisfy
+   the OpenVINO extra constraints in `pyproject.toml`; the build also logs a
+   filtered `uv pip list` inventory for those packages.
+2. `.github/workflows/openvino-release-gate.yml` builds the OpenVINO image with
+   `pull: true` and `no-cache: true` on relevant PRs, weekly schedule, and manual
+   dispatch. It then runs `e2e/smoke-openvino-permissions.sh`, which captures a
+   filtered installed-package inventory, `openvino.get_version()`, health output,
+   model metadata, embedding dimensions, and container logs.
+
+When changing the OpenVINO base image, `pyproject.toml`, or `uv.lock`, do not
+merge until this gate passes. If a version bump is intentional, update the
+OpenVINO extra constraints first and let the verifier prove the built image uses
+the expected installed versions.
 
 ### End-to-end test suite (optional)
 

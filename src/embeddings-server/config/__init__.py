@@ -15,6 +15,12 @@ GIT_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
 BUILD_DATE = os.environ.get("BUILD_DATE", "unknown")
 # ADR-004 → updated: multilingual-e5-base replaces distiluse (benchmark #926)
 MODEL_NAME = os.environ.get("MODEL_NAME", "intfloat/multilingual-e5-base")
+EXPECTED_EMBEDDING_DIM = os.environ.get("EXPECTED_EMBEDDING_DIM")
+if EXPECTED_EMBEDDING_DIM is not None:
+    try:
+        EXPECTED_EMBEDDING_DIM = int(EXPECTED_EMBEDDING_DIM)
+    except ValueError as exc:
+        raise SystemExit(f"EXPECTED_EMBEDDING_DIM must be an integer, got {EXPECTED_EMBEDDING_DIM!r}: {exc}") from exc
 
 # GPU acceleration config (v1.17.0)
 # DEVICE: auto|cpu|cuda|xpu — controls PyTorch device selection

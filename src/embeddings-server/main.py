@@ -16,6 +16,7 @@ from config import (
     BACKEND,
     BUILD_DATE,
     DEVICE,
+    EXPECTED_EMBEDDING_DIM,
     GIT_COMMIT,
     MODEL_NAME,
     PORT,
@@ -87,6 +88,14 @@ logger.info(
 try:
     model = SentenceTransformer(model_source, **model_kwargs)
     embedding_dim = model.get_sentence_embedding_dimension()
+    if EXPECTED_EMBEDDING_DIM is not None and embedding_dim != EXPECTED_EMBEDDING_DIM:
+        logger.critical(
+            "Embedding dimension mismatch for '%s': expected %d, got %d",
+            MODEL_NAME,
+            EXPECTED_EMBEDDING_DIM,
+            embedding_dim,
+        )
+        sys.exit(1)
     # OVBaseModel.device always returns torch.device("cpu"); show the real OV device instead
     _reported_device = model.device
     if BACKEND == "openvino":
