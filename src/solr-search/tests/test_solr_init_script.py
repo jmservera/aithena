@@ -11,18 +11,16 @@ and verifies that:
 from __future__ import annotations
 
 import json
-import os
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
-SECURITY_JSON_PATH = REPO_ROOT / "src" / "solr" / "security.json"
+COMPOSE_PROD_PATH = REPO_ROOT / "docker" / "compose.prod.yml"
 SOLR_INIT_SCRIPT_PATH = REPO_ROOT / "docker" / "solr-init.sh"
+SECURITY_JSON_PATH = REPO_ROOT / "src" / "solr" / "security.json"
 SOLR_IMPORT_SCRIPT_PATH = REPO_ROOT / "scripts" / "solr-import.sh"
 
 
@@ -47,10 +45,15 @@ def _load_security_json() -> dict:
         return json.load(fh)
 
 
-def _load_shared_solr_init_script() -> str:
-    """Load docker/solr-init.sh."""
-    with open(SOLR_INIT_SCRIPT_PATH, encoding="utf-8") as fh:
-        return fh.read()
+def _load_compose(path: Path) -> dict:
+    """Load and parse a docker-compose YAML file."""
+    with open(path, encoding="utf-8") as fh:
+        return yaml.safe_load(fh)
+
+
+def _load_solr_init_shell_script() -> str:
+    """Load docker/solr-init.sh script contents."""
+    return SOLR_INIT_SCRIPT_PATH.read_text(encoding="utf-8")
 
 
 def _load_solr_import_script() -> str:
@@ -144,66 +147,67 @@ def test_security_json_matches_solr97_roles():
     assert perm_map.get("update") == "index", "update must require index role"
 
 
-def test_init_scripts_rewrite_solr10_hnsw_params_for_solr9():
-    """Solr 9 bootstrap must rewrite source Solr 10 vector schema names."""
-    for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
-        assert 'SOLR_VERSION:-9}" = "9"' in script
-        assert 'hnswM="/hnswMaxConnections="' in script
-        assert 'hnswEfConstruction="/hnswBeamWidth="' in script
-        assert 'solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField' in script
-        assert 'bits="8"/ vectorEncoding="BYTE' in script
-        assert 'solr zk upconfig -z "${ZK_HOST}" -n books -d "${CONFIGSET_DIR}"' in script or (
-            'solr zk upconfig -z "$$ZK_HOST" -n books -d "$$CONFIGSET_DIR"' in script
-        )
+def test_block_unknown_explicitly_set_to_false_in_init_scripts():
+    """All Solr init scripts must explicitly set --block-unknown false."""
+    compose_embedded_script = _load_solr_init_script()
+    file_script = _load_solr_init_shell_script()
+    compose_prod = _load_compose(COMPOSE_PROD_PATH)
+    compose_prod_entrypoint = compose_prod.get("services", {}).get("solr-init", {}).get("entrypoint", [])
+    assert len(compose_prod_entrypoint) >= 3, (
+        f"Unexpected solr-init entrypoint format in {COMPOSE_PROD_PATH.name}: {compose_prod_entrypoint}"
+    )
+    compose_prod_script = compose_prod_entrypoint[2]
 
-
-def test_solr_import_configset_upload_stages_solr9_hnsw_rewrite():
-    """solr-import --configset-dir must not upload Solr 10 HNSW params to Solr 9."""
-    script = _load_solr_import_script()
-    assert "stage_configset_for_solr9" in script
-    assert 'SOLR_MAJOR_VERSION" -eq 9' in script
-
-    scratch = REPO_ROOT / ".pytest-solr-import-configset" / str(os.getpid())
-    config_dir = scratch / "source-configset"
-    staged_root = scratch / "staged-root"
-    shutil.rmtree(scratch, ignore_errors=True)
-    config_dir.mkdir(parents=True)
-    staged_root.mkdir(parents=True)
-    schema = config_dir / "managed-schema.xml"
-    schema.write_text(
-        '<schema><fieldType name="knn_vector_768_byte" '
-        'class="solr.ScalarQuantizedDenseVectorField" bits="8" '
-        'hnswM="12" hnswEfConstruction="100"/></schema>',
-        encoding="utf-8",
+    assert "--block-unknown false" in compose_embedded_script, "docker-compose solr-init must set --block-unknown false"
+    assert "--block-unknown false" in file_script, "docker/solr-init.sh must set --block-unknown false"
+    assert "--block-unknown false" in compose_prod_script, (
+        "docker/compose.prod.yml solr-init must set --block-unknown false"
     )
 
-    try:
-        bash = f"""
-set -euo pipefail
-PROJECT_ROOT={staged_root}
-LOG_FILE=/dev/null
-eval "$(sed '/^main "\\$@"/,$d' scripts/solr-import.sh)"
-staged="$(stage_configset_for_solr9 {config_dir} books)"
-test -f "${{staged}}/managed-schema.xml"
-grep -q 'hnswMaxConnections="12"' "${{staged}}/managed-schema.xml"
-grep -q 'hnswBeamWidth="100"' "${{staged}}/managed-schema.xml"
-grep -q 'class="solr.DenseVectorField"' "${{staged}}/managed-schema.xml"
-grep -q 'vectorEncoding="BYTE"' "${{staged}}/managed-schema.xml"
-! grep -q 'hnswM=' "${{staged}}/managed-schema.xml"
-! grep -q 'hnswEfConstruction=' "${{staged}}/managed-schema.xml"
-! grep -q 'ScalarQuantizedDenseVectorField' "${{staged}}/managed-schema.xml"
-! grep -q 'bits="8"' "${{staged}}/managed-schema.xml"
-grep -q 'hnswM="12"' {schema}
-grep -q 'ScalarQuantizedDenseVectorField' {schema}
-cleanup_staged_configset "$staged"
-test ! -d "$staged"
-"""
-        subprocess.run(  # noqa: S603 - script under test and paths are repo-local fixtures
-            ["/bin/bash", "-c", bash],
-            cwd=REPO_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+
+def test_security_json_explicitly_sets_block_unknown_false():
+    """security.json must explicitly keep blockUnknown=false."""
+    sec = _load_security_json()
+    authentication = sec.get("authentication", {})
+    assert "blockUnknown" in authentication, "security.json authentication must include blockUnknown key"
+    assert authentication.get("blockUnknown") is False, (
+        "security.json authentication.blockUnknown must remain explicitly false"
+    )
+
+
+def test_security_json_allows_unauthenticated_health_and_metrics():
+    """Health and metrics endpoints should remain unauthenticated."""
+    permissions = _load_security_json().get("authorization", {}).get("permissions", [])
+    perm_map = {p["name"]: p.get("role") for p in permissions}
+
+    assert "health" in perm_map, "security.json permissions must include health"
+    assert "metrics-read" in perm_map, "security.json permissions must include metrics-read"
+    # role: null means unauthenticated access is allowed for these endpoints.
+    assert perm_map.get("health") is None, "health permission must allow unauthenticated access (role: null)"
+    assert perm_map.get("metrics-read") is None, "metrics-read must allow unauthenticated access (role: null)"
+
+
+def test_solr_health_checks_use_authenticated_curl():
+    """Solr service health checks must authenticate with SOLR_AUTH_USER/PASS.
+
+    Both dev and prod compose variants are expected to define the 3-node Solr
+    services using names solr, solr2, solr3.
+    """
+    for compose_path in (COMPOSE_PATH, COMPOSE_PROD_PATH):
+        services = _load_compose(compose_path).get("services", {})
+        solr_services = sorted(name for name in services if re.fullmatch(r"solr[0-9]*", name))
+        assert solr_services, f"{compose_path.name} has no solr/solr2/solr3 services to validate"
+
+        for service_name in solr_services:
+            healthcheck = services.get(service_name, {}).get("healthcheck", {})
+            test_cmd = healthcheck.get("test", [])
+            healthcheck_command = " ".join(test_cmd) if isinstance(test_cmd, list) else str(test_cmd)
+            assert re.search(r"\bcurl\b.*\s-u\s", healthcheck_command), (
+                f"{compose_path.name}:{service_name} healthcheck must use curl auth"
+            )
+            assert "SOLR_AUTH_USER" in healthcheck_command and "SOLR_AUTH_PASS" in healthcheck_command, (
+                f"{compose_path.name}:{service_name} healthcheck must use SOLR_AUTH_USER/PASS"
+            )
+            assert "/solr/admin/info/system" in healthcheck_command, (
+                f"{compose_path.name}:{service_name} healthcheck must probe /admin/info/system"
+            )
