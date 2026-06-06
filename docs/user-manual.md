@@ -32,6 +32,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v2.3.0 — Infrastructure hardening:** This maintenance release has no user-facing feature changes. Operators must apply `vm.overcommit_memory=1` on the Docker host before starting the stack (required for Redis background saves). ZooKeeper security posture is now formally documented, and known RabbitMQ 4.x deprecation warnings are suppressed. See [v2.3.0 Release Notes](release-notes/v2.3.0.md) and the [Admin Manual](admin-manual.md) for operator requirements.
 
+**v2.5.0 — Solr 10 upgrade:** The search engine has been upgraded from Apache Solr 9 to Apache Solr 10. For end users, search behavior and the UI are unchanged. Admins gain a new **Admin → Security** page that links to Solr 10's built-in Security UI for user and role management. A new standalone (ZooKeeper-free) deployment option is available for lightweight installations. Operators upgrading from v2.3.0 must follow the Solr 10 migration runbook before restarting the stack. See [v2.5.0 Release Notes](release-notes/v2.5.0.md) and the [Admin Manual](admin-manual.md#deployment-updates-for-v250) for upgrade instructions.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -519,6 +521,7 @@ The admin portal is a React-based dashboard with sidebar navigation, organized i
 - **Indexing** — Reindex Library (full reindex with confirmation) and Indexing Status (per-document progress with filters)
 - **System** — System Status (container health), Log Viewer (per-service log streaming), and Infrastructure (links to Solr, RabbitMQ, Redis UIs)
 - **Management** — Users and Backups
+- **Security** _(v2.5.0+)_ — Solr 10 Security UI link for user and role management
 
 ### What to expect
 
@@ -755,6 +758,7 @@ The admin portal groups tools into a sidebar menu with five sections:
 - **Indexing** — Reindex Library and Indexing Status (per-document progress)
 - **System** — System Status (container health), Log Viewer (per-service streaming), and Infrastructure (links to Solr, RabbitMQ, Redis management UIs)
 - **Management** — Users and Backups
+- **Security** _(v2.5.0+)_ — Access to Solr 10's built-in Security UI for managing Solr users and roles
 
 The sidebar supports keyboard navigation with Arrow Up/Down, Home/End keys.
 
@@ -778,6 +782,17 @@ Administrators no longer need separate Solr credentials to access the Solr admin
 ### Detailed Indexing Status (v1.15.0+)
 
 The indexing status page now shows per-document indexing progress and status alignment with the system status view.
+
+### Security (v2.5.0+)
+
+The **Admin → Security** page provides access to Solr 10's built-in Security UI for managing Solr users and roles. This is an admin-only page.
+
+1. Sign in to Aithena as an `admin`.
+2. Open **Admin → Security** and click **Open Solr Security UI**.
+3. Authenticate to Solr if prompted (use the Solr admin credentials from your `.env`).
+4. Use the Solr UI to add or remove users, assign roles, and verify permissions.
+
+> **Note:** Aithena application users (in **Admin → User Management**) are separate from Solr users. Aithena users control access to the Aithena app; Solr users control direct Solr API and UI permissions.
 
 ## GPU Acceleration (v1.17.0)
 

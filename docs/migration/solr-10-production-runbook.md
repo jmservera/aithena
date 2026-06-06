@@ -59,7 +59,7 @@ Expected output: All 3 nodes in `live_nodes`, all shards with `active` status.
 ```bash
 # Create a baseline report
 mkdir -p ./backups/solr-migration
-cat > ./backups/solr-migration/solr-9-baseline.txt << 'REPORT'
+cat > ./backups/solr-migration/solr-9-baseline.txt << REPORT
 Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Solr Version: $(docker compose exec -T solr solr --version 2>/dev/null | grep "Apache Solr" || echo "MANUAL")
 Cluster Status: $(docker compose exec -T solr curl -s -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" http://solr:8983/api/cluster/status | jq -r '.cluster | "live=" + ((.live_nodes | length | tostring)) + ", down=" + ((.down_nodes | length | tostring))')
@@ -76,16 +76,17 @@ Store this for post-migration comparison.
 # Create a full snapshot (this may take 10–30 min for large indexes)
 BACKUP_NAME="books-pre-solr10-$(date +%Y%m%d-%H%M%S)"
 
-docker compose exec -T solr curl -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
+BACKUP_RESPONSE=$(docker compose exec -T solr curl -sS -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
   "http://solr:8983/solr/admin/collections?action=BACKUP" \
   -d "name=$BACKUP_NAME" \
   -d "collection=books" \
   -d "repository=local_repo" \
-  -d "wt=json" | jq '.'
+  -d "wt=json")
 
-# Verify backup completed
-docker compose exec -T solr curl -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
-  "http://solr:8983/solr/admin/collections?action=REQUESTSTATUS&requestid=0&wt=json"
+echo "$BACKUP_RESPONSE" | jq '.'
+
+# Verify synchronous BACKUP completed successfully
+echo "$BACKUP_RESPONSE" | jq -e '.responseHeader.status == 0'
 
 echo "Backup '$BACKUP_NAME' created. Verify it exists on disk or backup destination."
 ```
@@ -394,7 +395,7 @@ docker compose exec -T solr solr --version | grep "Apache Solr"
 ```bash
 # Create a post-migration report (compare with baseline from step 1.2)
 mkdir -p ./backups/solr-migration
-cat > ./backups/solr-migration/solr-10-postmig.txt << 'REPORT'
+cat > ./backups/solr-migration/solr-10-postmig.txt << REPORT
 Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Solr Version: $(docker compose exec -T solr solr --version 2>/dev/null | grep "Apache Solr" || echo "MANUAL")
 Cluster Status: $(docker compose exec -T solr curl -s -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" http://solr:8983/api/cluster/status | jq -r '.cluster | "live=" + ((.live_nodes | length | tostring)) + ", down=" + ((.down_nodes | length | tostring))')
