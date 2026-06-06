@@ -143,7 +143,7 @@ assert_json_field "severity=warning" "$tmpdir/out.json" 0 "severity" "warning"
 echo "Test 8: RabbitMQ management metrics deprecation stays info-only"
 cat > "$tmpdir/rabbitmq-deprecation.txt" <<'EOF'
 rabbitmq-1 | 2026-06-03 [warning] Deprecated features: `management_metrics_collection`.
-rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor version of RabbitMQ and the feature will be removed from a future major version; actual versions to be determined.
+rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor RabbitMQ version and the feature will be removed from a future major RabbitMQ version; actual versions to be determined.
 rabbitmq-1 | 2026-06-03 [warning]     "deprecated_features.permit.management_metrics_collection = true"
 EOF
 sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/rabbitmq-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
