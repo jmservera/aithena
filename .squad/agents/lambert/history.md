@@ -38,6 +38,11 @@
 
 ## Learnings
 
+### 2026-06-06T21:10:43.987+00:00 — #1356 Phase 2 Validation
+- Phase 2 coverage now has static preflight checks for single-node SolrCloud topology, production Overseer-disabled wiring, int8 schema memory ratio, and `efSearchScaleFactor` kNN query propagation in `src/solr-search/tests/test_e2e_solr10_phase2.py`.
+- Live Solr 10 runtime checks remain opt-in in `e2e/test_solr10_runtime_compat.py`; use `E2E_SOLR_EXPECTED_MAJOR=10` for fixture-backed checks and add `E2E_SOLR_OVERSEER_DISABLED=1` only when validating production Overseer-disabled mode.
+- Do not claim runtime memory/recall/latency evidence from preflight tests; pair #1356 with #1344/#1354 benchmark reports and live Solr logs before closing quantization quality gates.
+
 ### 2026-06-03 — PR #1623
 - Review cleanup: config reload tests must restore env before final reload; thumbnail tests should distinguish URL/stability metadata from actual image/header retrieval.
 - Single-node upload failure was Python E2E semantic upload (`test_web_api_semantic.py`), not Playwright. The missing proof was endpoint-level disabled-rate-limit behavior for repeated uploads.
