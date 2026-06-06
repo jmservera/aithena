@@ -3731,7 +3731,7 @@ The admin portal (`/admin`) is a React-based operator dashboard with sidebar nav
 
 #### Navigation structure
 
-The sidebar organizes admin pages into five groups:
+The sidebar organizes admin pages into six groups:
 
 | Group | Pages | Routes |
 |---|---|---|
@@ -3740,6 +3740,7 @@ The sidebar organizes admin pages into five groups:
 | **Indexing** | Reindex Library, Indexing Status | `/admin/reindex`, `/admin/indexing-status` |
 | **System** | System Status, Log Viewer, Infrastructure | `/admin/system-status`, `/admin/logs`, `/admin/infrastructure` |
 | **Management** | Users, Backups | `/admin/users`, `/admin/backups` |
+| **Security** _(v2.5.0+)_ | Security (Solr UI link) | `/admin/security` |
 
 The sidebar supports keyboard navigation: use **Arrow Up/Down** to move between items, **Home/End** to jump to the first/last item, and **Enter** to navigate.
 
