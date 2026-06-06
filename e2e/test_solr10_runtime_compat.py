@@ -197,8 +197,12 @@ def test_live_solr10_schema_exposes_scalar_quantized_vector(
     """The live Solr 10 books schema must expose the native int8 vector field type."""
     field_url = f"{solr_url}/schema/fieldtypes/knn_vector_768_byte"
     field_resp = _request_live_solr10("GET", field_url, params={"wt": "json"}, auth=solr_auth)
-    if field_resp.status_code == 404 and os.environ.get("VECTOR_QUANTIZATION", "none") != "int8":
-        pytest.skip("VECTOR_QUANTIZATION=none removes the scalar-quantized byte vector field from the live schema")
+    vector_quantization = os.environ.get("VECTOR_QUANTIZATION", "none")
+    if field_resp.status_code == 404 and vector_quantization != "int8":
+        pytest.skip(
+            f"VECTOR_QUANTIZATION={vector_quantization!r} removes the scalar-quantized "
+            "byte vector field from the live schema"
+        )
     field_resp.raise_for_status()
     body = _get_live_solr10_json(
         field_url,
