@@ -1,7 +1,13 @@
-# Brett decision: Pre-release warning policy for Solr/RabbitMQ runtime noise
+# Decision: Pre-release warning policy for Solr/RabbitMQ runtime noise
 
+**Author:** Brett (Infrastructure Architect)  
 **Date:** 2026-06-06T09:36:46.687+00:00  
-**Status:** Proposed for Scribe merge
+**Status:** Proposed for Scribe merge  
+**Related:** #1695, #1696
+
+## Context
+
+Pre-release validation run 27058984234 reported warnings for Solr/JVM deprecations, RabbitMQ `management_metrics_collection`, Solr `solr.log.dir`, and Solr `ZkCredentialsInjector`.
 
 ## Decision
 
