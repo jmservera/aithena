@@ -22,6 +22,7 @@ sys.path.append(str(SOLR_SEARCH_TESTS_DIR))
 from solr10_gates import assert_supported_solr10_scalar_bits  # noqa: E402
 
 EXPECTED_MAJOR_ENV = "E2E_SOLR_EXPECTED_MAJOR"
+SOLR_READY_TIMEOUT = int(os.environ.get("E2E_SOLR_READY_TIMEOUT", "90"))
 
 pytestmark = [pytest.mark.e2e, pytest.mark.solr10]
 
@@ -92,7 +93,7 @@ def solr_books_collection_ready(solr_url: str, solr_auth: tuple[str, str]) -> di
     base = solr_url.rstrip("/").removesuffix("/books").rstrip("/")
     url = f"{base}/admin/collections"
     params = {"action": "CLUSTERSTATUS", "collection": "books", "wt": "json"}
-    deadline = time.monotonic() + int(os.environ.get("E2E_SOLR_READY_TIMEOUT", "90"))
+    deadline = time.monotonic() + SOLR_READY_TIMEOUT
     last_status = "not checked"
 
     while time.monotonic() < deadline:
@@ -158,6 +159,7 @@ def test_live_solr_major_version_is_10(solr_system_info: dict[str, Any]) -> None
     assert version.startswith("10."), f"Expected Solr 10.x, got {version!r}"
 
 
+@pytest.mark.timeout(SOLR_READY_TIMEOUT + 60)
 def test_live_solr10_schema_exposes_scalar_quantized_vector(
     solr_url: str,
     solr_auth: tuple[str, str],
@@ -194,6 +196,7 @@ def test_live_solr10_security_allows_health_probe(
     _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/health"))
 
 
+@pytest.mark.timeout(SOLR_READY_TIMEOUT + 60)
 def test_live_solr10_security_enforces_rbac(
     solr_url: str,
     solr_auth: tuple[str, str],
@@ -227,6 +230,7 @@ def test_live_solr10_security_enforces_rbac(
     assert readonly_query.status_code == 200
 
     readonly_collection_create = None
+    delete_collection_probe = None
     try:
         readonly_collection_create = _request_live_solr10(
             "GET",
@@ -242,13 +246,18 @@ def test_live_solr10_security_enforces_rbac(
             },
         )
     finally:
-        _request_live_solr10(
+        delete_collection_probe = _request_live_solr10(
             "GET",
             f"{base}/admin/collections",
             auth=solr_auth,
             params={"action": "DELETE", "name": probe_collection, "wt": "json"},
         )
     assert readonly_collection_create is not None
+    assert delete_collection_probe is not None
+    if readonly_collection_create.status_code == 200:
+        assert delete_collection_probe.status_code == 200, delete_collection_probe.text
+    else:
+        assert delete_collection_probe.status_code in (200, 400, 404), delete_collection_probe.text
     assert readonly_collection_create.status_code in (401, 403), readonly_collection_create.text
 
     readonly_security_edit = None
