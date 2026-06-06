@@ -169,3 +169,13 @@ Reviewed dependabot PR #1562 (Solr 9.7→10.0 version bump). Verdict: **CLOSE** 
 - **Learning:** Dependabot PRs touching major versions require full integration scope review, not just version number change. Flag for epic routing early.
 
 This decision establishes the precedent: version bumps are coordinated at epic level when they touch multiple services or schema. Improves reliability and prevents broken intermediate states.
+
+### Solr 10 Combined Query / Hybrid Search Evaluation (#1349, 2026-06-06)
+
+**Finding:** Solr 10.0.0 does not include a native RRF/combined-query handler. SOLR-17319 / Apache Solr PR #3418 is merged on mainline after the 10.0.0 tag and adds `CombinedQuerySearchHandler` + `CombinedQueryComponent` for multiple JSON DSL queries with built-in RRF (`combiner.algorithm=rrf`, `combiner.rrf.k`, default 60). This is the first Solr-native fusion feature that maps directly to Aithena's BM25 + kNN + RRF architecture, but only once Aithena's Solr runtime includes it.
+
+**Aithena caveat:** It is not a drop-in replacement for current hybrid search because Aithena's BM25 leg returns parent book docs while kNN returns chunk docs. Native RRF operates on Solr document IDs, so parent IDs and chunk IDs do not overlap; Combined Query also documents grouping/cursor as unsupported. A prototype must either use book-level vectors, run both legs on chunks, or keep Python-side book normalization/fusion.
+
+**Recommendation:** Keep current app-side chunk-kNN RRF in production. Prototype Solr Combined Query RRF only behind a separate handler/flag and validate against the benchmark corpus for relevance (nDCG/judged top-k), p50/p95 latency, facets/highlights, and page-range quality before changing ranking.
+
+**Full report:** `docs/research/solr10-hybrid-search-evaluation.md`
