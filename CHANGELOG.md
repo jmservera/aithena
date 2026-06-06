@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.5.0] — 2026-06-06
 
-**Major release: Solr 10 production-ready migration, enhanced embeddings infrastructure, and comprehensive security hardening.**
+**Release highlights: Solr 10 production-ready migration, enhanced embeddings infrastructure, and comprehensive security hardening.**
 
 ### Added
 
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Solr 10 RBAC and blockUnknown hardening** — Finalizes Solr 10 security audit with comprehensive RBAC test coverage and validation of blockUnknown parameter override (#1663, #1683)
 - **Solr query response schema locking** — Enforces `wt=json` across all solr-search query paths to lock response schema and prevent unintended data leakage (#1664)
-- **Solr schema compatibility validation** — Confirms PathHierarchyTokenizer audit-out for Solr 10 migration (confirmed as no-op), ensuring schema compatibility (#1665)
+- **Solr schema compatibility validation** — Confirms PathHierarchyTokenizer compatibility for Solr 10 migration (no-op), ensuring schema compatibility (#1665)
 
 ### Breaking Changes
 
