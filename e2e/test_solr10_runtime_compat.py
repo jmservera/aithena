@@ -7,11 +7,18 @@ E2E_SOLR_EXPECTED_MAJOR=10 when running the E2E suite against a Solr 10 fixture.
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import pytest
 import requests
+
+SOLR_SEARCH_TESTS_DIR = Path(__file__).resolve().parents[1] / "src" / "solr-search" / "tests"
+sys.path.append(str(SOLR_SEARCH_TESTS_DIR))
+
+from solr10_gates import assert_supported_solr10_scalar_bits  # noqa: E402
 
 EXPECTED_MAJOR_ENV = "E2E_SOLR_EXPECTED_MAJOR"
 
@@ -106,7 +113,7 @@ def test_live_solr10_schema_exposes_scalar_quantized_vector(
     )
     field_type = body.get("fieldType", {})
     assert field_type.get("class") == "solr.ScalarQuantizedDenseVectorField"
-    assert str(field_type.get("bits")) == "8"
+    assert_supported_solr10_scalar_bits(field_type.get("bits"))
     assert "hnswMaxConnections" not in field_type
     assert "hnswBeamWidth" not in field_type
     assert field_type.get("hnswM") in (12, "12")

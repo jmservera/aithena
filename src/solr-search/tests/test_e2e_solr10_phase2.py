@@ -16,25 +16,33 @@ from typing import Any
 
 import pytest
 import yaml
+from solr10_gates import assert_supported_solr10_scalar_bits
 
 pytestmark = [pytest.mark.e2e, pytest.mark.phase2, pytest.mark.solr10]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MANAGED_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
 SINGLE_NODE_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.single-node.yml"
-SUPPORTED_SOLR10_SCALAR_BITS = {"7", "8"}
 
 
-def _construct_override(loader: yaml.SafeLoader, node: yaml.Node) -> Any:
+class ComposeSafeLoader(yaml.SafeLoader):
+    """YAML loader scoped to compose files that use Docker's !override tag."""
+
+
+def _construct_override(loader: ComposeSafeLoader, node: yaml.Node) -> Any:
     return loader.construct_mapping(node)
 
 
-yaml.SafeLoader.add_constructor("!override", _construct_override)
+ComposeSafeLoader.add_constructor("!override", _construct_override)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
+        loader = ComposeSafeLoader(fh)
+        try:
+            data = loader.get_single_data()
+        finally:
+            loader.dispose()
     assert isinstance(data, dict), f"{path} must parse as a YAML mapping"
     return data
 
@@ -85,7 +93,7 @@ class TestPhase2ActivePreflight:
 
         assert byte_vector is not None, "managed-schema.xml must define knn_vector_768_byte"
         assert byte_vector["class"] == "solr.ScalarQuantizedDenseVectorField"
-        assert byte_vector["bits"] in SUPPORTED_SOLR10_SCALAR_BITS
+        assert_supported_solr10_scalar_bits(byte_vector["bits"])
         assert byte_vector["hnswM"] == "12"
 
         config = _reload_config(monkeypatch, VECTOR_QUANTIZATION="int8")

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import solr_compat
+from solr10_gates import assert_supported_solr10_scalar_bits
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MANAGED_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
@@ -201,7 +202,7 @@ class TestScalarQuantizedVectorFieldType:
 
         assert result["name"] == "knn_vector_768_byte"
         assert result["class"] == "solr.ScalarQuantizedDenseVectorField"
-        assert result["bits"] == 8
+        assert_supported_solr10_scalar_bits(result["bits"])
         assert result["vectorDimension"] == 768
         assert result["similarityFunction"] == "cosine"
         assert result["hnswM"] == 12
@@ -248,7 +249,7 @@ class TestManagedSchemaHnswCompatibility:
         assert byte_vectors, "managed-schema.xml must define knn_vector_768_byte"
         byte_vector = byte_vectors[0]
         assert byte_vector.attrib["class"] == "solr.ScalarQuantizedDenseVectorField"
-        assert byte_vector.attrib["bits"] == "8"
+        assert_supported_solr10_scalar_bits(byte_vector.attrib["bits"])
         assert byte_vector.attrib["vectorDimension"] == "768"
         assert byte_vector.attrib["similarityFunction"] == "cosine"
         assert byte_vector.attrib["hnswM"] == "12"
