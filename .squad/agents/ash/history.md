@@ -170,6 +170,12 @@ Reviewed dependabot PR #1562 (Solr 9.7→10.0 version bump). Verdict: **CLOSE** 
 
 This decision establishes the precedent: version bumps are coordinated at epic level when they touch multiple services or schema. Improves reliability and prevents broken intermediate states.
 
+### DocumentCategorizer Prototype Feasibility (#1348, 2026-06-06)
+
+Solr 10 `DocumentCategorizerUpdateProcessorFactory` is feasible for index-time ONNX classification, but it lives in `analysis-extras`, not `language-models`, and requires both `model.onnx` and matching `vocab.txt` in SolrCloud FileStore. Do not enable it in active `solrconfig.xml` until a real model fixture exists.
+
+Safe pattern: keep manual `category_s` untouched; write classifier output to separate fields such as `topic_category_s` and `document_sentiment_s`. A disabled scaffold is acceptable, but no accuracy/performance claims should be made without a labeled corpus and measured indexing/JVM validation.
+
 ### Solr 10 Combined Query / Hybrid Search Evaluation (#1349, 2026-06-06)
 
 **Finding:** Solr 10.0.0 does not include a native RRF/combined-query handler. SOLR-17319 / Apache Solr PR #3418 is merged on mainline after the 10.0.0 tag and adds `CombinedQuerySearchHandler` + `CombinedQueryComponent` for multiple JSON DSL queries with built-in RRF (`combiner.algorithm=rrf`, `combiner.rrf.k`, default 60). This is the first Solr-native fusion feature that maps directly to Aithena's BM25 + kNN + RRF architecture, but only once Aithena's Solr runtime includes it.
