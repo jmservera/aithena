@@ -143,7 +143,7 @@ assert_json_field "severity=warning" "$tmpdir/out.json" 0 "severity" "warning"
 echo "Test 8: RabbitMQ management metrics deprecation stays info-only"
 cat > "$tmpdir/rabbitmq-deprecation.txt" <<'EOF'
 rabbitmq-1 | 2026-06-03 [warning] Deprecated features: `management_metrics_collection`.
-rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor version of RabbitMQ and the feature will be removed from a future major version; actual versions to be determined.
+rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor RabbitMQ version and the feature will be removed from a future major RabbitMQ version; actual versions to be determined.
 rabbitmq-1 | 2026-06-03 [warning]     "deprecated_features.permit.management_metrics_collection = true"
 EOF
 sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/rabbitmq-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
@@ -152,6 +152,18 @@ assert_json_count "3 info findings" "$tmpdir/out.json" 3
 assert_json_field "severity[0]=info" "$tmpdir/out.json" 0 "severity" "info"
 assert_json_field "severity[1]=info" "$tmpdir/out.json" 1 "severity" "info"
 assert_json_field "severity[2]=info" "$tmpdir/out.json" 2 "severity" "info"
+
+# -------------------------------------------------------
+echo "Test 8b: Other RabbitMQ deprecation follow-up lines remain warnings"
+cat > "$tmpdir/rabbitmq-other-deprecation.txt" <<'EOF'
+rabbitmq-1 | 2026-06-03 [warning] Deprecated features: `some_other_feature`.
+rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor RabbitMQ version and the feature will be removed from a future major RabbitMQ version; actual versions to be determined.
+EOF
+sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/rabbitmq-other-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 2 (unrelated RabbitMQ warning)" 2 "$rc"
+assert_json_count "2 warning findings" "$tmpdir/out.json" 2
+assert_json_field "severity[0]=warning" "$tmpdir/out.json" 0 "severity" "warning"
+assert_json_field "severity[1]=warning" "$tmpdir/out.json" 1 "severity" "warning"
 
 # -------------------------------------------------------
 echo "Test 9: --max-errors threshold allows some errors"
