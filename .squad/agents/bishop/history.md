@@ -11,3 +11,5 @@
 
 ## Learnings
 - Semantic E2E coverage should index parent PDFs via Solr `/update/extract`, then enqueue the same file paths to `shortembeddings` so document-indexer produces chunk docs with vectors before asserting `/v1/search` semantic and hybrid ranking.
+- 2026-06-06: Solr 10 scalar quantization must use `bits="7"` (or `4`) rather than `8`; Aithena's int8 path keeps `vectorDimension="768"` and `similarityFunction="cosine"`, with Solr 9 rollback rewriting to `DenseVectorField vectorEncoding="BYTE"`.
+- 2026-06-06: Quantization evaluation lives in `scripts/benchmark/`: run paired float32/int8 reports with `run_benchmark.py`, compare recall@10 with `compare_quantization.py`, and attach measured `docker stats` memory samples before claiming runtime savings.

@@ -96,6 +96,18 @@
 11. **CORS allow_credentials=true** needs strict origin validation — misconfigured browser + malicious origin = CSRF risk
 12. **Solr default ZK credentials/ACL providers** are medium-risk defense-in-depth findings, not automatic release blockers, only when ZooKeeper remains private to Compose and Solr HTTP auth is enabled.
 13. **For #1631 acceptance**, default Solr/ZK provider warnings are acceptable only if production Compose keeps ZooKeeper internal, Solr BasicAuth/RBAC remains required, and dev port overrides are treated as local-debug only.
+14. **Security CI green is not sufficient** — inspect logs for parser warnings, `--soft-fail`, and `continue-on-error`; on 2026-06-06 PR #1712 showed Bandit config parsing warnings, Checkov had a soft-failed CKV_DOCKER_7, and zizmor emitted a low-severity `artipacked` note while the overall checks were green.
+
+### 2026-06-06T22:00:15.185+00:00 — PR #1712/#1711/#1710 Security Review
+
+**Verdict:** No PR-blocking security issue found in #1712, #1711, or #1710. #1712 scanner/status checks were green after conflict resolution, including Bandit, Checkov, zizmor, CodeQL, Compose security regression, Solr image validation, integration tests, and RC container builds.
+
+**Non-blocking findings:**
+- #1712 Solr int8 quantization changes are schema/config/test/docs focused; no new secret exposure, auth bypass, externally published port, or shell-injection path found in the reviewed diff. Solr BasicAuth/RBAC bootstrap remains intact.
+- #1711 benchmark harness uses HTTP requests with timeouts and optional bearer token support without printing tokens; retry handling for transient `/update/extract` errors does not relax Solr auth.
+- #1710 Phase 2 tests add opt-in live Solr checks and static preflight validation; no production runtime behavior is weakened.
+- Security CI needed hardening: the Bandit job logged `.bandit` parser warnings in GitHub Actions, so `.bandit` is now project-level INI and the workflow relies on Bandit's auto-discovery; malformed `# nosec` rationale comments were normalized.
+- Current Checkov/zizmor signals are not pure blockers: Checkov runs with `--soft-fail` and reported CKV_DOCKER_7 on `src/solr/Dockerfile` (`FROM ${SOLR_BASE_IMAGE}`); zizmor is `continue-on-error` and reported a low-severity `zizmor/artipacked` note on `.github/workflows/codeql-analysis.yml`. These are actionable hardening backlog items, not #1712 merge blockers.
 
 ## Reskill Notes
 

@@ -87,3 +87,9 @@
 - **Prevention:** Future embeddings-server Dockerfiles include post-sync version verification; fails build immediately if versions drift
 - **For next release:** Smoke tests remain essential for runtime validation; build-time verification is now the defensive layer for transitive-dependency issues
 - **Pattern:** Any service using `uv sync --inexact` should include Python version-check step to fail early
+
+### 2026-06-06T22:00:15.185+00:00 — Quantization/Benchmark Test Quality Review (#1710, #1711, #1712)
+- #1712 had no test-quality blockers: unit coverage exercises recall pass/fail, missing candidate results, baseline errors/empty baselines, output serialization/formatting, Solr 10 bits=7 config, and Solr 9 BYTE fallback expectations.
+- Keep live float32/int8 recall and measured Solr memory evidence as follow-up for #1344/#1354 before performance claims or broad enablement; it should not block optional int8 support when docs explicitly disclaim measured evidence.
+- #1710 Phase 2 skips are acceptable when they include concrete GATED reasons and opt-in Solr 10 live checks fail loudly when the fixture is unreachable or wrong-shaped.
+- #1711 benchmark evidence gates are useful QA patterns: paired comparisons must validate same host/corpus metadata and report failed query IDs rather than allowing unsupported performance claims.

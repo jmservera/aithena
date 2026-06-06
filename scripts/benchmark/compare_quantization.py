@@ -19,6 +19,10 @@ from typing import Any
 
 DEFAULT_MIN_RECALL = 0.95
 DEFAULT_TOP_K = 10
+DEFAULT_VECTOR_DIMENSION = 768
+DEFAULT_CANDIDATE_BITS = 7
+DEFAULT_MEMORY_VECTOR_COUNT = 1_000_000
+FLOAT32_BYTES_PER_DIMENSION = 4
 
 
 @dataclass(frozen=True)
@@ -209,6 +213,50 @@ def summarize(comparisons: list[Comparison], *, min_recall: float) -> dict[str, 
     }
 
 
+def estimate_vector_payload_memory(
+    *,
+    vector_count: int,
+    vector_dimension: int = DEFAULT_VECTOR_DIMENSION,
+    candidate_bits: int = DEFAULT_CANDIDATE_BITS,
+) -> dict[str, Any]:
+    """Estimate raw vector payload memory for float32 vs scalar quantization.
+
+    This does not include Solr/Lucene/HNSW graph overhead; pair it with
+    ``docker stats`` from real runs before claiming measured savings.
+    """
+    if vector_count < 0:
+        raise ValueError("vector_count must be non-negative")
+    if vector_dimension <= 0:
+        raise ValueError("vector_dimension must be positive")
+    if candidate_bits <= 0:
+        raise ValueError("candidate_bits must be positive")
+
+    baseline_bytes = vector_count * vector_dimension * FLOAT32_BYTES_PER_DIMENSION
+    candidate_bytes = (vector_count * vector_dimension * candidate_bits + 7) // 8
+    int8_compat_bytes = vector_count * vector_dimension
+    saved_bytes = baseline_bytes - candidate_bytes
+    baseline_mib = round(baseline_bytes / 1024 / 1024, 4)
+    candidate_mib = round(candidate_bytes / 1024 / 1024, 4)
+    int8_compat_mib = round(int8_compat_bytes / 1024 / 1024, 4)
+    return {
+        "vector_count": vector_count,
+        "vector_dimension": vector_dimension,
+        "baseline_float32_payload_bytes": baseline_bytes,
+        "candidate_scalar_payload_bytes": candidate_bytes,
+        "solr9_byte_compat_payload_bytes": int8_compat_bytes,
+        "candidate_bits": candidate_bits,
+        "baseline_float32_payload_mb": baseline_mib,
+        "candidate_scalar_payload_mb": candidate_mib,
+        "solr9_byte_compat_payload_mb": int8_compat_mib,
+        "baseline_float32_payload_mib": baseline_mib,
+        "candidate_scalar_payload_mib": candidate_mib,
+        "solr9_byte_compat_payload_mib": int8_compat_mib,
+        "estimated_savings_pct": round((saved_bytes / baseline_bytes) * 100.0, 4) if baseline_bytes else 0.0,
+        "estimated_reduction_ratio": round(baseline_bytes / candidate_bytes, 4) if candidate_bytes else None,
+        "note": "Raw vector payload estimate only; measure Solr RSS/heap separately for release evidence.",
+    }
+
+
 def comparison_to_dict(comparison: Comparison) -> dict[str, Any]:
     """Serialize a comparison to a JSON-compatible dict."""
     return {
@@ -233,6 +281,9 @@ def build_output(
     *,
     top_k: int,
     min_recall: float,
+    vector_dimension: int = DEFAULT_VECTOR_DIMENSION,
+    candidate_bits: int = DEFAULT_CANDIDATE_BITS,
+    vector_count: int = DEFAULT_MEMORY_VECTOR_COUNT,
 ) -> dict[str, Any]:
     """Build the full JSON comparison report."""
     return {
@@ -240,6 +291,11 @@ def build_output(
         "candidate_report": str(candidate_path),
         "top_k": top_k,
         "summary": summarize(comparisons, min_recall=min_recall),
+        "memory_estimate": estimate_vector_payload_memory(
+            vector_count=vector_count,
+            vector_dimension=vector_dimension,
+            candidate_bits=candidate_bits,
+        ),
         "comparisons": [comparison_to_dict(c) for c in comparisons],
     }
 
@@ -251,6 +307,17 @@ def format_summary(output: dict[str, Any]) -> str:
     lines.append(f"top_k: {output['top_k']}")
     lines.append(f"min_recall_threshold: {summary['min_recall_threshold']}")
     lines.append(f"total_comparisons: {summary['total_comparisons']}")
+    memory = output.get("memory_estimate")
+    if memory:
+        reduction_ratio = memory["estimated_reduction_ratio"]
+        reduction_text = f"{reduction_ratio}x" if reduction_ratio is not None else "N/A"
+        lines.append(
+            "estimated_payload: "
+            f"vectors={memory['vector_count']} "
+            f"float32={memory['baseline_float32_payload_mib']} MiB "
+            f"scalar_bits={memory['candidate_bits']}:{memory['candidate_scalar_payload_mib']} MiB "
+            f"reduction={reduction_text}",
+        )
     lines.append("")
     for mode, stats in sorted(summary["by_mode"].items()):
         lines.append(
@@ -275,6 +342,24 @@ def main() -> None:
     parser.add_argument("--candidate", required=True, type=Path, help="Quantized benchmark JSON report")
     parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K, help="Top-k depth to compare")
     parser.add_argument(
+        "--vector-dimension",
+        type=int,
+        default=DEFAULT_VECTOR_DIMENSION,
+        help=f"Embedding vector dimension for memory estimates (default: {DEFAULT_VECTOR_DIMENSION})",
+    )
+    parser.add_argument(
+        "--candidate-bits",
+        type=int,
+        default=DEFAULT_CANDIDATE_BITS,
+        help=f"Scalar quantization bits for memory estimates (default: {DEFAULT_CANDIDATE_BITS})",
+    )
+    parser.add_argument(
+        "--vector-count",
+        type=int,
+        default=DEFAULT_MEMORY_VECTOR_COUNT,
+        help=f"Vector count for memory estimates (default: {DEFAULT_MEMORY_VECTOR_COUNT})",
+    )
+    parser.add_argument(
         "--min-recall",
         type=float,
         default=DEFAULT_MIN_RECALL,
@@ -292,6 +377,9 @@ def main() -> None:
         comparisons,
         top_k=args.top_k,
         min_recall=args.min_recall,
+        vector_dimension=args.vector_dimension,
+        candidate_bits=args.candidate_bits,
+        vector_count=args.vector_count,
     )
     print(format_summary(output))
 
