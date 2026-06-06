@@ -70,7 +70,7 @@ sudo sysctl --system
 
 ### ZooKeeper credentials (production hardening)
 
-Solr logs `Using default ZkCredentialsProvider/ZkACLProvider` at startup. In the default Docker Compose deployment this is an accepted posture: ZooKeeper is only exposed on the private Compose network, Solr BasicAuth/RBAC protects HTTP APIs, and no ZooKeeper ports should be published to the host.
+Solr logs `Using default ZkCredentialsInjector/ZkCredentialsProvider/ZkACLProvider` at startup. In the default Docker Compose deployment this is an accepted posture: ZooKeeper is only exposed on the private Compose network, Solr BasicAuth/RBAC protects HTTP APIs, and no ZooKeeper ports should be published to the host.
 
 Security implication: any already-compromised container on the Compose network could read or modify SolrCloud znodes, including configsets and `security.json`. Treat ZooKeeper ACLs as required hardening for regulated or multi-tenant production deployments, and do not publish `2181`, `2888`, or `3888` outside the Compose network. For deployments that require ZooKeeper ACL-based access control, see the [Apache Solr ZooKeeper Access Control](https://solr.apache.org/guide/solr/latest/deployment-guide/zookeeper-access-control.html) documentation.
 
