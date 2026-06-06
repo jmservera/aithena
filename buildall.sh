@@ -34,12 +34,18 @@ echo "Building version ${VERSION}"
 echo "Git commit: ${GIT_COMMIT}"
 echo "Build date: ${BUILD_DATE}"
 
-python_service_dirs=(
-  "src/document-indexer"
-  "src/document-lister"
-  "src/embeddings-server"
-  "src/solr-search"
-)
+discover_python_service_dirs() {
+  find src -mindepth 2 -maxdepth 2 -type f -name pyproject.toml -print \
+    | while IFS= read -r pyproject_file; do
+      service_dir="$(dirname "$pyproject_file")"
+      if [[ -f "${service_dir}/Dockerfile" ]]; then
+        printf '%s\n' "$service_dir"
+      fi
+    done \
+    | LC_ALL=C sort
+}
+
+mapfile -t python_service_dirs < <(discover_python_service_dirs)
 
 for service_dir in "${python_service_dirs[@]}"; do
   if [[ ! -f "${service_dir}/pyproject.toml" ]]; then
