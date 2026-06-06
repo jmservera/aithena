@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildSolrSecurityUrl } from '../hooks/useAdminInfrastructure';
+import { buildSolrSecurityUrl, safeAdminUrl } from '../hooks/useAdminInfrastructure';
 import SecurityPage from '../pages/SecurityPage';
 import { IntlWrapper } from './test-intl-wrapper';
 
@@ -46,6 +46,13 @@ describe('SecurityPage', () => {
     expect(buildSolrSecurityUrl('/admin/solr')).toBe('/admin/solr/ui/#/~security');
   });
 
+  it('rejects untrusted Solr admin URLs when building security links', () => {
+    expect(buildSolrSecurityUrl('javascript:alert(1)')).toBe('/admin/solr/ui/#/~security');
+    expect(buildSolrSecurityUrl('https://evil.example/solr/')).toBe('/admin/solr/ui/#/~security');
+    expect(buildSolrSecurityUrl('/\\evil.example/')).toBe('/admin/solr/ui/#/~security');
+    expect(safeAdminUrl('https://evil.example/solr/', '/admin/solr/')).toBe('/admin/solr/');
+  });
+
   it('renders the Solr security CTA and app user link', async () => {
     vi.stubGlobal('fetch', mockFetch(infrastructureResponse));
     renderPage();
@@ -68,6 +75,21 @@ describe('SecurityPage', () => {
       'href',
       '/admin/solr/ui/#/~security'
     );
+  });
+
+  it('falls back to the proxied Security UI link for malicious API URLs', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch({
+        ...infrastructureResponse,
+        solr_admin_url: 'javascript:alert(1)',
+        services: [{ ...infrastructureResponse.services[0], admin_url: 'https://evil.example/' }],
+      })
+    );
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: /open solr security ui/i });
+    expect(link).toHaveAttribute('href', '/admin/solr/ui/#/~security');
   });
 
   it('warns when Solr is reported down', async () => {
