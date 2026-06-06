@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'src/solr/**'
+      - 'docker/compose.solr10.yml'
       - '.github/workflows/build-containers.yml'
       - '.github/workflows/solr-image-validation.yml'
       - 'tests/test-solr-image-refs.sh'
@@ -31,6 +32,22 @@ jobs:
 
       - name: Validate Solr 10 image references
         run: bash tests/test-solr-image-refs.sh
+
+      - name: Validate opt-in Solr 10 Compose overlay
+        env:
+          ADMIN_API_KEY: ci-admin-api-key
+          AUTH_DB_DIR: .auth-data
+          AUTH_JWT_SECRET: ci-jwt-secret-change-me
+          SOLR_ADMIN_USER: solr_admin
+          SOLR_ADMIN_PASS: SolrAdmin_dev2024!
+          SOLR_READONLY_USER: solr_read
+          SOLR_READONLY_PASS: SolrRead_dev2024!
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker/compose.single-node.yml \
+            -f docker/compose.solr10.yml \
+            config >/dev/null
 
       - name: Build Solr 10 image
         run: |

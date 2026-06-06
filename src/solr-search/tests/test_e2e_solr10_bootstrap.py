@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 COMPOSE_PROD_PATH = REPO_ROOT / "docker" / "compose.prod.yml"
 E2E_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.e2e.yml"
+SOLR10_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.solr10.yml"
 SOLR_INIT_SCRIPT_PATH = REPO_ROOT / "docker" / "solr-init.sh"
 SECURITY_JSON_PATH = REPO_ROOT / "src" / "solr" / "security.json"
 MANAGED_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
@@ -77,6 +78,29 @@ class TestSolr10SafePreflight:
                 assert env.get("SOLR_VERSION") == "${SOLR_VERSION:-9}", (
                     f"{compose_path.name}:{service_name} must default SOLR_VERSION to 9 "
                     "while allowing Solr 10 E2E runs via environment override"
+                )
+
+    @pytest.mark.e2e
+    @pytest.mark.solr10
+    def test_solr10_compose_overlay_is_explicit_opt_in(self) -> None:
+        """The runtime slice must keep defaults on Solr 9 and isolate Solr 10 behind an overlay."""
+        overlay_services = _load_yaml(SOLR10_COMPOSE_PATH).get("services", {})
+        assert set(overlay_services) == {*CLUSTER_SOLR_SERVICES, "solr-init"}
+
+        for service_name, service in overlay_services.items():
+            env = _service_env(service)
+            build_args = service.get("build", {}).get("args", {})
+            assert env.get("SOLR_VERSION") == "10", f"{service_name} must opt into Solr 10 CLI behavior"
+            assert build_args.get("SOLR_BASE_IMAGE") == "solr:10", (
+                f"{service_name} must build from the Solr 10 base image only via the opt-in overlay"
+            )
+
+        for compose_path in (COMPOSE_PATH, COMPOSE_PROD_PATH):
+            services = _load_yaml(compose_path).get("services", {})
+            for service_name in (*CLUSTER_SOLR_SERVICES, "solr-init"):
+                build_args = services[service_name].get("build", {}).get("args", {})
+                assert build_args.get("SOLR_BASE_IMAGE") != "solr:10", (
+                    f"{compose_path.name}:{service_name} must not force Solr 10 in the default runtime"
                 )
 
     @pytest.mark.e2e
