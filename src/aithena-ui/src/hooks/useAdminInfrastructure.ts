@@ -14,10 +14,10 @@ export interface ServiceEndpoint {
 
 export interface InfrastructureInfo {
   services: ServiceEndpoint[];
-  connections?: Record<string, string>;
   solr_admin_url?: string;
   rabbitmq_admin_url?: string;
   redis_admin_url?: string;
+  connections?: Record<string, string>;
 }
 
 /* ── Hook state ───────────────────────────────────────────────────────── */

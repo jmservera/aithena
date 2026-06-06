@@ -1,10 +1,6 @@
 import { useIntl } from 'react-intl';
 import { Database, ExternalLink, MessageSquare, Server, RefreshCw } from 'lucide-react';
-import {
-  getServiceAdminUrl,
-  useAdminInfrastructure,
-  type ServiceEndpoint,
-} from '../hooks/useAdminInfrastructure';
+import { useAdminInfrastructure, type ServiceEndpoint } from '../hooks/useAdminInfrastructure';
 
 /* ── Sub-components ───────────────────────────────────────────────────── */
 
@@ -59,11 +55,26 @@ function AdminInfrastructurePage() {
   const fmt = (id: string, values?: Record<string, string | number>) =>
     intl.formatMessage({ id }, values);
 
-  const solrUrl = data?.solr_admin_url ?? getServiceAdminUrl(data, 'solr', '/admin/solr/');
-  const rabbitmqUrl =
-    data?.rabbitmq_admin_url ?? getServiceAdminUrl(data, 'rabbitmq', '/admin/rabbitmq/');
-  const redisUrl =
-    data?.redis_admin_url ?? getServiceAdminUrl(data, 'redis-commander', '/admin/redis/');
+  const resolveServiceAdminUrl = (
+    serviceName: string,
+    legacyUrl: string | undefined,
+    fallbackUrl: string
+  ) =>
+    data?.services.find((service) => service.name === serviceName)?.admin_url ??
+    legacyUrl ??
+    fallbackUrl;
+
+  const solrUrl = resolveServiceAdminUrl('solr', data?.solr_admin_url, '/admin/solr/');
+  const rabbitmqUrl = resolveServiceAdminUrl(
+    'rabbitmq',
+    data?.rabbitmq_admin_url,
+    '/admin/rabbitmq/'
+  );
+  const redisUrl = resolveServiceAdminUrl(
+    'redis-commander',
+    data?.redis_admin_url,
+    '/admin/redis/'
+  );
 
   return (
     <main className="admin-page">

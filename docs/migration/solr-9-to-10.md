@@ -331,6 +331,8 @@ Confirm `src/solr/security.json` is compatible with Solr 10:
 - `"health"` and `"metrics-read"` permissions with `"role": null` — verify unauthenticated access still works
 - RBAC rules — verify `solr.RuleBasedAuthorizationPlugin` API is unchanged
 
+Use the Solr 10 Security UI for post-bootstrap user, password, and role changes. Avoid manual `security.json` edits except for bootstrap or disaster-recovery flows where the Solr UI is unavailable.
+
 #### Step 2.5: Optional Schema Enhancements (Post-Upgrade)
 
 These are not required for the core upgrade but can be done after verification:
@@ -459,6 +461,10 @@ python run_benchmark.py --output post-migration-solr10.json
 | Highlighting | Search with highlighting on `content`, `_text_` | Highlighted snippets |
 | Backup | `curl .../admin/collections?action=BACKUP&...` | Backup created |
 | UI search | Open aithena-ui, perform a search | Results displayed |
+| Security UI access | Open `http://localhost/admin/solr/ui/` as admin | Security screen loads and allows edits |
+| Security UI readonly guard | Login as readonly Aithena account and open Security UI | Access is denied by the admin-gated proxy (for example, 403) |
+| Security UI role update | Add/remove a role for a non-admin user via Security UI | Updated permissions enforced on next request |
+| Auth CLI bootstrap | Run `solr auth enable` bootstrap during init | Initial admin auth works; post-bootstrap managed in Security UI |
 
 ---
 
@@ -508,7 +514,7 @@ Trigger rollback if any of these occur after migration:
 
 - **Solr 10 → Solr 9 index**: Lucene 10 indexes are **not** backward-compatible with Solr 9. You must restore from backup or reindex.
 - **ZooKeeper state**: ZK data should be compatible, but restore from backup to be safe.
-- **Security config**: The `security.json` format is compatible between versions.
+- **Security config**: The `security.json` format is compatible between versions. After bootstrap, manage users and roles through the Solr 10 Security UI rather than hand-editing ZooKeeper state.
 
 ---
 
@@ -584,6 +590,7 @@ Compare these metrics before and after migration:
 | Collection export tooling | [#1362](https://github.com/jmservera/aithena/issues/1362) | 🔄 In progress | Phase 4 (optional, for data export) |
 | Collection import tooling | [#1363](https://github.com/jmservera/aithena/issues/1363) | 🔄 In progress | Phase 4 (optional, for data import) |
 | Solr 9/10 compatibility layer | [#1365](https://github.com/jmservera/aithena/issues/1365) | 📋 Planned | Phase 2 (CLI abstraction) |
+| Frontend security UI prerequisite | [#1675](https://github.com/jmservera/aithena/issues/1675) | ⛔ Required before release | v2.5 Solr Security UI rollout |
 
 ### 6.2 Execution Phases
 
