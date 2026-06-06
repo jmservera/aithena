@@ -13,6 +13,7 @@ from compare_solr_versions import (  # noqa: E402
     build_comparison,
     compare_modes,
     format_markdown,
+    throughput_value,
     validate_evidence,
 )
 
@@ -139,6 +140,14 @@ class TestClaims:
 
         assert claims["memory_4x"]["status"] == "insufficient_evidence"
 
+    def test_throughput_value_preserves_ints(self) -> None:
+        report = _report(solr_version="10")
+
+        assert throughput_value(report, "concurrency") == 8
+        assert isinstance(throughput_value(report, "concurrency"), int)
+        assert throughput_value(report, "qps") == 20.0
+        assert isinstance(throughput_value(report, "qps"), float)
+
 
 class TestOutput:
     def test_build_comparison_from_files_and_format_markdown(self, tmp_path: Path) -> None:
@@ -153,6 +162,7 @@ class TestOutput:
         assert comparison["evidence"]["valid"] is True
         assert "Query Latency by Mode" in markdown
         assert "Claimed Improvements" in markdown
+        assert "Factor (>1 means Solr 10 improved)" in markdown
 
     def test_invalid_evidence_recommendation_blocks_claims(self) -> None:
         comparison = {

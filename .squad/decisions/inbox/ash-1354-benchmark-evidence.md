@@ -1,6 +1,9 @@
 # Decision: Gate Solr 9.7 vs Solr 10 performance claims on paired evidence
 
+Author: Ash  
 Date: 2026-06-06
+Status: Proposed  
+Related: #1354, #1711
 
 ## Context
 

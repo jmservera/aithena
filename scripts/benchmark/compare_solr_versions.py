@@ -182,12 +182,16 @@ def timing_seconds(report: dict[str, Any], key: str) -> float | None:
     return float(value) if isinstance(value, (int, float)) else None
 
 
-def throughput_value(report: dict[str, Any], key: str) -> float | None:
+def throughput_value(report: dict[str, Any], key: str) -> int | float | None:
     throughput = _metadata(report).get("throughput", {})
     if not isinstance(throughput, dict):
         return None
     value = throughput.get(key)
-    return float(value) if isinstance(value, (int, float)) else None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return value
+    return None
 
 
 def _factor(baseline: float | int | None, candidate: float | int | None) -> float | None:
@@ -353,7 +357,7 @@ def format_markdown(comparison: dict[str, Any]) -> str:
             "",
             "## Resource and Build Metrics",
             "",
-            "| Metric | Solr 9.7 | Solr 10 | Factor (Solr 9.7 / Solr 10) |",
+            "| Metric | Solr 9.7 | Solr 10 | Factor (>1 means Solr 10 improved) |",
             "|---|---:|---:|---:|",
             "| Memory bytes | "
             f"{_fmt(resources['solr9_memory_bytes'])} | "
