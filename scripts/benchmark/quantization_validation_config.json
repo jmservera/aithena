@@ -4,7 +4,7 @@
     "created_by": "Bishop (Vector Search & Data Science Specialist)",
     "created_at": "2026-06-05",
     "purpose": "Configuration for scalar quantization (int8) benchmark validation #1344",
-    "requires_pr": 1670
+    "schema_prerequisite": "Solr 10 ScalarQuantizedDenseVectorField uses supported bits (4 or 7) and Solr 9 staging rewrites bits 4/7 to vectorEncoding=BYTE"
   },
   "corpus": {
     "description": "Representative test corpus for benchmark",

@@ -1,6 +1,6 @@
 # Scalar Quantization Validation Plan for #1344
 
-**Document:** Comprehensive validation checklist for int8 scalar quantization (post-#1670)
+**Document:** Comprehensive validation checklist for int8 scalar quantization with Solr 10-supported scalar bits
 **Version:** 1.0
 **Created:** 2026-06-05
 **By:** Bishop (Vector Search & Data Science Specialist)
@@ -18,7 +18,7 @@ This document extends the benchmark plan in the squad decisions inbox with pract
 - [ ] **Solr containers ready:** No prior `docker compose up` state; clean start for repeatable benchmarks
 - [ ] **Disk space:** ~20 GB free (for float32 collection, int8 collection, results, logs)
 - [ ] **Network:** localhost:8983 (Solr) and localhost:8080 (solr-search API) not in use
-- [ ] **Git state:** On a branch post-#1670 (schema has `bits="7"` or `bits="4"` for Solr 10)
+- [ ] **Git state:** Schema contains `ScalarQuantizedDenseVectorField` with `bits="7"` or `bits="4"` for Solr 10
 
 ### Corpus Availability
 
@@ -36,9 +36,9 @@ This document extends the benchmark plan in the squad decisions inbox with pract
 ### Solr Schema
 
 - [ ] **Schema updated for Solr 10 int8:**
-  - Check: `grep 'ScalarQuantizedDenseVectorField' src/solr/books/managed-schema.xml | grep 'bits="7"'`
+  - Check: `grep 'ScalarQuantizedDenseVectorField' src/solr/books/managed-schema.xml | grep -E 'bits="[47]"'`
   - For Solr 9 compatibility: `grep -R 'bits="\[47\]".*vectorEncoding="BYTE"' docker/solr-init.sh scripts/solr-import.sh`
-  - If neither found: **BLOCKER** — #1670 not applied; schema validation failed
+  - If neither found: **BLOCKER** — schema still uses unsupported scalar bits or lacks the Solr 9 compatibility rewrite
 
 ### Comparison Tool
 
