@@ -56,7 +56,9 @@ Exit code: `0` if all checks pass, `1` otherwise.
 
 ## Benchmark Runner
 
-Measure search quality across keyword, semantic, and hybrid modes.
+Measure search quality across keyword, semantic, and hybrid modes. For release
+claims, include reproducibility metadata so Solr 9.7 and Solr 10 reports can be
+validated as same-host, same-corpus paired runs.
 
 ```bash
 # Run against a live instance
@@ -70,6 +72,33 @@ python scripts/benchmark/run_benchmark.py -o results/benchmark.json
 
 # Custom collection
 python scripts/benchmark/run_benchmark.py --collection books
+
+# Capture same-host/same-corpus evidence for Solr version comparisons
+python scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --solr-version 9.7 \
+  --run-label solr9-float32 \
+  --corpus-id booklibrary-2026-06-06 \
+  --corpus-documents 1000 \
+  --corpus-bytes 123456789 \
+  --startup-seconds 42.5 \
+  --index-build-seconds 3600 \
+  --vector-indexing-seconds 1800 \
+  --concurrency 8 \
+  --throughput-qps 120.5 \
+  --docker-stats-json results/solr9-docker-stats.json \
+  --output results/benchmark-solr9.json
+```
+
+`--docker-stats-json` should contain numeric `mem_usage_bytes` values, for
+example:
+
+```json
+{
+  "solr": {"mem_usage_bytes": 1073741824},
+  "solr2": {"mem_usage_bytes": 1048576000},
+  "solr3": {"mem_usage_bytes": 1101004800}
+}
 ```
 
 ## End-to-End Workflow
@@ -167,6 +196,31 @@ python3 scripts/benchmark/compare_quantization.py \
   --min-recall 0.95 \
   --output results/benchmark-1344-quantization-comparison.json
 ```
+
+## Solr 9.7 vs Solr 10 Paired Comparison (#1354)
+
+Use `compare_solr_versions.py` after collecting two reports with matching
+`run_metadata.host` and `run_metadata.corpus` values. The tool refuses to mark
+claims as valid when host or corpus evidence is missing/mismatched.
+
+```bash
+python3 scripts/benchmark/compare_solr_versions.py \
+  --solr9 results/benchmark-solr9.json \
+  --solr10 results/benchmark-solr10.json \
+  --output-json results/benchmark-solr9-vs-solr10-comparison.json \
+  --output-md results/benchmark-solr9-vs-solr10-report.md
+```
+
+Evidence required before publishing performance claims:
+
+- Solr 9.7 and Solr 10 benchmark JSON from the same host
+- identical corpus ID, document count, and byte count
+- `docker stats` memory samples with byte values for each Solr node
+- startup time, index build time, and failed query IDs
+- the generated JSON comparison and markdown report
+
+If actual Solr 9.7/10 runtime is unavailable, do not fabricate values. Commit
+the harness/runbook and comment on #1354 with the remaining commands to run.
 
 ## Running Tests
 
