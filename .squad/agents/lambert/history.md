@@ -87,3 +87,8 @@
 - **Prevention:** Future embeddings-server Dockerfiles include post-sync version verification; fails build immediately if versions drift
 - **For next release:** Smoke tests remain essential for runtime validation; build-time verification is now the defensive layer for transitive-dependency issues
 - **Pattern:** Any service using `uv sync --inexact` should include Python version-check step to fail early
+
+### 2026-06-06T09:36:46.687+00:00 — #1354 Post-#1670 Benchmark Reassessment
+- #1670 removes the Solr 10 scalar-quantization schema blocker (`bits=7`), so #1344/#1354 tooling can advance past preflight.
+- Do not close #1354 from tool-only validation: benchmark claims still require paired Solr 9.7/Solr 10 or float32/int8 runs on the same host, same representative corpus, captured benchmark JSON, `docker stats`, corpus size, and failed query IDs.
+- Safe local validation without a production corpus is limited to benchmark unit tests, comparator tests, schema/preflight checks, and mocked harness behavior; never fabricate latency, recall, throughput, or memory numbers from these checks.

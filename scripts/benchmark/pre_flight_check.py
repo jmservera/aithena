@@ -131,7 +131,7 @@ def check_docker_compose() -> CheckResult:
         )
 
     try:
-        result = subprocess.run([docker_path, "compose", "--version"], capture_output=True, text=True, timeout=5)  # noqa: S603
+        result = subprocess.run([docker_path, "compose", "version"], capture_output=True, text=True, timeout=5)  # noqa: S603
         if result.returncode == 0:
             version = result.stdout.strip()
             return CheckResult(

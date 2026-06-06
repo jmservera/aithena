@@ -3,6 +3,7 @@
 **Document:** Comprehensive validation checklist for int8 scalar quantization with Solr 10-supported scalar bits
 **Version:** 1.0
 **Created:** 2026-06-05
+**Updated:** 2026-06-06T09:36:46.687+00:00
 **By:** Bishop (Vector Search & Data Science Specialist)
 
 ## Overview
@@ -446,4 +447,4 @@ Before attaching to #1344:
 
 ---
 
-**Status:** Ready to execute post-#1670 merge | **Author:** Bishop | **Version:** 1.0
+**Status:** #1670 merged; ready for controlled same-corpus execution | **Author:** Bishop | **Version:** 1.0

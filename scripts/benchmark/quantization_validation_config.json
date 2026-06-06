@@ -3,6 +3,7 @@
     "version": "1.0",
     "created_by": "Bishop (Vector Search & Data Science Specialist)",
     "created_at": "2026-06-05",
+    "updated_at": "2026-06-06T09:36:46.687+00:00",
     "purpose": "Configuration for scalar quantization (int8) benchmark validation #1344",
     "schema_prerequisite": "Solr 10 ScalarQuantizedDenseVectorField uses supported bits (4 or 7) and Solr 9 staging rewrites bits 4/7 to vectorEncoding=BYTE"
   },
@@ -264,13 +265,13 @@
       "root_cause_analysis_if_blocker"
     ]
   },
-  "blocker_resolution": {
-    "current_state": "PR #1670 is held by directive (not merged)",
-    "current_schema_bits": 8,
-    "current_schema_compatibility": "Invalid for Solr 10 (only supports bits 4 or 7); works for Solr 9",
-    "required_schema_fix": "bits=\"7\" for Solr 10; Solr 9 compat rewrite to DenseVectorField vectorEncoding=BYTE",
-    "action_required": "Await Ripley directive or PR #1670 approval",
-    "post_merge_status": "This plan executable with no code changes; schema already updated"
+  "readiness_status": {
+    "current_state": "PR #1670 has merged; Solr 10 scalar quantization schema now uses supported bits=7",
+    "current_schema_bits": 7,
+    "current_schema_compatibility": "Valid for Solr 10; Solr 9 staging rewrites supported scalar bits to DenseVectorField vectorEncoding=BYTE",
+    "schema_fix": "bits=\"7\" for Solr 10; Solr 9 compat rewrite to DenseVectorField vectorEncoding=BYTE",
+    "action_required": "Execute paired float32 and int8 benchmark phases only in a controlled environment with the same representative corpus",
+    "remaining_blocker": "Benchmark JSON, docker stats memory samples, corpus size, and failed query IDs are still required before publishing memory, latency, or recall conclusions"
   },
   "notes": {
     "idempotency": "index_test_corpus.py deduplicates by Solr unique key; safe to re-run both phases",
