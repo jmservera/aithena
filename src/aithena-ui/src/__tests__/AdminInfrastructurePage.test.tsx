@@ -272,6 +272,54 @@ describe('AdminInfrastructurePage', () => {
     expect(redisLink).toHaveAttribute('href', '/custom/redis-commander/');
   });
 
+  it('falls back from unsafe API-provided admin URLs', async () => {
+    const unsafeData = {
+      ...mockInfrastructure,
+      solr_admin_url: 'javascript:alert(1)',
+      services: mockInfrastructure.services.map((service) => ({
+        ...service,
+        admin_url:
+          service.name === 'solr' ? '/\\evil.example/' : `https://evil.example/${service.name}/`,
+      })),
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: unsafeData }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Solr Admin')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Solr Admin').closest('a')).toHaveAttribute('href', '/admin/solr/');
+    expect(screen.getByText('RabbitMQ Management').closest('a')).toHaveAttribute(
+      'href',
+      '/admin/rabbitmq/'
+    );
+    expect(screen.getByText('Redis Commander').closest('a')).toHaveAttribute(
+      'href',
+      '/admin/redis/'
+    );
+  });
+
+  it('redacts sensitive URL details in the connection table', async () => {
+    const sensitiveData = {
+      ...mockInfrastructure,
+      services: [
+        {
+          name: 'embeddings-server',
+          url: 'https://embed-user:embed-pass@embeddings.example/v1/embeddings?token=secret#frag',
+          status: 'up',
+          type: 'embeddings',
+        },
+      ],
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: sensitiveData }));
+    renderPage();
+
+    await screen.findByText('https://embeddings.example/v1/embeddings');
+    expect(screen.queryByText(/embed-pass/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/token=secret/)).not.toBeInTheDocument();
+  });
+
   it('falls back to legacy URL when service admin_url is null', async () => {
     const nullAdminUrlData = {
       ...mockInfrastructure,

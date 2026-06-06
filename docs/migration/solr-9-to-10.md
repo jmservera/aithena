@@ -25,9 +25,9 @@
 
 | Component | Current |
 |-----------|---------|
-| Solr version | 9.7 (`FROM solr:9.7` in `src/solr/Dockerfile`) |
-| Java version | 17 (eclipse-temurin:17-jre via Solr 9.7 base image) |
-| Lucene match version | 9.10 (`solrconfig.xml`) |
+| Solr version | 10 (`ARG SOLR_BASE_IMAGE=solr:10` in `src/solr/Dockerfile`) |
+| Java version | Java 21+ via the Solr 10 base image |
+| Lucene match version | 10.0 (`solrconfig.xml`; Solr 9 rollback rewrites to 9.10) |
 | Deployment mode | SolrCloud (3 nodes: `solr`, `solr2`, `solr3`) |
 | ZooKeeper | 3 nodes (`zoo1`, `zoo2`, `zoo3`) at port 2181 |
 | Modules loaded | `extraction`, `langid` (`SOLR_MODULES` env var) |
@@ -82,7 +82,7 @@ The `solrconfig.xml` lives inside the `books` configset directory. Key settings:
 | Update processor | `langid` chain (via `add-conf-overlay.sh`) | Verify langid module compatibility |
 
 The `add-conf-overlay.sh` script adds at runtime:
-- `/update/extract` request handler (Tika extraction with langid chain)
+- `/update/extract` request handler (Tika extraction with langid chain; Solr 10 uses the `tika` service at `http://tika:9998`)
 - `my-init` initParams (sets default `df=content`)
 - `local_repo` backup repository
 
@@ -135,8 +135,8 @@ All `solr` CLI commands now require full double-dash flags. This breaks every `s
 |---------|-----------------|----------------|
 | Auth enable credentials | `-u "user:pass"` | `--credentials "user:pass"` |
 | ZooKeeper host | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` |
-| ZK upconfig name | `-n books` | `--name books` |
-| ZK upconfig dir | `-d /configsets/books` | `--dir /configsets/books` |
+| ZK upconfig name | `-n books` | `--conf-name books` |
+| ZK upconfig dir | `-d /configsets/books` | `--conf-dir /configsets/books` |
 | ZK ls host | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` |
 | ZK cp host | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` |
 
@@ -183,7 +183,7 @@ schema.
 | Minimum Java | 17 | 21 |
 | OS base | Ubuntu 22 | Ubuntu 24 |
 
-**Our impact**: Update `src/solr/Dockerfile` from `FROM solr:9.7` to `FROM solr:10`. The `apt-get install fonts-liberation fonts-dejavu-core` should still work on Ubuntu 24.
+**Our impact**: `src/solr/Dockerfile` now defaults `SOLR_BASE_IMAGE` to `solr:10`. The `apt-get install fonts-liberation fonts-dejavu-core` should still work on Ubuntu 24. Use `docker/compose.solr9.yml` for temporary Solr 9.7 rollback.
 
 ### 2.5 `luceneMatchVersion` Update
 
@@ -269,14 +269,11 @@ python run_benchmark.py --output pre-migration-baseline.json
 **File**: `src/solr/Dockerfile`
 
 ```dockerfile
-# Before (Solr 9.7)
-FROM solr:9.7
-
-# After (Solr 10)
-FROM solr:10
+ARG SOLR_BASE_IMAGE=solr:10
+FROM ${SOLR_BASE_IMAGE}
 ```
 
-Verify that `apt-get install fonts-liberation fonts-dejavu-core` still works on the Ubuntu 24 base.
+Verify that `apt-get install fonts-liberation fonts-dejavu-core` still works on the Ubuntu 24 base. For rollback, use `docker/compose.solr9.yml` or set `SOLR_BASE_IMAGE=solr:9.7 SOLR_VERSION=9`.
 
 #### Step 2.2: Update `luceneMatchVersion`
 
@@ -319,7 +316,7 @@ solr auth enable --type basicAuth \
   --solr-include-file /dev/null \
   --zk-host "$ZK_HOST"
 
-solr zk upconfig --zk-host "$ZK_HOST" --name books --dir /configsets/books
+solr zk upconfig --zk-host "$ZK_HOST" --conf-name books --conf-dir /configsets/books
 
 solr zk ls /configs --zk-host "$ZK_HOST"
 ```
@@ -622,10 +619,11 @@ These are tracked separately and not required for the core Solr 9 → 10 upgrade
 
 | File | Change Type | Description |
 |------|------------|-------------|
-| `src/solr/Dockerfile` | Edit | `FROM solr:9.7` → `FROM solr:10` |
-| `src/solr/books/solrconfig.xml` | Edit | `luceneMatchVersion` 9.10 → 10.0 |
-| `docker-compose.yml` | Edit | solr-init CLI double-dash syntax |
-| `docker/compose.prod.yml` | Edit | solr-init CLI double-dash syntax |
+| `src/solr/Dockerfile` | Edit | Default `SOLR_BASE_IMAGE` is `solr:10` |
+| `src/solr/books/solrconfig.xml` | Edit | `luceneMatchVersion` 10.0 by default; Solr 9 rollback rewrites to 9.10 |
+| `docker-compose.yml` | Edit | Solr 10 default build/runtime with Solr 9/10 CLI compatibility |
+| `docker/compose.prod.yml` | Edit | Solr 10 default build/runtime with Solr 9/10 CLI compatibility |
+| `docker/compose.solr9.yml` | Add | Explicit Solr 9.7 rollback overlay |
 | `src/solr/security.json` | Verify | Confirm `blockUnknown: false` compat |
 | `src/solr/books/managed-schema.xml` | No change (Phase 1) | HNSW defaults are fine; quantization is Phase 2 |
 | `src/solr-search/` | No change (Phase 1) | Uses `wt=json`, HTTP API unchanged |

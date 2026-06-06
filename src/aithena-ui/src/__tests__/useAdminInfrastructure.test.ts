@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { useAdminInfrastructure } from '../hooks/useAdminInfrastructure';
+import { redactUrlForDisplay, useAdminInfrastructure } from '../hooks/useAdminInfrastructure';
 
 function mockFetchResponse(body: unknown, status = 200) {
   return Promise.resolve({
@@ -22,6 +22,7 @@ describe('useAdminInfrastructure', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -163,5 +164,18 @@ describe('useAdminInfrastructure', () => {
       await vi.advanceTimersByTimeAsync(100);
     });
     expect(result.current.loading).toBe(false);
+  });
+});
+
+describe('redactUrlForDisplay', () => {
+  it('strips query strings and fragments from root-relative URLs', () => {
+    expect(redactUrlForDisplay('/admin/solr?token=secret#debug')).toBe('/admin/solr');
+    expect(redactUrlForDisplay('/?token=secret#debug')).toBe('/');
+  });
+
+  it('strips credentials, query strings, and fragments from protocol-relative URLs', () => {
+    expect(redactUrlForDisplay('//user:secret@solr.example:8983/solr/?token=secret#debug')).toBe(
+      '//solr.example:8983/solr/'
+    );
   });
 });

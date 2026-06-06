@@ -3903,6 +3903,23 @@ def admin_logs(
 # ---------------------------------------------------------------------------
 
 
+def _redact_url_for_admin_display(raw_url: str) -> str:
+    """Return a browser-safe URL display value without credentials or request data."""
+    parsed = urlparse(raw_url)
+    if not parsed.netloc:
+        display_value = raw_url.split("?", 1)[0].split("#", 1)[0]
+        return "—" if "@" in display_value else display_value
+
+    hostname = parsed.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    try:
+        port = f":{parsed.port}" if parsed.port else ""
+    except ValueError:
+        port = ""
+    return parsed._replace(netloc=f"{hostname}{port}", params="", query="", fragment="").geturl()
+
+
 @app.get(
     "/v1/admin/infrastructure/",
     include_in_schema=False,
@@ -3966,8 +3983,10 @@ def admin_infrastructure() -> dict[str, Any]:
         "solr": f"{solr_host}:{solr_port}",
         "redis": f"{settings.redis_host}:{settings.redis_port}",
         "rabbitmq_amqp": f"{settings.rabbitmq_host}:{settings.rabbitmq_port}",
-        "rabbitmq_mgmt": (f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"),
-        "embeddings": settings.embeddings_url,
+        "rabbitmq_mgmt": _redact_url_for_admin_display(
+            f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"
+        ),
+        "embeddings": _redact_url_for_admin_display(settings.embeddings_url),
     }
 
     return {

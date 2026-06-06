@@ -1,0 +1,39 @@
+# Solr 9.7 rollback overlay.
+#
+# Use only as a temporary rollback path if a Solr 10 runtime issue blocks
+# startup. Keep SOLR_BASE_IMAGE and SOLR_VERSION aligned so solr-init uses the
+# Solr 9 CLI flags and configset compatibility rewrites:
+#   docker compose -f docker-compose.yml -f docker/compose.single-node.yml -f docker/compose.solr9.yml up -d solr solr-init
+
+services:
+  solr:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:9.7
+    environment:
+      SOLR_VERSION: "9"
+
+  solr2:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:9.7
+    environment:
+      SOLR_VERSION: "9"
+
+  solr3:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:9.7
+    environment:
+      SOLR_VERSION: "9"
+
+  solr-init:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:9.7
+    environment:
+      SOLR_VERSION: "9"
+
+  solr-search:
+    environment:
+      - SOLR_VERSION=9

@@ -216,10 +216,10 @@ def test_solr_init_cli_helpers_translate_flags_for_solr_9_and_10(script_name: st
     assert _evaluate_cli_flags(script, "9") == ["-u", "-z", "-n", "-d"], (
         f"{script_name} must preserve Solr 9 CLI flag compatibility"
     )
-    assert _evaluate_cli_flags(script, "10") == ["--credentials", "--zk-host", "--name", "--dir"], (
+    assert _evaluate_cli_flags(script, "10") == ["--credentials", "--zk-host", "--conf-name", "--conf-dir"], (
         f"{script_name} must translate solr CLI flags to Solr 10 double-dash syntax"
     )
-    assert _evaluate_cli_flags(script, "10.0.0") == ["--credentials", "--zk-host", "--name", "--dir"], (
+    assert _evaluate_cli_flags(script, "10.0.0") == ["--credentials", "--zk-host", "--conf-name", "--conf-dir"], (
         f"{script_name} must accept full Solr 10 version strings"
     )
 
@@ -331,7 +331,7 @@ def test_solr_health_checks_use_authenticated_curl():
 def test_solr9_bootstrap_rewrites_scalar_quantized_vector_schema():
     """Solr 9 bootstrap must rewrite source Solr 10 vector schema names."""
     for script in (_load_solr_init_script(), _load_solr_init_shell_script()):
-        assert "SOLR_VERSION:-9}" in script  # solr_major_version() default to 9
+        assert "SOLR_VERSION:-10}" in script  # solr_major_version() defaults to Solr 10 after cutover
         assert 'hnswM="/hnswMaxConnections="' in script
         assert 'hnswEfConstruction="/hnswBeamWidth="' in script
         assert 'solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField' in script

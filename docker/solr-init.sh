@@ -35,7 +35,7 @@ REPLICATION_FACTOR="${SOLR_REPLICATION_FACTOR:-1}"
 EXPECTED_NODES="${SOLR_EXPECTED_NODES:-1}"
 
 solr_major_version() {
-  local version="${SOLR_VERSION:-9}"
+  local version="${SOLR_VERSION:-10}"
   printf '%s\n' "${version%%.*}"
 }
 
@@ -52,11 +52,11 @@ solr_credentials_flag() {
 }
 
 solr_name_flag() {
-  if solr_10_cli; then printf '%s\n' "--name"; else printf '%s\n' "-n"; fi
+  if solr_10_cli; then printf '%s\n' "--conf-name"; else printf '%s\n' "-n"; fi
 }
 
 solr_dir_flag() {
-  if solr_10_cli; then printf '%s\n' "--dir"; else printf '%s\n' "-d"; fi
+  if solr_10_cli; then printf '%s\n' "--conf-dir"; else printf '%s\n' "-d"; fi
 }
 
 # ── Wait for Solr to be reachable (with or without auth) ─────────────────────
@@ -150,6 +150,17 @@ if [ "$(solr_major_version)" = "9" ]; then
     -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
     -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
     -e 's/ bits="[47]"/ vectorEncoding="BYTE"/g' \
+    "${CONFIGSET_DIR}/managed-schema.xml"
+  sed -i \
+    -e 's/<luceneMatchVersion>10\.0<\/luceneMatchVersion>/<luceneMatchVersion>9.10<\/luceneMatchVersion>/g' \
+    "${CONFIGSET_DIR}/solrconfig.xml"
+elif [ "${VECTOR_QUANTIZATION:-none}" != "int8" ]; then
+  CONFIGSET_DIR="/var/solr/books-configset-solr10"
+  mkdir -p "${CONFIGSET_DIR}"
+  cp -R /configsets/books/. "${CONFIGSET_DIR}"/
+  sed -i \
+    -e '/<fieldType name="knn_vector_768_byte"/d' \
+    -e '/<field name="embedding_byte_v"/d' \
     "${CONFIGSET_DIR}/managed-schema.xml"
 fi
 
