@@ -189,7 +189,7 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 | Scalar (7-bit) | 672 | **~4.57× reduction** | Minimal |
 | Binary (1-bit) | 96 | **32× reduction** | Moderate |
 
-**Recommendation**: Use **scalar quantization** (7-bit, exposed as `VECTOR_QUANTIZATION=int8`) by default — ~4.57× raw vector payload savings with minimal accuracy loss. Offer binary quantization as an option for very large collections.
+**Recommendation**: Keep scalar quantization (7-bit, exposed as `VECTOR_QUANTIZATION=int8`) configurable and disabled by default until recall@10 and measured Solr memory evidence are reviewed. It is the preferred optional memory-saving path because it offers ~4.57× raw vector payload savings with minimal expected accuracy loss. Offer binary quantization as a future option for very large collections.
 
 **Schema change**:
 ```xml

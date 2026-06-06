@@ -60,8 +60,9 @@
   <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <!-- Scalar-quantized int8 vector type — used for "int8" quantization mode.
-       Solr 10 scalar quantization accepts bits="4" or bits="7"; int8 mode uses
-       bits="7" for runtime compatibility. solr-init rewrites this type to
+       VECTOR_QUANTIZATION=int8 maps to Solr 10 bits="7" because Solr 10 scalar
+       quantization accepts only bits="4" or bits="7"; do not use bits="8".
+       solr-init rewrites this type to
        DenseVectorField vectorEncoding="BYTE" while Solr 9 is supported.
        hnswM tuned to 12 (vs default 16) for memory savings with byte vectors. -->
   <fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField" vectorDimension="768" bits="7" similarityFunction="cosine" knnAlgorithm="hnsw" hnswM="12"/>

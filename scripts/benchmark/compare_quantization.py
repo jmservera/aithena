@@ -235,6 +235,9 @@ def estimate_vector_payload_memory(
     candidate_bytes = (vector_count * vector_dimension * candidate_bits + 7) // 8
     int8_compat_bytes = vector_count * vector_dimension
     saved_bytes = baseline_bytes - candidate_bytes
+    baseline_mib = round(baseline_bytes / 1024 / 1024, 4)
+    candidate_mib = round(candidate_bytes / 1024 / 1024, 4)
+    int8_compat_mib = round(int8_compat_bytes / 1024 / 1024, 4)
     return {
         "vector_count": vector_count,
         "vector_dimension": vector_dimension,
@@ -242,9 +245,12 @@ def estimate_vector_payload_memory(
         "candidate_scalar_payload_bytes": candidate_bytes,
         "solr9_byte_compat_payload_bytes": int8_compat_bytes,
         "candidate_bits": candidate_bits,
-        "baseline_float32_payload_mb": round(baseline_bytes / 1024 / 1024, 4),
-        "candidate_scalar_payload_mb": round(candidate_bytes / 1024 / 1024, 4),
-        "solr9_byte_compat_payload_mb": round(int8_compat_bytes / 1024 / 1024, 4),
+        "baseline_float32_payload_mb": baseline_mib,
+        "candidate_scalar_payload_mb": candidate_mib,
+        "solr9_byte_compat_payload_mb": int8_compat_mib,
+        "baseline_float32_payload_mib": baseline_mib,
+        "candidate_scalar_payload_mib": candidate_mib,
+        "solr9_byte_compat_payload_mib": int8_compat_mib,
         "estimated_savings_pct": round((saved_bytes / baseline_bytes) * 100.0, 4) if baseline_bytes else 0.0,
         "estimated_reduction_ratio": round(baseline_bytes / candidate_bytes, 4) if candidate_bytes else None,
         "note": "Raw vector payload estimate only; measure Solr RSS/heap separately for release evidence.",
@@ -308,8 +314,8 @@ def format_summary(output: dict[str, Any]) -> str:
         lines.append(
             "estimated_payload: "
             f"vectors={memory['vector_count']} "
-            f"float32={memory['baseline_float32_payload_mb']} MiB "
-            f"scalar_bits={memory['candidate_bits']}:{memory['candidate_scalar_payload_mb']} MiB "
+            f"float32={memory['baseline_float32_payload_mib']} MiB "
+            f"scalar_bits={memory['candidate_bits']}:{memory['candidate_scalar_payload_mib']} MiB "
             f"reduction={reduction_text}",
         )
     lines.append("")
