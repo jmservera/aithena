@@ -53,7 +53,7 @@ Ripley should use this milestone structure to sequence implementation: v2.5.1 te
 
 **Author:** Brett (Infrastructure Architect)  
 **Date:** 2026-06-05T17:02:51.834+00:00  
-**Status:** Proposed for Scribe merge  
+**Status:** Approved  
 **Related:** #1662
 
 ## Decision
