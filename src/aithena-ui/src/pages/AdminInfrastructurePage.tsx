@@ -1,6 +1,11 @@
 import { useIntl } from 'react-intl';
 import { Database, ExternalLink, MessageSquare, Server, RefreshCw } from 'lucide-react';
-import { useAdminInfrastructure, type ServiceEndpoint } from '../hooks/useAdminInfrastructure';
+import {
+  redactUrlForDisplay,
+  safeAdminUrl,
+  useAdminInfrastructure,
+  type ServiceEndpoint,
+} from '../hooks/useAdminInfrastructure';
 
 /* ── Sub-components ───────────────────────────────────────────────────── */
 
@@ -31,12 +36,13 @@ function ServiceCard({ icon, title, description, url }: ServiceCardProps) {
 function ConnectionRow({ service }: { service: ServiceEndpoint }) {
   const normalizedStatus = service.status.trim().toLowerCase();
   const isHealthy = normalizedStatus === 'connected' || normalizedStatus === 'up';
+  const endpoint = redactUrlForDisplay(service.admin_url ?? service.url);
 
   return (
     <tr>
       <td className="infra-service-name">{service.name}</td>
       <td>{service.type ?? service.description ?? '—'}</td>
-      <td>{service.admin_url ?? service.url ?? '—'}</td>
+      <td>{endpoint}</td>
       <td>
         <span className={`infra-badge ${isHealthy ? 'infra-badge--ok' : 'infra-badge--error'}`}>
           {service.status}
@@ -60,9 +66,10 @@ function AdminInfrastructurePage() {
     legacyUrl: string | undefined,
     fallbackUrl: string
   ) =>
-    data?.services.find((service) => service.name === serviceName)?.admin_url ??
-    legacyUrl ??
-    fallbackUrl;
+    safeAdminUrl(
+      data?.services.find((service) => service.name === serviceName)?.admin_url ?? legacyUrl,
+      fallbackUrl
+    );
 
   const solrUrl = resolveServiceAdminUrl('solr', data?.solr_admin_url, '/admin/solr/');
   const rabbitmqUrl = resolveServiceAdminUrl(
