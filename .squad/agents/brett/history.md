@@ -48,6 +48,13 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 - **Auth in E2E:** CI should mint one `E2E_API_TOKEN` and pass it to Playwright/pytest to avoid rate limiting from repeated login calls. Validate CI/test infrastructure locally with Docker + Playwright before pushing.
 - **Labels and PR hygiene:** GitHub label hierarchy is not enforced; parent labels need event-driven plus periodic sync. Review threads must be resolved through GraphQL `resolveReviewThread`; comments alone do not satisfy branch protection.
 
+## Research Loop Participation (2026-06-06)
+
+- **#1452 Complexity Reduction Research Pass:** Led decomposition of 7 follow-up PRs from original complexity audit post-PR #1706. Identified risks (LOW/MEDIUM/HIGH), owner routing (Brett/Parker/Dallas/Newt), and validation strategies. Owns items: health-check extraction, CI Compose overlay, buildall error handling, Dockerfile base stage extraction.
+- **#1356 Phase 2 Infrastructure Assessment:** Mapped infrastructure gaps (standalone Solr 10 overlay, Overseer-disabled overlay, init script branching). Provided compose overlay blueprints and blocking milestone (v2.5.1 pre-work).
+- **#1343 SolrCloud Overseer Decision:** Recorded decision to disable Overseer in production Solr 10 (retains ZooKeeper HA, removes collection-management bottleneck).
+- **#1662 OpenVINO Release Gates Decision:** Documented decision to verify inside built Docker image after `uv sync --inexact`; added release gate workflow + smoke tests.
+
 ## Learnings
 
 - **2026-06-06T16:09:02.162+00:00 — SolrCloud Overseer disabled mode:** For Solr 10 production HA, keep the existing 3×SolrCloud + 3×ZooKeeper topology and pass `-Dsolr.cloud.overseer.enabled=false` on every Solr node. This enables distributed cluster-state updates without changing dev/single-node topology; validate with compose config plus a runtime create/delete collection smoke test, and run `RUN_FAILOVER=1 tests/solrcloud-overseer-disabled-validation.sh` only in a production-like maintenance window because it stops `solr2`.

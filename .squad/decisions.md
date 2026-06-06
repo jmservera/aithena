@@ -1,1506 +1,1151 @@
-# Decision: PathHierarchyTokenizer Audit — No-Op (v2.5)
+# Decision: Scalar Quantization (int8) Benchmark Execution Plan #1344
 
+**Author:** Bishop (Vector Search & Data Science Specialist)
 **Date:** 2026-06-05
-**Author:** Ash (Search Engineer)
-**Status:** Closed — No-Op
-
-## Context
-
-The Solr 9 → 10 migration PRD (section 4.10) flagged a `PathHierarchyTokenizer` behavior change: token position increments changed from 0 to 1 in Solr 10. The `ancestor_path` and `descendent_path` field types use this tokenizer and required audit.
-
-## Findings
-
-Schema audit of `src/solr/books/managed-schema.xml`:
-
-- `ancestor_path` and `descendent_path` field types are **defined** (lines 6 and 35) as standard Solr boilerplate.
-- Dynamic field patterns `*_ancestor_path` and `*_descendent_path` are **registered** (lines 594–595).
-- **No concrete fields** in the schema use these types.
-- **No application code** (Python, TypeScript, configuration) reads or writes fields matching `*_ancestor_path` or `*_descendent_path`.
-
-## Decision
-
-The `PathHierarchyTokenizer` behavior change in Solr 10 has **no impact** on the aithena books collection. Both field types and their dynamic patterns are unused boilerplate inherited from the default Solr managed schema.
-
-No schema changes, code changes, or reindexing are required.
-
-## References
-
-- PRD section 4.10: `docs/prd/solr10-migration-prd.md`
-- Migration guide section 2.10: `docs/migration/solr-9-to-10.md`
-- Schema: `src/solr/books/managed-schema.xml`
-
----
-
-# Decision: Dependabot Batch Sweep 2026-05-31
-
-**Date:** 2026-05-31  
-**Author:** Ripley (Lead)  
-**Status:** Completed
+**Status:** Proposed
+**Blocked on:** #1670 (Solr 10 `bits="7"` schema fix)
+**Related:** #1344, #1669, #1671
 
 ## Summary
 
-Batched 16 low/medium-risk Dependabot PRs into PR #1584 (squash-merged to dev). Deferred 5 high-risk PRs with tracking issues.
+This document specifies the precise benchmark execution plan for validating scalar quantization (int8) vector reduction, including data sizes, recall thresholds, memory metrics, and pass/fail criteria. The plan is ready to execute post-#1670 merge without code changes; it requires only Docker and shell commands.
 
-## What Merged
+## Prerequisites
 
-16 dependency bumps across: .github/workflows (2), aithena-ui (6), solr-search (4), document-indexer (2), document-lister (1), embeddings-server (1).
+1. **Schema:** Target runtime must contain Solr 10 `ScalarQuantizedDenseVectorField bits="7"` (from #1670) or bits="4" equivalent for int8 quantization. Solr 9 compatibility rewrite to `DenseVectorField vectorEncoding="BYTE"` must remain functional.
+2. **Tooling:** 
+   - `python3` with `requests`, `numpy` available
+   - `docker compose` and `docker stats`
+   - `jq` for JSON parsing (optional, for manual inspection)
+3. **Branch state:** #1671 merged (benchmark comparator); #1670 merged (schema fix)
 
-## What's Deferred
+## Benchmark Corpus
 
-- **Solr 10** (#1562): Belongs to v2.5 milestone, tracked in #1335
-- **Python 3.14** (#1565, #1566, #1567): New tracking issue #1585
-- **Node 26** (#1564): New tracking issue #1586
+**Requirement:** Same representative corpus indexed twice (once per quantization mode), approximately:
+- **Corpus size:** 1,000–2,000 representative documents (~5–10 MB text content total)
+- **Target:** Mix of multilingual content (Spanish, Catalan, French, English) to reflect production diversity
+- **Indexing time:** ~2–5 minutes per mode (float32 then int8) on modern hardware
 
-## Process Notes
+**Rationale:** Corpus must be large enough to stress vector memory (~750 MB for 1M vectors in float32, ~187 MB in int8) but small enough to complete benchmark in reasonable time. 30-query suite (from `scripts/benchmark/queries.json`) ensures consistent measurement across runs.
 
-- Cherry-pick + lockfile-regen pattern works well for batch sweeps
-- Rulesets require all conversations resolved AND branch up-to-date — cannot bypass with --admin
-- E2E flake #1583 caused 4 reruns; remains a reliability concern
-- Code-scanning review threads auto-create on each push; must resolve before merge
+## Validation Workflow
 
-## Affects
+### Phase 1: Float32 Reference Benchmark (Baseline)
 
-All team members doing future dependency sweeps should follow same pattern.
-# Decision: E2E Auth Token Reuse Pattern
+**Goal:** Capture float32 performance as ground truth for recall comparison.
 
-**Author:** Parker (Backend Dev)  
-**Date:** 2026-05-31  
-**Status:** Approved (implemented in #1588)
+**Commands:**
+```bash
+# 1. Spin up services with float32 (default/no quantization)
+VECTOR_QUANTIZATION=none docker compose up -d --build
 
-## Context
+# 2. Wait for Solr to be ready (typically 15–30s after compose up)
+curl -s http://localhost:8983/solr/books/select?q=*:* | jq '.response.numFound' | head -1
 
-The integration test workflow was hitting chronic 429 rate limits on every PR because it made two back-to-back `/v1/auth/login` calls from the same source IP:
+# 3. Index the corpus (idempotent; safe to rerun)
+python3 scripts/index_test_corpus.py
 
-1. A curl login in the workflow step to mint `E2E_API_TOKEN`
-2. Playwright `global-setup.ts` making another `/v1/auth/login` immediately after
+# 4. Verify collection health
+python3 scripts/verify_collections.py --verbose
 
-This caused the solr-search rate limiter to trip, blocking every PR's `Run integration & E2E tests` workflow.
+# 5. Run benchmark suite (semantic + hybrid modes, no keyword—not affected by quantization)
+python3 scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --modes semantic hybrid \
+  --output results/benchmark-1344-float32.json
 
-## Decision
+# 6. Capture Solr memory footprint (solr and solr2, solr3 if in a cluster)
+docker stats --no-stream solr solr2 solr3 > results/memory-1344-float32.txt 2>&1 || echo "Single-node or unavailable"
+```
 
-**When CI workflows mint an auth token via curl (or similar), downstream test runners MUST consume that token via environment variable instead of re-authenticating.**
-
-Specifically:
-- Workflow steps should export minted tokens as environment variables (e.g., `E2E_API_TOKEN`)
-- Test setup code (e.g., Playwright global-setup, pytest fixtures) should check for these env vars first
-- Only fall back to password-based login when the env var is absent (for local development)
-
-## Implementation
-
-Modified `e2e/playwright/global-setup.ts` to:
-1. Check for `E2E_API_TOKEN` in the environment
-2. If present, use it directly to write auth storage state (skip login)
-3. If absent, fall back to the existing username/password login flow
-4. Added defense-in-depth: single retry with jittered backoff (1-3s) on 429 response
-
-## Benefits
-
-- Eliminates rate-limit races in CI (primary goal)
-- Faster test setup (one fewer HTTP round-trip)
-- Clearer separation: workflow owns auth, tests consume tokens
-- Fallback preserves local dev workflow
-
-## Alternatives Considered
-
-1. **Raise CI rate-limit window** (e.g., `AUTH_LOGIN_RATE_LIMIT_MAX=100` in `docker/compose.e2e.yml`)  
-   - ❌ Masks the problem instead of fixing the root cause
-2. **Backoff + retry only** (no token reuse)  
-   - ❌ Still wastes time and risks hitting the limit on slow CI runners
-
-## Related
-
-- Issue: #1583
-- PR: #1588
-- Unblocks: PR #1580, v2.2.0 dependabot sweep
-
----
-
-# Decision: Always Test Locally Before Pushing (User Directive)
-
-**Author:** Juanma (via Copilot/Ralph)  
-**Date:** 2026-05-31  
-**Status:** Active  
-**Captured:** Ralph Round 2
-
-## What
-
-**Directive:** "You have docker and playwright locally so you must test everything before pushing to GitHub."
-
-All squad agents working on this repo must run the relevant docker compose stack and Playwright/E2E tests locally before pushing branches, instead of relying on CI for first validation.
-
-## Why
-
-- **Reduces CI round-trips:** Local testing catches breakage before it reaches branch-protected merges
-- **Uses available infrastructure:** Docker + Playwright are provisioned on the dev box; leverage them
-- **Faster feedback:** Agent completes fix + validation locally (5–10 min) vs waiting for CI (15–30 min per round-trip)
-- **Preserves CI capacity:** Fewer failed CI runs = faster merge velocity for the team
-
-## Scope
-
-All squad agents (Parker, Brett, Lambert, Ash, Dallas, Ripley) when their work touches:
-- Services (backend Python, frontend TypeScript, E2E tests)
-- Docker compose overlays or networking
-- Playwright E2E tests or test infrastructure
-- Anything covered by the existing `docker compose` stack
-
-## Implementation
-
-### For Each Service/Change
-
-1. **Run locally first:**
-   - Python services: `uv run pytest --tb=short -q` in the service directory + linting
-   - TypeScript (aithena-ui): `npm run lint`, `npm run format:check`, `npx vitest run` (or `npm run build` for integration)
-   - E2E: `docker compose up -d` (with appropriate overlays) + `npx playwright test --headed` for exploratory, CI-compatible run for batch
-
-2. **Before pushing to GitHub:**
-   - Confirm local tests pass
-   - Review logs for errors/warnings
-   - If working on E2E or integration: confirm docker compose stack is healthy, services up and responding
-
-3. **For complex changes (e.g., E2E, infra):**
-   - Run full docker compose stack locally
-   - Test the specific scenario that would trigger in CI
-   - Document any local setup issues for future similar work
-
-### Example: E2E Token Reuse (PR #1588)
-
-Parker ran local E2E validation:
-1. Set up `docker compose` with E2E overlay + sample docs
-2. Verified `global-setup.ts` reuses `E2E_API_TOKEN` from environment
-3. Confirmed fallback (password login) works when token not set
-4. Pushed to GitHub with confidence that CI would pass
-
-(Local stack hit a worktree networking issue, fell back to CI evidence; still followed the spirit of the directive.)
-
-## Implications for Agents
-
-- **Plan local testing time into estimate:** Add 10–15 min for full docker compose cycles
-- **Report local test results in PR description:** "Tested locally: [service + test result]" helps code reviewers
-- **Defer agent work if local setup is broken:** Don't push code untested; fix the setup or escalate to Ripley
-
-## Related Decisions
-
-- E2E Auth Token Reuse (#1588): Exemplified this directive, though fallback to CI evidence was acceptable when worktree networking failed
-- Dependabot batch deferred (#1564–#1567): Major version bumps warrant local smoke-test before push
-
----
-
-# Decision: PR #1562 (Solr 10 Bump) Deferred to v2.5 Solr 10 Epic
-
-**Author:** Ash (via Ralph)  
-**Date:** 2026-05-31  
-**Status:** Accepted  
-**Scope:** Dependencies & Dependencies Planning
-**Related:** PR #1562 (closed), Issue #1335 (v2.5 Solr 10 epic)
-
-## Context
-
-PR #1562 (Dependabot bump: Solr 9.7→10.0) arrived as a Dockerfile-only version increment. Ash reviewed and determined the change is incomplete and premature.
-
-## Decision
-
-**Close PR #1562 without merging.** Defer the full Solr 10 migration to the v2.5 Solr 10 epic (#1335).
-
-## Rationale
-
-1. **Incomplete migration:** Solr 10 removes single-dash CLI flags (e.g., `-c` becomes `--collection`). The PR only bumps the version; it does not update any CLI invocations.
-2. **Schema incompatibility:** `luceneMatchVersion` must be updated to `10.0` in schema definitions; the PR does not touch schema files.
-3. **Integration scope:** Full Solr migration includes multiple services (solr-search, document-indexer) and integration testing. Belongs in coordinated epic planning.
-4. **Reduces risk:** Deferring prevents a broken state (version mismatch + stale schema) from reaching dev.
-
-## Action Taken
-
-- Closed PR #1562 with explanatory comment
-- Updated related issue tracking to route to v2.5 epic
-
----
-
-# Decision: PR #1518 (v2.1.0 Release Docs Backport) Closed as Superseded
-
-**Author:** Ralph  
-**Date:** 2026-05-31  
-**Status:** Closed  
-**Related:** PR #1518 (closed), Tag v2.1.0, Commit ed0380f
-
-## Context
-
-PR #1518 contained auto-generated v2.1.0 release documentation formatted for the dev branch. The PR arrived after v2.1.0 had already shipped to main (commit ed0380f, tag v2.1.0 exists).
-
-## Decision
-
-**Close PR #1518 without merging.** The release is complete on main; backporting release docs to dev would reintroduce stale content and confusion.
-
-## Rationale
-
-1. **Release already shipped:** v2.1.0 is tagged and live on main. No backport is needed or desired.
-2. **Stale content risk:** Backporting v2.1.0 docs to dev (which is ahead of v2.1.0) would make dev branch documentation ambiguous.
-3. **Standard release process:** Release docs remain on main only; dev docs are generated fresh when the next release cycle begins.
-
-## Action Taken
-
-- Closed PR #1518 with superseded note
-- No follow-up action required
-
-# Decision: PR #1614 Approved — Phase 1b Volume Migration Complete
-
-**Author:** Ripley (Lead)  
-**Date:** 2026-05-31  
-**Status:** Approved (awaiting E2E completion)  
-**PR:** #1614
-
-## Summary
-
-Approved Phase 1b of the installer wizard volume migration (#1578). All infrastructure volumes (Solr, ZooKeeper, collections-db, certbot) have been successfully converted from bind mounts to Docker-managed volumes.
-
-## Review Rationale
-
-1. **Technical correctness**: Volume migration is clean — all infrastructure state moved to Docker-managed volumes, user data (BOOKS_PATH) correctly preserved as bind mount.
-
-2. **Installer template correctness**: start.sh SSL bootstrap logic updated to check Docker volumes instead of filesystem paths. Removed obsolete sudo mkdir commands.
-
-3. **.env.example completeness**: Added missing Solr credentials (SOLR_ADMIN_USER/PASS, SOLR_READONLY_USER/PASS) that were referenced in code but undocumented.
-
-4. **CI validation**: 18/19 checks passing. E2E test still running at approval time (expected long runtime).
-
-5. **Design compliance**: Implements Phase 1b per approved design in `.squad/decisions.md`. Follows approved v2.2.0 clean-install policy for breaking volume changes.
-
-## Follow-up Actions
-
-1. **Monitor E2E completion**: If E2E fails, investigate whether it's volume-related or known flake #1583.
-
-2. **Phase 1 completion**: With Phase 1a (PR #1612) and Phase 1b merged, all infrastructure volumes are now Docker-managed. Unblocks Phase 2 (containerized installer image).
-
-3. **No revision required**: PR is acceptable for merge as-is.
-
-## Affects
-
-- Parker: Phase 1 complete, can proceed to Phase 2 (installer image Dockerfile)
-- Brett: Infrastructure volume architecture now finalized
-- All agents: Future PRs should use Docker-managed volumes for new infrastructure state
-
-## Related
-
-- Issue: #1578 (Wizard Installer)
-- Phase 1a: PR #1612 (Redis/RabbitMQ) — merged
-- Phase 1b: PR #1614 (Solr/ZooKeeper/certbot) — approved
-- Design doc: `.squad/decisions.md` (Wizard Installer Design)
-
----
-
-# Decision: Ralph Work Monitor — Scan Summary (2026-05-31)
-
-**Date:** 2026-05-31 22:52 UTC  
-**Requestor:** Squad Coordinator  
-**Status:** ✅ Complete
-
-## Scan Results
-
-### Untriaged Issues (squad label)
-- **Found:** 25 issues with `squad` label, no `squad:{member}` assignment
-- **Action:** Spawned Ripley (Lead) to triage all 25 issues
-- **Outcome:** ✅ All triaged and routed
-
-**Routing summary:**
-| Member | Count | Domains |
-|--------|-------|---------|
-| Ash    | 13    | Solr search, indexing pipeline, HNSW, scalar quantization |
-| Brett  | 5     | Docker/Compose, SolrCloud Overseer, CI/CD, Solr base image |
-| Lambert| 4     | E2E testing, performance benchmarks |
-| Parker | 1     | OpenTelemetry migration (admin/metrics) |
-| Dallas | 1     | Security UI implementation |
-| Kane   | 1     | Security audit Solr 10 |
-
-### Assigned Issues (squad:{member} labels)
-- **Status:** Already labeled in previous triage
-- **Action taken:** None required
-
-### Draft PRs
-- **Status:** 0 draft PRs found
-- **Action taken:** None
-
-### PRs with Review Feedback
-- **Status:** 0 PRs pending review
-- **Action taken:** None
-
-### CI-Failing PRs
-- **Status:** 0 failing PRs found
-- **Action taken:** None
-
-### Ready-to-Merge PRs
-- **Status:** 0 approved PRs (awaiting E2E or additional approvals)
-- **Action taken:** None
-
-### PR #1614 — Specific Check
-- **Title:** fix(docker): convert solr/zookeeper/certbot to docker-managed volumes (#1578 phase 1b)
-- **E2E Status:** ✅ **PASSING**
-  - Dev Integration Test (Single-Node): SUCCESS
-  - Run integration & E2E tests: SUCCESS
-  - All security & unit tests: SUCCESS
-- **Commits:** 3
-- **Review Decision:** "" (no conflicts)
-- **Action taken:** 
-  - ✅ Created merge todo: `.squad/todos/1614-merge-ready.md`
-  - ✅ Left merge recommendation comment on PR
-  - Recommendation: `gh pr merge 1614 --admin --merge`
-
-## Summary
-
-| Category | Count | Status |
-|----------|-------|--------|
-| Untriaged issues triaged | 25 | ✅ Routed to squad members |
-| Draft PRs nudged | 0 | — |
-| Review-pending PRs | 0 | — |
-| CI-failing PRs | 0 | — |
-| Ready-to-merge (no approval) | 0 | — |
-| **PR #1614 merge-ready** | **1** | **✅ Ready** |
-| Agents spawned | 1 (Ripley) | ✅ Complete |
+**Expected output:**
+- `results/benchmark-1344-float32.json` with `"modes_tested": ["semantic", "hybrid"]`
+- `results/memory-1344-float32.txt` showing MEM/LIMIT for each container
+- **Pass criterion:** All 30 queries complete (0 errors); no query latency > 5s
+
+### Phase 2: int8/Scalar Quantization Candidate Benchmark
+
+**Goal:** Measure recall@10 and latency delta under int8 constraints; compare to float32.
+
+**Commands:**
+```bash
+# 1. Re-spin with int8 quantization enabled
+VECTOR_QUANTIZATION=int8 docker compose up -d --build
+
+# 2. Wait for Solr (same as before)
+curl -s http://localhost:8983/solr/books/select?q=*:* | jq '.response.numFound' | head -1
+
+# 3. Re-index the SAME corpus (idempotent; indexer routes to embedding_byte_v)
+python3 scripts/index_test_corpus.py
+
+# 4. Verify collection health with int8 vectors
+python3 scripts/verify_collections.py --verbose
+
+# 5. Run the same benchmark suite (no reordering of queries; must match corpus)
+python3 scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --modes semantic hybrid \
+  --output results/benchmark-1344-int8.json
+
+# 6. Capture memory footprint (int8 vectors should consume ~4× less memory)
+docker stats --no-stream solr solr2 solr3 > results/memory-1344-int8.txt 2>&1 || echo "Single-node or unavailable"
+```
+
+**Expected output:**
+- `results/benchmark-1344-int8.json` with same structure
+- `results/memory-1344-int8.txt` showing reduced LIMIT/MEM
+- **Pass criterion:** All 30 queries complete (0 errors); median latency delta < ±10% (int8 slightly slower is acceptable)
+
+### Phase 3: Offline Comparison & Analysis
+
+**Goal:** Compare recall@10 and latency; generate pass/fail report.
+
+**Commands:**
+```bash
+# 1. Run the offline comparator (no Solr/Docker required)
+python3 scripts/benchmark/compare_quantization.py \
+  --baseline results/benchmark-1344-float32.json \
+  --candidate results/benchmark-1344-int8.json \
+  --top-k 10 \
+  --min-recall 0.95 \
+  --output results/benchmark-1344-quantization-comparison.json
+
+# 2. Inspect results
+jq '.' results/benchmark-1344-quantization-comparison.json | head -100
+
+# 3. Check failure summary (if any)
+jq '.failures' results/benchmark-1344-quantization-comparison.json
+```
+
+**Expected output:**
+- `results/benchmark-1344-quantization-comparison.json` JSON report with per-query recall and latency metrics
+- Summary section showing:
+  - Overall recall@10 (target: ≥0.95, i.e., ≥95% of top-10 documents match)
+  - Median latency delta (acceptable: -5% to +10%)
+  - Per-mode and per-category breakdown
+
+## Pass/Fail Criteria
+
+### Release Blocker (MUST PASS)
+1. **Recall@10:** Semantic and hybrid modes must maintain **≥0.95 (95%)** recall across all 30 queries
+   - Individual query failures below 0.95 trigger manual review; not auto-fail
+   - **If any query < 0.85 recall:** blocker; escalate to Ripley and Ash
+2. **Errors:** 0 index or search errors during Phase 1 and Phase 2
+3. **Memory:** int8 collection must use ≤50% of float32 memory (target: 4× reduction = 25% of float32 baseline)
+
+### Warning (SHOULD PASS)
+1. **Latency:** int8 queries may be up to +10% slower than float32 (due to byte unpacking); flag if > +15%
+2. **Corpus coverage:** Ensure indexed document count matches between Phase 1 and Phase 2
+
+### Manual Review (If Failures Occur)
+- Query ID + mode failing recall: capture top-10 document IDs from both runs and compare semantic relevance
+- Latency anomalies: re-run with larger corpus if single-corpus variance > 20%
+- Memory underestimate: if int8 > 50% of float32, audit Solr config for cache/buffer misconfiguration
+
+## Data Sizes & Thresholds
+
+| Metric | Float32 | int8 | Target Ratio |
+|--------|---------|------|--------------|
+| Bytes per vector | 4 bytes × 768 dims = 3,072 B | 1 byte × 768 dims = 768 B | 1:4 |
+| ~1M vectors memory | ~3 GB (+ Solr overhead) | ~750 MB (+ overhead) | 1:4× |
+| Corpus size | ~1K–2K docs | Same as float32 | n/a |
+| Query suite | 30 queries (10 per category) | Same 30 queries | n/a |
+| Recall threshold | 1.0 (reference) | ≥0.95 | 95% agreement |
+| Latency delta | 0 ms (reference) | ±5–10% | tolerance |
+
+## Deliverables
+
+After benchmark completion, attach to #1344:
+1. **Float32 report:** `results/benchmark-1344-float32.json` (full benchmark data)
+2. **int8 report:** `results/benchmark-1344-int8.json` (full benchmark data)
+3. **Comparison report:** `results/benchmark-1344-quantization-comparison.json` (recall@10, latency delta, summary)
+4. **Memory logs:** 
+   - `results/memory-1344-float32.txt` (Solr stats: `docker stats --no-stream`)
+   - `results/memory-1344-int8.txt` (Solr stats: same command, int8 run)
+5. **Corpus metadata:**
+   - Document count (from `verify_collections.py --verbose`)
+   - Total text size (approximate; from indexing logs)
+   - Any query failures and root cause analysis
+
+## Blocker Resolution
+
+### Current State
+- #1670 is **held by directive** (not merged)
+- Current schema has `bits="8"` (incompatible with Solr 10; will fail at runtime on Solr 10)
+- **Action:** Await Ripley directive or #1670 approval; this plan assumes #1670 is merged
+
+### Post-#1670 Merge
+- Schema will have `bits="7"` for Solr 10, Solr 9 compat rewrite to `DenseVectorField vectorEncoding="BYTE"`
+- This plan is executable with no further code changes
+- Only requirement: updated Docker compose and schema files from #1670
 
 ## Notes
 
-- All 25 triaged issues assessed for @copilot fit per routing.md guidance
-- PR #1614 all E2E checks passing; merge approved pending human authorization
-- No blockers, no escalations
+- **Idempotency:** `index_test_corpus.py` deduplicates by Solr unique key; safe to re-run
+- **No hardcoding:** Corpus path, Solr URL, and query file are configurable in benchmark scripts
+- **Offline comparison:** `compare_quantization.py` requires no Solr/Docker; suitable for CI pipelines
+- **Parallel runs not supported:** Each phase uses the same Solr collection; must be sequential
+- **Memory measurement:** `docker stats` captures live memory; run after indexing stabilizes (~1 min)
+
+## Acceptance
+
+This plan is approved by Bishop as a complete, self-contained validation strategy for #1344 scalar quantization, subject to #1670 schema fix merging.
 
 ---
 
-
-
----
-
-# Brett decision: Issue #1631 CI ZooKeeper port posture
-
-**Author:** Brett (Infrastructure Architect)  
-**Date:** 2026-06-04T01:20:37.644+00:00  
-**Status:** Proposed for Scribe merge
-
-## Decision
-
-CI and pre-release validation stacks should use `docker/compose.ci-ports.yml` instead of the local development `docker/compose.dev-ports.yml`.
-
-The CI overlay publishes only the host ports required by automated tests and service readiness checks. It intentionally does not publish ZooKeeper client or quorum ports.
-
-## Rationale
-
-Kane's issue #1631 security requirements allow the accepted default ZooKeeper credential/ACL posture only while ZooKeeper remains private to Compose and Solr BasicAuth/RBAC remains required. The local dev override still exposes ZooKeeper for manual debugging, but CI/pre-release runs do not need that exposure.
-
-## Follow-up
-
-Any future ZooKeeper ACL hardening remains a separate optional/tested feature across single-node and three-node SolrCloud topologies.
-
-
----
-
-# Decision: Pre-release Infra Warning Classification for Next Milestone
-
-**Author:** Brett (Infrastructure Architect)  
-**Date:** 2026-06-03  
-**Status:** Proposed  
-**Related:** #1628, #1630, #1631, PR #1638
-
-## Context
-
-Ralph round 1 routed pre-release warning issues to Brett. The deprecation bucket included a Solr CLI deprecation that is already fixed in current compose/init paths and RabbitMQ 4.0-management startup notices for `management_metrics_collection` that the project does not explicitly configure.
-
-## Decision
-
-Known RabbitMQ `management_metrics_collection` pre-release startup deprecation notices should remain visible but be classified as `info` by the pre-release analyzer allowlist until the RabbitMQ image line removes or changes the upstream notice. Redis overcommit remains a host/CI-runner kernel setting documented in the operator runbook and CI bootstrap, not a Compose `sysctls` responsibility for this stack. Solr/ZooKeeper default credential and ACL warnings require Kane's security posture decision before Brett changes the infra wiring.
-
-## Rationale
-
-This keeps the next milestone warning gate focused on actionable regressions without hiding known upstream image noise. Keeping Redis overcommit at the host/runner layer matches the existing admin manual and compose comments, and avoids documenting a Compose-level setting the project does not currently use. ZooKeeper/Solr ACL behavior has security implications, so Brett should not unilaterally define the acceptable dev/test versus production policy.
-
-
----
-
-# Kane final security review: issue #1631
-
-Date: 2026-06-04T01:20:37.644+00:00
-
-## Verdict
-
-Security approves closing #1631 as a medium defense-in-depth finding with accepted compensating controls.
-
-## Acceptance criteria
-
-- Default `docker-compose.yml` must keep ZooKeeper on internal `expose:` only; do not publish ZooKeeper client/quorum/election ports in production Compose.
-- Solr HTTP APIs must continue requiring BasicAuth/RBAC for admin and readonly access.
-- The `docker/compose.dev-ports.yml` ZooKeeper port mappings are acceptable only as explicit local-debug overrides, not production posture.
-- Pre-release allowlist entries may suppress only the known ZooKeeper client/secure/observer/maxCnxns informational messages and Solr `ZkCredentialsProvider`/`ZkACLProvider` default-provider messages.
-- Regulated, multi-tenant, or externally exposed deployments must route optional ZooKeeper ACL hardening to Brett and validate it across single-node and three-node topologies before enabling by default.
-
-## Brett routing
-
-No security-blocking infra implementation is required for this release. Brett should own any future optional ZooKeeper ACL hardening or production profile split; do not treat that work as a blocker for #1631 while the controls above hold.
-
-
----
-
-# Kane security decision: Issue #1631 ZooKeeper/Solr config warnings
-
-**Author:** Kane (Security Engineer)  
-**Date:** 2026-06-03  
-**Status:** Proposed for Scribe merge
-
-## Verdict
-
-Issue #1631 is a **medium security hardening finding**, not a release blocker for the next milestone by itself.
-
-The Solr `Using default ZkCredentialsProvider/ZkACLProvider` messages mean SolrCloud znodes are not protected by ZooKeeper ACLs. In the current supported Docker Compose posture, ZooKeeper is internal-only (`expose`, no host `ports`), Solr HTTP is protected by BasicAuth/RBAC, and the remaining exploit path requires compromise of another container on the Compose network.
-
-## Requirements for Brett
-
-1. Do not publish ZooKeeper client/quorum ports (`2181`, `2888`, `3888`) in production or CI overlays.
-2. Keep Solr HTTP BasicAuth/RBAC enabled and required before collection initialization succeeds.
-3. If Brett implements ZooKeeper ACL hardening, make it optional and tested across the three-node and single-node SolrCloud topologies; avoid reintroducing the prior ZooKeeper SASL/Java 17 fragility.
-4. The pre-release log analyzer may allowlist these exact informational messages only with documentation. It must continue to flag unrelated authentication, authorization, TLS, or config failures.
-
-## Action taken
-
-Kane documented the accepted default posture, added exact allowlist rules for the known informational messages, and wired the pre-release validation workflow to use the existing allowlist.
-
-
----
-
-# Decision: PR #1618 Release Docs — Conflict Resolved, Awaiting Approval
-
-**Author:** Lead (Technical Lead)  
-**Date:** 2026-06-01  
-**Status:** Informational
-
-## Context
-
-PR #1618 (`docs: release documentation for v2.2.0`) had a merge conflict in `docs/release-notes/v2.2.0.md` caused by PR #1619 landing a comprehensive release-notes file on `dev` first. The auto-generated stub in #1618 was superseded.
-
-## Resolution
-
-Resolved the conflict by keeping the `dev` version (from #1619) which is the definitive, human-written release notes. The PR is now mergeable but requires an approving review (branch protection).
-
-## Architectural Regression Check (v2.2.0 changes)
-
-No regressions found in upload/index/search flows:
-
-- **Volume migration** (PRs #1612, #1614, #1615): Infrastructure volumes converted to Docker-managed; `document-data` bind mount preserved correctly — upload path unaffected.
-- **Solr replication cap** (#1579): Correctly clamps factor to available nodes — prevents RED collections on single-node deploys.
-- **document-indexer**: Only test-fixture skip logic added (#1617) — no production code paths changed.
-
-## Action Required
-
-- A maintainer must approve PR #1618 before it can merge (branch protection requires 1 review).
-
-
----
-
-# Decision: v2.3.0 Milestone Board Definition
-
-**Date:** 2026-06-03  
-**From:** Newt (Product Manager)  
-**To:** Ripley (Release Lead), Squad  
-**Status:** IMMEDIATE ACTION REQUIRED
+**Next steps for squad:**
+1. Merge #1670 (or equivalent `bits="7"` fix)
+2. Execute Phases 1–3 per this plan
+3. Attach reports to #1344 for release validation
+# Scalar Quantization (int8) Evaluation Protocol — Issue #1344
+**Bishop: Vector Search & Data Science Specialist**  
+**Compiled**: 2026-06-06  
+**Status**: Research complete; validation plan documented
 
 ---
 
 ## Executive Summary
 
-v2.2.1 shipped successfully. The v2.3.0 development cycle has started (VERSION = 2.3.0-dev), but **no v2.3.0 GitHub milestone exists and no scope is defined**. This creates risk: without a defined board, developers will lack clarity on what to build. Additionally, **4 pre-release warning issues are unassigned and need triage**.
+**Scalar quantization (int8) implementation** is already in place:
+- `src/embeddings-server/quantization.py` — Quantization functions (none/fp16/int8 modes)
+- `src/embeddings-server/tests/test_quantization.py` — Unit tests with gatekeeping
+- Solr schema integration (via PR #1670) — Schema support for `ScalarQuantizedDenseVectorField bits=7`
 
-**Blocker Status:** v2.3.0 cannot proceed to release gate verification until these items are resolved.
+**Issue remains open** because:
+1. PR #1670 (schema fix for Solr 10) is **still open with owner hold**
+2. Without PR #1670, recall@10 and memory validation cannot run (tests are skipped)
+3. No live benchmarking has been executed
 
----
-
-## Current State (2026-06-03)
-
-### Milestone Inventory
-
-| Milestone | Open Issues | Status | Notes |
-|-----------|-------------|--------|-------|
-| **v2.5** | 25 | Active (Research) | Solr 10 migration, all labeled `go:needs-research` |
-| **v2.3.0** | 0 | **UNDEFINED** | No issues assigned; no scope documented |
-| **Unassigned** | 4 | **Triage Needed** | Pre-release warnings from run #26917585162 |
-| **TOTAL** | 29 | — | — |
-
-### Pre-Release Warning Issues (Require Immediate Triage)
-
-All from pre-release run #26917585162:
-
-| Issue | Assignee | Title | Category |
-|-------|----------|-------|----------|
-| #1631 | sq:brett | Pre-release config warnings for pre-release | ZooKeeper, Solr, solr-init config |
-| #1630 | sq:brett | Pre-release memory warnings for pre-release | Memory limits/thresholds |
-| #1629 | sq:parker | Pre-release connection warnings for pre-release | Network/connection config |
-| #1628 | sq:brett | Pre-release deprecation warnings for pre-release | Deprecated API/features |
-
-**Current Action:** Unassigned to any milestone. Team is unclear whether these are:
-- v2.3.0 release-blocking issues (must fix before ship), or
-- v2.5 tech debt (research/optimization for future)
+**Blockers identified, resolution path clear.**
 
 ---
 
-## Missing v2.3.0 Deliverables (Release Gate Standard)
+## Evaluation Protocol
 
-Per Aithena release standard (enforced since v0.8.0, never missed):
+### A. Corpus Requirements
 
-### Required Before Release
+**Collection**: `books` (e5-base 768D embeddings)
 
-1. **Release Notes** (`docs/release-notes/v2.3.0.md`)
-   - Summary, highlights, merged PRs, breaking changes, upgrade instructions, validation steps
-   - **Assignee:** Newt (Product Manager)
-   - **Milestone:** v2.3.0
-   - **Label:** `documentation`, `release-gate`
+**Query Suite**: `scripts/benchmark/queries.json` (30 queries × 3 modes = 90 executions)
+| Category | Count | Purpose |
+|----------|-------|---------|
+| simple_keyword | 5 | Basic catalog keyword searches |
+| natural_language | 6 | Questions benefiting from semantic understanding |
+| multilingual | 6 | Spanish, Catalan, French queries |
+| long_complex | 4 | Long queries testing 512-token context window |
+| edge_cases | 9 | Short queries, special chars, empty results |
 
-2. **Test Report** (`docs/test-reports/test-report-v2.3.0.md`)
-   - Per-service test counts, coverage metrics, regressions, performance delta
-   - **Assignee:** Lambert (Tester)
-   - **Milestone:** v2.3.0
-   - **Label:** `testing`, `release-gate`
+**Modes tested**: keyword, semantic, hybrid
 
-3. **Manual Updates** (user-manual.md, admin-manual.md)
-   - Feature descriptions, deployment procedures, env vars, troubleshooting, screenshots
-   - **Assignee:** Newt (Product Manager)
-   - **Milestone:** v2.3.0
-   - **Label:** `documentation`, `release-gate`
+**Corpus size**: Flexible (100–1000 PDFs recommended for statistical significance; test corpus available)
 
-4. **Release Validation Checklist**
-   - PM sign-off, deployment dry-run, security review confirmation
-   - **Assignee:** Ripley (Release Lead)
-   - **Milestone:** v2.3.0
-   - **Label:** `release-gate`
-
-**Current Status:** All ❌ NOT CREATED
+**Ground truth**: Not required (validation is *relative* comparison, not absolute quality)
 
 ---
 
-## Scope Definition Gap
+### B. Exact Execution Workflow
 
-**What We Don't Know About v2.3.0:**
-- Is v2.3.0 a feature release, bug-fix patch, infrastructure work, or maintenance release?
-- Are there any planned breaking changes?
-- Which dependency upgrades (if any) are in scope?
-- Expected cycle time: ~1 week (patch-only) vs ~2–3 weeks (feature-full)?
-- What's the target ship date?
+#### Step 1: Float32 Baseline Run
 
-**Impact:** Without scope, Ripley cannot:
-1. Plan release timing
-2. Define v2.3.0 issues that should be created
-3. Communicate expectations to the squad
-4. Set a reasonable due date
+```bash
+# Build with float32 quantization disabled
+VECTOR_QUANTIZATION=none docker compose up -d --build
 
----
+# Index corpus (idempotent, safe to re-run)
+python3 scripts/index_test_corpus.py --status-only
 
-## Exact Recommendations for Ripley
+# Verify collection health
+python3 scripts/verify_collections.py --verbose
 
-### **IMMEDIATE (This Week)**
+# Run benchmark: semantic + hybrid modes only (keyword is identical for both)
+python3 scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --modes semantic hybrid \
+  --output results/benchmark-1344-float32.json
 
-1. **Define v2.3.0 scope:**
-   - Feature release? Bug-fix release? Maintenance patch? Infrastructure-only?
-   - Expected due date (estimate from v2.2 cycle time)
-   - Breaking changes (if any)?
-   - Key themes or areas of focus?
+# Capture memory footprint
+docker stats --no-stream solr solr2 solr3 > results/docker-stats-float32.txt
 
-2. **Create v2.3.0 milestone in GitHub:**
-   - Title: `v2.3.0`
-   - Description: Scope summary + due date
-   - Add to product board for visibility
-
-3. **Triage pre-release warning issues (#1628–1631):**
-   - Option A: Assign to v2.3.0 milestone with `release-gate` label if they're **blockers**
-   - Option B: Assign to v2.5 milestone with `pre-release-warnings` label if **tech debt**
-   - Option C: Close with explanation if **false positives** (with link to resolution)
-
-### **FOLLOW-UP (After Scope Defined)**
-
-4. **Create 4 release follow-up issues:**
-
-   ```
-   Issue #N: docs: release notes for v2.3.0
-   Assignee: Newt
-   Milestone: v2.3.0
-   Labels: documentation, release-gate
-   Body: Create docs/release-notes/v2.3.0.md with summary, highlights, merged PRs, breaking changes, upgrade instructions, validation steps.
-   ```
-
-   ```
-   Issue #N: test: release test report for v2.3.0
-   Assignee: Lambert
-   Milestone: v2.3.0
-   Labels: testing, release-gate
-   Body: Create docs/test-reports/test-report-v2.3.0.md with per-service test counts, coverage metrics, regressions, performance deltas.
-   ```
-
-   ```
-   Issue #N: docs: update admin and user manuals for v2.3.0
-   Assignee: Newt
-   Milestone: v2.3.0
-   Labels: documentation, release-gate
-   Body: Update docs/admin-manual.md and docs/user-manual.md with feature descriptions, deployment procedures, env vars, troubleshooting.
-   ```
-
-   ```
-   Issue #N: release: v2.3.0 validation checklist
-   Assignee: Ripley
-   Milestone: v2.3.0
-   Labels: release-gate
-   Body: Pre-release gate: PM sign-off, deployment dry-run, security review, E2E validation, all documentation complete.
-   ```
-
-5. **Announce v2.3.0 milestone to squad** with scope, due date, and key contacts.
-
-### **OPTIONAL: Define Pre-Release Warning Policy**
-
-**Decision Point:** Should every pre-release run auto-create 4+ separate issues, or only for high-severity findings?
-
-**Current Pattern:** 1 pre-release run → 4 issues (configuration, memory, connection, deprecation warnings)
-
-**Suggested Policy:**
-- Auto-create issues **only if**:
-  - Total warning count >= 5, **OR**
-  - Any severity >= P0 (currently all appear to be info/warnings)
-- Otherwise: log in CI artifacts but don't create issues (reduces triage overhead)
-
-**Recommendation:** Establish this as a standing decision in `.squad/decisions.md` so future release runs follow the same policy.
-
----
-
-## Release Gate Precedent (Aithena History)
-
-Aithena has **never shipped a release without all four gate items complete:**
-- v1.0.0 through v2.2.1: 100% compliance
-- Pattern enforced: Release docs + test report + manual updates + PM sign-off = "ready to ship"
-- v2.3.0 must follow the same standard to maintain quality baseline
-
----
-
-## Impact of Not Acting
-
-**If v2.3.0 scope remains undefined:**
-1. Developers lack clarity on what to build/fix
-2. Release date slips or becomes chaotic (reactive vs proactive)
-3. Four pre-release warnings remain untracked (risk of missing release blockers)
-4. Release gate items created ad-hoc at the last minute (rushed documentation)
-5. v2.3.0 release quality degrades relative to v2.0–v2.2.1 pattern
-
-**If pre-release warnings aren't triaged:**
-1. Unclear if v2.3.0 can ship (may be blocked by unresolved issues)
-2. Team doesn't know who owns the work
-3. Issues may age out or be forgotten
-
----
-
-## Questions for Ripley
-
-1. What's the intended scope for v2.3.0? (Feature, patch, infrastructure, or maintenance-only?)
-2. Which of the 4 pre-release warnings (#1628–1631) are release blockers?
-3. Target ship date for v2.3.0?
-4. Should we establish a pre-release warning threshold policy going forward?
-
----
-
-## Appendix: v2.5 Milestone Health
-
-**v2.5 status:** Healthy (25 research issues, all properly labeled `go:needs-research`)
-
-v2.5 is focused on Solr 10 migration and is appropriately in research phase. No action needed. Forward planning is working well.
-
----
-
-**Next Step:** Ripley to respond with scope definition and pre-release warning triage decisions. Newt will then create the 4 release follow-up issues and set up the v2.3.0 board.
-
-
----
-
-# Decision: PR #1637 Review — v2.2.1 Release Documentation Approved
-
-**Author:** Newt (Product Manager)  
-**Date:** 2026-06-03T22:02:00Z  
-**PR:** #1637  
-**Status:** APPROVED (documentation quality) / BLOCKED (CI workflow)  
-
-## Summary
-
-PR #1637 contains auto-generated release documentation for v2.2.1. **Documentation quality is excellent and approved for merge.** The PR is currently blocked by a GitHub workflow failure (assign-work), not by product concerns.
-
-## Approval Rationale
-
-### ✅ Release Notes (v2.2.1.md) — Well-Executed
-- Accurately documents 5 core changes: volume migration (#1616), Solr safety (#1544), E2E rate-limit fix (#1583), test robustness (#1617), E2E skeleton suites (#1623)
-- Breaking changes clearly disclosed: prod-overlay volume migration requires data backup
-- Upgrade instructions are step-by-step with curl validation examples
-- Scope appropriate for maintenance patch (not overloaded with minor fixes)
-
-### ✅ Test Report (v2.2.1.md) — Honest & Professional
-- Verdict: PASS (maintenance patch, focused scope)
-- Acknowledges data limitations: "CI export artifacts not captured; confidence is documentation-led"
-- Provides 5 concrete repository spot-checks (prod overlay paths, Solr init checks, etc.)
-- All referenced issues are linkable and closeable
-- Appropriate candor for release gate validation
-
-### ✅ Admin Manual & User Manual — Current & Consistent
-- v2.2.1 sections added to both manuals with correct information
-- Breaking change repeated in Admin Manual (volume migration note)
-- Links to detailed release notes for users seeking more detail
-- Formatting and structure maintained
-
-### ✅ No User-Facing Risk
-- All changes are documentation only
-- No code modifications, no behavior changes
-- Breaking change is clearly communicated (operators must back up volumes)
-
-## Blocking Issues
-
-### ❌ CI Workflow Failure (Not Product Issue)
-- `assign-work` workflow failing (FAILURE + SKIPPED)
-- Prevents GitHub ruleset merge
-- **Resolution:** Ripley must fix CI; product assessment cannot proceed until workflow passes
-
-### ✅ Checklist Items → Follow-Up Issue
-PR contains 7 unchecked items (accuracy validation, completeness check, etc.). These are not PR merge blockers; they are human validation tasks.
-
-**Decision:** Created GitHub issue #1639 "Release Validation Checklist: v2.2.1" to capture all 7 items as separate work items. This allows:
-1. PR #1637 to merge once CI passes (no product blocker)
-2. Team to collaboratively validate release contents
-3. Clear ownership and sign-off authority (Ripley final approval before shipping to main)
-
-**Rationale for Separation:** Automation-generated PRs should not be merge-blocked by human validation tasks. Instead, human validation happens asynchronously in a dedicated issue, ensuring the release docs PR can proceed while validation work continues in parallel.
-
-## Release Gate Status
-
-| Requirement | Status | Notes |
-|---|---|---|
-| Release notes | ✅ PASS | Comprehensive, accurate, scope-appropriate |
-| Test report | ✅ PASS | Honest assessment with documented limitations |
-| Admin manual | ✅ PASS | Current and correct |
-| User manual | ✅ PASS | Current and correct |
-| Breaking changes disclosed | ✅ PASS | Volume migration clearly noted |
-| Upgrade instructions | ✅ PASS | Step-by-step with validation |
-| User impact assessment | ✅ PASS | No production risk |
-| **CI checks** | ❌ FAIL | assign-work workflow (Ripley's responsibility) |
-| **Human validation** | ⏳ PENDING | Issue #1639 created for follow-up |
-
-## Next Actions
-
-1. **Ripley (immediate):** Debug and fix assign-work workflow failure
-2. **Ripley (after CI passes):** Review and approve PR #1637 merge
-3. **Newt/Team (parallel):** Work issue #1639 to validate release contents (docs accuracy, completeness, testing)
-4. **Ripley (final gate):** Approve v2.2.1 release to main only after issue #1639 is fully signed off
-
-## Learnings
-
-1. **Checklist Separation Improves Process:** Keeping automation PR merge unblocked while routing human validation to a separate issue reduces cycle time and clarifies ownership.
-2. **Maintenance Patch Scope Works Well:** Limited change set (#1616, #1544, #1583, #1617, #1623) means focused, reviewable docs; test report honest about data limitations.
-3. **Release Gate Remains Effective:** Documentation-first enforcement (docs + tests + validation before merge) prevents release surprises; no exceptions taken.
-4. **CI/Product Concerns Decoupled:** Workflow failure is a technical ops issue; product assessment is complete and positive. These should be tracked separately.
-
----
-
-For questions about release readiness, contact Newt (Product Manager).
-
-
----
-
-# Product Board Rescan: v2.2.1 Release & v2.3.0 Milestone
-
-**Date:** 2026-06-04T00:02:03Z  
-**From:** Newt (Product Manager)  
-**Status:** Ready for deployment; v2.3.0 scope pending team input  
-**Audience:** Ripley (Lead), Squad
-
----
-
-## Executive Summary
-
-**v2.2.1 is release-ready.** All release gate items are complete:
-- ✅ Release notes (PR #1637 merged)
-- ✅ Test report (v2.2.1 available)
-- ✅ Pre-release warnings triaged (3 closed, 1 open & actively assigned)
-- ✅ Manual docs aligned
-
-**Issue #1639 (Release Validation Checklist)** has been assigned to Ripley and tagged with a product review comment confirming readiness. No product/documentation blockers remain.
-
-**v2.3.0 development cycle started** (PR #1638 merged; VERSION → 2.3.0-dev), but **GitHub milestone does not exist and scope is undefined.** This must be resolved before final squad assignment.
-
----
-
-## Board Status (2026-06-04, 00:02 UTC)
-
-### v2.2.1 Release Gate
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Release Notes | ✅ Complete | docs/release-notes/v2.2.1.md — PR #1637 |
-| Test Report | ✅ Complete | docs/test-reports/v2.2.1.md — available |
-| Manual Updates | ✅ Complete | docs/user-manual.md, docs/admin-manual.md aligned |
-| Pre-release Warnings | ✅ Triaged | #1628 (deprecation)—closed; #1629 (connection)—closed; #1630 (memory)—closed; #1631 (config)—assigned Brett+Kane |
-| PM Sign-off | ✅ Pending | Issue #1639 now assigned to Ripley for final checklist |
-
-**Result:** v2.2.1 release package is complete. Ready for Ripley final approval and merge to main.
-
----
-
-### Pre-Release Warning Issues (Post v2.2.1 Triage)
-
-Per decision in `.squad/decisions/inbox/ripley-next-milestone-triage.md`:
-
-| Issue | Status | Assignee | Priority | Label | Notes |
-|-------|--------|----------|----------|-------|-------|
-| #1628 | CLOSED | Brett | P2 | go:yes | Deprecation cleanup — resolved in v2.2.1 cycle |
-| #1629 | CLOSED | Parker | P1 | go:yes | Connection warning noise — resolved in v2.2.1 cycle |
-| #1630 | CLOSED | Brett | P2 | go:yes | Memory overcommit — resolved in v2.2.1 cycle |
-| #1631 | OPEN | Brett + Kane | P1 | go:yes | Config warnings — actively in triage; no release blocker |
-
-**Conclusion:** Three of four pre-release warning issues have been resolved during v2.2.1 work. #1631 remains open but is assigned and prioritized. No release blockers remain.
-
----
-
-### v2.3.0 Milestone Status
-
-**Current State:**
-- ✅ Development cycle started (PR #1638 merged; VERSION updated to 2.3.0-dev)
-- ❌ GitHub milestone **does not exist**
-- ❌ Release scope **undefined**
-- ❌ Release gate issues **not yet created**
-
-**Missing Artifacts:**
-1. GitHub v2.3.0 milestone (no number, no due date, no description)
-2. Release scope definition (feature? patch? infrastructure? maintenance?)
-3. Four release-gate issues (release notes, test report, manual updates, validation checklist)
-
-**Impact:**
-- Squad members lack clarity on what v2.3.0 should deliver
-- Release timeline unclear
-- Release gate pattern (established v0.8.0→v2.2.1) at risk of breakage
-
----
-
-## Exact Product Actions Taken
-
-1. ✅ **Issue #1639 Assignment:** Added comment confirming release readiness; assigned to Ripley (jmservera) for final sign-off
-2. ✅ **Pre-release Issue Review:** Confirmed #1628–#1631 triage is complete and decisions are documented in shared inbox
-3. ✅ **Version Check:** Confirmed VERSION = 2.3.0-dev in dev branch post-PR #1638
-
----
-
-## Exact Next Actions (In Human Terms)
-
-**Ripley must:**
-
-1. **Define v2.3.0 scope** (this week):
-   - Is it a feature release, maintenance patch, infrastructure sprint, or security/hardening cycle?
-   - Expected due date (estimate from v2.2 cycle time)?
-   - Any breaking changes?
-   - Key themes or focus areas?
-
-2. **Create GitHub v2.3.0 milestone:**
-   - Title: `v2.3.0`
-   - Description: Include scope summary + due date
-   - Add to product board for visibility
-
-3. **Once scope is confirmed, Newt will create 4 release-gate issues:**
-   - `docs: release notes for v2.3.0` (Assignee: Newt)
-   - `test: release test report for v2.3.0` (Assignee: Lambert)
-   - `docs: update admin and user manuals for v2.3.0` (Assignee: Newt)
-   - `release: v2.3.0 validation checklist` (Assignee: Ripley)
-
-**Squad coordination:**
-- Issue #1631 is assigned to Brett + Kane; no blocker to v2.2.1 release
-- Ralph loop can continue with pre-release warning resolution during v2.3.0 dev work
-- Do not wait on #1631 to ship v2.2.1
-
----
-
-## Questions for Ripley
-
-1. What's the intended scope for v2.3.0?
-2. Target ship date?
-3. Any known breaking changes or infrastructure changes?
-4. Should we adjust pre-release warning auto-issue threshold (currently 4 issues per run)?
-
----
-
-## Release Gate History (Compliance Check)
-
-Aithena has maintained 100% release-gate compliance since v0.8.0:
-- v1.0.0 through v2.2.1: 100% on-time delivery of all four gate items
-- Pattern: Release docs + test report + manual updates + PM sign-off = "ready to ship"
-- **v2.3.0 must follow the same standard** to maintain quality baseline
-
----
-
-## Appendix: Ralph Loop Status
-
-Ralph is active post-v2.2.1 and has successfully:
-- Closed #1628, #1629, #1630 (3 of 4 pre-release warning issues)
-- Started v2.3.0 development cycle (PR #1638)
-- Captured v2.2.1 release outcome (PR #1644)
-
-**No blockers remain for product side.** v2.2.1 is cleared for release. v2.3.0 planning is ready to proceed once scope is defined.
-
----
-
-**Status:** ✅ Product board is clear. Exact next action: Ripley defines v2.3.0 scope; Newt creates release-gate issues.
-
-
----
-
-# Decision: v2.3.0 Release Gate Issues Preparation (Issues #1645, #1647, #1648)
-
-**Date:** 2026-06-04T01:20:37.644+00:00  
-**Author:** Newt (Product Manager)  
-**Scope:** v2.3.0 release gate preparation; documentation and validation checklist setup  
-
----
-
-## Context
-
-Ripley assigned Newt to #1645, #1647, and #1648 (v2.3.0 release-gate issues) after scope confirmation that v2.3.0 is a **maintenance/infrastructure hardening cycle** with a 2026-06-11 target date. The only implementation item is Issue #1631 (pre-release config/security follow-up), which Kane approved as an accepted defense-in-depth risk.
-
----
-
-## Decision Summary
-
-I have prepared all three v2.3.0 release-gate issues for team review and final implementation coordination:
-
-### Issue #1645 (Release Notes)
-**Status:** ✅ **READY FOR REVIEW**
-
-Created `docs/release-notes/v2.3.0.md` documenting:
-- Maintenance release scope (no new user features)
-- Summary of Issue #1631 security validation outcomes
-- Infrastructure & Configuration Security Posture section with production constraints:
-  * Keep ZooKeeper internal (do NOT expose ports to host/external networks)
-  * Maintain Solr BasicAuth/RBAC requirement
-  * Pre-release analyzer allowlist for known config warnings
-  * No code changes needed; validation documented as accepted risk
-- Simple upgrade path (pull images + restart; no config changes)
-- Operator validation steps
-- No breaking changes for deployments
-
-**Prerequisites for final release notes:** None. Document is complete and ready for review. No further edits pending until team feedback.
-
-### Issue #1647 (User/Admin Manual Updates)
-**Status:** ✅ **READY FOR REVIEW**
-
-Updated both manuals:
-
-**User Manual (`docs/user-manual.md`):**
-- Added v2.3.0 summary before "Getting Started" section
-- States: "Maintenance/infrastructure hardening; no user-facing changes; pre-release validation completed"
-- Links to release notes for operator/infrastructure details
-
-**Admin Manual (`docs/admin-manual.md`):**
-- Updated operator-notes header to include v2.3.0 with maintenance scope summary
-- Added comprehensive "Deployment Updates for v2.3.0" section covering:
-  - Infrastructure security validation outcomes
-  - Operator responsibilities (keep ZK internal, maintain Solr auth, isolate network)
-  - Production deployment constraints with YAML examples
-  - Upgrade instructions (no config changes)
-  - Configuration changes table (all informational)
-  - Data migration (none required)
-  - Container image list (retagged from v2.2.1)
-
-**Prerequisites for final manual updates:** None. Updates are complete and aligned with release notes.
-
-### Issue #1648 (Release Validation Checklist)
-**Status:** ✅ **PREPARED — AWAITING IMPLEMENTATION MERGE**
-
-Recorded checklist readiness:
-
-**Documentation Complete:**
-- v2.3.0 milestone exists (due 2026-06-10)
-- Release notes complete and reviewed
-- User/admin manuals updated
-- Issue #1631 security posture documented
-
-**Implementation Blocking:**
-- PR #1649 ("Keep ZooKeeper private in CI validation stacks") must merge
-- CI checks must pass
-- Test evidence must be captured (per Lambert's test report framework)
-- Pre-release validation workflow must complete
-
-**Ready for Sign-Off After Prerequisites:**
-- Milestone zero open implementation/doc issues
-- Release notes accurate
-- Test report evidence complete
-- User/admin manual impact documented
-- #1631 accepted risk clearly stated
-- Newt release-gate approval recorded
-
----
-
-## Key Decisions Made
-
-### 1. Release Notes Scope — Production Constraints Over Feature List
-
-**Decision:** Instead of highlighting features (none to highlight), I structured v2.3.0 release notes around the **infrastructure security validation** that Issue #1631 represents.
-
-**Rationale:**
-- v2.3.0 is explicitly maintenance/infrastructure; zero user features are promised
-- The only valuable information for operators is the security validation outcome
-- Production constraints (do not expose ZK ports, keep Solr auth required) are essential for the release gate to be meaningful
-- Documentation-first release gate pattern requires operator-safe and accurate constraints to be published
-
-**Implication:** The release notes are deliberately short and constraint-focused, not feature-focused. This is correct for a maintenance cycle.
-
-### 2. Admin Manual Deployment Section — Operator Responsibilities Explicit
-
-**Decision:** I created a detailed "Deployment Updates for v2.3.0" section in the admin manual that **explicitly documents operator responsibilities** to maintain the security posture validated in this release.
-
-**Rationale:**
-- Issue #1631 is closed as "accepted risk" — but risk acceptance requires operators to enforce certain constraints
-- Production deployments MUST keep ZooKeeper internal and Solr auth enabled
-- The default `docker-compose.yml` already enforces these (it's the correct posture), but operators need explicit guidance
-- YAML examples show the correct pattern (expose: only, no ports:) to prevent misconfiguration
-
-**Implication:** This is an unusually detailed release notes section for a maintenance patch, but it reflects the security-validation nature of the release. The effort is justified because the constraints are load-bearing for the accepted risk.
-
-### 3. User Manual — No User Changes Stated Explicitly
-
-**Decision:** I added a v2.3.0 note to the user manual that explicitly states "no user-facing changes" and directs infrastructure questions to the admin manual.
-
-**Rationale:**
-- Newt's role includes ensuring user-facing accuracy
-- A maintenance release with no user features should still be acknowledged in the user manual
-- Explicit statement ("no user-facing changes") is clearer than omission
-- This pattern (one-liner with link to detailed docs) matches the existing manual's style for maintenance patches
-
-**Implication:** Consistency maintained; users and admins both know what v2.3.0 is about in a single glance.
-
-### 4. Test Report — Framework Ready; Evidence Pending
-
-**Decision:** I reviewed Lambert's test report draft and added comments to Issue #1648 clarifying the exact prerequisites for final test evidence.
-
-**Rationale:**
-- The test report framework is sound (Lambert has identified all required test artifacts)
-- The blocker is PR #1649 implementation merge, not documentation
-- I am not creating duplicate test evidence by hand; I am guiding the sequence so Newt can sign off after PR #1649 is merged
-- This keeps the release gate aligned with implementation progress
-
-**Implication:** No separate test run is needed from Newt; the gate waits for Brett's PR #1649 and CI evidence, which is appropriate.
-
----
-
-## Alignment with Release Gate Pattern
-
-All decisions follow the established v2.2.1 release gate pattern:
-
-| Gate Item | Pattern | v2.3.0 Implementation |
-|-----------|---------|----------------------|
-| **Release Notes** | Comprehensive guide; scope, highlights, changes, breaking changes, upgrade path, validation | ✅ Created; focused on infrastructure validation & constraints |
-| **Test Report** | Per-service metrics, coverage, regressions, evidence | ✅ Framework ready (Lambert); evidence pending PR #1649 |
-| **Manual Updates** | User-facing & operator-facing docs | ✅ Both updated; constraints explicit in admin manual |
-| **PM Approval** | Validation, product judgment, sign-off | ✅ Ready; pending test evidence collection |
-
----
-
-## Prerequisites for Release (Next Actions)
-
-### By Brett (Infrastructure):
-1. Merge PR #1649 ("Keep ZooKeeper private in CI validation stacks")
-2. Ensure required CI checks pass (Unit, Integration, Security, CodeQL)
-
-### By Lambert (Tester):
-1. After PR #1649 merge: Capture test results (compose-security, pre-release-check, verify.sh)
-2. Complete pre-release validation workflow run for v2.3.0 milestone
-3. Finalize test report with evidence and sign-off
-
-### By Newt (Product Manager):
-1. After test evidence is captured: Review and incorporate into Issue #1648 checklist
-2. Final release-gate approval comment on Issue #1648
-
-### By Ripley (Lead):
-1. Review all release gate items (release notes, test report, manual updates)
-2. Final architectural approval
-3. Merge to main and tag v2.3.0
-
----
-
-## Learnings & Future Application
-
-### 1. Infrastructure Releases Deserve Detailed Operator Guidance
-
-For future maintenance/infrastructure cycles, the release notes should include explicit **operator responsibilities** and constraint documentation, not just feature lists. This is especially important for accepted-risk decisions that require operational discipline to maintain.
-
-### 2. Production Constraints Are Part of the Product Boundary
-
-The decision to document "keep ZooKeeper internal" and "maintain Solr auth" in the release notes (not just in deployment docs) reflects that infrastructure security constraints are part of the **product contract** with operators. PM should call these out explicitly.
-
-### 3. Test Report Framework Pattern Works Well
-
-Lambert's approach of preparing a test report framework early (pre-implementation merge) and then filling in evidence after CI completes is effective for release-gate coordination. The framework itself becomes a checklist for implementation teams.
-
----
-
-## Sign-Off
-
-- **Newt (Product Manager):** All three release-gate issues are prepared and ready for team coordination. Documentation is complete; implementation coordination pending. No product/documentation blockers.
-- **Status:** ✅ Ready for implementation merge coordination (Issue #1649)
-- **Target Release Date:** 2026-06-11
-
----
-
-**References:**
-- Issue #1645: Release notes
-- Issue #1647: User/admin manual updates  
-- Issue #1648: Release validation checklist
-- Issue #1631: Pre-release config/security triage (closed; security approved)
-- PR #1649: Keep ZooKeeper private (implementation; OPEN)
-
-
----
-
-# v2.3.0 Release Gates — Status & Next Steps
-
-**Date:** 2026-06-04T01:20:37Z  
-**Owner:** Newt (Product Manager)  
-**Status:** Pending Ripley scope definition  
-**Audience:** Squad, Ripley (Lead), Product Board
-
----
-
-## Decision Summary
-
-**v2.3.0 release-gate issues WILL NOT be created until Ripley (Lead) defines v2.3.0 scope and milestone.** This aligns with established Aithena release patterns and avoids premature artifact creation.
-
----
-
-## Current State (2026-06-04)
-
-### v2.3.0 Artifacts Status
-
-| Artifact | Status | Owner | Blocker |
-|----------|--------|-------|---------|
-| GitHub v2.3.0 Milestone | ❌ Not Created | Ripley | **Yes** |
-| Release Scope (Features/Fixes) | ❌ Undefined | Ripley | **Yes** |
-| Release Gate Issues (4) | ❌ Not Created | Newt | Waiting for scope |
-| Development Cycle | ✅ Started | Brett | — |
-| VERSION → 2.3.0-dev | ✅ Updated | PR #1638 | — |
-
-### v2.2.1 Artifacts Status
-
-| Artifact | Status | Owner | Notes |
-|----------|--------|-------|-------|
-| GitHub v2.2.1 Milestone | ✅ Complete | Ripley | 5 issues closed |
-| Release Notes (v2.2.1.md) | ✅ Complete | Newt | PR #1637 merged |
-| Test Report (v2.2.1.md) | ✅ Complete | Lambert | Available |
-| Manual Updates | ✅ Complete | Newt | user-manual.md + admin-manual.md |
-| Validation Checklist (#1639) | ✅ Ready | Ripley (jmservera) | Assigned for human sign-off |
-| Pre-Release Warnings | ✅ Triaged | Brett, Kane, Parker | #1628–#1631 processed |
-
----
-
-## Why Wait for Scope?
-
-**Release-gate pattern established in v0.8.0→v2.2.1:**
-
-1. **Four release-gate issues follow scope**, not precede it:
-   - `docs: release notes for vX.Y.Z` — requires feature list, breaking changes, migration guide
-   - `test: release test report for vX.Y.Z` — requires final test runs, coverage baseline
-   - `docs: update manuals for vX.Y.Z` — requires feature descriptions, operational changes
-   - `release: vX.Y.Z validation checklist` — requires all above + PM sign-off
-
-2. **Creating issues before scope causes:**
-   - Undefined acceptance criteria (what goes in the release notes if we don't know features?)
-   - Duplicate triage work (issues created without info, then updated when scope arrives)
-   - Squad confusion on what to build (scope drives sprints; gates track completion)
-
-3. **Ripley's role (Lead):**
-   - Defines scope + due date (not Newt's role)
-   - Creates or updates GitHub milestone
-   - Once done, Newt creates gate issues in response
-
----
-
-## Exact Next Actions
-
-### Ripley Must (This Week)
-
-1. **Define v2.3.0 scope:**
-   - Feature focus (e.g., "search UX improvements", "embedding refinement", "operations hardening")?
-   - Target due date (estimate from v2.2 cycle time: ~4 weeks)?
-   - Any breaking changes or infrastructure changes?
-   - Known issues to defer?
-
-2. **Create GitHub v2.3.0 milestone:**
-   - Title: `v2.3.0`
-   - Description: Scope summary + due date
-   - Link to any relevant PRs or team planning docs
-
-3. **Notify Newt once milestone exists:**
-   - Comment on this decision file or tag @newt
-   - Newt will immediately create four release-gate issues
-
-### Newt Will (On Ripley Signal)
-
-Once Ripley creates the v2.3.0 milestone, Newt will create:
-
-1. `docs: release notes for v2.3.0` (Assignee: Newt, Label: `release-gate,v2.3.0`)
-2. `test: release test report for v2.3.0` (Assignee: Lambert, Label: `release-gate,v2.3.0`)
-3. `docs: update user & admin manuals for v2.3.0` (Assignee: Newt, Label: `release-gate,v2.3.0`)
-4. `release: v2.3.0 validation checklist` (Assignee: Ripley, Label: `release-gate,v2.3.0`)
-
-Each issue will include:
-- Milestone: `v2.3.0`
-- Description: Acceptance criteria from v2.2.1 pattern
-- Due date: 2 weeks before v2.3.0 target ship date (gate must close before dev→main merge)
-
----
-
-## v2.2.1 Status (For Clarity)
-
-**v2.2.1 is release-ready.** All gate items are complete:
-- ✅ Release notes merged (PR #1637)
-- ✅ Test report available
-- ✅ Manual updates aligned
-- ✅ Issue #1639 assigned to Ripley for human sign-off
-
-**No blockers to v2.2.1 ship.** Ripley can merge to main whenever ready.
-
----
-
-## Release-Gate Compliance History
-
-Aithena has maintained 100% release-gate compliance since v0.8.0 (50+ releases):
-- v0.8.0–v1.15.0: All releases include docs + tests + manual updates + PM sign-off
-- v2.0–v2.2.1: Same pattern, zero deviations
-- **v2.3.0 must continue this standard** for quality integrity
-
----
-
-## Open Questions for Ripley
-
-1. Is v2.3.0 a feature release, infrastructure sprint, or maintenance patch?
-2. Target ship date? (helps size release notes + manual effort)
-3. Any known breaking changes or migrations?
-4. Should pre-release warning threshold be adjusted (currently 4 issues/run)?
-5. Is v2.5 research backlog (25 open Solr issues) in or out of v2.3.0 scope?
-
----
-
-**Decision:** Hold v2.3.0 release gates pending Ripley scope definition. No gate issues will be created until GitHub milestone exists and scope is documented.
-
-**Status:** Approved by Newt. Awaiting Ripley confirmation.
-
-
----
-
-# Infra PR Merge Round Follow-up
-
-- **Date:** 2026-06-03T22:02:03.765+00:00
-- **Owner:** Ripley
-
-## Decision
-
-Do not admin-merge PRs with unresolved review threads or failed `assign-work` checks, even when the underlying product/infra CI is green. If a branch-behind PR cannot be admin-merged because repository rules require fresh expected checks, update the branch, wait for required checks, and only merge once review threads are resolved.
-
-## Rationale
-
-During PR #1638/#1641/#1642 handling, PR #1642 merged only after a branch refresh, green checks, and zero unresolved threads. PR #1641 gained new unresolved review threads after refresh and was routed back to Brett. PR #1638's `assign-work` failure matches PR #1637: the workflow can identify the squad member but receives 403 when creating the PR assignment comment, so Squad Issue Assign needs a permissions/pull-request-comment fix before the check is considered cleared.
-
-## Follow-up
-
-Brett/Ripley should patch Squad Issue Assign permissions for pull-request label events, then retrigger failed `assign-work` checks by reapplying the relevant squad label or rerunning the workflow where appropriate.
-
-
----
-
-# Next-Milestone Triage After v2.2.1 Release
-
-**Date:** 2026-06-03
-**Owner:** Ripley
-**Status:** Proposed
-
-## Decision
-
-Treat post-release pre-release warning issues as next-milestone hardening work once v2.2.1 is published. Remove the base `squad` inbox label after triage, add `go:yes` and a priority label, and leave exact owner labels/comments for Ralph and specialist agents.
-
-## Current routing
-
-- #1629 → Parker, P1: backend readiness/connection warning noise.
-- #1631 → Brett owner with Kane review, P1: ZooKeeper/Solr credential and ACL configuration warnings.
-- #1628 → Brett, P2: deprecation warning cleanup.
-- #1630 → Brett, P2: Redis memory-overcommit operational warning.
-- PR #1638 → Brett before merge: resolve dev `VERSION=*-dev` compatibility across release/pre-release workflows.
-- PR #1637 → Newt before merge/close: verify generated v2.2.1 release docs and decide whether the PR is still needed.
-
-## Rationale
-
-The release succeeded, but the next loop should not start implementation from the broad `v2.5` research backlog while fresh release-warning regressions and blocked release-cycle PRs exist. These are bounded, actionable, and close to release quality, so they should be cleared first.
-
-
----
-
-# Decision: v2.3.0 Maintenance/Infrastructure Scope
-
-**Date:** 2026-06-04
-**Owner:** Ripley
-
-## Decision
-
-v2.3.0 is a narrow maintenance/infrastructure hardening milestone targeting 2026-06-11.
-
-The milestone scope is limited to:
-- resolving or explicitly accepting the remaining pre-release config/security follow-up (#1631; now closed under the milestone), and
-- completing the standard release-gate deliverables: release notes, test report, user/admin manual impact review, and release validation checklist.
-
-No broader product feature scope is approved for v2.3.0. The broader feature roadmap remains TBD. Existing v2.5 Solr 10 migration/research issues remain in v2.5 and should not be pulled into v2.3.0 without a separate lead decision.
-
-## Rationale
-
-The active board after v2.2.1 contains one concrete non-v2.5 follow-up: #1631. The rest of the open backlog is either v2.5 research/migration work or v2.2.1 human validation. A maintenance milestone avoids inventing unsupported feature promises while giving the team a clear next release gate.
-
-## Routing
-
-- Brett: infrastructure/config implementation path for #1631 if it reopens.
-- Kane: security acceptance criteria and review for #1631 if it reopens.
-- Lambert: test evidence for v2.3.0 release report.
-- Newt: release notes, manual impact review, final release validation checklist.
-- Juanma/Ripley: human final sign-off where required.
-
-
----
-
-# Decision: Squad-Generated Workflow Security Scanning Exclusion
-
-**Date:** 2026-06-04
-**Author:** Brett (implementation), Copilot directive
-**Status:** Implemented (PR #1650 c7be8d0)
-
-## Context
-
-Generated `squad-*` workflows are maintained upstream and outside project control. However, zizmor code-scanning was flagging them locally, creating noise in security alerts.
-
-## Decision
-
-**User Directive:** Ignore comments and security issues from generated `squad-*` workflows — the project does not control these upstream workflows.
-
-**Technical Implementation:** Configure zizmor-action to exclude `.github/workflows/squad-*.yml` and `.github/workflows/squad-*.yaml` from scanning via repository-owned workflow inputs.
-
-## What Was Done
-
-- Verified locally and with `.squad/scripts/verify.sh`
-- Committed to PR #1650 as c7be8d0
-- zizmor now excludes generated Squad workflows from code-scanning alerts
-
-## Rationale
-
-- Squad workflows are generated upstream; local security noise is not actionable
-- Reduces false-positive alert fatigue for the team
-
----
-
-# Decision: v2.3.0 Release Blocker Triage — Pre-Release Validation Issues
-
-**Author:** Newt (Release Validator)  
-**Date:** 2026-06-05  
-**Status:** Triaged & Closed (by Brett)
-
-## Summary
-
-v2.3.0 is released and tagged on origin/main, but pre-release validation identified 3 issues (#1654, #1655, #1656) and 1 documentation PR (#1657). All issues triaged as non-blocking; documentation merged.
-
-## Issues Triaged
-
-### #1654 — Pre-release deprecation warnings
-- **Findings:** 6 informational-level deprecations from RabbitMQ, Solr, ZooKeeper
-- **Risk:** None — expected upstream deprecations
-- **Allowlist Reference:** #1628 (design decision to accept known deprecations)
-- **Action:** Closed as "not planned"
-
-### #1655 — Pre-release config warnings
-- **Findings:** 6 warning-level findings (ZooKeeper default credentials)
-- **Risk:** None — ZooKeeper private to Docker Compose; production ACLs documented in admin manual
-- **Action:** Closed as "not planned" (design decision)
-
-### #1656 — Pre-release validation error + warnings
-- **Findings:** 1 security error + 20 operational warnings from validation analyzer
-- **Risk Assessment:** Pre-existing findings (no regressions vs. v2.2.1)
-- **Action:** Closed as "not planned"
-
-### #1657 — Release documentation PR
-- **Status:** Merged ✅
-- **Content:** Release notes, admin manual updates, validation checklist
-- **Prerequisites:** #1654–#1656 triaged and closed
-
-## Coordinator Actions
-
-- Ralph: Completed broad release audit (tags, workflows, assets) — all verified healthy
-- Brett: Completed pre-release issue triage and merged documentation PR
-
-## Release Board Status
-
-| Item | Status |
-|------|--------|
-| v2.2.1 | Production-ready, no blockers ✅ |
-| v2.3.0 | Production-ready, no blockers ✅ |
-| Board | Clear ✅ |
-
-## Cross-Team Learning
-
-**Pre-release validation pattern:** Post-release, scan for pre-release validation findings and classify as:
-1. Regressions vs. prior release (fix)
-2. Known/allowlisted findings (document and close)
-3. False positives from analyzer (close with evidence)
-
-This prevents stale pre-release findings from blocking releases.
-
----
-
-# Decision: OpenVINO Smoke Failure Post-Mortem & Prevention (Issue #1662)
-
-**Author:** Brett (Infrastructure) with Ripley & Lambert inputs  
-**Date:** 2026-06-05  
-**Status:** ✅ Implemented — test-side gates plus Brett Dockerfile/workflow verification in PR #1666
-**Failed Run:** 27022717607 | **Fix Run:** 27026253418 (a8a5cb5) | **Issue:** #1662
-
-## Context
-
-Pre-release Containers smoke test `embeddings-server-openvino` failed due to Python package version mismatch inside the built OpenVINO image. The issue arose from a gap in verification: `uv sync --frozen` in the Docker build ensured lock consistency, but did not guarantee the *installed state* matched the lock file when `--inexact` flags were used in downstream layers.
-
-## Root Cause
-
-1. **Build-time:** `RUN uv sync --inexact` allows transitive dependency drift during build
-2. **CI assumption:** Clean `uv sync --frozen` in the CI environment was insufficient to guarantee correctness of the built image
-3. **Gap:** No post-build verification that the image's installed packages matched the expected versions
-
-## Decision
-
-**Implement post-sync version verification inside Dockerfiles for all embeddings-server variants (OpenVINO, CPU, torch).**
-
-After `uv sync --inexact`, run a Python verification script inside the image that:
-1. Imports critical packages and queries their `__version__`
-2. Compares against expected versions from the lock/manifest
-3. Fails the Docker build if versions do not match
-
-## Prevention Implementation
-
-**Pattern (in Dockerfile):**
-```dockerfile
-RUN uv sync --inexact --frozen --no-dev
-RUN python -c "\
-import sys; \
-import importlib.metadata as metadata; \
-critical_pkgs = ['sentence-transformers', 'optimum-intel', ...]; \
-for pkg in critical_pkgs: \
-    v = metadata.version(pkg); \
-    print(f'{pkg}={v}'); \
-    # compare v against expected; raise ValueError if mismatch \
-"
+# Record key metadata:
+# - Corpus size (total PDFs indexed)
+# - Embedding count (chunks created)
+# - Index size on disk (du -sh /var/solr/data/books)
 ```
 
-## Why This Works
+#### Step 2: Int8 Candidate Run (Same Corpus)
 
-1. **Detects drift before push:** Image build fails immediately; corrupt images never reach registry/CI
-2. **Universal:** Works in both CI and local developer builds
-3. **Minimal cost:** Single Python invocation per build (~100ms)
-4. **Rubber Duck approved:** Critique confirmed that verification must run *inside* the built image, not just CI assumptions
-5. **Future-proof:** Any `--inexact` usage in downstream layers is caught by the same verification
+```bash
+# Re-build with int8 quantization enabled
+VECTOR_QUANTIZATION=int8 docker compose up -d --build
 
-## Affected Services
+# Re-index identical corpus (idempotent via Solr deduplication)
+python3 scripts/index_test_corpus.py --status-only
 
-- `embeddings-server` (OpenVINO, CPU, torch variants)
-- Any future services using multi-layer `uv sync --inexact`
+# Verify collection health (should match float32)
+python3 scripts/verify_collections.py --verbose
 
-## Related
+# Run identical benchmark
+python3 scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --modes semantic hybrid \
+  --output results/benchmark-1344-int8.json
 
-- Issue: #1662
-- Failed run: 27022717607
-- Successful fix: 27026253418 (commit a8a5cb5)
-- Orchestration log: `.squad/orchestration-log/2026-06-05T16-26-openvino-postmortem.md`
+# Capture memory footprint (should be ~4× smaller)
+docker stats --no-stream solr solr2 solr3 > results/docker-stats-int8.txt
+
+# Record index size (should be ~750MB vs 3GB for float32)
+```
+
+#### Step 3: Offline Comparison (No Docker Needed)
+
+```bash
+# Run comparison tool with strict thresholds
+python3 scripts/benchmark/compare_quantization.py \
+  --baseline results/benchmark-1344-float32.json \
+  --candidate results/benchmark-1344-int8.json \
+  --top-k 10 \
+  --min-recall 0.95 \
+  --output results/benchmark-1344-comparison.json
+
+# Check exit code
+echo "Exit: $?"  # 0 = PASS, 1 = FAIL
+```
+
+---
+
+### C. Comparison Tool Reference
+
+**Location**: `scripts/benchmark/compare_quantization.py` (308 lines, fully documented)
+
+**Inputs**:
+- `--baseline` — Float32 benchmark JSON report
+- `--candidate` — Int8 benchmark JSON report  
+- `--top-k` — Depth to compare (default: 10)
+- `--min-recall` — Per-query recall threshold (default: 0.95)
+- `--output` — Optional JSON output path
+
+**Outputs**:
+1. **Console**: Human-readable summary (PASS/FAIL, metrics table)
+2. **JSON file**: Full comparison data with per-query breakdowns
+
+**Key metrics computed**:
+
+| Metric | Definition | Source Code |
+|--------|-----------|-------------|
+| `recall_at_k` | Overlap of top-k result IDs between runs | Line 80: `_recall_at_k()` |
+| `overlap_count` | Number of matching document IDs in top-k | Line 84 |
+| `latency_delta_pct` | Percent change: (int8_ms - float32_ms) / float32_ms × 100 | Line 77: `_latency_delta_pct()` |
+| `queries_below_min_recall` | List of query IDs failing threshold | Line 156 |
+| `passed` (summary) | True if all queries ≥ min_recall_threshold | Line 209 |
+
+**JSON schema** (lines 237–244):
+```python
+{
+  "baseline_report": "path/to/float32.json",
+  "candidate_report": "path/to/int8.json",
+  "top_k": 10,
+  "summary": {
+    "total_comparisons": 60,  # (30 queries × 2 modes)
+    "min_recall_threshold": 0.95,
+    "by_mode": {
+      "semantic": {
+        "query_count": 30,
+        "mean_recall_at_k": 0.97,
+        "min_recall_at_k": 0.95,
+        "queries_below_min_recall": [],
+        "mean_latency_delta_pct": -15.2,
+        "candidate_error_count": 0,
+        "baseline_error_count": 0
+      },
+      "hybrid": { ... }
+    },
+    "failures": [],  # Details of any threshold violations
+    "passed": true
+  },
+  "comparisons": [
+    {
+      "query_id": "sk-001",
+      "mode": "semantic",
+      "baseline_ids": [...],
+      "candidate_ids": [...],
+      "recall_at_k": 1.0,
+      "overlap_count": 10,
+      "baseline_latency_ms": 45.2,
+      "candidate_latency_ms": 38.5,
+      "latency_delta_pct": -14.8
+    },
+    ...
+  ]
+}
+```
+
+---
+
+### D. Success Thresholds
+
+**Release-critical gates**:
+
+| Metric | Threshold | Rationale | Priority |
+|--------|-----------|-----------|----------|
+| `recall@10` (semantic) | ≥ 0.95 per query | <5% doc reranking acceptable; int8 proven in literature | P0 |
+| `recall@10` (hybrid) | ≥ 0.95 per query | Hybrid includes vector component, same tolerance | P0 |
+| `mean_recall@10` | ≥ 0.95 per mode | No mode should average below threshold | P0 |
+| Memory reduction | 3–4× | 768D float32 (4B/dim) → int8 (1B/dim) | P0 |
+| Latency change | −50% to +10% | Int8 typically *faster* due to reduced I/O; +10% max | P1 |
+| Index size | < 800MB (1M vectors) | Disk footprint matches memory estimate | P1 |
+
+**Default minimum recall**: 0.95 (defined in line 20 of `compare_quantization.py`)
+
+**Override rationale**: Any query below 0.95 is a release blocker until:
+1. Cause is identified (outlier corpus property, model limitation, etc.)
+2. Documented in issue with query ID + baseline/candidate top-10 lists
+3. Approved by Ripley (Lead) for known exception
+
+---
+
+### E. Output Artifacts
+
+**Deliverables to attach to issue #1344**:
+
+1. **benchmark-1344-float32.json** — Full float32 benchmark report (90 query results)
+2. **benchmark-1344-int8.json** — Full int8 benchmark report (identical queries)
+3. **benchmark-1344-comparison.json** — Detailed comparison with all metrics
+4. **docker-stats-float32.txt** — Memory snapshot (float32 run)
+5. **docker-stats-int8.txt** — Memory snapshot (int8 run)
+6. **Metadata summary**:
+   - Corpus: `N PDFs → M chunks`
+   - Index size (bytes): float32 vs int8
+   - Mean latency (ms): per mode, both runs
+   - Recall summary: mean/min per mode, count of failing queries
+   - Solr version confirmed (10.0.0 after PR #1670 merges)
+
+**Example metadata comment**:
+```
+Corpus: 500 PDFs → 2,847 chunks (e5-base)
+Index Size:
+  - Float32: 2.9 GB
+  - Int8:    0.73 GB (4× reduction ✓)
+Latency (mean, ms):
+  - Semantic (float32): 62.1 | (int8): 48.3 (−22% ✓)
+  - Hybrid (float32): 68.4 | (int8): 54.1 (−21% ✓)
+Recall@10:
+  - Semantic: mean=0.968, min=0.960 ✓
+  - Hybrid: mean=0.972, min=0.950 ✓
+Conclusion: PASS — all thresholds met.
+```
+
+---
+
+### F. Closure Checklist
+
+Before closing issue #1344:
+
+- [ ] **PR #1670 merged** into `dev` (Solr 10 `bits=7` support)
+  - Status: Currently open; owned by Ash; pending owner signal
+  - Action: Refresh for conflicts, await merge signal
+  
+- [ ] **Corpus indexed** with `VECTOR_QUANTIZATION=none`
+  - Command: `python3 scripts/index_test_corpus.py --status-only`
+  - Verification: `python3 scripts/verify_collections.py --verbose`
+  
+- [ ] **Float32 benchmark** executed and saved
+  - File: `results/benchmark-1344-float32.json`
+  - Modes: semantic, hybrid (keyword identical, can skip)
+  
+- [ ] **Corpus re-indexed** with `VECTOR_QUANTIZATION=int8`
+  - Same documents, same collection name `books`
+  - Idempotent via Solr unique key
+  
+- [ ] **Int8 benchmark** executed and saved
+  - File: `results/benchmark-1344-int8.json`
+  - Identical query set and modes
+  
+- [ ] **Comparison executed** with `--min-recall 0.95`
+  - Command: See **Step 3** above
+  - Output: `results/benchmark-1344-comparison.json`
+  - Exit code verified: `echo $?` should return **0**
+  
+- [ ] **Memory captured** from both runs
+  - Files: `docker-stats-float32.txt`, `docker-stats-int8.txt`
+  - Confirms 4× reduction in Solr memory footprint
+  
+- [ ] **Metadata documented**
+  - Corpus size (PDFs, chunks, index bytes)
+  - Recall summary (mean/min per mode, pass/fail)
+  - Latency deltas (pct change per mode)
+  
+- [ ] **Artifacts attached** to issue
+  - All 5 files above uploaded/linked
+  - Metadata summary posted in comment
+  
+- [ ] **Failing queries analyzed** (if any)
+  - List query IDs below 0.95 recall
+  - Document why (if applicable)
+  - Escalate to Ripley if release-blocking
+  
+- [ ] **Issue closed** with label ✓
+  - Reference: "Closes #1344"
+
+---
+
+## Blockers & Dependencies
+
+### Critical Blocker: PR #1670
+
+**Status**: OPEN, owner hold: "Do not merge from this review session"
+
+**Why it matters**:
+- Solr 10 does not support `bits=8` for scalar quantization (signed-byte only)
+- PR #1670 changes schema from `bits="8"` to `bits="7"`
+- Without it: schema is misconfigured, int8 benchmarking is impossible
+
+**Current state**:
+- All CI passing ✓
+- No unresolved review threads ✓
+- `mergeable=CONFLICTING` (needs refresh against current `dev`)
+- Owner hold explicitly stated
+
+**Unblock path**:
+1. Await owner signal (lift hold)
+2. Refresh PR for conflicts (rebase on current `dev`)
+3. Confirm Solr 10 schema uses `bits=7` correctly
+4. Merge to `dev`
+
+**Once merged**: Tests ungated, live validation can proceed
+
+---
+
+## How This Closes #1344
+
+**Issue acceptance criteria** (from issue body):
+
+- [x] Add `ScalarQuantizedDenseVectorField` field type to schema → PR #1670 (pending merge)
+- [x] Configure `bits="7"` for int8 quantization → PR #1670
+- [x] Maintain `vectorDimension="768"` and `similarityFunction="cosine"` → Verified in schema configs
+- [x] Create migration path from `DenseVectorField` → Implemented in indexer
+- [ ] **Benchmark accuracy (cosine similarity recall@10)** ← VALIDATION STEP (this doc)
+- [ ] **Document memory savings: 3GB → ~750MB for 1M vectors** ← VALIDATION STEP (docker stats)
+- [ ] **Make quantization configurable (option to disable)** → Already implemented (`VECTOR_QUANTIZATION` env var)
+
+**Validation fulfills last two acceptance criteria**, enabling closure once executed.
+
+---
+
+## Timeline & Effort
+
+| Phase | Effort | Duration | Blocker |
+|-------|--------|----------|---------|
+| Await PR #1670 merge | — | TBD (owner-dependent) | YES |
+| Float32 run (baseline) | ~10–30 min | Build + index + benchmark | No |
+| Int8 run (candidate) | ~10–30 min | Re-build + re-index + benchmark | No |
+| Offline comparison | <1 min | Local computation only | No |
+| Documentation + closure | ~15 min | Attach artifacts, verify pass/fail | No |
+
+**Total post-PR-#1670**: ~45–90 minutes (mostly Docker I/O and indexing time).
+
+---
+
+## References
+
+### Code
+
+| File | Purpose | Key Lines |
+|------|---------|-----------|
+| `src/embeddings-server/quantization.py` | Quantization modes (none/fp16/int8) | 20–45 (quantize_embedding), 48–81 (validate_quantization_quality) |
+| `src/embeddings-server/tests/test_quantization.py` | Unit tests with #1670 gatekeeping | pytest.skip markers for unsupported bits |
+| `scripts/benchmark/run_benchmark.py` | Benchmark runner | 321–357 (run_benchmark loop) |
+| `scripts/benchmark/compare_quantization.py` | Recall/latency comparison | 87–142 (compare_reports), 229–244 (output schema) |
+| `scripts/benchmark/queries.json` | 30-query test suite | 30 queries × 3 modes = 90 executions |
+| `scripts/benchmark/README.md` | Complete workflow documentation | Lines 124–172 (scalar quantization validation) |
+
+### Related Issues & PRs
+
+- **PR #1670**: Solr 10 scalar quantization schema fix (`bits="7"`) — BLOCKER
+- **PR #1680**: Solr 10 default runtime (merged) — Prerequisite complete
+- **PR #1683**: Runtime/security E2E validation (merged) — Prerequisite complete
+- **Issue #926**: Model benchmark (e5-base vs distiluse) — Methodology reference
+
+### Documentation
+
+- **Solr scalar quantization**: https://solr.apache.org/guide/solr/latest/query-guide/dense-vector-search.html#scalar-quantization
+- **Benchmark methodology**: `scripts/benchmark/README.md` (this repo)
+- **Quantization literature**: Typical recall@10 degradation <5% (int8 vs float32)
+
+---
+
+## Next Steps
+
+1. **Await PR #1670 merge** — Unblock all validation
+2. **Execute validation workflow** — Steps A–C above
+3. **Attach artifacts to #1344** — All 5 deliverables
+4. **Confirm all thresholds met** — recall@10 ≥ 0.95, memory 4×, latency acceptable
+5. **Close issue with label ✓**
+
+---
+
+**Prepared by**: Bishop (Vector Search & Data Science Specialist)  
+**Validation plan**: Complete and executable upon PR #1670 merge
+# Research Pass: #1452 Reduce General Complexity — Remaining Items Post-PR #1706
+
+**Date:** 2026-06-06  
+**Authored by:** Brett (Infrastructure Architect)  
+**Status:** PLANNING (not implementation)  
+**Related:** #1452, PR #1706
+
+---
+
+## Summary
+
+PR #1706 completed the first step: **buildall.sh dynamic service discovery** — replaced hard-coded Python service list with filesystem-based detection (finds services with `pyproject.toml` + `Dockerfile`).
+
+This research pass identifies **remaining 5 complexity areas** in #1452 and decomposes them into **small, safe, low-risk follow-up PRs** scoped for single owners across Brett/Parker/Dallas/Newt.
+
+---
+
+## Findings: Remaining Complexity Areas (Post PR #1706)
+
+### 1. **Dockerfile Duplication** (4 Python Services, ~260 lines total)
+
+**Current state:**
+- `src/document-indexer/Dockerfile` (62 lines)
+- `src/document-lister/Dockerfile` (59 lines)
+- `src/solr-search/Dockerfile` (60 lines)
+- `src/embeddings-server/Dockerfile` (79 lines, uniquely complex: custom base image, OpenVINO optional)
+
+**Commonality:**
+- All 4 follow multi-stage build pattern: builder stage → runtime stage
+- All 4 use `python:3.*-*` base, `astral uv` package manager, Alpine or Debian-slim
+- All 4 create non-root app user (uid 1000), set `PYTHONUNBUFFERED=1`, expose health check endpoints
+- All 4 run `uv sync --frozen --no-dev --no-install-project --native-tls`
+
+**Divergence:**
+- **embeddings-server:** custom base image (`ghcr.io/jmservera/embeddings-server-base`), OpenVINO optional feature, cache/model dirs
+- **solr-search:** depends on `src/aithena-common/` (monorepo pattern), complex entrypoint
+- **document-indexer/lister:** simpler, fewer environment variables
+
+**Complexity cost:**
+- Drift risk: Changes to best practices (security, layer optimization) require manual updates across 4 files
+- Maintenance tax: Each Dockerfile change requires validation on 4 builds
+
+**Recommendation:**
+- Extract reusable base stages OR parametrized template (low-complexity first step)
+- Keep embeddings-server custom base separate (justified by OpenVINO complexity)
+- Do NOT attempt generic "template Dockerfile" — Docker build arg machinery is fragile; inline duplication is acceptable here
+
+---
+
+### 2. **Shell Script Sprawl** (18 scripts in `/scripts/`, no CLI wrapper)
+
+**Current state:**
+- Backup variants: `backup.sh`, `backup-critical.sh`, `backup-high.sh`, `backup-medium.sh`, `backup-critical-test.sh` (5 scripts)
+- Restore variants: `restore.sh`, `restore-critical.sh`, `restore-high.sh`, `restore-medium.sh` (4 scripts)
+- Solr export/import: `solr-export.sh`, `solr-import.sh` (2 scripts)
+- Verification: `verify-backup.sh` (1 script)
+- Data/benchmarks: `index_test_corpus.py`, `verify_collections.py` (2 Python utilities)
+- Operational: `cleanup-ghcr.sh`, `create-release-tag.sh`, `export-images.sh`, `init-volumes.sh` (4 scripts)
+
+**Commonality:**
+- All backup/restore variants share ~80% identical logic (Solr collection export/import, RabbitMQ queue drain/restore, Redis snapshot management)
+- Parameterization is via shell script naming convention (e.g., `backup-critical.sh` vs `backup-medium.sh` select different collection types)
+
+**Complexity cost:**
+- Discoverability: New users cannot easily find "how do I backup Solr?" — 5 backup scripts with unclear naming
+- Maintenance: A bug fix in `backup.sh` requires manual replication to `backup-critical.sh`, `backup-high.sh`, etc.
+- Silent drift: The 4 backup variants may have diverged intentionally or by accident; no single source of truth
+
+**Recommendation:**
+- Create `manage.sh` CLI wrapper with subcommands: `manage.sh backup [tier]`, `manage.sh restore [tier]`, `manage.sh export-images`, etc.
+- Parametrize backup/restore by tier (default, critical, high, medium) → single script + env var
+- Move Python utilities to a `scripts/util/` subdir or convert to `manage.sh backup-corpus` subcommand
+- Keep existing scripts as-is for backward compatibility; do NOT delete (users may have scripts calling them)
+
+**Risk:** LOW — CLI wrapper is additive; no breaking changes if we preserve existing script entry points.
+
+---
+
+### 3. **Environment File Confusion** (3 templates: `.env.example`, `.env.prod.example`, inline compose vars)
+
+**Current state:**
+- `.env.example` (193 lines): Comprehensive dev/CI template with all 50+ variables documented
+- `.env.prod.example` (82 lines): Production-only subset (BOOKS_PATH, CORS, auth, RabbitMQ, Solr, VERSION/GIT_COMMIT/BUILD_DATE)
+- **Inline defaults in compose services:** e.g., `solr-search/Dockerfile` hardcodes `SOLR_HOST="solr"`, `RABBITMQ_HOST="localhost"`, `REDIS_HOST="localhost"`
+
+**Redundancy:**
+- `.env.example` and `.env.prod.example` both define CORS_ORIGINS, RABBITMQ_PASS, SOLR_ADMIN_USER (overlapping)
+- Production env vars are scattered: some in `.env.prod.example`, some in `docker/compose.prod.yml` inline
+- Dockerfile env defaults (e.g., `ENV SOLR_HOST="solr"`) duplicate what could be in a `.env.compose.defaults`
+
+**Clarity cost:**
+- Onboarding: Docs say "copy .env.example" but prod should use ".env.prod.example" — not obvious when to use which
+- Merging: If you need to migrate dev → prod, unclear which vars to preserve vs. override
+
+**Recommendation:**
+- Create single `.env.example` with clearly marked **DEV** and **PROD** sections (with a header explaining when to use which)
+  - OR: Keep `.env.example` as dev; rename `.env.prod.example` → `.env.production` (simpler: just copy one of the two)
+- Document in README: "Start with `.env.example` for local dev. For production, copy `.env.production` and customize."
+- Move hardcoded Dockerfile ENV defaults into `.env.compose.defaults` (sourced by installer only, not checked in)
+- Do NOT strip vars from `.env.example`; that template should remain comprehensive for reference.
+
+**Risk:** MEDIUM — Need to coordinate with installer expectations (which vars does the installer depend on?). Test with fresh `python3 -m installer --reset` run.
+
+---
+
+### 4. **Test Infrastructure Complexity** (3 frameworks, 480-line orchestration workflow)
+
+**Current frameworks:**
+1. **Pytest (Python):** `e2e/pytest.ini`, `e2e/conftest.py`, ~10 test files in `e2e/test_*.py`, ~2000 lines
+2. **Playwright (JavaScript):** `e2e/playwright/`, separate `package.json`, separate test runner, ~200 lines
+3. **Stress tests (Python):** `tests/stress/`, separate `pytest.ini`, `conftest.py`, custom runner in `scripts/benchmark/`
+
+**Orchestration complexity:**
+- `.github/workflows/integration-test.yml` (480 lines): Glues all 3 together
+  - Changes discovery logic: PR → check if build-relevant → run all tests
+  - Topology matrix: [single-node, distributed]
+  - Health checks: Custom Python inline scripts (Solr cluster verification, API readiness, etc.)
+  - CI-only Docker Compose overrides: `docker-compose.github-actions.yml` generated inline (tmpfs volumes, no persistent data)
+  - Test execution: Sequential `pytest → playwright → report upload`
+
+**Fragility:**
+- Integration-test workflow is **480 lines** (hard to reason about, hard to change)
+- CI overrides generated inline (brittle, hard to diff, hard to version)
+- Health-check logic is embedded as shell + Python one-liners (hard to unit-test, hard to reuse)
+- Stress tests in separate `tests/stress/` with separate pytest.ini (unclear how/when they run)
+
+**Recommendation (stepped approach):**
+- **Phase 1 (low-risk):** Extract health-check logic into reusable `docker/health-check.sh` script (documented, testable, versionable)
+- **Phase 2 (medium-risk):** Move CI Docker Compose override into `docker/compose.ci.yml` (replaces inline generation, easier to review)
+- **Phase 3 (deferred):** Makefile targets for test orchestration (`make test-unit`, `make test-e2e`, `make test-stress`) — optional, used locally for dev but not required for CI
+- Do NOT merge pytest/playwright into one runner (they have different dependency stacks; npm vs uv)
+
+**Risk:** MEDIUM — Integration-test workflow is high-leverage; changes must be validated against both CI and local dev runs.
+
+---
+
+### 5. **Build Script Fragility** (`buildall.sh` lacks error handling for per-service failures)
+
+**Current state (post-PR #1706):**
+- `buildall.sh` now discovers services dynamically ✓
+- However: No error handling if ONE service build fails
+- If `docker compose up --build -d` hits a Dockerfile error, the entire command fails without clarity on which service broke
+
+**Missing:**
+- Per-service build error isolation and reporting
+- Partial build recovery (e.g., rebuild just the failed service)
+- Docker BuildKit native build parallelism (currently sequential by default)
+
+**Recommendation:**
+- Add `set -e` error trap to catch individual `uv sync` or `docker build` failures
+- Report which service failed, with isolated logs saved to `./.test-artifacts/buildall-{service}-{timestamp}.log`
+- Optional: Use `docker buildx build` for parallel native builds (more complex, deferred to v2.6+)
+
+**Risk:** LOW — Additive error handling; no breaking changes.
+
+---
+
+### 6. **Documentation Scatter** (Solr topology config in 3+ places)
+
+**Current state:**
+- Solr deployment topology documented in:
+  1. `.env.example` lines 149–170 (inline comments)
+  2. `.env.prod.example` (no topology docs, minimal guidance)
+  3. `docker/compose.single-node.yml` (overlay comments)
+  4. `installer/` (code, not docs)
+  5. Scattered across 67 Copilot skills (.copilot/, .squad/)
+
+**Fragmentation cost:**
+- Onboarding: Which doc to read? README doesn't link to `.env.example` topology section
+- Maintenance: If topology changes, docs must be updated in 3+ places
+- Single source of truth lost: Is `.env.example` authoritative, or the installer code?
+
+**Recommendation:**
+- Create `docs/deployment-topology.md` (single source of truth for Solr topology decision matrix)
+- Link from README → "Deployment" section → topology guide
+- Link from installer interactive prompt to guide
+- Update `.env.example` comments to cross-reference: "(See docs/deployment-topology.md for details)"
+- Keep inline comments in .env.example as SHORT TL;DR; reserve detailed docs for the dedicated guide
+
+**Risk:** LOW — Documentation-only change; no code changes needed initially.
+
+---
+
+## Decomposed Follow-Up Plan: Safe, Small PR Slices
+
+| # | Title | Scope | Owner | Risk | Validation | Depends On | Estimate |
+|---|-------|-------|-------|------|-----------|-----------|----------|
+| 1 | Extract health-check logic from integration-test.yml | Move inline health-check Python/shell into `docker/health-check.sh` (reusable, tested locally) | Brett | LOW | `bash -n docker/health-check.sh`, CI green on integration-test.yml | none | 1–2 PR cycles |
+| 2 | Create `docker/compose.ci.yml` overlay | Move inline CI Docker Compose volume/tmpfs overrides from integration-test.yml workflow to versioned file | Brett | MEDIUM | `docker compose -f docker-compose.yml -f docker/compose.ci.yml config`, CI green | Health-check extraction | 2–3 PR cycles |
+| 3 | Add error handling + logging to buildall.sh | Trap per-service failures, save logs to .test-artifacts/, report which service broke | Brett | LOW | `bash -n buildall.sh`, manual test on multi-service build | none | 1 PR cycle |
+| 4 | Create manage.sh CLI wrapper | Parametrize 5 backup scripts + 4 restore scripts into single `manage.sh backup [tier]` + `manage.sh restore [tier]` interface | Parker | MEDIUM | `bash -n manage.sh`, smoke-test each tier variant, verify backward compat | none | 2–3 PR cycles |
+| 5 | Consolidate .env files | Merge .env.prod.example into .env.example with **DEV**/**PROD** sections; update installer/README | Parker | MEDIUM | Fresh `python3 -m installer --reset`, test both dev + prod .env workflows | none | 1–2 PR cycles |
+| 6 | Document Solr deployment topology | Create `docs/deployment-topology.md` as single source of truth; link from README + installer | Dallas or Newt | LOW | Review for clarity by Ripley; link check in README | none | 1 PR cycle |
+| 7 | Dockerfile base stage extraction | Extract common Alpine/Debian stages from document-indexer, document-lister, solr-search (keep embeddings-server separate) | Brett | MEDIUM | `docker build` all 4 services, verify layer cache hit rates improve | none | 2–3 PR cycles (post v2.5) |
+
+---
+
+## Risk Ranking Summary
+
+| Risk Level | Items | Notes |
+|-----------|-------|-------|
+| **LOW** | Health-check extraction, buildall error handling, docs consolidation | Additive or docs-only; low breaking change risk |
+| **MEDIUM** | CI Compose overlay, manage.sh CLI, env file consolidation, Dockerfile extraction | Require careful testing; higher breaking change risk; good review gates recommended |
+| **HIGH** | Test framework unification (pytest + Playwright + stress tests into single runner) | **DEFERRED** — too risky for v2.5 backlog; revisit in v2.6+ with dedicated test refactor epic |
+
+---
+
+## Owner Routing
+
+- **Brett (Infra Architect):** #1, #2, #3, #7 (Docker, buildall, health checks, Compose overlays, Dockerfile refactoring)
+- **Parker (Backend Dev):** #4, #5 (manage.sh CLI, env consolidation — touches installer and deployment code)
+- **Dallas or Newt (Frontend Dev / Product Manager):** #6 (Docs consolidation — lightweight, good for Product context)
+- **Lambert (Tester):** Optional: smoke-test suite for #1–#7 (test coverage on new tooling)
+
+---
+
+## Validation Strategy (Per PR)
+
+### Health-Check Extraction (#1)
+- Syntax check: `bash -n docker/health-check.sh`
+- Unit test: Call `docker/health-check.sh` with mock curl (local dev)
+- Integration: CI green on `integration-test.yml` using extracted script
+
+### CI Compose Overlay (#2)
+- Validate config: `docker compose -f docker-compose.yml -f docker/compose.ci.yml config >/dev/null`
+- Compare generated vs. previous: Check volume tmpfs sizes match inline version
+- CI green on integration-test.yml
+
+### buildall Error Handling (#3)
+- Syntax check: `bash -n buildall.sh`
+- Test failure scenario: Sabotage a Dockerfile, verify buildall traps error + reports which service
+- Check artifact logs: `.test-artifacts/buildall-{service}-{timestamp}.log` exists
+
+### manage.sh CLI (#4)
+- Syntax check: `bash -n manage.sh`
+- Smoke test each tier: `./manage.sh backup default`, `./manage.sh backup critical`, etc.
+- Verify old scripts still work: Call `/scripts/backup.sh` directly (backward compat)
+
+### .env consolidation (#5)
+- Fresh installer run: `python3 -m installer --reset`, verify .env generated correctly
+- Prod workflow: Copy .env.production locally, verify solr-search + admin start with prod vars
+- Diff: Check old .env.prod.example vars are present in new merged .env.example
+
+### Solr topology docs (#6)
+- Link validation: README → docs/deployment-topology.md (no 404)
+- Clarity review by Ripley (2–3 min read)
+
+### Dockerfile extraction (#7)
+- Build all 4 services: `docker build src/document-indexer`, `docker build src/document-lister`, etc.
+- Layer cache hits: Compare `docker build` output (with cache hit vs. without)
+- Identical image output: Verify new multi-stage approach produces same binary
+
+---
+
+## Blockers & Dependencies
+
+- **None immediate.** All items are post-v2.5 backlog; no release blockers.
+- **Soft dependency:** #1 (health-check extraction) → #2 (CI Compose overlay) — order recommended but not mandatory
+- **Coordination needed:** Parker on #4 + #5 depends on installer domain knowledge; recommend pairing with installer owner if one exists
+
+---
+
+## Decision: Scope of This Comment
+
+This research pass is **PLANNING ONLY** — no code changes. Its output:
+1. Identifies remaining complexity areas (not duplicative of #1452 original findings; shows progress post-PR #1706)
+2. Decomposes into safe, single-owner PR slices (each 1–3 cycles)
+3. Ranks risk + validation strategy
+4. Routes to Brett/Parker/Dallas/Newt based on domain
+
+**Next step:** Once #1452 is reopened or a v2.5.1 backlog milestone exists, extract these into individual GitHub issues and link them to #1452 as follow-up work.
+
+---
+
+## References
+
+- Original issue: #1452
+- Completed: PR #1706 (buildall service discovery)
+- Config: `.squad/team.md` (routing), `.squad/agents/brett/charter.md` (Brett's domain)
+- Workflows: `.github/workflows/integration-test.yml`, `buildall.sh`
+- Services: `src/{document-indexer,document-lister,embeddings-server,solr-search}/Dockerfile`
+- Env templates: `.env.example` (193 lines), `.env.prod.example` (82 lines)
+- Scripts: `/scripts/` (18 files), `/docker/` (11 files)
+# Brett — Phase 2 Infrastructure Assessment
+
+**Date:** 2026-06-06  
+**Issue:** #1356 ([v2.5] Test Phase 2)  
+**Status:** Infrastructure analysis complete; fixtures deferred to v2.5.1
+
+## Scope
+
+Phase 2 testing requires validation of:
+1. **Standalone Solr 10 (no ZooKeeper)** — true single-node, no clustering
+2. **Vector quantization (int8)** — memory reduction + search quality
+3. **efSearchScaleFactor tuning** — speed/quality tradeoff
+4. **Production SolrCloud (Overseer disabled)** — cluster management without Overseer
+5. **Failover/resilience** — deferred to v2.5.1
+
+## Current Infrastructure State
+
+### Compose Overlays (Existing)
+- ✅ `docker-compose.yml` — base 3-node SolrCloud + 3-node ZK ensemble
+- ✅ `docker/compose.single-node.yml` — disables extra nodes, keeps ZooKeeper
+- ✅ `docker/compose.solr10.yml` — explicit Solr 10 runtime
+- ✅ `docker/compose.e2e.yml` — CI port overrides
+- ✅ `docker/compose.prod.yml` — production security + 3-node hardening
+
+### Compose Overlays (Missing)
+- ❌ `docker/compose.standalone-solr10.yml` — true no-ZK standalone Solr
+- ❌ `docker/compose.overseer-disabled.yml` — Overseer disabled validation
+- ⏳ `docker/compose.resilience.yml` — failover/recovery (v2.5.1 scope)
+
+### Init Script (`docker/solr-init.sh`)
+- **Current:** Hardcoded ZK_HOST requirement; all operations assume ZooKeeper
+- **Needed:** Variant path for `SOLR_STANDALONE_MODE=true` (skip ZK ops, use REST API)
+
+## Infrastructure Gaps
+
+### Gap 1: Standalone Solr 10 (No ZooKeeper)
+
+**What's required:**
+- Remove zoo1/zoo2/zoo3 services (profile-gated)
+- Single Solr node without ZK_HOST env var
+- Init script adapted to skip: `solr zk cp`, `solr zk upconfig`, `/clusterStatus` validation
+- Configset + collection creation via Solr REST API instead
+
+**Compose overlay blueprint:**
+```yaml
+services:
+  zoo1:
+    profiles: ["zk-only"]
+  zoo2:
+    profiles: ["zk-only"]
+  zoo3:
+    profiles: ["zk-only"]
+  
+  solr:
+    environment:
+      - ZK_HOST=  # empty; no ZooKeeper
+    depends_on: !override {}  # no ZK dependency
+  
+  solr2:
+    profiles: ["zk-only"]
+  solr3:
+    profiles: ["zk-only"]
+  
+  solr-init:
+    environment:
+      - SOLR_STANDALONE_MODE=true
+      - SOLR_EXPECTED_NODES=1
+    depends_on: !override
+      solr:
+        condition: service_healthy
+```
+
+**Init script variant:**
+```bash
+if [ "${SOLR_STANDALONE_MODE:-false}" = "true" ]; then
+  # Skip ZK auth bootstrap; Solr standalone mode has no distributed auth
+  # Configset upload: curl POST /api/cluster/configs instead of solr zk upconfig
+  # Collection creation: curl with waitForFinalState=true
+  # Node validation: curl /admin/info/system (no /clusterStatus)
+else
+  # Existing ZK-based path (current code)
+fi
+```
+
+**Validation:**
+- Collection creation succeeds without ZooKeeper
+- Search + indexing work in standalone mode
+- Health checks pass without cluster quorum
+
+---
+
+### Gap 2: Production SolrCloud (Overseer Disabled)
+
+**What's required:**
+- Overlay sets `-DSOLR_OVERSEER_DISABLED=true` system property
+- Keeps full 3-node topology (validate Overseer not needed for operations)
+- Collection management still responsive (manual election, no auto-rebalancing)
+
+**Compose overlay blueprint:**
+```yaml
+services:
+  solr:
+    environment:
+      - SOLR_OPTS=-DSOLR_OVERSEER_DISABLED=true
+  solr2:
+    environment:
+      - SOLR_OPTS=-DSOLR_OVERSEER_DISABLED=true
+  solr3:
+    environment:
+      - SOLR_OPTS=-DSOLR_OVERSEER_DISABLED=true
+```
+
+**Validation:**
+- Collections respond to `/admin/collections?action=CLUSTERSTATUS`
+- No "Overseer missing" errors in logs
+- Leader/replica state consistent (no auto-rebalancing, but state maintained)
+- Admin API functional
+
+---
+
+### Gap 3: Failover & Resilience (Out of Scope for v2.5.0)
+
+**Deferred to v2.5.1 or Phase 3.** Would require:
+- Leader failure + replica promotion
+- Node restart recovery
+- ZK ensemble loss recovery
+- Cluster healing validation
+
+---
+
+## Safe Runtime Commands
+
+For Phase 2 testing diagnostics:
+
+```bash
+# General health
+curl -s http://solr:8983/solr/admin/info/system | jq '.responseHeader.status'
+
+# Standalone check (no cluster info)
+curl -s http://solr:8983/solr/admin/info/properties | jq '.responseHeader'
+
+# SolrCloud status
+curl -s http://solr:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json | jq '.cluster'
+
+# Memory usage (quantization impact)
+curl -s http://solr:8983/solr/admin/info/jvm | jq '.jvm.memory.used'
+
+# Vector field stats
+curl -s http://solr:8983/solr/books/select?q=*:*&rows=0&stats=true&stats.field=embedding_byte_v | jq '.stats.stats_fields.embedding_byte_v'
+```
+
+---
+
+## Phase 2 Test Readiness Matrix
+
+| Scenario | Status | Blocker | Fixture |
+|----------|--------|---------|---------|
+| Single-node overlay validation | ✅ Active | None | `compose.single-node.yml` |
+| Int8 schema + app wiring | ✅ Active | None | `managed-schema.xml`, `config.py` |
+| Standalone mode startup | ⏸️ Gated | Missing fixture + #1670 + #1344 | `compose.standalone-solr10.yml` |
+| Standalone full workload | ⏸️ Gated | Missing fixture + #1670 + #1344 | `compose.standalone-solr10.yml` |
+| Quantization memory reduction | ⏸️ Gated | #1670 + #1344 | `compose.single-node.yml` + runtime |
+| Quantization search quality | ⏸️ Gated | #1670 + #1344 | `compose.single-node.yml` + baseline |
+| efSearchScaleFactor tuning | ⏸️ Gated | #1344 | `compose.single-node.yml` + runtime |
+| SolrCloud Overseer disabled | ⏸️ Gated | Missing fixture | `compose.overseer-disabled.yml` |
+
+---
+
+## Recommendations
+
+### For v2.5.0 Release Gate
+✅ **Do NOT block Phase 2 on infrastructure fixtures.** The quantization blockers (#1670 + #1344) drive the real dependency. Fixtures are pre-work that can happen in parallel.
+
+### For v2.5.1 Sprint (Post-Quantization)
+1. Create `docker/compose.standalone-solr10.yml`
+2. Adapt `docker/solr-init.sh` for `SOLR_STANDALONE_MODE` detection
+3. Create `docker/compose.overseer-disabled.yml`
+4. Activate all Phase 2 test scenarios
+
+### No Code Changes Required Today
+Infrastructure fixtures can be scaffolded immediately without blocking on merge or test execution:
+- Compose overlays: static YAML configurations
+- Init script: branching logic, no functional changes to existing paths
+- Runtime validation: diagnostic curl commands (no SDK changes)
+
+---
+
+## Deliverables
+
+- ✅ Infrastructure gap analysis (this document)
+- ✅ Infra findings comment posted to #1356
+- ✅ Safe runtime commands documented
+- ✅ Fixture scaffolds ready for v2.5.1 sprint
+# Decision: OpenVINO release gates for base-image drift
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-06-05T17:02:51.834+00:00  
+**Status:** Proposed for Scribe merge  
+**Related:** #1662
+
+## Decision
+
+Keep Docker `uv sync --inexact` for the OpenVINO embeddings image, but treat it as
+safe only when the built image proves the installed runtime packages satisfy the
+OpenVINO extra constraints in `src/embeddings-server/pyproject.toml`.
+
+The release gate now has two enforcement points:
+
+1. The Docker build fails immediately after `uv sync --inexact` if installed
+   `openvino`, `openvino-tokenizers`, or `optimum-intel` drift outside the
+   configured constraints.
+2. A PR/manual/weekly `OpenVINO Release Gate` workflow rebuilds the image with
+   the latest base image and runs runtime smoke diagnostics.
+
+## Rationale
+
+The post-mortem for #1662 showed that lockfile validation in a clean environment
+does not catch skew introduced by preserving base-image packages. Verifying inside
+the built image checks the actual runtime that will be released while preserving
+the build-time optimization.
+
+## Coordination notes for Parker
+
+Application/runtime tests can rely on `/v1/embeddings/model` for the expected
+embedding dimension instead of hardcoding `768`. If Parker changes model-loading
+behavior or OpenVINO dependencies, the Docker verifier and smoke script are the
+infra-owned gates that should be updated with the new source-of-truth constraints.
+# Decision: Keep App-Side Hybrid RRF Until Solr Combined Query Is Benchmarked
+
+**Date:** 2026-06-06
+**Author:** Ash (via Copilot)
+**Status:** Proposed
+**Related:** #1349, SOLR-17319
+
+## Context
+
+Solr 10.0.0 does not include a native RRF/combined-query handler. Solr mainline after the 10.0.0 tag now includes `CombinedQuerySearchHandler` / `CombinedQueryComponent` for multi-query fusion with built-in Reciprocal Rank Fusion (RRF). This is relevant to Aithena's current BM25 + kNN + RRF hybrid search implementation.
+
+## Proposal
+
+Keep Aithena's current app-side hybrid search as the production default until the shipped Solr runtime includes SOLR-17319 and a dedicated prototype proves that Solr Combined Query RRF preserves or improves relevance and latency on the real corpus.
+
+## Rationale
+
+Aithena currently fuses parent-document BM25 results with chunk-document kNN results after normalizing chunks to book IDs in Python. Solr native RRF fuses by Solr document ID, so a naive parent BM25 + chunk kNN combined query will not reward overlap between the same book's parent and chunks. Combined Query also does not support grouping/cursors, so parent-level chunk grouping cannot be assumed inside the fusion step.
+
+## Next Step
+
+Prototype behind a separate Solr handler/flag and benchmark:
+
+1. Current app-side chunk-kNN RRF.
+2. Solr Combined Query RRF with parent/book-level vectors, if parent vectors are indexed.
+3. Optional chunk-keyword + chunk-vector fusion with post-normalization.
+
+Do not change default ranking without judged relevance, latency, facet/highlight, and page-range validation.
+# Decision: Disable SolrCloud Overseer in production Solr 10 deployments
+
+**Date:** 2026-06-06T16:09:02.162+00:00
+**Owner:** Brett
+**Related issue:** #1343
+
+## Decision
+
+`docker/compose.prod.yml` starts all three production Solr nodes with
+`-Dsolr.cloud.overseer.enabled=false` by default. The production topology still
+uses three SolrCloud nodes and a three-node ZooKeeper ensemble for HA.
+
+## Rationale
+
+Solr 10 supports distributed cluster-state updates without the legacy Overseer
+queue. Disabling Overseer removes a collection-management bottleneck and avoids
+coupling cluster operations to one busy or restarting Overseer leader, while
+retaining the existing ZooKeeper-backed HA topology.
+
+## Guardrails
+
+- Dev/default/single-node topology is unchanged.
+- Operators can temporarily set `SOLR_CLOUD_OVERSEER_ENABLED=true` for rollback.
+- Runtime validation is documented in
+  `tests/solrcloud-overseer-disabled-validation.sh`; failover is opt-in with
+  `RUN_FAILOVER=1` because it intentionally stops a Solr node.
