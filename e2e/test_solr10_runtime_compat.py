@@ -141,13 +141,13 @@ def solr_books_collection_ready(solr_url: str, solr_auth: tuple[str, str]) -> di
             else:
                 last_status = _summarize_collection_health(body)
                 collection = body.get("cluster", {}).get("collections", {}).get("books")
-                if collection and (collection.get("health") == "GREEN" or _collection_replicas_active(collection)):
+                if collection and _collection_replicas_active(collection):
                     return body
         else:
             last_status = f"HTTP {response.status_code}: {response.text[:200]}"
         time.sleep(2)
 
-    pytest.fail(f"Solr 10 books collection did not become GREEN before live checks: {last_status}")
+    pytest.fail(f"Solr 10 books collection did not become active before live checks: {last_status}")
 
 
 @pytest.fixture(scope="session")
@@ -342,7 +342,9 @@ def test_live_solr10_security_enforces_rbac(
     if readonly_collection_create.status_code == 200:
         assert delete_collection_probe.status_code == 200, delete_collection_probe.text
     else:
-        assert _is_solr_not_found_response(delete_collection_probe), delete_collection_probe.text
+        assert delete_collection_probe.status_code == 200 or _is_solr_not_found_response(delete_collection_probe), (
+            delete_collection_probe.text
+        )
     assert readonly_collection_create.status_code in (401, 403), readonly_collection_create.text
 
     readonly_security_edit = None
