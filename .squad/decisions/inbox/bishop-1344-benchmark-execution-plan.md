@@ -1,7 +1,8 @@
-# Bishop Decision: Scalar Quantization (int8) Benchmark Execution Plan #1344
+# Decision: Scalar Quantization (int8) Benchmark Execution Plan #1344
 
 **Author:** Bishop (Vector Search & Data Science Specialist)
 **Date:** 2026-06-05
+**Status:** Proposed
 **Blocked on:** #1670 (Solr 10 `bits="7"` schema fix)
 **Related:** #1344, #1669, #1671
 

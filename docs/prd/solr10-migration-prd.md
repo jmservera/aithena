@@ -198,8 +198,8 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
            vectorDimension="768" similarityFunction="cosine"
            knnAlgorithm="hnsw"/>
 
-<!-- Solr 10: Scalar quantized -->
-<fieldType name="knn_vector_768" class="solr.ScalarQuantizedDenseVectorField"
+<!-- Solr 10: add separate scalar-quantized byte-vector field type -->
+<fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField"
            vectorDimension="768" similarityFunction="cosine"
            knnAlgorithm="hnsw" bits="7"/>
 ```
@@ -450,7 +450,7 @@ during migration, and perform a full reindex so vector graphs are rebuilt.
                        │ zoo1-3 │  (or embedded ZK in single-node SolrCloud)
                        └────────┘
 
-Vectors: ScalarQuantizedDenseVectorField (signed-byte bits=7, ~4× memory savings)
+Vectors: knn_vector_768 float32 plus knn_vector_768_byte ScalarQuantizedDenseVectorField (signed-byte bits=7, ~4× memory savings)
 ```
 
 ---

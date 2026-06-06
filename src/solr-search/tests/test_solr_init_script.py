@@ -333,13 +333,15 @@ def test_solr_health_checks_use_authenticated_curl():
                 f"{compose_path.name}:{service_name} healthcheck must probe /admin/info/system"
             )
 
+
+def test_solr9_bootstrap_rewrites_scalar_quantized_vector_schema():
     """Solr 9 bootstrap must rewrite source Solr 10 vector schema names."""
     for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
         assert "SOLR_VERSION:-9}" in script  # solr_major_version() default to 9
         assert 'hnswM="/hnswMaxConnections="' in script
         assert 'hnswEfConstruction="/hnswBeamWidth="' in script
         assert 'solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField' in script
-        assert 'bits="7"/ vectorEncoding="BYTE' in script
+        assert 'bits="[47]"/ vectorEncoding="BYTE' in script
         # solr zk upconfig uses helper functions for version-aware CLI flags
         upconfig_cmd = 'solr zk upconfig "$$(solr_zk_host_flag)" "$$ZK_HOST"'
         upconfig_cmd2 = '"$$(solr_name_flag)" books "$$(solr_dir_flag)" "$$CONFIGSET_DIR"'
@@ -348,13 +350,14 @@ def test_solr_health_checks_use_authenticated_curl():
         assert (upconfig_cmd + " " + upconfig_cmd2 in script) or (upconfig_cmd_alt + " " + upconfig_cmd2_alt in script)
 
 
-def test_solr_import_configset_upload_stages_solr9_hnsw_rewrite():
+@pytest.mark.parametrize("scalar_bits", ["4", "7"])
+def test_solr_import_configset_upload_stages_solr9_hnsw_rewrite(scalar_bits: str):
     """solr-import --configset-dir must not upload Solr 10 HNSW params to Solr 9."""
     script = _load_solr_import_script()
     assert "stage_configset_for_solr9" in script
     assert 'SOLR_MAJOR_VERSION" -eq 9' in script
 
-    scratch = REPO_ROOT / ".pytest-solr-import-configset" / str(os.getpid())
+    scratch = REPO_ROOT / ".pytest-solr-import-configset" / f"{os.getpid()}-{scalar_bits}"
     config_dir = scratch / "source-configset"
     staged_root = scratch / "staged-root"
     shutil.rmtree(scratch, ignore_errors=True)
@@ -363,7 +366,7 @@ def test_solr_import_configset_upload_stages_solr9_hnsw_rewrite():
     schema = config_dir / "managed-schema.xml"
     schema.write_text(
         '<schema><fieldType name="knn_vector_768_byte" '
-        'class="solr.ScalarQuantizedDenseVectorField" bits="7" '
+        f'class="solr.ScalarQuantizedDenseVectorField" bits="{scalar_bits}" '
         'hnswM="12" hnswEfConstruction="100"/></schema>',
         encoding="utf-8",
     )
@@ -383,7 +386,7 @@ grep -q 'vectorEncoding="BYTE"' "${{staged}}/managed-schema.xml"
 ! grep -q 'hnswM=' "${{staged}}/managed-schema.xml"
 ! grep -q 'hnswEfConstruction=' "${{staged}}/managed-schema.xml"
 ! grep -q 'ScalarQuantizedDenseVectorField' "${{staged}}/managed-schema.xml"
-! grep -q 'bits="7"' "${{staged}}/managed-schema.xml"
+! grep -q 'bits="{scalar_bits}"' "${{staged}}/managed-schema.xml"
 grep -q 'hnswM="12"' {schema}
 grep -q 'ScalarQuantizedDenseVectorField' {schema}
 cleanup_staged_configset "$staged"

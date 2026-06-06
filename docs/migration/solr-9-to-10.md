@@ -345,14 +345,16 @@ These are not required for the core upgrade but can be done after verification:
            vectorDimension="768" similarityFunction="cosine"
            knnAlgorithm="hnsw"/>
 
-<!-- After (Solr 10 scalar quantized) -->
-<fieldType name="knn_vector_768" class="solr.ScalarQuantizedDenseVectorField"
+<!-- Add a separate Solr 10 scalar-quantized field type for byte vectors -->
+<fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField"
            vectorDimension="768" similarityFunction="cosine"
            knnAlgorithm="hnsw" bits="7"/>
 ```
 
 > **Note**: Solr 10 scalar quantization supports `bits="4"` or `bits="7"` only
-> (not `bits="8"`). Vector quantization requires a full reindex.
+> (not `bits="8"`). Keep `knn_vector_768` as the float32 field type and route
+> quantized embeddings to `knn_vector_768_byte`; vector quantization requires a
+> full reindex of the quantized fields.
 
 ### Phase 3: Docker Image Swap
 
