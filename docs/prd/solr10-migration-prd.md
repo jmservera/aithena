@@ -186,10 +186,10 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 | Quantization | Bytes/vector | Memory savings | Accuracy loss |
 |-------------|-------------|---------------|---------------|
 | None (float32) | 3,072 | Baseline | None |
-| Scalar (int8) | 768 | **4× reduction** | Minimal |
+| Scalar (7-bit) | 672 | **~4.57× reduction** | Minimal |
 | Binary (1-bit) | 96 | **32× reduction** | Moderate |
 
-**Recommendation**: Use **scalar quantization** (int8) by default — 4× memory savings with minimal accuracy loss. Offer binary quantization as an option for very large collections.
+**Recommendation**: Use **scalar quantization** (7-bit, exposed as `VECTOR_QUANTIZATION=int8`) by default — ~4.57× raw vector payload savings with minimal accuracy loss. Offer binary quantization as an option for very large collections.
 
 **Schema change**:
 ```xml
@@ -206,7 +206,7 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 
 **Impact**: For 100K documents × 10 chunks each = 1M vectors:
 - Current: 1M × 3,072 = **~3GB** vector data
-- Scalar quantized: 1M × 768 = **~750MB**
+- Scalar quantized: 1M × 672 = **~672MB** raw vector payload before Lucene/HNSW overhead
 - Binary quantized: 1M × 96 = **~96MB**
 
 **Migration effort**: 🟢 Low — schema field type change + full reindex required.

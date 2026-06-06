@@ -303,12 +303,14 @@ def format_summary(output: dict[str, Any]) -> str:
     lines.append(f"total_comparisons: {summary['total_comparisons']}")
     memory = output.get("memory_estimate")
     if memory:
+        reduction_ratio = memory["estimated_reduction_ratio"]
+        reduction_text = f"{reduction_ratio}x" if reduction_ratio is not None else "N/A"
         lines.append(
             "estimated_payload: "
             f"vectors={memory['vector_count']} "
             f"float32={memory['baseline_float32_payload_mb']} MiB "
-            f"scalar_bits{memory['candidate_bits']}={memory['candidate_scalar_payload_mb']} MiB "
-            f"reduction={memory['estimated_reduction_ratio']}x",
+            f"scalar_bits={memory['candidate_bits']}:{memory['candidate_scalar_payload_mb']} MiB "
+            f"reduction={reduction_text}",
         )
     lines.append("")
     for mode, stats in sorted(summary["by_mode"].items()):

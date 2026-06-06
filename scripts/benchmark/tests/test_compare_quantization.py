@@ -182,7 +182,23 @@ class TestOutput:
 
         assert "QUANTIZATION RECALL COMPARISON" in text
         assert "estimated_payload:" in text
+        assert "scalar_bits=7:" in text
         assert "PASS" in text
+
+    def test_format_summary_handles_empty_memory_estimate(self) -> None:
+        output = build_output(
+            Path("baseline.json"),
+            Path("candidate.json"),
+            [],
+            top_k=10,
+            min_recall=0.95,
+            vector_count=0,
+        )
+
+        text = format_summary(output)
+
+        assert "reduction=N/A" in text
+        assert "Nonex" not in text
 
     def test_format_summary_includes_baseline_failure_counts(self) -> None:
         comparisons = compare_reports(
