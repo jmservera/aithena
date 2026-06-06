@@ -22,11 +22,14 @@ COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 COMPOSE_PROD_PATH = REPO_ROOT / "docker" / "compose.prod.yml"
 E2E_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.e2e.yml"
 SOLR10_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.solr10.yml"
+SOLR9_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.solr9.yml"
 SOLR_INIT_SCRIPT_PATH = REPO_ROOT / "docker" / "solr-init.sh"
 SECURITY_JSON_PATH = REPO_ROOT / "src" / "solr" / "security.json"
 MANAGED_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
 
 CLUSTER_SOLR_SERVICES = ("solr", "solr2", "solr3")
+SOLR_RUNTIME_SERVICES = (*CLUSTER_SOLR_SERVICES, "solr-init")
+SOLR_VERSION_SERVICES = (*SOLR_RUNTIME_SERVICES, "solr-search")
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -65,44 +68,58 @@ def _service_env(service: dict[str, Any]) -> dict[str, str]:
 
 
 class TestSolr10SafePreflight:
-    """Non-invasive checks that can land before the Solr 10 runtime switch."""
+    """Static checks for the Solr 10 default runtime and rollback path."""
 
     @pytest.mark.e2e
     @pytest.mark.solr10
     def test_compose_services_pass_through_solr_version(self) -> None:
-        """All Solr containers must accept SOLR_VERSION without changing the default."""
+        """All Solr containers must default to Solr 10 while accepting overrides."""
         for compose_path in (COMPOSE_PATH, COMPOSE_PROD_PATH):
             services = _load_yaml(compose_path).get("services", {})
-            for service_name in (*CLUSTER_SOLR_SERVICES, "solr-init"):
+            for service_name in SOLR_VERSION_SERVICES:
                 assert service_name in services, f"{compose_path.name} is missing service {service_name!r}"
                 env = _service_env(services[service_name])
-                assert env.get("SOLR_VERSION") == "${SOLR_VERSION:-9}", (
-                    f"{compose_path.name}:{service_name} must default SOLR_VERSION to 9 "
-                    "while allowing Solr 10 E2E runs via environment override"
+                assert env.get("SOLR_VERSION") == "${SOLR_VERSION:-10}", (
+                    f"{compose_path.name}:{service_name} must default SOLR_VERSION to 10 "
+                    "while allowing Solr 9 rollback runs via environment override"
                 )
 
     @pytest.mark.e2e
     @pytest.mark.solr10
-    def test_solr10_compose_overlay_is_explicit_opt_in(self) -> None:
-        """The runtime slice must keep defaults on Solr 9 and isolate Solr 10 behind an overlay."""
+    def test_solr10_is_default_and_solr9_overlay_is_explicit_rollback(self) -> None:
+        """The runtime defaults to Solr 10 and isolates Solr 9 behind a rollback overlay."""
         overlay_services = _load_yaml(SOLR10_COMPOSE_PATH).get("services", {})
-        assert set(overlay_services) == {*CLUSTER_SOLR_SERVICES, "solr-init"}
+        assert set(overlay_services) == {*SOLR_RUNTIME_SERVICES, "solr-search"}
 
         for service_name, service in overlay_services.items():
             env = _service_env(service)
+            assert env.get("SOLR_VERSION") == "10", f"{service_name} must opt into Solr 10 behavior"
+            if service_name == "solr-search":
+                continue
             build_args = service.get("build", {}).get("args", {})
-            assert env.get("SOLR_VERSION") == "10", f"{service_name} must opt into Solr 10 CLI behavior"
             assert build_args.get("SOLR_BASE_IMAGE") == "solr:10", (
-                f"{service_name} must build from the Solr 10 base image only via the opt-in overlay"
+                f"{service_name} must build from the Solr 10 base image via the explicit Solr 10 overlay"
             )
 
         for compose_path in (COMPOSE_PATH, COMPOSE_PROD_PATH):
             services = _load_yaml(compose_path).get("services", {})
-            for service_name in (*CLUSTER_SOLR_SERVICES, "solr-init"):
+            for service_name in SOLR_RUNTIME_SERVICES:
                 build_args = services[service_name].get("build", {}).get("args", {})
-                assert build_args.get("SOLR_BASE_IMAGE") != "solr:10", (
-                    f"{compose_path.name}:{service_name} must not force Solr 10 in the default runtime"
+                assert build_args.get("SOLR_BASE_IMAGE") == "${SOLR_BASE_IMAGE:-solr:10}", (
+                    f"{compose_path.name}:{service_name} must default to Solr 10 while allowing rollback override"
                 )
+
+        rollback_services = _load_yaml(SOLR9_COMPOSE_PATH).get("services", {})
+        assert set(rollback_services) == {*SOLR_RUNTIME_SERVICES, "solr-search"}
+        for service_name, service in rollback_services.items():
+            env = _service_env(service)
+            assert env.get("SOLR_VERSION") == "9", f"{service_name} must opt into Solr 9 behavior"
+            if service_name == "solr-search":
+                continue
+            build_args = service.get("build", {}).get("args", {})
+            assert build_args.get("SOLR_BASE_IMAGE") == "solr:9.7", (
+                f"{service_name} must build from the Solr 9.7 base image only via the rollback overlay"
+            )
 
     @pytest.mark.e2e
     @pytest.mark.solr10
@@ -118,6 +135,7 @@ class TestSolr10SafePreflight:
             's/hnswEfConstruction="/hnswBeamWidth="/g',
             's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g',
             's/ bits="8"/ vectorEncoding="BYTE"/g',
+            r"s/<luceneMatchVersion>10\.0<\/luceneMatchVersion>/<luceneMatchVersion>9.10<\/luceneMatchVersion>/g",
         )
 
         for script in scripts:
@@ -129,6 +147,9 @@ class TestSolr10SafePreflight:
             ), "Solr 9 compatibility rewrites must be guarded by SOLR_VERSION=9"
             for pattern in rewrite_patterns:
                 assert pattern in script, f"Missing Solr 9 compatibility rewrite: {pattern}"
+            assert "VECTOR_QUANTIZATION" in script
+            assert '/<fieldType name="knn_vector_768_byte"/d' in script
+            assert '/<field name="embedding_byte_v"/d' in script
 
     @pytest.mark.e2e
     @pytest.mark.solr10

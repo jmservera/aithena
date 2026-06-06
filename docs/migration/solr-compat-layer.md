@@ -40,7 +40,7 @@ names for the detected Solr version.
 | `solr auth enable -u USER:PASS` | `solr auth enable --credentials USER:PASS` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
 | `solr auth enable -z HOST` | `solr auth enable --zk-host HOST` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
 | `solr zk ls … -z HOST` | `solr zk ls … --zk-host HOST` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
-| `solr zk upconfig -z HOST -n NAME -d DIR` | `solr zk upconfig --zk-host HOST --name NAME --dir DIR` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
+| `solr zk upconfig -z HOST -n NAME -d DIR` | `solr zk upconfig --zk-host HOST --conf-name NAME --conf-dir DIR` | `docker-compose.yml`, `docker/compose.prod.yml`, `docker/solr-init.sh` |
 
 **Compat approach**: The `solr-init` entrypoints read `SOLR_VERSION` and use
 version-appropriate CLI flags via shell helper functions.
@@ -100,7 +100,7 @@ Not used in current codebase. Documented for future reference only.
 1. **Environment variable** (`SOLR_VERSION`): Checked first. Values: `"9"` or `"10"`.
 2. **Solr API fallback**: Queries `GET /solr/admin/info/system` and parses
    `lucene.solr-spec-version` from the response.
-3. **Default**: Falls back to `"9"` if detection fails.
+3. **Default**: Runtime Compose defaults to `"10"`; application-side API detection still falls back safely if Solr is unreachable.
 
 ### Provided Functions
 
@@ -129,7 +129,8 @@ is ready for use when:
 
 | Variable | Default | Values | Where |
 |----------|---------|--------|-------|
-| `SOLR_VERSION` | `9` | `9`, `10` | `.env.example`, `docker-compose.yml`, `docker/compose.prod.yml`, opt-in `docker/compose.solr10.yml` |
+| `SOLR_VERSION` | `10` | `9`, `10` | `.env.example`, `docker-compose.yml`, `docker/compose.prod.yml`; `docker/compose.solr9.yml` pins rollback to `9` |
+| `SOLR_BASE_IMAGE` | `solr:10` | `solr:10`, `solr:9.7` | `.env.example`, Solr build args in Compose; `docker/compose.solr9.yml` pins rollback to `solr:9.7` |
 
 ---
 
@@ -137,10 +138,14 @@ is ready for use when:
 
 When switching from Solr 9 to 10:
 
-1. [ ] For validation runs, add `docker/compose.solr10.yml` to `COMPOSE_FILE` so Solr containers build with `SOLR_BASE_IMAGE=solr:10` and run with `SOLR_VERSION=10`
-2. [ ] For final cutover, update `src/solr/Dockerfile` default `SOLR_BASE_IMAGE` from `solr:9.7` to `solr:10` after the Solr 10 runtime overlay has been validated
-3. [ ] Update `src/solr/books/solrconfig.xml` `luceneMatchVersion` to `10.0`
-4. [ ] Verify CLI commands in `docker-compose.yml` use double-dash syntax
+1. [x] Default runtime builds with `SOLR_BASE_IMAGE=solr:10` and runs with `SOLR_VERSION=10`
+2. [x] `src/solr/books/solrconfig.xml` uses `luceneMatchVersion` `10.0`; Solr 9 rollback rewrites it to `9.10`
+3. [x] Solr 10 default uploads omit the `int8` field/type unless `VECTOR_QUANTIZATION=int8`, keeping the held scalar-quantization change out of the default runtime
+4. [x] Verify CLI commands in `docker-compose.yml` use version-aware Solr 9/10 syntax
 5. [ ] Upload the updated `books` configset and re-index all data (required after
        HNSW schema parameter and `luceneMatchVersion` changes)
 6. [ ] Run full test suite
+
+Rollback: temporarily add `docker/compose.solr9.yml` or set
+`SOLR_BASE_IMAGE=solr:9.7 SOLR_VERSION=9` so Solr containers and solr-init use
+the Solr 9.7 compatibility path.

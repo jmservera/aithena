@@ -49,15 +49,14 @@ collection_config="$(retry_curl "$collection_endpoint")"
 if ! printf '%s' "$collection_config" | grep -q '"/update/extract"'; then
   post_json "$collection_endpoint" '{
     "add-requesthandler": {
-      "/update/extract": {
-        "name": "/update/extract",
-        "class": "solr.extraction.ExtractingRequestHandler",
-        "defaults": {
-          "lowernames": "true",
-          "fmap.content": "_text_",
-          "captureAttr": "true",
-          "update.chain": "langid"
-        }
+      "name": "/update/extract",
+      "class": "solr.extraction.ExtractingRequestHandler",
+      "tikaserver.url": "http://tika:9998",
+      "defaults": {
+        "lowernames": "true",
+        "fmap.content": "_text_",
+        "captureAttr": "true",
+        "update.chain": "langid"
       }
     }
   }'

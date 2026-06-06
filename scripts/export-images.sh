@@ -141,7 +141,9 @@ OFFICIAL_IMAGES=(
   "rediscommander/redis-commander:latest"
   "nginx:1.27-alpine"
   "zookeeper:3.9"
-  "solr:9.7"
+  "apache/tika:3.2.3.0-full"
+  "solr:10"
+  "solr:9.7"  # rollback overlay
 )
 
 ALL_IMAGES=("${CUSTOM_IMAGES[@]}" "${OFFICIAL_IMAGES[@]}")

@@ -214,10 +214,10 @@ def test_solr_init_cli_helpers_translate_flags_for_solr_9_and_10(script_name: st
     assert _evaluate_cli_flags(script, "9") == ["-u", "-z", "-n", "-d"], (
         f"{script_name} must preserve Solr 9 CLI flag compatibility"
     )
-    assert _evaluate_cli_flags(script, "10") == ["--credentials", "--zk-host", "--name", "--dir"], (
+    assert _evaluate_cli_flags(script, "10") == ["--credentials", "--zk-host", "--conf-name", "--conf-dir"], (
         f"{script_name} must translate solr CLI flags to Solr 10 double-dash syntax"
     )
-    assert _evaluate_cli_flags(script, "10.0.0") == ["--credentials", "--zk-host", "--name", "--dir"], (
+    assert _evaluate_cli_flags(script, "10.0.0") == ["--credentials", "--zk-host", "--conf-name", "--conf-dir"], (
         f"{script_name} must accept full Solr 10 version strings"
     )
 
