@@ -67,6 +67,15 @@ docker compose config --quiet
 
 Until CI covers all paths, the reviewing agent must run these manually.
 
+### Container registry/transient bootstrap failures
+
+If a container workflow fails before repository build steps while pulling
+BuildKit or base images (for example Docker Hub `context deadline exceeded`) and
+the same workflow later passes on the PR branch, treat it as non-code-related
+CI noise, not a PR blocker. Open a resiliency follow-up only if the timeout
+repeats across runs or services; then evaluate BuildKit image mirroring, retry
+wrappers around bootstrap pulls, or runner/network health.
+
 ## Pattern 3: Branch Protection Strict Mode
 
 When branch protection requires "up to date before merging":
