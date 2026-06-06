@@ -433,6 +433,22 @@ def test_build_knn_params_custom_field() -> None:
     assert "author_s:Amades" in params["fq"]
 
 
+def test_build_knn_params_includes_ef_search_scale_factor_override() -> None:
+    params = build_knn_params([0.5], top_k=10, knn_field="embedding_v", ef_search_scale_factor=2.5)
+
+    assert params["q"] == "{!knn f=embedding_v topK=10 efSearchScaleFactor=2.5}[0.5]"
+
+
+def test_build_knn_params_rejects_non_positive_ef_search_scale_factor() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="efSearchScaleFactor must be finite and greater than 0"):
+        build_knn_params([0.5], top_k=10, knn_field="embedding_v", ef_search_scale_factor=0)
+
+    with pytest.raises(ValueError, match="efSearchScaleFactor must be finite and greater than 0"):
+        build_knn_params([0.5], top_k=10, knn_field="embedding_v", ef_search_scale_factor=float("inf"))
+
+
 def test_int8_quantization_defaults_to_byte_vector_field() -> None:
     from config import _vector_field_default
 

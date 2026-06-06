@@ -520,7 +520,15 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_post: MagicMock) -> 
     mock_post.side_effect = _dispatch
 
     client = get_client()
-    response = client.get("/search", params={"q": "catalan history", "mode": "semantic"})
+    response = client.get(
+        "/search",
+        params={
+            "q": "catalan history",
+            "mode": "semantic",
+            "limit": 7,
+            "efSearchScaleFactor": 2.5,
+        },
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -533,6 +541,36 @@ def test_search_semantic_mode_calls_embeddings_and_knn(mock_post: MagicMock) -> 
 
     solr_calls = [call for call in mock_post.call_args_list if "data" in call.kwargs]
     _assert_solr_calls_use_json_writer(solr_calls)
+    assert solr_calls[0].kwargs["data"]["q"].startswith("{!knn f=embedding_v topK=7 efSearchScaleFactor=2.5}")
+
+
+def test_search_rejects_invalid_ef_search_scale_factor() -> None:
+    client = get_client()
+
+    zero_response = client.get(
+        "/search",
+        params={"q": "catalan history", "mode": "semantic", "efSearchScaleFactor": 0},
+    )
+    infinity_response = client.get(
+        "/search",
+        params={"q": "catalan history", "mode": "semantic", "efSearchScaleFactor": "inf"},
+    )
+
+    assert zero_response.status_code == 422
+    assert zero_response.json()["detail"][0]["loc"] == ["query", "efSearchScaleFactor"]
+    assert infinity_response.status_code == 422
+    assert infinity_response.json()["detail"][0]["loc"] == ["query", "efSearchScaleFactor"]
+
+
+def test_openapi_documents_ef_search_scale_factor() -> None:
+    client = get_client()
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    params = response.json()["paths"]["/search"]["get"]["parameters"]
+    ef_param = next(param for param in params if param["name"] == "efSearchScaleFactor")
+    assert ef_param["schema"]["default"] == 1.0
+    assert ef_param["schema"]["exclusiveMinimum"] == 0
 
 
 @patch("main.requests.post")
@@ -650,7 +688,10 @@ def test_search_hybrid_mode_fuses_both_legs(mock_post: MagicMock) -> None:
     mock_post.side_effect = _dispatch
 
     client = get_client()
-    response = client.get("/search", params={"q": "folklore", "mode": "hybrid", "page_size": 5})
+    response = client.get(
+        "/search",
+        params={"q": "folklore", "mode": "hybrid", "page_size": 5, "efSearchScaleFactor": 1.5},
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -665,6 +706,8 @@ def test_search_hybrid_mode_fuses_both_legs(mock_post: MagicMock) -> None:
 
     solr_calls = [call for call in mock_post.call_args_list if "data" in call.kwargs]
     _assert_solr_calls_use_json_writer(solr_calls)
+    knn_queries = [call.kwargs["data"]["q"] for call in solr_calls if "{!knn" in call.kwargs["data"].get("q", "")]
+    assert knn_queries[0].startswith("{!knn f=embedding_v topK=20 efSearchScaleFactor=1.5}")
 
 
 @patch("main.requests.post")
