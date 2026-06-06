@@ -268,6 +268,16 @@ assert_json_field "category=security" "$tmpdir/out.json" 0 "category" "security"
 assert_json_field "severity=error" "$tmpdir/out.json" 0 "severity" "error"
 
 # -------------------------------------------------------
+echo "Test 19: Explicit authentication failures are still security errors"
+cat > "$tmpdir/authentication-failure.txt" <<'EOF'
+api-1 | 2026-06-06 authentication failure for service account
+EOF
+sh "$ANALYZER" "$tmpdir/authentication-failure.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 1 (security error)" 1 "$rc"
+assert_json_field "category=security" "$tmpdir/out.json" 0 "category" "security"
+assert_json_field "severity=error" "$tmpdir/out.json" 0 "severity" "error"
+
+# -------------------------------------------------------
 echo ""
 echo "========================================"
 echo "Results: $PASS passed, $FAIL failed"
