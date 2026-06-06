@@ -5469,7 +5469,7 @@ HNSW vector field parameter names changed between Solr 9 and Solr 10. **Existing
 
 1. Back up Solr data volumes.
 2. Update `managed-schema.xml` to use the Solr 10 parameter names.
-3. Follow the [Solr 10 Migration Runbook](migration/solr10-migration-runbook.md) for the complete step-by-step procedure.
+3. Follow the [Solr 10 Migration Runbook](migration/solr-10-production-runbook.md) for the complete step-by-step procedure.
 
 Do not start the Solr 10 images against an existing Solr 9 data directory without completing this migration.
 
@@ -5551,7 +5551,7 @@ Solr 10 ships with `blockUnknown=true` as the default for the BasicAuth security
 
 3. **Follow the Solr 10 migration runbook:**
    ```
-   docs/migration/solr10-migration-runbook.md
+   docs/migration/solr-10-production-runbook.md
    ```
 
 4. **Pull the latest service images:**
@@ -5599,7 +5599,7 @@ Follow the [v2.3.0 deployment notes](#deployment-updates-for-v230) first, then a
 
 ### Data Migration
 
-**HNSW schema migration is required for upgrades.** Follow `docs/migration/solr10-migration-runbook.md`. Auth storage, collections DB, and Redis state are unaffected.
+**HNSW schema migration is required for upgrades.** Follow `docs/migration/solr-10-production-runbook.md`. Auth storage, collections DB, and Redis state are unaffected.
 
 Fresh installations require no migration.
 
