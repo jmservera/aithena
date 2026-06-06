@@ -415,7 +415,7 @@ That means every service using `/data/documents` is reading from the same mounte
 | `EMBEDDINGS_TIMEOUT` | `120` | Max wait for query embeddings before semantic/hybrid degrade to keyword |
 | `DEFAULT_SEARCH_MODE` | `keyword` | Default API search mode |
 | `RRF_K` | `60` | Reciprocal-rank fusion damping constant for hybrid ranking |
-| `VECTOR_QUANTIZATION` | `none` | Embedding precision mode. Set `int8` to use Solr scalar-quantized byte vectors. |
+| `VECTOR_QUANTIZATION` | `none` | Embedding precision mode. Set `int8` to use signed-byte vector storage (`ScalarQuantizedDenseVectorField bits=7` on Solr 10, `DenseVectorField vectorEncoding=BYTE` on Solr 9). |
 | `KNN_FIELD` | `embedding_v` (`embedding_byte_v` when `VECTOR_QUANTIZATION=int8`) | Dense-vector field used by the semantic/hybrid kNN leg |
 | `UPLOAD_MAX_SIZE_MB` | `50` | Maximum upload file size (v0.6.0+) |
 | `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
@@ -476,7 +476,7 @@ Operators can tune the search path with these controls:
 - `DEFAULT_SEARCH_MODE` sets the API default when clients do not pass a `mode` query parameter.
 - Clients can switch modes per request with `GET /v1/search?mode=keyword|semantic|hybrid`.
 - `RRF_K` controls how aggressively hybrid mode favors top-ranked documents from each leg.
-- `VECTOR_QUANTIZATION=int8` selects the scalar-quantized `embedding_byte_v` field by default; leave unset for float32 `embedding_v`.
+- `VECTOR_QUANTIZATION=int8` selects the signed-byte `embedding_byte_v` field by default; leave unset for float32 `embedding_v`.
 - `KNN_FIELD` overrides the Solr dense-vector field used by semantic and hybrid search.
 - `EMBEDDINGS_TIMEOUT` controls how long semantic/hybrid requests wait before falling back to keyword results.
 

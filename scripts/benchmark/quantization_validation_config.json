@@ -1,0 +1,288 @@
+{
+  "validation_config": {
+    "version": "1.0",
+    "created_by": "Bishop (Vector Search & Data Science Specialist)",
+    "created_at": "2026-06-05",
+    "purpose": "Configuration for scalar quantization (int8) benchmark validation #1344",
+    "schema_prerequisite": "Solr 10 ScalarQuantizedDenseVectorField uses supported bits (4 or 7) and Solr 9 staging rewrites bits 4/7 to vectorEncoding=BYTE"
+  },
+  "corpus": {
+    "description": "Representative test corpus for benchmark",
+    "document_count": {
+      "recommended": 1500,
+      "minimum": 1000,
+      "maximum": 2000,
+      "rationale": "Large enough to stress memory (~750MB in float32, ~187MB in int8), small enough to complete in <10min per phase"
+    },
+    "language_diversity": [
+      "Spanish",
+      "Catalan",
+      "French",
+      "English"
+    ],
+    "approximate_text_size_mb": {
+      "small": 5,
+      "medium": 7,
+      "large": 10
+    }
+  },
+  "benchmark_suite": {
+    "query_count": 30,
+    "categories": {
+      "simple_keyword": 5,
+      "natural_language": 6,
+      "multilingual": 6,
+      "long_complex": 4,
+      "edge_cases": 9
+    },
+    "search_modes": [
+      "semantic",
+      "hybrid"
+    ],
+    "excluded_modes": [
+      "keyword"
+    ],
+    "excluded_reason": "Keyword search is unaffected by vector quantization; focus on vector-dependent modes"
+  },
+  "vector_quantization": {
+    "modes": [
+      {
+        "name": "float32",
+        "env_var": "VECTOR_QUANTIZATION=none",
+        "bytes_per_vector": 3072,
+        "bytes_per_dimension": 4,
+        "solr_field_type": "knn_vector_768",
+        "solr_field": "embedding_v",
+        "phase": "baseline (reference)"
+      },
+      {
+        "name": "int8",
+        "env_var": "VECTOR_QUANTIZATION=int8",
+        "bytes_per_vector": 768,
+        "bytes_per_dimension": 1,
+        "solr_field_type": "knn_vector_768_byte",
+        "solr_field": "embedding_byte_v",
+        "phase": "candidate",
+        "expected_memory_ratio": 0.25,
+        "expected_memory_ratio_description": "int8 should use ~25% of float32 memory (4x reduction)"
+      }
+    ],
+    "embedding_model": "multilingual-e5-base",
+    "embedding_dimension": 768,
+    "similarity_function": "cosine"
+  },
+  "pass_fail_criteria": {
+    "release_blockers": [
+      {
+        "metric": "recall_at_k",
+        "threshold": 0.95,
+        "scope": "all_queries_aggregate",
+        "description": "Mean recall@10 across semantic and hybrid modes must be ≥0.95 (95% agreement with float32)"
+      },
+      {
+        "metric": "recall_at_k_individual",
+        "threshold": 0.85,
+        "scope": "per_query",
+        "description": "No individual query should fall below 0.85 recall (85% agreement) without manual review"
+      },
+      {
+        "metric": "indexing_errors",
+        "threshold": 0,
+        "scope": "both_phases",
+        "description": "Zero indexing or search errors during Phase 1 (float32) and Phase 2 (int8)"
+      },
+      {
+        "metric": "memory_reduction_ratio",
+        "threshold": 0.5,
+        "scope": "int8_vs_float32",
+        "description": "int8 collection memory must be ≤50% of float32 (target: 25% for 4x reduction)"
+      }
+    ],
+    "warnings": [
+      {
+        "metric": "latency_delta_pct",
+        "threshold": 15,
+        "scope": "median_across_queries",
+        "description": "int8 queries may be up to +10% slower; flag if >+15% (byte unpacking overhead)"
+      },
+      {
+        "metric": "document_count_consistency",
+        "scope": "phase_1_vs_phase_2",
+        "description": "Indexed document count must match between Phase 1 and Phase 2"
+      }
+    ]
+  },
+  "benchmark_execution": {
+    "phase_1": {
+      "name": "Float32 Baseline",
+      "quantization_mode": "none",
+      "env_var": "VECTOR_QUANTIZATION=none",
+      "docker_compose_command": "docker compose up -d --build",
+      "steps": [
+        "Start services with float32",
+        "Wait for Solr readiness (~15-30s)",
+        "Index test corpus (python3 scripts/index_test_corpus.py)",
+        "Verify collection (python3 scripts/verify_collections.py --verbose)",
+        "Run benchmark (semantic + hybrid modes)",
+        "Capture memory: docker stats --no-stream solr solr2 solr3"
+      ],
+      "expected_output": [
+        "results/benchmark-1344-float32.json",
+        "results/memory-1344-float32.txt"
+      ],
+      "validation": [
+        "All 30 queries complete (0 errors)",
+        "No query latency > 5s",
+        "Memory baseline captured"
+      ]
+    },
+    "phase_2": {
+      "name": "int8 Scalar Quantization Candidate",
+      "quantization_mode": "int8",
+      "env_var": "VECTOR_QUANTIZATION=int8",
+      "docker_compose_command": "VECTOR_QUANTIZATION=int8 docker compose up -d --build",
+      "steps": [
+        "Start services with int8 quantization",
+        "Wait for Solr readiness",
+        "Index SAME corpus (idempotent; indexer routes to embedding_byte_v)",
+        "Verify collection",
+        "Run SAME benchmark queries (order must match Phase 1)",
+        "Capture memory"
+      ],
+      "expected_output": [
+        "results/benchmark-1344-int8.json",
+        "results/memory-1344-int8.txt"
+      ],
+      "validation": [
+        "All 30 queries complete (0 errors)",
+        "Query IDs and order match Phase 1",
+        "Document count matches Phase 1",
+        "Memory captured"
+      ]
+    },
+    "phase_3": {
+      "name": "Offline Comparison & Analysis",
+      "command": "python3 scripts/benchmark/compare_quantization.py --baseline results/benchmark-1344-float32.json --candidate results/benchmark-1344-int8.json --top-k 10 --min-recall 0.95",
+      "expected_output": [
+        "results/benchmark-1344-quantization-comparison.json"
+      ],
+      "validation": [
+        "Comparison report generated",
+        "Recall@10 computed for all queries",
+        "Latency delta calculated"
+      ]
+    }
+  },
+  "data_sizes_and_metrics": {
+    "per_vector_memory": {
+      "float32": {
+        "bytes_per_dimension": 4,
+        "total_dimensions": 768,
+        "bytes_per_vector": 3072,
+        "percent_of_float32": "100%"
+      },
+      "int8": {
+        "bytes_per_dimension": 1,
+        "total_dimensions": 768,
+        "bytes_per_vector": 768,
+        "percent_of_float32": "25%"
+      }
+    },
+    "collection_memory_examples": {
+      "1_million_vectors": {
+        "float32_mb": 3000,
+        "float32_with_overhead_gb": 3.5,
+        "int8_mb": 750,
+        "int8_with_overhead_gb": 1.0,
+        "reduction_ratio": "3.5x"
+      },
+      "1000_documents_approx": {
+        "float32_mb": 30,
+        "int8_mb": 7.5,
+        "reduction_ratio": "4x"
+      }
+    },
+    "benchmark_metrics": {
+      "recall_at_k": {
+        "threshold": 0.95,
+        "description": "Percentage of baseline top-10 documents found in candidate top-10",
+        "unit": "fraction (0.0 to 1.0)"
+      },
+      "latency_delta_pct": {
+        "acceptable_range": "-5% to +10%",
+        "description": "Difference in query latency between int8 and float32",
+        "unit": "percentage"
+      },
+      "top_k_overlap": {
+        "measurement": "number of matching documents in top-k",
+        "unit": "count (0 to 10 for top-10)"
+      }
+    }
+  },
+  "deliverables": {
+    "required_files": [
+      {
+        "name": "benchmark-1344-float32.json",
+        "path": "results/",
+        "description": "Full benchmark report with 60 results (30 queries × 2 modes)"
+      },
+      {
+        "name": "benchmark-1344-int8.json",
+        "path": "results/",
+        "description": "Full benchmark report with 60 results (int8 candidate)"
+      },
+      {
+        "name": "benchmark-1344-quantization-comparison.json",
+        "path": "results/",
+        "description": "Offline comparison with per-query recall@10 and latency delta"
+      },
+      {
+        "name": "memory-1344-float32.txt",
+        "path": "results/",
+        "description": "docker stats output for float32 baseline (MEM, LIMIT columns)"
+      },
+      {
+        "name": "memory-1344-int8.txt",
+        "path": "results/",
+        "description": "docker stats output for int8 candidate (should show 4x reduction)"
+      }
+    ],
+    "manual_summary_fields": [
+      "corpus_size_documents",
+      "corpus_size_mb_text",
+      "recall_at_k_mean_percent",
+      "recall_at_k_min_percent",
+      "recall_at_k_semantic_percent",
+      "recall_at_k_hybrid_percent",
+      "memory_reduction_ratio_float32_vs_int8",
+      "memory_usage_float32_gb",
+      "memory_usage_int8_gb",
+      "latency_delta_median_percent",
+      "latency_delta_range_percent",
+      "pass_fail_decision",
+      "failed_query_ids_if_any",
+      "root_cause_analysis_if_blocker"
+    ]
+  },
+  "blocker_resolution": {
+    "current_state": "PR #1670 is held by directive (not merged)",
+    "current_schema_bits": 8,
+    "current_schema_compatibility": "Invalid for Solr 10 (only supports bits 4 or 7); works for Solr 9",
+    "required_schema_fix": "bits=\"7\" for Solr 10; Solr 9 compat rewrite to DenseVectorField vectorEncoding=BYTE",
+    "action_required": "Await Ripley directive or PR #1670 approval",
+    "post_merge_status": "This plan executable with no code changes; schema already updated"
+  },
+  "notes": {
+    "idempotency": "index_test_corpus.py deduplicates by Solr unique key; safe to re-run both phases",
+    "offline_comparison": "compare_quantization.py requires no Solr/Docker; suitable for CI pipelines",
+    "sequential_execution": "Each phase uses same Solr collection; must not overlap",
+    "corpus_consistency": "Phase 1 and Phase 2 must index the SAME corpus (same documents, same order) for valid comparison",
+    "memory_measurement": "docker stats captures live memory; run after indexing stabilizes (~1 min post-completion)",
+    "query_order": "Benchmark runner loads from queries.json in deterministic order; query_id must match between phases"
+  },
+  "approval": {
+    "approved_by": "Bishop (Vector Search & Data Science Specialist)",
+    "approval_date": "2026-06-05",
+    "approval_status": "Ready to execute post-#1670 merge"
+  }
+}

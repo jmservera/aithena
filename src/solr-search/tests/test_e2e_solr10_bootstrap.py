@@ -134,7 +134,7 @@ class TestSolr10SafePreflight:
             's/hnswM="/hnswMaxConnections="/g',
             's/hnswEfConstruction="/hnswBeamWidth="/g',
             's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g',
-            's/ bits="8"/ vectorEncoding="BYTE"/g',
+            's/ bits="[47]"/ vectorEncoding="BYTE"/g',
             r"s/<luceneMatchVersion>10\.0<\/luceneMatchVersion>/<luceneMatchVersion>9.10<\/luceneMatchVersion>/g",
         )
 
