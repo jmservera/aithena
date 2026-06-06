@@ -87,6 +87,26 @@ def _summarize_collection_health(body: Mapping[str, Any]) -> str:
     return f"health={health}, replicas={','.join(replica_states) or 'none'}"
 
 
+def _collection_replicas_active(collection: Mapping[str, Any]) -> bool:
+    shards = collection.get("shards")
+    if not isinstance(shards, Mapping) or not shards:
+        return False
+
+    for shard in shards.values():
+        if not isinstance(shard, Mapping):
+            return False
+        shard_state = shard.get("state")
+        if shard_state not in (None, "active"):
+            return False
+        replicas = shard.get("replicas")
+        if not isinstance(replicas, Mapping) or not replicas:
+            return False
+        for replica in replicas.values():
+            if not isinstance(replica, Mapping) or replica.get("state") != "active":
+                return False
+    return True
+
+
 def _is_solr_not_found_response(response: requests.Response) -> bool:
     text = response.text.lower()
     return response.status_code == 404 or (
@@ -121,7 +141,7 @@ def solr_books_collection_ready(solr_url: str, solr_auth: tuple[str, str]) -> di
             else:
                 last_status = _summarize_collection_health(body)
                 collection = body.get("cluster", {}).get("collections", {}).get("books")
-                if collection and collection.get("health") == "GREEN":
+                if collection and (collection.get("health") == "GREEN" or _collection_replicas_active(collection)):
                     return body
         else:
             last_status = f"HTTP {response.status_code}: {response.text[:200]}"
@@ -180,6 +200,38 @@ def test_opt_in_non_json_solr10_fixture_fails(monkeypatch: pytest.MonkeyPatch) -
 )
 def test_solr_not_found_response_detection(response: requests.Response, expected: bool) -> None:
     assert _is_solr_not_found_response(response) is expected
+
+
+def test_collection_replicas_active_accepts_solr10_clusterstatus_without_health() -> None:
+    collection = {
+        "shards": {
+            "shard1": {
+                "state": "active",
+                "replicas": {
+                    "core_node2": {"state": "active"},
+                    "core_node3": {"state": "active"},
+                },
+            }
+        }
+    }
+
+    assert _collection_replicas_active(collection) is True
+
+
+def test_collection_replicas_active_rejects_recovering_replica() -> None:
+    collection = {
+        "shards": {
+            "shard1": {
+                "state": "active",
+                "replicas": {
+                    "core_node2": {"state": "active"},
+                    "core_node3": {"state": "recovering"},
+                },
+            }
+        }
+    }
+
+    assert _collection_replicas_active(collection) is False
 
 
 def test_live_solr_major_version_is_10(solr_system_info: dict[str, Any]) -> None:
@@ -294,6 +346,7 @@ def test_live_solr10_security_enforces_rbac(
     assert readonly_collection_create.status_code in (401, 403), readonly_collection_create.text
 
     readonly_security_edit = None
+    delete_readonly_security_probe = None
     try:
         readonly_security_edit = _request_live_solr10(
             "POST",
@@ -303,7 +356,7 @@ def test_live_solr10_security_enforces_rbac(
             json={"set-user": {probe_user: "blocked"}},
         )
     finally:
-        _request_live_solr10(
+        delete_readonly_security_probe = _request_live_solr10(
             "POST",
             f"{base}/admin/authentication",
             auth=solr_auth,
@@ -311,6 +364,9 @@ def test_live_solr10_security_enforces_rbac(
             json={"delete-user": [probe_user]},
         )
     assert readonly_security_edit is not None
+    if readonly_security_edit.status_code == 200:
+        assert delete_readonly_security_probe is not None
+        assert delete_readonly_security_probe.status_code == 200, delete_readonly_security_probe.text
     assert readonly_security_edit.status_code in (401, 403), readonly_security_edit.text
 
     create_probe = _request_live_solr10(
