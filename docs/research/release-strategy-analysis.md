@@ -25,7 +25,7 @@ This analysis examines the current monorepo release strategy for Aithena, a micr
 
 ### 1.1 Service Inventory
 
-The Aithena stack consists of **16 containers** in production:
+The Aithena stack consists of **17 containers** in production:
 
 | Service | Type | Build Required | Base Image | Approx Size | Purpose |
 |---------|------|----------------|------------|-------------|---------|
@@ -38,11 +38,12 @@ The Aithena stack consists of **16 containers** in production:
 | **redis** | Cache | No | redis:latest | ~50 MB | Search cache |
 | **rabbitmq** | Queue | No | rabbitmq:4.0-management | ~200 MB | Async messaging |
 | **redis-commander** | Admin UI | No | rediscommander/redis-commander | ~100 MB | Redis browser |
-| **solr** (×3) | Search engine | No | solr:9.7 | ~600 MB ea | SolrCloud cluster |
+| **tika** | PDF extraction server | No | apache/tika:3.2.3.0-full | ~500 MB | Required by Solr 10 `/update/extract` |
+| **solr** (×3) | Search engine | No | solr:10 | ~600 MB ea | SolrCloud cluster |
 | **zookeeper** (×3) | Coordinator | No | zookeeper:3.9 | ~300 MB ea | ZK ensemble |
-| **solr-init** | One-shot | No | solr:9.7 | ~600 MB | Collection bootstrap |
+| **solr-init** | One-shot | No | solr:10 | ~600 MB | Collection bootstrap |
 
-**Total image footprint:** ~6.5 GB (compressed), ~15 GB (uncompressed with all layers)
+**Total image footprint:** ~7.0 GB (compressed), ~16 GB (uncompressed with all layers)
 
 **Services with custom builds:** 6 (aithena-ui, solr-search, embeddings-server, document-indexer, document-lister, admin)
 

@@ -104,6 +104,33 @@ services:
       default:
         aliases:
           - embeddings-server
+  tika:
+    image: apache/tika:3.2.3.0-full
+    expose:
+      - "9998"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:9998/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      default:
+        aliases:
+          - tika
   document-lister:
     image: ghcr.io/jmservera/aithena-document-lister:${VERSION:-latest}
     environment:
@@ -209,6 +236,8 @@ services:
         condition: service_healthy
       embeddings-server:
         condition: service_healthy
+      tika:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
@@ -233,6 +262,7 @@ services:
         max-file: "3"
     environment:
       - PORT=8080
+      - SOLR_VERSION=${SOLR_VERSION:-10}
       - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
       - BASE_PATH=/data/documents
@@ -491,6 +521,8 @@ services:
   solr:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -501,8 +533,9 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
-      SOLR_VERSION: ${SOLR_VERSION:-9}
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -539,6 +572,8 @@ services:
   solr2:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -549,8 +584,9 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
-      SOLR_VERSION: ${SOLR_VERSION:-9}
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -587,6 +623,8 @@ services:
   solr3:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -597,8 +635,9 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
-      SOLR_VERSION: ${SOLR_VERSION:-9}
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -635,6 +674,8 @@ services:
   solr-init:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     depends_on:
       solr:
         condition: service_healthy
@@ -646,7 +687,7 @@ services:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
     environment:
-      SOLR_VERSION: ${SOLR_VERSION:-9}
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
@@ -654,6 +695,7 @@ services:
       SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:?Set SOLR_READONLY_PASS}
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      VECTOR_QUANTIZATION: ${VECTOR_QUANTIZATION:-none}
       SOLR_NUM_SHARDS: ${SOLR_NUM_SHARDS:-1}
       SOLR_REPLICATION_FACTOR: ${SOLR_REPLICATION_FACTOR:-3}
     entrypoint:
@@ -666,7 +708,7 @@ services:
           SOLR_URL="http://solr:8983"
 
           solr_major_version() {
-            local version="$${SOLR_VERSION:-9}"
+            local version="$${SOLR_VERSION:-10}"
             printf '%s\n' "$${version%%.*}"
           }
 
@@ -683,11 +725,11 @@ services:
           }
 
           solr_name_flag() {
-            if solr_10_cli; then printf '%s\n' "--name"; else printf '%s\n' "-n"; fi
+            if solr_10_cli; then printf '%s\n' "--conf-name"; else printf '%s\n' "-n"; fi
           }
 
           solr_dir_flag() {
-            if solr_10_cli; then printf '%s\n' "--dir"; else printf '%s\n' "-d"; fi
+            if solr_10_cli; then printf '%s\n' "--conf-dir"; else printf '%s\n' "-d"; fi
           }
 
           # Wait for Solr to be reachable (with or without auth)
@@ -771,6 +813,17 @@ services:
               -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
               -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
               -e 's/ bits="8"/ vectorEncoding="BYTE"/g' \
+              "$$CONFIGSET_DIR/managed-schema.xml"
+            sed -i \
+              -e 's/<luceneMatchVersion>10\.0<\/luceneMatchVersion>/<luceneMatchVersion>9.10<\/luceneMatchVersion>/g' \
+              "$$CONFIGSET_DIR/solrconfig.xml"
+          elif [ "$${VECTOR_QUANTIZATION:-none}" != "int8" ]; then
+            CONFIGSET_DIR="/var/solr/books-configset-solr10"
+            mkdir -p "$$CONFIGSET_DIR"
+            cp -R /configsets/books/. "$$CONFIGSET_DIR"/
+            sed -i \
+              -e '/<fieldType name="knn_vector_768_byte"/d' \
+              -e '/<field name="embedding_byte_v"/d' \
               "$$CONFIGSET_DIR/managed-schema.xml"
           fi
 

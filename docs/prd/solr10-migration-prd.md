@@ -264,7 +264,7 @@ solr auth enable --type basicAuth \
 |-------------------|----------|---------|----------|
 | Credentials flag | `-u "user:pass"` | `--credentials "user:pass"` | solr-init entrypoint |
 | ZooKeeper flag | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` | solr-init entrypoint |
-| zk upconfig flags | `-z ... -n ... -d ...` | `--zk-host ... --name ... --dir ...` | solr-init entrypoint |
+| zk upconfig flags | `-z ... -n ... -d ...` | `--zk-host ... --conf-name ... --conf-dir ...` | solr-init entrypoint |
 | zk ls flag | `-z ...` | `--zk-host ...` | solr-init entrypoint |
 
 **Action**: Update all `solr` CLI invocations in both compose files. Test thoroughly.

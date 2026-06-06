@@ -36,8 +36,8 @@ https://solr.apache.org/guide/solr/latest/configuration-guide/configuring-solrco
        that you fully re-index after changing this setting as it can
        affect both how text is indexed and queried.
   -->
-  <!-- Solr 9: 9.10 | Solr 10: update to 10.0 (requires full re-index) -->
-  <luceneMatchVersion>9.10</luceneMatchVersion>
+  <!-- Solr 10 default. solr-init rewrites this to 9.10 for the Solr 9 rollback overlay. -->
+  <luceneMatchVersion>10.0</luceneMatchVersion>
 
   <!-- <lib/> directives can be used to instruct Solr to load any Jars
        identified and use them to resolve any "plugins" specified in

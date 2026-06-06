@@ -503,7 +503,7 @@ Click **Start Scan**
 
 | Finding | Severity | Status | Notes |
 |---------|----------|--------|-------|
-| Third-party images use version tags (`redis`, `rabbitmq:3.12-management`, `solr:9.7`, etc.) | ⚠️ Medium | DOCUMENT | Should pin to digest (`@sha256:...`) for reproducibility |
+| Third-party images use version tags (`redis`, `rabbitmq:3.12-management`, `solr:10`, etc.) | ⚠️ Medium | DOCUMENT | Should pin to digest (`@sha256:...`) for reproducibility |
 | Some images lack explicit tags (`redis` → implicitly `:latest`) | ⚠️ Medium | FINDING | Add explicit version tags |
 
 **Questions to answer:**
