@@ -18,11 +18,14 @@ import pytest
 import yaml
 from solr10_gates import assert_supported_solr10_scalar_bits
 
+from search_service import build_knn_params
+
 pytestmark = [pytest.mark.e2e, pytest.mark.phase2, pytest.mark.solr10]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MANAGED_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
 SINGLE_NODE_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.single-node.yml"
+PROD_COMPOSE_PATH = REPO_ROOT / "docker" / "compose.prod.yml"
 
 
 class ComposeSafeLoader(yaml.SafeLoader):
@@ -70,6 +73,10 @@ def _reload_config(monkeypatch: pytest.MonkeyPatch, **env: str):
     return importlib.reload(config)
 
 
+def _estimated_scalar_vector_bytes(dimensions: int, bits: object) -> int:
+    return (dimensions * int(str(bits)) + 7) // 8
+
+
 class TestPhase2ActivePreflight:
     """Issue #1356 checks that can run before #1670/#1344 land."""
 
@@ -84,6 +91,33 @@ class TestPhase2ActivePreflight:
         solr_search_env = _service_env(services["solr-search"])
         assert solr_search_env.get("ZOOKEEPER_HOSTS") == "zoo1:2181"
         assert "zoo1" in services["solr"]["depends_on"]
+
+    def test_phase2_single_node_overlay_keeps_only_one_active_solr_node(self) -> None:
+        """Single-node mode must route all Solr workload to the primary SolrCloud node."""
+        compose = _load_yaml(SINGLE_NODE_COMPOSE_PATH)
+        services = compose["services"]
+
+        assert services["zoo2"]["profiles"] == ["distributed-only"]
+        assert services["zoo3"]["profiles"] == ["distributed-only"]
+        assert services["solr2"]["profiles"] == ["distributed-only"]
+        assert services["solr3"]["profiles"] == ["distributed-only"]
+        assert set(services["solr-init"]["depends_on"]) == {"solr"}
+        assert services["solr-init"]["environment"]["SOLR_NUM_SHARDS"] == "${SOLR_NUM_SHARDS:-1}"
+        assert services["solr-init"]["environment"]["SOLR_REPLICATION_FACTOR"] == "${SOLR_REPLICATION_FACTOR:-1}"
+
+    def test_phase2_production_solrcloud_overseer_disabled_is_wired(self) -> None:
+        """Production SolrCloud must keep 3 nodes while disabling the legacy Overseer queue."""
+        compose = _load_yaml(PROD_COMPOSE_PATH)
+        services = compose["services"]
+
+        for service_name in ("zoo1", "zoo2", "zoo3", "solr", "solr2", "solr3"):
+            assert service_name in services
+            assert "distributed-only" not in services[service_name].get("profiles", [])
+
+        for service_name in ("solr", "solr2", "solr3"):
+            env = _service_env(services[service_name])
+            assert "-Dsolr.cloud.overseer.enabled=${SOLR_CLOUD_OVERSEER_ENABLED:-false}" in env["SOLR_OPTS"]
+            assert env["ZK_HOST"] == "zoo1:2181,zoo2:2181,zoo3:2181"
 
     def test_phase2_int8_schema_and_app_config_are_wired(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Quantization wiring can be validated without executing Solr benchmarks."""
@@ -100,6 +134,47 @@ class TestPhase2ActivePreflight:
         assert config.settings.vector_quantization == "int8"
         assert config.settings.knn_field == "embedding_byte_v"
         assert config.settings.book_embedding_field == "embedding_byte_v"
+
+    def test_phase2_int8_vector_storage_estimate_meets_memory_reduction_gate(self) -> None:
+        """Schema-level int8 storage should meet the Phase 2 ≥3.5× memory-reduction gate."""
+        schema = ET.parse(MANAGED_SCHEMA_PATH).getroot()  # nosec B314
+        field_types = {field_type.attrib.get("name"): field_type.attrib for field_type in schema.findall("fieldType")}
+        float_vector = field_types["knn_vector_768"]
+        byte_vector = field_types["knn_vector_768_byte"]
+
+        assert int(float_vector["vectorDimension"]) == int(byte_vector["vectorDimension"]) == 768
+        assert_supported_solr10_scalar_bits(byte_vector["bits"])
+
+        dimensions = int(byte_vector["vectorDimension"])
+        float32_bytes_per_vector = int(float_vector["vectorDimension"]) * 4
+        quantized_bytes_per_vector = _estimated_scalar_vector_bytes(dimensions, byte_vector["bits"])
+        assert float32_bytes_per_vector / quantized_bytes_per_vector >= 3.5
+
+    @pytest.mark.parametrize(
+        ("bits", "expected_bytes"),
+        [
+            ("4", 384),
+            ("7", 672),
+        ],
+    )
+    def test_phase2_scalar_vector_byte_estimate_uses_supported_bits(self, bits: str, expected_bytes: int) -> None:
+        """The memory estimate must track Solr 10 scalar bits, not assume full bytes."""
+        assert _estimated_scalar_vector_bytes(768, bits) == expected_bytes
+
+    @pytest.mark.parametrize("scale_factor", [2.0, 5.0])
+    def test_phase2_efsearch_scale_factor_changes_solr_knn_query(self, scale_factor: float) -> None:
+        """The Solr 10 efSearchScaleFactor tuning parameter must reach the kNN local params."""
+        default_params = build_knn_params([0.5], top_k=10, knn_field="embedding_v")
+        tuned_params = build_knn_params(
+            [0.5],
+            top_k=10,
+            knn_field="embedding_v",
+            ef_search_scale_factor=scale_factor,
+        )
+
+        assert "efSearchScaleFactor" not in default_params["q"]
+        assert f"efSearchScaleFactor={scale_factor:g}" in tuned_params["q"]
+        assert tuned_params["rows"] == 10
 
 
 class TestPhase2StandaloneMode:
