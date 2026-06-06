@@ -67,6 +67,17 @@ This index consolidates all Solr 10 migration documentation for **v2.5.0 release
 
 ---
 
+### 4. **[Solr 10 Hybrid Search Evaluation](../research/solr10-hybrid-search-evaluation.md)** ✨ NEW
+**Purpose**: Research findings for #1349 on Solr 10/mainline hybrid search, RRF, rerank, and tuning options.
+**Audience**: Search engineers, backend engineers, product/relevance reviewers
+**Status**: ✅ Research complete; prototype deferred until SOLR-17319 is in the shipped Solr runtime and benchmark validation is scheduled
+**Key points**:
+- Solr 10.0.0 has no native RRF/combined-query handler; SOLR-17319 is on Apache Solr mainline after the 10.0.0 tag
+- Native Combined Query RRF is not drop-in for Aithena because BM25 returns parent docs while kNN returns chunk docs
+- Keep app-side chunk-kNN RRF as default; prototype Solr-native RRF behind a separate handler/flag before any ranking change
+
+---
+
 ## Implementation Status
 
 ### Merged (Ready for v2.5.0)
