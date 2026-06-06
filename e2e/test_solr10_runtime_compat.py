@@ -23,6 +23,7 @@ from solr10_gates import assert_supported_solr10_scalar_bits  # noqa: E402
 
 EXPECTED_MAJOR_ENV = "E2E_SOLR_EXPECTED_MAJOR"
 SOLR_READY_TIMEOUT = int(os.environ.get("E2E_SOLR_READY_TIMEOUT", "90"))
+SOLR_READY_TEST_TIMEOUT = SOLR_READY_TIMEOUT + 60
 
 pytestmark = [pytest.mark.e2e, pytest.mark.solr10]
 
@@ -84,6 +85,20 @@ def _summarize_collection_health(body: Mapping[str, Any]) -> str:
             replica_states.append(f"{shard_name}/{replica_name}={replica.get('state')}")
     health = collection.get("health", "missing")
     return f"health={health}, replicas={','.join(replica_states) or 'none'}"
+
+
+def _is_solr_not_found_response(response: requests.Response) -> bool:
+    text = response.text.lower()
+    return response.status_code == 404 or (
+        response.status_code == 400 and ("not found" in text or "does not exist" in text)
+    )
+
+
+def _response(status_code: int, body: str = "") -> requests.Response:
+    response = requests.Response()
+    response.status_code = status_code
+    response._content = body.encode()
+    return response
 
 
 @pytest.fixture(scope="session")
@@ -153,13 +168,27 @@ def test_opt_in_non_json_solr10_fixture_fails(monkeypatch: pytest.MonkeyPatch) -
         _get_live_solr10_json("http://127.0.0.1:8983/solr/books/admin/ping")
 
 
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (_response(404), True),
+        (_response(400, "Collection audit_probe does not exist"), True),
+        (_response(400, "collection not found"), True),
+        (_response(400, "bad request"), False),
+        (_response(500, "server error"), False),
+    ],
+)
+def test_solr_not_found_response_detection(response: requests.Response, expected: bool) -> None:
+    assert _is_solr_not_found_response(response) is expected
+
+
 def test_live_solr_major_version_is_10(solr_system_info: dict[str, Any]) -> None:
     """The opt-in Solr 10 fixture must actually run Solr 10."""
     version = str(solr_system_info.get("lucene", {}).get("solr-spec-version", ""))
     assert version.startswith("10."), f"Expected Solr 10.x, got {version!r}"
 
 
-@pytest.mark.timeout(SOLR_READY_TIMEOUT + 60)
+@pytest.mark.timeout(SOLR_READY_TEST_TIMEOUT)
 def test_live_solr10_schema_exposes_scalar_quantized_vector(
     solr_url: str,
     solr_auth: tuple[str, str],
@@ -196,7 +225,7 @@ def test_live_solr10_security_allows_health_probe(
     _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/health"))
 
 
-@pytest.mark.timeout(SOLR_READY_TIMEOUT + 60)
+@pytest.mark.timeout(SOLR_READY_TEST_TIMEOUT)
 def test_live_solr10_security_enforces_rbac(
     solr_url: str,
     solr_auth: tuple[str, str],
@@ -257,7 +286,7 @@ def test_live_solr10_security_enforces_rbac(
     if readonly_collection_create.status_code == 200:
         assert delete_collection_probe.status_code == 200, delete_collection_probe.text
     else:
-        assert delete_collection_probe.status_code in (200, 400, 404), delete_collection_probe.text
+        assert _is_solr_not_found_response(delete_collection_probe), delete_collection_probe.text
     assert readonly_collection_create.status_code in (401, 403), readonly_collection_create.text
 
     readonly_security_edit = None
