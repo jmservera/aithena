@@ -1,3 +1,91 @@
+# Decision: Issue Milestone Triage — 2026-06-06
+
+**Date:** 2026-06-06T08:35:28Z  
+**Author:** Newt (Product Manager)  
+**Status:** Closed
+
+## Context
+
+All 14 open issues required milestone assignment. Two active milestones existed:
+- **v2.5**: Post-release research and infrastructure work (longer cycle)
+- **v2.5.1**: Active validation phase for v2.5 release (shorter cycle)
+
+## Triage Criteria
+
+1. **Test phases and validation** → v2.5.1: Test Phase 1, 2, 3; Performance benchmarks; Pre-release validation.
+2. **Research, enhancement, and infrastructure** → v2.5: Vector quantization, GPU codecs, search improvements, admin migration, SolrCloud configuration, complexity reduction.
+
+## Decisions
+
+| Issue | Title | Milestone | Rationale |
+|-------|-------|-----------|-----------|
+| 1686 | Pre-release validation failed for pre-release | v2.5.1 | Release gate issue; active validation |
+| 1452 | Reduce general complexity: Dockerfiles, scripts | v2.5 | Infrastructure enhancement; post-release |
+| 1449 | Simplify GitHub Actions workflows | v2.5 | Infrastructure enhancement; post-release |
+| 1357 | [v2.5] Test Phase 3 | v2.5.1 | Explicit test phase; active validation |
+| 1356 | [v2.5] Test Phase 2 | v2.5.1 | Explicit test phase; already assigned |
+| 1355 | [v2.5] Test Phase 1 | v2.5.1 | Explicit test phase; already assigned |
+| 1354 | [v2.5] Performance benchmarks Solr 9.7 vs 10 | v2.5.1 | Validation evidence; already assigned |
+| 1351 | [v2.5] Migrate admin/metrics to OpenTelemetry | v2.5 | Infrastructure enhancement |
+| 1349 | [v2.5] Evaluate hybrid search improvements | v2.5 | Research track |
+| 1348 | [v2.5] Prototype DocumentCategorizerUpdateProcessorFactory | v2.5 | Research track |
+| 1347 | [v2.5] Add cuVS GPU codec | v2.5 | Vector quantization research |
+| 1345 | [v2.5] Expose efSearchScaleFactor parameter | v2.5 | Search tuning research |
+| 1344 | [v2.5] Add scalar quantization (int8) | v2.5.1 | Vector quantization; already assigned (performance gate) |
+| 1343 | [v2.5] Configure SolrCloud with Overseer disabled | v2.5 | Infrastructure enhancement |
+
+## Outcome
+
+**All 14 open issues now have milestone assignments.** No issue remains unassigned.
+
+**v2.5.1 focus:** 6 issues (test phases 1–3, pre-release validation, performance benchmarks, scalar quantization).  
+**v2.5 focus:** 8 issues (research, infrastructure, enhancements).
+
+## Notes
+
+The v2.5.1 milestone now groups the active validation work needed before v2.5 release approval. The v2.5 milestone contains follow-up research and infrastructure initiatives that can proceed in parallel without blocking release validation.
+
+Ripley should use this milestone structure to sequence implementation: v2.5.1 tests and validation gate the release; v2.5 research informs next-generation architecture decisions.
+
+---
+
+# Decision: OpenVINO release gates for base-image drift
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-06-05T17:02:51.834+00:00  
+**Status:** Proposed for Scribe merge  
+**Related:** #1662
+
+## Decision
+
+Keep Docker `uv sync --inexact` for the OpenVINO embeddings image, but treat it as
+safe only when the built image proves the installed runtime packages satisfy the
+OpenVINO extra constraints in `src/embeddings-server/pyproject.toml`.
+
+The release gate now has two enforcement points:
+
+1. The Docker build fails immediately after `uv sync --inexact` if installed
+   `openvino`, `openvino-tokenizers`, or `optimum-intel` drift outside the
+   configured constraints.
+2. A PR/manual/weekly `OpenVINO Release Gate` workflow rebuilds the image with
+   the latest base image and runs runtime smoke diagnostics.
+
+## Rationale
+
+The post-mortem for #1662 showed that lockfile validation in a clean environment
+does not catch skew introduced by preserving base-image packages. Verifying inside
+the built image checks the actual runtime that will be released while preserving
+the build-time optimization.
+
+## Coordination notes for Parker
+
+Application/runtime tests can rely on `/v1/embeddings/model` for the expected
+embedding dimension instead of hardcoding `768`. If Parker changes model-loading
+behavior or OpenVINO dependencies, the Docker verifier and smoke script are the
+infra-owned gates that should be updated with the new source-of-truth constraints.
+
+---
+
 # Decision: PathHierarchyTokenizer Audit — No-Op (v2.5)
 
 **Date:** 2026-06-05
