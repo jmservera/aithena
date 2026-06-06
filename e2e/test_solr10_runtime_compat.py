@@ -200,8 +200,8 @@ def test_live_solr10_schema_exposes_scalar_quantized_vector(
     vector_quantization = os.environ.get("VECTOR_QUANTIZATION", "none")
     if field_resp.status_code == 404 and vector_quantization != "int8":
         pytest.skip(
-            f"VECTOR_QUANTIZATION={vector_quantization!r} removes the scalar-quantized "
-            "byte vector field from the live schema"
+            f"VECTOR_QUANTIZATION={vector_quantization!r} is not int8, so the scalar-quantized "
+            "byte vector field is absent from the live schema"
         )
     field_resp.raise_for_status()
     body = _get_live_solr10_json(
