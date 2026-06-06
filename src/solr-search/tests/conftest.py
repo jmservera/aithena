@@ -8,9 +8,15 @@ real infrastructure paths (like /data) that don't exist on CI runners.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 # Paths that default to /data/* in production — redirect to /tmp for tests
 os.environ.setdefault("BASE_PATH", "/tmp/test_data")  # noqa: S108

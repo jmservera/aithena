@@ -29,13 +29,14 @@ function ServiceCard({ icon, title, description, url }: ServiceCardProps) {
 }
 
 function ConnectionRow({ service }: { service: ServiceEndpoint }) {
-  const isHealthy = service.status === 'connected' || service.status === 'up';
+  const normalizedStatus = service.status.trim().toLowerCase();
+  const isHealthy = normalizedStatus === 'connected' || normalizedStatus === 'up';
 
   return (
     <tr>
       <td className="infra-service-name">{service.name}</td>
-      <td>{service.type ?? '\u2014'}</td>
-      <td>{service.url ?? '\u2014'}</td>
+      <td>{service.type ?? service.description ?? '—'}</td>
+      <td>{service.admin_url ?? service.url ?? '—'}</td>
       <td>
         <span className={`infra-badge ${isHealthy ? 'infra-badge--ok' : 'infra-badge--error'}`}>
           {service.status}

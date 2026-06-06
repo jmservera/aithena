@@ -136,7 +136,7 @@ describe('AdminInfrastructurePage', () => {
     });
 
     expect(screen.getByText('solr')).toBeInTheDocument();
-    expect(screen.getByText('http://solr:8983')).toBeInTheDocument();
+    expect(screen.getByText('/admin/solr/')).toBeInTheDocument();
     expect(screen.getByText('rabbitmq')).toBeInTheDocument();
     expect(screen.getByText('redis-commander')).toBeInTheDocument();
 
@@ -157,6 +157,38 @@ describe('AdminInfrastructurePage', () => {
     const disconnectedBadges = screen.getAllByText('disconnected');
     expect(connectedBadges.length).toBe(2);
     expect(disconnectedBadges.length).toBe(1);
+  });
+
+  it('treats up status as healthy in the connection table', async () => {
+    const upStatusData = {
+      ...mockInfrastructure,
+      services: [{ name: 'solr', url: 'http://solr:8983', status: 'up', type: 'search' }],
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: upStatusData }));
+    renderPage();
+
+    const statusBadge = await screen.findByText('up');
+    expect(statusBadge).toHaveClass('infra-badge--ok');
+  });
+
+  it('prefers admin_url over url in the connection table endpoint column', async () => {
+    const adminUrlPreferredData = {
+      ...mockInfrastructure,
+      services: [
+        {
+          name: 'solr',
+          url: 'http://solr:8983',
+          admin_url: '/admin/solr/',
+          status: 'connected',
+          type: 'search',
+        },
+      ],
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: adminUrlPreferredData }));
+    renderPage();
+
+    await screen.findByText('/admin/solr/');
+    expect(screen.queryByText('http://solr:8983')).not.toBeInTheDocument();
   });
 
   it('shows error banner when API fails', async () => {

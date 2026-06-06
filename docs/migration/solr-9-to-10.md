@@ -331,6 +331,8 @@ Confirm `src/solr/security.json` is compatible with Solr 10:
 - `"health"` and `"metrics-read"` permissions with `"role": null` — verify unauthenticated access still works
 - RBAC rules — verify `solr.RuleBasedAuthorizationPlugin` API is unchanged
 
+Use the Solr 10 Security UI for post-bootstrap user, password, and role changes. Avoid manual `security.json` edits except for bootstrap or disaster-recovery flows where the Solr UI is unavailable.
+
 #### Step 2.5: Optional Schema Enhancements (Post-Upgrade)
 
 These are not required for the core upgrade but can be done after verification:
@@ -512,7 +514,7 @@ Trigger rollback if any of these occur after migration:
 
 - **Solr 10 → Solr 9 index**: Lucene 10 indexes are **not** backward-compatible with Solr 9. You must restore from backup or reindex.
 - **ZooKeeper state**: ZK data should be compatible, but restore from backup to be safe.
-- **Security config**: The `security.json` format is compatible between versions.
+- **Security config**: The `security.json` format is compatible between versions. After bootstrap, manage users and roles through the Solr 10 Security UI rather than hand-editing ZooKeeper state.
 
 ---
 

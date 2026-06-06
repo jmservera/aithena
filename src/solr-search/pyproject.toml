@@ -28,6 +28,15 @@ dev = [
 
 [tool.pytest.ini_options]
 addopts = "--cov=search_service --cov=main --cov=auth --cov=admin_auth --cov=config --cov=metrics --cov=correlation --cov=logging_config --cov=reset_password --cov=password_policy --cov=collections_service --cov=collections_models --cov=backup_service --cov=utils --cov=solr_compat --cov=rerank_service --cov-report=term-missing --cov-report=html -ra"
+markers = [
+    "e2e: end-to-end and E2E preflight tests",
+    "phase1: Solr 10 phase 1 migration tests",
+    "phase2: Solr 10 phase 2 migration tests",
+    "phase3: Solr 10 phase 3 migration tests",
+    "skipif_no_cuda: GPU tests gated on CUDA availability",
+    "skipif_no_cuvs: GPU tests gated on cuVS availability",
+    "solr10: Solr 10 compatibility tests",
+]
 
 [tool.coverage.run]
 source = ["search_service", "main", "auth", "admin_auth", "config", "metrics", "correlation", "logging_config", "reset_password", "password_policy", "collections_service", "collections_models", "backup_service", "utils", "solr_compat", "rerank_service"]
