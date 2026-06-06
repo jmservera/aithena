@@ -15,7 +15,8 @@ that spelling to match the schema exactly.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET  # nosec B405 — trusted local schema files only
+# Trusted local schema files only.
+import xml.etree.ElementTree as ET  # nosec B405
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,7 @@ BOOKS_SCHEMA = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
 
 
 def _parse_schema(schema_path: Path) -> ET.Element:
-    tree = ET.parse(schema_path)  # nosec B314 — trusted local schema file
+    tree = ET.parse(schema_path)  # nosec B314
     return tree.getroot()
 
 

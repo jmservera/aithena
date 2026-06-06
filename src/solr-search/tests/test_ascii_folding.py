@@ -13,7 +13,9 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-import xml.etree.ElementTree as ET  # nosec B405 — trusted local schema files only
+
+# Trusted local schema files only.
+import xml.etree.ElementTree as ET  # nosec B405
 from pathlib import Path
 from unittest.mock import patch
 
@@ -45,7 +47,7 @@ def _get_field_type_filters(schema_path: Path, field_type_name: str) -> list[tup
     For field types with index/query analyzers, returns [("index", [...]), ("query", [...])].
     For non-TextField types (e.g. StrField), returns [].
     """
-    tree = ET.parse(schema_path)  # nosec B314 — trusted local schema file
+    tree = ET.parse(schema_path)  # nosec B314
     root = tree.getroot()
 
     for ft in root.findall(".//fieldType"):
