@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -72,6 +73,47 @@ def _request_live_solr10(
         pytest.fail(f"{EXPECTED_MAJOR_ENV}=10 requires a reachable Solr 10 fixture at {url}: {exc}")
 
 
+def _summarize_collection_health(body: Mapping[str, Any]) -> str:
+    collection = body.get("cluster", {}).get("collections", {}).get("books", {})
+    shards = collection.get("shards", {})
+    replica_states = []
+    for shard_name, shard in shards.items():
+        replicas = shard.get("replicas", {})
+        for replica_name, replica in replicas.items():
+            replica_states.append(f"{shard_name}/{replica_name}={replica.get('state')}")
+    health = collection.get("health", "missing")
+    return f"health={health}, replicas={','.join(replica_states) or 'none'}"
+
+
+@pytest.fixture(scope="session")
+def solr_books_collection_ready(solr_url: str, solr_auth: tuple[str, str]) -> dict[str, Any]:
+    """Wait until the live books collection is fully active, not merely created."""
+    _require_expected_solr10()
+    base = solr_url.rstrip("/").removesuffix("/books").rstrip("/")
+    url = f"{base}/admin/collections"
+    params = {"action": "CLUSTERSTATUS", "collection": "books", "wt": "json"}
+    deadline = time.monotonic() + int(os.environ.get("E2E_SOLR_READY_TIMEOUT", "90"))
+    last_status = "not checked"
+
+    while time.monotonic() < deadline:
+        response = _request_live_solr10("GET", url, params=params, auth=solr_auth)
+        if response.status_code == 200:
+            try:
+                body = response.json()
+            except ValueError:
+                last_status = f"non-JSON response: {response.text[:200]}"
+            else:
+                last_status = _summarize_collection_health(body)
+                collection = body.get("cluster", {}).get("collections", {}).get("books")
+                if collection and collection.get("health") == "GREEN":
+                    return body
+        else:
+            last_status = f"HTTP {response.status_code}: {response.text[:200]}"
+        time.sleep(2)
+
+    pytest.fail(f"Solr 10 books collection did not become GREEN before live checks: {last_status}")
+
+
 @pytest.fixture(scope="session")
 def solr_system_info(solr_url: str, solr_auth: tuple[str, str]) -> dict[str, Any]:
     return _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/system"), auth=solr_auth)
@@ -119,6 +161,7 @@ def test_live_solr_major_version_is_10(solr_system_info: dict[str, Any]) -> None
 def test_live_solr10_schema_exposes_scalar_quantized_vector(
     solr_url: str,
     solr_auth: tuple[str, str],
+    solr_books_collection_ready: dict[str, Any],
 ) -> None:
     """The live Solr 10 books schema must expose the native int8 vector field type."""
     field_url = f"{solr_url}/schema/fieldtypes/knn_vector_768_byte"
@@ -154,6 +197,7 @@ def test_live_solr10_security_allows_health_probe(
 def test_live_solr10_security_enforces_rbac(
     solr_url: str,
     solr_auth: tuple[str, str],
+    solr_books_collection_ready: dict[str, Any],
 ) -> None:
     """The final Solr 10 candidate must block unauth/admin mutations while preserving health/metrics."""
     base = solr_url.rstrip("/").removesuffix("/books").rstrip("/")
