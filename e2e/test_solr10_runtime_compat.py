@@ -201,6 +201,9 @@ def test_live_solr10_security_enforces_rbac(
 ) -> None:
     """The final Solr 10 candidate must block unauth/admin mutations while preserving health/metrics."""
     base = solr_url.rstrip("/").removesuffix("/books").rstrip("/")
+    probe_suffix = f"{int(time.time())}_{os.getpid()}"
+    probe_collection = f"audit_probe_{probe_suffix}"
+    probe_user = f"audit_probe_{probe_suffix}"
     readonly_auth = (
         os.environ.get("SOLR_READONLY_USER", "solr_read"),
         os.environ.get("SOLR_READONLY_PASS", "SolrRead_dev2024!"),
@@ -223,45 +226,67 @@ def test_live_solr10_security_enforces_rbac(
     )
     assert readonly_query.status_code == 200
 
-    readonly_collection_create = _request_live_solr10(
-        "GET",
-        f"{base}/admin/collections",
-        auth=readonly_auth,
-        params={
-            "action": "CREATE",
-            "name": "audit_probe",
-            "collection.configName": "books",
-            "numShards": "1",
-            "replicationFactor": "1",
-            "wt": "json",
-        },
-    )
-    assert readonly_collection_create.status_code in (401, 403)
+    readonly_collection_create = None
+    try:
+        readonly_collection_create = _request_live_solr10(
+            "GET",
+            f"{base}/admin/collections",
+            auth=readonly_auth,
+            params={
+                "action": "CREATE",
+                "name": probe_collection,
+                "collection.configName": "books",
+                "numShards": "1",
+                "replicationFactor": "1",
+                "wt": "json",
+            },
+        )
+    finally:
+        _request_live_solr10(
+            "GET",
+            f"{base}/admin/collections",
+            auth=solr_auth,
+            params={"action": "DELETE", "name": probe_collection, "wt": "json"},
+        )
+    assert readonly_collection_create is not None
+    assert readonly_collection_create.status_code in (401, 403), readonly_collection_create.text
 
-    readonly_security_edit = _request_live_solr10(
-        "POST",
-        f"{base}/admin/authentication",
-        auth=readonly_auth,
-        params={"wt": "json"},
-        json={"set-user": {"audit_probe": "blocked"}},
-    )
-    assert readonly_security_edit.status_code in (401, 403)
+    readonly_security_edit = None
+    try:
+        readonly_security_edit = _request_live_solr10(
+            "POST",
+            f"{base}/admin/authentication",
+            auth=readonly_auth,
+            params={"wt": "json"},
+            json={"set-user": {probe_user: "blocked"}},
+        )
+    finally:
+        _request_live_solr10(
+            "POST",
+            f"{base}/admin/authentication",
+            auth=solr_auth,
+            params={"wt": "json"},
+            json={"delete-user": [probe_user]},
+        )
+    assert readonly_security_edit is not None
+    assert readonly_security_edit.status_code in (401, 403), readonly_security_edit.text
 
     create_probe = _request_live_solr10(
         "POST",
         f"{base}/admin/authentication",
         auth=solr_auth,
         params={"wt": "json"},
-        json={"set-user": {"audit_probe": "AuditProbe_test_2026!"}},
+        json={"set-user": {probe_user: "AuditProbe_test_2026!"}},
     )
     try:
-        assert create_probe.status_code == 200
+        assert create_probe.status_code == 200, create_probe.text
     finally:
         delete_probe = _request_live_solr10(
             "POST",
             f"{base}/admin/authentication",
             auth=solr_auth,
             params={"wt": "json"},
-            json={"delete-user": ["audit_probe"]},
+            json={"delete-user": [probe_user]},
         )
-        assert delete_probe.status_code == 200
+        if create_probe.status_code == 200:
+            assert delete_probe.status_code == 200, delete_probe.text
