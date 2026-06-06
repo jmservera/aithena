@@ -518,6 +518,10 @@
   <field name="file_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="folder_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="category_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <!-- Disabled-by-default Solr 10 DocumentCategorizer prototype output fields.
+       Keep separate from manual category_s until an ONNX model fixture is validated. -->
+  <field name="topic_category_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="document_sentiment_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="file_size_l" type="plong" multiValued="false" indexed="true" stored="true"/>
   <field name="language_detected_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="series_s" type="string" multiValued="false" indexed="true" stored="true"/>

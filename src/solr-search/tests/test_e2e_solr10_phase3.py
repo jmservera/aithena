@@ -21,6 +21,9 @@ pytestmark = [pytest.mark.e2e, pytest.mark.phase3, pytest.mark.solr10]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEXER_EMBEDDINGS_PATH = REPO_ROOT / "src" / "document-indexer" / "document_indexer" / "embeddings.py"
+SOLR_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
+DOCUMENT_CATEGORIZER_PROTOTYPE_PATH = REPO_ROOT / "src" / "solr" / "books" / "document-categorizer-prototype.xml"
+DOCUMENT_CATEGORIZER_RESEARCH_PATH = REPO_ROOT / "docs" / "research" / "solr10-document-categorizer-prototype.md"
 
 
 def _load_indexer_embeddings_module() -> ModuleType:
@@ -52,6 +55,22 @@ class TestPhase3ActivePreflight:
         assert "score" in search_service.SOLR_FIELD_LIST
         assert "category" in search_service.FACET_FIELDS
         assert "language" in search_service.FACET_FIELDS
+
+    def test_phase3_document_categorizer_scaffold_is_disabled_by_default(self) -> None:
+        """DocumentCategorizer scaffold is present but not loaded without a model fixture."""
+        schema = SOLR_SCHEMA_PATH.read_text(encoding="utf-8")
+        prototype = DOCUMENT_CATEGORIZER_PROTOTYPE_PATH.read_text(encoding="utf-8")
+        research = DOCUMENT_CATEGORIZER_RESEARCH_PATH.read_text(encoding="utf-8")
+
+        assert 'name="topic_category_s"' in schema
+        assert 'name="document_sentiment_s"' in schema
+        assert "DocumentCategorizerUpdateProcessorFactory" in prototype
+        assert "modelFile" in prototype
+        assert "vocabFile" in prototype
+        assert "analysis-extras" in prototype
+        assert "intentionally not included from solrconfig.xml" in prototype
+        assert "Do not claim accuracy or performance" in research
+        assert "runtime classification deferred" in research
 
 
 class TestPhase3LanguageModels:
