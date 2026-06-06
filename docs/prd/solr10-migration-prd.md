@@ -199,7 +199,7 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
            knnAlgorithm="hnsw"/>
 
 <!-- Solr 10: Scalar quantized -->
-<fieldType name="knn_vector_768" class="solr.ScalarQuantizedDenseVectorField"
+<fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField"
            vectorDimension="768" similarityFunction="cosine"
            knnAlgorithm="hnsw" bits="7"/>
 ```
