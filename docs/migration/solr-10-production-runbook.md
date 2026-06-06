@@ -173,7 +173,7 @@ Expected for Solr 10 default float vectors:
 
 If custom HNSW tuning is enabled, use Solr 10 names (`hnswM`, `hnswEfConstruction`). The Solr 9 rollback path rewrites those back to `hnswMaxConnections` / `hnswBeamWidth` before uploading to a Solr 9 cluster.
 
-`VECTOR_QUANTIZATION=int8` remains a held follow-up because PR #1670 has not merged. Keep the default float32 path (`VECTOR_QUANTIZATION=none`) for v2.5 production upgrades unless #1670 or an equivalent scalar-quantization fix lands.
+`VECTOR_QUANTIZATION=int8` is optional and remains disabled by default for v2.5 production upgrades. Enable it only after validating the Solr 10 schema uses `ScalarQuantizedDenseVectorField bits="7"` and after planning a full reindex from `embedding_v` to `embedding_byte_v`.
 
 #### Step 1.4: Verify Security Configuration
 
@@ -620,11 +620,11 @@ Scalar quantization can reduce Solr vector memory, but it is **not part of the d
 
 - `VECTOR_QUANTIZATION=none` (default): store vectors in the float32 `knn_vector_768` field. Recommended for v2.5 production cutover.
 - `VECTOR_QUANTIZATION=fp16`: embeddings-server-side quantization before submission; Solr still stores float32 vectors.
-- `VECTOR_QUANTIZATION=int8`: routes to `embedding_byte_v` / `knn_vector_768_byte`; held until PR #1670 or an equivalent Solr 10 scalar-quantization fix lands.
+- `VECTOR_QUANTIZATION=int8`: routes to `embedding_byte_v` / `knn_vector_768_byte`; Solr 10 uses `ScalarQuantizedDenseVectorField bits="7"` and the Solr 9 rollback path rewrites it to `DenseVectorField vectorEncoding="BYTE"`.
 
-If enabling `int8` after the hold is lifted, validate that Solr 10 uses supported `ScalarQuantizedDenseVectorField` settings, then run a full reindex (estimated 30–120 min for 100k+ docs).
+If enabling `int8`, validate that Solr 10 uses supported `ScalarQuantizedDenseVectorField` settings, then run a full reindex (estimated 30–120 min for 100k+ docs).
 
-> **STATUS**: PR #1670 remains held; do not enable `VECTOR_QUANTIZATION=int8` for the v2.5 cutover unless that fix is merged separately.
+> **STATUS**: Optional for v2.5; do not make `VECTOR_QUANTIZATION=int8` the default until recall@10 and memory measurements for #1344 are attached.
 
 ### 5.2 Configure `efSearchScaleFactor`
 
@@ -670,7 +670,7 @@ For persistent issues:
 
 - ⚠️ Language-models module (embeddings in Solr) deferred to v2.6 (requires upstream work)
 - ⚠️ GPU acceleration (cuVS codec) deferred to v2.5.1
-- ⚠️ `VECTOR_QUANTIZATION=int8` remains held until PR #1670 (or an equivalent scalar-quantization fix) merges; default float32 vectors are the supported v2.5 path
+- ⚠️ `VECTOR_QUANTIZATION=int8` remains optional pending #1344 recall@10 and memory evidence; default float32 vectors are the supported v2.5 path
 
 ---
 

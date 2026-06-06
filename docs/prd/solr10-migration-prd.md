@@ -201,7 +201,7 @@ For embeddings specifically, migration feasibility depends on text-to-vector com
 <!-- Solr 10: Scalar quantized -->
 <fieldType name="knn_vector_768" class="solr.ScalarQuantizedDenseVectorField"
            vectorDimension="768" similarityFunction="cosine"
-           knnAlgorithm="hnsw" bits="8"/>
+           knnAlgorithm="hnsw" bits="7"/>
 ```
 
 **Impact**: For 100K documents × 10 chunks each = 1M vectors:

@@ -60,10 +60,11 @@
   <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
   <!-- Scalar-quantized int8 vector type — used for "int8" quantization mode.
-       bits="8" stores one byte per dimension. solr-init rewrites this type to
+       Solr 10 scalar quantization accepts bits="4" or bits="7"; int8 mode uses
+       bits="7" for runtime compatibility. solr-init rewrites this type to
        DenseVectorField vectorEncoding="BYTE" while Solr 9 is supported.
        hnswM tuned to 12 (vs default 16) for memory savings with byte vectors. -->
-  <fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField" vectorDimension="768" bits="8" similarityFunction="cosine" knnAlgorithm="hnsw" hnswM="12"/>
+  <fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField" vectorDimension="768" bits="7" similarityFunction="cosine" knnAlgorithm="hnsw" hnswM="12"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">

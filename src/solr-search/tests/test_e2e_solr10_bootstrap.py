@@ -134,7 +134,7 @@ class TestSolr10SafePreflight:
             's/hnswM="/hnswMaxConnections="/g',
             's/hnswEfConstruction="/hnswBeamWidth="/g',
             's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g',
-            's/ bits="8"/ vectorEncoding="BYTE"/g',
+            's/ bits="[47]"/ vectorEncoding="BYTE"/g',
             r"s/<luceneMatchVersion>10\.0<\/luceneMatchVersion>/<luceneMatchVersion>9.10<\/luceneMatchVersion>/g",
         )
 
@@ -164,6 +164,7 @@ class TestSolr10SafePreflight:
         assert byte is not None, "managed-schema.xml must define knn_vector_768_byte"
         assert dense["class"] == "solr.DenseVectorField"
         assert byte["class"] == "solr.ScalarQuantizedDenseVectorField"
+        assert byte["bits"] == "7"
         assert_supported_solr10_scalar_bits(byte["bits"])
         for attrs in (dense, byte):
             assert "hnswMaxConnections" not in attrs
