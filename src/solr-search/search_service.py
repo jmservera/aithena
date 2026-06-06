@@ -289,15 +289,25 @@ def build_knn_params(
     top_k: int,
     knn_field: str,
     filters: list[str] | None = None,
+    ef_search_scale_factor: float = 1.0,
 ) -> dict[str, Any]:
     """Build Solr parameters for a kNN (dense vector) query.
 
     Uses the Solr ``{!knn}`` local-parameter syntax with the pre-existing
     ``embedding_v`` DenseVectorField (HNSW, cosine similarity, 512-dim).
+    ``ef_search_scale_factor`` is a Solr 10 query-time HNSW tuning knob; Solr
+    computes ``efSearch = efSearchScaleFactor * topK``. The default is omitted
+    to preserve Solr 9 compatibility.
     """
+    if not math.isfinite(ef_search_scale_factor) or ef_search_scale_factor <= 0:
+        raise ValueError("efSearchScaleFactor must be finite and greater than 0")
+
     vector_str = "[" + ",".join(str(v) for v in vector) + "]"
+    ef_search_param = ""
+    if ef_search_scale_factor != 1.0:
+        ef_search_param = f" efSearchScaleFactor={ef_search_scale_factor:g}"
     params = {
-        "q": f"{{!knn f={knn_field} topK={top_k}}}{vector_str}",
+        "q": f"{{!knn f={knn_field} topK={top_k}{ef_search_param}}}{vector_str}",
         "rows": top_k,
         "fl": ",".join(SOLR_FIELD_LIST),
         "wt": "json",

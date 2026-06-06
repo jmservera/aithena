@@ -681,16 +681,19 @@ If enabling `int8` after the hold is lifted, validate that Solr 10 uses supporte
 
 ### 5.2 Configure `efSearchScaleFactor`
 
-Tune vector search accuracy independently of result count (Solr 10 only):
+Tune vector search accuracy independently of result count (Solr 10 only). The `/v1/search` API accepts an optional `efSearchScaleFactor` query parameter for `mode=semantic` and HNSW-backed `mode=hybrid` searches:
 
-**In `solr-search` query logic:**
-```python
-# Allow per-query tuning of accuracy vs. speed
-efSearchScaleFactor = request_params.get('efSearchScaleFactor', 1.0)
-# Use in query: {!knn f=book_embedding topK=10 efSearchScaleFactor=2.0}
+```bash
+curl "http://localhost/v1/search?q=machine%20learning&mode=semantic&limit=10&efSearchScaleFactor=2.0"
 ```
 
-> **PENDING**: Add `efSearchScaleFactor` parameter to `/v1/search` API (deferred to v2.5.1).
+Defaults and validation:
+
+- Default: `1.0` (standard Solr accuracy behavior; omitted from the Solr local-param query to preserve Solr 9 compatibility at the default).
+- Validation: values must be greater than `0`.
+- Formula: `efSearch = efSearchScaleFactor × topK`, so `limit=10&efSearchScaleFactor=2.0` uses an effective `efSearch` of `20`.
+
+Higher values can improve HNSW recall but may increase latency. The API/unit coverage verifies request validation and Solr query construction; live quality/latency impact still needs validation against a representative indexed corpus and running Solr 10 deployment.
 
 ### 5.3 Monitor Solr Metrics
 

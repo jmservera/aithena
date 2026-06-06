@@ -478,6 +478,7 @@ Operators can tune the search path with these controls:
 - `RRF_K` controls how aggressively hybrid mode favors top-ranked documents from each leg.
 - `VECTOR_QUANTIZATION=int8` selects the signed-byte `embedding_byte_v` field by default; leave unset for float32 `embedding_v`.
 - `KNN_FIELD` overrides the Solr dense-vector field used by semantic and hybrid search.
+- `efSearchScaleFactor` is a per-request query parameter for Solr 10 semantic and HNSW hybrid searches. It defaults to `1.0`, must be greater than `0`, and Solr computes `efSearch = efSearchScaleFactor × topK`. Higher values can improve HNSW recall at the cost of latency; validate against your corpus before raising it globally in clients. Example: `GET /v1/search?q=historia&mode=semantic&efSearchScaleFactor=2.0`.
 - `EMBEDDINGS_TIMEOUT` controls how long semantic/hybrid requests wait before falling back to keyword results.
 
 Hybrid currently uses equal contribution from the BM25 and semantic legs through standard RRF. There are no separate per-leg weight environment variables today.
