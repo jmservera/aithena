@@ -462,7 +462,7 @@ python run_benchmark.py --output post-migration-solr10.json
 | Backup | `curl .../admin/collections?action=BACKUP&...` | Backup created |
 | UI search | Open aithena-ui, perform a search | Results displayed |
 | Security UI access | Open `http://localhost/admin/solr/ui/` as admin | Security screen loads and allows edits |
-| Security UI readonly guard | Login as readonly account and open Security UI | Readonly account cannot perform write operations |
+| Security UI readonly guard | Login as readonly Aithena account and open Security UI | Access is denied by the admin-gated proxy (for example, 403) |
 | Security UI role update | Add/remove a role for a non-admin user via Security UI | Updated permissions enforced on next request |
 | Auth CLI bootstrap | Run `solr auth enable` bootstrap during init | Initial admin auth works; post-bootstrap managed in Security UI |
 

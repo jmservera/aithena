@@ -3818,7 +3818,7 @@ Provides quick links to management UIs for infrastructure services:
 - **RabbitMQ Management** — link to `/admin/rabbitmq/` for queue monitoring
 - **Redis Commander** — link to `/admin/redis/` for Redis state inspection
 
-Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, internal endpoint URL, and connection status.
+Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, admin/management endpoint URL, and connection status.
 
 The frontend prefers backend-provided `admin_url` values from `/v1/admin/infrastructure` when available, then falls back to the default paths above. This keeps UI links aligned with server routing.
 
