@@ -57,6 +57,21 @@ def _get_live_solr10_json(
     return body
 
 
+def _request_live_solr10(
+    method: str,
+    url: str,
+    *,
+    auth: tuple[str, str] | None = None,
+    params: Mapping[str, str] | None = None,
+    json: Mapping[str, Any] | None = None,
+) -> requests.Response:
+    _require_expected_solr10()
+    try:
+        return requests.request(method, url, auth=auth, params=params, json=json, timeout=10)
+    except requests.RequestException as exc:
+        pytest.fail(f"{EXPECTED_MAJOR_ENV}=10 requires a reachable Solr 10 fixture at {url}: {exc}")
+
+
 @pytest.fixture(scope="session")
 def solr_system_info(solr_url: str, solr_auth: tuple[str, str]) -> dict[str, Any]:
     return _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/system"), auth=solr_auth)
@@ -106,8 +121,13 @@ def test_live_solr10_schema_exposes_scalar_quantized_vector(
     solr_auth: tuple[str, str],
 ) -> None:
     """The live Solr 10 books schema must expose the native int8 vector field type."""
+    field_url = f"{solr_url}/schema/fieldtypes/knn_vector_768_byte"
+    field_resp = _request_live_solr10("GET", field_url, params={"wt": "json"}, auth=solr_auth)
+    if field_resp.status_code == 404 and os.environ.get("VECTOR_QUANTIZATION", "none") != "int8":
+        pytest.skip("VECTOR_QUANTIZATION=none removes the scalar-quantized byte vector field from the live schema")
+    field_resp.raise_for_status()
     body = _get_live_solr10_json(
-        f"{solr_url}/schema/fieldtypes/knn_vector_768_byte",
+        field_url,
         params={"wt": "json"},
         auth=solr_auth,
     )
@@ -128,4 +148,76 @@ def test_live_solr10_security_allows_health_probe(
     authentication = auth_body.get("authentication", {})
     assert authentication.get("blockUnknown") is False
 
-    _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/system"))
+    _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/health"))
+
+
+def test_live_solr10_security_enforces_rbac(
+    solr_url: str,
+    solr_auth: tuple[str, str],
+) -> None:
+    """The final Solr 10 candidate must block unauth/admin mutations while preserving health/metrics."""
+    base = solr_url.rstrip("/").removesuffix("/books").rstrip("/")
+    readonly_auth = (
+        os.environ.get("SOLR_READONLY_USER", "solr_read"),
+        os.environ.get("SOLR_READONLY_PASS", "SolrRead_dev2024!"),
+    )
+
+    unauth_admin = _request_live_solr10("GET", f"{base}/admin/info/system", params={"wt": "json"})
+    assert unauth_admin.status_code in (401, 403)
+
+    health = _request_live_solr10("GET", f"{base}/admin/info/health")
+    assert health.status_code == 200
+
+    metrics = _request_live_solr10("GET", f"{base}/admin/metrics", params={"wt": "prometheus"})
+    assert metrics.status_code == 200
+
+    readonly_query = _request_live_solr10(
+        "GET",
+        f"{solr_url}/select",
+        auth=readonly_auth,
+        params={"q": "*:*", "rows": "0", "wt": "json"},
+    )
+    assert readonly_query.status_code == 200
+
+    readonly_collection_create = _request_live_solr10(
+        "GET",
+        f"{base}/admin/collections",
+        auth=readonly_auth,
+        params={
+            "action": "CREATE",
+            "name": "audit_probe",
+            "collection.configName": "books",
+            "numShards": "1",
+            "replicationFactor": "1",
+            "wt": "json",
+        },
+    )
+    assert readonly_collection_create.status_code in (401, 403)
+
+    readonly_security_edit = _request_live_solr10(
+        "POST",
+        f"{base}/admin/authentication",
+        auth=readonly_auth,
+        params={"wt": "json"},
+        json={"set-user": {"audit_probe": "blocked"}},
+    )
+    assert readonly_security_edit.status_code in (401, 403)
+
+    create_probe = _request_live_solr10(
+        "POST",
+        f"{base}/admin/authentication",
+        auth=solr_auth,
+        params={"wt": "json"},
+        json={"set-user": {"audit_probe": "AuditProbe_test_2026!"}},
+    )
+    try:
+        assert create_probe.status_code == 200
+    finally:
+        delete_probe = _request_live_solr10(
+            "POST",
+            f"{base}/admin/authentication",
+            auth=solr_auth,
+            params={"wt": "json"},
+            json={"delete-user": ["audit_probe"]},
+        )
+        assert delete_probe.status_code == 200
