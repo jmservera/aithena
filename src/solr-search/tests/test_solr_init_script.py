@@ -60,12 +60,6 @@ def _load_solr_init_shell_script() -> str:
     return SOLR_INIT_SCRIPT_PATH.read_text(encoding="utf-8")
 
 
-def _load_shared_solr_init_script() -> str:
-    """Load docker/solr-init.sh."""
-    with open(SOLR_INIT_SCRIPT_PATH, encoding="utf-8") as fh:
-        return fh.read()
-
-
 def _load_solr_import_script() -> str:
     """Load scripts/solr-import.sh."""
     with open(SOLR_IMPORT_SCRIPT_PATH, encoding="utf-8") as fh:
@@ -336,7 +330,7 @@ def test_solr_health_checks_use_authenticated_curl():
 
 def test_solr9_bootstrap_rewrites_scalar_quantized_vector_schema():
     """Solr 9 bootstrap must rewrite source Solr 10 vector schema names."""
-    for script in (_load_solr_init_script(), _load_shared_solr_init_script()):
+    for script in (_load_solr_init_script(), _load_solr_init_shell_script()):
         assert "SOLR_VERSION:-9}" in script  # solr_major_version() default to 9
         assert 'hnswM="/hnswMaxConnections="' in script
         assert 'hnswEfConstruction="/hnswBeamWidth="' in script

@@ -613,14 +613,18 @@ Reduce Solr memory footprint by 4× with scalar quantization:
 
 **Edit `src/solr/books/managed-schema.xml`:**
 ```xml
-<!-- Before (Solr 10 default) -->
+<!-- Keep the existing float32 field type for baseline/rollback paths. -->
 <fieldType name="knn_vector_768" class="solr.DenseVectorField"
            vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
 
-<!-- After (scalar quantized) -->
-<fieldType name="knn_vector_768" class="solr.ScalarQuantizedDenseVectorField"
+<!-- Add a separate scalar-quantized byte field type for int8 routing. -->
+<fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField"
            vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw" bits="7"/>
 ```
+
+**Route embeddings to the byte field:** set `VECTOR_QUANTIZATION=int8` so indexing/search use
+the `embedding_byte_v` dynamic field backed by `knn_vector_768_byte`. Do not replace
+`knn_vector_768`; keep it as the float32 vector field.
 
 **Then reindex:** Full index reindex required (estimated 30–120 min for 100k+ docs).
 

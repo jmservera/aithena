@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -173,7 +174,7 @@ def check_python() -> CheckResult:
                 version_parts = version_str.replace("Python ", "").split(".")
                 major = int(version_parts[0])
                 minor = int(version_parts[1])
-                if major >= 3 and minor >= 10:
+                if (major > 3) or (major == 3 and minor >= 10):
                     return CheckResult(
                         name="Python version (3.10+)",
                         passed=True,
@@ -321,13 +322,19 @@ def check_schema() -> CheckResult:
         with schema_path.open(encoding="utf-8") as f:
             schema_content = f.read()
 
-        # Check for either Solr 10 bits="7" or Solr 9 BYTE encoding
-        has_scalar_quantized_7 = "ScalarQuantizedDenseVectorField" in schema_content and 'bits="7"' in schema_content
+        # Check for either Solr 10 supported scalar quantization bits or Solr 9 BYTE encoding
+        has_scalar_quantized = (
+            re.search(
+                r'<fieldType\b(?=[^>]*class="solr\.ScalarQuantizedDenseVectorField")(?=[^>]*bits="[47]")',
+                schema_content,
+            )
+            is not None
+        )
         has_byte_encoding = "DenseVectorField" in schema_content and 'vectorEncoding="BYTE"' in schema_content
 
-        if has_scalar_quantized_7 or has_byte_encoding:
-            if has_scalar_quantized_7:
-                msg = '✓ Schema has ScalarQuantizedDenseVectorField bits="7" (Solr 10)'
+        if has_scalar_quantized or has_byte_encoding:
+            if has_scalar_quantized:
+                msg = '✓ Schema has ScalarQuantizedDenseVectorField bits="4" or bits="7" (Solr 10)'
             else:
                 msg = '✓ Schema has DenseVectorField vectorEncoding="BYTE" (Solr 9)'
             return CheckResult(
