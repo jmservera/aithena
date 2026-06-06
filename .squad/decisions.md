@@ -1610,7 +1610,7 @@ The analyzer classified it as security because the shell glob `auth*fail` matche
 
 ## Decision
 
-Pre-release security classification should use phrase-level authentication failure patterns, not broad substring globs. The analyzer now matches explicit phrases such as `auth failed`, `auth failure`, `auth error`, `authentication failed`, and `authorization failed/failure`.
+Pre-release security classification should use phrase-level authentication failure patterns, not broad substring globs. The analyzer now matches explicit phrases such as `auth failed`, `auth failure`, `auth error`, `authentication failed`, `authorization failed`, and `authorization failure`.
 
 ## Rationale
 
