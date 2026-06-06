@@ -76,3 +76,11 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 - **Rubber Duck critique:** Confirmed verification must run inside the built image, not just CI assumptions
 - **Pattern:** Add Python version-check step after each `uv sync --inexact` in embeddings-server Dockerfiles to catch future drift immediately
 - **Decision:** `.squad/decisions.md` (OpenVINO Smoke Failure section)
+
+## 2026-06-06 — v2.5.1 Board Completion
+
+Completed #1343 (Configure SolrCloud with Overseer disabled) via PR #1700, merged to dev. Issued pre-release validation analyzer hardening decisions:
+- Narrow pre-release auth failure classification (explicit phrase matching vs. substring globs)
+- Pre-release warning policy for Solr/RabbitMQ runtime noise (allowlist narrowing)
+
+Related: #1686, #1695, #1696
