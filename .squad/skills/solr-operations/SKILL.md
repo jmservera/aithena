@@ -104,7 +104,7 @@ curl -X POST 'http://localhost:8983/api/collections/books/shards/shard1/replicas
 
 - Static Phase 2 preflight lives in `src/solr-search/tests/test_e2e_solr10_phase2.py`; it validates single-node SolrCloud compose wiring, production Overseer-disabled SolrCloud wiring, int8 schema routing, estimated vector storage ratio, and `efSearchScaleFactor` query propagation without requiring Docker.
 - Live Solr 10 compatibility checks live in `e2e/test_solr10_runtime_compat.py`; set `E2E_SOLR_EXPECTED_MAJOR=10` only when a reachable Solr 10 fixture is running.
-- Production Overseer-disabled runtime validation is opt-in: set `E2E_SOLR_OVERSEER_DISABLED=1` for the pytest property check, or run `tests/solrcloud-overseer-disabled-validation.sh` against the production compose stack for create/delete smoke validation.
+- Production Overseer-disabled runtime validation is opt-in: set `E2E_SOLR_OVERSEER_DISABLED=1` for the pytest property check, or follow `docs/migration/solr-10-production-runbook.md` § 3.4 ("Validate Overseer Disabled Cluster Operations") for the production compose create/delete smoke procedure.
 - Treat quantization memory and recall as evidence-backed gates: preflight can prove schema/config wiring, but release claims need paired float32/int8 benchmark JSON plus memory observations from the same host and corpus.
 
 ### ZK SASL Limitation (v1.14.0+)

@@ -73,6 +73,10 @@ def _reload_config(monkeypatch: pytest.MonkeyPatch, **env: str):
     return importlib.reload(config)
 
 
+def _estimated_scalar_vector_bytes(dimensions: int, bits: object) -> int:
+    return (dimensions * int(str(bits)) + 7) // 8
+
+
 class TestPhase2ActivePreflight:
     """Issue #1356 checks that can run before #1670/#1344 land."""
 
@@ -141,9 +145,21 @@ class TestPhase2ActivePreflight:
         assert int(float_vector["vectorDimension"]) == int(byte_vector["vectorDimension"]) == 768
         assert_supported_solr10_scalar_bits(byte_vector["bits"])
 
+        dimensions = int(byte_vector["vectorDimension"])
         float32_bytes_per_vector = int(float_vector["vectorDimension"]) * 4
-        signed_byte_bytes_per_vector = int(byte_vector["vectorDimension"])
-        assert float32_bytes_per_vector / signed_byte_bytes_per_vector >= 3.5
+        quantized_bytes_per_vector = _estimated_scalar_vector_bytes(dimensions, byte_vector["bits"])
+        assert float32_bytes_per_vector / quantized_bytes_per_vector >= 3.5
+
+    @pytest.mark.parametrize(
+        ("bits", "expected_bytes"),
+        [
+            ("4", 384),
+            ("7", 672),
+        ],
+    )
+    def test_phase2_scalar_vector_byte_estimate_uses_supported_bits(self, bits: str, expected_bytes: int) -> None:
+        """The memory estimate must track Solr 10 scalar bits, not assume full bytes."""
+        assert _estimated_scalar_vector_bytes(768, bits) == expected_bytes
 
     @pytest.mark.parametrize("scale_factor", [2.0, 5.0])
     def test_phase2_efsearch_scale_factor_changes_solr_knn_query(self, scale_factor: float) -> None:
