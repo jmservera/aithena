@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import statistics
 import time
 from dataclasses import dataclass, field
@@ -36,6 +37,7 @@ SEARCH_MODES = ("keyword", "semantic", "hybrid")
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class QueryResult:
@@ -65,11 +67,13 @@ class BenchmarkReport:
     modes_tested: list[str] = field(default_factory=list)
     results: list[QueryResult] = field(default_factory=list)
     summary: dict[str, Any] = field(default_factory=dict)
+    run_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
 # Query loading
 # ---------------------------------------------------------------------------
+
 
 def load_queries(path: Path) -> list[dict[str, Any]]:
     """Load and flatten queries from the benchmark suite JSON file."""
@@ -79,18 +83,21 @@ def load_queries(path: Path) -> list[dict[str, Any]]:
     queries: list[dict[str, Any]] = []
     for category_key, category_data in data.get("categories", {}).items():
         for q in category_data.get("queries", []):
-            queries.append({
-                "id": q["id"],
-                "query": q["query"],
-                "category": category_key,
-                "notes": q.get("notes", ""),
-            })
+            queries.append(
+                {
+                    "id": q["id"],
+                    "query": q["query"],
+                    "category": category_key,
+                    "notes": q.get("notes", ""),
+                }
+            )
     return queries
 
 
 # ---------------------------------------------------------------------------
 # API interaction
 # ---------------------------------------------------------------------------
+
 
 def execute_query(
     base_url: str,
@@ -154,6 +161,7 @@ def execute_query(
 # Aggregate statistics
 # ---------------------------------------------------------------------------
 
+
 def compute_summary(results: list[QueryResult]) -> dict[str, Any]:
     """Compute aggregate statistics across all results."""
     summary: dict[str, Any] = {"by_mode": {}, "by_category": {}}
@@ -192,6 +200,81 @@ def compute_summary(results: list[QueryResult]) -> dict[str, Any]:
     return summary
 
 
+def load_json_artifact(path: Path | None) -> Any | None:
+    """Load an optional JSON artifact, returning None when not provided."""
+    if path is None:
+        return None
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def build_run_metadata(
+    *,
+    run_label: str | None = None,
+    solr_version: str | None = None,
+    corpus_id: str | None = None,
+    corpus_documents: int | None = None,
+    corpus_bytes: int | None = None,
+    corpus_description: str | None = None,
+    startup_seconds: float | None = None,
+    index_build_seconds: float | None = None,
+    vector_indexing_seconds: float | None = None,
+    concurrency: int | None = None,
+    throughput_qps: float | None = None,
+    docker_stats: Any | None = None,
+) -> dict[str, Any]:
+    """Build reproducibility metadata for paired benchmark comparisons."""
+    metadata: dict[str, Any] = {
+        "host": {
+            "node": platform.node(),
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "python_version": platform.python_version(),
+        },
+    }
+    if run_label:
+        metadata["run_label"] = run_label
+    if solr_version:
+        metadata["solr_version"] = solr_version
+
+    corpus: dict[str, Any] = {}
+    if corpus_id:
+        corpus["id"] = corpus_id
+    if corpus_documents is not None:
+        corpus["document_count"] = corpus_documents
+    if corpus_bytes is not None:
+        corpus["bytes"] = corpus_bytes
+    if corpus_description:
+        corpus["description"] = corpus_description
+    if corpus:
+        metadata["corpus"] = corpus
+
+    timings: dict[str, float] = {}
+    if startup_seconds is not None:
+        timings["startup_seconds"] = startup_seconds
+    if index_build_seconds is not None:
+        timings["index_build_seconds"] = index_build_seconds
+    if vector_indexing_seconds is not None:
+        timings["vector_indexing_seconds"] = vector_indexing_seconds
+    if timings:
+        metadata["timings"] = timings
+
+    throughput: dict[str, float | int] = {}
+    if concurrency is not None:
+        throughput["concurrency"] = concurrency
+    if throughput_qps is not None:
+        throughput["qps"] = throughput_qps
+    if throughput:
+        metadata["throughput"] = throughput
+
+    if docker_stats is not None:
+        metadata["docker_stats"] = docker_stats
+
+    return metadata
+
+
 _CATEGORY_MAP = {
     "sk": "simple_keyword",
     "nl": "natural_language",
@@ -228,6 +311,7 @@ def _percentile(values: list[float], pct: float) -> float | None:
 # Report serialization
 # ---------------------------------------------------------------------------
 
+
 def query_result_to_dict(r: QueryResult) -> dict[str, Any]:
     """Serialize a QueryResult to a JSON-compatible dict."""
     return {
@@ -253,6 +337,7 @@ def report_to_dict(report: BenchmarkReport) -> dict[str, Any]:
         "collection": report.collection,
         "total_queries": report.total_queries,
         "modes_tested": report.modes_tested,
+        "run_metadata": report.run_metadata,
         "summary": report.summary,
         "results": [query_result_to_dict(r) for r in report.results],
     }
@@ -261,6 +346,7 @@ def report_to_dict(report: BenchmarkReport) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Human-readable summary
 # ---------------------------------------------------------------------------
+
 
 def format_summary(report: BenchmarkReport) -> str:
     """Format a human-readable summary of benchmark results."""
@@ -318,6 +404,7 @@ def _fmt(value: float | None) -> str:
 # Main runner
 # ---------------------------------------------------------------------------
 
+
 def run_benchmark(
     base_url: str = DEFAULT_BASE_URL,
     queries_path: Path = DEFAULT_QUERIES_PATH,
@@ -326,6 +413,7 @@ def run_benchmark(
     top_k: int = DEFAULT_TOP_K,
     timeout: float = 30.0,
     token: str | None = None,
+    run_metadata: dict[str, Any] | None = None,
 ) -> BenchmarkReport:
     """Execute the full benchmark suite and return a report."""
     queries = load_queries(queries_path)
@@ -337,6 +425,7 @@ def run_benchmark(
         collection=collection,
         total_queries=len(queries),
         modes_tested=list(modes),
+        run_metadata=run_metadata or build_run_metadata(),
     )
 
     total = len(queries) * len(modes)
@@ -349,7 +438,14 @@ def run_benchmark(
             print(f"{progress} {mode:8s} | {q['id']:6s} | {q['query'][:50]}...", flush=True)
 
             result = execute_query(
-                base_url, q["query"], q["id"], collection, mode, top_k, timeout, token=token,
+                base_url,
+                q["query"],
+                q["id"],
+                collection,
+                mode,
+                top_k,
+                timeout,
+                token=token,
             )
             report.results.append(result)
 
@@ -397,7 +493,8 @@ def main() -> None:
         help="HTTP request timeout in seconds (default: 30)",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         help="Output file for JSON report (default: stdout summary only)",
     )
@@ -406,7 +503,38 @@ def main() -> None:
         default=None,
         help="Bearer token for authenticated APIs (default: none)",
     )
+    parser.add_argument("--run-label", help="Human-readable run label, e.g. solr9-float32")
+    parser.add_argument("--solr-version", help="Solr version under test, e.g. 9.7 or 10.0")
+    parser.add_argument("--corpus-id", help="Stable ID/name for the indexed corpus")
+    parser.add_argument("--corpus-documents", type=int, help="Number of source documents in the corpus")
+    parser.add_argument("--corpus-bytes", type=int, help="Total source corpus size in bytes")
+    parser.add_argument("--corpus-description", help="Short corpus description")
+    parser.add_argument("--startup-seconds", type=float, help="Measured startup time for this run")
+    parser.add_argument("--index-build-seconds", type=float, help="Measured full index build time for this run")
+    parser.add_argument("--vector-indexing-seconds", type=float, help="Measured vector indexing time for this run")
+    parser.add_argument("--concurrency", type=int, help="Concurrent clients used by an external throughput run")
+    parser.add_argument("--throughput-qps", type=float, help="Queries per second from an external throughput run")
+    parser.add_argument(
+        "--docker-stats-json",
+        type=Path,
+        help="Optional docker stats JSON artifact captured on the same host/run",
+    )
     args = parser.parse_args()
+
+    run_metadata = build_run_metadata(
+        run_label=args.run_label,
+        solr_version=args.solr_version,
+        corpus_id=args.corpus_id,
+        corpus_documents=args.corpus_documents,
+        corpus_bytes=args.corpus_bytes,
+        corpus_description=args.corpus_description,
+        startup_seconds=args.startup_seconds,
+        index_build_seconds=args.index_build_seconds,
+        vector_indexing_seconds=args.vector_indexing_seconds,
+        concurrency=args.concurrency,
+        throughput_qps=args.throughput_qps,
+        docker_stats=load_json_artifact(args.docker_stats_json),
+    )
 
     report = run_benchmark(
         base_url=args.base_url,
@@ -416,6 +544,7 @@ def main() -> None:
         top_k=args.top_k,
         timeout=args.timeout,
         token=args.token,
+        run_metadata=run_metadata,
     )
 
     # Human-readable summary to stdout
