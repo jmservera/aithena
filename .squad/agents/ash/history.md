@@ -169,3 +169,9 @@ Reviewed dependabot PR #1562 (Solr 9.7→10.0 version bump). Verdict: **CLOSE** 
 - **Learning:** Dependabot PRs touching major versions require full integration scope review, not just version number change. Flag for epic routing early.
 
 This decision establishes the precedent: version bumps are coordinated at epic level when they touch multiple services or schema. Improves reliability and prevents broken intermediate states.
+
+## 2026-06-06 — v2.5.1 Board Completion
+
+Completed #1349 (Evaluate hybrid search improvements) via PR #1702, merged to dev. Advanced #1348 (Prototype DocumentCategorizerUpdateProcessorFactory) via PR #1703, merged to dev; issue remains open for real ONNX/model/runtime validation. Documented decision: DocumentCategorizer stays disabled until model fixture validation.
+
+Related: #1348, #1349, v2.5.1 board

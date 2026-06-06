@@ -1592,3 +1592,74 @@ for pkg in critical_pkgs: \
 - Failed run: 27022717607
 - Successful fix: 27026253418 (commit a8a5cb5)
 - Orchestration log: `.squad/orchestration-log/2026-06-05T16-26-openvino-postmortem.md`
+
+# Decision: Narrow pre-release auth failure classification
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-06-06T09:36:46.687+00:00  
+**Status:** Approved  
+**Related:** #1686
+
+## Context
+
+Pre-release validation run 27053636169 reported a release-blocking `security` error for `document-indexer-1`. The underlying log line was a benign thumbnail warning for a corrupt fixture PDF under a `TestAuthor` path:
+
+`TestAuthor ... Thumbnail generation failed ... Failed to open file`
+
+The analyzer classified it as security because the shell glob `auth*fail` matched `Author` followed later by `failed`.
+
+## Decision
+
+Pre-release security classification should use phrase-level authentication failure patterns, not broad substring globs. The analyzer now matches explicit phrases such as `auth failed`, `auth failure`, `auth error`, `authentication failed`, `authorization failed`, and `authorization failure`.
+
+## Rationale
+
+This keeps real authentication and authorization failures release-blocking while preventing benign author names, filenames, or log fields from tripping the security gate. The fix is narrower than adding an allowlist for the corrupt PDF fixture because it addresses the classifier bug without hiding future file-open or thumbnail problems.
+
+---
+
+# Decision: Pre-release warning policy for Solr/RabbitMQ runtime noise
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-06-06T09:36:46.687+00:00  
+**Status:** Approved  
+**Related:** #1695, #1696
+
+## Context
+
+Pre-release validation run 27058984234 reported warnings for Solr/JVM deprecations, RabbitMQ `management_metrics_collection`, Solr `solr.log.dir`, and Solr `ZkCredentialsInjector`.
+
+## Decision
+
+Pre-release allowlist entries should stay narrow and preserve signal:
+
+- Fix actionable first-party configuration deprecations in Compose/scripts instead of allowlisting them. The Solr 10 `solr.log.dir` warning is actionable; Aithena should use `solr.logs.dir`.
+- Keep known upstream/runtime notices as `info` only when there is no safe first-party knob for the supported topology. Current examples are Solr/JVM `sun.misc.Unsafe` terminal deprecation notices and RabbitMQ 4.0-management `management_metrics_collection` startup notices.
+- Keep the Solr `Using default ZkCredentialsInjector` message in the same accepted posture as `ZkCredentialsProvider/ZkACLProvider`: acceptable only while ZooKeeper remains internal-only and Solr HTTP BasicAuth/RBAC remains enforced.
+- Do not use broad allowlist patterns such as `deprecation:*deprecated*`; unrelated deprecations must continue to surface as warnings.
+
+## Rationale
+
+Issue #1695 mixed one actionable Solr logging configuration warning with upstream Solr/JVM and RabbitMQ runtime deprecations. Issue #1696 used the newer Solr 10 `ZkCredentialsInjector` wording for the previously accepted ZooKeeper ACL posture. Narrow rules prevent recurring pre-release issues for known noise without hiding new deprecations, authentication failures, or production hardening gaps.
+
+---
+
+# Decision: DocumentCategorizer stays disabled until model fixture validation
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2026-06-06  
+**Status:** Approved  
+**Related:** #1348
+
+## Decision
+
+Keep Solr 10 `DocumentCategorizerUpdateProcessorFactory` disabled by default. Repository changes may include output schema fields, documentation, tests, and a non-loaded config scaffold, but active `solrconfig.xml` wiring waits for a real ONNX/vocab fixture and measured validation.
+
+## Rationale
+
+The processor belongs to Solr's `analysis-extras` module and requires real model artifacts in SolrCloud FileStore. Enabling the processor without those artifacts risks core load/indexing failures. Bundling model binaries or claiming accuracy without a labeled corpus would violate the #1348 research constraints.
+
+## Follow-up
+
+Create a dedicated fixture task to select a small multilingual ONNX classifier, upload it at runtime, index labeled documents, and measure accuracy, latency, throughput, and JVM memory before replacing manual metadata or changing ranking.
+

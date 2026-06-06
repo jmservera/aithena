@@ -85,3 +85,9 @@
 13. **2026-06-04 — v2.3.0 release docs:** Infrastructure maintenance releases require explicit operator-responsibility sections (ZooKeeper ACLs, Redis memory overcommit) in BOTH release notes and admin manual. Accepted-risk posture only holds when published where operators will find it during deployment. Release validation checklist should document framework first (accept blockers and constraints as legit) before test evidence arrives, reducing PM/infra/test interdependencies and making bottlenecks visible early.
 
 14. **2026-06-06 — Milestone triage:** When only two active milestones exist (v2.5 and v2.5.1), apply product judgment to sort research/enhancement/infrastructure issues into v2.5 (longer-term post-release work) and test/validation/release issues into v2.5.1 (active validation phase). Issues prefixed with "[v2.5]" tag go into v2.5 unless they are explicit test phases or pre-release validation, which go into v2.5.1. All 14 open issues now assigned: v2.5 = 8 (research, infra, enhancements), v2.5.1 = 6 (test phases, validation gates).
+
+## 2026-06-06 — v2.5.1 Board Triage Complete
+
+Triaged remaining v2.5.1 board items. All issues now assigned or in-progress. Remaining work blocked on external dependencies: external corpus, hardware, model/runtime fixtures, benchmark execution, or broader design planning. Recommended Ralph idle until external unblocking.
+
+Related: v2.5.1 board, v2.5 epic
