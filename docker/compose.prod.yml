@@ -535,7 +535,7 @@ services:
     environment:
       SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
-      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.cloud.overseer.enabled=${SOLR_CLOUD_OVERSEER_ENABLED:-false} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -586,7 +586,7 @@ services:
     environment:
       SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
-      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.cloud.overseer.enabled=${SOLR_CLOUD_OVERSEER_ENABLED:-false} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -637,7 +637,7 @@ services:
     environment:
       SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
-      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.cloud.overseer.enabled=${SOLR_CLOUD_OVERSEER_ENABLED:-false} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}

@@ -61,6 +61,33 @@ for service_name in ("solr", "solr2", "solr3", "solr-init"):
         if key not in env_keys:
             failures.append(f"{label}: {service_name} missing {key}")
 
+if label == "production topology":
+    for service_name in ("zoo1", "zoo2", "zoo3", "solr", "solr2", "solr3"):
+        service = services.get(service_name)
+        if service is None:
+            failures.append(f"{label}: missing HA service {service_name}")
+        elif "distributed-only" in (service.get("profiles") or []):
+            failures.append(f"{label}: {service_name} is gated behind distributed-only profile")
+
+    for service_name in ("solr", "solr2", "solr3"):
+        service = services.get(service_name) or {}
+        env = service.get("environment") or {}
+        if isinstance(env, list):
+            env = dict(item.split("=", 1) for item in env if "=" in item)
+        solr_opts = env.get("SOLR_OPTS", "")
+        if "-Dsolr.cloud.overseer.enabled=false" not in solr_opts:
+            failures.append(f"{label}: {service_name} does not disable SolrCloud Overseer")
+
+if label == "single-node CI topology":
+    for service_name in ("solr",):
+        service = services.get(service_name) or {}
+        env = service.get("environment") or {}
+        if isinstance(env, list):
+            env = dict(item.split("=", 1) for item in env if "=" in item)
+        solr_opts = env.get("SOLR_OPTS", "")
+        if "solr.cloud.overseer.enabled" in solr_opts:
+            failures.append(f"{label}: {service_name} unexpectedly changes Overseer mode")
+
 if failures:
     print("\n".join(failures), file=sys.stderr)
     sys.exit(1)

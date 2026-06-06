@@ -156,7 +156,33 @@ Current `dev` defaults to Solr 10 after PR #1680:
 
 > **STATUS**: Solr 10 runtime cutover is merged in PR #1680, with Solr 9 rollback kept as an explicit overlay. CLI updates are merged in PR #1673.
 
-#### Step 1.3: Review Schema Compatibility
+#### Step 1.3: Verify SolrCloud Overseer Disabled Mode
+
+Production keeps the 3-node SolrCloud + 3-node ZooKeeper HA topology, but Solr
+nodes now start with `-Dsolr.cloud.overseer.enabled=false` by default in
+`docker/compose.prod.yml`. This follows the Solr 10 migration recommendation to
+use distributed cluster-state updates instead of routing all collection/state
+work through the legacy Overseer queue.
+
+Expected operational improvements:
+
+- Removes the Overseer queue as a collection-management bottleneck during
+  replica recovery, collection creation, and state updates.
+- Reduces sensitivity to a busy or restarting Overseer leader.
+- Keeps ZooKeeper quorum and replicated Solr data nodes for HA; this is not the
+  standalone/no-ZooKeeper topology.
+
+Rollback switch: set `SOLR_CLOUD_OVERSEER_ENABLED=true` in the production
+environment if a Solr 10 regression requires temporarily returning to legacy
+Overseer behavior.
+
+```bash
+# Verify production compose renders Overseer disabled on every Solr node
+docker compose -f docker/compose.prod.yml config --format json | \
+  python3 -c 'import json,sys; d=json.load(sys.stdin); print({s:d["services"][s]["environment"]["SOLR_OPTS"] for s in ("solr","solr2","solr3")})'
+```
+
+#### Step 1.4: Review Schema Compatibility
 
 The existing `src/solr/books/managed-schema.xml` has been pre-updated for Solr 10 HNSW naming (see PR #1667). Verify:
 
@@ -175,7 +201,7 @@ If custom HNSW tuning is enabled, use Solr 10 names (`hnswM`, `hnswEfConstructio
 
 `VECTOR_QUANTIZATION=int8` remains a held follow-up because PR #1670 has not merged. Keep the default float32 path (`VECTOR_QUANTIZATION=none`) for v2.5 production upgrades unless #1670 or an equivalent scalar-quantization fix lands.
 
-#### Step 1.4: Verify Security Configuration
+#### Step 1.5: Verify Security Configuration
 
 Check that `src/solr/security.json` is Solr 10 compatible:
 
@@ -405,7 +431,34 @@ REPORT
 cat ./backups/solr-migration/solr-10-postmig.txt
 ```
 
-#### Step 3.4: Restart Indexing Pipeline
+#### Step 3.4: Validate Overseer Disabled Cluster Operations
+
+Run the production SolrCloud smoke test after `solr-init` has uploaded the
+`books` configset. It verifies:
+
+- runtime `solr.cloud.overseer.enabled=false`
+- exactly 3 live Solr nodes
+- create/delete collection operations against a temporary replicated collection
+
+```bash
+SOLR_ADMIN_USER="$SOLR_ADMIN_USER" SOLR_ADMIN_PASS="$SOLR_ADMIN_PASS" \
+  bash tests/solrcloud-overseer-disabled-validation.sh
+```
+
+For maintenance-window failover validation, opt into a single-node stop/start
+exercise. The script stops `solr2`, verifies the temporary collection keeps an
+active shard leader with 2 live nodes, restarts `solr2`, waits for 3 live nodes,
+and then deletes the temporary collection.
+
+```bash
+RUN_FAILOVER=1 SOLR_ADMIN_USER="$SOLR_ADMIN_USER" SOLR_ADMIN_PASS="$SOLR_ADMIN_PASS" \
+  bash tests/solrcloud-overseer-disabled-validation.sh
+```
+
+Do not mark failover validation complete until the `RUN_FAILOVER=1` path has
+run against the target production-like cluster.
+
+#### Step 3.5: Restart Indexing Pipeline
 
 ```bash
 # Resume document indexing
@@ -421,7 +474,7 @@ docker compose exec -T redis redis-cli KEYS "doc:*" | wc -l
 # Should show growing count as indexing resumes
 ```
 
-#### Step 3.5: Performance Validation (Optional)
+#### Step 3.6: Performance Validation (Optional)
 
 **PENDING**: Create benchmark suite (to be added in v2.5.1). For now, manual spot-checks:
 
