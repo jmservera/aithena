@@ -75,3 +75,7 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 - **Rubber Duck critique:** Confirmed verification must run inside the built image, not just CI assumptions
 - **Pattern:** Add Python version-check step after each `uv sync --inexact` in embeddings-server Dockerfiles to catch future drift immediately
 - **Decision:** `.squad/decisions.md` (OpenVINO Smoke Failure section)
+
+### 2026-06-06 — Workflow Consolidation Follow-up (Issue #1449)
+- Phase 1 consolidation is already merged on `dev`; keep later release/heartbeat workflow rewrites deferred instead of changing required release gates during v2.5.1 cleanup.
+- `squad-ci.yml` is a manual-dispatch placeholder with no required-check or release behavior; removing it is safe dead-code cleanup and preserves CI/release semantics.
