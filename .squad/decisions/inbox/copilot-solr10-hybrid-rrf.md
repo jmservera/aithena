@@ -1,7 +1,8 @@
-# Decision Proposal: Keep App-Side Hybrid RRF Until Solr Combined Query Is Benchmarked
+# Decision: Keep App-Side Hybrid RRF Until Solr Combined Query Is Benchmarked
 
-**Date:** 2026-06-06  
-**Author:** Ash (via Copilot)  
+**Date:** 2026-06-06
+**Author:** Ash (via Copilot)
+**Status:** Proposed
 **Related:** #1349, SOLR-17319
 
 ## Context

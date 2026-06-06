@@ -17,7 +17,7 @@ Aithena's default `hnsw` search architecture in `src/solr-search/main.py` does t
 
 1. **Keyword leg:** BM25/eDisMax on parent book documents, with `EXCLUDE_CHUNKS_FQ = "-parent_id_s:[* TO *]"` so chunk documents do not pollute keyword results.
 2. **Semantic leg:** query embedding from the local embeddings-server, then Solr `{!knn f=<KNN_FIELD> topK=N}` against chunk vectors. The chunk-exclusion filter is intentionally not applied.
-3. **Fusion:** `reciprocal_rank_fusion()` in `search_service.py`, default `RRF_K=60`, after normalizing chunk hits to book-level results.
+3. **Fusion:** `reciprocal_rank_fusion()` in `search_service.py`, using a default `k=60` damping value after normalizing chunk hits to book-level results.
 4. **Facets/highlights:** sourced from the BM25 leg only.
 5. **Fallback:** if embeddings are unavailable, hybrid degrades to keyword results.
 
