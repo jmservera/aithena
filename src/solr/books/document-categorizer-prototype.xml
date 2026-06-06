@@ -12,6 +12,11 @@
   - Validate labels, latency, JVM memory, and indexing throughput before enabling.
 -->
 <prototype>
+  <!--
+    To enable after validation, move these updateProcessor definitions and the
+    chain below into solrconfig.xml, then invoke with:
+    update.chain=document-categorizer-prototype
+  -->
   <updateProcessor class="solr.processor.DocumentCategorizerUpdateProcessorFactory" name="topicCategorizer">
     <str name="modelFile">models/topic/model.onnx</str>
     <str name="vocabFile">models/topic/vocab.txt</str>
@@ -27,14 +32,7 @@
     <str name="dest">document_sentiment_s</str>
   </updateProcessor>
 
-  <updateRequestProcessorChain name="document-categorizer-prototype">
-    <processor class="solr.processor.DocumentCategorizerUpdateProcessorFactory">
-      <str name="modelFile">models/topic/model.onnx</str>
-      <str name="vocabFile">models/topic/vocab.txt</str>
-      <str name="source">content</str>
-      <str name="source">title_t</str>
-      <str name="dest">topic_category_s</str>
-    </processor>
+  <updateRequestProcessorChain name="document-categorizer-prototype" processor="topicCategorizer,sentimentCategorizer">
     <processor class="solr.LogUpdateProcessorFactory"/>
     <processor class="solr.DistributedUpdateProcessorFactory"/>
     <processor class="solr.RunUpdateProcessorFactory"/>

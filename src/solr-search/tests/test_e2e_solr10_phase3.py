@@ -22,6 +22,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.phase3, pytest.mark.solr10]
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEXER_EMBEDDINGS_PATH = REPO_ROOT / "src" / "document-indexer" / "document_indexer" / "embeddings.py"
 SOLR_SCHEMA_PATH = REPO_ROOT / "src" / "solr" / "books" / "managed-schema.xml"
+SOLR_CONFIG_PATH = REPO_ROOT / "src" / "solr" / "books" / "solrconfig.xml"
 DOCUMENT_CATEGORIZER_PROTOTYPE_PATH = REPO_ROOT / "src" / "solr" / "books" / "document-categorizer-prototype.xml"
 DOCUMENT_CATEGORIZER_RESEARCH_PATH = REPO_ROOT / "docs" / "research" / "solr10-document-categorizer-prototype.md"
 
@@ -61,6 +62,7 @@ class TestPhase3ActivePreflight:
         schema = SOLR_SCHEMA_PATH.read_text(encoding="utf-8")
         prototype = DOCUMENT_CATEGORIZER_PROTOTYPE_PATH.read_text(encoding="utf-8")
         research = DOCUMENT_CATEGORIZER_RESEARCH_PATH.read_text(encoding="utf-8")
+        solrconfig = SOLR_CONFIG_PATH.read_text(encoding="utf-8")
 
         assert 'name="topic_category_s"' in schema
         assert 'name="document_sentiment_s"' in schema
@@ -69,6 +71,11 @@ class TestPhase3ActivePreflight:
         assert "vocabFile" in prototype
         assert "analysis-extras" in prototype
         assert "intentionally not included from solrconfig.xml" in prototype
+        assert 'processor="topicCategorizer,sentimentCategorizer"' in prototype
+        assert "DocumentCategorizerUpdateProcessorFactory" not in solrconfig
+        assert "topicCategorizer" not in solrconfig
+        assert "sentimentCategorizer" not in solrconfig
+        assert "document-categorizer-prototype" not in solrconfig
         assert "Do not claim accuracy or performance" in research
         assert "runtime classification deferred" in research
 
