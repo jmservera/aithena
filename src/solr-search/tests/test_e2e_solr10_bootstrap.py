@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import yaml
+from solr10_gates import assert_supported_solr10_scalar_bits
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
@@ -142,7 +143,7 @@ class TestSolr10SafePreflight:
         assert byte is not None, "managed-schema.xml must define knn_vector_768_byte"
         assert dense["class"] == "solr.DenseVectorField"
         assert byte["class"] == "solr.ScalarQuantizedDenseVectorField"
-        assert byte["bits"] == "8"
+        assert_supported_solr10_scalar_bits(byte["bits"])
         for attrs in (dense, byte):
             assert "hnswMaxConnections" not in attrs
             assert "hnswBeamWidth" not in attrs
@@ -170,6 +171,27 @@ class TestSolr10SafePreflight:
         document_data = compose["volumes"]["document-data"]
         device = document_data["driver_opts"]["device"]
         assert device == "${E2E_LIBRARY_PATH:-/tmp/aithena-e2e-library}"
+
+
+class TestPhase1ActivePreflight:
+    """Issue #1355: Phase 1 checks that can run before Solr 10 fixtures exist."""
+
+    @pytest.mark.e2e
+    @pytest.mark.phase1
+    @pytest.mark.solr10
+    def test_phase1_solr10_auth_cli_syntax_is_preflighted(self) -> None:
+        """Auth bootstrap syntax is statically verifiable after the #1676 merge."""
+        scripts = [
+            _solr_init_script(COMPOSE_PATH),
+            _solr_init_script(COMPOSE_PROD_PATH),
+            SOLR_INIT_SCRIPT_PATH.read_text(encoding="utf-8"),
+        ]
+
+        for script in scripts:
+            assert "solr auth enable --type basicAuth" in script
+            assert "--block-unknown false" in script
+            assert "solr_major_version" in script
+            assert "SOLR_VERSION" in script
 
 
 class TestSolr10Bootstrap:
@@ -213,28 +235,28 @@ class TestPhase1SolrUpgrade:
     @pytest.mark.phase1
     @pytest.mark.solr10
     def test_phase1_fresh_install_solr10(self) -> None:
-        pytest.skip("Requires fresh Solr 10 docker-compose fixture")
+        pytest.skip("GATED: requires fresh Solr 10 docker-compose fixture")
 
     @pytest.mark.e2e
     @pytest.mark.phase1
     @pytest.mark.solr10
     def test_phase1_backup_restore_9_to_10(self) -> None:
-        pytest.skip("Requires Solr 9.7 backup fixture")
+        pytest.skip("GATED: requires Solr 9.7 backup fixture")
 
     @pytest.mark.e2e
     @pytest.mark.phase1
     @pytest.mark.solr10
     def test_phase1_full_reindex(self) -> None:
-        pytest.skip("Requires test corpus and reindex fixtures")
+        pytest.skip("GATED: requires test corpus and reindex fixtures")
 
     @pytest.mark.e2e
     @pytest.mark.phase1
     @pytest.mark.solr10
     def test_phase1_hnsw_parameters(self) -> None:
-        pytest.skip("Requires schema query and kNN fixtures")
+        pytest.skip("GATED: static schema/HNSW preflight is active; runtime kNN fixture still required")
 
     @pytest.mark.e2e
     @pytest.mark.phase1
     @pytest.mark.solr10
     def test_phase1_solr_cli_syntax(self) -> None:
-        pytest.skip("Requires solr-init CLI fixture")
+        pytest.skip("GATED: static auth CLI syntax preflight is active; runtime solr-init fixture still required")
