@@ -5,6 +5,8 @@
 > **Based on**: [Solr 10 Migration PRD](../prd/solr10-migration-prd.md)
 > **Issue**: [#1364](https://github.com/jmservera/aithena/issues/1364)
 > **Target Release**: v2.0
+> **Operator runbook**: [Solr 10 Production Migration Runbook](./solr-10-production-runbook.md)
+> **v2.5 docs index**: [Solr 10 v2.5 Documentation Index](./solr-10-v2.5-docs-index.md)
 
 ---
 

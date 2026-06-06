@@ -1,9 +1,9 @@
 # Solr 10 Production Migration Runbook
 
-_Last updated:_ 2026-06-05  
-_Owner:_ Ash (Search Engineer) / Brett (Infrastructure)  
-_PRD reference:_ [`docs/prd/solr10-migration-prd.md`](../prd/solr10-migration-prd.md) — Sections 5-8  
-_Related issues:_ [#1353](https://github.com/jmservera/aithena/issues/1353) (docs), [#1359](https://github.com/jmservera/aithena/issues/1359) (runbook)  
+_Last updated:_ 2026-06-06
+_Owner:_ Ash (Search Engineer) / Brett (Infrastructure)
+_PRD reference:_ [`docs/prd/solr10-migration-prd.md`](../prd/solr10-migration-prd.md) — Sections 5-8
+_Related issues:_ [#1353](https://github.com/jmservera/aithena/issues/1353) (docs), [#1359](https://github.com/jmservera/aithena/issues/1359) (runbook)
 _Related migration guide:_ [`docs/migration/solr-9-to-10.md`](./solr-9-to-10.md)
 
 ---
@@ -12,13 +12,13 @@ _Related migration guide:_ [`docs/migration/solr-9-to-10.md`](./solr-9-to-10.md)
 
 This is the operator's guide for migrating **production Aithena deployments from Solr 9.7 to Solr 10**. It covers:
 - Pre-migration verification and backup procedures
-- Coordinated upgrade steps for SolrCloud and standalone modes
+- Coordinated upgrade steps for distributed SolrCloud and single-node SolrCloud modes
 - Rollback triggers and procedures
 - Post-migration validation and performance tuning
 
 **Read the full [Solr 9→10 Migration Plan](./solr-9-to-10.md) first** — this runbook focuses on execution, not the technical details.
 
-> **Prerequisite knowledge:**  
+> **Prerequisite knowledge:**
 > - Familiarity with Docker Compose (`docker compose` commands)
 > - Understanding of [Aithena architecture](../architecture/) and service dependencies
 > - Shell scripting and basic Solr CLI commands
@@ -58,13 +58,14 @@ Expected output: All 3 nodes in `live_nodes`, all shards with `active` status.
 
 ```bash
 # Create a baseline report
-cat > /tmp/solr-9-baseline.txt << 'REPORT'
+mkdir -p ./backups/solr-migration
+cat > ./backups/solr-migration/solr-9-baseline.txt << 'REPORT'
 Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Solr Version: $(docker compose exec -T solr solr --version 2>/dev/null | grep "Apache Solr" || echo "MANUAL")
 Cluster Status: $(docker compose exec -T solr curl -s -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" http://solr:8983/api/cluster/status | jq -r '.cluster | "live=" + ((.live_nodes | length | tostring)) + ", down=" + ((.down_nodes | length | tostring))')
 REPORT
 
-cat /tmp/solr-9-baseline.txt
+cat ./backups/solr-migration/solr-9-baseline.txt
 ```
 
 Store this for post-migration comparison.
@@ -139,35 +140,39 @@ docker compose exec -T redis redis-cli KEYS "doc:*" | wc -l
 # Expected: 0 (or existing but non-growing count)
 ```
 
-#### Step 1.2: Update Docker Compose Files
+#### Step 1.2: Verify Docker Compose Runtime Selection
 
-**For single-node deployment** (`docker-compose.yml`):
-- Update Solr image: `solr:10` (from `solr:9.7`)
-- Update `luceneMatchVersion` in `src/solr/books/solrconfig.xml`: `10.0` (from `9.10`)
-- Update `solr-init` CLI commands to use `--` syntax (see [migration plan § 2.3](./solr-9-to-10.md#step-23-update-solr-init-cli-commands))
+Current `dev` defaults to Solr 10 after PR #1680:
 
-**For production 3-node deployment** (`docker/compose.prod.yml`):
-- Same updates as above for all 3 Solr nodes
+- `src/solr/Dockerfile` defaults to `SOLR_BASE_IMAGE=solr:10`.
+- `docker-compose.yml` and `docker/compose.prod.yml` default `SOLR_VERSION=10`.
+- `src/solr/books/solrconfig.xml` uses `luceneMatchVersion` `10.0`; the Solr 9 rollback overlay rewrites it to `9.10`.
+- Solr 9 rollback is explicit via `docker/compose.solr9.yml`, `SOLR_BASE_IMAGE=solr:9.7`, and `SOLR_VERSION=9`.
 
-> **STATUS**: All CLI updates are merged in PR #1673 and related commits. Verify by checking current `docker-compose.yml`.
+**For single-node deployments**: use the documented single-node SolrCloud overlay. A true standalone/core mode is not shipped in v2.5.
+
+**For production 3-node deployments**: use `docker/compose.prod.yml`; it runs all three Solr nodes on Solr 10 by default.
+
+> **STATUS**: Solr 10 runtime cutover is merged in PR #1680, with Solr 9 rollback kept as an explicit overlay. CLI updates are merged in PR #1673.
 
 #### Step 1.3: Review Schema Compatibility
 
-The existing `src/solr/books/managed-schema.xml` has been pre-updated with Solr 10 HNSW parameter names and scalar quantization support (see PR #1667 and commit 72f2122). Verify:
+The existing `src/solr/books/managed-schema.xml` has been pre-updated for Solr 10 HNSW naming (see PR #1667). Verify:
 
 ```bash
-# Check for Solr 10-compatible field types
-grep -A3 "knn_vector_768" src/solr/books/managed-schema.xml
+# Check Solr 10-compatible HNSW parameter names
+grep -A6 "knn_vector_768" src/solr/books/managed-schema.xml
 ```
 
-Expected:
+Expected for Solr 10 default float vectors:
 ```xml
 <fieldType name="knn_vector_768" class="solr.DenseVectorField"
-           vectorDimension="768" similarityFunction="cosine"
-           knnAlgorithm="hnsw" hnswMaxConnections="32" hnswBeamWidth="40"/>
+           vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
 ```
 
-If your schema still uses old `maxconn` / `beamWidth` names, apply the migration from [solr-9-to-10.md § 2.2](./solr-9-to-10.md#22-hnsw-parameter-renames--requires-configset-upload--reindex).
+If custom HNSW tuning is enabled, use Solr 10 names (`hnswM`, `hnswEfConstruction`). The Solr 9 rollback path rewrites those back to `hnswMaxConnections` / `hnswBeamWidth` before uploading to a Solr 9 cluster.
+
+`VECTOR_QUANTIZATION=int8` remains a held follow-up because PR #1670 has not merged. Keep the default float32 path (`VECTOR_QUANTIZATION=none`) for v2.5 production upgrades unless #1670 or an equivalent scalar-quantization fix lands.
 
 #### Step 1.4: Verify Security Configuration
 
@@ -183,7 +188,7 @@ jq '.authorization.rules[] | select(.name == "health" or .name == "metrics-read"
 # Expected: Both have "role": null or "role": ["null"]
 ```
 
-> **PENDING**: Solr 10 changes blockUnknown default to `true`. If not explicitly set to `false`, health checks will fail. This is addressed in PR #1663.
+> **STATUS**: PR #1663 verified the explicit `blockUnknown=false` posture and authenticated health checks for the Solr 10 migration path.
 
 ### Phase 2: Cutover (Maintenance window begins)
 
@@ -250,7 +255,7 @@ docker compose images solr | grep -E "DIGEST|solr:10"
 #### Step 2.6: Start Cluster in Solr 10
 
 ```bash
-# Start ZooKeeper (cluster mode) or skip for standalone
+# Start ZooKeeper for distributed or single-node SolrCloud
 docker compose up -d zoo1 zoo2 zoo3
 
 # Wait for quorum (30–60 sec)
@@ -287,7 +292,7 @@ docker compose logs -f solr-init
 # ✓ Collection 'books' created or already exists
 ```
 
-> **PENDING IMPLEMENTATION**: solr-init logic for Solr 10 is in PR #1673 (now merged). If initialization fails, check `docker compose logs solr-init` for error messages.
+> **STATUS**: Solr 10 solr-init CLI syntax is merged in PR #1673. If initialization fails, check `docker compose logs solr-init` for error messages.
 
 #### Step 2.8: Verify Cluster Health
 
@@ -388,14 +393,15 @@ docker compose exec -T solr solr --version | grep "Apache Solr"
 
 ```bash
 # Create a post-migration report (compare with baseline from step 1.2)
-cat > /tmp/solr-10-postmig.txt << 'REPORT'
+mkdir -p ./backups/solr-migration
+cat > ./backups/solr-migration/solr-10-postmig.txt << 'REPORT'
 Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Solr Version: $(docker compose exec -T solr solr --version 2>/dev/null | grep "Apache Solr" || echo "MANUAL")
 Cluster Status: $(docker compose exec -T solr curl -s -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" http://solr:8983/api/cluster/status | jq -r '.cluster | "live=" + ((.live_nodes | length | tostring)) + ", down=" + ((.down_nodes | length | tostring))')
 Index Size: $(docker volume inspect aithena_solr-data 2>/dev/null | jq -r '.[0].Mountpoint' | xargs du -sh)
 REPORT
 
-cat /tmp/solr-10-postmig.txt
+cat ./backups/solr-migration/solr-10-postmig.txt
 ```
 
 #### Step 3.4: Restart Indexing Pipeline
@@ -549,7 +555,7 @@ docker compose logs -f document-indexer | grep -E "processed|completed"
 
 **Resolution**:
 1. Check solr-init logs: `docker compose logs solr-init`
-2. Manually create collection: 
+2. Manually create collection:
    ```bash
    docker compose exec -T solr curl -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
      "http://solr:8983/api/collections?action=CREATE" \
@@ -609,26 +615,15 @@ These optimizations are **not required** for v2.5.0 release but can improve perf
 
 ### 5.1 Enable Vector Quantization
 
-Reduce Solr memory footprint by 4× with scalar quantization:
+Scalar quantization can reduce Solr vector memory, but it is **not part of the default v2.5 production upgrade path**. Current options are:
 
-**Edit `src/solr/books/managed-schema.xml`:**
-```xml
-<!-- Keep the existing float32 field type for baseline/rollback paths. -->
-<fieldType name="knn_vector_768" class="solr.DenseVectorField"
-           vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
+- `VECTOR_QUANTIZATION=none` (default): store vectors in the float32 `knn_vector_768` field. Recommended for v2.5 production cutover.
+- `VECTOR_QUANTIZATION=fp16`: embeddings-server-side quantization before submission; Solr still stores float32 vectors.
+- `VECTOR_QUANTIZATION=int8`: routes to `embedding_byte_v` / `knn_vector_768_byte`; held until PR #1670 or an equivalent Solr 10 scalar-quantization fix lands.
 
-<!-- Add a separate scalar-quantized byte field type for int8 routing. -->
-<fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField"
-           vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw" bits="7"/>
-```
+If enabling `int8` after the hold is lifted, validate that Solr 10 uses supported `ScalarQuantizedDenseVectorField` settings, then run a full reindex (estimated 30–120 min for 100k+ docs).
 
-**Route embeddings to the byte field:** set `VECTOR_QUANTIZATION=int8` so indexing/search use
-the `embedding_byte_v` dynamic field backed by `knn_vector_768_byte`. Do not replace
-`knn_vector_768`; keep it as the float32 vector field.
-
-**Then reindex:** Full index reindex required (estimated 30–120 min for 100k+ docs).
-
-> **STATUS**: Vector quantization bits logic is validated in PR #1670 (scalar 7-bit fix).
+> **STATUS**: PR #1670 remains held; do not enable `VECTOR_QUANTIZATION=int8` for the v2.5 cutover unless that fix is merged separately.
 
 ### 5.2 Configure `efSearchScaleFactor`
 
@@ -674,7 +669,7 @@ For persistent issues:
 
 - ⚠️ Language-models module (embeddings in Solr) deferred to v2.6 (requires upstream work)
 - ⚠️ GPU acceleration (cuVS codec) deferred to v2.5.1
-- ⚠️ Binary vector quantization not yet tested, scalar quantization is supported
+- ⚠️ `VECTOR_QUANTIZATION=int8` remains held until PR #1670 (or an equivalent scalar-quantization fix) merges; default float32 vectors are the supported v2.5 path
 
 ---
 
@@ -732,8 +727,8 @@ docker compose ps
 
 ---
 
-**Version**: v2.5.0-rc1  
-**Next review**: After first production deployment  
+**Version**: v2.5.0-rc1
+**Next review**: After first production deployment
 **Changes in this version**:
 - Initial runbook for Solr 10 migration (v2.5.0 release)
 - Marked pending sections for v2.5.1+ optimization work
