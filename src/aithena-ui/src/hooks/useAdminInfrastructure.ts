@@ -140,7 +140,28 @@ export function redactUrlForDisplay(candidate: string | null | undefined): strin
   if (hasUnsafeUrlCharacters(value)) return '—';
 
   if (value.startsWith('/') && !value.startsWith('//')) {
-    return value;
+    try {
+      const parsed = new URL(value, 'http://localhost');
+      return parsed.pathname;
+    } catch {
+      return '—';
+    }
+  }
+
+  if (value.startsWith('//')) {
+    try {
+      const parsed = new URL(value, 'http://localhost');
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return '—';
+      }
+      parsed.username = '';
+      parsed.password = '';
+      parsed.search = '';
+      parsed.hash = '';
+      return `//${parsed.host}${parsed.pathname}`;
+    } catch {
+      return '—';
+    }
   }
 
   try {
