@@ -132,7 +132,12 @@ def solr_books_collection_ready(solr_url: str, solr_auth: tuple[str, str]) -> di
     last_status = "not checked"
 
     while time.monotonic() < deadline:
-        response = _request_live_solr10("GET", url, params=params, auth=solr_auth)
+        try:
+            response = requests.get(url, params=params, auth=solr_auth, timeout=10)
+        except requests.RequestException as exc:
+            last_status = f"transient request failure: {exc}"
+            time.sleep(2)
+            continue
         if response.status_code == 200:
             try:
                 body = response.json()
