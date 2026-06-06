@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -83,8 +84,18 @@ def check_docker() -> CheckResult:
     """Check Docker availability."""
     import subprocess
 
+    docker_path = shutil.which("docker")
+    if docker_path is None:
+        return CheckResult(
+            name="Docker availability",
+            passed=False,
+            message="✗ Docker not found or not responding",
+            severity="error",
+            command_hint="docker --version",
+        )
+
     try:
-        result = subprocess.run(["docker", "--version"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([docker_path, "--version"], capture_output=True, text=True, timeout=5)  # noqa: S603
         if result.returncode == 0:
             version = result.stdout.strip()
             return CheckResult(
@@ -108,8 +119,18 @@ def check_docker_compose() -> CheckResult:
     """Check Docker Compose availability."""
     import subprocess
 
+    docker_path = shutil.which("docker")
+    if docker_path is None:
+        return CheckResult(
+            name="Docker Compose availability",
+            passed=False,
+            message="✗ Docker Compose not found or not responding",
+            severity="error",
+            command_hint="docker compose --version",
+        )
+
     try:
-        result = subprocess.run(["docker", "compose", "--version"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([docker_path, "compose", "--version"], capture_output=True, text=True, timeout=5)  # noqa: S603
         if result.returncode == 0:
             version = result.stdout.strip()
             return CheckResult(
@@ -133,8 +154,18 @@ def check_python() -> CheckResult:
     """Check Python version (3.10+)."""
     import subprocess
 
+    python_path = shutil.which("python3")
+    if python_path is None:
+        return CheckResult(
+            name="Python version (3.10+)",
+            passed=False,
+            message="✗ Python3 not found or not responding",
+            severity="error",
+            command_hint="python3 --version",
+        )
+
     try:
-        result = subprocess.run(["python3", "--version"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([python_path, "--version"], capture_output=True, text=True, timeout=5)  # noqa: S603
         if result.returncode == 0:
             version_str = result.stdout.strip()
             # Extract version number
@@ -177,8 +208,8 @@ def check_python() -> CheckResult:
 def check_dependencies() -> CheckResult:
     """Check Python dependencies (requests, numpy)."""
     try:
-        import requests  # noqa: F401
         import numpy  # noqa: F401
+        import requests  # noqa: F401
 
         return CheckResult(
             name="Python dependencies (requests, numpy)",
@@ -240,7 +271,7 @@ def check_queries_file() -> CheckResult:
                 message=f"✗ Only {query_count} queries found; expected ≥30",
                 severity="error",
             )
-    except (json.JSONDecodeError, IOError) as e:
+    except (json.JSONDecodeError, OSError) as e:
         return CheckResult(
             name="Benchmark query suite (queries.json)",
             passed=False,
@@ -312,7 +343,7 @@ def check_schema() -> CheckResult:
                 severity="warning",
                 command_hint="grep -n 'ScalarQuantizedDenseVectorField.*bits' src/solr/books/managed-schema.xml",
             )
-    except IOError as e:
+    except OSError as e:
         return CheckResult(
             name="Solr schema int8 support",
             passed=False,
