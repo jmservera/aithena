@@ -11,3 +11,4 @@
 
 ## Learnings
 - Semantic E2E coverage should index parent PDFs via Solr `/update/extract`, then enqueue the same file paths to `shortembeddings` so document-indexer produces chunk docs with vectors before asserting `/v1/search` semantic and hybrid ranking.
+- 2026-06-06T09:36:46.687+00:00: For #1344 scalar quantization closure, validate against `dev` when #1670 is only merged there; schema/preflight/unit checks can prove bits=7 wiring, but recall@10 and memory savings still require same-corpus float32 vs int8 runtime benchmark artifacts.
