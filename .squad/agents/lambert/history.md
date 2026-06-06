@@ -92,3 +92,10 @@
 - #1670 removes the Solr 10 scalar-quantization schema blocker (`bits=7`), so #1344/#1354 tooling can advance past preflight.
 - Do not close #1354 from tool-only validation: benchmark claims still require paired Solr 9.7/Solr 10 or float32/int8 runs on the same host, same representative corpus, captured benchmark JSON, `docker stats`, corpus size, and failed query IDs.
 - Safe local validation without a production corpus is limited to benchmark unit tests, comparator tests, schema/preflight checks, and mocked harness behavior; never fabricate latency, recall, throughput, or memory numbers from these checks.
+
+## Research Loop Participation (2026-06-06)
+
+- **#1357 Phase 3 Test Readiness Planning:** Co-authored Phase 3 test scope documenting query suite validation (30 queries × 3 modes), Overseer-disabled runtime diagnostics, and int8 corpus indexing readiness. Identified blockers: PR #1670 (schema fix), #1344 (benchmark validation).
+- **#1356 Phase 2 Infrastructure Assessment:** Co-authored infrastructure gap analysis (standalone Solr 10 overlay, Overseer-disabled overlay, init script branching). Confirmed Phase 2 test readiness matrix and deferred failover/resilience scope to v2.5.1.
+- **#1354 Scalar Quantization Benchmark Execution Plan:** Co-authored 3-phase benchmark workflow with detailed corpus requirements, pass/fail criteria, and deliverables. Validated that plan is executable post-PR-#1670 merge with no additional code changes.
+- **#1344 int8 Evaluation Protocol:** Co-authored closure checklist and blocker resolution path. Confirmed benchmark validation is P0 release blocker pending #1670 merge.

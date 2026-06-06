@@ -185,3 +185,12 @@ Safe pattern: keep manual `category_s` untouched; write classifier output to sep
 **Recommendation:** Keep current app-side chunk-kNN RRF in production. Prototype Solr Combined Query RRF only behind a separate handler/flag and validate against the benchmark corpus for relevance (nDCG/judged top-k), p50/p95 latency, facets/highlights, and page-range quality before changing ranking.
 
 **Full report:** `docs/research/solr10-hybrid-search-evaluation.md`
+
+## Research Loop Participation (2026-06-06)
+
+- **#1357 Phase 3 Test Readiness Planning:** Co-authored Phase 3 test scope documenting query suite validation (30 queries × 3 modes), Overseer-disabled runtime diagnostics, and int8 corpus indexing readiness. Identified blockers: PR #1670 (schema fix), #1344 (benchmark validation).
+- **#1347 cuVS GPU Search Implementation Plan:** Co-authored planning for GPU-accelerated vector search infrastructure and implementation approach (documented in issue threads).
+- **#1348 DocumentCategorizer Runtime/QA Validation Plan:** Co-authored runtime and QA validation approach; noted that SolrCloud `DocumentCategorizerUpdateProcessorFactory` requires labeled corpus before enabling and safe pattern is separate fields (topic_category_s, document_sentiment_s) without touching core category_s.
+- **#1344 int8 Quantization Gate:** Co-signed int8 evaluation protocol; noted recall@10 and memory validation as release blockers on #1670.
+- **#1343 SolrCloud Overseer Decision:** Approved decision to disable Overseer in production Solr 10 while retaining ZooKeeper HA. Documented runtime validation commands for Phase 2 testing.
+- **#1349 Hybrid RRF Decision:** Decided to keep app-side RRF (current implementation) as production default until Solr Combined Query is benchmarked and proven on real corpus. SOLR-17319 adds native RRF but does not handle parent/chunk fusion correctly; prototype required before default change.
