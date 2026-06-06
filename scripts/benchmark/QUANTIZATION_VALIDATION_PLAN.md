@@ -14,7 +14,7 @@ This document extends the benchmark plan in the squad decisions inbox with pract
 ### Environment Verification
 
 - [ ] **Docker availability:** `docker --version` and `docker compose --version` work
-- [ ] **Python environment:** `python3 --version` (3.10+) and `python3 -m pip list | grep requests numpy`
+- [ ] **Python environment:** `python3 --version` (3.10+) and `python3 -m pip show requests numpy`
 - [ ] **Solr containers ready:** No prior `docker compose up` state; clean start for repeatable benchmarks
 - [ ] **Disk space:** ~20 GB free (for float32 collection, int8 collection, results, logs)
 - [ ] **Network:** localhost:8983 (Solr) and localhost:8080 (solr-search API) not in use
@@ -31,13 +31,13 @@ This document extends the benchmark plan in the squad decisions inbox with pract
 
 - [ ] **Query suite present:** `scripts/benchmark/queries.json` exists (30 queries across 5 categories)
   - Categories: simple_keyword (5), natural_language (6), multilingual (6), long_complex (4), edge_cases (9)
-  - Check: `jq '.queries | length' scripts/benchmark/queries.json`
+  - Check: `jq '[.categories[].queries[]] | length' scripts/benchmark/queries.json`
 
 ### Solr Schema
 
 - [ ] **Schema updated for Solr 10 int8:**
   - Check: `grep 'ScalarQuantizedDenseVectorField' src/solr/books/managed-schema.xml | grep 'bits="7"'`
-  - For Solr 9: `grep 'DenseVectorField vectorEncoding="BYTE"' src/solr/books/managed-schema.xml`
+  - For Solr 9 compatibility: `grep -R 'bits="\[47\]".*vectorEncoding="BYTE"' docker/solr-init.sh scripts/solr-import.sh`
   - If neither found: **BLOCKER** — #1670 not applied; schema validation failed
 
 ### Comparison Tool

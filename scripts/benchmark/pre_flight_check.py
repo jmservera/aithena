@@ -6,7 +6,7 @@ before executing Phase 1 (float32 baseline) of the validation workflow.
 
 Usage:
     python3 scripts/benchmark/pre_flight_check.py
-    python3 scripts/benchmark/pre_flight_check.py --strict  # Fail on first warning
+    python3 scripts/benchmark/pre_flight_check.py --strict  # Fail if any warning is emitted
     python3 scripts/benchmark/pre_flight_check.py --json    # JSON output for CI
 """
 
@@ -60,14 +60,14 @@ class PreFlightReport:
             return self.failed_checks == 0 and self.warning_checks == 0
         return self.failed_checks == 0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, strict: bool = False) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
         return {
             "total_checks": self.total_checks,
             "passed_checks": self.passed_checks,
             "warning_checks": self.warning_checks,
             "failed_checks": self.failed_checks,
-            "ready": self.is_ready(),
+            "ready": self.is_ready(strict=strict),
             "checks": [
                 {
                     "name": c.name,
@@ -458,7 +458,7 @@ def main() -> int:
 
     # Output results
     if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
+        print(json.dumps(report.to_dict(strict=args.strict), indent=2))
     else:
         # Human-readable output
         print("\n" + "=" * 70)
