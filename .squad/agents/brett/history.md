@@ -50,6 +50,7 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 
 ## Learnings
 
+- **2026-06-06T09:36:46.687+00:00 — Pre-release auth-pattern overmatch:** Issue #1686 showed that the log analyzer's broad `auth*fail` security glob matched `TestAuthor ... Thumbnail generation failed`. Keep security patterns phrase-based (`auth failed`, `authentication failed`, `authorization failed`) so benign filenames/authors do not become release-blocking security errors while real auth failures still fail.
 - **2026-06-04 — Squad upgrade and zizmor configuration:** Squad v0.9.4 upgrade completes coordinator refresh, workflow/skill sync, and template refresh smoothly. Opened PR #1650 (brett-5). Generated `squad-*` workflows triggered zizmor code-scanning alerts; resolved by configuring zizmor-action to exclude generated workflow basenames via repository-owned input list (brett-6, c7be8d0). User directive: project does not control upstream Squad workflows, so generated security noise should be ignored.
 - **2026-06-04 — Solr readiness auth:** Solr readiness probes must validate `SOLR_ADMIN_USER` and `SOLR_ADMIN_PASS` before constructing curl credentials; missing installer-exported `.env` values should produce explicit CI errors, not opaque 401 retry loops.
 - **2026-06-04 — ZooKeeper exposure:** CI/production overlays must keep ZooKeeper ports unpublished while preserving Solr auth env wiring for init and health checks. Add compose config regression tests for both.

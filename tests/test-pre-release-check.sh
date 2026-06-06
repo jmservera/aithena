@@ -249,6 +249,35 @@ assert_exit "exit code 0 (accepted ZK/Solr config)" 0 "$rc"
 assert_json_count "0 findings (accepted config posture)" "$tmpdir/out.json" 0
 
 # -------------------------------------------------------
+echo "Test 17: Author paths with failed file opens are not auth failures"
+cat > "$tmpdir/author-file-open.txt" <<'EOF'
+document-indexer-1   | {"timestamp": "2026-06-06T05:25:03.503125+00:00", "level": "WARNING", "service": "document-indexer", "name": "document_indexer.thumbnail", "message": "Thumbnail generation failed for /data/documents/TestAuthor/TestAuthor - Corrupt Index (2024).pdf: Failed to open file '/data/documents/TestAuthor/TestAuthor - Corrupt Index (2024).pdf'.", "logger": "document_indexer.thumbnail"}
+EOF
+sh "$ANALYZER" "$tmpdir/author-file-open.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 0 (benign thumbnail warning)" 0 "$rc"
+assert_no_category "no security findings" "$tmpdir/out.json" "security"
+
+# -------------------------------------------------------
+echo "Test 18: Explicit auth failures are still security errors"
+cat > "$tmpdir/auth-failed.txt" <<'EOF'
+api-1 | 2026-06-06 auth failed for service account
+EOF
+sh "$ANALYZER" "$tmpdir/auth-failed.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 1 (security error)" 1 "$rc"
+assert_json_field "category=security" "$tmpdir/out.json" 0 "category" "security"
+assert_json_field "severity=error" "$tmpdir/out.json" 0 "severity" "error"
+
+# -------------------------------------------------------
+echo "Test 19: Explicit authentication failures are still security errors"
+cat > "$tmpdir/authentication-failure.txt" <<'EOF'
+api-1 | 2026-06-06 authentication failure for service account
+EOF
+sh "$ANALYZER" "$tmpdir/authentication-failure.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 1 (security error)" 1 "$rc"
+assert_json_field "category=security" "$tmpdir/out.json" 0 "category" "security"
+assert_json_field "severity=error" "$tmpdir/out.json" 0 "severity" "error"
+
+# -------------------------------------------------------
 echo ""
 echo "========================================"
 echo "Results: $PASS passed, $FAIL failed"

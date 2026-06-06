@@ -363,7 +363,7 @@ scan_security() {
         # ZK non-TLS quorum is expected in dev/CI — downgrade to warning
         add_finding "security" "warning" "${svc:-unknown}" "$line" "$LINE_NUM"
         ;;
-      *"insecure"*|*"certificate"*"error"*|*"certificate"*"expired"*|*"certificate"*"invalid"*|*"tls"*"error"*|*"tls"*"fail"*|*"ssl"*"error"*|*"auth"*"fail"*|*"authentication failed"*|*"unauthorized"*|*"permission denied"*)
+      *"insecure"*|*"certificate"*"error"*|*"certificate"*"expired"*|*"certificate"*"invalid"*|*"tls"*"error"*|*"tls"*"fail"*|*"ssl"*"error"*|*"auth failed"*|*"auth failure"*|*"auth error"*|*"authentication failed"*|*"authentication failure"*|*"authorization failed"*|*"authorization failure"*|*"unauthorized"*|*"permission denied"*)
         add_finding "security" "error" "${svc:-unknown}" "$line" "$LINE_NUM"
         ;;
       *"self-signed"*|*"insecure mode"*|*"without tls"*|*"no ssl"*)
