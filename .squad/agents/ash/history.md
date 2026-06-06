@@ -117,6 +117,12 @@
 
 ## Learnings
 
+### Solr 9.7 vs Solr 10 Benchmark Evidence (#1354, 2026-06-06)
+
+Benchmark claims must be generated from same-host, same-corpus paired runs only. Key paths: `scripts/benchmark/run_benchmark.py` records reproducibility metadata, `scripts/benchmark/compare_solr_versions.py` gates Solr 9.7 vs 10 comparisons, and `docs/research/solr-97-vs-10-benchmark-evidence.md` documents the required runbook.
+
+Required evidence before publishing 4× memory or 40× indexing claims: paired benchmark JSON, Docker stats with byte-valued memory samples, corpus ID/document count/byte count, startup/index timing, and failed query IDs.
+
 ### Solr 10 Language-Models Module (2025-07-22)
 
 **Key finding:** Solr 10's `language-models` module (available since 9.8) does NOT run models locally. It is a bridge to **remote embedding APIs** (OpenAI, Cohere, HuggingFace Inference API, MistralAI) via LangChain4j. No ONNX, no in-process inference.
