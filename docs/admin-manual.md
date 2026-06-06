@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 / v2.2.1 / v2.3.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the prod-overlay volume migration work, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, and fixes a CodeQL security alert in the installer. **v2.2.1** is the follow-up maintenance patch for the 2.2.x line: it removes the remaining prod-overlay bind-mount overrides, preserves the single-node Solr safety guard, and improves release/test reliability. **v2.3.0** is an infrastructure hardening release: enforces host-level Redis memory overcommit, documents ZooKeeper security posture constraints, and improves pre-release validation. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), [v2.2.0 Deployment Updates](#deployment-updates-for-v220), [v2.2.1 Deployment Updates](#deployment-updates-for-v221), and [v2.3.0 Deployment Updates](#deployment-updates-for-v230) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 / v2.2.1 / v2.3.0 / v2.5.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the prod-overlay volume migration work, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, and fixes a CodeQL security alert in the installer. **v2.2.1** is the follow-up maintenance patch for the 2.2.x line: it removes the remaining prod-overlay bind-mount overrides, preserves the single-node Solr safety guard, and improves release/test reliability. **v2.3.0** is an infrastructure hardening release: enforces host-level Redis memory overcommit, documents ZooKeeper security posture constraints, and improves pre-release validation. **v2.5.0 is a major infrastructure release:** upgrades the default Solr runtime from 9 to 10, adds a dedicated Tika service, rewrites solr-init CLI for Solr 10 syntax, migrates HNSW schema parameters, hardens `blockUnknown=true` security posture, adds a simplified Security UI page, and provides a Solr 9 rollback overlay. **A full Solr reindex is required when upgrading from v2.3.0.** `VECTOR_QUANTIZATION=int8` is temporarily unsupported. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), [v2.2.0 Deployment Updates](#deployment-updates-for-v220), [v2.2.1 Deployment Updates](#deployment-updates-for-v221), [v2.3.0 Deployment Updates](#deployment-updates-for-v230), and [v2.5.0 Deployment Updates](#deployment-updates-for-v250) sections below.
 
 ## System architecture overview
 
@@ -5435,3 +5435,193 @@ v2.3.0 publishes the existing service images with the new release tag:
 
 - **RabbitMQ deprecation warnings:** Allowlisted in v2.3.0. These are informational and do not indicate functional problems.
 - **Pre-release validation:** No longer surfaces allowlisted warnings, improving signal-to-noise ratio during release operations.
+
+---
+
+## Deployment Updates for v2.5.0
+
+### Summary
+
+v2.5.0 is a **major infrastructure release delivering the Solr 9→10 migration.** Solr 10 is now the default runtime. Key changes for operators:
+
+1. **Solr 10 as default runtime (#1680)** — `solr:10` replaces `solr:9` as the base image. A `tika` service is added to the stack.
+2. **Full Solr reindex required** — HNSW dense-vector parameter names changed between Solr 9 and 10. Existing collections must be re-bootstrapped.
+3. **`blockUnknown=true` enforced in Solr 10** — All Solr health checks, admin probes, and CI validation scripts now authenticate. Custom scripts that probe Solr without credentials must be updated.
+4. **Simplified Security UI (#1674, #1677)** — New **Admin → Security** page links to the Solr 10 Security UI for day-to-day user/role management.
+5. **Solr 9 rollback overlay preserved** — `docker/compose.solr9.yml` provides a temporary fallback for operators who cannot immediately complete the reindex.
+6. **`VECTOR_QUANTIZATION=int8` temporarily disabled** — Solr 10 int8 scalar quantization fix (PR #1670) is on hold; use `none` (default) or `fp16` only.
+7. **OpenVINO release gates hardened (#1666, #1668)** — Version constraints locked to base image; smoke diagnostics enhanced.
+
+**Breaking Changes:** Full Solr reindex required. Tika service added to Compose stack. `int8` quantization unsupported.
+
+### Host Prerequisites (No New Requirements for v2.5.0)
+
+The existing requirements from v2.3.0 remain in effect. No additional host-level prerequisites are introduced in v2.5.0. Ensure:
+
+- `vm.overcommit_memory=1` is applied (see [Redis memory overcommit](#redis-memory-overcommit)).
+- ZooKeeper ports are not published to the host.
+
+Solr 10 requires **Java 21**, which is bundled in the container image — no host-level Java installation is needed.
+
+### Solr 10 Security Posture
+
+#### `blockUnknown=true` Default
+
+Solr 10 sets `blockUnknown=true` in its security configuration by default. All unauthenticated requests to the Solr HTTP API are rejected. Aithena's health checks, solr-init scripts, and CI workflows now authenticate using credentials from `.env`:
+
+```
+SOLR_ADMIN_USER=admin
+SOLR_ADMIN_PASS=<your-solr-password>
+```
+
+**Operator action:** If you have custom scripts that probe Solr directly without credentials, update them. Example authenticated probe:
+
+```bash
+curl -s -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" http://localhost:8983/solr/admin/info/system
+```
+
+#### HNSW Parameter Names Changed
+
+Solr 10 renames the HNSW dense-vector field parameters:
+
+| Solr 9 | Solr 10 |
+|--------|---------|
+| `hnswMaxConnections` | `hnswM` |
+| `hnswBeamWidth` | `hnswEfConstruction` |
+
+The configset in v2.5.0 uses Solr 10 names. The `solr-init` container includes a compatibility shim that rewrites to Solr 9 names when the Solr 9 rollback overlay is in use. **A full reindex is required when upgrading an existing Solr 9 collection to Solr 10.**
+
+#### Solr 9 Rollback Overlay
+
+`docker/compose.solr9.yml` is available as a temporary fallback:
+
+```bash
+docker compose -f docker-compose.yml -f docker/compose.solr9.yml up -d
+```
+
+The rollback overlay:
+- Pins the Solr image to Solr 9
+- Restores Solr 9 CLI syntax in solr-init
+- Rewrites HNSW parameter names to Solr 9 format before configset upload
+
+**The rollback overlay is temporary.** It will be removed in a future release. Plan to complete the Solr 10 migration as soon as practical.
+
+### Tika Service
+
+A dedicated `tika` container is now part of the Compose stack. It is used by the document indexer for PDF text extraction.
+
+Operators using custom `COMPOSE_FILE` chains must ensure the base `docker-compose.yml` is included, as the `tika` service is defined there. No new environment variables are required; the service uses its default Tika configuration.
+
+### `VECTOR_QUANTIZATION=int8` Unsupported in v2.5.0
+
+`VECTOR_QUANTIZATION=int8` is **not supported in v2.5.0** due to a Solr 10 quantization bits incompatibility (PR #1670 on hold pending validation).
+
+**If your deployment currently uses `int8`:** Set `VECTOR_QUANTIZATION=none` (or remove the variable to use the default float32 mode) before upgrading. Attempting to use `int8` with Solr 10 will produce incorrect vector encodings.
+
+Supported values: `none` (default, float32), `fp16` (reduced precision float).
+
+`int8` will be re-enabled in v2.5.1.
+
+### Upgrade Instructions
+
+> ⚠️ **Read the full [Solr 10 Production Migration Runbook](../migration/solr-10-production-runbook.md) before starting a production upgrade.** It covers pre-migration checklist, phased cutover, rollback procedures, and troubleshooting.
+
+**From v2.3.0 → v2.5.0:**
+
+1. **Pre-migration preparation** (24 hours before):
+   - Back up auth database, Solr data, and collections.
+   - Notify users of planned maintenance window (2–8 hours depending on collection size).
+   - If using `VECTOR_QUANTIZATION=int8`, change to `none` in `.env` now.
+
+2. **Apply/verify host prerequisites:**
+   ```bash
+   # Verify Redis memory overcommit
+   cat /proc/sys/vm/overcommit_memory
+   # Expected: 1
+   ```
+
+3. **Pull the latest service images:**
+   ```bash
+   docker compose pull
+   ```
+
+4. **Stop the stack:**
+   ```bash
+   docker compose down
+   ```
+
+5. **Start with Solr 10 (default):**
+   ```bash
+   docker compose up -d
+   # or: ./start.sh
+   ```
+
+   To use Solr 9 temporarily:
+   ```bash
+   docker compose -f docker-compose.yml -f docker/compose.solr9.yml up -d
+   ```
+
+6. **Monitor solr-init:**
+   ```bash
+   docker compose logs -f solr-init
+   # Wait for: "Collection books is healthy"
+   ```
+
+7. **Trigger a full reindex** (required):
+   ```bash
+   # Via admin portal: Admin → Reindex Library → Reindex All
+   # or via API (with admin auth token):
+   curl -sf -X POST http://localhost/v1/admin/reindex \
+     -H "Cookie: aithena_auth=<your-token>"
+   ```
+
+8. **Verify health and Solr version:**
+   ```bash
+   curl -sf http://localhost/v1/health | jq .
+   docker compose exec solr /opt/solr/bin/solr version
+   curl -sf http://localhost/admin && echo "✅ Admin portal accessible"
+   ```
+
+### Configuration Changes
+
+| Change | File | Required action |
+|---|---|---|
+| Solr base image upgraded to 10 | `src/solr/Dockerfile` | **Pull new images.** `docker compose pull` |
+| Tika service added | `docker-compose.yml` | No action if using standard stack. Ensure base `docker-compose.yml` is in `COMPOSE_FILE`. |
+| HNSW parameter names updated | `src/solr/books/managed-schema.xml` | **Full reindex required.** New schema uploads on `solr-init` restart. |
+| solr-init CLI updated to double-dash syntax | `src/solr/init-scripts/` | No operator action. Scripts updated internally. |
+| `blockUnknown=true` handling | Health checks, admin scripts | Update any custom Solr probes to include credentials. |
+| `VECTOR_QUANTIZATION=int8` disabled | `docker-compose.yml`, docs | Change to `none` or `fp16` if currently using `int8`. |
+| Solr 9 rollback overlay | `docker/compose.solr9.yml` | Optional. Use only as temporary fallback. |
+
+### Data Migration
+
+**Full Solr reindex is required.** Solr 10 uses a different HNSW parameter name format in the collection configset. After `solr-init` bootstraps the collection with Solr 10 schema:
+
+1. The existing documents remain in Solr until reindex completes.
+2. Vector search may return degraded results during reindex (keyword search remains available).
+3. After reindex, full semantic and hybrid search resume.
+
+Auth database, Redis state, and RabbitMQ queue state are **not affected** by the Solr 10 upgrade.
+
+### Container Image Changes
+
+v2.5.0 publishes updated service images:
+
+| Image | Change |
+|---|---|
+| `ghcr.io/jmservera/aithena-aithena-ui:2.5.0` | Updated tag |
+| `ghcr.io/jmservera/aithena-document-indexer:2.5.0` | Updated tag |
+| `ghcr.io/jmservera/aithena-document-lister:2.5.0` | Updated tag |
+| `ghcr.io/jmservera/aithena-embeddings-server:2.5.0` | Updated tag (OpenVINO gates hardened) |
+| `ghcr.io/jmservera/aithena-solr-search:2.5.0` | Updated tag (wt=json enforcement, blockUnknown auth) |
+| `ghcr.io/jmservera/aithena-solr:2.5.0` | **New: Solr 10 base image** |
+
+### Known Limitations
+
+- **`VECTOR_QUANTIZATION=int8` disabled:** Solr 10 int8 quantization is unsupported in v2.5.0. Use `none` (default) or `fp16`. Will be re-enabled in v2.5.1.
+- **Solr 9 rollback overlay is temporary:** `docker/compose.solr9.yml` will be removed in a future release.
+- **cuVS GPU codec deferred:** GPU-accelerated Solr indexing (cuVS) is deferred to v2.5.1+.
+- **RabbitMQ deprecation warnings:** Allowlisted since v2.3.0. These are informational and do not indicate functional problems.
+
+Follow the [v2.3.0 deployment notes](#deployment-updates-for-v230) first, then apply v2.5.0 steps above.

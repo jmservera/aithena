@@ -32,6 +32,8 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v2.3.0 — Infrastructure hardening:** This maintenance release has no user-facing feature changes. Operators must apply `vm.overcommit_memory=1` on the Docker host before starting the stack (required for Redis background saves). ZooKeeper security posture is now formally documented, and known RabbitMQ 4.x deprecation warnings are suppressed. See [v2.3.0 Release Notes](release-notes/v2.3.0.md) and the [Admin Manual](admin-manual.md) for operator requirements.
 
+**v2.5.0 — Solr 10 upgrade:** The underlying search engine has been upgraded from Solr 9 to Solr 10. There are no user-facing search or UI changes — search, facets, collections, and all existing features work exactly as before. Administrators will find a new **Admin → Security** page for managing Solr users and roles. Upgrading from v2.3.0 requires a full reindex; see [v2.5.0 Release Notes](release-notes/v2.5.0.md) and the [Admin Manual](admin-manual.md) for operator requirements. The `VECTOR_QUANTIZATION=int8` setting is temporarily unsupported in this release.
+
 ## Getting started
 
 Aithena is a web app for searching an indexed PDF library. It helps you:
@@ -50,6 +52,7 @@ Aithena is a web app for searching an indexed PDF library. It helps you:
 - check system health in the Status tab
 - view library-wide statistics in the Stats tab
 - open the Admin portal at `/admin/` for the full operator dashboard (React SPA in v2.0.0+)
+- manage Solr users and roles from **Admin → Security** (v2.5.0+, requires admin role)
 
 ### How to access it
 
