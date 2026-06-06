@@ -147,11 +147,34 @@ Common local URLs:
 | Search API | `http://localhost/v1/search/` | Protected |
 | Status API | `http://localhost/v1/status/` | Protected |
 | Stats API | `http://localhost/v1/stats/` | Protected |
-| Solr admin | `http://localhost/admin/solr/` | Protected |
-| RabbitMQ management | `http://localhost/admin/rabbitmq/` | Protected |
-| Redis Commander | `http://localhost/admin/redis/` | Protected |
+| Solr admin | `http://localhost/admin/solr/` | Admin-only |
+| Solr 10 Security UI | `http://localhost/admin/solr/ui/` | Admin-only; Solr RBAC also applies |
+| RabbitMQ management | `http://localhost/admin/rabbitmq/` | Admin-only |
+| Redis Commander | `http://localhost/admin/redis/` | Admin-only |
 
 Health, info, version, and auth bootstrap endpoints remain available for operational checks and login flows. Direct host ports (`8080`, `8983`-`8985`, `15672`, `6379`, `2181`-`2183`, `18080`, `8081`, `8085`) are available only when the local `docker/compose.dev-ports.yml` file is loaded.
+
+### Solr 10 Security UI (v2.5)
+
+Aithena includes an **Admin → Security** scaffold that links to Solr 10's built-in Security UI at `/admin/solr/ui/#/~security`, and the Solr admin UI remains available from **Admin → Infrastructure → Solr Admin** or directly at `/admin/solr/ui/`.
+
+Security posture:
+
+- Sign in to Aithena as an `admin`; `/admin/security` is gated by the app's admin route, while `/admin/solr/`, `/admin/rabbitmq/`, and `/admin/redis/` are gated by nginx via `GET /v1/auth/validate-admin`.
+- Non-admin Aithena users cannot open proxied infrastructure admin tools through nginx.
+- Aithena does not bypass Solr authorization. User creation, password changes, and role assignments remain enforced by Solr BasicAuth/RBAC; use a Solr account with the required `security-edit` permission for state-changing security operations.
+- Browser auth cookies are `HttpOnly` and `SameSite=Lax`; Solr still owns CSRF behavior for its UI forms/API calls.
+- Keep Aithena application users in **Admin → User Management** separate from Solr users/roles. Aithena users control access to the Aithena app and proxied admin surfaces; Solr users control direct Solr API/UI permissions.
+- Do not paste passwords, tokens, or `security.json` contents into tickets or screenshots.
+
+To add or remove Solr users and roles in Solr 10:
+
+1. Sign in to Aithena as an `admin`.
+2. Open **Admin → Security** and choose **Open Solr Security UI**, or open **Admin → Infrastructure → Solr Admin**.
+3. Authenticate to Solr if prompted.
+4. Open the Solr UI security section.
+5. Use the Solr UI controls to add/remove users and assign roles, then verify the resulting permissions before signing out.
+
 
 ## GPU Acceleration Setup (v1.17.0)
 
@@ -392,7 +415,8 @@ That means every service using `/data/documents` is reading from the same mounte
 | `EMBEDDINGS_TIMEOUT` | `120` | Max wait for query embeddings before semantic/hybrid degrade to keyword |
 | `DEFAULT_SEARCH_MODE` | `keyword` | Default API search mode |
 | `RRF_K` | `60` | Reciprocal-rank fusion damping constant for hybrid ranking |
-| `KNN_FIELD` | `book_embedding` | Dense-vector field used by the semantic/hybrid kNN leg |
+| `VECTOR_QUANTIZATION` | `none` | Embedding precision mode. Set `int8` to use Solr scalar-quantized byte vectors. |
+| `KNN_FIELD` | `embedding_v` (`embedding_byte_v` when `VECTOR_QUANTIZATION=int8`) | Dense-vector field used by the semantic/hybrid kNN leg |
 | `UPLOAD_MAX_SIZE_MB` | `50` | Maximum upload file size (v0.6.0+) |
 | `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
 | `UPLOAD_STAGING_DIR` | `/data/uploads/` | Temporary upload staging area (v0.6.0+) |
@@ -452,7 +476,8 @@ Operators can tune the search path with these controls:
 - `DEFAULT_SEARCH_MODE` sets the API default when clients do not pass a `mode` query parameter.
 - Clients can switch modes per request with `GET /v1/search?mode=keyword|semantic|hybrid`.
 - `RRF_K` controls how aggressively hybrid mode favors top-ranked documents from each leg.
-- `KNN_FIELD` selects the Solr dense-vector field used by semantic and hybrid search.
+- `VECTOR_QUANTIZATION=int8` selects the scalar-quantized `embedding_byte_v` field by default; leave unset for float32 `embedding_v`.
+- `KNN_FIELD` overrides the Solr dense-vector field used by semantic and hybrid search.
 - `EMBEDDINGS_TIMEOUT` controls how long semantic/hybrid requests wait before falling back to keyword results.
 
 Hybrid currently uses equal contribution from the BM25 and semantic legs through standard RRF. There are no separate per-leg weight environment variables today.
@@ -3793,7 +3818,9 @@ Provides quick links to management UIs for infrastructure services:
 - **RabbitMQ Management** — link to `/admin/rabbitmq/` for queue monitoring
 - **Redis Commander** — link to `/admin/redis/` for Redis state inspection
 
-Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, internal endpoint URL, and connection status.
+Below the link cards, a **Connection Details** table shows each infrastructure service's name, type, admin/management endpoint URL, and connection status.
+
+The frontend prefers backend-provided `admin_url` values from `/v1/admin/infrastructure` when available, then falls back to the default paths above. This keeps UI links aligned with server routing.
 
 #### Accessibility
 
@@ -3844,6 +3871,33 @@ The passthrough uses credentials from `.env`:
 SOLR_ADMIN_USER=admin
 SOLR_ADMIN_PASS=<your-solr-password>
 ```
+
+### Solr 10 Security UI (v2.5)
+
+Solr 10 adds a dedicated Security UI under `/solr/ui/` that is exposed through Aithena at:
+
+- `http://localhost/admin/solr/ui/`
+
+Use this UI for day-to-day Solr user and role administration instead of manually editing `security.json`.
+
+#### Add or remove users via UI
+
+1. Open **Solr Admin** from `/admin/infrastructure` (or browse directly to `/admin/solr/ui/`).
+2. In the Solr UI left navigation, open **Security** (shield icon) from the Admin UI menu.
+3. In the users section:
+   - Add user: enter username and password, then save.
+   - Remove user: select the user and confirm delete.
+4. Validate with a login/API call using the updated account.
+
+#### Assign roles via UI
+
+1. In **Security** → roles/permissions mapping, select the target user.
+2. Assign or remove roles (`superadmin`, `admin`, `search`, `index`) as required.
+3. Save changes and verify effective permissions using a scoped account (for example, readonly `search` access).
+
+#### Bootstrap guidance (`bin/solr auth`)
+
+For first-time cluster bootstrap, continue using `bin/solr auth enable` in `solr-init` to seed auth and initial admin credentials. After bootstrap, use the Security UI for incremental user/role updates.
 
 ### Document Indexer Improvements
 

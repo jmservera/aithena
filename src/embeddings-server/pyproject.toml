@@ -11,11 +11,24 @@ dependencies = [
 
 [project.optional-dependencies]
 openvino = [
-"sentence-transformers[openvino]>=3.4,<6",
-    "openvino",
-    "optimum-intel",
+    "sentence-transformers[openvino]>=3.4,<6",
+    "openvino>=2025.4,<2026",
+    "optimum-intel>=1.27,<2",
     "intel-extension-for-pytorch",
+    "openvino-tokenizers>=2025.4,<2026",
 ]
+
+[tool.aithena.openvino]
+# Keep these in sync with the OpenVINO base image tag. The Docker build uses
+# uv sync --inexact, so base-image packages and lockfile-resolved packages must
+# stay on the same OpenVINO series.
+base-image-series = "2025.4"
+openvino-min = "2025.4"
+openvino-max-exclusive = "2026"
+openvino-tokenizers-min = "2025.4"
+openvino-tokenizers-max-exclusive = "2026"
+optimum-intel-min = "1.27"
+optimum-intel-max-exclusive = "2"
 
 [dependency-groups]
 dev = [

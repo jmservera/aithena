@@ -1,0 +1,397 @@
+"""Gated live E2E checks for Solr 10 runtime compatibility.
+
+These tests are opt-in until the Solr 10 stack is available. Set
+E2E_SOLR_EXPECTED_MAJOR=10 when running the E2E suite against a Solr 10 fixture.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import time
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+import pytest
+import requests
+
+SOLR_SEARCH_TESTS_DIR = Path(__file__).resolve().parents[1] / "src" / "solr-search" / "tests"
+sys.path.append(str(SOLR_SEARCH_TESTS_DIR))
+
+from solr10_gates import assert_supported_solr10_scalar_bits  # noqa: E402
+
+EXPECTED_MAJOR_ENV = "E2E_SOLR_EXPECTED_MAJOR"
+SOLR_READY_TIMEOUT = int(os.environ.get("E2E_SOLR_READY_TIMEOUT", "90"))
+SOLR_READY_TEST_TIMEOUT = SOLR_READY_TIMEOUT + 60
+
+pytestmark = [pytest.mark.e2e, pytest.mark.solr10]
+
+
+def _require_expected_solr10() -> None:
+    expected = os.environ.get(EXPECTED_MAJOR_ENV)
+    if expected != "10":
+        pytest.skip(f"Set {EXPECTED_MAJOR_ENV}=10 to enable Solr 10 runtime compatibility checks")
+
+
+def _solr_admin_url(solr_url: str, path: str) -> str:
+    collection_suffix = "/books"
+    base = solr_url.rstrip("/").removesuffix(collection_suffix).rstrip("/")
+    return f"{base}/{path.lstrip('/')}"
+
+
+def _get_live_solr10_json(
+    url: str,
+    *,
+    auth: tuple[str, str] | None = None,
+    params: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    _require_expected_solr10()
+    try:
+        resp = requests.get(url, auth=auth, params=params, timeout=10)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        pytest.fail(f"{EXPECTED_MAJOR_ENV}=10 requires a reachable Solr 10 fixture at {url}: {exc}")
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        pytest.fail(f"{EXPECTED_MAJOR_ENV}=10 requires Solr to return JSON at {url}: {exc}")
+    assert isinstance(body, dict), f"Expected Solr JSON object, got {type(body)}"
+    return body
+
+
+def _request_live_solr10(
+    method: str,
+    url: str,
+    *,
+    auth: tuple[str, str] | None = None,
+    params: Mapping[str, str] | None = None,
+    json: Mapping[str, Any] | None = None,
+) -> requests.Response:
+    _require_expected_solr10()
+    try:
+        return requests.request(method, url, auth=auth, params=params, json=json, timeout=10)
+    except requests.RequestException as exc:
+        pytest.fail(f"{EXPECTED_MAJOR_ENV}=10 requires a reachable Solr 10 fixture at {url}: {exc}")
+
+
+def _summarize_collection_health(body: Mapping[str, Any]) -> str:
+    collection = body.get("cluster", {}).get("collections", {}).get("books", {})
+    shards = collection.get("shards", {})
+    replica_states = []
+    for shard_name, shard in shards.items():
+        replicas = shard.get("replicas", {})
+        for replica_name, replica in replicas.items():
+            replica_states.append(f"{shard_name}/{replica_name}={replica.get('state')}")
+    health = collection.get("health", "missing")
+    return f"health={health}, replicas={','.join(replica_states) or 'none'}"
+
+
+def _collection_replicas_active(collection: Mapping[str, Any]) -> bool:
+    shards = collection.get("shards")
+    if not isinstance(shards, Mapping) or not shards:
+        return False
+
+    for shard in shards.values():
+        if not isinstance(shard, Mapping):
+            return False
+        shard_state = shard.get("state")
+        if shard_state not in (None, "active"):
+            return False
+        replicas = shard.get("replicas")
+        if not isinstance(replicas, Mapping) or not replicas:
+            return False
+        for replica in replicas.values():
+            if not isinstance(replica, Mapping) or replica.get("state") != "active":
+                return False
+    return True
+
+
+def _is_solr_not_found_response(response: requests.Response) -> bool:
+    text = response.text.lower()
+    return response.status_code == 404 or (
+        response.status_code == 400 and ("not found" in text or "does not exist" in text)
+    )
+
+
+def _response(status_code: int, body: str = "") -> requests.Response:
+    response = requests.Response()
+    response.status_code = status_code
+    response._content = body.encode()
+    return response
+
+
+@pytest.fixture(scope="session")
+def solr_books_collection_ready(solr_url: str, solr_auth: tuple[str, str]) -> dict[str, Any]:
+    """Wait until the live books collection is fully active, not merely created."""
+    _require_expected_solr10()
+    base = solr_url.rstrip("/").removesuffix("/books").rstrip("/")
+    url = f"{base}/admin/collections"
+    params = {"action": "CLUSTERSTATUS", "collection": "books", "wt": "json"}
+    deadline = time.monotonic() + SOLR_READY_TIMEOUT
+    last_status = "not checked"
+
+    while time.monotonic() < deadline:
+        try:
+            response = requests.get(url, params=params, auth=solr_auth, timeout=10)
+        except requests.RequestException as exc:
+            last_status = f"transient request failure: {exc}"
+            time.sleep(2)
+            continue
+        if response.status_code == 200:
+            try:
+                body = response.json()
+            except ValueError:
+                last_status = f"non-JSON response: {response.text[:200]}"
+            else:
+                last_status = _summarize_collection_health(body)
+                collection = body.get("cluster", {}).get("collections", {}).get("books")
+                if collection and _collection_replicas_active(collection):
+                    return body
+        else:
+            last_status = f"HTTP {response.status_code}: {response.text[:200]}"
+        time.sleep(2)
+
+    pytest.fail(f"Solr 10 books collection did not become active before live checks: {last_status}")
+
+
+@pytest.fixture(scope="session")
+def solr_system_info(solr_url: str, solr_auth: tuple[str, str]) -> dict[str, Any]:
+    return _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/system"), auth=solr_auth)
+
+
+def test_opt_in_unreachable_solr10_fixture_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Once opted in, a missing live Solr 10 fixture must fail instead of skipping."""
+    monkeypatch.setenv(EXPECTED_MAJOR_ENV, "10")
+
+    def _raise_connection_error(*_args: Any, **_kwargs: Any) -> requests.Response:
+        raise requests.ConnectionError("connection refused")
+
+    monkeypatch.setattr(requests, "get", _raise_connection_error)
+
+    with pytest.raises(pytest.fail.Exception, match="requires a reachable Solr 10 fixture"):
+        _get_live_solr10_json("http://127.0.0.1:1/solr/books/admin/ping")
+
+
+def test_opt_in_non_json_solr10_fixture_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Once opted in, a non-JSON Solr response must fail with endpoint context."""
+    monkeypatch.setenv(EXPECTED_MAJOR_ENV, "10")
+
+    class _NonJsonResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            raise ValueError("not json")
+
+    def _get_non_json(*_args: Any, **_kwargs: Any) -> _NonJsonResponse:
+        return _NonJsonResponse()
+
+    monkeypatch.setattr(requests, "get", _get_non_json)
+
+    with pytest.raises(pytest.fail.Exception, match="requires Solr to return JSON"):
+        _get_live_solr10_json("http://127.0.0.1:8983/solr/books/admin/ping")
+
+
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (_response(404), True),
+        (_response(400, "Collection audit_probe does not exist"), True),
+        (_response(400, "collection not found"), True),
+        (_response(400, "bad request"), False),
+        (_response(500, "server error"), False),
+    ],
+)
+def test_solr_not_found_response_detection(response: requests.Response, expected: bool) -> None:
+    assert _is_solr_not_found_response(response) is expected
+
+
+def test_collection_replicas_active_accepts_solr10_clusterstatus_without_health() -> None:
+    collection = {
+        "shards": {
+            "shard1": {
+                "state": "active",
+                "replicas": {
+                    "core_node2": {"state": "active"},
+                    "core_node3": {"state": "active"},
+                },
+            }
+        }
+    }
+
+    assert _collection_replicas_active(collection) is True
+
+
+def test_collection_replicas_active_rejects_recovering_replica() -> None:
+    collection = {
+        "shards": {
+            "shard1": {
+                "state": "active",
+                "replicas": {
+                    "core_node2": {"state": "active"},
+                    "core_node3": {"state": "recovering"},
+                },
+            }
+        }
+    }
+
+    assert _collection_replicas_active(collection) is False
+
+
+def test_live_solr_major_version_is_10(solr_system_info: dict[str, Any]) -> None:
+    """The opt-in Solr 10 fixture must actually run Solr 10."""
+    version = str(solr_system_info.get("lucene", {}).get("solr-spec-version", ""))
+    assert version.startswith("10."), f"Expected Solr 10.x, got {version!r}"
+
+
+@pytest.mark.timeout(SOLR_READY_TEST_TIMEOUT)
+def test_live_solr10_schema_exposes_scalar_quantized_vector(
+    solr_url: str,
+    solr_auth: tuple[str, str],
+    solr_books_collection_ready: dict[str, Any],
+) -> None:
+    """The live Solr 10 books schema must expose the native int8 vector field type."""
+    field_url = f"{solr_url}/schema/fieldtypes/knn_vector_768_byte"
+    field_resp = _request_live_solr10("GET", field_url, params={"wt": "json"}, auth=solr_auth)
+    vector_quantization = os.environ.get("VECTOR_QUANTIZATION", "none")
+    if field_resp.status_code == 404 and vector_quantization != "int8":
+        pytest.skip(
+            f"VECTOR_QUANTIZATION={vector_quantization!r} is not int8, so the scalar-quantized "
+            "byte vector field is absent from the live schema"
+        )
+    field_resp.raise_for_status()
+    body = _get_live_solr10_json(
+        field_url,
+        params={"wt": "json"},
+        auth=solr_auth,
+    )
+    field_type = body.get("fieldType", {})
+    assert field_type.get("class") == "solr.ScalarQuantizedDenseVectorField"
+    assert_supported_solr10_scalar_bits(field_type.get("bits"))
+    assert "hnswMaxConnections" not in field_type
+    assert "hnswBeamWidth" not in field_type
+    assert field_type.get("hnswM") in (12, "12")
+
+
+def test_live_solr10_security_allows_health_probe(
+    solr_url: str,
+    solr_auth: tuple[str, str],
+) -> None:
+    """Solr 10 auth bootstrap must preserve unauthenticated health checks."""
+    auth_body = _get_live_solr10_json(_solr_admin_url(solr_url, "admin/authentication"), auth=solr_auth)
+    authentication = auth_body.get("authentication", {})
+    assert authentication.get("blockUnknown") is False
+
+    _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/health"))
+
+
+@pytest.mark.timeout(SOLR_READY_TEST_TIMEOUT)
+def test_live_solr10_security_enforces_rbac(
+    solr_url: str,
+    solr_auth: tuple[str, str],
+    solr_books_collection_ready: dict[str, Any],
+) -> None:
+    """The final Solr 10 candidate must block unauth/admin mutations while preserving health/metrics."""
+    base = solr_url.rstrip("/").removesuffix("/books").rstrip("/")
+    probe_suffix = f"{int(time.time())}_{os.getpid()}"
+    probe_collection = f"audit_probe_{probe_suffix}"
+    probe_user = f"audit_probe_{probe_suffix}"
+    readonly_auth = (
+        os.environ.get("SOLR_READONLY_USER", "solr_read"),
+        os.environ.get("SOLR_READONLY_PASS", "SolrRead_dev2024!"),
+    )
+
+    unauth_admin = _request_live_solr10("GET", f"{base}/admin/info/system", params={"wt": "json"})
+    assert unauth_admin.status_code in (401, 403)
+
+    health = _request_live_solr10("GET", f"{base}/admin/info/health")
+    assert health.status_code == 200
+
+    metrics = _request_live_solr10("GET", f"{base}/admin/metrics", params={"wt": "prometheus"})
+    assert metrics.status_code == 200
+
+    readonly_query = _request_live_solr10(
+        "GET",
+        f"{solr_url}/select",
+        auth=readonly_auth,
+        params={"q": "*:*", "rows": "0", "wt": "json"},
+    )
+    assert readonly_query.status_code == 200
+
+    readonly_collection_create = None
+    delete_collection_probe = None
+    try:
+        readonly_collection_create = _request_live_solr10(
+            "GET",
+            f"{base}/admin/collections",
+            auth=readonly_auth,
+            params={
+                "action": "CREATE",
+                "name": probe_collection,
+                "collection.configName": "books",
+                "numShards": "1",
+                "replicationFactor": "1",
+                "wt": "json",
+            },
+        )
+    finally:
+        delete_collection_probe = _request_live_solr10(
+            "GET",
+            f"{base}/admin/collections",
+            auth=solr_auth,
+            params={"action": "DELETE", "name": probe_collection, "wt": "json"},
+        )
+    assert readonly_collection_create is not None
+    assert delete_collection_probe is not None
+    if readonly_collection_create.status_code == 200:
+        assert delete_collection_probe.status_code == 200, delete_collection_probe.text
+    else:
+        assert delete_collection_probe.status_code == 200 or _is_solr_not_found_response(delete_collection_probe), (
+            delete_collection_probe.text
+        )
+    assert readonly_collection_create.status_code in (401, 403), readonly_collection_create.text
+
+    readonly_security_edit = None
+    delete_readonly_security_probe = None
+    try:
+        readonly_security_edit = _request_live_solr10(
+            "POST",
+            f"{base}/admin/authentication",
+            auth=readonly_auth,
+            params={"wt": "json"},
+            json={"set-user": {probe_user: "blocked"}},
+        )
+    finally:
+        delete_readonly_security_probe = _request_live_solr10(
+            "POST",
+            f"{base}/admin/authentication",
+            auth=solr_auth,
+            params={"wt": "json"},
+            json={"delete-user": [probe_user]},
+        )
+    assert readonly_security_edit is not None
+    if readonly_security_edit.status_code == 200:
+        assert delete_readonly_security_probe is not None
+        assert delete_readonly_security_probe.status_code == 200, delete_readonly_security_probe.text
+    assert readonly_security_edit.status_code in (401, 403), readonly_security_edit.text
+
+    create_probe = _request_live_solr10(
+        "POST",
+        f"{base}/admin/authentication",
+        auth=solr_auth,
+        params={"wt": "json"},
+        json={"set-user": {probe_user: "AuditProbe_test_2026!"}},
+    )
+    try:
+        assert create_probe.status_code == 200, create_probe.text
+    finally:
+        delete_probe = _request_live_solr10(
+            "POST",
+            f"{base}/admin/authentication",
+            auth=solr_auth,
+            params={"wt": "json"},
+            json={"delete-user": [probe_user]},
+        )
+        if create_probe.status_code == 200:
+            assert delete_probe.status_code == 200, delete_probe.text

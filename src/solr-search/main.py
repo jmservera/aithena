@@ -762,6 +762,8 @@ def capabilities() -> dict[str, Any]:
         "search_modes": sorted(VALID_SEARCH_MODES),
         "architecture": settings.search_architecture,
         "vector_dimensions": 768,
+        "vector_quantization": settings.vector_quantization,
+        "knn_field": settings.knn_field,
         "similar_books": settings.search_architecture == "hnsw",
     }
 
@@ -815,6 +817,22 @@ def auth_validate(request: Request, response: Response) -> dict[str, Any]:
         secure=_request_uses_https(request),
     )
     return {"authenticated": True, "user": user.to_dict()}
+
+
+@app.get("/v1/auth/validate-admin/", include_in_schema=False, name="auth_validate_admin_v1_slash")
+@app.get("/v1/auth/validate-admin", name="auth_validate_admin_v1")
+def auth_validate_admin(request: Request, response: Response) -> dict[str, Any]:
+    """Validate a browser session for nginx-proxied admin tools.
+
+    This endpoint is intentionally JWT/cookie-only (no ADMIN_API_KEY fallback)
+    because nginx auth_request uses it to protect browser-accessible UIs such
+    as Solr's Security UI. Machine API keys must not grant browser UI access.
+    """
+    validation = auth_validate(request, response)
+    user = validation["user"]
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return {"authenticated": True, "admin": True, "user": user}
 
 
 @app.post("/v1/auth/logout/", include_in_schema=False, name="auth_logout_v1_slash")
@@ -3885,6 +3903,23 @@ def admin_logs(
 # ---------------------------------------------------------------------------
 
 
+def _redact_url_for_admin_display(raw_url: str) -> str:
+    """Return a browser-safe URL display value without credentials or request data."""
+    parsed = urlparse(raw_url)
+    if not parsed.netloc:
+        display_value = raw_url.split("?", 1)[0].split("#", 1)[0]
+        return "—" if "@" in display_value else display_value
+
+    hostname = parsed.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    try:
+        port = f":{parsed.port}" if parsed.port else ""
+    except ValueError:
+        port = ""
+    return parsed._replace(netloc=f"{hostname}{port}", params="", query="", fragment="").geturl()
+
+
 @app.get(
     "/v1/admin/infrastructure/",
     include_in_schema=False,
@@ -3921,6 +3956,7 @@ def admin_infrastructure() -> dict[str, Any]:
             "name": "solr",
             "status": "up" if solr_up else "down",
             "admin_url": "/admin/solr/",
+            "security_ui_url": "/admin/solr/ui/",
             "description": "Full-text search engine",
         },
         {
@@ -3947,13 +3983,27 @@ def admin_infrastructure() -> dict[str, Any]:
         "solr": f"{solr_host}:{solr_port}",
         "redis": f"{settings.redis_host}:{settings.redis_port}",
         "rabbitmq_amqp": f"{settings.rabbitmq_host}:{settings.rabbitmq_port}",
-        "rabbitmq_mgmt": (f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"),
-        "embeddings": settings.embeddings_url,
+        "rabbitmq_mgmt": _redact_url_for_admin_display(
+            f"http://{settings.rabbitmq_host}:{settings.rabbitmq_management_port}"
+        ),
+        "embeddings": _redact_url_for_admin_display(settings.embeddings_url),
     }
 
     return {
         "services": services,
         "connections": connections,
+        "solr_admin_url": "/admin/solr/",
+        "solr_security_ui": {
+            "url": "/admin/solr/ui/",
+            "admin_url": "/admin/solr/",
+            "auth_check_url": "/v1/auth/validate-admin",
+            "required_aithena_role": "admin",
+            "state_changing_operations": (
+                "Handled by Solr's Security UI and Solr RBAC; Aithena only gates proxy access."
+            ),
+        },
+        "rabbitmq_admin_url": "/admin/rabbitmq/",
+        "redis_admin_url": "/admin/redis/",
     }
 
 

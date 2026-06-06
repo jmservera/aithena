@@ -1,3 +1,36 @@
+# Decision: PathHierarchyTokenizer Audit — No-Op (v2.5)
+
+**Date:** 2026-06-05
+**Author:** Ash (Search Engineer)
+**Status:** Closed — No-Op
+
+## Context
+
+The Solr 9 → 10 migration PRD (section 4.10) flagged a `PathHierarchyTokenizer` behavior change: token position increments changed from 0 to 1 in Solr 10. The `ancestor_path` and `descendent_path` field types use this tokenizer and required audit.
+
+## Findings
+
+Schema audit of `src/solr/books/managed-schema.xml`:
+
+- `ancestor_path` and `descendent_path` field types are **defined** (lines 6 and 35) as standard Solr boilerplate.
+- Dynamic field patterns `*_ancestor_path` and `*_descendent_path` are **registered** (lines 594–595).
+- **No concrete fields** in the schema use these types.
+- **No application code** (Python, TypeScript, configuration) reads or writes fields matching `*_ancestor_path` or `*_descendent_path`.
+
+## Decision
+
+The `PathHierarchyTokenizer` behavior change in Solr 10 has **no impact** on the aithena books collection. Both field types and their dynamic patterns are unused boilerplate inherited from the default Solr managed schema.
+
+No schema changes, code changes, or reindexing are required.
+
+## References
+
+- PRD section 4.10: `docs/prd/solr10-migration-prd.md`
+- Migration guide section 2.10: `docs/migration/solr-9-to-10.md`
+- Schema: `src/solr/books/managed-schema.xml`
+
+---
+
 # Decision: Dependabot Batch Sweep 2026-05-31
 
 **Date:** 2026-05-31  
@@ -1350,3 +1383,124 @@ Generated `squad-*` workflows are maintained upstream and outside project contro
 
 - Squad workflows are generated upstream; local security noise is not actionable
 - Reduces false-positive alert fatigue for the team
+
+---
+
+# Decision: v2.3.0 Release Blocker Triage — Pre-Release Validation Issues
+
+**Author:** Newt (Release Validator)  
+**Date:** 2026-06-05  
+**Status:** Triaged & Closed (by Brett)
+
+## Summary
+
+v2.3.0 is released and tagged on origin/main, but pre-release validation identified 3 issues (#1654, #1655, #1656) and 1 documentation PR (#1657). All issues triaged as non-blocking; documentation merged.
+
+## Issues Triaged
+
+### #1654 — Pre-release deprecation warnings
+- **Findings:** 6 informational-level deprecations from RabbitMQ, Solr, ZooKeeper
+- **Risk:** None — expected upstream deprecations
+- **Allowlist Reference:** #1628 (design decision to accept known deprecations)
+- **Action:** Closed as "not planned"
+
+### #1655 — Pre-release config warnings
+- **Findings:** 6 warning-level findings (ZooKeeper default credentials)
+- **Risk:** None — ZooKeeper private to Docker Compose; production ACLs documented in admin manual
+- **Action:** Closed as "not planned" (design decision)
+
+### #1656 — Pre-release validation error + warnings
+- **Findings:** 1 security error + 20 operational warnings from validation analyzer
+- **Risk Assessment:** Pre-existing findings (no regressions vs. v2.2.1)
+- **Action:** Closed as "not planned"
+
+### #1657 — Release documentation PR
+- **Status:** Merged ✅
+- **Content:** Release notes, admin manual updates, validation checklist
+- **Prerequisites:** #1654–#1656 triaged and closed
+
+## Coordinator Actions
+
+- Ralph: Completed broad release audit (tags, workflows, assets) — all verified healthy
+- Brett: Completed pre-release issue triage and merged documentation PR
+
+## Release Board Status
+
+| Item | Status |
+|------|--------|
+| v2.2.1 | Production-ready, no blockers ✅ |
+| v2.3.0 | Production-ready, no blockers ✅ |
+| Board | Clear ✅ |
+
+## Cross-Team Learning
+
+**Pre-release validation pattern:** Post-release, scan for pre-release validation findings and classify as:
+1. Regressions vs. prior release (fix)
+2. Known/allowlisted findings (document and close)
+3. False positives from analyzer (close with evidence)
+
+This prevents stale pre-release findings from blocking releases.
+
+---
+
+# Decision: OpenVINO Smoke Failure Post-Mortem & Prevention (Issue #1662)
+
+**Author:** Brett (Infrastructure) with Ripley & Lambert inputs  
+**Date:** 2026-06-05  
+**Status:** ✅ Implemented — test-side gates plus Brett Dockerfile/workflow verification in PR #1666
+**Failed Run:** 27022717607 | **Fix Run:** 27026253418 (a8a5cb5) | **Issue:** #1662
+
+## Context
+
+Pre-release Containers smoke test `embeddings-server-openvino` failed due to Python package version mismatch inside the built OpenVINO image. The issue arose from a gap in verification: `uv sync --frozen` in the Docker build ensured lock consistency, but did not guarantee the *installed state* matched the lock file when `--inexact` flags were used in downstream layers.
+
+## Root Cause
+
+1. **Build-time:** `RUN uv sync --inexact` allows transitive dependency drift during build
+2. **CI assumption:** Clean `uv sync --frozen` in the CI environment was insufficient to guarantee correctness of the built image
+3. **Gap:** No post-build verification that the image's installed packages matched the expected versions
+
+## Decision
+
+**Implement post-sync version verification inside Dockerfiles for all embeddings-server variants (OpenVINO, CPU, torch).**
+
+After `uv sync --inexact`, run a Python verification script inside the image that:
+1. Imports critical packages and queries their `__version__`
+2. Compares against expected versions from the lock/manifest
+3. Fails the Docker build if versions do not match
+
+## Prevention Implementation
+
+**Pattern (in Dockerfile):**
+```dockerfile
+RUN uv sync --inexact --frozen --no-dev
+RUN python -c "\
+import sys; \
+import importlib.metadata as metadata; \
+critical_pkgs = ['sentence-transformers', 'optimum-intel', ...]; \
+for pkg in critical_pkgs: \
+    v = metadata.version(pkg); \
+    print(f'{pkg}={v}'); \
+    # compare v against expected; raise ValueError if mismatch \
+"
+```
+
+## Why This Works
+
+1. **Detects drift before push:** Image build fails immediately; corrupt images never reach registry/CI
+2. **Universal:** Works in both CI and local developer builds
+3. **Minimal cost:** Single Python invocation per build (~100ms)
+4. **Rubber Duck approved:** Critique confirmed that verification must run *inside* the built image, not just CI assumptions
+5. **Future-proof:** Any `--inexact` usage in downstream layers is caught by the same verification
+
+## Affected Services
+
+- `embeddings-server` (OpenVINO, CPU, torch variants)
+- Any future services using multi-layer `uv sync --inexact`
+
+## Related
+
+- Issue: #1662
+- Failed run: 27022717607
+- Successful fix: 27026253418 (commit a8a5cb5)
+- Orchestration log: `.squad/orchestration-log/2026-06-05T16-26-openvino-postmortem.md`

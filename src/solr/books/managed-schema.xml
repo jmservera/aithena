@@ -43,24 +43,27 @@
   <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
   <!-- 768-dim dense vector field type for multilingual-e5-base (replaces distiluse, benchmark #926).
        HNSW index with cosine similarity for kNN semantic search.
-       Uses Solr defaults for HNSW tuning. If custom params are needed:
+       Uses Solr 10 HNSW parameter names. The solr-init bootstrap rewrites these
+       names for Solr 9 during the compatibility window. If custom params are needed:
          Solr 9:  hnswMaxConnections="16" hnswBeamWidth="100"
-         Solr 10: maxConnections="16" beamWidth="100"
+         Solr 10: hnswM="16" hnswEfConstruction="100"
        See docs/migration/solr-compat-layer.md and src/solr-search/solr_compat.py
 
        Vector quantization modes (VECTOR_QUANTIZATION env var):
          - "none"  → float32 vectors stored in knn_vector_768 (default, highest precision)
          - "fp16"  → float32 vectors stored in knn_vector_768 (fp16 quantization is applied
                       at the embeddings-server level before sending; Solr stores as float32)
-         - "int8"  → byte vectors stored in knn_vector_768_byte (BYTE encoding, ~4x memory savings)
+         - "int8"  → scalar-quantized byte vectors stored in knn_vector_768_byte
+                      (~4x memory savings)
        When mode is "none" or "fp16", the indexer writes to the `embedding_v` field.
        When mode is "int8", the indexer writes to the `embedding_byte_v` field instead. -->
   <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
-  <!-- BYTE (int8) vector type — used for "int8" quantization mode.
-       vectorEncoding="BYTE" stores each dimension as a signed byte [-128, 127].
-       hnswMaxConnections tuned to 12 (vs default 16) for memory savings with byte vectors. -->
-  <fieldType name="knn_vector_768_byte" class="solr.DenseVectorField" vectorDimension="768" vectorEncoding="BYTE" similarityFunction="cosine" knnAlgorithm="hnsw" hnswMaxConnections="12"/>
+  <!-- Scalar-quantized int8 vector type — used for "int8" quantization mode.
+       bits="8" stores one byte per dimension. solr-init rewrites this type to
+       DenseVectorField vectorEncoding="BYTE" while Solr 9 is supported.
+       hnswM tuned to 12 (vs default 16) for memory savings with byte vectors. -->
+  <fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField" vectorDimension="768" bits="8" similarityFunction="cosine" knnAlgorithm="hnsw" hnswM="12"/>
   <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025" distanceUnits="kilometers"/>
   <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">

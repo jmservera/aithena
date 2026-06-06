@@ -37,6 +37,7 @@ describe('AdminSidebar', () => {
     expect(screen.getByText('Log Viewer')).toBeInTheDocument();
     expect(screen.getByText('Infrastructure')).toBeInTheDocument();
     expect(screen.getByText('User Management')).toBeInTheDocument();
+    expect(screen.getByText('Security')).toBeInTheDocument();
     expect(screen.getByText('Backup Dashboard')).toBeInTheDocument();
   });
 

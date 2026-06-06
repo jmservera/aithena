@@ -2,6 +2,7 @@
   "requestHandler":{"/update/extract":{
       "name":"/update/extract",
       "class":"solr.extraction.ExtractingRequestHandler",
+      "tikaserver.url":"http://tika:9998",
       "defaults":{
         "lowernames":"true",
         "fmap.content":"_text_",

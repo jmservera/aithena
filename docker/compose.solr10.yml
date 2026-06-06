@@ -1,0 +1,38 @@
+# Solr 10 runtime overlay.
+#
+# Solr 10 is now the default runtime. This overlay is retained as an explicit
+# Solr 10 validation/compatibility target for existing runbooks:
+#   docker compose -f docker-compose.yml -f docker/compose.single-node.yml -f docker/compose.solr10.yml up -d solr solr-init
+
+services:
+  solr:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:10
+    environment:
+      SOLR_VERSION: "10"
+
+  solr2:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:10
+    environment:
+      SOLR_VERSION: "10"
+
+  solr3:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:10
+    environment:
+      SOLR_VERSION: "10"
+
+  solr-init:
+    build:
+      args:
+        SOLR_BASE_IMAGE: solr:10
+    environment:
+      SOLR_VERSION: "10"
+
+  solr-search:
+    environment:
+      - SOLR_VERSION=10

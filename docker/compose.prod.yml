@@ -104,6 +104,33 @@ services:
       default:
         aliases:
           - embeddings-server
+  tika:
+    image: apache/tika:3.2.3.0-full
+    expose:
+      - "9998"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:9998/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      default:
+        aliases:
+          - tika
   document-lister:
     image: ghcr.io/jmservera/aithena-document-lister:${VERSION:-latest}
     environment:
@@ -209,6 +236,8 @@ services:
         condition: service_healthy
       embeddings-server:
         condition: service_healthy
+      tika:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
@@ -233,11 +262,13 @@ services:
         max-file: "3"
     environment:
       - PORT=8080
+      - SOLR_VERSION=${SOLR_VERSION:-10}
       - SOLR_URL=http://solr:8983/solr
       - SOLR_COLLECTION=books
       - BASE_PATH=/data/documents
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
       - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
+      - VECTOR_QUANTIZATION=${VECTOR_QUANTIZATION:-none}
       - DEFAULT_SEARCH_MODE=keyword
       - UPLOAD_DIR=/data/documents/uploads
       - MAX_UPLOAD_SIZE_MB=50
@@ -490,6 +521,8 @@ services:
   solr:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -500,7 +533,9 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -537,6 +572,8 @@ services:
   solr2:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -547,7 +584,9 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -584,6 +623,8 @@ services:
   solr3:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     user: "0:0"
     entrypoint: /entrypoint.sh
     command: ["solr-foreground"]
@@ -594,7 +635,9 @@ services:
       - document-data:/data/documents:ro
       - ./src/solr/entrypoint.sh:/entrypoint.sh:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_MODULES: extraction,langid
+      SOLR_OPTS: ${SOLR_OPTS:-} -Dsolr.log.dir=/var/solr/logs -Dsolr.logs.dir=/var/solr/logs
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       ZK_HOST: "zoo1:2181,zoo2:2181,zoo3:2181"
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
@@ -631,6 +674,8 @@ services:
   solr-init:
     build:
       context: ./src/solr
+      args:
+        SOLR_BASE_IMAGE: ${SOLR_BASE_IMAGE:-solr:10}
     depends_on:
       solr:
         condition: service_healthy
@@ -642,6 +687,7 @@ services:
       - ./src/solr/books:/configsets/books:ro
       - ./src/solr/add-conf-overlay.sh:/scripts/add-conf-overlay.sh:ro
     environment:
+      SOLR_VERSION: ${SOLR_VERSION:-10}
       SOLR_SECURITY_MANAGER_ENABLED: "false"
       SOLR_ADMIN_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_ADMIN_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
@@ -649,6 +695,7 @@ services:
       SOLR_READONLY_PASS: ${SOLR_READONLY_PASS:?Set SOLR_READONLY_PASS}
       SOLR_AUTH_USER: ${SOLR_ADMIN_USER:?Set SOLR_ADMIN_USER}
       SOLR_AUTH_PASS: ${SOLR_ADMIN_PASS:?Set SOLR_ADMIN_PASS}
+      VECTOR_QUANTIZATION: ${VECTOR_QUANTIZATION:-none}
       SOLR_NUM_SHARDS: ${SOLR_NUM_SHARDS:-1}
       SOLR_REPLICATION_FACTOR: ${SOLR_REPLICATION_FACTOR:-3}
     entrypoint:
@@ -659,6 +706,31 @@ services:
 
           ZK_HOST="zoo1:2181,zoo2:2181,zoo3:2181"
           SOLR_URL="http://solr:8983"
+
+          solr_major_version() {
+            local version="$${SOLR_VERSION:-10}"
+            printf '%s\n' "$${version%%.*}"
+          }
+
+          solr_10_cli() {
+            [ "$$(solr_major_version)" -ge 10 ] 2>/dev/null
+          }
+
+          solr_zk_host_flag() {
+            if solr_10_cli; then printf '%s\n' "--zk-host"; else printf '%s\n' "-z"; fi
+          }
+
+          solr_credentials_flag() {
+            if solr_10_cli; then printf '%s\n' "--credentials"; else printf '%s\n' "-u"; fi
+          }
+
+          solr_name_flag() {
+            if solr_10_cli; then printf '%s\n' "--conf-name"; else printf '%s\n' "-n"; fi
+          }
+
+          solr_dir_flag() {
+            if solr_10_cli; then printf '%s\n' "--conf-dir"; else printf '%s\n' "-d"; fi
+          }
 
           # Wait for Solr to be reachable (with or without auth)
           until curl -fsS -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1 || curl -fsS "$$SOLR_URL/solr/admin/info/system" >/dev/null 2>&1; do
@@ -679,15 +751,15 @@ services:
           AUTH_RESP=$$(curl -sS "$$SOLR_URL/solr/admin/authentication" 2>/dev/null || true)
           if echo "$$AUTH_RESP" | grep -qi 'No authentication'; then
             echo "Bootstrapping Solr security..."
-            echo '{}' > /tmp/empty-security.json
-            solr zk cp file:/tmp/empty-security.json zk:/security.json -z "$$ZK_HOST"
+            echo '{}' > /var/solr/empty-security.json
+            solr zk cp file:/var/solr/empty-security.json zk:/security.json "$$(solr_zk_host_flag)" "$$ZK_HOST"
             sleep 2
 
             solr auth enable --type basicAuth \
-              -u "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
+              "$$(solr_credentials_flag)" "$$SOLR_ADMIN_USER:$$SOLR_ADMIN_PASS" \
               --block-unknown false \
               --solr-include-file /dev/null \
-              -z "$$ZK_HOST"
+              "$$(solr_zk_host_flag)" "$$ZK_HOST"
 
             echo "Waiting for Solr to load security config..."
             sleep 5
@@ -731,8 +803,32 @@ services:
             echo "WARNING: SOLR_REPLICATION_FACTOR=$$REPLICATION_FACTOR exceeds the default 3-node topology. Ensure you have enough Solr nodes." >&2
           fi
 
-          if ! solr zk ls /configs -z "$$ZK_HOST" | grep -q 'books'; then
-            solr zk upconfig -z "$$ZK_HOST" -n books -d /configsets/books
+          CONFIGSET_DIR="/configsets/books"
+          if [ "$$(solr_major_version)" = "9" ]; then
+            CONFIGSET_DIR="/var/solr/books-configset-solr9"
+            mkdir -p "$$CONFIGSET_DIR"
+            cp -R /configsets/books/. "$$CONFIGSET_DIR"/
+            sed -i \
+              -e 's/hnswM="/hnswMaxConnections="/g' \
+              -e 's/hnswEfConstruction="/hnswBeamWidth="/g' \
+              -e 's/class="solr.ScalarQuantizedDenseVectorField"/class="solr.DenseVectorField"/g' \
+              -e 's/ bits="8"/ vectorEncoding="BYTE"/g' \
+              "$$CONFIGSET_DIR/managed-schema.xml"
+            sed -i \
+              -e 's/<luceneMatchVersion>10\.0<\/luceneMatchVersion>/<luceneMatchVersion>9.10<\/luceneMatchVersion>/g' \
+              "$$CONFIGSET_DIR/solrconfig.xml"
+          elif [ "$${VECTOR_QUANTIZATION:-none}" != "int8" ]; then
+            CONFIGSET_DIR="/var/solr/books-configset-solr10"
+            mkdir -p "$$CONFIGSET_DIR"
+            cp -R /configsets/books/. "$$CONFIGSET_DIR"/
+            sed -i \
+              -e '/<fieldType name="knn_vector_768_byte"/d' \
+              -e '/<field name="embedding_byte_v"/d' \
+              "$$CONFIGSET_DIR/managed-schema.xml"
+          fi
+
+          if ! solr zk ls /configs "$$(solr_zk_host_flag)" "$$ZK_HOST" | grep -qx 'books'; then
+            solr zk upconfig "$$(solr_zk_host_flag)" "$$ZK_HOST" "$$(solr_name_flag)" books "$$(solr_dir_flag)" "$$CONFIGSET_DIR"
           fi
 
           if ! curl -fsS -u "$$SOLR_AUTH_USER:$$SOLR_AUTH_PASS" "$$SOLR_URL/solr/admin/collections?action=LIST&wt=json" | grep -q '"books"'; then

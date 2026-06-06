@@ -5,6 +5,8 @@
 > **Based on**: [Solr 10 Migration PRD](../prd/solr10-migration-prd.md)
 > **Issue**: [#1364](https://github.com/jmservera/aithena/issues/1364)
 > **Target Release**: v2.0
+> **Operator runbook**: [Solr 10 Production Migration Runbook](./solr-10-production-runbook.md)
+> **v2.5 docs index**: [Solr 10 v2.5 Documentation Index](./solr-10-v2.5-docs-index.md)
 
 ---
 
@@ -25,9 +27,9 @@
 
 | Component | Current |
 |-----------|---------|
-| Solr version | 9.7 (`FROM solr:9.7` in `src/solr/Dockerfile`) |
-| Java version | 17 (eclipse-temurin:17-jre via Solr 9.7 base image) |
-| Lucene match version | 9.10 (`solrconfig.xml`) |
+| Solr version | 10 (`ARG SOLR_BASE_IMAGE=solr:10` in `src/solr/Dockerfile`) |
+| Java version | Java 21+ via the Solr 10 base image |
+| Lucene match version | 10.0 (`solrconfig.xml`; Solr 9 rollback rewrites to 9.10) |
 | Deployment mode | SolrCloud (3 nodes: `solr`, `solr2`, `solr3`) |
 | ZooKeeper | 3 nodes (`zoo1`, `zoo2`, `zoo3`) at port 2181 |
 | Modules loaded | `extraction`, `langid` (`SOLR_MODULES` env var) |
@@ -56,7 +58,10 @@
 | `book_embedding` | `knn_vector_768` | Book-level semantic search (768D, cosine) |
 | `embedding_v` | `knn_vector_768` | Chunk-level embedding for granular search |
 
-**HNSW configuration**: Uses defaults — `hnswMaxConnections` and `hnswBeamWidth` are **not** explicitly set in the schema. This simplifies migration since the Solr 10 parameter renames (`hnswM`, `hnswEfConstruction`) do not require a schema edit.
+**HNSW configuration**: The source configset uses Solr 10 HNSW names. During
+the compatibility window, `solr-init` rewrites those names before uploading to
+Solr 9. Upload the updated configset and run a full reindex when moving an
+existing collection from Solr 9 to Solr 10.
 
 **Key fields** (book metadata, ADR-002):
 - `title_s`/`title_t`, `author_s`/`author_t`, `year_i`, `category_s`, `language_detected_s`, `series_s`
@@ -79,7 +84,7 @@ The `solrconfig.xml` lives inside the `books` configset directory. Key settings:
 | Update processor | `langid` chain (via `add-conf-overlay.sh`) | Verify langid module compatibility |
 
 The `add-conf-overlay.sh` script adds at runtime:
-- `/update/extract` request handler (Tika extraction with langid chain)
+- `/update/extract` request handler (Tika extraction with langid chain; Solr 10 uses the `tika` service at `http://tika:9998`)
 - `my-init` initParams (sets default `df=content`)
 - `local_repo` backup repository
 
@@ -132,8 +137,8 @@ All `solr` CLI commands now require full double-dash flags. This breaks every `s
 |---------|-----------------|----------------|
 | Auth enable credentials | `-u "user:pass"` | `--credentials "user:pass"` |
 | ZooKeeper host | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` |
-| ZK upconfig name | `-n books` | `--name books` |
-| ZK upconfig dir | `-d /configsets/books` | `--dir /configsets/books` |
+| ZK upconfig name | `-n books` | `--conf-name books` |
+| ZK upconfig dir | `-d /configsets/books` | `--conf-dir /configsets/books` |
 | ZK ls host | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` |
 | ZK cp host | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` |
 
@@ -141,14 +146,18 @@ All `solr` CLI commands now require full double-dash flags. This breaks every `s
 - `docker-compose.yml` — solr-init entrypoint (lines ~710–798)
 - `docker/compose.prod.yml` — solr-init entrypoint (lines ~658–736)
 
-### 2.2 HNSW Parameter Renames (🟢 Low Impact for Us)
+### 2.2 HNSW Parameter Renames (🟡 Requires Configset Upload + Reindex)
 
 | Solr 9 | Solr 10 |
 |--------|---------|
 | `hnswMaxConnections` | `hnswM` |
 | `hnswBeamWidth` | `hnswEfConstruction` |
 
-**Our impact**: **None** — our schema uses defaults and does not explicitly set these parameters. If custom HNSW tuning is added later, use the Solr 10 names.
+**Our impact**: The byte-vector type uses custom graph tuning. The source
+configset now uses Solr 10 names (`hnswM`, `hnswEfConstruction`); Solr 9
+bootstrap rewrites them during upload. After uploading the updated configset to
+Solr 10, perform a full reindex so HNSW graphs are rebuilt with the Solr 10
+schema.
 
 ### 2.3 `blockUnknown` Default Change (🟡 Medium Impact)
 
@@ -158,6 +167,16 @@ All `solr` CLI commands now require full double-dash flags. This breaks every `s
 
 **Our impact**: We explicitly set `--block-unknown false` in the init script and have `"blockUnknown": false` in `security.json`. Verify this explicit setting is still honored in Solr 10. Docker health checks authenticate with credentials, so they should work either way.
 
+**v2.5 verification status**:
+- `--block-unknown false` remains explicitly set in all Solr init variants (`docker/solr-init.sh`, `docker-compose.yml`, `docker/compose.prod.yml`)
+- Solr container health checks are authenticated (`curl -sf -u $${SOLR_AUTH_USER}:$${SOLR_AUTH_PASS} ...` in Compose; equivalent single-$ runtime expansion)
+- `security.json` still allows unauthenticated `health` and `metrics-read` via `role: null`
+
+**Security consideration (decision point)**:
+- Keeping `blockUnknown: false` preserves compatibility with the current unauthenticated health/metrics permissions.
+- Switching to `blockUnknown: true` is stricter and is the recommended target state for a future fully authenticated probes/endpoints posture; this would require updating health-check expectations and removing/adjusting unauthenticated permissions.
+- **Current v2.5 recommendation**: keep `blockUnknown: false` for now (no breaking change), and plan a dedicated hardening change to move to `true` together with fully authenticated health/metrics access.
+
 ### 2.4 Java 21 Requirement (🟡 Medium Impact)
 
 | | Solr 9.7 | Solr 10 |
@@ -166,7 +185,7 @@ All `solr` CLI commands now require full double-dash flags. This breaks every `s
 | Minimum Java | 17 | 21 |
 | OS base | Ubuntu 22 | Ubuntu 24 |
 
-**Our impact**: Update `src/solr/Dockerfile` from `FROM solr:9.7` to `FROM solr:10`. The `apt-get install fonts-liberation fonts-dejavu-core` should still work on Ubuntu 24.
+**Our impact**: `src/solr/Dockerfile` now defaults `SOLR_BASE_IMAGE` to `solr:10`. The `apt-get install fonts-liberation fonts-dejavu-core` should still work on Ubuntu 24. Use `docker/compose.solr9.yml` for temporary Solr 9.7 rollback.
 
 ### 2.5 `luceneMatchVersion` Update
 
@@ -252,14 +271,11 @@ python run_benchmark.py --output pre-migration-baseline.json
 **File**: `src/solr/Dockerfile`
 
 ```dockerfile
-# Before (Solr 9.7)
-FROM solr:9.7
-
-# After (Solr 10)
-FROM solr:10
+ARG SOLR_BASE_IMAGE=solr:10
+FROM ${SOLR_BASE_IMAGE}
 ```
 
-Verify that `apt-get install fonts-liberation fonts-dejavu-core` still works on the Ubuntu 24 base.
+Verify that `apt-get install fonts-liberation fonts-dejavu-core` still works on the Ubuntu 24 base. For rollback, use `docker/compose.solr9.yml` or set `SOLR_BASE_IMAGE=solr:9.7 SOLR_VERSION=9`.
 
 #### Step 2.2: Update `luceneMatchVersion`
 
@@ -281,7 +297,7 @@ Replace all Solr 9 CLI syntax with Solr 10 double-dash equivalents in the `solr-
 
 ```bash
 # Before (Solr 9.7)
-solr zk cp file:/tmp/empty-security.json zk:/security.json -z "$ZK_HOST"
+solr zk cp file:/var/solr/empty-security.json zk:/security.json -z "$ZK_HOST"
 
 solr auth enable --type basicAuth \
   -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
@@ -294,7 +310,7 @@ solr zk upconfig -z "$ZK_HOST" -n books -d /configsets/books
 solr zk ls /configs -z "$ZK_HOST"
 
 # After (Solr 10)
-solr zk cp file:/tmp/empty-security.json zk:/security.json --zk-host "$ZK_HOST"
+solr zk cp file:/var/solr/empty-security.json zk:/security.json --zk-host "$ZK_HOST"
 
 solr auth enable --type basicAuth \
   --credentials "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
@@ -302,7 +318,7 @@ solr auth enable --type basicAuth \
   --solr-include-file /dev/null \
   --zk-host "$ZK_HOST"
 
-solr zk upconfig --zk-host "$ZK_HOST" --name books --dir /configsets/books
+solr zk upconfig --zk-host "$ZK_HOST" --conf-name books --conf-dir /configsets/books
 
 solr zk ls /configs --zk-host "$ZK_HOST"
 ```
@@ -313,6 +329,8 @@ Confirm `src/solr/security.json` is compatible with Solr 10:
 - `"blockUnknown": false` — still supported, but Solr 10 defaults to `true` when not set
 - `"health"` and `"metrics-read"` permissions with `"role": null` — verify unauthenticated access still works
 - RBAC rules — verify `solr.RuleBasedAuthorizationPlugin` API is unchanged
+
+Use the Solr 10 Security UI for post-bootstrap user, password, and role changes. Avoid manual `security.json` edits except for bootstrap or disaster-recovery flows where the Solr UI is unavailable.
 
 #### Step 2.5: Optional Schema Enhancements (Post-Upgrade)
 
@@ -442,6 +460,10 @@ python run_benchmark.py --output post-migration-solr10.json
 | Highlighting | Search with highlighting on `content`, `_text_` | Highlighted snippets |
 | Backup | `curl .../admin/collections?action=BACKUP&...` | Backup created |
 | UI search | Open aithena-ui, perform a search | Results displayed |
+| Security UI access | Open `http://localhost/admin/solr/ui/` as admin | Security screen loads and allows edits |
+| Security UI readonly guard | Login as readonly Aithena account and open Security UI | Access is denied by the admin-gated proxy (for example, 403) |
+| Security UI role update | Add/remove a role for a non-admin user via Security UI | Updated permissions enforced on next request |
+| Auth CLI bootstrap | Run `solr auth enable` bootstrap during init | Initial admin auth works; post-bootstrap managed in Security UI |
 
 ---
 
@@ -491,7 +513,7 @@ Trigger rollback if any of these occur after migration:
 
 - **Solr 10 → Solr 9 index**: Lucene 10 indexes are **not** backward-compatible with Solr 9. You must restore from backup or reindex.
 - **ZooKeeper state**: ZK data should be compatible, but restore from backup to be safe.
-- **Security config**: The `security.json` format is compatible between versions.
+- **Security config**: The `security.json` format is compatible between versions. After bootstrap, manage users and roles through the Solr 10 Security UI rather than hand-editing ZooKeeper state.
 
 ---
 
@@ -567,6 +589,7 @@ Compare these metrics before and after migration:
 | Collection export tooling | [#1362](https://github.com/jmservera/aithena/issues/1362) | 🔄 In progress | Phase 4 (optional, for data export) |
 | Collection import tooling | [#1363](https://github.com/jmservera/aithena/issues/1363) | 🔄 In progress | Phase 4 (optional, for data import) |
 | Solr 9/10 compatibility layer | [#1365](https://github.com/jmservera/aithena/issues/1365) | 📋 Planned | Phase 2 (CLI abstraction) |
+| Frontend security UI prerequisite | [#1675](https://github.com/jmservera/aithena/issues/1675) | ⛔ Required before release | v2.5 Solr Security UI rollout |
 
 ### 6.2 Execution Phases
 
@@ -595,10 +618,11 @@ These are tracked separately and not required for the core Solr 9 → 10 upgrade
 
 | File | Change Type | Description |
 |------|------------|-------------|
-| `src/solr/Dockerfile` | Edit | `FROM solr:9.7` → `FROM solr:10` |
-| `src/solr/books/solrconfig.xml` | Edit | `luceneMatchVersion` 9.10 → 10.0 |
-| `docker-compose.yml` | Edit | solr-init CLI double-dash syntax |
-| `docker/compose.prod.yml` | Edit | solr-init CLI double-dash syntax |
+| `src/solr/Dockerfile` | Edit | Default `SOLR_BASE_IMAGE` is `solr:10` |
+| `src/solr/books/solrconfig.xml` | Edit | `luceneMatchVersion` 10.0 by default; Solr 9 rollback rewrites to 9.10 |
+| `docker-compose.yml` | Edit | Solr 10 default build/runtime with Solr 9/10 CLI compatibility |
+| `docker/compose.prod.yml` | Edit | Solr 10 default build/runtime with Solr 9/10 CLI compatibility |
+| `docker/compose.solr9.yml` | Add | Explicit Solr 9.7 rollback overlay |
 | `src/solr/security.json` | Verify | Confirm `blockUnknown: false` compat |
 | `src/solr/books/managed-schema.xml` | No change (Phase 1) | HNSW defaults are fine; quantization is Phase 2 |
 | `src/solr-search/` | No change (Phase 1) | Uses `wt=json`, HTTP API unchanged |

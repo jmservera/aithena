@@ -1,6 +1,11 @@
 import { useIntl } from 'react-intl';
 import { Database, ExternalLink, MessageSquare, Server, RefreshCw } from 'lucide-react';
-import { useAdminInfrastructure, type ServiceEndpoint } from '../hooks/useAdminInfrastructure';
+import {
+  redactUrlForDisplay,
+  safeAdminUrl,
+  useAdminInfrastructure,
+  type ServiceEndpoint,
+} from '../hooks/useAdminInfrastructure';
 
 /* ── Sub-components ───────────────────────────────────────────────────── */
 
@@ -29,15 +34,17 @@ function ServiceCard({ icon, title, description, url }: ServiceCardProps) {
 }
 
 function ConnectionRow({ service }: { service: ServiceEndpoint }) {
+  const normalizedStatus = service.status.trim().toLowerCase();
+  const isHealthy = normalizedStatus === 'connected' || normalizedStatus === 'up';
+  const endpoint = redactUrlForDisplay(service.admin_url ?? service.url);
+
   return (
     <tr>
       <td className="infra-service-name">{service.name}</td>
-      <td>{service.type}</td>
-      <td>{service.url}</td>
+      <td>{service.type ?? service.description ?? '—'}</td>
+      <td>{endpoint}</td>
       <td>
-        <span
-          className={`infra-badge ${service.status === 'connected' ? 'infra-badge--ok' : 'infra-badge--error'}`}
-        >
+        <span className={`infra-badge ${isHealthy ? 'infra-badge--ok' : 'infra-badge--error'}`}>
           {service.status}
         </span>
       </td>
@@ -54,9 +61,27 @@ function AdminInfrastructurePage() {
   const fmt = (id: string, values?: Record<string, string | number>) =>
     intl.formatMessage({ id }, values);
 
-  const solrUrl = data?.solr_admin_url ?? '/admin/solr/';
-  const rabbitmqUrl = data?.rabbitmq_admin_url ?? '/admin/rabbitmq/';
-  const redisUrl = data?.redis_admin_url ?? '/admin/redis/';
+  const resolveServiceAdminUrl = (
+    serviceName: string,
+    legacyUrl: string | undefined,
+    fallbackUrl: string
+  ) =>
+    safeAdminUrl(
+      data?.services.find((service) => service.name === serviceName)?.admin_url ?? legacyUrl,
+      fallbackUrl
+    );
+
+  const solrUrl = resolveServiceAdminUrl('solr', data?.solr_admin_url, '/admin/solr/');
+  const rabbitmqUrl = resolveServiceAdminUrl(
+    'rabbitmq',
+    data?.rabbitmq_admin_url,
+    '/admin/rabbitmq/'
+  );
+  const redisUrl = resolveServiceAdminUrl(
+    'redis-commander',
+    data?.redis_admin_url,
+    '/admin/redis/'
+  );
 
   return (
     <main className="admin-page">

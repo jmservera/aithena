@@ -264,21 +264,25 @@ solr auth enable --type basicAuth \
 |-------------------|----------|---------|----------|
 | Credentials flag | `-u "user:pass"` | `--credentials "user:pass"` | solr-init entrypoint |
 | ZooKeeper flag | `-z "$ZK_HOST"` | `--zk-host "$ZK_HOST"` | solr-init entrypoint |
-| zk upconfig flags | `-z ... -n ... -d ...` | `--zk-host ... --name ... --dir ...` | solr-init entrypoint |
+| zk upconfig flags | `-z ... -n ... -d ...` | `--zk-host ... --conf-name ... --conf-dir ...` | solr-init entrypoint |
 | zk ls flag | `-z ...` | `--zk-host ...` | solr-init entrypoint |
 
 **Action**: Update all `solr` CLI invocations in both compose files. Test thoroughly.
 
 ### 4.2 🔴 HNSW Parameter Renames
 
-**Impact**: Conditional. `src/solr/books/managed-schema.xml` currently uses the vector field type defaults and does **not** explicitly set `hnswMaxConnections` / `hnswBeamWidth`.
+**Impact**: Required for the byte-vector field. `src/solr/books/managed-schema.xml`
+uses defaults for the float32 vector type, but explicitly tunes graph degree for
+the byte-vector type. Solr 10 requires the renamed HNSW schema parameters.
 
 | Current | Solr 10 |
 |---------|---------|
 | `hnswMaxConnections` | `hnswM` |
 | `hnswBeamWidth` | `hnswEfConstruction` |
 
-**Action**: No schema change is needed for this item unless we explicitly tune HNSW parameters in schema. If we later add these settings, use the Solr 10 names above; a reindex would then be required.
+**Action**: Use the Solr 10 names above in the source configset, let Solr 9
+bootstrap rewrite them during the compatibility window, upload the configset
+during migration, and perform a full reindex so vector graphs are rebuilt.
 
 ### 4.3 🔴 `blockUnknown` Default Change
 
@@ -335,11 +339,13 @@ solr auth enable --type basicAuth \
 
 **Action**: No code change needed — our auth setup already protects config endpoints via RBAC.
 
-### 4.10 🟡 `PathHierarchyTokenizer` Behavior Change
+### 4.10 ✅ `PathHierarchyTokenizer` Behavior Change
 
 **Impact**: Token position increments changed from 0 to 1.
 
-**Action**: Check if `ancestor_path` or `descendent_path` field types are used in the books schema (they exist as definitions but may not be used by any fields). If unused, no action needed.
+**Audit Result (v2.5)**: Both `ancestor_path` and `descendent_path` field types are defined in `managed-schema.xml` (as default Solr schema boilerplate) and dynamic field patterns `*_ancestor_path` / `*_descendent_path` are registered, but **no concrete fields** use these types and no application code reads or writes `*_ancestor_path` or `*_descendent_path` fields. The behavior change has **no impact** on the books collection.
+
+**Action**: No action needed — confirmed no-op. See `.squad/decisions.md` for the audit decision record.
 
 ---
 

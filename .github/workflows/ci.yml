@@ -274,6 +274,19 @@ jobs:
       - name: Validate Compose security posture
         run: bash tests/test-compose-security.sh
 
+  solr-image-reference-regression:
+    name: Solr image reference regression
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate Solr 10 image wiring
+        run: bash tests/test-solr-image-refs.sh
+
   all-tests-passed:
     name: All tests passed
     if: always()
@@ -287,6 +300,7 @@ jobs:
       - embeddings-server-tests
       - python-lint
       - compose-security-regression
+      - solr-image-reference-regression
     steps:
       - name: Evaluate results
         env:
@@ -298,13 +312,14 @@ jobs:
           EMBEDDINGS_RESULT: ${{ needs.embeddings-server-tests.result }}
           LINT_RESULT: ${{ needs.python-lint.result }}
           COMPOSE_SECURITY_RESULT: ${{ needs.compose-security-regression.result }}
+          SOLR_IMAGE_REFS_RESULT: ${{ needs.solr-image-reference-regression.result }}
           BUILD_NEEDED: ${{ needs.changes.outputs.build }}
         run: |
           if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
             echo "❌ Change detection failed"
             exit 1
           fi
-          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT" "$COMPOSE_SECURITY_RESULT"; do
+          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT" "$COMPOSE_SECURITY_RESULT" "$SOLR_IMAGE_REFS_RESULT"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "❌ One or more required jobs failed"
               exit 1

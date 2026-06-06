@@ -204,7 +204,7 @@ docker exec solr solr config-set-upload \
 3. **Sorting**: Use `sort=year_i desc` or `sort=title_s asc` for result ordering.
 4. **Pagination**: Use `start=0&rows=20` for 20 results per page.
 5. **kNN topK**: Set `topK` ≥ `rows` on the kNN QParser. A value of 100–200 is a good starting point for re-ranking hybrid searches.
-6. **HNSW tuning**: The default HNSW parameters (`hnswMaxConnections=16`, `hnswBeamWidth=100`) suit collections up to ~1 M vectors. Increase `hnswMaxConnections` (e.g. 32) for higher recall at the cost of more memory.
+6. **HNSW tuning**: The default HNSW parameters suit collections up to ~1 M vectors (`hnswMaxConnections=16`, `hnswBeamWidth=100` in Solr 9; `hnswM=16`, `hnswEfConstruction=100` in Solr 10). Increase graph degree (`hnswMaxConnections`/`hnswM`, e.g. 32) for higher recall at the cost of more memory.
 
 ## References
 

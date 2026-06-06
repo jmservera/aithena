@@ -46,7 +46,8 @@ Key environment variables (see `config.py` for full list):
 |----------|---------|-------------|
 | `SOLR_URL` | `http://solr1:8983/solr` | Solr base URL |
 | `SOLR_COLLECTION` | `books` | Collection name |
-| `KNN_FIELD` | `embedding_v` | Dense vector field for kNN |
+| `VECTOR_QUANTIZATION` | `none` | Matches the embeddings-server mode; `int8` defaults kNN to `embedding_byte_v` |
+| `KNN_FIELD` | `embedding_v` (`embedding_byte_v` when `VECTOR_QUANTIZATION=int8`) | Dense vector field for kNN |
 | `RRF_K` | `60` | RRF damping constant |
 | `EMBEDDINGS_URL` | `http://embeddings-server:8085/v1/embeddings/` | Embeddings endpoint |
 | `EMBEDDINGS_TIMEOUT` | `120` | Embeddings request timeout (seconds) |

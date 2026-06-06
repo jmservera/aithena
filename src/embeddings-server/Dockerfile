@@ -54,6 +54,7 @@ USER app
 
 # Copy lock files first for cache invalidation
 COPY --chown=app:app pyproject.toml uv.lock ./
+COPY --chown=app:app scripts/verify_openvino_runtime.py ./scripts/verify_openvino_runtime.py
 
 # Install app-specific deps into the base image's .venv using --inexact
 # (preserves heavy pre-installed packages, only adds the delta).
@@ -61,6 +62,9 @@ COPY --chown=app:app pyproject.toml uv.lock ./
 RUN --mount=from=ghcr.io/astral-sh/uv:0.11.2,source=/uv,target=/usr/local/bin/uv \
     if [ "$INSTALL_OPENVINO" = "true" ]; then \
       uv sync --frozen --no-dev --no-install-project --extra openvino --inexact --native-tls; \
+      echo "Installed OpenVINO runtime packages after uv sync --inexact:"; \
+      uv pip list --python .venv/bin/python | grep -Ei '^(openvino|optimum-intel|tokenizers)' || true; \
+      .venv/bin/python scripts/verify_openvino_runtime.py --pyproject pyproject.toml; \
     else \
       uv sync --frozen --no-dev --no-install-project --inexact --native-tls; \
     fi

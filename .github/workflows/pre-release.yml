@@ -331,6 +331,7 @@ jobs:
         env:
           RC_TAG: ${{ needs.prepare.outputs.full_tag }}-openvino
         run: |
+          set -o pipefail
           chmod +x e2e/smoke-openvino-permissions.sh
           ./e2e/smoke-openvino-permissions.sh \
             "ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}" \
@@ -342,6 +343,14 @@ jobs:
           echo "::group::OpenVINO smoke test output"
           cat openvino-smoke-output.txt 2>/dev/null || true
           echo "::endgroup::"
+
+      - name: Upload OpenVINO smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: pre-release-openvino-smoke-${{ needs.prepare.outputs.full_tag }}
+          path: openvino-smoke-output.txt
+          if-no-files-found: ignore
 
       - name: Report result to summary
         if: always()

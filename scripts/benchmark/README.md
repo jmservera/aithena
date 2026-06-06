@@ -120,6 +120,56 @@ Aggregate (per mode and category):
 - **Console:** Human-readable summary with per-mode stats and errors
 - **JSON** (`--output`): Full result data for further analysis
 
+
+## Scalar Quantization Validation (#1344)
+
+Use this workflow after PR #1670 (Solr 10 `bits=7` compatibility) merges and the same corpus can be indexed twice. It avoids hardware-intensive runs by reusing the existing 30-query suite and comparing top-k agreement between a float32 reference collection and an int8/scalar-quantized candidate collection.
+
+### Validation checklist
+
+1. Confirm the runtime contains the #1670 schema fix (`ScalarQuantizedDenseVectorField bits="7"` on Solr 10; Solr 9 compatibility still rewrites to `DenseVectorField vectorEncoding="BYTE"`).
+2. Index the same representative corpus with `VECTOR_QUANTIZATION=none` and save a float32 benchmark report.
+3. Re-index the same corpus with `VECTOR_QUANTIZATION=int8` and save a candidate benchmark report.
+4. Compare reports with `compare_quantization.py`; treat recall@10 below `0.95` for any semantic/hybrid query as a release blocker until reviewed.
+5. Capture memory from `docker stats --no-stream solr solr2 solr3` (or the existing `e2e/benchmark.sh` report when a small generated corpus is acceptable) for float32 and int8 runs.
+6. Attach the JSON reports, comparison output, Solr memory samples, corpus size, and any failed query IDs to #1344.
+
+### Commands
+
+```bash
+# Float32 reference run
+VECTOR_QUANTIZATION=none docker compose up -d --build
+python3 scripts/index_test_corpus.py --status-only
+python3 scripts/verify_collections.py --verbose
+python3 scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --modes semantic hybrid \
+  --output results/benchmark-1344-float32.json
+
+docker stats --no-stream solr solr2 solr3
+
+# Int8/scalar-quantized candidate run after re-indexing the same corpus
+VECTOR_QUANTIZATION=int8 docker compose up -d --build
+python3 scripts/index_test_corpus.py --status-only
+python3 scripts/verify_collections.py --verbose
+python3 scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --modes semantic hybrid \
+  --output results/benchmark-1344-int8.json
+
+docker stats --no-stream solr solr2 solr3
+
+# Offline recall/latency comparison (safe to run without Docker)
+python3 scripts/benchmark/compare_quantization.py \
+  --baseline results/benchmark-1344-float32.json \
+  --candidate results/benchmark-1344-int8.json \
+  --top-k 10 \
+  --min-recall 0.95 \
+  --output results/benchmark-1344-quantization-comparison.json
+```
+
+**Remaining blocker:** do not execute the int8/Solr 10 validation until #1670 is merged or equivalent `bits=7` schema support is present in the target environment.
+
 ## Running Tests
 
 ```bash

@@ -1,0 +1,134 @@
+name: Solr Image Validation
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'src/solr/**'
+      - 'docker-compose.yml'
+      - 'docker/compose.prod.yml'
+      - 'docker/compose.solr10.yml'
+      - 'docker/compose.solr9.yml'
+      - '.github/workflows/build-containers.yml'
+      - '.github/workflows/solr-image-validation.yml'
+      - 'tests/test-solr-image-refs.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  solr10-image:
+    name: Build and smoke default Solr 10 image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate Solr 10 image references
+        run: bash tests/test-solr-image-refs.sh
+
+      - name: Validate default Solr 10 Compose config
+        env:
+          ADMIN_API_KEY: ci-admin-api-key
+          AUTH_DB_DIR: .auth-data
+          AUTH_JWT_SECRET: ci-jwt-secret-change-me
+          SOLR_ADMIN_USER: solr_admin
+          SOLR_ADMIN_PASS: SolrAdmin_dev2024!
+          SOLR_READONLY_USER: solr_read
+          SOLR_READONLY_PASS: SolrRead_dev2024!
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker/compose.single-node.yml \
+            config >/dev/null
+
+      - name: Validate Solr 9 rollback Compose overlay
+        env:
+          ADMIN_API_KEY: ci-admin-api-key
+          AUTH_DB_DIR: .auth-data
+          AUTH_JWT_SECRET: ci-jwt-secret-change-me
+          SOLR_ADMIN_USER: solr_admin
+          SOLR_ADMIN_PASS: SolrAdmin_dev2024!
+          SOLR_READONLY_USER: solr_read
+          SOLR_READONLY_PASS: SolrRead_dev2024!
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker/compose.single-node.yml \
+            -f docker/compose.solr9.yml \
+            config >/dev/null
+
+      - name: Validate explicit Solr 10 Compose overlay
+        env:
+          ADMIN_API_KEY: ci-admin-api-key
+          AUTH_DB_DIR: .auth-data
+          AUTH_JWT_SECRET: ci-jwt-secret-change-me
+          SOLR_ADMIN_USER: solr_admin
+          SOLR_ADMIN_PASS: SolrAdmin_dev2024!
+          SOLR_READONLY_USER: solr_read
+          SOLR_READONLY_PASS: SolrRead_dev2024!
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker/compose.single-node.yml \
+            -f docker/compose.solr10.yml \
+            config >/dev/null
+
+      - name: Build default Solr 10 image
+        run: |
+          docker build \
+            --build-arg VERSION=ci-solr10 \
+            --build-arg GIT_COMMIT="${GITHUB_SHA}" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t aithena-solr:solr10-ci \
+            src/solr
+
+      - name: Smoke test Solr 10 container
+        run: |
+          container_id="$(docker run -d -e SOLR_MODULES=extraction,langid -p 8983:8983 aithena-solr:solr10-ci solr-foreground)"
+          cleanup() {
+            docker logs "$container_id" || true
+            docker rm -f "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for attempt in {1..60}; do
+            if curl -fsS 'http://localhost:8983/solr/admin/info/system?wt=json' > solr-system.json; then
+              break
+            fi
+            echo "[$attempt/60] Waiting for Solr 10..."
+            sleep 5
+          done
+
+          test -s solr-system.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("solr-system.json").read_text(encoding="utf-8"))
+          lucene = data.get("lucene", {})
+          version = str(lucene.get("solr-spec-version") or lucene.get("solr-impl-version") or "")
+          if not version.startswith("10."):
+              raise SystemExit(f"Expected Solr 10.x from /admin/info/system, got {version!r}")
+          jvm_spec = data.get("jvm", {}).get("spec", {})
+          java_spec = str(jvm_spec.get("version") or "")
+          java_major = int(java_spec.split(".", 1)[0]) if java_spec else 0
+          if java_major < 21:
+              raise SystemExit(f"Expected Java 21+ runtime, got spec version {java_spec!r}")
+          java_vendor = str(data.get("jvm", {}).get("jre", {}).get("vendor") or "")
+          if "Eclipse" not in java_vendor:
+              raise SystemExit(f"Expected Eclipse Temurin/Adoptium JRE, got vendor {java_vendor!r}")
+          print(f"Solr version validated: {version}; Java spec version: {java_spec}; JRE vendor: {java_vendor}")
+          PY
+
+          docker exec "$container_id" sh -c 'ls /opt/solr/server/lib/ext/jetty-server-12.*.jar >/dev/null'
+          docker exec "$container_id" sh -c 'grep -q "^VERSION_CODENAME=noble$" /etc/os-release'

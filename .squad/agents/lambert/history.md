@@ -80,3 +80,10 @@
 ### 2026-06-04T11:12:16.371+00:00 — v2.3.0 Pre-Release Evidence
 - For #1646, tie release test reports to both PR check rollups and focused local commands; avoid claiming exact test counts when GitHub check summaries do not expose them.
 - #1631 evidence hinges on `tests/test-compose-security.sh` plus `tests/test-pre-release-check.sh`: ZooKeeper ports stay private, Solr auth wiring is required, and accepted ZK/Solr config warnings are allowlisted without hiding real crashes or runtime connection failures.
+
+### 2026-06-05 — OpenVINO Smoke Test Prevention (Issue #1662)
+- **Context:** Pre-release smoke test embeddings-server-openvino failed (run 27022717607) due to package version mismatch in built image
+- **QA insight:** Smoke tests only validate that the image boots and responds to a simple request; they do not catch intermediate build-state issues
+- **Prevention:** Future embeddings-server Dockerfiles include post-sync version verification; fails build immediately if versions drift
+- **For next release:** Smoke tests remain essential for runtime validation; build-time verification is now the defensive layer for transitive-dependency issues
+- **Pattern:** Any service using `uv sync --inexact` should include Python version-check step to fail early

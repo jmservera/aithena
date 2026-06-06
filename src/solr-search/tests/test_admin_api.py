@@ -358,6 +358,46 @@ class TestInfrastructure:
         assert "rabbitmq_amqp" in data["connections"]
         assert "rabbitmq_mgmt" in data["connections"]
         assert "embeddings" in data["connections"]
+        assert data["solr_admin_url"] == "/admin/solr/"
+        assert data["rabbitmq_admin_url"] == "/admin/rabbitmq/"
+        assert data["redis_admin_url"] == "/admin/redis/"
+
+        security_ui = data["solr_security_ui"]
+        assert security_ui["url"] == "/admin/solr/ui/"
+        assert security_ui["auth_check_url"] == "/v1/auth/validate-admin"
+        assert security_ui["required_aithena_role"] == "admin"
+
+    def test_infrastructure_redacts_sensitive_connection_urls(self):
+        original_embeddings_url = settings.embeddings_url
+        object.__setattr__(
+            settings,
+            "embeddings_url",
+            "https://embed-user:embed-pass@embeddings.example/v1/embeddings?token=secret#frag",
+        )
+        try:
+            with (
+                patch("main._tcp_check", return_value=True),
+                patch("main._rabbitmq_management_check", return_value=True),
+                patch("main._embeddings_available", return_value=True),
+            ):
+                client = get_client()
+                resp = client.get("/v1/admin/infrastructure")
+        finally:
+            object.__setattr__(settings, "embeddings_url", original_embeddings_url)
+
+        assert resp.status_code == 200
+        connections = resp.json()["connections"]
+        assert connections["embeddings"] == "https://embeddings.example/v1/embeddings"
+        assert "embed-pass" not in json.dumps(connections)
+        assert "token=secret" not in json.dumps(connections)
+
+    def test_infrastructure_redacts_protocol_relative_urls(self):
+        from main import _redact_url_for_admin_display
+
+        assert (
+            _redact_url_for_admin_display("//embed-user:embed-pass@embeddings.example/v1?token=secret#frag")
+            == "//embeddings.example/v1"
+        )
 
     def test_infrastructure_some_down(self):
         def selective_tcp(host, port, timeout=2.0):

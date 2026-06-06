@@ -8,9 +8,27 @@ import { IntlWrapper } from './test-intl-wrapper';
 
 const mockInfrastructure = {
   services: [
-    { name: 'solr', url: 'http://solr:8983', status: 'connected', type: 'search' },
-    { name: 'rabbitmq', url: 'amqp://rabbitmq:5672', status: 'connected', type: 'queue' },
-    { name: 'redis', url: 'redis://redis:6379', status: 'disconnected', type: 'cache' },
+    {
+      name: 'solr',
+      url: 'http://solr:8983',
+      status: 'connected',
+      type: 'search',
+      admin_url: '/admin/solr/',
+    },
+    {
+      name: 'rabbitmq',
+      url: 'amqp://rabbitmq:5672',
+      status: 'connected',
+      type: 'queue',
+      admin_url: '/admin/rabbitmq/',
+    },
+    {
+      name: 'redis-commander',
+      url: 'redis://redis:6379',
+      status: 'disconnected',
+      type: 'cache',
+      admin_url: '/admin/redis/',
+    },
   ],
   solr_admin_url: '/admin/solr/',
   rabbitmq_admin_url: '/admin/rabbitmq/',
@@ -118,9 +136,9 @@ describe('AdminInfrastructurePage', () => {
     });
 
     expect(screen.getByText('solr')).toBeInTheDocument();
-    expect(screen.getByText('http://solr:8983')).toBeInTheDocument();
+    expect(screen.getByText('/admin/solr/')).toBeInTheDocument();
     expect(screen.getByText('rabbitmq')).toBeInTheDocument();
-    expect(screen.getByText('redis')).toBeInTheDocument();
+    expect(screen.getByText('redis-commander')).toBeInTheDocument();
 
     // Check table structure: header + 3 data rows
     const rows = screen.getAllByRole('row');
@@ -139,6 +157,38 @@ describe('AdminInfrastructurePage', () => {
     const disconnectedBadges = screen.getAllByText('disconnected');
     expect(connectedBadges.length).toBe(2);
     expect(disconnectedBadges.length).toBe(1);
+  });
+
+  it('treats up status as healthy in the connection table', async () => {
+    const upStatusData = {
+      ...mockInfrastructure,
+      services: [{ name: 'solr', url: 'http://solr:8983', status: 'up', type: 'search' }],
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: upStatusData }));
+    renderPage();
+
+    const statusBadge = await screen.findByText('up');
+    expect(statusBadge).toHaveClass('infra-badge--ok');
+  });
+
+  it('prefers admin_url over url in the connection table endpoint column', async () => {
+    const adminUrlPreferredData = {
+      ...mockInfrastructure,
+      services: [
+        {
+          name: 'solr',
+          url: 'http://solr:8983',
+          admin_url: '/admin/solr/',
+          status: 'connected',
+          type: 'search',
+        },
+      ],
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: adminUrlPreferredData }));
+    renderPage();
+
+    await screen.findByText('/admin/solr/');
+    expect(screen.queryByText('http://solr:8983')).not.toBeInTheDocument();
   });
 
   it('shows error banner when API fails', async () => {
@@ -199,9 +249,13 @@ describe('AdminInfrastructurePage', () => {
   it('uses API-provided URLs when available', async () => {
     const customData = {
       ...mockInfrastructure,
-      solr_admin_url: '/custom/solr/',
-      rabbitmq_admin_url: '/custom/rabbitmq/',
-      redis_admin_url: '/custom/redis/',
+      solr_admin_url: '/legacy/solr/',
+      rabbitmq_admin_url: '/legacy/rabbitmq/',
+      redis_admin_url: '/legacy/redis/',
+      services: mockInfrastructure.services.map((service) => ({
+        ...service,
+        admin_url: `/custom/${service.name}/`,
+      })),
     };
     vi.stubGlobal('fetch', createMockFetch({ data: customData }));
     renderPage();
@@ -211,7 +265,93 @@ describe('AdminInfrastructurePage', () => {
     });
 
     const solrLink = screen.getByText('Solr Admin').closest('a');
+    const rabbitmqLink = screen.getByText('RabbitMQ Management').closest('a');
+    const redisLink = screen.getByText('Redis Commander').closest('a');
     expect(solrLink).toHaveAttribute('href', '/custom/solr/');
+    expect(rabbitmqLink).toHaveAttribute('href', '/custom/rabbitmq/');
+    expect(redisLink).toHaveAttribute('href', '/custom/redis-commander/');
+  });
+
+  it('falls back from unsafe API-provided admin URLs', async () => {
+    const unsafeData = {
+      ...mockInfrastructure,
+      solr_admin_url: 'javascript:alert(1)',
+      services: mockInfrastructure.services.map((service) => ({
+        ...service,
+        admin_url:
+          service.name === 'solr' ? '/\\evil.example/' : `https://evil.example/${service.name}/`,
+      })),
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: unsafeData }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Solr Admin')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Solr Admin').closest('a')).toHaveAttribute('href', '/admin/solr/');
+    expect(screen.getByText('RabbitMQ Management').closest('a')).toHaveAttribute(
+      'href',
+      '/admin/rabbitmq/'
+    );
+    expect(screen.getByText('Redis Commander').closest('a')).toHaveAttribute(
+      'href',
+      '/admin/redis/'
+    );
+  });
+
+  it('redacts sensitive URL details in the connection table', async () => {
+    const sensitiveData = {
+      ...mockInfrastructure,
+      services: [
+        {
+          name: 'embeddings-server',
+          url: 'https://embed-user:embed-pass@embeddings.example/v1/embeddings?token=secret#frag',
+          status: 'up',
+          type: 'embeddings',
+        },
+      ],
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: sensitiveData }));
+    renderPage();
+
+    await screen.findByText('https://embeddings.example/v1/embeddings');
+    expect(screen.queryByText(/embed-pass/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/token=secret/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to legacy URL when service admin_url is null', async () => {
+    const nullAdminUrlData = {
+      ...mockInfrastructure,
+      solr_admin_url: '/legacy/solr/',
+      services: mockInfrastructure.services.map((service) =>
+        service.name === 'solr' ? { ...service, admin_url: null } : service
+      ),
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: nullAdminUrlData }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Solr Admin')).toBeInTheDocument();
+    });
+
+    const solrLink = screen.getByText('Solr Admin').closest('a');
+    expect(solrLink).toHaveAttribute('href', '/legacy/solr/');
+  });
+
+  it('treats status up as healthy in connection badges', async () => {
+    const dataWithUpStatus = {
+      ...mockInfrastructure,
+      services: [{ ...mockInfrastructure.services[0], status: 'up' }],
+    };
+    vi.stubGlobal('fetch', createMockFetch({ data: dataWithUpStatus }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('up')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('up')).toHaveClass('infra-badge--ok');
   });
 
   it('renders with empty services array', async () => {

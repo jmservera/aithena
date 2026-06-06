@@ -65,6 +65,15 @@ jobs:
           - image: solr-search
             context: .
             dockerfile: ./src/solr-search/Dockerfile
+          - image: solr
+            context: ./src/solr
+            dockerfile: ./src/solr/Dockerfile
+          - image: solr
+            context: ./src/solr
+            dockerfile: ./src/solr/Dockerfile
+            tag_suffix: "-solr9"
+            extra_build_args: |
+              SOLR_BASE_IMAGE=solr:9.7
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
