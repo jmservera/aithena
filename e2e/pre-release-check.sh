@@ -239,13 +239,28 @@ scan_crashes() {
 # --- Category 2: Deprecation warnings ---
 scan_deprecations() {
   LINE_NUM=0
+  LAST_DEPRECATION_SVC=""
+  LAST_DEPRECATION_LC_LINE=""
+  LAST_DEPRECATION_LINE=0
   while IFS= read -r line; do
     LINE_NUM=$((LINE_NUM + 1))
     svc="$(extract_service "$line")"
     lc_line="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
     case "$lc_line" in
       *"deprecated"*|*"will be removed"*|*"no longer supported"*|*"end of life"*|*"end-of-life"*)
-        add_finding "deprecation" "warning" "${svc:-unknown}" "$line" "$LINE_NUM"
+        severity="warning"
+        if [ "${svc:-unknown}" = "$LAST_DEPRECATION_SVC" ] \
+          && [ $((LINE_NUM - LAST_DEPRECATION_LINE)) -le 2 ]; then
+          case "$LAST_DEPRECATION_LC_LINE:$lc_line" in
+            *"deprecated features:"*"management_metrics_collection"*:*"will not be permitted by default in a future minor"*"rabbitmq version"*"removed from a future major"*"rabbitmq version"*)
+              severity="info"
+              ;;
+          esac
+        fi
+        add_finding "deprecation" "$severity" "${svc:-unknown}" "$line" "$LINE_NUM"
+        LAST_DEPRECATION_SVC="${svc:-unknown}"
+        LAST_DEPRECATION_LC_LINE="$lc_line"
+        LAST_DEPRECATION_LINE="$LINE_NUM"
         ;;
     esac
   done < "$LOG_FILE"

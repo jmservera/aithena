@@ -36,7 +36,6 @@ deprecation:*sun.misc.Unsafe::arrayBaseOffset will be removed in a future releas
 # deprecated_features.permit.management_metrics_collection flag. Keep the
 # exact notice visible as info; unrelated RabbitMQ deprecations remain warnings.
 deprecation:*management_metrics_collection*=info
-deprecation:*will not be permitted by default in a future minor*RabbitMQ version*removed from a future major*RabbitMQ version*=info
 
 # Connection retries during startup are normal for Docker Compose orchestration
 connection:*retrying*=ignore
