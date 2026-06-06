@@ -35,14 +35,14 @@ echo "Git commit: ${GIT_COMMIT}"
 echo "Build date: ${BUILD_DATE}"
 
 discover_python_service_dirs() {
-  find src -mindepth 2 -maxdepth 2 -name pyproject.toml -print \
+  find src -mindepth 2 -maxdepth 2 -type f -name pyproject.toml -print \
     | while IFS= read -r pyproject_file; do
       service_dir="$(dirname "$pyproject_file")"
       if [[ -f "${service_dir}/Dockerfile" ]]; then
         printf '%s\n' "$service_dir"
       fi
     done \
-    | sort
+    | LC_ALL=C sort
 }
 
 mapfile -t python_service_dirs < <(discover_python_service_dirs)
