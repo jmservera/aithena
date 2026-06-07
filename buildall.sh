@@ -51,7 +51,7 @@ record_failure() {
 }
 
 print_failure_summary() {
-  echo ""
+  echo "" >&2
   echo "Build failed with ${#FAILURES[@]} failure(s):" >&2
   local failure label status log_file
   for failure in "${FAILURES[@]}"; do
