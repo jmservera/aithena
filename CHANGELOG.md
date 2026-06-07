@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Solr 10 as default runtime** — Switches default Solr runtime from v9 to v10, enabling modern vector search capabilities with scalar quantization support, security RBAC, and backwards-compatible HNSW schema parameters (#1680)
+- **Solr 10 as default runtime** — Switches default Solr runtime from v9 to v10, enabling modern vector search capabilities, optional scalar quantization support (disabled by default pending #1344 evidence), security RBAC, and backwards-compatible HNSW schema parameters (#1680)
 - **Solr 10 migration runbook** — Comprehensive production migration documentation with pre-flight checks, phased rollout procedures, and validation checklists for operators upgrading from Solr 9 (#1682)
 - **Solr Security UI** — Simplified Solr security administration with dedicated UI backend, auth-protected access, and integrated admin infrastructure dashboard (#1674, #1675)
 - **Solr 10 E2E validation** — Extensive end-to-end test coverage for Solr 10 bootstrap, RBAC audit, live collection health checks, and quantization parameter validation (#1676, #1683)

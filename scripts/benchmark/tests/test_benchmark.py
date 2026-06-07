@@ -282,6 +282,7 @@ class TestSerialization:
         metadata = build_run_metadata(
             run_label="solr9",
             solr_version="9.7",
+            vector_quantization_mode="fp16",
             corpus_id="same-corpus",
             corpus_documents=10,
             corpus_bytes=1000,
@@ -293,6 +294,7 @@ class TestSerialization:
         )
 
         assert metadata["solr_version"] == "9.7"
+        assert metadata["vector_quantization_mode"] == "fp16"
         assert metadata["corpus"]["id"] == "same-corpus"
         assert metadata["corpus"]["document_count"] == 10
         assert metadata["timings"]["index_build_seconds"] == 60.0

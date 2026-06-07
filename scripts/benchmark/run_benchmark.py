@@ -510,7 +510,7 @@ def main() -> None:
     parser.add_argument("--solr-version", help="Solr version under test, e.g. 9.7 or 10.0")
     parser.add_argument(
         "--vector-quantization-mode",
-        choices=("none", "int8"),
+        choices=("none", "fp16", "int8"),
         help="Vector quantization mode for this run; required for release comparison claims",
     )
     parser.add_argument("--corpus-id", help="Stable ID/name for the indexed corpus")

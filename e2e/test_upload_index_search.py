@@ -91,7 +91,6 @@ def _index_pdf(solr_url: str, pdf_path: Path, base_path: Path) -> requests.Respo
     if year:
         params["literal.year_i"] = year
 
-    last_response: requests.Response | None = None
     for attempt in range(1, EXTRACT_RETRY_ATTEMPTS + 1):
         with pdf_path.open("rb") as fh:
             resp = requests.post(
@@ -103,11 +102,7 @@ def _index_pdf(solr_url: str, pdf_path: Path, base_path: Path) -> requests.Respo
             )
         if resp.status_code < 500 or attempt == EXTRACT_RETRY_ATTEMPTS:
             return resp
-        last_response = resp
         time.sleep(EXTRACT_RETRY_DELAY_SECONDS)
-
-    assert last_response is not None
-    return last_response
 
 
 def _capture_diagnostics(solr_url: str, label: str) -> None:
