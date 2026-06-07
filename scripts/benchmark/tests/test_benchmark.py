@@ -18,9 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from run_benchmark import (
     BenchmarkReport,
     QueryResult,
+    build_run_metadata,
     compute_summary,
     execute_query,
     format_summary,
+    load_json_artifact,
     load_queries,
     query_result_to_dict,
     report_to_dict,
@@ -30,6 +32,7 @@ from run_benchmark import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def sample_queries_file(tmp_path: Path) -> Path:
@@ -87,6 +90,7 @@ def _make_query_result(
 # load_queries
 # ---------------------------------------------------------------------------
 
+
 class TestLoadQueries:
     def test_loads_and_flattens_queries(self, sample_queries_file: Path) -> None:
         queries = load_queries(sample_queries_file)
@@ -113,6 +117,7 @@ class TestLoadQueries:
 # execute_query (mocked HTTP)
 # ---------------------------------------------------------------------------
 
+
 class TestExecuteQuery:
     @patch("run_benchmark.requests.get")
     def test_successful_query(self, mock_get: MagicMock) -> None:
@@ -130,7 +135,11 @@ class TestExecuteQuery:
         mock_get.return_value = mock_response
 
         result = execute_query(
-            "http://localhost:8080", "test query", "sk-01", "books", "semantic",
+            "http://localhost:8080",
+            "test query",
+            "sk-01",
+            "books",
+            "semantic",
         )
 
         assert result.top_k_ids == ["doc1", "doc2"]
@@ -147,7 +156,11 @@ class TestExecuteQuery:
         mock_get.return_value = mock_response
 
         execute_query(
-            "http://localhost:8080", "test", "sk-01", "books", "semantic",
+            "http://localhost:8080",
+            "test",
+            "sk-01",
+            "books",
+            "semantic",
         )
 
         call_url = mock_get.call_args[0][0]
@@ -159,7 +172,11 @@ class TestExecuteQuery:
         mock_get.side_effect = ConnectionError("Connection refused")
 
         result = execute_query(
-            "http://localhost:8080", "test", "sk-01", "books", "keyword",
+            "http://localhost:8080",
+            "test",
+            "sk-01",
+            "books",
+            "keyword",
         )
 
         assert result.error is not None
@@ -178,7 +195,11 @@ class TestExecuteQuery:
         mock_get.return_value = mock_response
 
         result = execute_query(
-            "http://localhost:8080", "test", "sk-01", "books", "hybrid",
+            "http://localhost:8080",
+            "test",
+            "sk-01",
+            "books",
+            "hybrid",
         )
         assert result.degraded is True
 
@@ -186,6 +207,7 @@ class TestExecuteQuery:
 # ---------------------------------------------------------------------------
 # compute_summary
 # ---------------------------------------------------------------------------
+
 
 class TestComputeSummary:
     def test_summary_by_mode(self) -> None:
@@ -220,8 +242,7 @@ class TestComputeSummary:
 
     def test_p95_latency(self) -> None:
         results = [
-            _make_query_result(query_id=f"sk-{i:02d}", mode="semantic", latency_ms=float(i * 10))
-            for i in range(1, 21)
+            _make_query_result(query_id=f"sk-{i:02d}", mode="semantic", latency_ms=float(i * 10)) for i in range(1, 21)
         ]
         summary = compute_summary(results)
         assert summary["by_mode"]["semantic"]["p95_latency_ms"] is not None
@@ -230,6 +251,7 @@ class TestComputeSummary:
 # ---------------------------------------------------------------------------
 # Serialization
 # ---------------------------------------------------------------------------
+
 
 class TestSerialization:
     def test_query_result_to_dict(self) -> None:
@@ -254,11 +276,44 @@ class TestSerialization:
         serialized = json.dumps(d)
         assert "sk-01" in serialized
         assert d["collection"] == "books"
+        assert "run_metadata" in d
+
+    def test_build_run_metadata_records_reproducibility_fields(self) -> None:
+        metadata = build_run_metadata(
+            run_label="solr9",
+            solr_version="9.7",
+            vector_quantization_mode="fp16",
+            corpus_id="same-corpus",
+            corpus_documents=10,
+            corpus_bytes=1000,
+            startup_seconds=5.0,
+            index_build_seconds=60.0,
+            concurrency=8,
+            throughput_qps=120.0,
+            docker_stats={"solr": {"mem_usage_bytes": 123}},
+        )
+
+        assert metadata["solr_version"] == "9.7"
+        assert metadata["vector_quantization_mode"] == "fp16"
+        assert metadata["corpus"]["id"] == "same-corpus"
+        assert metadata["corpus"]["document_count"] == 10
+        assert metadata["timings"]["index_build_seconds"] == 60.0
+        assert metadata["throughput"]["concurrency"] == 8
+        assert metadata["throughput"]["qps"] == 120.0
+        assert metadata["docker_stats"]["solr"]["mem_usage_bytes"] == 123
+        assert metadata["host"]["system"]
+
+    def test_load_json_artifact(self, tmp_path: Path) -> None:
+        path = tmp_path / "artifact.json"
+        path.write_text('{"ok": true}', encoding="utf-8")
+
+        assert load_json_artifact(path) == {"ok": True}
 
 
 # ---------------------------------------------------------------------------
 # format_summary
 # ---------------------------------------------------------------------------
+
 
 class TestFormatSummary:
     def test_format_includes_key_sections(self) -> None:
@@ -312,10 +367,13 @@ class TestFormatSummary:
 # run_benchmark (integration with mocked API)
 # ---------------------------------------------------------------------------
 
+
 class TestRunBenchmark:
     @patch("run_benchmark.execute_query")
     def test_runs_all_combinations(
-        self, mock_execute: MagicMock, sample_queries_file: Path,
+        self,
+        mock_execute: MagicMock,
+        sample_queries_file: Path,
     ) -> None:
         mock_execute.return_value = _make_query_result()
 
@@ -333,7 +391,9 @@ class TestRunBenchmark:
 
     @patch("run_benchmark.execute_query")
     def test_collection_passed_correctly(
-        self, mock_execute: MagicMock, sample_queries_file: Path,
+        self,
+        mock_execute: MagicMock,
+        sample_queries_file: Path,
     ) -> None:
         mock_execute.return_value = _make_query_result()
 
@@ -349,7 +409,9 @@ class TestRunBenchmark:
 
     @patch("run_benchmark.execute_query")
     def test_custom_collection(
-        self, mock_execute: MagicMock, sample_queries_file: Path,
+        self,
+        mock_execute: MagicMock,
+        sample_queries_file: Path,
     ) -> None:
         mock_execute.return_value = _make_query_result(collection="my_collection")
 

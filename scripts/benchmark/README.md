@@ -56,7 +56,9 @@ Exit code: `0` if all checks pass, `1` otherwise.
 
 ## Benchmark Runner
 
-Measure search quality across keyword, semantic, and hybrid modes.
+Measure search quality across keyword, semantic, and hybrid modes. For release
+claims, include reproducibility metadata so Solr 9.7 and Solr 10 reports can be
+validated as same-host, same-corpus paired runs.
 
 ```bash
 # Run against a live instance
@@ -70,6 +72,34 @@ python scripts/benchmark/run_benchmark.py -o results/benchmark.json
 
 # Custom collection
 python scripts/benchmark/run_benchmark.py --collection books
+
+# Capture same-host/same-corpus evidence for Solr version comparisons
+python scripts/benchmark/run_benchmark.py \
+  --base-url http://localhost:8080 \
+  --solr-version 9.7 \
+  --vector-quantization-mode none \
+  --run-label solr9-float32 \
+  --corpus-id booklibrary-2026-06-06 \
+  --corpus-documents 1000 \
+  --corpus-bytes 123456789 \
+  --startup-seconds 42.5 \
+  --index-build-seconds 3600 \
+  --vector-indexing-seconds 1800 \
+  --concurrency 8 \
+  --throughput-qps 120.5 \
+  --docker-stats-json results/solr9-docker-stats.json \
+  --output results/benchmark-solr9.json
+```
+
+`--docker-stats-json` should contain numeric `mem_usage_bytes` values, for
+example:
+
+```json
+{
+  "solr": {"mem_usage_bytes": 1073741824},
+  "solr2": {"mem_usage_bytes": 1048576000},
+  "solr3": {"mem_usage_bytes": 1101004800}
+}
 ```
 
 ## End-to-End Workflow
@@ -127,11 +157,11 @@ Use this workflow now that PR #1670 (Solr 10 `bits=7` compatibility) has merged,
 
 ### Validation checklist
 
-1. Confirm the runtime contains the #1670 schema fix (`ScalarQuantizedDenseVectorField bits="7"` on Solr 10; Solr 9 compatibility still rewrites to `DenseVectorField vectorEncoding="BYTE"`).
+1. Confirm the runtime contains `ScalarQuantizedDenseVectorField bits="7"` on Solr 10; Solr 9 compatibility still rewrites to `DenseVectorField vectorEncoding="BYTE"`.
 2. Index the same representative corpus with `VECTOR_QUANTIZATION=none` and save a float32 benchmark report.
-3. Re-index the same corpus with `VECTOR_QUANTIZATION=int8` and save a candidate benchmark report.
+3. Re-index the same corpus with `VECTOR_QUANTIZATION=int8` and save a candidate benchmark report. This full reindex is the migration path from the existing `DenseVectorField` (`embedding_v`) to the scalar-quantized field (`embedding_byte_v`); Solr cannot change an existing indexed vector field in place.
 4. Compare reports with `compare_quantization.py`; treat recall@10 below `0.95` for any semantic/hybrid query as a release blocker until reviewed.
-5. Capture memory from `docker stats --no-stream solr solr2 solr3` (or the existing `e2e/benchmark.sh` report when a small generated corpus is acceptable) for float32 and int8 runs.
+5. Capture memory from `docker stats --no-stream solr solr2 solr3` (or the existing `e2e/benchmark.sh` report when a small generated corpus is acceptable) for float32 and int8 runs. The comparison report also prints raw vector payload estimates: 1M 768D float32 vectors are 3,072,000,000 bytes, Solr 10 bits=7 scalar payload is about 672,000,000 bytes, and Solr 9 BYTE compatibility payload is 768,000,000 bytes before HNSW/Lucene overhead.
 6. Attach the JSON reports, comparison output, Solr memory samples, corpus size, and any failed query IDs to #1344.
 
 ### Commands
@@ -144,6 +174,7 @@ python3 scripts/verify_collections.py --verbose
 python3 scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --modes semantic hybrid \
+  --vector-quantization-mode none \
   --output results/benchmark-1344-float32.json
 
 docker stats --no-stream solr solr2 solr3
@@ -155,6 +186,7 @@ python3 scripts/verify_collections.py --verbose
 python3 scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --modes semantic hybrid \
+  --vector-quantization-mode int8 \
   --output results/benchmark-1344-int8.json
 
 docker stats --no-stream solr solr2 solr3
@@ -167,6 +199,35 @@ python3 scripts/benchmark/compare_quantization.py \
   --min-recall 0.95 \
   --output results/benchmark-1344-quantization-comparison.json
 ```
+
+## Solr 9.7 vs Solr 10 Paired Comparison (#1354)
+
+Use `compare_solr_versions.py` after collecting two reports with matching
+`run_metadata.host`, `run_metadata.corpus`, and `run_metadata.vector_quantization_mode`
+values. The tool refuses to mark claims as valid when host/corpus evidence is
+missing/mismatched, Solr versions do not match the expected 9.7/10 profiles, or
+the two runs use different quantization modes.
+
+```bash
+python3 scripts/benchmark/compare_solr_versions.py \
+  --solr9 results/benchmark-solr9.json \
+  --solr10 results/benchmark-solr10.json \
+  --output-json results/benchmark-solr9-vs-solr10-comparison.json \
+  --output-md results/benchmark-solr9-vs-solr10-report.md
+```
+
+Evidence required before publishing performance claims:
+
+- Solr 9.7 and Solr 10 benchmark JSON from the same host
+- identical corpus ID, document count, and byte count
+- matching `vector_quantization_mode` values (`none` vs `none` for pure Solr-version claims)
+- `run_metadata.solr_version` values matching the intended Solr 9.7 and Solr 10 profiles
+- `docker stats` memory samples with byte values for each Solr node
+- startup time, index build time, and failed query IDs
+- the generated JSON comparison and markdown report
+
+If actual Solr 9.7/10 runtime is unavailable, do not fabricate values. Commit
+the harness/runbook and comment on #1354 with the remaining commands to run.
 
 **Remaining blocker:** do not publish pass/fail performance or memory claims until the float32 and int8 runs have been executed on the same host, with the same corpus, and with captured benchmark JSON plus `docker stats` evidence.
 

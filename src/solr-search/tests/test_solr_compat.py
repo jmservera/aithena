@@ -202,6 +202,7 @@ class TestScalarQuantizedVectorFieldType:
 
         assert result["name"] == "knn_vector_768_byte"
         assert result["class"] == "solr.ScalarQuantizedDenseVectorField"
+        assert result["bits"] == 7
         assert_supported_solr10_scalar_bits(result["bits"])
         assert result["vectorDimension"] == 768
         assert result["similarityFunction"] == "cosine"
@@ -261,6 +262,7 @@ class TestManagedSchemaHnswCompatibility:
         assert byte_vectors, "managed-schema.xml must define knn_vector_768_byte"
         byte_vector = byte_vectors[0]
         assert byte_vector.attrib["class"] == "solr.ScalarQuantizedDenseVectorField"
+        assert byte_vector.attrib["bits"] == "7"
         assert_supported_solr10_scalar_bits(byte_vector.attrib["bits"])
         assert byte_vector.attrib["vectorDimension"] == "768"
         assert byte_vector.attrib["similarityFunction"] == "cosine"

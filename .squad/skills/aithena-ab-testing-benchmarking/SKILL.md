@@ -16,6 +16,7 @@ Apply this skill when:
 - Setting up parallel Solr collections for A/B testing
 - Creating benchmark query suites and comparison metrics
 - Implementing result ranking and overlap analysis
+- Comparing Solr runtime versions where claims require same-host/same-corpus evidence
 
 This skill consolidates the dual-collection architecture with benchmarking tooling for comparing model quality, latency, and index size.
 
@@ -181,6 +182,7 @@ input_type = "query" if is_e5_collection(collection) else "passage"
 ## Anti-Patterns
 
 - **Don't evaluate only one model** — always maintain a known-good baseline for comparison
+- **Don't publish Solr version performance claims from unpaired runs** — require same-host, same-corpus reports plus Docker stats, corpus size, and failed query IDs
 - **Don't rely on automated metrics alone** — human evaluation catches relevance nuances that Jaccard/MRR miss
 - **Don't assume test collection indexes faster** — measure actual throughput; higher dimensions may increase time
 - **Don't share collection data volumes in Docker** — each collection needs its own replica storage
@@ -233,6 +235,31 @@ python scripts/verify_collections.py \
 # Output: "✓ 10242 parent docs in books, 10242 in books_e5base"
 #         "✓ 512D embeddings in books, 768D in books_e5base"
 #         "✓ All parent IDs present in both collections"
+```
+
+### Example: Compare Solr 9.7 and Solr 10 evidence
+```bash
+python3 scripts/benchmark/run_benchmark.py \
+  --solr-version 9.7 \
+  --corpus-id booklibrary-2026-06-06 \
+  --corpus-documents <count> \
+  --corpus-bytes <bytes> \
+  --docker-stats-json results/solr9-docker-stats.json \
+  --output results/benchmark-solr9.json
+
+python3 scripts/benchmark/run_benchmark.py \
+  --solr-version 10 \
+  --corpus-id booklibrary-2026-06-06 \
+  --corpus-documents <count> \
+  --corpus-bytes <bytes> \
+  --docker-stats-json results/solr10-docker-stats.json \
+  --output results/benchmark-solr10.json
+
+python3 scripts/benchmark/compare_solr_versions.py \
+  --solr9 results/benchmark-solr9.json \
+  --solr10 results/benchmark-solr10.json \
+  --output-json results/benchmark-solr9-vs-solr10-comparison.json \
+  --output-md results/benchmark-solr9-vs-solr10-report.md
 ```
 
 ## References

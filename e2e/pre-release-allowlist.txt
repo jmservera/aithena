@@ -26,16 +26,16 @@ security:*permission denied*read-only*=warning
 # but document-indexer runs as UID 1000. Thumbnails are non-critical; indexing succeeds.
 security:*permission denied*/data/thumbnails/*=ignore
 
-# Solr deprecation warnings for internal APIs
-deprecation:*Deprecated*=info
-deprecation:*deprecated*=info
+# Solr/JVM startup deprecations from the Solr 10 image and bundled Java stack.
+# These are upstream runtime notices, not Aithena configuration knobs.
+deprecation:*terminally deprecated method in sun.misc.Unsafe*=info
+deprecation:*sun.misc.Unsafe::arrayBaseOffset will be removed in a future release*=info
 
 # RabbitMQ 4.0-management emits a known startup deprecation notice for the
 # management_metrics_collection feature even when the project does not set the
-# deprecated_features.permit.management_metrics_collection flag. It is
-# non-actionable during pre-release smoke tests and remains visible as info.
+# deprecated_features.permit.management_metrics_collection flag. Keep the
+# exact notice visible as info; unrelated RabbitMQ deprecations remain warnings.
 deprecation:*management_metrics_collection*=info
-deprecation:*will not be permitted by default*future minor version of RabbitMQ*=info
 
 # Connection retries during startup are normal for Docker Compose orchestration
 connection:*retrying*=ignore
@@ -56,5 +56,6 @@ config:*maxCnxns is not configured*=ignore
 # the private Compose network. This is an accepted dev/CI and default production
 # posture until Brett implements optional ZK ACL hardening; do not hide any
 # other authentication or authorization failures.
+config:*Using default ZkCredentialsInjector*OPEN_ACL_UNSAFE*=ignore
 config:*Using default ZkCredentialsProvider*=ignore
 config:*Using default ZkACLProvider*=ignore

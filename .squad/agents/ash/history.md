@@ -117,6 +117,12 @@
 
 ## Learnings
 
+### Solr 9.7 vs Solr 10 Benchmark Evidence (#1354, 2026-06-06)
+
+Benchmark claims must be generated from same-host, same-corpus paired runs only. Key paths: `scripts/benchmark/run_benchmark.py` records reproducibility metadata, `scripts/benchmark/compare_solr_versions.py` gates Solr 9.7 vs 10 comparisons, and `docs/research/solr-97-vs-10-benchmark-evidence.md` documents the required runbook.
+
+Required evidence before publishing 4× memory or 40× indexing claims: paired benchmark JSON, Docker stats with byte-valued memory samples, corpus ID/document count/byte count, startup/index timing, and failed query IDs.
+
 ### Solr 10 Language-Models Module (2025-07-22)
 
 **Key finding:** Solr 10's `language-models` module (available since 9.8) does NOT run models locally. It is a bridge to **remote embedding APIs** (OpenAI, Cohere, HuggingFace Inference API, MistralAI) via LangChain4j. No ONNX, no in-process inference.
@@ -170,6 +176,11 @@ Reviewed dependabot PR #1562 (Solr 9.7→10.0 version bump). Verdict: **CLOSE** 
 
 This decision establishes the precedent: version bumps are coordinated at epic level when they touch multiple services or schema. Improves reliability and prevents broken intermediate states.
 
+## 2026-06-06 — v2.5.1 Board Completion
+
+Completed #1349 (Evaluate hybrid search improvements) via PR #1702, merged to dev. Advanced #1348 (Prototype DocumentCategorizerUpdateProcessorFactory) via PR #1703, merged to dev; issue remains open for real ONNX/model/runtime validation. Documented decision: DocumentCategorizer stays disabled until model fixture validation.
+
+Related: #1348, #1349, v2.5.1 board
 ### DocumentCategorizer Prototype Feasibility (#1348, 2026-06-06)
 
 Solr 10 `DocumentCategorizerUpdateProcessorFactory` is feasible for index-time ONNX classification, but it lives in `analysis-extras`, not `language-models`, and requires both `model.onnx` and matching `vocab.txt` in SolrCloud FileStore. Do not enable it in active `solrconfig.xml` until a real model fixture exists.

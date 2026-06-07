@@ -1,36 +1,15 @@
-# Bandit security scanning configuration
-# Baseline exceptions for legitimate patterns
+[bandit]
+# Exclude virtual environments and third-party/generated code.
+exclude = .venv,venv,site-packages,node_modules,__pycache__
 
-# Exclude virtual environments and third-party code
-exclude_dirs:
-  - .venv
-  - venv
-  - site-packages
-  - node_modules
-  - __pycache__
-
-# Skip rules for legitimate patterns
-# B101: Use of assert detected (required by pytest)
-# B104: Binding to 0.0.0.0 (legitimate for containerized services)
-# B603: subprocess call - check for execution of untrusted input (used in e2e tests)
-# B607: Starting a process with a partial executable path (used in e2e tests)
-# B108: Probable insecure usage of temp file/directory (test fixtures)
-# B105: Possible hardcoded password string (often false positives in test data)
-# B106: Possible hardcoded password function argument (often false positives)
-# B112: Try, Except, Continue detected (common pattern in test code)
-# B110: Try, Except, Pass detected (common pattern in test cleanup)
-# B311: Random pseudo-generators (acceptable for test data selection, not crypto)
-# B404: Consider possible security implications of subprocess module (informational)
-skips:
-  - B101
-  - B104
-  - B603
-  - B607
-  - B108
-  - B105
-  - B106
-  - B112
-  - B110
-  - B311
-  - B404
-  - B608
+# Baseline exceptions for legitimate patterns:
+# B101 assert usage is required by pytest.
+# B104 binding to 0.0.0.0 is legitimate for containerized services.
+# B603/B607 subprocess patterns are used in e2e tests.
+# B108 temp paths appear in test fixtures.
+# B105/B106 hardcoded password findings are often test/config false positives.
+# B110/B112 try/except cleanup patterns are common in tests.
+# B311 random is used for test data selection, not cryptography.
+# B404 subprocess import is informational in this repo.
+# B608 SQL strings are used with trusted local schema/test data.
+skips = B101,B104,B603,B607,B108,B105,B106,B112,B110,B311,B404,B608

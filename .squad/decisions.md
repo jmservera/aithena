@@ -1,3 +1,92 @@
+# Decision: Issue Milestone Triage — 2026-06-06
+
+**Date:** 2026-06-06T08:35:28Z  
+**Author:** Newt (Product Manager)  
+**Status:** Closed
+
+## Context
+
+All 14 open issues required milestone assignment. Two active milestones existed:
+- **v2.5**: Post-release research and infrastructure work (longer cycle)
+- **v2.5.1**: Active validation phase for v2.5 release (shorter cycle)
+
+## Triage Criteria
+
+1. **Test phases and validation** → v2.5.1: Test Phase 1, 2, 3; Performance benchmarks; Pre-release validation.
+2. **Research, enhancement, and infrastructure** → v2.5: Vector quantization, GPU codecs, search improvements, admin migration, SolrCloud configuration, complexity reduction.
+
+## Decisions
+
+| Issue | Title | Milestone | Rationale |
+|-------|-------|-----------|-----------|
+| 1686 | Pre-release validation failed for pre-release | v2.5.1 | Release gate issue; active validation |
+| 1452 | Reduce general complexity: Dockerfiles, scripts | v2.5 | Infrastructure enhancement; post-release |
+| 1449 | Simplify GitHub Actions workflows | v2.5 | Infrastructure enhancement; post-release |
+| 1357 | [v2.5] Test Phase 3 | v2.5.1 | Explicit test phase; active validation |
+| 1356 | [v2.5] Test Phase 2 | v2.5.1 | Explicit test phase; already assigned |
+| 1355 | [v2.5] Test Phase 1 | v2.5.1 | Explicit test phase; already assigned |
+| 1354 | [v2.5] Performance benchmarks Solr 9.7 vs 10 | v2.5.1 | Validation evidence; already assigned |
+| 1351 | [v2.5] Migrate admin/metrics to OpenTelemetry | v2.5 | Infrastructure enhancement |
+| 1349 | [v2.5] Evaluate hybrid search improvements | v2.5 | Research track |
+| 1348 | [v2.5] Prototype DocumentCategorizerUpdateProcessorFactory | v2.5 | Research track |
+| 1347 | [v2.5] Add cuVS GPU codec | v2.5 | Vector quantization research |
+| 1345 | [v2.5] Expose efSearchScaleFactor parameter | v2.5 | Search tuning research |
+| 1344 | [v2.5] Add scalar quantization (int8) | v2.5.1 | Vector quantization; already assigned (performance gate) |
+| 1343 | [v2.5] Configure SolrCloud with Overseer disabled | v2.5 | Infrastructure enhancement |
+
+## Outcome
+
+**All 14 open issues now have milestone assignments.** No issue remains unassigned.
+
+**v2.5.1 focus:** 6 issues (test phases 1–3, pre-release validation, performance benchmarks, scalar quantization).  
+**v2.5 focus:** 8 issues (research, infrastructure, enhancements).
+
+## Notes
+
+The v2.5.1 milestone now groups the active validation work needed before v2.5 release approval. The v2.5 milestone contains follow-up research and infrastructure initiatives that can proceed in parallel without blocking release validation.
+
+Ripley should use this milestone structure to sequence implementation: v2.5.1 tests and validation gate the release; v2.5 research informs next-generation architecture decisions.
+
+---
+
+# Decision: OpenVINO release gates for base-image drift
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-06-05T17:02:51.834+00:00  
+**Status:** Approved  
+**Related:** #1662
+
+## Decision
+
+Keep Docker `uv sync --inexact` for the OpenVINO embeddings image, but treat it as
+safe only when the built image proves the installed runtime packages satisfy the
+OpenVINO extra constraints in `src/embeddings-server/pyproject.toml`.
+
+The release gate now has two enforcement points:
+
+1. The Docker build fails immediately after `uv sync --inexact` if installed
+   `openvino`, `openvino-tokenizers`, or `optimum-intel` drift outside the
+   configured constraints.
+2. A PR/manual/weekly `OpenVINO Release Gate` workflow rebuilds the image with
+   the latest base image and runs runtime smoke diagnostics.
+
+## Rationale
+
+The post-mortem for #1662 showed that lockfile validation in a clean environment
+does not catch skew introduced by preserving base-image packages. Verifying inside
+the built image checks the actual runtime that will be released while preserving
+the build-time optimization.
+
+## Coordination notes for Parker
+
+Application/runtime tests can rely on `/v1/embeddings/model` for the expected
+embedding dimension instead of hardcoding `768`. If Parker changes model-loading
+behavior or OpenVINO dependencies, the Docker verifier and smoke script are the
+infra-owned gates that should be updated with the new source-of-truth constraints.
+
+---
+
+# Decision: PathHierarchyTokenizer Audit — No-Op (v2.5)
 # Decision: Scalar Quantization (int8) Benchmark Execution Plan #1344
 
 **Author:** Bishop (Vector Search & Data Science Specialist)
@@ -289,6 +378,81 @@ python3 scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --modes semantic hybrid \
   --output results/benchmark-1344-int8.json
+
+- Issue: #1662
+- Failed run: 27022717607
+- Successful fix: 27026253418 (commit a8a5cb5)
+- Orchestration log: `.squad/orchestration-log/2026-06-05T16-26-openvino-postmortem.md`
+
+# Decision: Narrow pre-release auth failure classification
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-06-06T09:36:46.687+00:00  
+**Status:** Approved  
+**Related:** #1686
+
+## Context
+
+Pre-release validation run 27053636169 reported a release-blocking `security` error for `document-indexer-1`. The underlying log line was a benign thumbnail warning for a corrupt fixture PDF under a `TestAuthor` path:
+
+`TestAuthor ... Thumbnail generation failed ... Failed to open file`
+
+The analyzer classified it as security because the shell glob `auth*fail` matched `Author` followed later by `failed`.
+
+## Decision
+
+Pre-release security classification should use phrase-level authentication failure patterns, not broad substring globs. The analyzer now matches explicit phrases such as `auth failed`, `auth failure`, `auth error`, `authentication failed`, `authorization failed`, and `authorization failure`.
+
+## Rationale
+
+This keeps real authentication and authorization failures release-blocking while preventing benign author names, filenames, or log fields from tripping the security gate. The fix is narrower than adding an allowlist for the corrupt PDF fixture because it addresses the classifier bug without hiding future file-open or thumbnail problems.
+
+---
+
+# Decision: Pre-release warning policy for Solr/RabbitMQ runtime noise
+
+**Author:** Brett (Infrastructure Architect)  
+**Date:** 2026-06-06T09:36:46.687+00:00  
+**Status:** Approved  
+**Related:** #1695, #1696
+
+## Context
+
+Pre-release validation run 27058984234 reported warnings for Solr/JVM deprecations, RabbitMQ `management_metrics_collection`, Solr `solr.log.dir`, and Solr `ZkCredentialsInjector`.
+
+## Decision
+
+Pre-release allowlist entries should stay narrow and preserve signal:
+
+- Fix actionable first-party configuration deprecations in Compose/scripts instead of allowlisting them. The Solr 10 `solr.log.dir` warning is actionable; Aithena should use `solr.logs.dir`.
+- Keep known upstream/runtime notices as `info` only when there is no safe first-party knob for the supported topology. Current examples are Solr/JVM `sun.misc.Unsafe` terminal deprecation notices and RabbitMQ 4.0-management `management_metrics_collection` startup notices.
+- Keep the Solr `Using default ZkCredentialsInjector` message in the same accepted posture as `ZkCredentialsProvider/ZkACLProvider`: acceptable only while ZooKeeper remains internal-only and Solr HTTP BasicAuth/RBAC remains enforced.
+- Do not use broad allowlist patterns such as `deprecation:*deprecated*`; unrelated deprecations must continue to surface as warnings.
+
+## Rationale
+
+Issue #1695 mixed one actionable Solr logging configuration warning with upstream Solr/JVM and RabbitMQ runtime deprecations. Issue #1696 used the newer Solr 10 `ZkCredentialsInjector` wording for the previously accepted ZooKeeper ACL posture. Narrow rules prevent recurring pre-release issues for known noise without hiding new deprecations, authentication failures, or production hardening gaps.
+
+---
+
+# Decision: DocumentCategorizer stays disabled until model fixture validation
+
+**Author:** Ash (Search Engineer)  
+**Date:** 2026-06-06  
+**Status:** Approved  
+**Related:** #1348
+
+## Decision
+
+Keep Solr 10 `DocumentCategorizerUpdateProcessorFactory` disabled by default. Repository changes may include output schema fields, documentation, tests, and a non-loaded config scaffold, but active `solrconfig.xml` wiring waits for a real ONNX/vocab fixture and measured validation.
+
+## Rationale
+
+The processor belongs to Solr's `analysis-extras` module and requires real model artifacts in SolrCloud FileStore. Enabling the processor without those artifacts risks core load/indexing failures. Bundling model binaries or claiming accuracy without a labeled corpus would violate the #1348 research constraints.
+
+## Follow-up
+
+Create a dedicated fixture task to select a small multilingual ONNX classifier, upload it at runtime, index labeled documents, and measure accuracy, latency, throughput, and JVM memory before replacing manual metadata or changing ranking.
 
 # Capture memory footprint (should be ~4× smaller)
 docker stats --no-stream solr solr2 solr3 > results/docker-stats-int8.txt

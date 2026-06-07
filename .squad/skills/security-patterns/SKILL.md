@@ -71,8 +71,9 @@ jobs:
 
 ### Bandit (Python SAST)
 - Config: `.bandit` (centralized)
-- Mode: `--exit-zero` + `continue-on-error: true` (non-blocking, SARIF upload)
-- Baseline skips: B101 (pytest assert), B104 (0.0.0.0 in containers), B105/B106/B108 (test data), B603/B607 (subprocess in tests)
+- Mode: blocking scan; findings should fail the job, then SARIF still uploads with `if: always()`
+- Keep `.bandit` in Bandit's project-level INI format and run `bandit -r .`; treat "Unable to parse config file" and malformed `# nosec` warnings as actionable
+- Baseline skips: B101 (pytest assert), B104 (0.0.0.0 in containers), B105/B106/B108 (test data), B603/B607 (subprocess in tests), plus documented low-risk test/runtime exceptions
 - Always exclude: `.venv`, `site-packages`, `node_modules`
 
 ### Checkov (IaC)
@@ -91,6 +92,7 @@ jobs:
 2. **MEDIUM/LOW:** Baseline exception acceptable if low exploitability
 3. **False positive:** Dismiss with `noqa` + inline rationale comment (never suppress silently)
 4. **Real findings:** Fix if trivial; otherwise document in `docs/security/baseline-exceptions.md`
+5. **Green CI can hide risk:** inspect scanner logs/SARIF for `soft-fail`, `continue-on-error`, parse warnings, and note-level findings before declaring a security review clean
 
 ## Pattern 4: Logging Security
 

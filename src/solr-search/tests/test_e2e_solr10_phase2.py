@@ -78,7 +78,7 @@ def _estimated_scalar_vector_bytes(dimensions: int, bits: object) -> int:
 
 
 class TestPhase2ActivePreflight:
-    """Issue #1356 checks that can run before #1670/#1344 land."""
+    """Issue #1356 checks that can run before #1344 runtime benchmarks land."""
 
     def test_phase2_single_node_overlay_status_is_explicit(self) -> None:
         """The available single-node overlay is active but still ZooKeeper-backed."""
@@ -127,6 +127,7 @@ class TestPhase2ActivePreflight:
 
         assert byte_vector is not None, "managed-schema.xml must define knn_vector_768_byte"
         assert byte_vector["class"] == "solr.ScalarQuantizedDenseVectorField"
+        assert byte_vector["bits"] == "7"
         assert_supported_solr10_scalar_bits(byte_vector["bits"])
         assert byte_vector["hnswM"] == "12"
 
@@ -230,7 +231,7 @@ class TestPhase2VectorQuantization:
         - [ ] No out-of-memory errors during reindex
         - [ ] Solr index integrity verified (no corruption)
         """
-        pytest.skip("GATED: requires #1344/#1670 quantization runtime plus memory profiler")
+        pytest.skip("GATED: requires #1344 quantization runtime plus memory profiler")
 
     @pytest.mark.e2e
     @pytest.mark.phase2
@@ -246,7 +247,7 @@ class TestPhase2VectorQuantization:
         - [ ] Recall@10 ≥ 95% (at least 9 of top-10 match float32)
         - [ ] No quality loss below acceptable threshold
         """
-        pytest.skip("GATED: requires #1344/#1670 quantization index and search quality validator")
+        pytest.skip("GATED: requires #1344 quantization index and search quality validator")
 
     @pytest.mark.e2e
     @pytest.mark.phase2

@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from compare_quantization import (  # noqa: E402
     build_output,
     compare_reports,
+    estimate_vector_payload_memory,
     format_summary,
     load_report,
     summarize,
@@ -166,6 +167,9 @@ class TestOutput:
         )
 
         assert output["summary"]["passed"] is True
+        assert output["memory_estimate"]["vector_dimension"] == 768
+        assert output["memory_estimate"]["baseline_float32_payload_mb"] == 3072.0
+        assert output["memory_estimate"]["baseline_float32_payload_mib"] == 2929.6875
         assert "sk-01" in json.dumps(output)
 
     def test_format_summary_includes_pass_fail(self) -> None:
@@ -179,7 +183,24 @@ class TestOutput:
         text = format_summary(output)
 
         assert "QUANTIZATION RECALL COMPARISON" in text
+        assert "estimated_payload:" in text
+        assert "scalar_bits=7:" in text
         assert "PASS" in text
+
+    def test_format_summary_handles_empty_memory_estimate(self) -> None:
+        output = build_output(
+            Path("baseline.json"),
+            Path("candidate.json"),
+            [],
+            top_k=10,
+            min_recall=0.95,
+            vector_count=0,
+        )
+
+        text = format_summary(output)
+
+        assert "reduction=N/A" in text
+        assert "Nonex" not in text
 
     def test_format_summary_includes_baseline_failure_counts(self) -> None:
         comparisons = compare_reports(
@@ -219,5 +240,25 @@ class TestOutput:
             load_report(FakePath())  # type: ignore[arg-type]
         except ValueError as exc:
             assert "results list" in str(exc)
+        else:
+            raise AssertionError("ValueError not raised")
+
+
+class TestMemoryEstimate:
+    def test_estimates_float32_and_solr10_scalar_payload_savings(self) -> None:
+        estimate = estimate_vector_payload_memory(vector_count=1_000_000, vector_dimension=768, candidate_bits=7)
+
+        assert estimate["baseline_float32_payload_bytes"] == 3_072_000_000
+        assert estimate["candidate_scalar_payload_bytes"] == 672_000_000
+        assert estimate["solr9_byte_compat_payload_bytes"] == 768_000_000
+        assert estimate["candidate_scalar_payload_mb"] == 672.0
+        assert estimate["candidate_scalar_payload_mib"] == 640.8691
+        assert estimate["estimated_reduction_ratio"] == 4.5714
+
+    def test_rejects_invalid_inputs(self) -> None:
+        try:
+            estimate_vector_payload_memory(vector_count=-1)
+        except ValueError as exc:
+            assert "vector_count" in str(exc)
         else:
             raise AssertionError("ValueError not raised")

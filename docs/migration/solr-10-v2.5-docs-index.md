@@ -8,7 +8,7 @@ _Status:_ 🟢 Documentation package ready; Solr 10 default runtime merged in PR
 
 ## Overview
 
-This index consolidates all Solr 10 migration documentation for **v2.5.0 release**. The documentation package is complete for v2.5. PR #1680 made Solr 10 the default runtime with an explicit Solr 9 rollback overlay. PR #1670 remains held and is documented as an optional scalar-quantization follow-up.
+This index consolidates all Solr 10 migration documentation for **v2.5.0 release**. The documentation package is complete for v2.5. PR #1680 made Solr 10 the default runtime with an explicit Solr 9 rollback overlay. Scalar quantization is documented as an optional follow-up that must remain disabled by default until #1344 recall@10 and memory evidence is reviewed.
 
 ---
 
@@ -30,7 +30,7 @@ This index consolidates all Solr 10 migration documentation for **v2.5.0 release
 - HNSW parameter names: Solr 10 uses `hnswM` / `hnswEfConstruction`; Solr 9 rollback rewrites to `hnswMaxConnections` / `hnswBeamWidth`
 - CLI double-dash syntax: `-z $ZK` → `--zk-host $ZK`
 - `blockUnknown` default changed from `false` (Solr 9) to `true` (Solr 10)
-- Vector quantization options: default float32 is supported for v2.5; `int8` scalar quantization remains held in PR #1670
+- Vector quantization options: default float32 is supported for v2.5; optional `int8` scalar quantization uses Solr 10 `bits="7"` and still requires #1344 benchmark evidence
 - Java requirement: Java 17 → Java 21+
 
 ---
@@ -62,7 +62,7 @@ This index consolidates all Solr 10 migration documentation for **v2.5.0 release
 **Key points**:
 - Eliminate embeddings-server for on-prem via `language-models` module (deferred)
 - Simplify topology over time; v2.5 ships distributed and single-node SolrCloud, not standalone/core mode
-- Future memory savings via scalar quantization once PR #1670 or an equivalent fix lands
+- Future memory savings via scalar quantization once #1344 recall@10 and memory evidence is reviewed
 - 40× faster GPU-accelerated indexing via cuVS (optional, deferred)
 
 ---
@@ -91,11 +91,11 @@ This index consolidates all Solr 10 migration documentation for **v2.5.0 release
 | E2E tests (Solr 10 opt-in) | #1676 | ✅ Merged | Preflight + safe test coverage |
 | Solr 10 default runtime cutover | #1680 | ✅ Merged | `solr:10` default, Tika service added, Solr 9 rollback overlay preserved |
 
-### Held / Not Merged
+### Optional / Not Default
 
 | Component | PR | Status | Impact | Needed for |
 |-----------|----|---------|---------|----|
-| Scalar quantization bits fix | #1670 | ⏸️ Owner hold — do not merge | Keeps optional `VECTOR_QUANTIZATION=int8` on a safe Solr 10 setting | Optional v2.5.1+ memory optimization; do not enable int8 in v2.5 cutover |
+| Scalar quantization validation | #1344 | 📋 Benchmark evidence needed | Keeps optional `VECTOR_QUANTIZATION=int8` on a safe Solr 10 `bits="7"` setting | Optional v2.5.1+ memory optimization; do not enable int8 by default in v2.5 cutover |
 
 ### Deferred to v2.5.1+
 
@@ -143,7 +143,7 @@ This index consolidates all Solr 10 migration documentation for **v2.5.0 release
 - [x] CLI syntax updated and tested (PR #1673)
 - [x] Health check auth verified (PR #1663)
 - [x] E2E test coverage added (PR #1676)
-- [ ] Scalar quantization bits fix (PR #1670 held; optional for v2.5.1+, not default v2.5 runtime)
+- [ ] Scalar quantization validation (#1344; optional for v2.5.1+, not default v2.5 runtime)
 - [ ] Performance benchmarks (deferred to v2.5.1)
 - [ ] GPU acceleration docs (deferred to v2.5.1)
 - [ ] Embeddings-server optional mode docs (deferred to v2.6)
@@ -186,9 +186,9 @@ Documentation coverage is ready once this docs-only PR merges:
 - ✅ Issue #1353: Update documentation for Solr 10 → covered by migration plan, compatibility guide, docs index, and runbook.
 - ✅ Issue #1359: Create Solr 10 migration runbook → covered by the production runbook.
 
-Release implementation blocker:
+Release implementation note:
 
-- ⏸️ PR #1670 remains on owner hold. Keep `VECTOR_QUANTIZATION=int8` disabled unless that fix lands separately.
+- 📋 Keep `VECTOR_QUANTIZATION=int8` disabled by default until #1344 recall@10 and memory measurements are attached and reviewed.
 
 ### For v2.5.1
 

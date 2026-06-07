@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] — 2026-06-06
+
+**Release highlights: Solr 10 production-ready migration, enhanced embeddings infrastructure, and comprehensive security hardening.**
+
+### Added
+
+- **Solr 10 as default runtime** — Switches default Solr runtime from v9 to v10, enabling modern vector search capabilities, optional scalar quantization support (disabled by default pending #1344 evidence), security RBAC, and backwards-compatible HNSW schema parameters (#1680)
+- **Solr 10 migration runbook** — Comprehensive production migration documentation with pre-flight checks, phased rollout procedures, and validation checklists for operators upgrading from Solr 9 (#1682)
+- **Solr Security UI** — Simplified Solr security administration with dedicated UI backend, auth-protected access, and integrated admin infrastructure dashboard (#1674, #1675)
+- **Solr 10 E2E validation** — Extensive end-to-end test coverage for Solr 10 bootstrap, RBAC audit, live collection health checks, and quantization parameter validation (#1676, #1683)
+- **Vector quantization benchmarking** — Adds scalar quantization comparison tools and validation scaffolding to support performance tuning and release gates (#1671, #1669)
+- **OpenVINO release gates** — Hardened release validation with smoke test automation, permission verification, and CI integration for embeddings-server OpenVINO builds (#1666)
+- **Enhanced admin infrastructure UI** — Align security/infrastructure page design with Solr 10 security UI, with proper auth posture and URL handling (#1677, #1681)
+
+### Changed
+
+- **Solr init CLI redesign** — Rewrites solr-init command-line flags for Solr 10 compatibility while maintaining backwards compatibility with v9 configurations (#1673)
+- **Admin infrastructure auth hardening** — Improves URL handling robustness and access control for admin infrastructure services (#1681)
+- **OpenVINO dependency lockdown** — Pins openvino to 2025.4.x, adds openvino-tokenizers for compatibility, upgrades optimum-intel to 1.27.0 (#1659, #1660, #1661)
+
+### Security
+
+- **Solr 10 RBAC and blockUnknown hardening** — Finalizes Solr 10 security audit with comprehensive RBAC test coverage and validation of blockUnknown parameter override (#1663, #1683)
+- **Solr query response schema locking** — Enforces `wt=json` across all solr-search query paths to lock response schema and prevent unintended data leakage (#1664)
+- **Solr schema compatibility validation** — Confirms PathHierarchyTokenizer compatibility for Solr 10 migration (no-op), ensuring schema compatibility (#1665)
+
+### Breaking Changes
+
+- **Solr 9 optional, not default** — Solr 9 remains supported via optional overlay (`docker/compose.solr9.yml`) but is no longer the default runtime. New deployments use Solr 10. Existing Solr 9 production deployments should follow the v2.5.0 migration runbook to upgrade.
+- **HNSW schema parameter migration** — Updated managed-schema.xml for Solr 10 with migrated HNSW parameters. Operators upgrading from Solr 9 must follow the documented migration procedure.
+- **Solr init CLI changes** — CLI flag order and defaults changed for Solr 10; scripts using explicit `solr-init` invocations must review the rewritten command signatures.
+
 ## [2.3.0] — 2026-06-04
 
 ### Changed

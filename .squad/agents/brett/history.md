@@ -57,6 +57,10 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 
 ## Learnings
 
+- **2026-06-06T22:00:15.185+00:00 — PR #1712 infra quality review:** Solr 10 `bits=7` scalar quantization is compatible with current Solr 9 fallback rewrites when every compatibility path rewrites `bits="[47]"` to `vectorEncoding="BYTE"` (compose, prod compose, `docker/solr-init.sh`, `scripts/solr-import.sh`). Validate with dummy required auth envs: `docker compose config --quiet`, `docker compose -f docker/compose.prod.yml config --quiet`, `bash -n docker/solr-init.sh scripts/solr-import.sh`, and targeted Solr/benchmark pytest. A one-off PR #1712 pre-release embeddings-server failure was BuildKit bootstrap pulling `moby/buildkit` from Docker Hub (`context deadline exceeded`) before repository build logic; later pre-release runs passed, so track as transient unless repeated.
+- **2026-06-06T17:35:30.213+00:00 — buildall service discovery:** Keep `buildall.sh` behavior-preserving by discovering Python container service directories from `src/*/{pyproject.toml,Dockerfile}`. This includes only buildable Python services and intentionally excludes source-only packages such as `aithena-common`.
+- **2026-06-06T09:36:46.687+00:00 — Pre-release warning cleanup:** Solr 10 `solr.log.dir` is an actionable Aithena config deprecation; use only `solr.logs.dir` in Compose and log4j2. Solr/JVM `sun.misc.Unsafe::arrayBaseOffset` and RabbitMQ `management_metrics_collection` are upstream/runtime notices in the current topology, so track them as narrow info allowlist entries. Solr `ZkCredentialsInjector` is the Solr 10 wording for the already accepted internal-only ZooKeeper ACL posture; allowlist it narrowly alongside Provider/ACLProvider while keeping unrelated auth/config warnings actionable.
+- **2026-06-06T09:36:46.687+00:00 — Pre-release auth-pattern overmatch:** Issue #1686 showed that the log analyzer's broad `auth*fail` security glob matched `TestAuthor ... Thumbnail generation failed`. Keep security patterns phrase-based (`auth failed`, `authentication failed`, `authorization failed`) so benign filenames/authors do not become release-blocking security errors while real auth failures still fail.
 - **2026-06-06T16:09:02.162+00:00 — SolrCloud Overseer disabled mode:** For Solr 10 production HA, keep the existing 3×SolrCloud + 3×ZooKeeper topology and pass `-Dsolr.cloud.overseer.enabled=false` on every Solr node. This enables distributed cluster-state updates without changing dev/single-node topology; validate with compose config plus a runtime create/delete collection smoke test, and run `RUN_FAILOVER=1 tests/solrcloud-overseer-disabled-validation.sh` only in a production-like maintenance window because it stops `solr2`.
 - **2026-06-04 — Squad upgrade and zizmor configuration:** Squad v0.9.4 upgrade completes coordinator refresh, workflow/skill sync, and template refresh smoothly. Opened PR #1650 (brett-5). Generated `squad-*` workflows triggered zizmor code-scanning alerts; resolved by configuring zizmor-action to exclude generated workflow basenames via repository-owned input list (brett-6, c7be8d0). User directive: project does not control upstream Squad workflows, so generated security noise should be ignored.
 - **2026-06-04 — Solr readiness auth:** Solr readiness probes must validate `SOLR_ADMIN_USER` and `SOLR_ADMIN_PASS` before constructing curl credentials; missing installer-exported `.env` values should produce explicit CI errors, not opaque 401 retry loops.
@@ -83,6 +87,13 @@ Brett owns Docker Compose, Solr/SolrCloud, ZooKeeper, Redis, RabbitMQ, nginx, CI
 - **Pattern:** Add Python version-check step after each `uv sync --inexact` in embeddings-server Dockerfiles to catch future drift immediately
 - **Decision:** `.squad/decisions.md` (OpenVINO Smoke Failure section)
 
+## 2026-06-06 — v2.5.1 Board Completion
+
+Completed #1343 (Configure SolrCloud with Overseer disabled) via PR #1700, merged to dev. Issued pre-release validation analyzer hardening decisions:
+- Narrow pre-release auth failure classification (explicit phrase matching vs. substring globs)
+- Pre-release warning policy for Solr/RabbitMQ runtime noise (allowlist narrowing)
+
+Related: #1686, #1695, #1696
 ### 2026-06-06 — Workflow Consolidation Follow-up (Issue #1449)
 - Phase 1 consolidation is already merged on `dev`; keep later release/heartbeat workflow rewrites deferred instead of changing required release gates during v2.5.1 cleanup.
 - `squad-ci.yml` is a manual-dispatch placeholder with no required-check or release behavior; removing it is safe dead-code cleanup and preserves CI/release semantics.

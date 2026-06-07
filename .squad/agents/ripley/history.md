@@ -124,3 +124,13 @@
 - **Rubber Duck critique:** Confirmed that verification must run inside the built image; CI environment assumptions are insufficient
 - **Decision documented:** `.squad/decisions.md` (OpenVINO Smoke Failure section)
 - **Pattern:** Future GPU/accelerator builds should follow post-sync verification pattern for all critical dependencies
+
+### 2026-06-06 — v2.5.1 validation dispatch
+- Start only active validation now: #1356 Phase 2 (Lambert), #1354 Solr 9.7 vs 10 benchmarks (Ash+Lambert), and #1344 scalar-quantization evidence (Bishop+Lambert).
+- Defer `release:backlog`/optional feature work (#1452, #1357, #1348, #1347) until Phase 2 and benchmark evidence exists; DocumentCategorizer remains disabled without a real model fixture.
+- #1344 should not stay Ripley-owned once architecture is settled; route implementation/validation to Bishop + Lambert, with Ash consulted for schema/search details.
+
+### 2026-06-06 — Lead quality review for PRs #1712/#1711/#1710
+- #1712 correctly moves Solr 10 scalar quantization to supported `bits=7`, preserves Solr 9 `DenseVectorField vectorEncoding=BYTE` rewrites, and keeps `VECTOR_QUANTIZATION=int8` optional pending #1344 recall/memory evidence; required checks were green and the addressed PRD review thread was resolved.
+- #1711 adds the right same-host/same-corpus benchmark evidence gate; follow-up risk recorded on #1354 to validate `run_metadata.solr_version` and vector-quantization run profiles before release claims.
+- #1710 is acceptable as Phase 2 preflight/live-opt-in validation; it does not replace true standalone/no-ZK or paired quantization benchmark evidence.

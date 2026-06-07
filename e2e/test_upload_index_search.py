@@ -29,6 +29,7 @@ import hashlib
 import json
 import shutil
 import subprocess  # noqa: S404 — diagnostic logging only, uses list args for safety
+import time
 from pathlib import Path
 
 import requests
@@ -40,6 +41,8 @@ from conftest import (
 
 SOLR_TIMEOUT = 60  # seconds to wait for a Solr document to appear
 SOLR_AUTH = (SOLR_ADMIN_USER, SOLR_ADMIN_PASS)
+EXTRACT_RETRY_ATTEMPTS = 3
+EXTRACT_RETRY_DELAY_SECONDS = 2
 
 
 # ---------------------------------------------------------------------------
@@ -88,15 +91,19 @@ def _index_pdf(solr_url: str, pdf_path: Path, base_path: Path) -> requests.Respo
     if year:
         params["literal.year_i"] = year
 
-    with pdf_path.open("rb") as fh:
-        resp = requests.post(
-            f"{solr_url}/update/extract",
-            params=params,
-            files={"file": (pdf_path.name, fh, "application/pdf")},
-            auth=SOLR_AUTH,
-            timeout=60,
-        )
-    return resp
+    for attempt in range(1, EXTRACT_RETRY_ATTEMPTS + 1):
+        with pdf_path.open("rb") as fh:
+            resp = requests.post(
+                f"{solr_url}/update/extract",
+                params=params,
+                files={"file": (pdf_path.name, fh, "application/pdf")},
+                auth=SOLR_AUTH,
+                timeout=60,
+            )
+        if resp.status_code < 500 or attempt == EXTRACT_RETRY_ATTEMPTS:
+            return resp
+        resp.close()
+        time.sleep(EXTRACT_RETRY_DELAY_SECONDS)
 
 
 def _capture_diagnostics(solr_url: str, label: str) -> None:

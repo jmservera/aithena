@@ -45,4 +45,10 @@ Parker owns Python backend services: PDF processing, metadata extraction, file w
 - **2026-03-26:** Similar-books must query vectors from chunks, not parents: sort first chunk by `chunk_index_i`, over-fetch kNN candidates, dedupe by `parent_id_s`, return parent IDs, and assert exact IDs/counts in tests.
 - **2026-03-24/25:** Thumbnail serving required nginx alias + volume + API URL prefix alignment. HF_TOKEN belongs in GitHub Actions build secrets, isolated by multi-stage Dockerfiles and never persisted at runtime.
 - **2026-03-16–22:** Admin login loops came from API-key-only auth plus nginx `/admin/` interception; add JWT fallback and let React SPA routes pass through. Earlier backend fixes: `EMBEDDINGS_URL` must default to port 8080; semantic/hybrid wrap kNN failures; metadata PATCH uses Solr atomic updates plus Redis overrides; seed admin with lazy imports; status helpers degrade; root-owned bind mounts need privilege drop; Python 3.12 removes `async-timeout`/`tomli`; logging uses `logger.error()` plus `logger.debug(exc_info=True)`.
+
+## 2026-06-06 — v2.5.1 Board Completion
+
+Completed #1345 (Expose efSearchScaleFactor parameter) via PR #1701, merged to dev. Reassessed #1351 (Migrate admin/metrics to OpenTelemetry) and closed as already satisfied by current metrics behavior/tests.
+
+Related: v2.5.1 board
 - **2026-06-06:** `efSearchScaleFactor` is a Solr 10 local-param for kNN queries, not a precomputed `efSearch` value in solr-search. Keep the default `1.0` omitted from local params to preserve Solr 9 compatibility, and require live corpus validation before claiming recall/latency gains.

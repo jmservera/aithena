@@ -131,19 +131,19 @@ assert_exit "exit code 2 (warning)" 2 "$rc"
 assert_json_field "severity=warning" "$tmpdir/out.json" 0 "severity" "warning"
 
 # -------------------------------------------------------
-echo "Test 7: Allowlist downgrades deprecation to info"
+echo "Test 7: Generic deprecations remain warnings"
 cat > "$tmpdir/dep.txt" <<'EOF'
 solr1  | 2024-01-01 Deprecated handler class used in config
 EOF
 sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/dep.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
-assert_exit "exit code 0 (info only)" 0 "$rc"
-assert_json_field "severity=info" "$tmpdir/out.json" 0 "severity" "info"
+assert_exit "exit code 2 (warning)" 2 "$rc"
+assert_json_field "severity=warning" "$tmpdir/out.json" 0 "severity" "warning"
 
 # -------------------------------------------------------
 echo "Test 8: RabbitMQ management metrics deprecation stays info-only"
 cat > "$tmpdir/rabbitmq-deprecation.txt" <<'EOF'
 rabbitmq-1 | 2026-06-03 [warning] Deprecated features: `management_metrics_collection`.
-rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor version of RabbitMQ and will be removed from a future major version.
+rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor RabbitMQ version and the feature will be removed from a future major RabbitMQ version; actual versions to be determined.
 rabbitmq-1 | 2026-06-03 [warning]     "deprecated_features.permit.management_metrics_collection = true"
 EOF
 sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/rabbitmq-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
@@ -152,6 +152,18 @@ assert_json_count "3 info findings" "$tmpdir/out.json" 3
 assert_json_field "severity[0]=info" "$tmpdir/out.json" 0 "severity" "info"
 assert_json_field "severity[1]=info" "$tmpdir/out.json" 1 "severity" "info"
 assert_json_field "severity[2]=info" "$tmpdir/out.json" 2 "severity" "info"
+
+# -------------------------------------------------------
+echo "Test 8b: Other RabbitMQ deprecation follow-up lines remain warnings"
+cat > "$tmpdir/rabbitmq-other-deprecation.txt" <<'EOF'
+rabbitmq-1 | 2026-06-03 [warning] Deprecated features: `some_other_feature`.
+rabbitmq-1 | 2026-06-03 [warning] Its use will not be permitted by default in a future minor RabbitMQ version and the feature will be removed from a future major RabbitMQ version; actual versions to be determined.
+EOF
+sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/rabbitmq-other-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 2 (unrelated RabbitMQ warning)" 2 "$rc"
+assert_json_count "2 warning findings" "$tmpdir/out.json" 2
+assert_json_field "severity[0]=warning" "$tmpdir/out.json" 0 "severity" "warning"
+assert_json_field "severity[1]=warning" "$tmpdir/out.json" 1 "severity" "warning"
 
 # -------------------------------------------------------
 echo "Test 9: --max-errors threshold allows some errors"
@@ -241,12 +253,67 @@ zoo1  | 2026-06-03 clientPort is not set
 zoo1  | 2026-06-03 secureClientPort is not set
 zoo1  | 2026-06-03 observerMasterPort is not set
 zoo1  | 2026-06-03 maxCnxns is not configured
+solr1 | 2026-06-03 Using default ZkCredentialsInjector. ZkCredentialsInjector is not secure, it creates an empty list of credentials which leads to 'OPEN_ACL_UNSAFE' ACLs to Zookeeper nodes
 solr1 | 2026-06-03 Using default ZkCredentialsProvider
 solr1 | 2026-06-03 Using default ZkACLProvider
 EOF
 sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/zk-config.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
 assert_exit "exit code 0 (accepted ZK/Solr config)" 0 "$rc"
 assert_json_count "0 findings (accepted config posture)" "$tmpdir/out.json" 0
+
+# -------------------------------------------------------
+echo "Test 17: Author paths with failed file opens are not auth failures"
+cat > "$tmpdir/author-file-open.txt" <<'EOF'
+document-indexer-1   | {"timestamp": "2026-06-06T05:25:03.503125+00:00", "level": "WARNING", "service": "document-indexer", "name": "document_indexer.thumbnail", "message": "Thumbnail generation failed for /data/documents/TestAuthor/TestAuthor - Corrupt Index (2024).pdf: Failed to open file '/data/documents/TestAuthor/TestAuthor - Corrupt Index (2024).pdf'.", "logger": "document_indexer.thumbnail"}
+EOF
+sh "$ANALYZER" "$tmpdir/author-file-open.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 0 (benign thumbnail warning)" 0 "$rc"
+assert_no_category "no security findings" "$tmpdir/out.json" "security"
+
+# -------------------------------------------------------
+echo "Test 18: Explicit auth failures are still security errors"
+cat > "$tmpdir/auth-failed.txt" <<'EOF'
+api-1 | 2026-06-06 auth failed for service account
+EOF
+sh "$ANALYZER" "$tmpdir/auth-failed.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 1 (security error)" 1 "$rc"
+assert_json_field "category=security" "$tmpdir/out.json" 0 "category" "security"
+assert_json_field "severity=error" "$tmpdir/out.json" 0 "severity" "error"
+
+# -------------------------------------------------------
+echo "Test 19: Explicit authentication failures are still security errors"
+cat > "$tmpdir/authentication-failure.txt" <<'EOF'
+api-1 | 2026-06-06 authentication failure for service account
+EOF
+sh "$ANALYZER" "$tmpdir/authentication-failure.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 1 (security error)" 1 "$rc"
+assert_json_field "category=security" "$tmpdir/out.json" 0 "category" "security"
+assert_json_field "severity=error" "$tmpdir/out.json" 0 "severity" "error"
+
+# -------------------------------------------------------
+echo "Test 20: Solr JVM Unsafe deprecations stay info-only"
+cat > "$tmpdir/solr-unsafe-deprecation.txt" <<'EOF'
+solr-init-1 | WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+solr-init-1 | WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+solr-1      | WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+solr-1      | WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+EOF
+sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/solr-unsafe-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 0 (info-only Solr JVM warnings)" 0 "$rc"
+assert_json_count "4 info findings" "$tmpdir/out.json" 4
+assert_json_field "severity[0]=info" "$tmpdir/out.json" 0 "severity" "info"
+assert_json_field "severity[1]=info" "$tmpdir/out.json" 1 "severity" "info"
+assert_json_field "severity[2]=info" "$tmpdir/out.json" 2 "severity" "info"
+assert_json_field "severity[3]=info" "$tmpdir/out.json" 3 "severity" "info"
+
+# -------------------------------------------------------
+echo "Test 21: Deprecated Solr log dir property remains actionable"
+cat > "$tmpdir/solr-log-dir-deprecation.txt" <<'EOF'
+solr-1 | 2026-06-06 WARN o.a.s.c.u.EnvUtils You are passing in deprecated system property solr.log.dir and should upgrade to using solr.logs.dir instead.
+EOF
+sh "$ANALYZER" --allowlist "$ALLOWLIST" "$tmpdir/solr-log-dir-deprecation.txt" > "$tmpdir/out.json" 2>/dev/null; rc=$?
+assert_exit "exit code 2 (deprecated Solr log dir remains warning)" 2 "$rc"
+assert_json_field "severity=warning" "$tmpdir/out.json" 0 "severity" "warning"
 
 # -------------------------------------------------------
 echo ""
