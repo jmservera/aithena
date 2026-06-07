@@ -97,3 +97,4 @@ Related: #1686, #1695, #1696
 ### 2026-06-06 — Workflow Consolidation Follow-up (Issue #1449)
 - Phase 1 consolidation is already merged on `dev`; keep later release/heartbeat workflow rewrites deferred instead of changing required release gates during v2.5.1 cleanup.
 - `squad-ci.yml` is a manual-dispatch placeholder with no required-check or release behavior; removing it is safe dead-code cleanup and preserves CI/release semantics.
+- **2026-06-07T10:39:19.545+00:00 — buildall failure reporting:** Keep `buildall.sh` bounded to preparation/build failure handling: capture each `uv sync` and Compose build step in `.test-artifacts/buildall-{step}-{timestamp}.log`, continue checking all Python prep steps, then skip Compose when prep failed and summarize failing steps with log paths.
