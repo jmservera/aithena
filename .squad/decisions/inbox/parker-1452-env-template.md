@@ -1,8 +1,9 @@
 # Decision: Canonical environment template
 
+Author: Parker
 Date: 2026-06-07
-Issue: #1452
-Owner: Parker
+Status: Proposed
+Related: #1452, #1716
 
 ## Decision
 
