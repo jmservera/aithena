@@ -15,7 +15,7 @@ openvino = [
     "openvino>=2025.4,<2026",
     "optimum-intel>=1.27,<2",
     "intel-extension-for-pytorch",
-    "openvino-tokenizers>=2025.4,<2026",
+    "openvino-tokenizers>=2025.4,<2027",
 ]
 
 [tool.aithena.openvino]
