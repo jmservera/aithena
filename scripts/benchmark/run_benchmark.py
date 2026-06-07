@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import platform
 import statistics
 import time
@@ -305,8 +306,7 @@ def _percentile(values: list[float], pct: float) -> float | None:
     if not values:
         return None
     sorted_vals = sorted(values)
-    idx = int(len(sorted_vals) * pct)
-    idx = min(idx, len(sorted_vals) - 1)
+    idx = min(max(math.ceil(len(sorted_vals) * pct) - 1, 0), len(sorted_vals) - 1)
     return round(sorted_vals[idx], 2)
 
 

@@ -102,6 +102,7 @@ def _index_pdf(solr_url: str, pdf_path: Path, base_path: Path) -> requests.Respo
             )
         if resp.status_code < 500 or attempt == EXTRACT_RETRY_ATTEMPTS:
             return resp
+        resp.close()
         time.sleep(EXTRACT_RETRY_DELAY_SECONDS)
 
 

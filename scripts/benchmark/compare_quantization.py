@@ -235,6 +235,9 @@ def estimate_vector_payload_memory(
     candidate_bytes = (vector_count * vector_dimension * candidate_bits + 7) // 8
     int8_compat_bytes = vector_count * vector_dimension
     saved_bytes = baseline_bytes - candidate_bytes
+    baseline_mb = round(baseline_bytes / 1_000_000, 4)
+    candidate_mb = round(candidate_bytes / 1_000_000, 4)
+    int8_compat_mb = round(int8_compat_bytes / 1_000_000, 4)
     baseline_mib = round(baseline_bytes / 1024 / 1024, 4)
     candidate_mib = round(candidate_bytes / 1024 / 1024, 4)
     int8_compat_mib = round(int8_compat_bytes / 1024 / 1024, 4)
@@ -245,9 +248,9 @@ def estimate_vector_payload_memory(
         "candidate_scalar_payload_bytes": candidate_bytes,
         "solr9_byte_compat_payload_bytes": int8_compat_bytes,
         "candidate_bits": candidate_bits,
-        "baseline_float32_payload_mb": baseline_mib,
-        "candidate_scalar_payload_mb": candidate_mib,
-        "solr9_byte_compat_payload_mb": int8_compat_mib,
+        "baseline_float32_payload_mb": baseline_mb,
+        "candidate_scalar_payload_mb": candidate_mb,
+        "solr9_byte_compat_payload_mb": int8_compat_mb,
         "baseline_float32_payload_mib": baseline_mib,
         "candidate_scalar_payload_mib": candidate_mib,
         "solr9_byte_compat_payload_mib": int8_compat_mib,

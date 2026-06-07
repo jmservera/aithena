@@ -168,10 +168,8 @@ class TestOutput:
 
         assert output["summary"]["passed"] is True
         assert output["memory_estimate"]["vector_dimension"] == 768
-        assert (
-            output["memory_estimate"]["baseline_float32_payload_mib"]
-            == output["memory_estimate"]["baseline_float32_payload_mb"]
-        )
+        assert output["memory_estimate"]["baseline_float32_payload_mb"] == 3072.0
+        assert output["memory_estimate"]["baseline_float32_payload_mib"] == 2929.6875
         assert "sk-01" in json.dumps(output)
 
     def test_format_summary_includes_pass_fail(self) -> None:
@@ -253,7 +251,8 @@ class TestMemoryEstimate:
         assert estimate["baseline_float32_payload_bytes"] == 3_072_000_000
         assert estimate["candidate_scalar_payload_bytes"] == 672_000_000
         assert estimate["solr9_byte_compat_payload_bytes"] == 768_000_000
-        assert estimate["candidate_scalar_payload_mib"] == estimate["candidate_scalar_payload_mb"]
+        assert estimate["candidate_scalar_payload_mb"] == 672.0
+        assert estimate["candidate_scalar_payload_mib"] == 640.8691
         assert estimate["estimated_reduction_ratio"] == 4.5714
 
     def test_rejects_invalid_inputs(self) -> None:

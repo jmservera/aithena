@@ -153,6 +153,21 @@ class TestModeComparison:
         assert comparison.solr9_mean_latency_ms == 15.0
         assert comparison.solr10_mean_latency_ms == 15.0
 
+    def test_p95_uses_nearest_rank_percentile_not_max_for_twenty_values(self) -> None:
+        solr9 = _report(
+            solr_version="9.7",
+            results=[_result(f"sk-{idx:02d}", "keyword", float(idx)) for idx in range(1, 21)],
+        )
+        solr10 = _report(
+            solr_version="10",
+            results=[_result(f"sk-{idx:02d}", "keyword", float(idx)) for idx in range(1, 21)],
+        )
+
+        comparison = compare_modes(solr9, solr10)[0]
+
+        assert comparison.solr9_p95_latency_ms == 19.0
+        assert comparison.solr10_p95_latency_ms == 19.0
+
 
 class TestClaims:
     def test_validates_claims_when_factors_meet_targets(self) -> None:

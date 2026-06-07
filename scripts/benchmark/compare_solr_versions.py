@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
@@ -138,7 +139,7 @@ def _percentile(values: list[float], pct: float) -> float | None:
     if not values:
         return None
     sorted_values = sorted(values)
-    idx = min(int(len(sorted_values) * pct), len(sorted_values) - 1)
+    idx = min(max(math.ceil(len(sorted_values) * pct) - 1, 0), len(sorted_values) - 1)
     return round(sorted_values[idx], 4)
 
 
