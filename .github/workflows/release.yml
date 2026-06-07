@@ -272,7 +272,7 @@ jobs:
           
           # Core production files
           cp docker/compose.prod.yml release-package/
-          cp .env.prod.example release-package/
+          cp .env.example release-package/
           cp README.md release-package/
           cp LICENSE release-package/
           cp VERSION release-package/

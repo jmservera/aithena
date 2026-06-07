@@ -217,7 +217,7 @@ git push origin v1.4.0
 - [ ] Docs PR merged to `dev` (includes release notes, test report, manuals)
 - [ ] Git tag created with `v{VERSION}` format
 - [ ] GitHub Release created automatically (via release.yml)
-- [ ] Release asset contains docker/compose.prod.yml, .env.prod.example, deployment guide
+- [ ] Release asset contains docker/compose.prod.yml, .env.example, deployment guide
 - [ ] Docker images tagged with version in GHCR
 - [ ] `/version` endpoints return correct version metadata
 
