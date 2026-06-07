@@ -181,3 +181,27 @@ This decision establishes the precedent: version bumps are coordinated at epic l
 Completed #1349 (Evaluate hybrid search improvements) via PR #1702, merged to dev. Advanced #1348 (Prototype DocumentCategorizerUpdateProcessorFactory) via PR #1703, merged to dev; issue remains open for real ONNX/model/runtime validation. Documented decision: DocumentCategorizer stays disabled until model fixture validation.
 
 Related: #1348, #1349, v2.5.1 board
+### DocumentCategorizer Prototype Feasibility (#1348, 2026-06-06)
+
+Solr 10 `DocumentCategorizerUpdateProcessorFactory` is feasible for index-time ONNX classification, but it lives in `analysis-extras`, not `language-models`, and requires both `model.onnx` and matching `vocab.txt` in SolrCloud FileStore. Do not enable it in active `solrconfig.xml` until a real model fixture exists.
+
+Safe pattern: keep manual `category_s` untouched; write classifier output to separate fields such as `topic_category_s` and `document_sentiment_s`. A disabled scaffold is acceptable, but no accuracy/performance claims should be made without a labeled corpus and measured indexing/JVM validation.
+
+### Solr 10 Combined Query / Hybrid Search Evaluation (#1349, 2026-06-06)
+
+**Finding:** Solr 10.0.0 does not include a native RRF/combined-query handler. SOLR-17319 / Apache Solr PR #3418 is merged on mainline after the 10.0.0 tag and adds `CombinedQuerySearchHandler` + `CombinedQueryComponent` for multiple JSON DSL queries with built-in RRF (`combiner.algorithm=rrf`, `combiner.rrf.k`, default 60). This is the first Solr-native fusion feature that maps directly to Aithena's BM25 + kNN + RRF architecture, but only once Aithena's Solr runtime includes it.
+
+**Aithena caveat:** It is not a drop-in replacement for current hybrid search because Aithena's BM25 leg returns parent book docs while kNN returns chunk docs. Native RRF operates on Solr document IDs, so parent IDs and chunk IDs do not overlap; Combined Query also documents grouping/cursor as unsupported. A prototype must either use book-level vectors, run both legs on chunks, or keep Python-side book normalization/fusion.
+
+**Recommendation:** Keep current app-side chunk-kNN RRF in production. Prototype Solr Combined Query RRF only behind a separate handler/flag and validate against the benchmark corpus for relevance (nDCG/judged top-k), p50/p95 latency, facets/highlights, and page-range quality before changing ranking.
+
+**Full report:** `docs/research/solr10-hybrid-search-evaluation.md`
+
+## Research Loop Participation (2026-06-06)
+
+- **#1357 Phase 3 Test Readiness Planning:** Co-authored Phase 3 test scope documenting query suite validation (30 queries × 3 modes), Overseer-disabled runtime diagnostics, and int8 corpus indexing readiness. Identified blockers: PR #1670 (schema fix), #1344 (benchmark validation).
+- **#1347 cuVS GPU Search Implementation Plan:** Co-authored planning for GPU-accelerated vector search infrastructure and implementation approach (documented in issue threads).
+- **#1348 DocumentCategorizer Runtime/QA Validation Plan:** Co-authored runtime and QA validation approach; noted that SolrCloud `DocumentCategorizerUpdateProcessorFactory` requires labeled corpus before enabling and safe pattern is separate fields (topic_category_s, document_sentiment_s) without touching core category_s.
+- **#1344 int8 Quantization Gate:** Co-signed int8 evaluation protocol; noted recall@10 and memory validation as release blockers on #1670.
+- **#1343 SolrCloud Overseer Decision:** Approved decision to disable Overseer in production Solr 10 while retaining ZooKeeper HA. Documented runtime validation commands for Phase 2 testing.
+- **#1349 Hybrid RRF Decision:** Decided to keep app-side RRF (current implementation) as production default until Solr Combined Query is benchmarked and proven on real corpus. SOLR-17319 adds native RRF but does not handle parent/chunk fusion correctly; prototype required before default change.

@@ -153,7 +153,7 @@ Aggregate (per mode and category):
 
 ## Scalar Quantization Validation (#1344)
 
-Use this workflow after the Solr 10 `bits=7` scalar-quantization config is deployed and the same corpus can be indexed twice. It avoids hardware-intensive runs by reusing the existing 30-query suite and comparing top-k agreement between a float32 reference collection and an int8/scalar-quantized candidate collection.
+Use this workflow now that PR #1670 (Solr 10 `bits=7` compatibility) has merged, once the same representative corpus can be indexed twice in a controlled environment. It avoids fabricating performance claims by reusing the existing 30-query suite and comparing top-k agreement between a float32 reference collection and an int8/scalar-quantized candidate collection.
 
 ### Validation checklist
 
@@ -228,6 +228,8 @@ Evidence required before publishing performance claims:
 
 If actual Solr 9.7/10 runtime is unavailable, do not fabricate values. Commit
 the harness/runbook and comment on #1354 with the remaining commands to run.
+
+**Remaining blocker:** do not publish pass/fail performance or memory claims until the float32 and int8 runs have been executed on the same host, with the same corpus, and with captured benchmark JSON plus `docker stats` evidence.
 
 ## Running Tests
 

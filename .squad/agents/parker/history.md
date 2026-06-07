@@ -51,3 +51,4 @@ Parker owns Python backend services: PDF processing, metadata extraction, file w
 Completed #1345 (Expose efSearchScaleFactor parameter) via PR #1701, merged to dev. Reassessed #1351 (Migrate admin/metrics to OpenTelemetry) and closed as already satisfied by current metrics behavior/tests.
 
 Related: v2.5.1 board
+- **2026-06-06:** `efSearchScaleFactor` is a Solr 10 local-param for kNN queries, not a precomputed `efSearch` value in solr-search. Keep the default `1.0` omitted from local params to preserve Solr 9 compatibility, and require live corpus validation before claiming recall/latency gains.

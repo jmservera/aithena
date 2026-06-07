@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Disabled-by-default Solr 10 DocumentCategorizer prototype for issue #1348.
+
+  This file is intentionally not included from solrconfig.xml. Loading
+  solr.processor.DocumentCategorizerUpdateProcessorFactory requires the Solr
+  analysis-extras module and real ONNX/vocab files in SolrCloud FileStore.
+
+  Runtime prerequisites:
+  - Start Solr with SOLR_MODULES including analysis-extras.
+  - Upload a validated ONNX model and matching vocab.txt to FileStore.
+  - Validate labels, latency, JVM memory, and indexing throughput before enabling.
+-->
+<prototype>
+  <!--
+    To enable after validation, move these updateProcessor definitions and the
+    chain below into solrconfig.xml, then invoke with:
+    update.chain=document-categorizer-prototype
+  -->
+  <updateProcessor class="solr.processor.DocumentCategorizerUpdateProcessorFactory" name="topicCategorizer">
+    <str name="modelFile">models/topic/model.onnx</str>
+    <str name="vocabFile">models/topic/vocab.txt</str>
+    <str name="source">content</str>
+    <str name="source">title_t</str>
+    <str name="dest">topic_category_s</str>
+  </updateProcessor>
+
+  <updateProcessor class="solr.processor.DocumentCategorizerUpdateProcessorFactory" name="sentimentCategorizer">
+    <str name="modelFile">models/sentiment/model.onnx</str>
+    <str name="vocabFile">models/sentiment/vocab.txt</str>
+    <str name="source">content</str>
+    <str name="dest">document_sentiment_s</str>
+  </updateProcessor>
+
+  <updateRequestProcessorChain name="document-categorizer-prototype" processor="topicCategorizer,sentimentCategorizer">
+    <processor class="solr.LogUpdateProcessorFactory"/>
+    <processor class="solr.DistributedUpdateProcessorFactory"/>
+    <processor class="solr.RunUpdateProcessorFactory"/>
+  </updateRequestProcessorChain>
+</prototype>

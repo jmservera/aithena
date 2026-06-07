@@ -54,7 +54,7 @@
 #   upload a staged copy with HNSW and int8 vector schema attributes renamed back:
 #     hnswM                  →  hnswMaxConnections
 #     hnswEfConstruction     →  hnswBeamWidth
-#     ScalarQuantizedDenseVectorField bits="4" or bits="7" → DenseVectorField vectorEncoding="BYTE"
+#     ScalarQuantizedDenseVectorField bits="4"|"7" → DenseVectorField vectorEncoding="BYTE"
 #
 # Exit codes:
 #   0  Import succeeded

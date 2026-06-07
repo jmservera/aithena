@@ -53,16 +53,15 @@
          - "none"  → float32 vectors stored in knn_vector_768 (default, highest precision)
          - "fp16"  → float32 vectors stored in knn_vector_768 (fp16 quantization is applied
                       at the embeddings-server level before sending; Solr stores as float32)
-         - "int8"  → scalar-quantized byte vectors stored in knn_vector_768_byte
+         - "int8"  → scalar-quantized signed-byte vectors stored in knn_vector_768_byte
                       (~4x memory savings)
        When mode is "none" or "fp16", the indexer writes to the `embedding_v` field.
        When mode is "int8", the indexer writes to the `embedding_byte_v` field instead. -->
   <!-- float32 vector type — used for "none" and "fp16" quantization modes -->
   <fieldType name="knn_vector_768" class="solr.DenseVectorField" vectorDimension="768" similarityFunction="cosine" knnAlgorithm="hnsw"/>
-  <!-- Scalar-quantized int8 vector type — used for "int8" quantization mode.
-       VECTOR_QUANTIZATION=int8 maps to Solr 10 bits="7" because Solr 10 scalar
-       quantization accepts only bits="4" or bits="7"; do not use bits="8".
-       solr-init rewrites this type to
+  <!-- Scalar-quantized signed-byte vector type — used for "int8" quantization mode.
+       Solr 10 ScalarQuantizedDenseVectorField accepts bits="4" or bits="7";
+       bits="7" is its signed-byte mode. solr-init rewrites this type to
        DenseVectorField vectorEncoding="BYTE" while Solr 9 is supported.
        hnswM tuned to 12 (vs default 16) for memory savings with byte vectors. -->
   <fieldType name="knn_vector_768_byte" class="solr.ScalarQuantizedDenseVectorField" vectorDimension="768" bits="7" similarityFunction="cosine" knnAlgorithm="hnsw" hnswM="12"/>
@@ -519,6 +518,10 @@
   <field name="file_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="folder_path_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="category_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <!-- Disabled-by-default Solr 10 DocumentCategorizer prototype output fields.
+       Keep separate from manual category_s until an ONNX model fixture is validated. -->
+  <field name="topic_category_s" type="string" multiValued="false" indexed="true" stored="true"/>
+  <field name="document_sentiment_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="file_size_l" type="plong" multiValued="false" indexed="true" stored="true"/>
   <field name="language_detected_s" type="string" multiValued="false" indexed="true" stored="true"/>
   <field name="series_s" type="string" multiValued="false" indexed="true" stored="true"/>

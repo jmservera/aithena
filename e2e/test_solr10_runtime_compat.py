@@ -22,6 +22,7 @@ sys.path.append(str(SOLR_SEARCH_TESTS_DIR))
 from solr10_gates import assert_supported_solr10_scalar_bits  # noqa: E402
 
 EXPECTED_MAJOR_ENV = "E2E_SOLR_EXPECTED_MAJOR"
+OVERSEER_DISABLED_ENV = "E2E_SOLR_OVERSEER_DISABLED"
 SOLR_READY_TIMEOUT = int(os.environ.get("E2E_SOLR_READY_TIMEOUT", "90"))
 SOLR_READY_TEST_TIMEOUT = SOLR_READY_TIMEOUT + 60
 
@@ -32,6 +33,12 @@ def _require_expected_solr10() -> None:
     expected = os.environ.get(EXPECTED_MAJOR_ENV)
     if expected != "10":
         pytest.skip(f"Set {EXPECTED_MAJOR_ENV}=10 to enable Solr 10 runtime compatibility checks")
+
+
+def _require_overseer_disabled_fixture() -> None:
+    _require_expected_solr10()
+    if os.environ.get(OVERSEER_DISABLED_ENV) != "1":
+        pytest.skip(f"Set {OVERSEER_DISABLED_ENV}=1 when the Solr 10 fixture should have Overseer disabled")
 
 
 def _solr_admin_url(solr_url: str, path: str) -> str:
@@ -119,6 +126,10 @@ def _response(status_code: int, body: str = "") -> requests.Response:
     response.status_code = status_code
     response._content = body.encode()
     return response
+
+
+def _zero_vector(dimensions: int = 768) -> str:
+    return "[" + ",".join("0" for _ in range(dimensions)) + "]"
 
 
 @pytest.fixture(scope="session")
@@ -243,6 +254,42 @@ def test_live_solr_major_version_is_10(solr_system_info: dict[str, Any]) -> None
     """The opt-in Solr 10 fixture must actually run Solr 10."""
     version = str(solr_system_info.get("lucene", {}).get("solr-spec-version", ""))
     assert version.startswith("10."), f"Expected Solr 10.x, got {version!r}"
+
+
+@pytest.mark.timeout(SOLR_READY_TEST_TIMEOUT)
+def test_live_solr10_accepts_efsearch_scale_factor_query(
+    solr_url: str,
+    solr_auth: tuple[str, str],
+    solr_books_collection_ready: dict[str, Any],
+) -> None:
+    """Solr 10 must accept efSearchScaleFactor in kNN local params for Phase 2 tuning."""
+    response = _request_live_solr10(
+        "GET",
+        f"{solr_url}/select",
+        auth=solr_auth,
+        params={
+            "q": f"{{!knn f=embedding_v topK=1 efSearchScaleFactor=2}}{_zero_vector()}",
+            "rows": "1",
+            "fl": "id,score",
+            "wt": "json",
+        },
+    )
+
+    response.raise_for_status()
+    body = response.json()
+    assert body.get("responseHeader", {}).get("status") == 0
+
+
+def test_live_solr10_overseer_disabled_system_property(
+    solr_url: str,
+    solr_auth: tuple[str, str],
+) -> None:
+    """Production SolrCloud validation can assert the Overseer-disabled runtime property."""
+    _require_overseer_disabled_fixture()
+    body = _get_live_solr10_json(_solr_admin_url(solr_url, "admin/info/properties"), auth=solr_auth)
+    properties = body.get("system.properties") or body.get("systemProperties") or {}
+
+    assert str(properties.get("solr.cloud.overseer.enabled")).lower() == "false"
 
 
 @pytest.mark.timeout(SOLR_READY_TEST_TIMEOUT)

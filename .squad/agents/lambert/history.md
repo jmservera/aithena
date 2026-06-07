@@ -38,6 +38,11 @@
 
 ## Learnings
 
+### 2026-06-06T21:10:43.987+00:00 — #1356 Phase 2 Validation
+- Phase 2 coverage now has static preflight checks for single-node SolrCloud topology, production Overseer-disabled wiring, int8 schema memory ratio, and `efSearchScaleFactor` kNN query propagation in `src/solr-search/tests/test_e2e_solr10_phase2.py`.
+- Live Solr 10 runtime checks remain opt-in in `e2e/test_solr10_runtime_compat.py`; use `E2E_SOLR_EXPECTED_MAJOR=10` for fixture-backed checks and add `E2E_SOLR_OVERSEER_DISABLED=1` only when validating production Overseer-disabled mode.
+- Do not claim runtime memory/recall/latency evidence from preflight tests; pair #1356 with #1344/#1354 benchmark reports and live Solr logs before closing quantization quality gates.
+
 ### 2026-06-03 — PR #1623
 - Review cleanup: config reload tests must restore env before final reload; thumbnail tests should distinguish URL/stability metadata from actual image/header retrieval.
 - Single-node upload failure was Python E2E semantic upload (`test_web_api_semantic.py`), not Playwright. The missing proof was endpoint-level disabled-rate-limit behavior for repeated uploads.
@@ -98,3 +103,14 @@
 - Local live evidence remained blocked because paired runs would require tearing down/rebuilding the shared Solr stack and reindexing the same corpus; do not close #1344 or #1354 from tooling-only evidence.
 - #1354 gates should require same host, same corpus, expected Solr version metadata, and matching `vector_quantization_mode`; otherwise Solr-version and quantization effects can be conflated.
 - #1344 close-out evidence must include float32/int8 benchmark JSON, `compare_quantization.py` output with recall@10 threshold results, corpus size, failed query IDs, and measured Solr memory samples; payload estimates alone are not measured memory evidence.
+### 2026-06-06T09:36:46.687+00:00 — #1354 Post-#1670 Benchmark Reassessment
+- #1670 removes the Solr 10 scalar-quantization schema blocker (`bits=7`), so #1344/#1354 tooling can advance past preflight.
+- Do not close #1354 from tool-only validation: benchmark claims still require paired Solr 9.7/Solr 10 or float32/int8 runs on the same host, same representative corpus, captured benchmark JSON, `docker stats`, corpus size, and failed query IDs.
+- Safe local validation without a production corpus is limited to benchmark unit tests, comparator tests, schema/preflight checks, and mocked harness behavior; never fabricate latency, recall, throughput, or memory numbers from these checks.
+
+## Research Loop Participation (2026-06-06)
+
+- **#1357 Phase 3 Test Readiness Planning:** Co-authored Phase 3 test scope documenting query suite validation (30 queries × 3 modes), Overseer-disabled runtime diagnostics, and int8 corpus indexing readiness. Identified blockers: PR #1670 (schema fix), #1344 (benchmark validation).
+- **#1356 Phase 2 Infrastructure Assessment:** Co-authored infrastructure gap analysis (standalone Solr 10 overlay, Overseer-disabled overlay, init script branching). Confirmed Phase 2 test readiness matrix and deferred failover/resilience scope to v2.5.1.
+- **#1354 Scalar Quantization Benchmark Execution Plan:** Co-authored 3-phase benchmark workflow with detailed corpus requirements, pass/fail criteria, and deliverables. Validated that plan is executable post-PR-#1670 merge with no additional code changes.
+- **#1344 int8 Evaluation Protocol:** Co-authored closure checklist and blocker resolution path. Confirmed benchmark validation is P0 release blocker pending #1670 merge.

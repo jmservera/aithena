@@ -977,6 +977,16 @@ def search(
         enum=list(VALID_SEARCH_MODES),
     ),
     collection: str | None = Query(None, description="Solr collection to query (default: books)."),
+    ef_search_scale_factor: float = Query(
+        1.0,
+        alias="efSearchScaleFactor",
+        gt=0,
+        allow_inf_nan=False,
+        description=(
+            "Solr 10 kNN accuracy/latency tuning for semantic and HNSW hybrid search. "
+            "Effective efSearch is efSearchScaleFactor × topK. Default 1.0 preserves standard accuracy."
+        ),
+    ),
     _rate_limit: None = Depends(check_search_rate_limit),
 ) -> dict[str, Any]:
     """Search for books.
@@ -990,6 +1000,10 @@ def search(
 
     An optional ``collection`` parameter routes the query to a specific Solr
     collection (e.g. ``books_e5base`` for the e5-base A/B test).
+
+    ``efSearchScaleFactor`` tunes Solr 10 kNN accuracy/latency for ``semantic``
+    and HNSW-backed ``hybrid`` searches; Solr computes
+    ``efSearch = efSearchScaleFactor × topK``. Values must be greater than 0.
 
     **Rate Limit:** Configurable via ``RATE_LIMIT_REQUESTS_PER_MINUTE`` (default: 100).
     Set to 0 to disable rate limiting (e.g., for E2E testing).
@@ -1043,6 +1057,7 @@ def search(
                     sort,
                     filters,
                     collection=resolved_collection,
+                    ef_search_scale_factor=ef_search_scale_factor,
                 )
             else:
                 response = _search_hybrid(
@@ -1055,6 +1070,7 @@ def search(
                     sort,
                     filters,
                     collection=resolved_collection,
+                    ef_search_scale_factor=ef_search_scale_factor,
                 )
     except Exception:
         is_error = True
@@ -1162,6 +1178,7 @@ def _search_semantic(
     filters: dict[str, str],
     *,
     collection: str | None = None,
+    ef_search_scale_factor: float = 1.0,
 ) -> dict[str, Any]:
     """Execute a Solr kNN semantic search using the ``embedding_v`` field.
 
@@ -1194,7 +1211,13 @@ def _search_semantic(
         raise
 
     payload = query_solr(
-        build_knn_params(vector, top_k, settings.knn_field, build_filter_queries(filters)),
+        build_knn_params(
+            vector,
+            top_k,
+            settings.knn_field,
+            build_filter_queries(filters),
+            ef_search_scale_factor=ef_search_scale_factor,
+        ),
         collection=collection,
     )
 
@@ -1230,13 +1253,25 @@ def _search_hybrid(
     filters: dict[str, str],
     *,
     collection: str | None = None,
+    ef_search_scale_factor: float = 1.0,
 ) -> dict[str, Any]:
     """Execute hybrid search — delegates to HNSW or rerank based on architecture."""
     if settings.search_architecture == "hybrid-rerank":
         return _search_hybrid_rerank(
             request, q, page, page_size, sort_by, sort_order, sort, filters, collection=collection
         )
-    return _search_hybrid_hnsw(request, q, page, page_size, sort_by, sort_order, sort, filters, collection=collection)
+    return _search_hybrid_hnsw(
+        request,
+        q,
+        page,
+        page_size,
+        sort_by,
+        sort_order,
+        sort,
+        filters,
+        collection=collection,
+        ef_search_scale_factor=ef_search_scale_factor,
+    )
 
 
 def _search_hybrid_hnsw(
@@ -1250,6 +1285,7 @@ def _search_hybrid_hnsw(
     filters: dict[str, str],
     *,
     collection: str | None = None,
+    ef_search_scale_factor: float = 1.0,
 ) -> dict[str, Any]:
     """Execute BM25 and kNN searches in parallel, then fuse with RRF.
 
@@ -1304,7 +1340,13 @@ def _search_hybrid_hnsw(
         kw_payload = kw_future_result
 
     knn_payload = query_solr(
-        build_knn_params(vector, candidate_limit, settings.knn_field, build_filter_queries(filters)),
+        build_knn_params(
+            vector,
+            candidate_limit,
+            settings.knn_field,
+            build_filter_queries(filters),
+            ef_search_scale_factor=ef_search_scale_factor,
+        ),
         collection=collection,
     )
 

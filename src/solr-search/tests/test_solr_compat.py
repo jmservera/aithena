@@ -198,7 +198,7 @@ class TestScalarQuantizedVectorFieldType:
 
     def test_solr_10_uses_scalar_quantized_field(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("SOLR_VERSION", "10")
-        result = solr_compat.scalar_quantized_vector_field_type(hnsw_max_connections=12)
+        result = solr_compat.scalar_quantized_vector_field_type(bits=7, hnsw_max_connections=12)
 
         assert result["name"] == "knn_vector_768_byte"
         assert result["class"] == "solr.ScalarQuantizedDenseVectorField"
@@ -209,9 +209,21 @@ class TestScalarQuantizedVectorFieldType:
         assert result["hnswM"] == 12
         assert "vectorEncoding" not in result
 
+    def test_solr_10_requires_explicit_scalar_quantized_bits(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("SOLR_VERSION", "10")
+
+        with pytest.raises(ValueError, match="requires explicit bits"):
+            solr_compat.scalar_quantized_vector_field_type()
+
+    def test_solr_10_rejects_invalid_scalar_quantized_bits(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("SOLR_VERSION", "10")
+
+        with pytest.raises(ValueError, match="bits must be one of: 4, 7"):
+            solr_compat.scalar_quantized_vector_field_type(bits=8)
+
     def test_solr_9_uses_dense_vector_byte_encoding(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("SOLR_VERSION", "9")
-        result = solr_compat.scalar_quantized_vector_field_type(hnsw_max_connections=12)
+        result = solr_compat.scalar_quantized_vector_field_type(bits=8, hnsw_max_connections=12)
 
         assert result["class"] == "solr.DenseVectorField"
         assert result["vectorEncoding"] == "BYTE"
@@ -255,3 +267,14 @@ class TestManagedSchemaHnswCompatibility:
         assert byte_vector.attrib["vectorDimension"] == "768"
         assert byte_vector.attrib["similarityFunction"] == "cosine"
         assert byte_vector.attrib["hnswM"] == "12"
+
+    def test_managed_schema_rejects_solr10_invalid_scalar_quantized_bits(self):
+        schema = ET.parse(MANAGED_SCHEMA_PATH).getroot()  # nosec B314
+        invalid = [
+            field_type.attrib
+            for field_type in schema.findall("fieldType")
+            if field_type.attrib.get("class") == "solr.ScalarQuantizedDenseVectorField"
+            and field_type.attrib.get("bits") not in {"4", "7"}
+        ]
+
+        assert invalid == []
