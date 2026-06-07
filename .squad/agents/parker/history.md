@@ -53,3 +53,4 @@ Completed #1345 (Expose efSearchScaleFactor parameter) via PR #1701, merged to d
 Related: v2.5.1 board
 - **2026-06-06:** `efSearchScaleFactor` is a Solr 10 local-param for kNN queries, not a precomputed `efSearch` value in solr-search. Keep the default `1.0` omitted from local params to preserve Solr 9 compatibility, and require live corpus validation before claiming recall/latency gains.
 - **2026-06-07:** For #1452 env-template consolidation, treat `.env.example` as the canonical dev/prod/offline template. Keep installer-generated `.env` behavior separate from template documentation; release/offline packages should carry `.env.example`, not a production-only duplicate.
+- **2026-06-07:** For solr-search dependency security refreshes, `uv lock --upgrade-package starlette --upgrade-package urllib3` can target transitive fixes without broad upgrades; FastAPI 0.136.3 resolves with Starlette 1.x.
