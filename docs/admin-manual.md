@@ -2,7 +2,7 @@
 
 This manual covers deployment, configuration, monitoring, and troubleshooting for Aithena. If you are looking for end-user instructions, start with the [User Manual](user-manual.md). For the latest release features, see the [latest changelog](../CHANGELOG.md).
 
-**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 / v2.2.1 / v2.3.0 / v2.5.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the prod-overlay volume migration work, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, and fixes a CodeQL security alert in the installer. **v2.2.1** is the follow-up maintenance patch for the 2.2.x line: it removes the remaining prod-overlay bind-mount overrides, preserves the single-node Solr safety guard, and improves release/test reliability. **v2.3.0** is an infrastructure hardening release: enforces host-level Redis memory overcommit, documents ZooKeeper security posture constraints, and improves pre-release validation. **v2.5.0 is a major infrastructure release:** upgrades the search engine from Apache Solr 9 to Apache Solr 10, introduces a ZooKeeper-free standalone deployment mode, integrates the Solr 10 Security UI into the admin portal, and rewrites the `solr-init` bootstrap for Solr 10 APIs. Operators upgrading from v2.3.0 must migrate HNSW schema parameters and follow the Solr 10 migration runbook before restarting the stack. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), [v2.2.0 Deployment Updates](#deployment-updates-for-v220), [v2.2.1 Deployment Updates](#deployment-updates-for-v221), [v2.3.0 Deployment Updates](#deployment-updates-for-v230), and [v2.5.0 Deployment Updates](#deployment-updates-for-v250) sections below.
+**v1.15.0 / v1.16.0 / v1.17.0 / v1.18.0 / v1.19.0 / v2.0.0 / v2.2.0 / v2.2.1 / v2.3.0 / v2.5.0 operator note:** v1.15.0 includes admin portal enhancements (sidebar navigation, per-service log viewer, Solr SSO passthrough), critical bug fixes (document indexer OOM on large PDFs, thumbnail write failures), build-time dependency installation, and volume permission hardening. v1.16.0 adds search UI bug fixes, similar-books endpoint fix, admin dashboard pagination, nginx thumbnail routing fix, RabbitMQ deprecation warning fix, CI smoke test timeout fix, and a new pre-release container workflow. v1.17.0 introduces GPU acceleration for embeddings (opt-in via environment variables), security dependency updates (`requests`, `picomatch`), and comprehensive GPU documentation. v1.18.0 adds folder path facets for hierarchical search filtering, a comprehensive backup and disaster recovery system, stress-testing infrastructure, PDF embedded viewer fix, collections UI consistency fix, and CI/CD hardening. v1.18.1 patches the Solr auth role assignment to align with Solr 9.7 defaults and fixes the installer when run from the repo root. v1.19.0 adds configurable Solr topology (shards and replication factor), suppresses deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, and includes 38+ dependency updates. **v2.0.0 is a major release:** replaces the Streamlit admin dashboard with a React SPA at `/admin/`, removes the `aithena-admin` container image, adds admin REST API endpoints, overhauled installer with GPU auto-detection and SSL, Solr 9/10 compatibility layer, and 119 integration tests + 38 accessibility tests. **v2.2.0** completes the prod-overlay volume migration work, fixes the Solr-init replication factor cap on single-node deployments, resolves a chronic CI E2E 429 rate-limit failure, and fixes a CodeQL security alert in the installer. **v2.2.1** is the follow-up maintenance patch for the 2.2.x line: it removes the remaining prod-overlay bind-mount overrides, preserves the single-node Solr safety guard, and improves release/test reliability. **v2.3.0** is an infrastructure hardening release: enforces host-level Redis memory overcommit, documents ZooKeeper security posture constraints, and improves pre-release validation. **v2.5.0 is a major infrastructure release:** upgrades the search engine from Apache Solr 9 to Apache Solr 10, keeps lightweight deployments on single-node SolrCloud (one Solr node plus ZooKeeper), integrates the Solr 10 Security UI into the admin portal, and rewrites the `solr-init` bootstrap for Solr 10 APIs. Operators upgrading from v2.3.0 must migrate HNSW schema parameters and follow the Solr 10 migration runbook before restarting the stack. See the [v1.15.0 Deployment Updates](#deployment-updates-for-v1150), [v1.16.0 Deployment Updates](#deployment-updates-for-v1160), [v1.17.0 Deployment Updates](#deployment-updates-for-v1170), [v1.18.0 Deployment Updates](#deployment-updates-for-v1180), [v1.18.1 Deployment Updates](#deployment-updates-for-v1181), [v1.19.0 Deployment Updates](#deployment-updates-for-v1190), [v2.0.0 Deployment Updates](#deployment-updates-for-v200), [v2.2.0 Deployment Updates](#deployment-updates-for-v220), [v2.2.1 Deployment Updates](#deployment-updates-for-v221), [v2.3.0 Deployment Updates](#deployment-updates-for-v230), and [v2.5.0 Deployment Updates](#deployment-updates-for-v250) sections below.
 
 ## System architecture overview
 
@@ -5449,8 +5449,8 @@ v2.5.0 is a **major infrastructure release that upgrades the Solr search engine 
 1. **Solr 10 base image (#1335)** — The `solr`, `solr2`, and `solr3` container images now run Apache Solr 10.x.
 2. **HNSW schema migration (#1336)** — Vector search field parameters renamed for Solr 10; existing collections require schema migration before upgrading.
 3. **solr-init CLI rewrite (#1337)** — `solr-init` bootstrap uses Solr 10 CLI APIs (`solr create`, `solr config`, `solr auth`); Solr 9 invocations removed.
-4. **blockUnknown default enforcement (#1338)** — Solr 10 defaults `blockUnknown=true`; `security.json` bootstrap now sets this explicitly.
-5. **Standalone Solr mode (#1342)** — New `docker/compose.solr-standalone.yml` enables ZooKeeper-free single-node deployments.
+4. **blockUnknown compatibility posture (#1338, #1663)** — Solr 10 defaults `blockUnknown=true`; Aithena v2.5 explicitly keeps `blockUnknown=false` for current health/metrics compatibility.
+5. **Single-node SolrCloud topology (#1342)** — Lightweight deployments use `docker/compose.single-node.yml` (one Solr node plus ZooKeeper); true ZooKeeper-free standalone/core mode is not shipped in v2.5.
 6. **Security UI integration (#1350)** — Admin portal **Security** page links to Solr 10's built-in Security UI at `/admin/solr/ui/#/~security`.
 7. **PathHierarchyTokenizer verified (#1352)** — Folder path facets confirmed compatible with Solr 10; no schema changes required.
 
@@ -5464,8 +5464,8 @@ HNSW vector field parameter names changed between Solr 9 and Solr 10. **Existing
 
 | Solr 9 Parameter | Solr 10 Parameter |
 |---|---|
-| `hnswMaxConnections` | `maxConnections` |
-| `hnswBeamWidth` | `beamWidth` |
+| `hnswMaxConnections` | `hnswM` |
+| `hnswBeamWidth` | `hnswEfConstruction` |
 
 **Before upgrading to v2.5.0:**
 
@@ -5475,25 +5475,21 @@ HNSW vector field parameter names changed between Solr 9 and Solr 10. **Existing
 
 Do not start the Solr 10 images against an existing Solr 9 data directory without completing this migration.
 
-### Standalone Solr Mode (New)
+### Lightweight Solr Topology
 
-v2.5.0 introduces a ZooKeeper-free standalone deployment option for lightweight single-node installations.
+v2.5.0 does **not** ship true ZooKeeper-free standalone/core mode. For lightweight single-node installations, use the single-node SolrCloud overlay, which runs one Solr node plus ZooKeeper.
 
-**To use standalone mode:**
+**To use single-node SolrCloud:**
 
 ```bash
-# Run the installer and choose "Standalone" when prompted for topology
-python3 -m installer
-# or pass directly:
-python3 -m installer --topology standalone
+# Include the single-node overlay when starting the stack
+COMPOSE_FILE=docker-compose.yml:docker/compose.single-node.yml docker compose up -d
 ```
 
-The installer generates a `start.sh` that includes `docker/compose.solr-standalone.yml` for standalone mode.
-
-**Standalone mode limitations:**
-- No sharding or multi-node replication.
-- Not supported for production deployments with large document counts.
-- Use the SolrCloud topology (default) for HA and distributed search.
+**Single-node SolrCloud limitations:**
+- No high availability; a node outage stops search/indexing.
+- ZooKeeper is still required, but only as a single container in the Compose network.
+- Use the distributed SolrCloud topology (default) for HA and distributed search.
 
 ### Solr 10 Security UI (v2.5)
 
@@ -5523,14 +5519,14 @@ The Aithena admin portal now includes an **Admin → Security** page that provid
 
 ### blockUnknown Security Default
 
-Solr 10 ships with `blockUnknown=true` as the default for the BasicAuth security plugin. Aithena's `security.json` bootstrap now explicitly sets this value.
+Solr 10 ships with `blockUnknown=true` as the default for the BasicAuth security plugin. Aithena v2.5 explicitly keeps `blockUnknown=false` in `security.json` and `solr-init` so current unauthenticated health and metrics permissions continue to work.
 
 **Impact:**
-- Unauthenticated requests to Solr are rejected with HTTP 401.
-- This is the expected behavior and the Aithena stack is designed for it.
-- Operators with custom `security.json` overrides should review them to ensure `blockUnknown` is set explicitly.
+- The Solr API remains protected by RBAC for privileged operations.
+- Health and metrics permissions that intentionally allow unauthenticated probes continue to work.
+- Operators with custom `security.json` overrides should review them to ensure `blockUnknown` is set deliberately.
 
-**No operator action is required** for standard Aithena deployments. The `security.json` bootstrap is handled by `solr-init`.
+Moving to `blockUnknown=true` is the recommended future hardening target, but it should be paired with fully authenticated health/metrics access in a dedicated change.
 
 ### Upgrade Instructions
 
@@ -5595,8 +5591,8 @@ Follow the [v2.3.0 deployment notes](#deployment-updates-for-v230) first, then a
 | Upgrade Solr base image to 10 | `docker-compose.yml` (image tags) | Pull new images before restart. |
 | Migrate HNSW schema parameters | `managed-schema.xml` | **REQUIRED** for upgrades. Follow migration runbook. |
 | Rewrite solr-init bootstrap | `src/solr-init/` | No operator action. Applied on image pull. |
-| `blockUnknown=true` explicit in `security.json` | `src/solr-init/security.json` | No operator action. Bootstrap applies on fresh collections. |
-| Standalone Solr topology | `docker/compose.solr-standalone.yml` | Optional. Choose during installer or pass `--topology standalone`. |
+| `blockUnknown=false` explicit in `security.json` | `src/solr/security.json` and `solr-init` | No operator action for v2.5. Plan a separate hardening change before switching to `true`. |
+| Single-node SolrCloud topology | `docker/compose.single-node.yml` | Optional lightweight topology. Still uses ZooKeeper; true standalone/core mode is not shipped. |
 | Security UI scaffold | `src/aithena-ui/src/admin/Security` | No operator action. Available after pull and restart. |
 
 ### Data Migration
@@ -5622,6 +5618,7 @@ v2.5.0 publishes updated service images with the new release tag:
 ### Known Limitations
 
 - **Solr 10 startup time:** SolrCloud startup can take 45–60 seconds on first boot. `solr-init` retries are built in; increase `--health-retries` in CI if timeout issues arise.
-- **Standalone mode is not HA:** The standalone topology does not support sharding or replication. Use SolrCloud for production deployments.
+- **Single-node SolrCloud is not HA:** The lightweight topology uses one Solr node plus ZooKeeper and does not provide multi-node failover. Use distributed SolrCloud for HA production deployments.
+- **No true standalone/core mode in v2.5:** Do not look for `docker/compose.solr-standalone.yml`; it is not part of the shipped release.
 - **Legacy Solr 9 data directories:** Starting Solr 10 against an unmigrated Solr 9 data directory will result in startup errors. Always follow the migration runbook.
-- **Custom `security.json`:** Operators with custom Solr security configurations should review them against the Solr 10 `blockUnknown` default.
+- **Custom `security.json`:** Operators with custom Solr security configurations should review them against the Solr 10 `blockUnknown` default and the v2.5 compatibility posture.

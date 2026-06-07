@@ -17,11 +17,11 @@
 
 **Release baseline:** Docs-first gates are enforced since v0.8.0. v1.x shipped infra, ops, quality, admin, CI, embeddings, and docs releases. Tests grew from ~467 (v1.4.0) to 1,939 (v1.15.0); drops or unexplained jumps require investigation.
 
-**Current state (2026-06):** v2.2.1 shipped. v2.3.0 is maintenance/infrastructure hardening: milestone exists, target 2026-06-11, notes/manuals prepared in #1645/#1647, validation in #1648, final evidence pending implementation/tests. v2.5 is Solr 10 research.
+**Current state (2026-06):** v2.5.0 shipped as the Solr 10 infrastructure release. Post-v2.5 follow-up tracks include evidence-gated quantization, topology hardening, and docs/source-of-truth cleanup.
 
 **Active PRDs / product tracks:**
 1. **Pre-Release Containers (v1.16+)** — RC workflow before main merge; manual/auto triggers; production compose validation.
-2. **Admin React Migration (v2.0)** — Streamlit → React `/admin/*`; unify auth; remove docker.sock exposure; phase-gated API/UI/tests/removal.
+2. **Admin React Migration (v2.0, completed)** — Streamlit → React `/admin/*`; shipped in v2.0.0 and archived at `docs/prd/completed/admin-react-migration.md`.
 3. **Infrastructure hardening (v2.3.0)** — publish operator responsibilities for ZooKeeper/Solr posture and accepted risks.
 
 ## Product Patterns
@@ -91,3 +91,5 @@
 Triaged remaining v2.5.1 board items. All issues now assigned or in-progress. Remaining work blocked on external dependencies: external corpus, hardware, model/runtime fixtures, benchmark execution, or broader design planning. Recommended Ralph idle until external unblocking.
 
 Related: v2.5.1 board, v2.5 epic
+
+15. **2026-06-07 — Docs consistency cleanup:** Release notes, manuals, test reports, and topology docs must align to shipped code, not planned issue titles. For v2.5, the shipped source of truth is single-node SolrCloud (not ZooKeeper-free standalone), `blockUnknown=false` compatibility posture, Solr 10 HNSW names `hnswM`/`hnswEfConstruction`, and evidence-gated int8 quantization (#1344).

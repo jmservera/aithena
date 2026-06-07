@@ -1,12 +1,16 @@
-# PRD: Admin Portal Migration — Streamlit to React (v2.0)
+# Completed PRD: Admin Portal Migration — Streamlit to React (v2.0)
 
 | Field | Value |
 |---|---|
 | **Author** | Newt (Product Manager) |
 | **Requested by** | Juanma (jmservera) |
-| **Status** | Draft |
+| **Status** | Completed — shipped in v2.0.0 |
 | **Target release** | v2.0 |
-| **Last updated** | 2025-07-18 |
+| **Last updated** | 2026-06-07 |
+
+---
+
+> **Completion note (2026-06-07):** This PRD is archived as completed. The React admin portal shipped in v2.0.0, and the legacy Streamlit admin service/image was removed from the release payload (see `CHANGELOG.md` v2.0.0).
 
 ---
 

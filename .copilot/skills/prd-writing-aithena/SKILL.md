@@ -193,7 +193,7 @@ Phase 4: Cleanup (Week 6)
 **Format:** Links to related PRDs, decisions, skills
 
 **Example:**
-- Related PRD: `docs/prd/admin-react-migration.md` (Phase 1 API endpoints support pre-release validation)
+- Related PRD: `docs/prd/completed/admin-react-migration.md` (Phase 1 API endpoints support pre-release validation)
 - Skill: `phase-gated-execution` (Admin React migration will use 4-phase model)
 - Skill: `milestone-wave-execution` (12-issue Admin React migration will use waves)
 - Decision: `.squad/decisions.md` (Pre-release containers approved 2026-03-25)
@@ -262,6 +262,6 @@ At release time (e.g., v1.16.0 release):
 ## References
 
 - **Pre-Release Containers PRD:** `docs/prd/pre-release-containers.md` (v1.16.0, 5 issues)
-- **Admin React Migration PRD:** `docs/prd/admin-react-migration.md` (v2.0, 12 issues)
+- **Admin React Migration PRD:** `docs/prd/completed/admin-react-migration.md` (v2.0, 12 issues)
 - **Related skills:** phase-gated-execution, milestone-wave-execution, release-gate
 - **Decision tracker:** `.squad/decisions.md` (all approved PRDs logged here)
