@@ -247,14 +247,14 @@ Change chunking strategy from **400-word passages** to **full pages**:
 - **Implementation:** Modify document-indexer chunk size; re-index required
 - **Timeline:** 1–2 weeks
 
-#### Phase 2: int8 Quantization (Solr 9.7 Ready)
+#### Phase 2: int8 Quantization (Evidence-Gated)
 
-Enable `vectorEncoding="BYTE"` in the schema:
+Aithena includes an optional int8/byte-vector path, but production use remains evidence-gated. Treat it as an optimization candidate until benchmark evidence for your corpus is captured (see issue #1344).
 
-- **Reduction:** 4× per-vector (3,328 bytes → 832 bytes)
-- **Quality loss:** ~1–3% recall@10 (acceptable trade-off)
-- **Implementation:** Schema change + quantization in embeddings-server
-- **Timeline:** 2–3 weeks + re-index
+- **Reduction target:** up to 4× per-vector (3,328 bytes → 832 bytes)
+- **Quality impact:** expected to be corpus-dependent; validate recall@10 before enabling in production
+- **Implementation:** Schema/config change + embeddings pipeline support + full re-index
+- **Timeline:** 2–3 weeks + benchmark/evidence review + re-index
 
 #### Phase 3: Model Downgrade (Optional)
 
@@ -442,9 +442,9 @@ Vector quantization reduces memory footprint and affects hardware budgets.
 | Mode | Dimensions | Per-Vector Size | Total (30K books) | Quality Loss | Solr Version |
 |------|-----------|-----------------|------------------|--------------|------------|
 | **No quantization** (float32) | 768 (e5-base) | 3,328 B | 130–180 GB | None | 9.3+ |
-| **int8 (byte encoding)** | 768 (e5-base) | 832 B | 25–35 GB | ~1–3% | 9.7+ |
-| **Model downgrade** (e5-small) | 384 | 1,664 B (float32) | 65–90 GB | ~5% relative | 9.3+ |
-| **e5-small + int8** | 384 | 416 B | 13–18 GB | ~5% + ~1–3% | 9.7+ |
+| **int8 (byte encoding)** | 768 (e5-base) | 832 B | 25–35 GB | Evidence required; corpus-dependent | Optional; validate via #1344 before production |
+| **Model downgrade** (e5-small) | 384 | 1,664 B (float32) | 65–90 GB | ~5% relative (benchmark before production) | 9.3+ |
+| **e5-small + int8** | 384 | 416 B | 13–18 GB | Combined impact requires evidence | Optional; validate via #1344 before production |
 | **ScalarQuantized (int4)** | 768 | 416 B | 13–18 GB | ~2–5% | 10.0+ (future) |
 
 ### Recommended Combinations
@@ -452,8 +452,8 @@ Vector quantization reduces memory footprint and affects hardware budgets.
 **For 32 GB Single-Node (Scenario B):**
 ```
 Page-level chunking: 54M → 9M vectors
-int8 quantization: 768D × 832 B = 7.5 GB HNSW
-Total: ~32 GB (with OS + JVM + text headroom)
+int8 quantization candidate: 768D × 832 B = 7.5 GB HNSW
+Total target: ~32 GB (requires #1344-style recall and memory evidence before production)
 ```
 
 **For 64 GB Single-Node (Scenario D, maximum comfort):**
@@ -466,7 +466,7 @@ Total: ~48 GB (with OS + JVM + text headroom)
 **For Distributed (any scale):**
 ```
 No quantization required; memory per node is 2–8 GB for Solr
-Recommend: int8 for indexing performance (less memory → faster disk I/O)
+Consider int8 only after corpus-specific benchmark evidence; float32 remains the conservative default
 ```
 
 ---
