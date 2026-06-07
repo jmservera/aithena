@@ -14,6 +14,7 @@
 - 2026-06-06: Solr 10 scalar quantization must use `bits="7"` (or `4`) rather than `8`; Aithena's int8 path keeps `vectorDimension="768"` and `similarityFunction="cosine"`, with Solr 9 rollback rewriting to `DenseVectorField vectorEncoding="BYTE"`.
 - 2026-06-06: Quantization evaluation lives in `scripts/benchmark/`: run paired float32/int8 reports with `run_benchmark.py`, compare recall@10 with `compare_quantization.py`, and attach measured `docker stats` memory samples before claiming runtime savings.
 - **2026-06-06:** For #1344 scalar quantization closure, validate against `dev` when #1670 is only merged there; schema/preflight/unit checks can prove bits=7 wiring, but recall@10 and memory savings still require same-corpus float32 vs int8 runtime benchmark artifacts.
+- **2026-06-07:** For #1717 preflight, quantization acceptance is per semantic/hybrid query-mode recall@10 ≥0.95 from `compare_quantization.py`, or explicit exception review; measured same-host Docker stats are required and payload estimates are not release evidence.
 
 ## Research Loop Participation (2026-06-06)
 

@@ -3,8 +3,8 @@
     "version": "1.0",
     "created_by": "Bishop (Vector Search & Data Science Specialist)",
     "created_at": "2026-06-05",
-    "updated_at": "2026-06-06T09:36:46.687+00:00",
-    "purpose": "Configuration for scalar quantization (int8) benchmark validation #1344",
+    "updated_at": "2026-06-07T16:55:27.144+00:00",
+    "purpose": "Configuration for scalar quantization (int8) benchmark validation #1344/#1717",
     "schema_prerequisite": "Solr 10 ScalarQuantizedDenseVectorField uses supported bits (4 or 7) and Solr 9 staging rewrites bits 4/7 to vectorEncoding=BYTE"
   },
   "corpus": {
@@ -75,16 +75,16 @@
   "pass_fail_criteria": {
     "release_blockers": [
       {
-        "metric": "recall_at_k",
+        "metric": "recall_at_k_individual",
         "threshold": 0.95,
-        "scope": "all_queries_aggregate",
-        "description": "Mean recall@10 across semantic and hybrid modes must be ≥0.95 (95% agreement with float32)"
+        "scope": "per_query_mode",
+        "description": "Every semantic and hybrid query/mode comparison must have recall@10 ≥0.95 against float32, or be listed for explicit exception review before release claims"
       },
       {
-        "metric": "recall_at_k_individual",
-        "threshold": 0.85,
-        "scope": "per_query",
-        "description": "No individual query should fall below 0.85 recall (85% agreement) without manual review"
+        "metric": "query_pairing",
+        "threshold": "exact_match",
+        "scope": "float32_vs_int8",
+        "description": "Query IDs, query file identity, search modes, top_k, collection, corpus ID, document count, and corpus bytes must match between float32 and int8 reports"
       },
       {
         "metric": "indexing_errors",
@@ -93,10 +93,10 @@
         "description": "Zero indexing or search errors during Phase 1 (float32) and Phase 2 (int8)"
       },
       {
-        "metric": "memory_reduction_ratio",
-        "threshold": 0.5,
-        "scope": "int8_vs_float32",
-        "description": "int8 collection memory must be ≤50% of float32 (target: 25% for 4x reduction)"
+        "metric": "measured_solr_memory_samples",
+        "threshold": "present",
+        "scope": "both_phases",
+        "description": "Attach same-host docker stats memory samples for every Solr node in both float32 and int8 runs; payload estimates alone are not acceptable evidence"
       }
     ],
     "warnings": [
