@@ -165,11 +165,11 @@ docker pull ghcr.io/jmservera/aithena-solr-search:v1.3.0
 
 ### Step 2: Create `.env.prod` for Production Configuration
 
-Copy the production example and update values:
+Copy the canonical environment template and update values:
 
 ```bash
-cp .env.prod.example .env.prod
-# Edit .env.prod with your environment (see docs/deployment/production.md)
+cp .env.example .env.prod
+# Edit .env.prod with your production environment values
 ```
 
 Required settings:

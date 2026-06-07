@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -23,6 +24,72 @@ def fake_secret(_: int) -> str:
 
 
 REQUIRED_ENV_KEYS = {key for key, _ in ENV_COMMENTS}
+
+CANONICAL_TEMPLATE_PROD_KEYS = {
+    "BOOKS_PATH",
+    "BOOK_LIBRARY_PATH",
+    "PUBLIC_ORIGIN",
+    "CORS_ORIGINS",
+    "AUTH_DB_DIR",
+    "AUTH_DB_PATH",
+    "AUTH_JWT_SECRET",
+    "AUTH_JWT_TTL",
+    "AUTH_COOKIE_NAME",
+    "ADMIN_API_KEY",
+    "AUTH_ADMIN_USERNAME",
+    "AUTH_ADMIN_PASSWORD",
+    "AUTH_ENABLED",
+    "RABBITMQ_USER",
+    "RABBITMQ_PASS",
+    "RABBITMQ_LISTER_USER",
+    "RABBITMQ_LISTER_PASS",
+    "RABBITMQ_INDEXER_USER",
+    "RABBITMQ_INDEXER_PASS",
+    "RABBITMQ_SEARCH_USER",
+    "RABBITMQ_SEARCH_PASS",
+    "RABBITMQ_ADMIN_USER",
+    "RABBITMQ_ADMIN_PASS",
+    "SOLR_ADMIN_USER",
+    "SOLR_ADMIN_PASS",
+    "SOLR_READONLY_USER",
+    "SOLR_READONLY_PASS",
+    "VERSION",
+    "GIT_COMMIT",
+    "BUILD_DATE",
+}
+
+COMPOSE_DEFAULT_ENV_KEYS = {
+    "COLLECTIONS_DB_PATH",
+    "EMBEDDINGS_BASE_TAG",
+    "EMBEDDINGS_VERSION",
+    "NGINX_HOST",
+    "RATE_LIMIT_REQUESTS_PER_MINUTE",
+    "SOLR_CLOUD_OVERSEER_ENABLED",
+    "SOLR_OPTS",
+    "SOLR_VERSION",
+    "SOLR_BASE_IMAGE",
+    "UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE",
+    "VECTOR_QUANTIZATION",
+}
+
+
+def _env_template_keys(path: Path) -> set[str]:
+    return {
+        match.group(1)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if (match := re.match(r"\s*#?\s*([A-Z][A-Z0-9_]+)=", line))
+    }
+
+
+def test_env_example_is_canonical_template() -> None:
+    template_path = ROOT / ".env.example"
+    assert template_path.exists()
+    assert not (ROOT / ".env.prod.example").exists()
+
+    template_keys = _env_template_keys(template_path)
+    assert CANONICAL_TEMPLATE_PROD_KEYS.issubset(template_keys)
+    assert REQUIRED_ENV_KEYS.issubset(template_keys)
+    assert COMPOSE_DEFAULT_ENV_KEYS.issubset(template_keys)
 
 
 def test_run_setup_writes_env_and_hashes_password(tmp_path: Path) -> None:
