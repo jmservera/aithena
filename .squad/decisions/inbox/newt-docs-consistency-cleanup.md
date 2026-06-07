@@ -1,9 +1,9 @@
 # Decision: Docs Must Describe Shipped v2.5 Behavior
 
-**Author:** Newt (Product Manager)
-**Date:** 2026-06-07T14:53:54Z
-**Status:** Proposed
-**Related:** #1452, #1344, v2.5.0 docs audit
+Author: Newt (Product Manager)
+Date: 2026-06-07
+Status: Proposed
+Related: #1452, #1344, v2.5.0 docs audit
 
 ## Context
 
