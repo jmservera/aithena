@@ -17,6 +17,8 @@ from typing import Any
 DEFAULT_LATENCY_REGRESSION_PCT = 20.0
 MEMORY_IMPROVEMENT_TARGET = 4.0
 INDEXING_IMPROVEMENT_TARGET = 40.0
+DEFAULT_EXPECTED_SOLR9_VERSION = "9.7"
+DEFAULT_EXPECTED_SOLR10_VERSION = "10"
 
 
 @dataclass(frozen=True)
@@ -60,11 +62,30 @@ def _corpus_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
     return {key: corpus.get(key) for key in ("id", "document_count", "bytes") if corpus.get(key) is not None}
 
 
-def validate_evidence(solr9: dict[str, Any], solr10: dict[str, Any]) -> dict[str, Any]:
+def _metadata_value(report: dict[str, Any], key: str) -> str | None:
+    value = _metadata(report).get(key)
+    return str(value) if value is not None else None
+
+
+def _version_matches(actual: str | None, expected: str) -> bool:
+    return actual is not None and actual.startswith(expected)
+
+
+def validate_evidence(
+    solr9: dict[str, Any],
+    solr10: dict[str, Any],
+    *,
+    expected_solr9_version: str = DEFAULT_EXPECTED_SOLR9_VERSION,
+    expected_solr10_version: str = DEFAULT_EXPECTED_SOLR10_VERSION,
+) -> dict[str, Any]:
     host9 = _host_fingerprint(solr9)
     host10 = _host_fingerprint(solr10)
     corpus9 = _corpus_fingerprint(solr9)
     corpus10 = _corpus_fingerprint(solr10)
+    solr9_version = _metadata_value(solr9, "solr_version")
+    solr10_version = _metadata_value(solr10, "solr_version")
+    solr9_quantization = _metadata_value(solr9, "vector_quantization_mode")
+    solr10_quantization = _metadata_value(solr10, "vector_quantization_mode")
     failures: list[str] = []
     if not host9 or not host10:
         failures.append("missing_host_metadata")
@@ -74,6 +95,14 @@ def validate_evidence(solr9: dict[str, Any], solr10: dict[str, Any]) -> dict[str
         failures.append("missing_corpus_metadata")
     elif corpus9 != corpus10:
         failures.append("corpus_mismatch")
+    if not _version_matches(solr9_version, expected_solr9_version):
+        failures.append("solr9_version_mismatch")
+    if not _version_matches(solr10_version, expected_solr10_version):
+        failures.append("solr10_version_mismatch")
+    if solr9_quantization is None or solr10_quantization is None:
+        failures.append("missing_vector_quantization_mode")
+    elif solr9_quantization != solr10_quantization:
+        failures.append("vector_quantization_mode_mismatch")
     return {
         "valid": not failures,
         "failures": failures,
@@ -81,6 +110,12 @@ def validate_evidence(solr9: dict[str, Any], solr10: dict[str, Any]) -> dict[str
         "solr10_host": host10,
         "solr9_corpus": corpus9,
         "solr10_corpus": corpus10,
+        "expected_solr9_version": expected_solr9_version,
+        "expected_solr10_version": expected_solr10_version,
+        "solr9_version": solr9_version,
+        "solr10_version": solr10_version,
+        "solr9_vector_quantization_mode": solr9_quantization,
+        "solr10_vector_quantization_mode": solr10_quantization,
     }
 
 
@@ -265,6 +300,8 @@ def build_comparison(
     solr10_path: Path,
     *,
     latency_regression_pct: float = DEFAULT_LATENCY_REGRESSION_PCT,
+    expected_solr9_version: str = DEFAULT_EXPECTED_SOLR9_VERSION,
+    expected_solr10_version: str = DEFAULT_EXPECTED_SOLR10_VERSION,
 ) -> dict[str, Any]:
     solr9 = load_report(solr9_path)
     solr10 = load_report(solr10_path)
@@ -272,7 +309,12 @@ def build_comparison(
     return {
         "solr9_report": str(solr9_path),
         "solr10_report": str(solr10_path),
-        "evidence": validate_evidence(solr9, solr10),
+        "evidence": validate_evidence(
+            solr9,
+            solr10,
+            expected_solr9_version=expected_solr9_version,
+            expected_solr10_version=expected_solr10_version,
+        ),
         "mode_comparisons": [comparison.__dict__ for comparison in comparisons],
         "resource_comparison": {
             "solr9_memory_bytes": memory_bytes(solr9),
@@ -304,6 +346,8 @@ def build_comparison(
             ),
             "solr9_concurrency": throughput_value(solr9, "concurrency"),
             "solr10_concurrency": throughput_value(solr10, "concurrency"),
+            "solr9_vector_quantization_mode": _metadata_value(solr9, "vector_quantization_mode"),
+            "solr10_vector_quantization_mode": _metadata_value(solr10, "vector_quantization_mode"),
         },
         "claims": analyze_claims(solr9, solr10),
         "regressions": identify_regressions(
@@ -329,6 +373,9 @@ def format_markdown(comparison: dict[str, Any]) -> str:
         "",
         f"- Valid paired evidence: **{'yes' if evidence['valid'] else 'no'}**",
         f"- Gate failures: {', '.join(evidence['failures']) if evidence['failures'] else '(none)'}",
+        f"- Solr versions: {evidence['solr9_version']} vs {evidence['solr10_version']}",
+        "- Vector quantization modes: "
+        f"{evidence['solr9_vector_quantization_mode']} vs {evidence['solr10_vector_quantization_mode']}",
         "",
         "## Query Latency by Mode",
         "",
@@ -382,6 +429,9 @@ def format_markdown(comparison: dict[str, Any]) -> str:
             "| Throughput concurrency | "
             f"{_fmt(resources['solr9_concurrency'])} | "
             f"{_fmt(resources['solr10_concurrency'])} | N/A |",
+            "| Vector quantization mode | "
+            f"{_fmt(resources['solr9_vector_quantization_mode'])} | "
+            f"{_fmt(resources['solr10_vector_quantization_mode'])} | N/A |",
             "",
             "## Claimed Improvements",
             "",
@@ -406,8 +456,9 @@ def format_markdown(comparison: dict[str, Any]) -> str:
     if not evidence["valid"]:
         lines.append(
             "Do not publish performance claims or make deployment decisions yet. Re-run Solr 9.7 "
-            "and Solr 10 on the same host with the same corpus and attach benchmark JSON, "
-            "docker stats, corpus size, and failed query IDs.",
+            "and Solr 10 on the same host with the same corpus and matching vector quantization "
+            "mode; attach benchmark JSON, docker stats, corpus size, Solr versions, quantization "
+            "mode, and failed query IDs.",
         )
     elif comparison["regressions"]:
         lines.append("Hold production rollout until regressions are triaged and re-benchmarked.")
@@ -443,12 +494,24 @@ def main() -> None:
         default=DEFAULT_LATENCY_REGRESSION_PCT,
         help=f"p95 latency regression threshold (default: {DEFAULT_LATENCY_REGRESSION_PCT})",
     )
+    parser.add_argument(
+        "--expected-solr9-version",
+        default=DEFAULT_EXPECTED_SOLR9_VERSION,
+        help=f"Expected Solr 9 report version prefix (default: {DEFAULT_EXPECTED_SOLR9_VERSION})",
+    )
+    parser.add_argument(
+        "--expected-solr10-version",
+        default=DEFAULT_EXPECTED_SOLR10_VERSION,
+        help=f"Expected Solr 10 report version prefix (default: {DEFAULT_EXPECTED_SOLR10_VERSION})",
+    )
     args = parser.parse_args()
 
     comparison = build_comparison(
         args.solr9,
         args.solr10,
         latency_regression_pct=args.latency_regression_pct,
+        expected_solr9_version=args.expected_solr9_version,
+        expected_solr10_version=args.expected_solr10_version,
     )
     markdown = format_markdown(comparison)
     print(markdown)

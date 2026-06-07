@@ -93,3 +93,8 @@
 - Keep live float32/int8 recall and measured Solr memory evidence as follow-up for #1344/#1354 before performance claims or broad enablement; it should not block optional int8 support when docs explicitly disclaim measured evidence.
 - #1710 Phase 2 skips are acceptable when they include concrete GATED reasons and opt-in Solr 10 live checks fail loudly when the fixture is unreachable or wrong-shaped.
 - #1711 benchmark evidence gates are useful QA patterns: paired comparisons must validate same host/corpus metadata and report failed query IDs rather than allowing unsupported performance claims.
+
+### 2026-06-07T08:10:57.944+00:00 — Evidence Gate Support (#1344, #1354)
+- Local live evidence remained blocked because paired runs would require tearing down/rebuilding the shared Solr stack and reindexing the same corpus; do not close #1344 or #1354 from tooling-only evidence.
+- #1354 gates should require same host, same corpus, expected Solr version metadata, and matching `vector_quantization_mode`; otherwise Solr-version and quantization effects can be conflated.
+- #1344 close-out evidence must include float32/int8 benchmark JSON, `compare_quantization.py` output with recall@10 threshold results, corpus size, failed query IDs, and measured Solr memory samples; payload estimates alone are not measured memory evidence.

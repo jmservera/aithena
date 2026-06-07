@@ -212,6 +212,7 @@ def build_run_metadata(
     *,
     run_label: str | None = None,
     solr_version: str | None = None,
+    vector_quantization_mode: str | None = None,
     corpus_id: str | None = None,
     corpus_documents: int | None = None,
     corpus_bytes: int | None = None,
@@ -238,6 +239,8 @@ def build_run_metadata(
         metadata["run_label"] = run_label
     if solr_version:
         metadata["solr_version"] = solr_version
+    if vector_quantization_mode:
+        metadata["vector_quantization_mode"] = vector_quantization_mode
 
     corpus: dict[str, Any] = {}
     if corpus_id:
@@ -505,6 +508,11 @@ def main() -> None:
     )
     parser.add_argument("--run-label", help="Human-readable run label, e.g. solr9-float32")
     parser.add_argument("--solr-version", help="Solr version under test, e.g. 9.7 or 10.0")
+    parser.add_argument(
+        "--vector-quantization-mode",
+        choices=("none", "int8"),
+        help="Vector quantization mode for this run; required for release comparison claims",
+    )
     parser.add_argument("--corpus-id", help="Stable ID/name for the indexed corpus")
     parser.add_argument("--corpus-documents", type=int, help="Number of source documents in the corpus")
     parser.add_argument("--corpus-bytes", type=int, help="Total source corpus size in bytes")
@@ -524,6 +532,7 @@ def main() -> None:
     run_metadata = build_run_metadata(
         run_label=args.run_label,
         solr_version=args.solr_version,
+        vector_quantization_mode=args.vector_quantization_mode,
         corpus_id=args.corpus_id,
         corpus_documents=args.corpus_documents,
         corpus_bytes=args.corpus_bytes,

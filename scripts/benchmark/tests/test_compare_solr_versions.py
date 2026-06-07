@@ -36,6 +36,7 @@ def _result(query_id: str, mode: str, latency_ms: float, error: str | None = Non
 def _report(
     *,
     solr_version: str,
+    vector_quantization_mode: str = "none",
     corpus_id: str = "corpus-a",
     node: str = "bench-host",
     memory_bytes: int = 400,
@@ -51,6 +52,7 @@ def _report(
         "modes_tested": ["keyword"],
         "run_metadata": {
             "solr_version": solr_version,
+            "vector_quantization_mode": vector_quantization_mode,
             "host": {
                 "node": node,
                 "system": "Linux",
@@ -78,6 +80,8 @@ class TestEvidenceValidation:
 
         assert evidence["valid"] is True
         assert evidence["failures"] == []
+        assert evidence["solr9_vector_quantization_mode"] == "none"
+        assert evidence["solr10_vector_quantization_mode"] == "none"
 
     def test_host_mismatch_is_invalid(self) -> None:
         evidence = validate_evidence(
@@ -96,6 +100,35 @@ class TestEvidenceValidation:
 
         assert evidence["valid"] is False
         assert "corpus_mismatch" in evidence["failures"]
+
+    def test_solr_version_mismatch_is_invalid(self) -> None:
+        evidence = validate_evidence(
+            _report(solr_version="10"),
+            _report(solr_version="9.7"),
+        )
+
+        assert evidence["valid"] is False
+        assert "solr9_version_mismatch" in evidence["failures"]
+        assert "solr10_version_mismatch" in evidence["failures"]
+
+    def test_missing_quantization_mode_is_invalid(self) -> None:
+        solr9 = _report(solr_version="9.7")
+        solr10 = _report(solr_version="10")
+        solr10["run_metadata"].pop("vector_quantization_mode")
+
+        evidence = validate_evidence(solr9, solr10)
+
+        assert evidence["valid"] is False
+        assert "missing_vector_quantization_mode" in evidence["failures"]
+
+    def test_quantization_mode_mismatch_is_invalid(self) -> None:
+        evidence = validate_evidence(
+            _report(solr_version="9.7", vector_quantization_mode="none"),
+            _report(solr_version="10", vector_quantization_mode="int8"),
+        )
+
+        assert evidence["valid"] is False
+        assert "vector_quantization_mode_mismatch" in evidence["failures"]
 
 
 class TestModeComparison:
@@ -160,13 +193,22 @@ class TestOutput:
         markdown = format_markdown(comparison)
 
         assert comparison["evidence"]["valid"] is True
+        assert comparison["resource_comparison"]["solr9_vector_quantization_mode"] == "none"
         assert "Query Latency by Mode" in markdown
         assert "Claimed Improvements" in markdown
         assert "Factor (>1 means Solr 10 improved)" in markdown
+        assert "Vector quantization mode" in markdown
 
     def test_invalid_evidence_recommendation_blocks_claims(self) -> None:
         comparison = {
-            "evidence": {"valid": False, "failures": ["host_mismatch"]},
+            "evidence": {
+                "valid": False,
+                "failures": ["host_mismatch"],
+                "solr9_version": "9.7",
+                "solr10_version": "10",
+                "solr9_vector_quantization_mode": "none",
+                "solr10_vector_quantization_mode": "int8",
+            },
             "mode_comparisons": [],
             "resource_comparison": {
                 "solr9_memory_bytes": None,
@@ -186,6 +228,8 @@ class TestOutput:
                 "throughput_factor": None,
                 "solr9_concurrency": None,
                 "solr10_concurrency": None,
+                "solr9_vector_quantization_mode": "none",
+                "solr10_vector_quantization_mode": "int8",
             },
             "claims": {
                 "memory_4x": {"target_factor": 4.0, "factor": None, "status": "insufficient_evidence"},

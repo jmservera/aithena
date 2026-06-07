@@ -77,6 +77,7 @@ python scripts/benchmark/run_benchmark.py --collection books
 python scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --solr-version 9.7 \
+  --vector-quantization-mode none \
   --run-label solr9-float32 \
   --corpus-id booklibrary-2026-06-06 \
   --corpus-documents 1000 \
@@ -173,6 +174,7 @@ python3 scripts/verify_collections.py --verbose
 python3 scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --modes semantic hybrid \
+  --vector-quantization-mode none \
   --output results/benchmark-1344-float32.json
 
 docker stats --no-stream solr solr2 solr3
@@ -184,6 +186,7 @@ python3 scripts/verify_collections.py --verbose
 python3 scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --modes semantic hybrid \
+  --vector-quantization-mode int8 \
   --output results/benchmark-1344-int8.json
 
 docker stats --no-stream solr solr2 solr3
@@ -200,8 +203,10 @@ python3 scripts/benchmark/compare_quantization.py \
 ## Solr 9.7 vs Solr 10 Paired Comparison (#1354)
 
 Use `compare_solr_versions.py` after collecting two reports with matching
-`run_metadata.host` and `run_metadata.corpus` values. The tool refuses to mark
-claims as valid when host or corpus evidence is missing/mismatched.
+`run_metadata.host`, `run_metadata.corpus`, and `run_metadata.vector_quantization_mode`
+values. The tool refuses to mark claims as valid when host/corpus evidence is
+missing/mismatched, Solr versions do not match the expected 9.7/10 profiles, or
+the two runs use different quantization modes.
 
 ```bash
 python3 scripts/benchmark/compare_solr_versions.py \
@@ -215,6 +220,8 @@ Evidence required before publishing performance claims:
 
 - Solr 9.7 and Solr 10 benchmark JSON from the same host
 - identical corpus ID, document count, and byte count
+- matching `vector_quantization_mode` values (`none` vs `none` for pure Solr-version claims)
+- `run_metadata.solr_version` values matching the intended Solr 9.7 and Solr 10 profiles
 - `docker stats` memory samples with byte values for each Solr node
 - startup time, index build time, and failed query IDs
 - the generated JSON comparison and markdown report

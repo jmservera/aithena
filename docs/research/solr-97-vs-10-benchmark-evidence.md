@@ -32,6 +32,7 @@ docker compose -f docker-compose.yml -f docker/compose.solr9.yml up -d --build
 python3 scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --solr-version 9.7 \
+  --vector-quantization-mode none \
   --run-label solr9-float32 \
   --corpus-id booklibrary-2026-06-06 \
   --corpus-documents <document-count> \
@@ -49,6 +50,7 @@ docker compose -f docker-compose.yml -f docker/compose.solr10.yml up -d --build
 python3 scripts/benchmark/run_benchmark.py \
   --base-url http://localhost:8080 \
   --solr-version 10 \
+  --vector-quantization-mode none \
   --run-label solr10-float32 \
   --corpus-id booklibrary-2026-06-06 \
   --corpus-documents <document-count> \
@@ -71,7 +73,8 @@ python3 scripts/benchmark/compare_solr_versions.py \
 ## Recommendation Rule
 
 - If the evidence gate fails, rerun the benchmark; no production recommendation
-  may be made from mismatched data.
+  may be made from mismatched host/corpus data, wrong Solr versions, or mixed
+  vector quantization modes.
 - If any Solr 10 p95 latency mode regresses by more than 20% or has additional
   failed query IDs, hold rollout pending triage.
 - If evidence is valid and no regressions are reported, proceed to staged
