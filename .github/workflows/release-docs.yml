@@ -529,6 +529,7 @@ jobs:
           # The release-docs branch is deterministic per version. Re-running the
           # workflow should update that branch/PR instead of failing on a
           # non-fast-forward push from a previous attempt.
+          git fetch origin "$BRANCH:refs/remotes/origin/$BRANCH" || true
           git push --force-with-lease origin "$BRANCH"
           
           # Build list of generated files
