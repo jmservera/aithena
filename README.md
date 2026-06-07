@@ -2,9 +2,9 @@
 
 A multilingual book library search engine that indexes PDFs using **Apache Solr** for full-text search, extracts metadata (author, date, language) from filenames and folder names, and supports keyword, semantic, and hybrid search via embeddings.
 
-**Current Release:** v2.2.1 — Maintenance patch for prod-overlay volume migration safety and test reliability.  
-**Development:** v2.5 milestone active. All PRs target `dev` branch; releases merge `dev` → `main`.  
-**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v2.2.1.md)**
+**Current Release:** v2.5.0 — Solr 10 runtime migration, enhanced embeddings infrastructure, and security hardening.
+**Development:** Post-v2.5 follow-up and validation work continues on `dev`; releases merge `dev` → `main`.
+**[View Milestones](https://github.com/jmservera/aithena/milestones)** | **[Latest Release Notes](docs/release-notes/v2.5.0.md)**
 
 ## What It Does
 
@@ -98,6 +98,8 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 ### Release Notes (newest first)
 
+- [v2.5.0 Release Notes](docs/release-notes/v2.5.0.md) — Solr 10 runtime migration, embeddings infrastructure, and security hardening
+- [v2.3.0 Release Notes](docs/release-notes/v2.3.0.md) — Infrastructure hardening and release validation noise reduction
 - [v2.2.1 Release Notes](docs/release-notes/v2.2.1.md) — Maintenance patch superseding v2.2.0
 - [v2.2.0 Release Notes](docs/release-notes/v2.2.0.md) — Prod overlay volume migration and test reliability
 - [v2.1.0 Release Notes](docs/release-notes/v2.1.0.md) — Configurable search architecture, single-node topology
@@ -407,10 +409,10 @@ See `src/document-indexer/tests/test_metadata.py` for test cases and real librar
 
 ### Project Phases
 
-**Phase 1** (in progress): Core Solr indexing pipeline, metadata extraction, schema  
-**Phase 2**: FastAPI search API, React search UI with faceting, PDF viewer  
-**Phase 3**: Embeddings indexing, hybrid search (keyword + semantic), similar books  
-**Phase 4**: PDF upload, file watcher, admin dashboard, production hardening  
+**Phase 1** (in progress): Core Solr indexing pipeline, metadata extraction, schema
+**Phase 2**: FastAPI search API, React search UI with faceting, PDF viewer
+**Phase 3**: Embeddings indexing, hybrid search (keyword + semantic), similar books
+**Phase 4**: PDF upload, file watcher, admin dashboard, production hardening
 
 Current branch: `dev`
 
