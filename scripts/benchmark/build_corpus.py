@@ -13,8 +13,8 @@ Sources:
 
 import json
 import logging
-import os
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -196,8 +196,7 @@ def fetch_hal(target: int) -> int:
             "wt": "json",
         }
         try:
-            resp = requests.get(base_url, params=params, timeout=30,
-                                headers={"User-Agent": "aithena-benchmark/1.0"})
+            resp = requests.get(base_url, params=params, timeout=30, headers={"User-Agent": "aithena-benchmark/1.0"})
             if resp.status_code != 200:
                 log.warning("HAL API error %d", resp.status_code)
                 break
@@ -267,8 +266,7 @@ def fetch_scielo(target: int) -> int:
             "output_lang": "es",
         }
         try:
-            resp = requests.get(base_url, params=params, timeout=30,
-                                headers={"User-Agent": "aithena-benchmark/1.0"})
+            resp = requests.get(base_url, params=params, timeout=30, headers={"User-Agent": "aithena-benchmark/1.0"})
             if resp.status_code != 200:
                 log.warning("SciELO API error %d", resp.status_code)
                 break
@@ -345,15 +343,15 @@ def fetch_raco(target: int) -> int:
     }
 
     try:
-        resp = requests.get(base_url, params=params, timeout=30,
-                            headers={"User-Agent": "aithena-benchmark/1.0"})
+        resp = requests.get(base_url, params=params, timeout=30, headers={"User-Agent": "aithena-benchmark/1.0"})
         if resp.status_code != 200:
             log.warning("RACO OAI error %d", resp.status_code)
             return saved
 
         # Parse OAI response for PDF links
-        import xml.etree.ElementTree as ET
-        root = ET.fromstring(resp.content)
+        from defusedxml.ElementTree import fromstring as xml_fromstring
+
+        root = xml_fromstring(resp.content)
         ns = {
             "oai": "http://www.openarchives.org/OAI/2.0/",
             "dc": "http://purl.org/dc/elements/1.1/",
@@ -387,7 +385,6 @@ def fetch_raco(target: int) -> int:
                     if ident.text and "raco.cat" in ident.text and "/article/view/" in ident.text:
                         # Try to get PDF version
                         view_url = ident.text
-                        article_id = view_url.rstrip("/").split("/")[-1]
                         pdf_url = view_url.replace("/article/view/", "/article/download/").rstrip("/") + "/pdf"
                         break
 
@@ -425,7 +422,6 @@ def text_to_pdf(text: str, title: str = "Document") -> bytes | None:
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib.units import cm
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-        from reportlab.platypus.flowables import PageBreak
 
         buf = BytesIO()
         doc = SimpleDocTemplate(
@@ -478,7 +474,7 @@ def fetch_gutenberg_text(lang_code: str, book_id: int) -> tuple[str, str] | tupl
                 if end != -1:
                     text = text[:end]
                 return title, text
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort text extraction
             pass
     return None, None
 
@@ -496,27 +492,122 @@ def chunk_text(text: str, words_per_chunk: int = 2000) -> list[str]:
 # Gutenberg book IDs by language — short/medium texts, public domain
 GUTENBERG_BOOKS = {
     "en": [
-        11, 84, 1342, 1661, 2701, 74, 76, 98, 1400, 2600,
-        345, 4300, 174, 1080, 2554, 5200, 2591, 16328, 46,
-        1232, 7370, 25344, 7178, 2148, 3207, 1952, 2097,
-        1260, 1184, 219, 30, 1998, 203, 768, 1399,
+        11,
+        84,
+        1342,
+        1661,
+        2701,
+        74,
+        76,
+        98,
+        1400,
+        2600,
+        345,
+        4300,
+        174,
+        1080,
+        2554,
+        5200,
+        2591,
+        16328,
+        46,
+        1232,
+        7370,
+        25344,
+        7178,
+        2148,
+        3207,
+        1952,
+        2097,
+        1260,
+        1184,
+        219,
+        30,
+        1998,
+        203,
+        768,
+        1399,
     ],
     "fr": [
-        13951, 17489, 4650, 14779, 5097, 3748, 14286, 17834,
-        13846, 15621, 17235, 3160, 17154, 16816, 5765, 3074,
-        4122, 7105, 2982, 16652, 14523, 13846, 7942, 18585,
-        17302, 14672, 10133, 5765, 14286, 7399,
+        13951,
+        17489,
+        4650,
+        14779,
+        5097,
+        3748,
+        14286,
+        17834,
+        13846,
+        15621,
+        17235,
+        3160,
+        17154,
+        16816,
+        5765,
+        3074,
+        4122,
+        7105,
+        2982,
+        16652,
+        14523,
+        13846,
+        7942,
+        18585,
+        17302,
+        14672,
+        10133,
+        5765,
+        14286,
+        7399,
     ],
     "es": [
-        2000, 2033, 2199, 15130, 14765, 14981, 15083, 15136,
-        14232, 14441, 14459, 14588, 14613, 14678, 14717, 14741,
-        14783, 14793, 14801, 14888, 14915, 14934, 15010, 15016,
-        15064, 15078, 15095, 15105, 15117, 15133,
+        2000,
+        2033,
+        2199,
+        15130,
+        14765,
+        14981,
+        15083,
+        15136,
+        14232,
+        14441,
+        14459,
+        14588,
+        14613,
+        14678,
+        14717,
+        14741,
+        14783,
+        14793,
+        14801,
+        14888,
+        14915,
+        14934,
+        15010,
+        15016,
+        15064,
+        15078,
+        15095,
+        15105,
+        15117,
+        15133,
     ],
     "ca": [
         # Catalan books are rarer on Gutenberg; use a mix
-        11561, 14467, 43363, 43364, 43365, 43366, 43367,
-        43368, 43369, 43370, 28371, 28372, 28373, 28374,
+        11561,
+        14467,
+        43363,
+        43364,
+        43365,
+        43366,
+        43367,
+        43368,
+        43369,
+        43370,
+        28371,
+        28372,
+        28373,
+        28374,
     ],
 }
 
@@ -557,8 +648,7 @@ def fetch_gutenberg_fallback(lang: str, target: int) -> int:
                     filename = f"gutenberg_{book_id}_part{i:03d}.pdf"
                     if not (CORPUS_ROOT / lang / filename).exists():
                         (CORPUS_ROOT / lang / filename).write_bytes(pdf_data)
-                        log.info("%s saved: %s (%d pages, %d total)",
-                                 lang.upper(), filename, pages, count_saved(lang))
+                        log.info("%s saved: %s (%d pages, %d total)", lang.upper(), filename, pages, count_saved(lang))
                 else:
                     log.debug("Chunk %d has %d pages, skipping", i, pages)
 
@@ -576,11 +666,7 @@ def write_manifest(stats: dict):
         "created_at": datetime.utcnow().isoformat() + "Z",
         "total_documents": sum(stats.values()),
         "per_language": stats,
-        "total_bytes": sum(
-            f.stat().st_size
-            for lang in TARGETS
-            for f in (CORPUS_ROOT / lang).glob("*.pdf")
-        ),
+        "total_bytes": sum(f.stat().st_size for lang in TARGETS for f in (CORPUS_ROOT / lang).glob("*.pdf")),
         "max_pages_per_doc": MAX_PAGES,
         "sources": ["arxiv", "hal", "scielo", "raco", "gutenberg"],
     }
@@ -601,23 +687,22 @@ def main():
 
     # Install dependencies if missing
     try:
-        import PyPDF2
+        import PyPDF2  # noqa: F401
     except ImportError:
         log.info("Installing PyPDF2...")
-        os.system(f"{sys.executable} -m pip install PyPDF2 --quiet")
-        import PyPDF2
+        subprocess.run([sys.executable, "-m", "pip", "install", "PyPDF2", "--quiet"], check=False)  # noqa: S603
 
     try:
-        import reportlab
+        import reportlab  # noqa: F401
     except ImportError:
         log.info("Installing reportlab...")
-        os.system(f"{sys.executable} -m pip install reportlab --quiet")
+        subprocess.run([sys.executable, "-m", "pip", "install", "reportlab", "--quiet"], check=False)  # noqa: S603
 
     try:
-        import arxiv
+        import arxiv  # noqa: F401
     except ImportError:
         log.info("Installing arxiv...")
-        os.system(f"{sys.executable} -m pip install arxiv --quiet")
+        subprocess.run([sys.executable, "-m", "pip", "install", "arxiv", "--quiet"], check=False)  # noqa: S603
 
     # Phase 1: Real PDF sources
     fetch_arxiv(TARGETS["en"])
