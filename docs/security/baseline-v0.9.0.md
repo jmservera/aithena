@@ -20,7 +20,7 @@ This document supersedes the Python dependency portion of the v0.6.0 baseline. I
 | `embeddings-server` | Python 3.11 | `requirements.txt` only | ❌ no lockfile |
 
 **Retired services (no longer in repo):**  
-`qdrant-search/`, `llama-server/` — all Mend alerts referencing these paths are retired as stale.
+`qdrant-search/`, `qdrant-clean/`, `llama-server/` — all Mend/Dependabot alerts referencing these paths are retired as stale.
 
 ## Audit Methodology
 
@@ -118,10 +118,20 @@ The following Mend/Dependabot alert classes are retired because they target mani
 | Alert Category | Reason for Retirement |
 |---------------|----------------------|
 | Any alert referencing `qdrant-search/` | Service removed; directory does not exist |
+| Any alert referencing `qdrant-clean/` | Service removed; directory does not exist |
 | Any alert referencing `llama-server/` | Service removed; directory does not exist |
 | Any alert referencing Python 3.7 wheels | Stack is Python 3.11+; 3.7 wheels never ship |
-| Any alert referencing `requirements.txt` in `qdrant-search/` or `llama-server/` | Files do not exist |
+| Any alert referencing `requirements.txt` in `qdrant-search/`, `qdrant-clean/`, or `llama-server/` | Files do not exist |
 | Pre-`uv` transitive resolutions (non-deterministic) | All services now use `uv.lock` for deterministic resolution |
+
+### Dependabot Alert Disposition — Legacy Qdrant Manifests
+
+Kane's security baseline treats these as stale/non-actionable in the current tree: the vulnerable manifests were removed with the deprecated Qdrant services in PR #115, and `.gitignore` keeps `qdrant-search/` and `qdrant-clean/` from being reintroduced accidentally.
+
+| Alert(s) | Package | Manifest(s) | Disposition |
+|----------|---------|-------------|-------------|
+| #40 | `qdrant-client` | `qdrant-search/requirements.txt` | Dismiss as stale / not affected: service and manifest removed; no dependency to upgrade |
+| #149-168, #199-202 | `aiohttp` | `qdrant-search/requirements.txt`, `qdrant-clean/requirements.txt` | Dismiss as stale / not affected: services and manifests removed; no dependency to upgrade |
 
 ---
 
