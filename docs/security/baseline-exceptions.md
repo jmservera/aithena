@@ -52,7 +52,7 @@ The `ecdsa` Python package (pure Python ECDSA implementation) is vulnerable to C
 ## CVE-2025-3000 — PyTorch `torch.jit.script` Memory Corruption (Dependabot alert 205)
 
 **Status:** ACCEPTED RISK  
-**Severity:** LOW (GitHub Advisory)
+**Severity:** LOW (GitHub Advisory)  
 **Affected Service:** embeddings-server  
 **Dependency Chain:** sentence-transformers 5.3.0 → torch 2.11.0  
 
