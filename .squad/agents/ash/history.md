@@ -205,3 +205,17 @@ Safe pattern: keep manual `category_s` untouched; write classifier output to sep
 - **#1344 int8 Quantization Gate:** Co-signed int8 evaluation protocol; noted recall@10 and memory validation as release blockers on #1670.
 - **#1343 SolrCloud Overseer Decision:** Approved decision to disable Overseer in production Solr 10 while retaining ZooKeeper HA. Documented runtime validation commands for Phase 2 testing.
 - **#1349 Hybrid RRF Decision:** Decided to keep app-side RRF (current implementation) as production default until Solr Combined Query is benchmarked and proven on real corpus. SOLR-17319 adds native RRF but does not handle parent/chunk fusion correctly; prototype required before default change.
+
+## Corpus Build & Benchmark Readiness (2026-06-12)
+
+**1502-document benchmark corpus built and validated.** Multilingual PDF collection with diverse document types (technical, news, fiction, academic) and payload sizes (50KB–5MB). All documents successfully indexed and embedded; metadata verified for evidence gate requirements.
+
+**Corpus attributes:**
+- **Document count:** 1502 PDFs
+- **Language coverage:** Multilingual (diverse tokenization profiles)
+- **Document types:** Technical, news, fiction, academic
+- **Payload distribution:** 50KB–5MB per document
+
+**Evidence gate readiness:** Corpus snapshot persisted for reproducible paired Solr 9.7 vs Solr 10 benchmark runs (#1354). Paired evidence must include: same host/corpus, matching quantization modes, Docker stats, startup/index timing, throughput, failed query IDs. Benchmark JSON reports and Solr memory samples are required for release claims.
+
+**Related:** Supports #1354 performance benchmarks (Solr 9.7 vs 10 memory/indexing) and #1344 quantization validation (int8 vs float32 recall@10).

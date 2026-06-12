@@ -1313,3 +1313,331 @@ retaining the existing ZooKeeper-backed HA topology.
 - Runtime validation is documented in
   `tests/solrcloud-overseer-disabled-validation.sh`; failover is opt-in with
   `RUN_FAILOVER=1` because it intentionally stops a Solr node.
+
+---
+
+# Decision: Gate Solr 9.7 vs Solr 10 performance claims on paired evidence
+
+Author: Ash  
+Date: 2026-06-06
+Status: Proposed  
+Related: #1354, #1711
+
+## Context
+
+Issue #1354 asks for Solr 9.7 vs Solr 10 performance benchmark conclusions,
+including validating 4× memory and 40× indexing improvements. Unpaired runs can
+produce misleading claims because host capacity, corpus size, Docker topology,
+and failed query sets materially affect the result.
+
+## Decision
+
+Do not publish Solr 9.7 vs Solr 10 performance claims unless both reports come
+from the same host and the same corpus, with benchmark JSON, Docker stats,
+corpus ID/document count/byte count, startup/index timing, and failed query IDs.
+
+## Consequences
+
+- `scripts/benchmark/compare_solr_versions.py` marks evidence invalid when host
+  or corpus metadata is missing/mismatched.
+- Production recommendations should be "rerun benchmark" until the evidence gate
+  passes.
+- The same evidence rule should apply to future Solr runtime and quantization
+  benchmark reports.
+
+---
+
+# Decision: #1354 Runtime Benchmark Evidence Gate
+
+Date: 2026-06-07
+
+For #1354, do not treat a single live-stack benchmark or mismatched quantization run as close-out evidence. The release claim gate requires paired Solr 9.7 and Solr 10 reports captured on the same host and corpus, with matching `vector_quantization_mode`, expected `solr_version` metadata, Docker stats in bytes, corpus size, startup/index timing, throughput, and failed query IDs.
+
+This session captured only non-destructive Solr 9.7 smoke evidence from the shared live stack. Switching that stack to Solr 10 would require teardown/reindexing and risks disrupting other users, so the paired benchmark must run in an isolated window/host or isolated Compose project with non-conflicting ports and a fixed corpus.
+
+---
+
+# Decision: #1344 quantization evidence
+
+Date: 2026-06-06
+
+## Decision
+
+Keep `VECTOR_QUANTIZATION=int8` configurable and disabled by default until recall@10 and measured Solr memory evidence are attached to #1344.
+
+## Rationale
+
+The schema/config path is now safe for Solr 10 by using `ScalarQuantizedDenseVectorField bits="7"` with `vectorDimension="768"` and `similarityFunction="cosine"`. The Solr 9 rollback path still rewrites scalar quantization to `DenseVectorField vectorEncoding="BYTE"`.
+
+The benchmark harness can compare float32 and int8 top-10 agreement and estimate raw vector payload savings, but release claims need paired benchmark JSON reports and actual `docker stats` memory samples from the same corpus.
+
+## Follow-up
+
+Run the workflow in `scripts/benchmark/README.md` and attach:
+
+- `results/benchmark-1344-float32.json`
+- `results/benchmark-1344-int8.json`
+- `results/benchmark-1344-quantization-comparison.json`
+- Solr memory samples for both runs
+
+---
+
+# Decision: Lambert evidence gates for benchmark claims
+
+Date: 2026-06-07
+
+For #1354 Solr-version benchmark claims, paired reports must prove more than
+same host and same corpus. The evidence gate now requires the report metadata to
+match the intended Solr 9.7 and Solr 10 profiles and to use the same
+`vector_quantization_mode` in both runs, so teams cannot accidentally attribute a
+quantization delta to the Solr-version upgrade.
+
+Acceptance evidence for #1344 and #1354 remains blocked until live same-corpus
+artifacts are attached to the issues. Synthetic/offline comparator output is
+useful for validating report shape, but it is not close-out evidence for recall,
+memory, latency, throughput, or indexing claims.
+
+---
+
+# Decision: Complexity Reduction PRD & Decomposition for v2.6
+
+**Date:** 2026-06-12T20:44:08Z  
+**Author:** Newt (Product Manager)  
+**Status:** Proposed  
+**Related:** #1452, issues #1739–#1751
+
+---
+
+## Summary
+
+Aithena's infrastructure has accumulated technical debt across six key areas (Docker duplication, shell script sprawl, environment file confusion, fragmented test infrastructure, scattered config docs, fragile build scripts). This decision captures a systematic three-phase consolidation plan to reduce maintenance burden and establish patterns for future growth.
+
+---
+
+## Research Findings
+
+1. **Dockerfile Duplication:** 5 near-identical Python Dockerfiles (document-indexer, document-lister, solr-search, embeddings-server, admin-backend)
+2. **Shell Script Sprawl:** 18 scripts in `/scripts/` with no unified CLI interface
+3. **Environment File Confusion:** 3 overlapping templates (`.env.example`, `.env.local`, `docker-compose.env`) with unclear precedence
+4. **Test Infrastructure Fragmentation:** 3 separate frameworks (Playwright, Pytest E2E, Node stress) with no single `make test` entrypoint
+5. **Documentation Scatter:** Configuration guidance spread across setup, admin manual, operator guide, topology docs
+6. **Build Script Fragility:** `buildall.sh` with hard-coded service list; requires manual edit when adding services
+
+---
+
+## Proposed Solution: 3-Phase Consolidation (15 person-days, 6 weeks)
+
+### Phase 1: Foundation (Weeks 1–2, 5d) — Unblock Operations
+
+**Goal:** Get `manage.sh` and `.env.example` in place; immediate operator benefit.
+
+| Issue | Title | Owner | Effort |
+|-------|-------|-------|--------|
+| 1739 | Create manage.sh CLI with core subcommands | squad:brett | 2d |
+| 1740 | Consolidate to single .env.example | squad:brett | 1d |
+| 1741 | Create Makefile with unified test targets | squad:lambert | 1d |
+| 1742 | Deprecate old scripts and document migration | squad:brett | 0.5d |
+
+**Success criteria:** Operators use `./manage.sh up/down/build/test` and configure via `.env.example` without external reference (80% of cases).
+
+### Phase 2: Documentation & Robustness (Weeks 3–4, 5d) — Polish & Centralize
+
+**Goal:** Config docs centralized; build system dynamic; test infrastructure unified.
+
+| Issue | Title | Owner | Effort |
+|-------|-------|-------|--------|
+| 1743 | Create configuration source of truth (docs/config/) | Newt + squad:dallas | 1.5d |
+| 1744 | Migrate buildall.sh to dynamic service discovery | squad:brett | 1d |
+| 1745 | Consolidate test infrastructure documentation | squad:lambert | 1d |
+| 1746 | Audit and migrate scattered config docs | squad:newt | 1d |
+| 1747 | Update GitHub Actions to use make test | squad:brett | 0.5d |
+
+**Success criteria:** New contributors onboard via centralized docs; build system self-discovers new services; CI uses `make test` entrypoint.
+
+### Phase 3: Docker Consolidation (Weeks 5–6, 5d) — Major Refactor & Validate
+
+**Goal:** Reduce Dockerfile duplication; establish patterns for new services.
+
+| Issue | Title | Owner | Effort |
+|-------|-------|-------|--------|
+| 1748 | Extract shared Docker base image | squad:brett | 2d |
+| 1749 | Refactor 5 service Dockerfiles to use shared base | squad:brett | 2d |
+| 1750 | Validate compose health checks with new Docker base | squad:lambert | 1d |
+| 1751 | Update deployment and build documentation | Newt + squad:brett | 1d |
+
+**Success criteria:** New Python services use 3–5 line Dockerfile + base image (15% Docker complexity reduction); no regression in build time.
+
+---
+
+## Key Decisions
+
+### 1. Dynamic Service Discovery (Issue #1744)
+
+**Decision:** Use `find src -name Dockerfile` to auto-detect services instead of hard-coded lists.
+
+**Rationale:** 
+- Eliminates manual `buildall.sh` list maintenance
+- New services automatically included in `manage.sh build` and `make test` workflows
+- Reduces friction for adding services; improves scalability
+
+**Owner:** Brett  
+**Implementation:** Applies to both `buildall.sh` and `manage.sh build [service]` command.
+
+---
+
+### 2. Unified `manage.sh` CLI (Issue #1739)
+
+**Decision:** Single entry point for all operational tasks (up, down, build, test, logs, health, shell, status, config-check, reset).
+
+**Rationale:** 
+- 18 scripts → 1 CLI; immediate discoverability via `--help`
+- Standardizes error handling and logging
+- Operators no longer need to `ls scripts/` and search for the right script
+- Enables easier automation in CI/CD and playbooks
+
+**Owner:** Brett  
+**Documentation:** MIGRATION.md maps old scripts to new commands (Phase 1, Issue #1742).
+
+---
+
+### 3. Shared Docker Base Image (Issue #1748)
+
+**Decision:** Extract `Dockerfile.base` containing Python 3.11, UV, system packages, and health-check patterns; all 5 service Dockerfiles `FROM aithena:base`.
+
+**Rationale:** 
+- Single security patch point (apply once to base, rebuild 5 services)
+- Service images build 10–20% faster (cached base)
+- New services follow established pattern (copy base, add service-specific pyproject.toml)
+- Reduces Dockerfile maintenance burden
+
+**Owner:** Brett  
+**Pattern:** Service Dockerfile becomes ~10–20 lines (FROM base + COPY pyproject.toml + RUN uv sync + COPY src + ENTRYPOINT).
+
+---
+
+### 4. Configuration Source of Truth (Issue #1743)
+
+**Decision:** Single `.env.example` (canonical template) + `docs/config/README.md` (detailed reference).
+
+**Rationale:** 
+- Eliminates `.env.local` / `docker-compose.env` confusion
+- Inline documentation in `.env.example` answers 80% of "what is this" questions
+- Operators go to one place first; escalate to detailed docs only if needed
+- Reduces onboarding time
+
+**Owner:** Newt + Dallas  
+**Structure:** `.env.example` grouped by domain (deployment, services, UI, advanced); linked to `docs/config/README.md` for detailed explanation.
+
+---
+
+### 5. Makefile Test Targets (Issue #1741)
+
+**Decision:** Create Makefile with `make test` (all), `make test-ui` (Playwright), `make test-backend` (Pytest), `make test-stress` (Node).
+
+**Rationale:** 
+- Single CI entrypoint (`make test`)
+- Developers can run individual suites locally
+- Consistent with project conventions in other codebases
+- Easier to add new test frameworks (just add a target)
+
+**Owner:** Lambert  
+**CI Impact:** GitHub Actions updated to use `make test` instead of framework-specific commands (Issue #1747).
+
+---
+
+## Expected Outcomes
+
+| Metric | Target | Baseline | Reduction |
+|--------|--------|----------|-----------|
+| Scripts in `/scripts/` | ≤ 4 | 18 | 77% |
+| Dockerfile maintenance (new service) | 1–2 edits | 5 edits | 60–80% |
+| Environment templates | 1 (+ inline docs) | 3 (no docs) | 66% reduction + self-service |
+| Test single entrypoint | `make test` works | 3 separate commands | Unified |
+| Build time (full stack) | ≤ 5 min (no regression) | ~5 min | 0% (preserved) |
+| Config doc centralization | 1 primary + links | 3+ scattered | Single source of truth |
+
+---
+
+## Risks & Mitigation
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|-----------|
+| Dockerfile base image breaks services | Low (5%) | High (blocks release) | Phase 3 includes comprehensive compose validation (Issue #1750); health check test suite |
+| Script consolidation introduces regressions | Low (5%) | Medium (operator confusion) | MIGRATION.md with side-by-side comparison; test all subcommands before Phase 1 merge |
+| Config centralization misses edge cases | Medium (25%) | Low (documented separately) | Phase 2 audits existing docs (Issue #1746); cross-reference checks |
+| Build time regression from dynamic discovery | Very low (2%) | Low (dev experience) | Benchmark baseline (Issue #1744 includes timing); no recursive searches (fixed depth) |
+
+---
+
+## Release Gate Criteria (v2.6)
+
+1. ✅ `/scripts/` reduced from 18 to ≤ 4 files
+2. ✅ All 5 service Dockerfiles use shared base (no file > 30 lines)
+3. ✅ `.env.example` is canonical; 3 old templates removed
+4. ✅ `make test` runs all test suites (single CI entrypoint)
+5. ✅ `docs/config/README.md` exists; admin manual links to it
+6. ✅ No regression in build time (≤ 5 min for full stack)
+7. ✅ All tests pass; CI clean
+8. ✅ `manage.sh` covers ≥ 80% of operational tasks; MIGRATION.md complete
+
+---
+
+## Appendix: Staffing & Timeline
+
+**Total Effort:** 15 person-days across 6 weeks
+
+**Team Assignments:**
+- **Brett** (Infra Architect): Docker consolidation, scripts, build system → 7d
+- **Lambert** (Tester): Test infrastructure, validation → 3d
+- **Newt** (Product Manager): Config docs, documentation → 3d
+- **Dallas** (Frontend Dev): UI config docs (support) → 1.5d
+
+**Sequencing:**
+- Phase 1 → Phase 2 (Phase 2 docs reference Phase 1 deliverables)
+- Phase 2 → Phase 3 (Phase 3 Docker uses Phase 2 config patterns)
+- All phases can proceed in parallel once dependencies are clear
+
+**Release Target:** v2.6 (post-v2.5 validation; v2.5.1 work completes mid-June, freeing squad)
+
+---
+
+# Decision: Docs Must Describe Shipped v2.5 Behavior
+
+Author: Newt (Product Manager)
+Date: 2026-06-07
+Status: Proposed
+Related: #1452, #1344, v2.5.0 docs audit
+
+## Context
+
+The pending-work audit found several v2.5 documents describing planned or issue-title behavior that diverged from the shipped code and migration runbooks. Conflicts included ZooKeeper-free standalone mode, `blockUnknown=true`, non-runtime HNSW parameter names, and overconfident quantization claims.
+
+## Decision
+
+When release documentation conflicts, operator-facing docs must be reconciled to the shipped code/runtime and current migration runbooks. Future planned hardening or optimization should be named as follow-up work, not documented as already shipped behavior.
+
+## Current v2.5 Source of Truth
+
+- Lightweight Solr deployments use single-node SolrCloud (`docker/compose.single-node.yml`), not true ZooKeeper-free standalone/core mode.
+- Aithena v2.5 explicitly keeps `blockUnknown=false`; moving to `true` requires a dedicated hardening change.
+- Solr 10 HNSW names are `hnswM` and `hnswEfConstruction`; Solr 9 compatibility rewrites them during rollback/support windows.
+- int8 quantization remains evidence-gated for production and should point to #1344-style benchmark evidence.
+
+---
+
+# Decision: Canonical environment template
+
+Author: Parker
+Date: 2026-06-07
+Status: Proposed
+Related: #1452, #1716
+
+## Decision
+
+`.env.example` is the canonical environment template for development, production, and offline deployment. The separate `.env.prod.example` template is removed; release packaging and docs should copy/reference `.env.example` and override values in the generated `.env`/`.env.prod` as needed.
+
+## Rationale
+
+Maintaining separate templates let production-only variables and compose defaults drift. A single template keeps variable coverage reviewable and lets installer/release paths consume the same documented defaults without changing runtime secret generation behavior.
+
+---
