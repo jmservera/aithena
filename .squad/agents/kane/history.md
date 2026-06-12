@@ -158,3 +158,10 @@
 **Decision Record:** `.squad/decisions.md` → "Security Analysis: Internal Service Authentication (Redis, ZooKeeper, Solr)"
 
 **Next:** Pending team consensus on compliance implications; network isolation discussion recommended.
+
+### 2026-06-07T18:32:36.169+00:00 — Security alert triage
+
+- Dependabot open alerts: solr-search `urllib3` high CVEs GHSA-qccp-gfcp-xxvc/GHSA-mf9v-mfxr-j63j, solr-search `starlette` medium GHSA-86qp-5c8j-p5mr, embeddings-server `transformers` medium CVE-2026-1839.
+- Fixed solr-search lockfile by updating `urllib3` 2.6.3→2.7.0 and `starlette` 0.52.1→1.2.1.
+- `transformers` remains blocked/accepted-risk for now: patched version is 5.0.0rc3, but `sentence-transformers` still resolves transformers 4.x; prior Dependabot PR #1393 was closed as release-candidate/transitive.
+- Fixed open low-severity zizmor `artipacked` CodeQL alert by setting `actions/checkout` `persist-credentials: false` in `.github/workflows/codeql-analysis.yml`.
