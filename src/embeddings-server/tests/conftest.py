@@ -7,29 +7,27 @@ are not available (e.g., local dev machines without GPU drivers).
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 
 import pytest
 
 # Check once at collection time whether torch can actually load.
-# Tests that import the app module (main, config) transitively require torch.
 _TORCH_AVAILABLE = False
 try:
     importlib.import_module("torch")
     _TORCH_AVAILABLE = True
 except (ImportError, OSError):
-    # OSError covers missing .so files like libcudnn.so
+    # OSError covers missing shared libraries like libcudnn.so
     pass
 
+# Files where EVERY test uses _fresh_import() → `import main` → torch.
+# No torch-free tests exist in these modules, so file-level exclusion
+# is correct (not overly broad).
+_TORCH_DEPENDENT_FILES = {"test_gpu_config.py", "test_embeddings_server.py"}
 
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Skip tests that require torch/CUDA when the runtime isn't available."""
-    if _TORCH_AVAILABLE:
-        return
 
-    skip_torch = pytest.mark.skip(reason="torch not functional (missing CUDA libs)")
-    # Test files that import from main/config/app code requiring torch
-    torch_dependent_files = {"test_gpu_config.py", "test_embeddings_server.py"}
-
-    for item in items:
-        if item.path and item.path.name in torch_dependent_files:
-            item.add_marker(skip_torch)
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    """Skip collection of torch-dependent test files when CUDA is unavailable."""
+    if not _TORCH_AVAILABLE and collection_path.name in _TORCH_DEPENDENT_FILES:
+        return True
+    return None
