@@ -35,7 +35,8 @@ def test_openvino_runtime_verifier_rejects_lockfile_drift(monkeypatch: pytest.Mo
 
     failures = verify_openvino_runtime.verify_openvino_runtime(PYPROJECT_PATH)
 
-    assert any("openvino 2026.0.0 does not satisfy" in failure for failure in failures)
+    # openvino 2026.0.0 satisfies >=2025.4,<2027 but the runtime verifier
+    # still rejects when openvino and openvino-tokenizers minor versions differ
     assert any("minor versions differ" in failure for failure in failures)
 
 
