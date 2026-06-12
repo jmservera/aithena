@@ -46,3 +46,43 @@ The `ecdsa` Python package (pure Python ECDSA implementation) is vulnerable to C
 **Reviewed by:** Kane (Security Engineer)  
 **Date:** 2026-03-16  
 **Next Review:** v1.1.0 planning (estimated 2026-04)
+
+---
+
+## CVE-2025-3000 — PyTorch `torch.jit.script` Memory Corruption (Dependabot alert 205)
+
+**Status:** ACCEPTED RISK  
+**Severity:** LOW (GitHub Advisory)  
+**Affected Service:** embeddings-server  
+**Dependency Chain:** sentence-transformers 5.3.0 → torch 2.11.0  
+
+### Vulnerability Details
+PyTorch is vulnerable to memory corruption in the `torch.jit.script` function. GitHub tracks this as GHSA-rrmf-rvhw-rf47 / CVE-2025-3000 for `torch<=2.12.0`.
+
+### Why No Patch Available
+- **No fixed version exists** — Dependabot reports `first_patched_version: null`
+- **Current lockfile version:** `src/embeddings-server/uv.lock` resolves torch 2.11.0
+- **Vulnerable range:** `<=2.12.0`
+
+### Mitigation
+1. **No JIT/TorchScript entry point:** embeddings-server code does not import `torch` directly and repository search found no `torch.jit.script` or TorchScript usage.
+2. **Text-only API surface:** `/v1/embeddings/` accepts text and passes it to `SentenceTransformer.encode`; clients cannot submit Python functions, TorchScript code, or model artifacts through the service API.
+3. **Pinned offline model runtime:** The container defaults to `MODEL_NAME=intfloat/multilingual-e5-base` with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`, so runtime does not fetch attacker-controlled model code.
+4. **Container hardening:** The embeddings server runs as the non-root `app` user in the Docker image.
+
+### Risk Assessment
+- **Exploitability:** LOW — Practical exploitation would require local/trusted control over Python code or model artifacts that invoke `torch.jit.script`, not ordinary embeddings API access
+- **Impact:** LOW — Advisory impact is local memory corruption with low confidentiality, integrity, and availability impact
+- **Likelihood:** LOW — The service does not use the vulnerable API and runs a pinned offline model
+- **Residual Risk:** ACCEPTABLE until PyTorch publishes a patched release
+
+### Planned Remediation
+- **Action:** Reopen and upgrade torch when a patched version is published.
+- **Guardrail:** Reassess before adding TorchScript/JIT features or accepting untrusted model files/code in embeddings-server.
+
+### References
+- **CVE:** CVE-2025-3000
+- **Dependabot alert:** https://github.com/jmservera/aithena/security/dependabot/205
+- **GHSA:** GHSA-rrmf-rvhw-rf47
+- **NVD:** https://nvd.nist.gov/vuln/detail/CVE-2025-3000
+- **PyTorch issue:** https://github.com/pytorch/pytorch/issues/149623
