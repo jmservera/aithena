@@ -262,9 +262,9 @@ Need automation instead of prompts? Run `python3 installer/setup.py --help` for 
 
 ### Legacy `scripts/` directory
 
-`./manage.sh` is now the preferred CLI for routine stack operations. Treat the root `scripts/` directory as **legacy** and consult [`scripts/MIGRATION.md`](scripts/MIGRATION.md) before using any of those helpers directly.
+Treat the root `scripts/` directory as **legacy** and consult [`scripts/MIGRATION.md`](scripts/MIGRATION.md) before using any of those helpers directly. The planned `./manage.sh` day-2 CLI is coming in PR #1758; until then, keep using the documented `docker compose ...` commands and `.squad/scripts/verify.sh`.
 
-Legacy root-level scripts are deprecated now and should be migrated to `manage.sh`, documented runbooks, or other maintained entrypoints before the **next major version**, when removal is expected.
+Legacy root-level scripts are deprecated now and should be migrated to documented runbooks or other maintained entrypoints before the **next major version**, when removal is expected. After PR #1758 merges, `./manage.sh` will become the preferred routine operator CLI.
 
 ### Compose File Layout
 
