@@ -307,7 +307,10 @@ services:
       - BASE_PATH=/data/documents
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
       - EMBEDDINGS_URL=http://embeddings-server:8080/v1/embeddings/
+      - SEARCH_ARCHITECTURE=${SEARCH_ARCHITECTURE:-hnsw}
       - VECTOR_QUANTIZATION=${VECTOR_QUANTIZATION:-none}
+      - KNN_FIELD=${KNN_FIELD:-embedding_v}
+      - BOOK_EMBEDDING_FIELD=${BOOK_EMBEDDING_FIELD:-embedding_v}
       - DEFAULT_SEARCH_MODE=keyword
       - UPLOAD_DIR=/data/documents/uploads
       - MAX_UPLOAD_SIZE_MB=50
