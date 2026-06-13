@@ -231,7 +231,7 @@ By default, Aithena uses the `multilingual-e5-base` model. To use a different mo
 
 1. Edit `src/embeddings-server/Dockerfile`
 2. Change the model checkpoint (e.g., `intfloat/e5-large` for higher quality)
-3. Rebuild and tag: `docker build -t aithena-embeddings:custom docker/embeddings`
+3. Rebuild and tag: `docker build -t aithena-embeddings:custom src/embeddings-server`
 4. Update compose to use the custom image
 5. Reindex all documents
 
@@ -316,7 +316,7 @@ docker compose logs rabbitmq     # Queue errors
 
 **Check:**
 
-1. Solr GC and memory: `curl http://localhost:8983/solr/admin/info/jvm`
+1. Solr GC and memory: `curl -u "${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS}" http://localhost:8983/solr/admin/info/jvm`
 2. Redis memory: `docker compose exec redis redis-cli info memory`
 3. Vector quantization: if `VECTOR_QUANTIZATION=none`, switch to `fp16` or `int8`
 
