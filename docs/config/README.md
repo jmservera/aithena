@@ -39,7 +39,7 @@ All configuration is controlled through environment variables loaded from `.env`
 | `CORS_ORIGINS` | `http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173` | Browser origins allowed by solr-search (comma-separated). Keep localhost:5173 for Vite dev. | Yes |
 | `VERSION` | `2.5.1` | Build metadata used by image labels, `/version` endpoints, and GHCR tags. | No |
 | `GIT_COMMIT` | `unknown` | Git commit hash embedded in build metadata. | No |
-| `BUILD_DATE` | `2026-06-13T14:54:18+00:00` | Build timestamp. Updated automatically at image build. | No |
+| `BUILD_DATE` | `unknown` | Build timestamp. Updated automatically at image build. | No |
 
 ### Authentication, Admin Bootstrap, and API Safety
 
@@ -77,7 +77,7 @@ All configuration is controlled through environment variables loaded from `.env`
 | Variable | Default | Purpose | Required | Notes |
 |---|---|---|---|---|
 | `DEVICE` | `cpu` | Compute device: `cpu` (default, portable) or `cuda` (NVIDIA GPU), `xpu` (Intel GPU). | No | GPU overlays auto-detect; see [GPU Acceleration](../admin-manual.md#gpu-acceleration-setup-v1170). |
-| `BACKEND` | `torch` | Embedding backend. Currently only `torch` is supported. | No | Future support for alternative backends TBD. |
+| `BACKEND` | `torch` | Embedding backend. Currently `torch` and `openvino` are supported. | No | Future support for alternative backends TBD. |
 | `EMBEDDINGS_BASE_TAG` | `3.12-slim-multilingual-e5-base` | Source-build base image tag for local builds via docker-compose.yml. | No | Used only if building embeddings image locally. |
 | `EMBEDDINGS_VERSION` | `2.5.1` | Prebuilt embeddings image tag used by production/offline deployments. | No | Set when pulling prebuilt images from GHCR. |
 | `VECTOR_QUANTIZATION` | `none` | Stored vector precision: `none` (full fp32), `fp16`, or `int8`. Smaller = faster search, less accurate. | No | Requires reindexing when changed. Quantization evidence-gated until v2.6. |
@@ -120,7 +120,7 @@ Docker Compose supports overlay files for environment-specific configurations. T
 | `docker/compose.yml` (default) | Base distributed topology (3 Solr + 3 ZK). | Production-ready deployments. |
 | `docker/compose.single-node.yml` | Single Solr node + single ZooKeeper. Lightweight. | Development, testing, resource-constrained VMs. |
 | `docker/compose.ssl.yml` | Adds nginx TLS certificate management via certbot. | HTTPS deployments; requires `NGINX_HOST`. |
-| `docker/compose.prod-overlay.yml` | Production hardening: larger limits, volume persistence, reserved memory. | Hardened production environments. |
+| `docker/compose.prod.yml` | Production hardening: larger limits, volume persistence, reserved memory. | Hardened production environments. |
 | `docker/compose.e2e.yml` | E2E test environment with isolated library path. | Running integration tests. |
 
 **Example: start single-node with SSL:**
@@ -162,7 +162,8 @@ If upgrading from Solr 9 (v2.3.0) to Solr 10 (v2.5.0+):
 
 ```bash
 # Download Solr 9 collections to a backup directory
-curl http://localhost:8983/api/collections/books/backups -X POST -H 'Content-Type: application/json' \
+curl http://localhost:8983/solr/api/collections/books/backups -X POST -H 'Content-Type: application/json' \
+  -u admin:SolrRocks \
   -d '{"name": "books_backup_pre_v2.5"}'
 ```
 
@@ -214,7 +215,7 @@ The `books` collection schema is bootstrapped by `solr-init` on first start. Key
 
 To apply schema changes:
 
-1. Edit `src/solr/conf/managed-schema.xml`
+1. Edit `src/solr/books/managed-schema.xml`
 2. Restart solr-init or use Solr API to reload config
 3. Reindex documents if field definitions changed
 
@@ -224,7 +225,7 @@ See [Solr Data Model](../architecture/solr-data-model.md) for full schema refere
 
 By default, Aithena uses the `multilingual-e5-base` model. To use a different model:
 
-1. Edit `docker/embeddings/Dockerfile`
+1. Edit `src/embeddings-server/Dockerfile`
 2. Change the model checkpoint (e.g., `intfloat/e5-large` for higher quality)
 3. Rebuild and tag: `docker build -t aithena-embeddings:custom docker/embeddings`
 4. Update compose to use the custom image
@@ -311,7 +312,7 @@ docker compose logs rabbitmq     # Queue errors
 
 **Check:**
 
-1. Solr GC and memory: `curl http://localhost:8983/admin/info/jvm`
+1. Solr GC and memory: `curl http://localhost:8983/solr/admin/info/jvm`
 2. Redis memory: `docker compose exec redis redis-cli info memory`
 3. Vector quantization: if `VECTOR_QUANTIZATION=none`, switch to `fp16` or `int8`
 
