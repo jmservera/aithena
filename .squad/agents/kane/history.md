@@ -2,166 +2,35 @@
 
 ## Core Context
 
-**Role:** Security Engineer — SAST scanning, supply chain security, baseline exceptions, auth review
+Kane owns security review, scanner posture, auth hardening, baseline exceptions, and release security triage.
 
-**Expertise:** Bandit (Python SAST), Checkov (IaC), zizmor (Actions supply chain), OWASP ZAP (DAST), JWT auth review, dependency triage
+- Core scanners: Bandit (Python SAST), Checkov (IaC / Docker / Actions posture), zizmor (Actions supply chain), CodeQL, and OWASP ZAP guidance.
+- Current auth baseline: mandatory JWT secret, Argon2id with pre-hash length validation, Redis-backed login rate limiting, RBAC via `require_role()`, and shared JWT cookie SSO between `solr-search` and admin.
+- Baseline exceptions must stay documented with rationale; low exploitability findings may be accepted only with mitigation/context.
+- Security CI being green is necessary but not sufficient; inspect warnings, soft-fails, and `continue-on-error` behavior.
 
-**Current Blockers:** None
+## Active Patterns
 
-### Security Posture (as of v1.10.0)
+- Exclude third-party envs/site-packages from Bandit scans to avoid noisy findings.
+- Treat `noqa` / `nosec` comments as security documentation, not just suppression toggles.
+- API-key-only admin auth is insufficient; browser/admin paths still need JWT role checks.
+- Model/schema/input constraints are durable defenses: validate length/range at the model boundary first.
 
-**CI Scanners (all non-blocking, SARIF → GitHub Code Scanning):**
-- Bandit: Python SAST with `.bandit` config, 7 baseline skip rules (B101, B104, B603, B607, B105, B106, B108)
-- Checkov: Dockerfile + GitHub Actions scanning (docker-compose needs manual review — checkov limitation)
-- Zizmor: GitHub Actions supply chain (template-injection, dangerous-triggers, secrets-outside-env)
-- CodeQL: JS/TS + Python (pre-existing)
+## Recent Learnings
 
-**Baseline Exceptions (documented in `docs/security/baseline-exceptions.md`):**
-- Legitimate: pytest assert (B101), 0.0.0.0 in containers (B104), subprocess in tests (B603/B607)
-- ecdsa CVE-2024-23342: No fix exists; runtime uses pyca/cryptography backend (OpenSSL), not pure-Python ecdsa. Deferred: python-jose → PyJWT migration
-- noqa comments document each suppression with rationale for future reviewers
+### 2026-06-07T18:32:36+00:00 — Security alert triage
+- Updated `solr-search` lockfiles to address high `urllib3` and medium `starlette` alerts.
+- `transformers` remains accepted risk for now because the patched line is still release-candidate/transitive relative to `sentence-transformers`.
+- Cleared the low-severity zizmor `artipacked` CodeQL alert by setting `persist-credentials: false` in CodeQL checkout.
 
-**Known Gaps (tracked, deferred):**
-- Network segmentation: single Docker network (all services reachable from any container)
-- TLS for inter-service (RabbitMQ AMQP, Redis) — deferred to v2.0
-- CSP header on React UI — non-trivial with Vite HMR in dev
+### 2026-06-06T22:00:15.185+00:00 — PR #1712 / #1711 / #1710 review
+- No PR-blocking security issue was found in the quantization, benchmark, or Phase 2 validation diffs.
+- Follow-up hardening remains: Bandit config parsing must stay clean, Checkov soft-fails should be tracked honestly, and zizmor low-severity notes are backlog items unless exploitability changes.
 
-**Auth System (implemented, reviewed, approved):**
-- JWT cookie SSO across solr-search ↔ admin (shared secret, HttpOnly/SameSite/Secure cookies)
-- Argon2id hashing with pre-hash length validation (8-128 chars, prevents DoS)
-- Redis-backed rate limiting: 10 attempts/15 min per IP on login
-- RBAC via `require_role()` FastAPI dependency (admin role enforced on admin SSO)
-- JWT secret is mandatory env var (no fallback); `exp` claim strictly enforced
+### 2026-03-24 — Internal service authentication assessment
+- Production Compose isolation can justify thinner internal auth for non-exposed Redis/ZooKeeper, but Solr BasicAuth remains the thin compliance/security layer.
+- Any simplification must preserve the no-external-port assumption and document compensating controls.
 
-### Triage Criteria
-
-| Severity | Action |
-|----------|--------|
-| CRITICAL/HIGH | Must fix or documented baseline exception with mitigation |
-| MEDIUM/LOW | Baseline exception acceptable if low exploitability |
-| False positive | Dismiss with noqa + inline rationale comment |
-
-### Key Docs
-- `docs/security/owasp-zap-audit-guide.md` — DAST guide with Docker Compose IaC checklist
-- `docs/security/baseline-exceptions.md` — CVE exceptions with risk assessments
-- `docs/security/README.md` — Security docs index
-- `.bandit`, `.checkov.yml`, `.zizmor.yml` — Scanner configs
-
----
-
-## Completed Work (Summary)
-
-### v0.6.0: Security Scanning Infrastructure
-- SEC-1 (PR #193): Bandit CI workflow with centralized `.bandit` config
-- SEC-2 (PR #245): Checkov Dockerfile + Actions scanning
-- SEC-3 (PR #192): Zizmor supply chain scanning (official `zizmorcore/zizmor-action@v0.1.1`)
-- SEC-4 (PR #194): OWASP ZAP audit guide (900+ lines) with IaC review checklist
-- SEC-5 (#98): Full triage of bandit/checkov/zizmor findings
-
-### v1.0.1: Auth & Vulnerability Triage
-- PR #263 review: Found 3 blockers in auth module (hardcoded JWT secret fallback, missing exp enforcement, no rate limiting) — all fixed before approval
-- PR #308: Stack trace exposure false positive — applied defense-in-depth fix (removed exception chaining)
-- PR #309: ecdsa CVE-2024-23342 baseline exception with risk assessment
-- PR #313: Triaged 4 false-positive bandit/ruff alerts with noqa + documentation
-- Full 10-alert triage for release gate: 7 stale (already fixed), 3 acceptable risk → **APPROVED**
-
-### v1.7.1+: STRIDE Threat Assessment
-- 23 vulnerabilities identified (5 critical, 5 high, 9 medium, 4 low)
-- Critical findings: unprotected admin endpoints, nginx 1.15 EOL, default credentials, missing CSP
-- Produced prioritized roadmap: v1.7.1 blockers → v1.8.0 hardening → v1.9.0+ defense-in-depth
-
-### v1.10.0: Collections & Metadata Security
-- PR #722: 67 security tests, found 4 vulnerabilities (missing JWT role check on metadata edit, negative position, unbounded reorder, missing max_length)
-- Confirmed: parameterized SQL, cross-user isolation, Solr query escaping, safe Redis key construction
-
-### Workflow Security Reviews
-- PRs #245, #247, #249: Approved after corrections (Bandit B-IDs, secret handling, persist-credentials: false)
-- PR #419: Blocked Dependabot auto-merge (2 real findings: secrets-outside-env, overly broad permissions)
-- PR #419 follow-up: Verified fixes, baselined bot-conditions in `.zizmor.yml`, found impostor commit SHA
-
----
-
-## Learnings (Distilled)
-
-1. **Exclude .venv/site-packages** from Bandit scans — generates third-party false positives
-2. **Checkov can't scan docker-compose** — use manual IaC checklist (in OWASP ZAP guide)
-3. **Stale Code Scanning alerts** are common post-fix — re-scan or push commit to close them
-4. **Exception chaining (`from exc`) is safe** but remove it when CodeQL flags it (defense-in-depth, zero cost)
-5. **noqa comments ARE documentation** — always include rationale, not just the rule ID
-6. **python-jose always installs ecdsa** even with cryptography backend — known design issue, mitigate by verifying runtime backend
-7. **Zizmor secrets-outside-env** flags step-level env without deployment environments — step-level env IS secure, deployment environments are optional defense-in-depth
-8. **API key auth alone is insufficient** for admin endpoints — always combine with JWT role verification
-9. **Pydantic Field constraints** (ge, max_length) are model-level defense that persists across refactors — validate at model first, then runtime
-10. **Password length BEFORE hashing** — Argon2 processes full input, 1MB password = CPU DoS
-11. **CORS allow_credentials=true** needs strict origin validation — misconfigured browser + malicious origin = CSRF risk
-12. **Solr default ZK credentials/ACL providers** are medium-risk defense-in-depth findings, not automatic release blockers, only when ZooKeeper remains private to Compose and Solr HTTP auth is enabled.
-13. **For #1631 acceptance**, default Solr/ZK provider warnings are acceptable only if production Compose keeps ZooKeeper internal, Solr BasicAuth/RBAC remains required, and dev port overrides are treated as local-debug only.
-14. **Security CI green is not sufficient** — inspect logs for parser warnings, `--soft-fail`, and `continue-on-error`; on 2026-06-06 PR #1712 showed Bandit config parsing warnings, Checkov had a soft-failed CKV_DOCKER_7, and zizmor emitted a low-severity `artipacked` note while the overall checks were green.
-
-### 2026-06-06T22:00:15.185+00:00 — PR #1712/#1711/#1710 Security Review
-
-**Verdict:** No PR-blocking security issue found in #1712, #1711, or #1710. #1712 scanner/status checks were green after conflict resolution, including Bandit, Checkov, zizmor, CodeQL, Compose security regression, Solr image validation, integration tests, and RC container builds.
-
-**Non-blocking findings:**
-- #1712 Solr int8 quantization changes are schema/config/test/docs focused; no new secret exposure, auth bypass, externally published port, or shell-injection path found in the reviewed diff. Solr BasicAuth/RBAC bootstrap remains intact.
-- #1711 benchmark harness uses HTTP requests with timeouts and optional bearer token support without printing tokens; retry handling for transient `/update/extract` errors does not relax Solr auth.
-- #1710 Phase 2 tests add opt-in live Solr checks and static preflight validation; no production runtime behavior is weakened.
-- Security CI needed hardening: the Bandit job logged `.bandit` parser warnings in GitHub Actions, so `.bandit` is now project-level INI and the workflow relies on Bandit's auto-discovery; malformed `# nosec` rationale comments were normalized.
-- Current Checkov/zizmor signals are not pure blockers: Checkov runs with `--soft-fail` and reported CKV_DOCKER_7 on `src/solr/Dockerfile` (`FROM ${SOLR_BASE_IMAGE}`); zizmor is `continue-on-error` and reported a low-severity `zizmor/artipacked` note on `.github/workflows/codeql-analysis.yml`. These are actionable hardening backlog items, not #1712 merge blockers.
-
-## Reskill Notes
-
-**Self-assessment:** Strong coverage of SAST tooling, auth review, and CI security patterns. Skills `fastapi-auth-patterns`, `ci-workflow-security`, `logging-security`, `workflow-secrets-security` already capture most reusable patterns. Gap: no skill for security scanning baseline configuration and triage workflow — extracted as new skill.
-
-**Knowledge rating:** 85% — deep on auth, scanning infrastructure, and triage. Gaps remain in runtime DAST (ZAP guide exists but no automated integration) and container image CVE scanning (trivy/grype not yet integrated).
-
-**Compression:** 678 → ~120 lines. Removed verbose PR narratives, duplicate SEC descriptions, full code snippets (covered by skills), and investigation blow-by-blow details. Retained all security decisions, posture state, and distilled learnings.
-
-### 2026-03-22T13:49Z: Spawned for threat assessment v1.12
-
-**Directive:** User (jmservera) mandated security fixes in all releases + comprehensive security review before next release.
-
-**Scope:** Full threat assessment covering:
-- CI/CD security (GitHub Actions, prompt injection on issue_comment)
-- Input sanitization (SQL/Solr injection, XSS, CSRF)
-- All previous baselines reviewed + new attack vectors
-
-**Deliverable:** docs/security/threat-assessment-v1.12.md
-
-**Deliverable:** docs/security/threat-assessment-v1.12.md
-
-**Release Gate:** This document is now mandatory for version tagging.
-
-### 2026-03-24 — Internal Service Authentication Assessment (Background Spawn)
-
-**Recommendation:** Simplify internal service auth (Redis/ZK) for non-exposed services; keep thin Solr auth layer
-
-**Security Analysis:**
-- Current topology: Services use `expose:` (internal visibility) in prod, `ports:` in dev override
-- Network exposure: No ports published to host in production (docker-compose.yml)
-- Auth burden: Redis password + ZooKeeper DigestMD5 (60–80 lines SASL bootstrap code)
-- Auth value: Minimal — services not exposed externally; Docker bridge isolation is primary control
-
-**Recommendation Summary:**
-- **Drop:** Redis internal password (session/cache only, network-isolated)
-- **Drop:** ZooKeeper DigestMD5 auth (complex, broken on ZK 3.9 + Java 17, triggers NullPointerException)
-- **Keep:** Solr BasicAuth (thin compliance baseline, simple bootstrap via Solr 9.7 default)
-- **Compensating Control:** Maintain Docker bridge network isolation, reject external port mappings
-
-**Expected Benefits:**
-- Remove 60–80 lines of SASL bootstrap code (entrypoint-sasl.sh, JAAS generation)
-- Fix ZK 3.9 startup NullPointerException (Java 17 SASL bug)
-- Simpler env var management (no ZK_SASL_USER/PASS, reduced SOLR_ZK_CREDS config)
-- Faster dev onboarding (fewer auth failures)
-- Retain compliance-ready baseline (internal auth can be re-added for prod if governance requires)
-
-**Decision Record:** `.squad/decisions.md` → "Security Analysis: Internal Service Authentication (Redis, ZooKeeper, Solr)"
-
-**Next:** Pending team consensus on compliance implications; network isolation discussion recommended.
-
-### 2026-06-07T18:32:36.169+00:00 — Security alert triage
-
-- Dependabot open alerts: solr-search `urllib3` high CVEs GHSA-qccp-gfcp-xxvc/GHSA-mf9v-mfxr-j63j, solr-search `starlette` medium GHSA-86qp-5c8j-p5mr, embeddings-server `transformers` medium CVE-2026-1839.
-- Fixed solr-search lockfile by updating `urllib3` 2.6.3→2.7.0 and `starlette` 0.52.1→1.2.1.
-- `transformers` remains blocked/accepted-risk for now: patched version is 5.0.0rc3, but `sentence-transformers` still resolves transformers 4.x; prior Dependabot PR #1393 was closed as release-candidate/transitive.
-- Fixed open low-severity zizmor `artipacked` CodeQL alert by setting `actions/checkout` `persist-credentials: false` in `.github/workflows/codeql-analysis.yml`.
+### 2026-03-22 — Threat-assessment release gate
+- Comprehensive threat assessment became a mandatory release-gate artifact.
+- Security fixes and review are expected in every release cycle, not only major versions.
