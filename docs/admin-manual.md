@@ -421,14 +421,10 @@ That means every service using `/data/documents` is reading from the same mounte
 | `RRF_K` | `60` | Reciprocal-rank fusion damping constant for hybrid ranking |
 | `VECTOR_QUANTIZATION` | `none` | Embedding precision mode. Set `int8` to use signed-byte vector storage (`ScalarQuantizedDenseVectorField bits=7` on Solr 10, `DenseVectorField vectorEncoding=BYTE` on Solr 9). |
 | `KNN_FIELD` | `embedding_v` (`embedding_byte_v` when `VECTOR_QUANTIZATION=int8`) | Dense-vector field used by the semantic/hybrid kNN leg |
-| `UPLOAD_MAX_SIZE_MB` | `50` | Maximum upload file size (v0.6.0+) |
-| `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
 | `UPLOAD_STAGING_DIR` | `/data/uploads/` | Temporary upload staging area (v0.6.0+) |
 | `EXPOSE_CONTAINER_STATS` | `false` | Enable `/v1/admin/containers` endpoint (v0.7.0+) |
-| `AUTH_DB_PATH` | `/data/auth/users.db` | SQLite auth database path inside the container (v0.11.0+) |
-| `AUTH_JWT_SECRET` | installer-generated | JWT signing secret required at startup (v0.11.0+) |
-| `AUTH_JWT_TTL` | `24h` | Session lifetime for issued JWTs (v0.11.0+) |
-| `AUTH_COOKIE_NAME` | `aithena_auth` | Cookie name used for browser auth (v0.11.0+) |
+
+Upload limits, auth storage, JWT settings, and other operator-tuned defaults now live in the centralized [Configuration Guide](config/README.md#authentication-admin-bootstrap-and-api-safety). Use that guide as the authoritative reference instead of duplicating those defaults here.
 
 #### Infrastructure services
 

@@ -358,8 +358,10 @@ def classify(item):
         return "healthy"
     if health:
         return health
-    if state in {"running", "created"}:
+    if state == "running":
         return "running"
+    if state == "created":
+        return "created"
     if state.startswith("restarting"):
         return "restarting"
     if state.startswith("exited"):

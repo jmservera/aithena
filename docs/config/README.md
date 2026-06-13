@@ -47,7 +47,7 @@ All configuration is controlled through environment variables loaded from `.env`
 
 | Variable | Default | Purpose | Required | Security |
 |---|---|---|---|---|
-| `AUTH_DB_DIR` | `./volumes/auth` | Host directory bind-mounted into solr-search for SQLite auth database. | Yes | Must be readable/writable by Docker user. |
+| `AUTH_DB_DIR` | `./volumes/auth` | Host directory bind-mounted into solr-search for SQLite auth database. | Yes | Manual `.env` default shown here; the installer defaults to `~/.local/share/aithena/auth`. Must be readable/writable by Docker user. |
 | `AUTH_DB_PATH` | `/data/auth/users.db` | Container path for SQLite auth database. Change only if modifying compose mount. | No | Internal only; do not modify unless customizing mounts. |
 | `AUTH_JWT_SECRET` | `generate-with-installer` | JWT secret for auth tokens. **Must be regenerated for production.** | **Yes** | Secrets-managed only; never commit real values. Use installer. |
 | `AUTH_JWT_TTL` | `24h` | JWT token lifetime (`24h`, `30m`, `7d`, etc.). Shorter TTL = more frequent re-auth. | No | Adjust for security posture. |
@@ -55,9 +55,9 @@ All configuration is controlled through environment variables loaded from `.env`
 | `ADMIN_API_KEY` | `generate-with-installer` | Defense-in-depth API key for `/v1/admin/*` endpoints. **Must be regenerated for production.** | **Yes** | Secrets-managed only; never commit real values. Use installer. |
 | `AUTH_ADMIN_USERNAME` | `admin` | Bootstrap admin account username written into auth database by installer. | Yes | Set only at first initialization. |
 | `AUTH_ADMIN_PASSWORD` | (blank) | Bootstrap admin account password. Installer prompts for this. | Yes | Never commit real passwords. |
-| `AUTH_ENABLED` | `true` | Enable/disable auth. Keep `true` in production; set `false` only for isolated tests. | No | Disabling auth is dangerous; only for development. |
+| `AUTH_ENABLED` | `true` | Reserved compatibility flag kept in `.env.example`. Runtime auth is not toggled by this value today. | No | Leave `true`; use test-only compose overrides instead of relying on this flag. |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | `100` | Global request limit for authenticated API traffic. Set `0` to disable all rate limiting. | No | Tune for load and security. |
-| `UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE` | `10` | Upload-specific rate limit. When blank, solr-search falls back to 10 or inherits global limit. | No | Usually tighter than global limit. |
+| `UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE` | (blank) | Upload-specific rate limit. When blank, solr-search falls back to 10 or inherits global `0`. | No | Leave blank unless uploads need a dedicated override. |
 
 ### RabbitMQ Credentials
 
@@ -164,9 +164,13 @@ If upgrading from Solr 9 (v2.3.0) to Solr 10 (v2.5.0+):
 
 ```bash
 # Download Solr 9 collections to a backup directory
-curl http://localhost:8983/solr/api/collections/books/backups -X POST -H 'Content-Type: application/json' \
-  -u ${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS} \
-  -d '{"name": "books_backup_pre_v2.5"}'
+BACKUP_NAME="books-pre-solr10-$(date +%Y%m%d-%H%M%S)"
+docker compose exec -T solr curl -sS -u "$SOLR_ADMIN_USER:$SOLR_ADMIN_PASS" \
+  "http://solr:8983/solr/admin/collections?action=BACKUP" \
+  -d "name=$BACKUP_NAME" \
+  -d "collection=books" \
+  -d "repository=local_repo" \
+  -d "wt=json"
 ```
 
 Replace `${SOLR_ADMIN_USER}` and `${SOLR_ADMIN_PASS}` with the credentials from your `.env` file.
@@ -336,9 +340,9 @@ SOLR_OPTS="-Xmx4g -Xms2g" docker compose up -d
 
 **Check:**
 
-1. Auth database exists: `ls -la volumes/auth/users.db`
+1. Auth database exists: `ls -la "${AUTH_DB_DIR}/$(basename "$AUTH_DB_PATH")"`
 2. JWT secret is set: `echo $AUTH_JWT_SECRET`
-3. Admin user exists: `docker compose exec solr-search sqlite3 /data/auth/users.db 'SELECT username FROM users;'`
+3. Admin user exists: `docker compose exec solr-search sqlite3 "$AUTH_DB_PATH" 'SELECT username FROM users;'`
 
 **Solutions:**
 
