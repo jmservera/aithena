@@ -1,0 +1,98 @@
+[
+  {
+    "name": "aithena-solr-search-1",
+    "cpu": "0.13%",
+    "mem_usage": "77.48MiB / 512MiB",
+    "mem_perc": "15.13%"
+  },
+  {
+    "name": "aithena-solr-1",
+    "cpu": "1.19%",
+    "mem_usage": "1.106GiB / 2GiB",
+    "mem_perc": "55.29%"
+  },
+  {
+    "name": "aithena-embeddings-server-1",
+    "cpu": "325.77%",
+    "mem_usage": "997.7MiB / 3GiB",
+    "mem_perc": "32.48%"
+  },
+  {
+    "name": "aithena-document-indexer-1",
+    "cpu": "0.01%",
+    "mem_usage": "109.8MiB / 2GiB",
+    "mem_perc": "5.36%"
+  },
+  {
+    "name": "aithena-solr3-1",
+    "cpu": "0.56%",
+    "mem_usage": "1.272GiB / 2GiB",
+    "mem_perc": "63.60%"
+  },
+  {
+    "name": "aithena-solr2-1",
+    "cpu": "0.58%",
+    "mem_usage": "1.323GiB / 2GiB",
+    "mem_perc": "66.17%"
+  },
+  {
+    "name": "aithena-nginx-1",
+    "cpu": "0.00%",
+    "mem_usage": "7.566MiB / 256MiB",
+    "mem_perc": "2.96%"
+  },
+  {
+    "name": "aithena-aithena-ui-1",
+    "cpu": "0.00%",
+    "mem_usage": "7.156MiB / 256MiB",
+    "mem_perc": "2.80%"
+  },
+  {
+    "name": "aithena-document-lister-1",
+    "cpu": "0.00%",
+    "mem_usage": "40.25MiB / 256MiB",
+    "mem_perc": "15.72%"
+  },
+  {
+    "name": "aithena-redis-commander-1",
+    "cpu": "0.00%",
+    "mem_usage": "24.23MiB / 256MiB",
+    "mem_perc": "9.46%"
+  },
+  {
+    "name": "aithena-redis-1",
+    "cpu": "0.42%",
+    "mem_usage": "14.46MiB / 512MiB",
+    "mem_perc": "2.82%"
+  },
+  {
+    "name": "aithena-rabbitmq-1",
+    "cpu": "47.23%",
+    "mem_usage": "176.3MiB / 1GiB",
+    "mem_perc": "17.21%"
+  },
+  {
+    "name": "aithena-zoo1-1",
+    "cpu": "0.12%",
+    "mem_usage": "190.6MiB / 512MiB",
+    "mem_perc": "37.22%"
+  },
+  {
+    "name": "aithena-zoo3-1",
+    "cpu": "0.15%",
+    "mem_usage": "151.3MiB / 512MiB",
+    "mem_perc": "29.55%"
+  },
+  {
+    "name": "aithena-zoo2-1",
+    "cpu": "0.12%",
+    "mem_usage": "178.3MiB / 512MiB",
+    "mem_perc": "34.83%"
+  },
+  {
+    "name": "aithena-tika-1",
+    "cpu": "0.63%",
+    "mem_usage": "465.1MiB / 1GiB",
+    "mem_perc": "45.42%"
+  }
+]

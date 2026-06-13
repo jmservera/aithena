@@ -1,0 +1,135 @@
+{
+  "timestamp": "2026-06-13T00:08:00Z",
+  "solr_version": "10.0.0",
+  "quantization": "float32",
+  "stats": [
+    {
+      "container": "aithena-document-indexer-1",
+      "cpu": "0.00%",
+      "mem_usage": "164.8MiB / 2GiB",
+      "mem_perc": "8.05%",
+      "net_io": "212MB / 289MB",
+      "block_io": "49.9MB / 17.7MB"
+    },
+    {
+      "container": "aithena-nginx-1",
+      "cpu": "0.00%",
+      "mem_usage": "8.027MiB / 256MiB",
+      "mem_perc": "3.14%",
+      "net_io": "472kB / 485kB",
+      "block_io": "713kB / 24.6kB"
+    },
+    {
+      "container": "aithena-aithena-ui-1",
+      "cpu": "0.00%",
+      "mem_usage": "8.422MiB / 256MiB",
+      "mem_perc": "3.29%",
+      "net_io": "179kB / 231kB",
+      "block_io": "1.5MB / 4.1kB"
+    },
+    {
+      "container": "aithena-solr3-1",
+      "cpu": "0.38%",
+      "mem_usage": "1.235GiB / 2GiB",
+      "mem_perc": "61.74%",
+      "net_io": "149MB / 2.44MB",
+      "block_io": "16.4kB / 1.26GB"
+    },
+    {
+      "container": "aithena-solr-search-1",
+      "cpu": "0.12%",
+      "mem_usage": "71.94MiB / 512MiB",
+      "mem_perc": "14.05%",
+      "net_io": "3.25MB / 3.71MB",
+      "block_io": "12.5MB / 0B"
+    },
+    {
+      "container": "aithena-solr2-1",
+      "cpu": "0.35%",
+      "mem_usage": "1012MiB / 2GiB",
+      "mem_perc": "49.43%",
+      "net_io": "149MB / 2.44MB",
+      "block_io": "4.1kB / 1.27GB"
+    },
+    {
+      "container": "aithena-document-lister-1",
+      "cpu": "0.00%",
+      "mem_usage": "123.6MiB / 256MiB",
+      "mem_perc": "48.26%",
+      "net_io": "82.3MB / 24.8MB",
+      "block_io": "2.57MB / 38.6MB"
+    },
+    {
+      "container": "aithena-solr-1",
+      "cpu": "0.42%",
+      "mem_usage": "1.21GiB / 2GiB",
+      "mem_perc": "60.52%",
+      "net_io": "285MB / 313MB",
+      "block_io": "29MB / 1.27GB"
+    },
+    {
+      "container": "aithena-redis-commander-1",
+      "cpu": "0.00%",
+      "mem_usage": "20.75MiB / 256MiB",
+      "mem_perc": "8.11%",
+      "net_io": "117kB / 16.3kB",
+      "block_io": "3.29MB / 4.1kB"
+    },
+    {
+      "container": "aithena-redis-1",
+      "cpu": "2.56%",
+      "mem_usage": "15.38MiB / 512MiB",
+      "mem_perc": "3.00%",
+      "net_io": "27.5MB / 70.5MB",
+      "block_io": "5.03MB / 158MB"
+    },
+    {
+      "container": "aithena-rabbitmq-1",
+      "cpu": "0.13%",
+      "mem_usage": "112.9MiB / 1GiB",
+      "mem_perc": "11.03%",
+      "net_io": "1.37MB / 971kB",
+      "block_io": "19.4MB / 696kB"
+    },
+    {
+      "container": "aithena-zoo3-1",
+      "cpu": "0.16%",
+      "mem_usage": "189.2MiB / 512MiB",
+      "mem_perc": "36.95%",
+      "net_io": "3.85MB / 11.6MB",
+      "block_io": "905kB / 4.09MB"
+    },
+    {
+      "container": "aithena-zoo2-1",
+      "cpu": "0.08%",
+      "mem_usage": "160.9MiB / 512MiB",
+      "mem_perc": "31.43%",
+      "net_io": "3.74MB / 15.7MB",
+      "block_io": "13.6MB / 3.93MB"
+    },
+    {
+      "container": "aithena-zoo1-1",
+      "cpu": "0.09%",
+      "mem_usage": "115.2MiB / 512MiB",
+      "mem_perc": "22.49%",
+      "net_io": "1.83MB / 780kB",
+      "block_io": "7.95MB / 3.56MB"
+    },
+    {
+      "container": "aithena-embeddings-server-1",
+      "cpu": "2.74%",
+      "mem_usage": "1005MiB / 3GiB",
+      "mem_perc": "32.70%",
+      "net_io": "22.2MB / 205MB",
+      "block_io": "117MB / 0B"
+    },
+    {
+      "container": "aithena-tika-1",
+      "cpu": "0.17%",
+      "mem_usage": "462.6MiB / 1GiB",
+      "mem_perc": "45.18%",
+      "net_io": "22.6MB / 9.58MB",
+      "block_io": "74.4MB / 2.48MB"
+    }
+  ]
+}
