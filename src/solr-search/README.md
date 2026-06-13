@@ -40,6 +40,8 @@ is critical for writing correct search queries.
 
 ## Configuration
 
+> **Canonical reference:** For complete configuration, environment variables, and deployment options, see [Configuration Guide](../../docs/config/README.md).
+
 Key environment variables (see `config.py` for full list):
 
 | Variable | Default | Description |
