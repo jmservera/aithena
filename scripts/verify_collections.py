@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# DEPRECATED: See scripts/MIGRATION.md for the replacement command
 """Verify that the Solr books collection is correctly indexed.
 
 Checks:

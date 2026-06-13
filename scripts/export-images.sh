@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: See scripts/MIGRATION.md for the replacement command
 # =============================================================================
 # Aithena — Build & Export All Docker Images for Air-Gapped Deployment
 # =============================================================================

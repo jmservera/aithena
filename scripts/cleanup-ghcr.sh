@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: See scripts/MIGRATION.md for the replacement command
 # ──────────────────────────────────────────────────────────────────────────────
 # cleanup-ghcr.sh — Remove old / untagged container images from GHCR
 #
