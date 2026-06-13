@@ -44,6 +44,7 @@ run_manage() {
 }
 
 bash -n "$ROOT/manage.sh"
+[[ -x "$ROOT/manage.sh" ]] || fail "manage.sh should be executable"
 
 run_manage --help >"$ARTIFACT_DIR/help.txt"
 grep -Fq "Core commands:" "$ARTIFACT_DIR/help.txt" || fail "main help should list commands"

@@ -276,10 +276,10 @@ Core subcommands:
 
 | Command | What it does |
 |---------|---------------|
-| `./manage.sh up [service]` | Starts the configured stack in detached mode |
+| `./manage.sh up [service...]` | Starts the configured stack in detached mode |
 | `./manage.sh down` | Stops and removes the configured stack |
-| `./manage.sh build [service]` | Builds all services or a specific service |
-| `./manage.sh logs [service]` | Streams logs (`--no-follow` prints once) |
+| `./manage.sh build [service...]` | Builds all services or one or more specific services |
+| `./manage.sh logs [service...]` | Streams logs (`--no-follow` prints once) |
 | `./manage.sh health` | Summarizes service health and exits non-zero when a service is not healthy, running, or completed |
 | `./manage.sh test` | Runs `make test` when available, otherwise falls back to `.squad/scripts/verify.sh --all` |
 | `./manage.sh status` | Shows container state, health, and published ports |
