@@ -39,7 +39,7 @@ The fastest way to verify your changes:
 
 | Tool/Service | Minimum Version | Installation |
 |---|---|---|
-| **Node.js** | 18.0.0 | https://nodejs.org |
+| **Node.js** | 22.0.0 | https://nodejs.org |
 | **Python** | 3.12+ | https://www.python.org (or via pyenv) |
 | **Docker** | 24.0.0+ | https://docs.docker.com/get-docker/ |
 | **Docker Compose** | 2.20.0+ | Included with Docker Desktop |
@@ -56,8 +56,7 @@ git clone https://github.com/jmservera/aithena.git
 cd aithena
 
 # Install Python virtual environment (automatic via uv)
-# For each Python service, uv will auto-create and sync dependencies:
-# uv sync is called automatically by pytest and the verify script
+# For each Python service, use `uv run pytest` to run tests with automatic venv sync
 
 # Install Node dependencies
 cd src/aithena-ui
@@ -65,10 +64,10 @@ npm ci
 cd ../..
 
 # Start the Docker Compose stack (all services)
-docker-compose up -d
+docker compose up -d
 
 # Or start just what you need for a specific test
-# See "Running a Single Service" below
+# See the [Running a Single Service](##running-a-single-service) section below
 ```
 
 ### Environment Configuration
@@ -961,7 +960,7 @@ cd src/solr-search && uv sync && uv run pytest
 - [Pytest Documentation](https://docs.pytest.org)
 - [Vitest Documentation](https://vitest.dev)
 - [Playwright Documentation](https://playwright.dev)
-- [Test Quality Gates](../.squad/quality-gates.md)
+- [Test Quality Gates](../../.squad/quality-gates.md)
 - [Pre-Release Testing](../pre-release-testing.md)
 
 ---
