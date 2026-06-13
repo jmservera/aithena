@@ -92,6 +92,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
+- [Test Infrastructure Guide](docs/testing/README.md)
 - [Deployment Sizing Guide](docs/deployment/sizing-guide.md)
 - [i18n Contributor Guide](docs/guides/i18n-guide.md)
 - [Security Baseline](docs/security/baseline-v0.6.0.md)
@@ -286,6 +287,12 @@ Core subcommands:
 | `./manage.sh reset` | Runs `down -v --remove-orphans`, then rebuilds images |
 
 `manage.sh` automatically follows the compose file chain from the generated `start.sh` when present. For automation or isolated testing, override it with `AITHENA_COMPOSE_FILES=file1:file2` or standard `COMPOSE_FILE=file1:file2`.
+
+### Legacy `scripts/` directory
+
+`./manage.sh` is now the preferred CLI for routine stack operations. Treat the root `scripts/` directory as **legacy** and consult [`scripts/MIGRATION.md`](scripts/MIGRATION.md) before using any of those helpers directly.
+
+Legacy root-level scripts are deprecated now and should be migrated to `manage.sh`, documented runbooks, or other maintained entrypoints before the **next major version**, when removal is expected.
 
 ### Compose File Layout
 

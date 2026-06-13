@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: See scripts/MIGRATION.md for the replacement command
 # Create required Docker volume directories for Aithena.
 # Covers docker-compose.yml and docker/compose.prod.yml.
 # For SSL (docker/compose.ssl.yml), also create certbot dirs manually.

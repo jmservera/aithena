@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: See scripts/MIGRATION.md for the replacement command
 # =============================================================================
 # Aithena BCDR — Tier 2: High-Priority Data Backup (Solr + ZooKeeper)
 # =============================================================================
