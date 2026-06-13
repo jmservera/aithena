@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: .
+    command: ["sh", "-lc", "trap 'exit 0' TERM INT; echo 'fixture app started'; while :; do sleep 1; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "test -x /bin/sh"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 1s
