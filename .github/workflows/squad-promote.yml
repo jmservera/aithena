@@ -10,17 +10,19 @@ on:
         type: choice
         options: ['false', 'true']
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   dev-to-preview:
     name: Promote dev → preview
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure git
@@ -69,10 +71,13 @@ jobs:
     name: Promote preview → main (release)
     needs: dev-to-preview
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure git
