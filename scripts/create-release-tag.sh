@@ -1,4 +1,5 @@
 #!/bin/sh
+# DEPRECATED: See scripts/MIGRATION.md for the replacement command
 # create-release-tag.sh — Safe tag creation for Aithena releases.
 #
 # Prevents stale-tag issues by enforcing:

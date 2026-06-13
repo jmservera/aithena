@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# DEPRECATED: See scripts/MIGRATION.md for the replacement command
 """Trigger indexing of documents through the e5-base embedding pipeline.
 
 Publishes document file paths to the RabbitMQ exchange so that the
