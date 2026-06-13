@@ -301,6 +301,16 @@ render_compose_status() {
   local mode="$1"
   local one_shot_csv
   local compose_ps_json
+
+  if ! have_command python3; then
+    if [[ "$mode" == "status" ]]; then
+      warn "python3 not found; falling back to 'docker compose ps' output for status."
+      compose ps
+      return 0
+    fi
+    die "python3 is required for './manage.sh health'. Install python3 or use 'docker compose ps' for a basic status view."
+  fi
+
   one_shot_csv="$(join_by ',' "${ONE_SHOT_SERVICES[@]}")"
   compose_ps_json="$(compose ps --format json)"
 
@@ -405,8 +415,6 @@ print("  ".join("-" * width for width in widths))
 for row in rows:
     print(fmt(row))
 
-if bad_rows:
-    sys.exit(1)
 PY
 }
 

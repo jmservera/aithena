@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# This smoke test is intended to run from `make test`; until #1747 merges, invoke it directly.
 FIXTURE_DIR="$ROOT/tests/fixtures/manage-cli"
 ARTIFACT_DIR="$ROOT/.test-artifacts/manage-cli"
 PROJECT_NAME="manage-cli-$RANDOM-$$"
