@@ -27,6 +27,16 @@ if [[ ${#FAILURES[@]} -gt 0 ]]; then
 fi
 
 aithena_run_logged "$ARTIFACT_DIR" "$BUILDALL_LOG_TIMESTAMP" FAILURES \
+  "docker build aithena:base" "python-base" "$SCRIPT_DIR" \
+  docker build -f Dockerfile.base -t aithena:base . || true
+
+if [[ ${#FAILURES[@]} -gt 0 ]]; then
+  echo "Skipping Docker Compose because the shared Python base image failed to build." >&2
+  aithena_print_failure_summary FAILURES
+  exit 1
+fi
+
+aithena_run_logged "$ARTIFACT_DIR" "$BUILDALL_LOG_TIMESTAMP" FAILURES \
   "docker compose up --build -d" "compose" "$SCRIPT_DIR" docker compose up --build -d || true
 
 if [[ ${#FAILURES[@]} -gt 0 ]]; then

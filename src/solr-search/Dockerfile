@@ -1,22 +1,9 @@
+ARG BASE_IMAGE=aithena:base
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-# ---------- build stage ----------
-FROM python:3.14.5-slim-bookworm AS builder
-
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-WORKDIR /app
-
-COPY src/aithena-common/ /aithena-common/
-COPY src/solr-search/pyproject.toml src/solr-search/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --native-tls
-
-COPY src/solr-search/ .
-
-# ---------- runtime stage ----------
-FROM python:3.14.5-slim-bookworm AS runtime
+FROM ${BASE_IMAGE}
 
 ARG VERSION
 ARG GIT_COMMIT
@@ -30,31 +17,25 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 ENV VERSION=${VERSION} \
     GIT_COMMIT=${GIT_COMMIT} \
     BUILD_DATE=${BUILD_DATE} \
-    PYTHONUNBUFFERED=1 \
-    PORT=8080
+    PORT=8080 \
+    SOLR_URL=http://solr:8983/solr \
+    SOLR_COLLECTION=books \
+    BASE_PATH=/data/documents \
+    CORS_ORIGINS=http://localhost:5173 \
+    HEALTHCHECK_MODE=http \
+    HEALTHCHECK_URL=http://localhost:8080/health
 
-WORKDIR /app
+COPY src/aithena-common/ /aithena-common/
+COPY src/solr-search/pyproject.toml src/solr-search/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --native-tls
 
-RUN apt-get update && apt-get install -y --no-install-recommends wget gosu sqlite3 && rm -rf /var/lib/apt/lists/*
-
-RUN groupadd --system --gid 1000 app && useradd --system --uid 1000 --gid app --create-home app
-
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/*.py /app/
-COPY --from=builder /app/migrations /app/migrations
-COPY --from=builder /app/scripts /app/scripts
-
-ENV PATH="/app/.venv/bin:${PATH}"
-
-ENV SOLR_URL="http://solr:8983/solr"
-ENV SOLR_COLLECTION="books"
-ENV BASE_PATH="/data/documents"
-ENV CORS_ORIGINS="http://localhost:5173"
-
-RUN mkdir -p /data/documents/uploads /data/auth /data/collections && chown -R app:app /data
-
+COPY src/solr-search/*.py /app/
+COPY src/solr-search/migrations /app/migrations
+COPY src/solr-search/scripts /app/scripts
 COPY src/solr-search/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh \
+    && mkdir -p /data/documents/uploads /data/auth /data/collections \
+    && chown -R app:app /app /data
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["sh","-c","python -m uvicorn --port=$PORT --host 0.0.0.0 main:app"]

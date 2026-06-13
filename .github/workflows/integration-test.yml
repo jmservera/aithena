@@ -240,6 +240,7 @@ jobs:
 
       - name: Build all container images
         run: |
+          docker build -f Dockerfile.base -t aithena:base .
           docker compose --profile production build
 
       - name: Start stack (${{ matrix.topology }})

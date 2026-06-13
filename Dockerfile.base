@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim-bookworm
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:${PATH}"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      gosu \
+      libgomp1 \
+      libstdc++6 \
+      procps \
+      sqlite3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 1000 app \
+    && useradd --system --uid 1000 --gid app --create-home app
+
+COPY docker/python-service-healthcheck.py /usr/local/bin/python-service-healthcheck.py
+RUN chmod +x /usr/local/bin/python-service-healthcheck.py
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=30s \
+  CMD ["python", "/usr/local/bin/python-service-healthcheck.py"]
