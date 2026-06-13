@@ -1,11 +1,13 @@
-SHELL := /usr/bin/env bash
+SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-PYTHON_SERVICES ?= $(sort $(patsubst src/%/pyproject.toml,%,$(wildcard src/*/pyproject.toml)))
+PYTHON_SERVICES ?= $(sort $(foreach p,$(wildcard src/*/pyproject.toml),$(if $(wildcard $(dir $(p))tests),$(notdir $(patsubst %/,%,$(dir $(p)))))))
 UI_DIR ?= src/aithena-ui
 E2E_DIR ?= e2e
 PLAYWRIGHT_DIR ?= e2e/playwright
 STRESS_DIR ?= tests/stress
+E2E ?= 0
+STRESS ?= 0
 
 PYTEST_CMD ?= uv run pytest
 PYTEST_ARGS ?= --tb=short -q
@@ -33,12 +35,10 @@ UI_LINT_TARGETS := lint-ui
 UI_FORMAT_TARGETS := format-ui
 endif
 
+ifeq ($(E2E),1)
 ifneq ($(HAS_PLAYWRIGHT),no)
 UI_TEST_TARGETS += test-ui-e2e
 endif
-
-ifneq ($(HAS_STRESS),no)
-STRESS_TEST_TARGETS := test-stress
 endif
 
 ALL_TEST_TARGETS := test-backend
@@ -47,24 +47,27 @@ ifneq ($(HAS_UI),no)
 ALL_TEST_TARGETS += test-ui
 endif
 
+ifeq ($(STRESS),1)
 ifneq ($(HAS_STRESS),no)
-ALL_TEST_TARGETS += test-stress
+ALL_TEST_TARGETS += test-stress-python
+endif
 endif
 
-.PHONY: help test test-backend test-ui test-ui-unit test-ui-e2e test-playwright test-e2e test-e2e-python test-stress lint format lint-ui format-ui $(PYTHON_TEST_TARGETS) $(PYTHON_LINT_TARGETS) $(PYTHON_FORMAT_TARGETS)
+.PHONY: help test test-backend test-ui test-ui-unit test-ui-e2e test-playwright test-e2e test-e2e-python test-stress test-stress-python lint format lint-ui format-ui $(PYTHON_TEST_TARGETS) $(PYTHON_LINT_TARGETS) $(PYTHON_FORMAT_TARGETS)
 
 help: ## List available targets
 	@printf "\nAvailable targets:\n\n"
 	@printf "  %-22s %s\n" "help" "List available targets"
-	@printf "  %-22s %s\n" "test" "Run backend, UI, and stress suites when available"
+	@printf "  %-22s %s\n" "test" "Run backend and default UI suites (E2E=1, STRESS=1 to opt in)"
 	@printf "  %-22s %s\n" "test-backend" "Run pytest for all Python backend services"
-	@if [ "$(HAS_UI)" != "no" ]; then printf "  %-22s %s\n" "test-ui" "Run UI Vitest and Playwright suites"; fi
+	@if [ "$(HAS_UI)" != "no" ]; then printf "  %-22s %s\n" "test-ui" "Run UI Vitest suite (set E2E=1 to include Playwright)"; fi
 	@if [ "$(HAS_UI)" != "no" ]; then printf "  %-22s %s\n" "test-ui-unit" "Run UI Vitest suite"; fi
 	@if [ "$(HAS_E2E)" != "no" ]; then printf "  %-22s %s\n" "test-e2e" "Run Python and browser end-to-end suites"; fi
 	@if [ "$(HAS_E2E)" != "no" ]; then printf "  %-22s %s\n" "test-e2e-python" "Run Python end-to-end suite"; fi
 	@if [ "$(HAS_PLAYWRIGHT)" != "no" ]; then printf "  %-22s %s\n" "test-ui-e2e" "Run Playwright end-to-end suite"; fi
 	@if [ "$(HAS_PLAYWRIGHT)" != "no" ]; then printf "  %-22s %s\n" "test-playwright" "Alias for test-ui-e2e"; fi
-	@if [ "$(HAS_STRESS)" != "no" ]; then printf "  %-22s %s\n" "test-stress" "Run Python stress tests (requires stack)"; fi
+	@if [ "$(HAS_STRESS)" != "no" ]; then printf "  %-22s %s\n" "test-stress-python" "Run Python stress tests (requires stack)"; fi
+	@if [ "$(HAS_STRESS)" != "no" ]; then printf "  %-22s %s\n" "test-stress" "Alias for test-stress-python"; fi
 	@printf "  %-22s %s\n" "lint" "Run Ruff and ESLint"
 	@printf "  %-22s %s\n" "format" "Run Ruff format and Prettier"
 	@if [ "$(HAS_UI)" != "no" ]; then printf "  %-22s %s\n" "lint-ui" "Run ESLint for the UI"; fi
@@ -79,11 +82,13 @@ test: $(ALL_TEST_TARGETS) ## Run all available test suites
 
 test-backend: $(PYTHON_TEST_TARGETS) ## Run pytest for all Python backend services
 
-test-ui: $(UI_TEST_TARGETS) ## Run UI Vitest and Playwright suites
+test-ui: $(UI_TEST_TARGETS) ## Run UI Vitest suite; include Playwright with E2E=1
 
 test-e2e: test-e2e-python test-ui-e2e ## Run Python and browser end-to-end suites
 
 test-playwright: test-ui-e2e ## Alias for Playwright end-to-end tests
+
+test-stress: test-stress-python ## Alias for Python stress tests
 
 lint: $(PYTHON_LINT_TARGETS) $(UI_LINT_TARGETS) ## Run Ruff and ESLint
 
@@ -105,7 +110,7 @@ test-ui-e2e: ## Run Playwright end-to-end suite
 		if [ ! -d node_modules ] && [ -f package-lock.json ]; then npm ci; fi && \
 		$(PLAYWRIGHT_CMD) $(PLAYWRIGHT_ARGS)
 
-test-stress: ## Run Python stress tests (requires a running stack)
+test-stress-python: ## Run Python stress tests (requires a running stack)
 	@echo "==> Running stress tests"
 	@python -m pip install --upgrade pip
 	@python -m pip install -r $(STRESS_DIR)/requirements-stress.txt
