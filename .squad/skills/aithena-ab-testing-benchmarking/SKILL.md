@@ -5,8 +5,8 @@ domain: "search, embeddings, evaluation, benchmarking"
 confidence: "high"
 source: "earned — E5-base model research and dual-collection A/B testing implementation (Phase 1-2, issues #873-#879)"
 author: "Ash"
-created: "2026-07-21"
-last_validated: "2026-07-21"
+created: "2026-06-13"
+last_validated: "2026-06-13"
 ---
 
 ## Context
@@ -91,6 +91,18 @@ This is idempotent — the `grep -q` check prevents duplicate creates on contain
 - `?q=<text>&collection=<name>&mode=<semantic|keyword|hybrid>&limit=20`
 - E5 collections automatically get `input_type=query` injection (handled by `is_e5_collection()` check in API)
 - Returns: `results[{id, title, author, score}]`, `latency_ms`, `collection`
+
+### 2b. Evidence Contract for Benchmark Claims
+
+Before publishing Solr-version, quantization, or model-quality claims, require all of the following in the same evidence bundle:
+- same host or runner class for both runs
+- same corpus ID, document count, and corpus byte count
+- explicit run metadata (Solr version, vector/quantization mode, collection names)
+- paired benchmark JSON artifacts
+- measured memory samples (for example `docker stats --no-stream`), not payload-size estimates
+- failed-query IDs or other exception inventory so reviewers can inspect outliers
+
+Treat static/preflight validation as wiring proof only. It does not close latency, recall, throughput, or memory questions on its own.
 
 ### 3. Result Comparison Metrics
 
