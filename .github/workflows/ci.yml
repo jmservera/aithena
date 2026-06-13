@@ -86,9 +86,8 @@ jobs:
         working-directory: src/document-indexer
         run: uv sync --frozen
 
-      - name: Run tests with coverage
-        working-directory: src/document-indexer
-        run: uv run pytest -v --tb=short
+      - name: Run tests via make
+        run: make test-document-indexer PYTEST_ARGS='-v --tb=short'
 
       - name: Upload coverage report
         if: always()
@@ -123,9 +122,8 @@ jobs:
         working-directory: src/solr-search
         run: uv sync --frozen
 
-      - name: Run tests with coverage
-        working-directory: src/solr-search
-        run: uv run pytest -v --tb=short
+      - name: Run tests via make
+        run: make test-solr-search PYTEST_ARGS='-v --tb=short'
 
       - name: Upload coverage report
         if: always()
@@ -168,9 +166,8 @@ jobs:
         working-directory: src/aithena-ui
         run: npm run build
 
-      - name: Run tests
-        working-directory: src/aithena-ui
-        run: npx vitest run
+      - name: Run tests via make
+        run: make test-ui-unit
 
   document-lister-tests:
     name: document-lister tests
@@ -197,9 +194,8 @@ jobs:
         working-directory: src/document-lister
         run: uv sync --frozen
 
-      - name: Run tests with coverage
-        working-directory: src/document-lister
-        run: uv run pytest -v --tb=short
+      - name: Run tests via make
+        run: make test-document-lister PYTEST_ARGS='-v --tb=short'
 
       - name: Upload coverage report
         if: always()
@@ -239,9 +235,8 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest==8.3.4 httpx==0.27.2 pytest-cov==6.1.1
 
-      - name: Run tests with coverage
-        working-directory: src/embeddings-server
-        run: pytest -v --tb=short --cov=main --cov=config --cov-report=term-missing --cov-report=html
+      - name: Run tests via make
+        run: make test-embeddings-server PYTEST_CMD=pytest PYTEST_ARGS='-v --tb=short --cov=main --cov=config --cov-report=term-missing --cov-report=html'
 
       - name: Upload coverage report
         if: always()

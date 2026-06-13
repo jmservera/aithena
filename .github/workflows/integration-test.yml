@@ -349,8 +349,13 @@ jobs:
         working-directory: e2e
         run: pip install -r requirements.txt
 
-      - name: Run Python E2E tests
-        working-directory: e2e
+      - name: Install Playwright dependencies
+        working-directory: e2e/playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E suites via make
         env:
           E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
           E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
@@ -363,28 +368,14 @@ jobs:
             ls -ld "$E2E_LIBRARY_PATH" 2>/dev/null || true
             stat "$E2E_LIBRARY_PATH" 2>/dev/null || true
           fi
-          ADMIN_API_KEY=$(grep '^ADMIN_API_KEY=' ../.env 2>/dev/null | cut -d= -f2 || true)
+          ADMIN_API_KEY=$(grep '^ADMIN_API_KEY=' .env 2>/dev/null | cut -d= -f2 || true)
           export ADMIN_API_KEY="${ADMIN_API_KEY:-ci-admin-api-key}"
-          pytest -v --junitxml=pytest-results.xml
-
-      - name: Install Playwright dependencies
-        working-directory: e2e/playwright
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-
-      - name: Run Playwright browser tests
-        working-directory: e2e/playwright
-        env:
-          E2E_USERNAME: ${{ env.CI_ADMIN_USERNAME }}
-          E2E_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
-        run: |
           export E2E_AUTH_COOKIE_NAME=aithena_auth
           export E2E_API_TOKEN="$(curl --fail --silent --show-error \
             -H 'Content-Type: application/json' \
             -d "$(python3 -c 'import json, os; print(json.dumps({"username": os.environ["E2E_USERNAME"], "password": os.environ["E2E_PASSWORD"]}))')" \
             http://localhost/v1/auth/login | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')"
-          npx playwright test
+          make test-e2e E2E_PYTEST_ARGS='-v --junitxml=pytest-results.xml'
 
       - name: Upload Python E2E results
         if: always()
