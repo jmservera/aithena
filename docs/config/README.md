@@ -58,7 +58,7 @@ chmod 600 .env
 | `SOLR_PORT` | `8983` | Primary Solr port |
 | `SOLR_COLLECTION` | `books` | Target Solr collection |
 | `EMBEDDINGS_HOST` | `embeddings-server` | Embeddings service hostname |
-| `EMBEDDINGS_PORT` | `8085` | Embeddings service port |
+| `EMBEDDINGS_PORT` | `8080` | Embeddings service port |
 | `THUMBNAIL_DIR` | `/data/thumbnails` | Writable directory for document thumbnails (v1.15.0+) |
 
 **Scaling document indexing:**
@@ -74,15 +74,15 @@ chmod 600 .env
 | `SOLR_COLLECTION` | `books` | Collection used for search |
 | `BASE_PATH` | `/data/documents` | Base path for document downloads |
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed dev origin (development only) |
-| `EMBEDDINGS_URL` | `http://embeddings-server:8085/v1/embeddings/` | Embeddings endpoint |
+| `EMBEDDINGS_URL` | `http://embeddings-server:8080/v1/embeddings/` | Embeddings endpoint |
 | `EMBEDDINGS_TIMEOUT` | `120` | Max wait for query embeddings before degrading to keyword |
 | `DEFAULT_SEARCH_MODE` | `keyword` | Default API search mode (`keyword`, `semantic`, or `hybrid`) |
 | `RRF_K` | `60` | Reciprocal-rank fusion damping constant for hybrid ranking |
 | `VECTOR_QUANTIZATION` | `none` | Embedding precision: `none` (float32) or `int8` (signed-byte quantization) |
 | `KNN_FIELD` | `embedding_v` | Dense-vector field for semantic/hybrid search (auto-switches to `embedding_byte_v` if `VECTOR_QUANTIZATION=int8`) |
-| `UPLOAD_MAX_SIZE_MB` | `50` | Maximum upload file size in MB (v0.6.0+) |
-| `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
-| `UPLOAD_STAGING_DIR` | `/data/uploads/` | Temporary upload staging area (v0.6.0+) |
+| `MAX_UPLOAD_SIZE_MB` | `50` | Maximum upload file size in MB (v0.6.0+) |
+| `UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE` | `10` | Upload rate limit: requests per minute per IP (v0.6.0+) |
+| `UPLOAD_DIR` | `/data/uploads/` | Writable directory for uploaded files (v0.6.0+) |
 | `EXPOSE_CONTAINER_STATS` | `false` | Enable `/v1/admin/containers` endpoint (v0.7.0+) |
 | `AUTH_DB_PATH` | `/data/auth/users.db` | SQLite auth database path (v0.11.0+) |
 | `AUTH_JWT_SECRET` | installer-generated | JWT signing secret (v0.11.0+) |
@@ -94,7 +94,7 @@ chmod 600 .env
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PORT` | `8085` | Embeddings service listen port |
+| `PORT` | `8080` | Embeddings service listen port |
 | `DEVICE` | `auto` | Device selection: `auto` (auto-fallback to CPU), `cpu`, `cuda`, or `xpu` (v1.17.0+) |
 | `BACKEND` | `torch` | Inference backend: `torch` (NVIDIA/CPU) or `openvino` (Intel GPU/CPU) (v1.17.0+) |
 
@@ -147,7 +147,7 @@ Aithena uses overlay files to compose configurations for different deployment sc
 | `docker/compose.ssl.yml` | TLS termination (production) |
 | `docker/compose.single-node.yml` | Single-node SolrCloud topology |
 | `docker/compose.e2e.yml` | E2E test fixtures |
-| `docker/compose.ci.yml` | CI ephemeral volumes/tmpfs (v2.3.0+) |
+| `docker/compose.ci-ports.yml` | CI ephemeral volumes/tmpfs (v2.3.0+) |
 
 ### Example Compose Chains
 
@@ -294,7 +294,7 @@ services:
     secrets:
       - jwt_secret
     environment:
-      AUTH_JWT_SECRET_FILE: /run/secrets/jwt_secret
+      AUTH_JWT_SECRET: /run/secrets/jwt_secret
 ```
 
 Or use environment variable references from host-managed credential systems.
