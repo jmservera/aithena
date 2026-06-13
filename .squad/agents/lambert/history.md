@@ -114,3 +114,12 @@
 - **#1356 Phase 2 Infrastructure Assessment:** Co-authored infrastructure gap analysis (standalone Solr 10 overlay, Overseer-disabled overlay, init script branching). Confirmed Phase 2 test readiness matrix and deferred failover/resilience scope to v2.5.1.
 - **#1354 Scalar Quantization Benchmark Execution Plan:** Co-authored 3-phase benchmark workflow with detailed corpus requirements, pass/fail criteria, and deliverables. Validated that plan is executable post-PR-#1670 merge with no additional code changes.
 - **#1344 int8 Evaluation Protocol:** Co-authored closure checklist and blocker resolution path. Confirmed benchmark validation is P0 release blocker pending #1670 merge.
+
+### 2026-06-13T15:31:32.692+00:00 — #1745 Test Infrastructure Documentation
+- **Deliverable**: Consolidated test infrastructure guide at `docs/testing/README.md` (969 lines)
+- **Content**: Quick start, prerequisites (Node 18+, Python 3.12+, Docker 24+), complete test command reference, framework details (pytest, vitest, Playwright), coverage targets and reporting, adding new tests patterns, CI/CD integration, known gotchas, debugging
+- **Integration**: Linked from main README Guides section for discoverability
+- **PR**: #1760 — Closes #1745
+- **AC met**: All acceptance criteria satisfied (docs created, commands listed/explained, results interpretation, patterns documented, CI expectations, README link)
+- **Key patterns documented**: Rate limiter state reset, Solr readiness polling, circuit breaker testing shape, i18n badge selectors, PDF viewer sequencing, E2E auth token reuse, test isolation fixtures
+- **Lambert role**: Unified fragmented testing guidance into single source of truth; coordinated across pytest/vitest/Playwright frameworks
