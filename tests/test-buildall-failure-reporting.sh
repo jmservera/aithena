@@ -24,6 +24,8 @@ fail() {
 
 mkdir -p "$SANDBOX/repo/src/service-a" "$SANDBOX/repo/src/service-b" "$SANDBOX/bin"
 cp "$ROOT/buildall.sh" "$SANDBOX/repo/buildall.sh"
+mkdir -p "$SANDBOX/repo/scripts/lib"
+cp "$ROOT/scripts/lib/build-services.sh" "$SANDBOX/repo/scripts/lib/build-services.sh"
 printf 'test-version\n' > "$SANDBOX/repo/VERSION"
 
 for service in service-a service-b; do
