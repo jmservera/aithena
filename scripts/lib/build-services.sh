@@ -3,10 +3,10 @@
 aithena_load_dotenv() {
   local root="$1"
   if [[ -f "$root/.env" ]]; then
-    set +a
+    set -a
     # shellcheck disable=SC1090
     source "$root/.env"
-    set -a
+    set +a
   fi
 }
 
@@ -91,7 +91,7 @@ aithena_discover_docker_service_dirs() {
   local root="$1"
   (
     cd "$root"
-    find src -mindepth 2 -maxdepth 2 -type f -name Dockerfile -printf '%h\n' \
+    find src -mindepth 2 -maxdepth 2 -type f -name Dockerfile -exec dirname {} \; \
       | LC_ALL=C sort -u
   )
 }

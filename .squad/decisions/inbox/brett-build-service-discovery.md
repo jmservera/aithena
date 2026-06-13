@@ -1,7 +1,9 @@
-# Brett — Shared build-service discovery
+# Decision: Shared build-service discovery
 
-- **Date:** 2026-06-13
-- **Issue:** #1744
+**Author:** Brett (Infrastructure Architect)
+**Date:** 2026-06-13
+**Status:** Proposed
+**Related:** #1744
 
 ## Decision
 
