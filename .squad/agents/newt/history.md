@@ -93,3 +93,5 @@ Triaged remaining v2.5.1 board items. All issues now assigned or in-progress. Re
 Related: v2.5.1 board, v2.5 epic
 
 15. **2026-06-07 — Docs consistency cleanup:** Release notes, manuals, test reports, and topology docs must align to shipped code, not planned issue titles. For v2.5, the shipped source of truth is single-node SolrCloud (not ZooKeeper-free standalone), `blockUnknown=false` compatibility posture, Solr 10 HNSW names `hnswM`/`hnswEfConstruction`, and evidence-gated int8 quantization (#1344).
+
+16. **2026-06-13 — Configuration source of truth (issue #1743):** Centralized config documentation eliminates operator confusion and reduces support burden. Structure: environment variables by domain (paths, auth, embeddings, Solr, etc.), Docker Compose overlays, migration runbooks, advanced topics, troubleshooting. Key insight: operators need 40+ variables organized by concern and intent (required vs optional, security implications), not scattered across deployment guides. Reference from admin manual preserves focus while linking to comprehensive guide. QA: verify no duplicated guidance remains across docs after consolidation.
