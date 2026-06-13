@@ -1,5 +1,7 @@
 # Deployment Topologies: Single-Node vs. Distributed
 
+> **Configuration Reference:** For environment variables, services configuration, and deployment options, see the [Configuration Guide](config/README.md).
+
 This document describes the two supported Solr deployment architectures for Aithena and helps you choose the right topology for your deployment.
 
 ## Overview

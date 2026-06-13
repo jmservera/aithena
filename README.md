@@ -256,6 +256,8 @@ docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compos
 docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
 ```
 
+**For complete configuration options**, see the [Configuration Guide](docs/config/README.md).
+
 Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
 
 ### Legacy `scripts/` directory
@@ -516,12 +518,13 @@ If a release needs to be rolled back:
 
 ### Document Lister Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POLL_INTERVAL` | `60` | Seconds between library scans. New and modified files are re-queued; unchanged processed files are skipped. |
-| `BASE_PATH` | `/data/documents/` | Root directory to scan for documents. |
-| `DOCUMENT_WILDCARD` | `*.pdf` | Glob pattern for files to consider. Non-PDF files are skipped explicitly. |
-| `QUEUE_NAME` | `shortembeddings` | RabbitMQ queue name for discovered documents in the current Docker Compose stack. |
+For comprehensive configuration reference, see [Configuration Guide](docs/config/README.md).
+
+Key variables for the Document Lister:
+- `POLL_INTERVAL` — Seconds between filesystem scans (default: `60`)
+- `BASE_PATH` — Root directory to scan (default: `/data/documents/`)
+- `DOCUMENT_WILDCARD` — Glob pattern for files (default: `*.pdf`)
+- `QUEUE_NAME` — RabbitMQ queue name (default: `shortembeddings`)
 
 ### Solr returns empty results?
 - Check collection was created: `http://localhost/admin/solr/#/collections` (or `http://localhost:8983/solr/#/collections` when the dev override is loaded)

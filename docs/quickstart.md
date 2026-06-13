@@ -103,6 +103,8 @@ Sign in with the admin credentials you configured during installation.
 
 ## Post-Installation Configuration
 
+For comprehensive configuration options (environment variables, search tuning, GPU setup, etc.), see the [Configuration Guide](config/README.md).
+
 ### Enable HTTPS with Let's Encrypt
 
 To add TLS, use the SSL overlay:

@@ -366,7 +366,7 @@ The page logic supports both a direct restore action and a test-restore action. 
 
 ## Configuration
 
-> **For comprehensive environment variable documentation, see the [Configuration Guide](config/README.md).** This section covers runtime service configuration and tuning options specific to the deployment model. The configuration guide centralizes all environment variables, Docker Compose overlays, Solr migration, advanced topics, and troubleshooting.
+**For complete configuration reference, see [Configuration Guide](config/README.md).** This section focuses on deployment-specific procedures and runtime behavior; use the configuration guide as the authoritative source for environment variables, overlays, secrets, migration steps, and troubleshooting.
 
 ### Host-mounted volume
 
