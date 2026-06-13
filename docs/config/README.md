@@ -25,6 +25,8 @@ docker compose config  # Validate syntax
 docker compose up -d   # Start the stack
 ```
 
+> ⚠️ **Replace all placeholder secrets before deploying.** The installer generates secure random values for `AUTH_JWT_SECRET`, `ADMIN_API_KEY`, and all `RABBITMQ_*_PASS` variables automatically. If manually editing `.env`, these must be replaced with secure values before any production deployment.
+
 ## Environment Variables Reference
 
 All configuration is controlled through environment variables loaded from `.env`. Here is the complete reference with defaults, purposes, and security notes.
@@ -117,7 +119,7 @@ Docker Compose supports overlay files for environment-specific configurations. T
 
 | Overlay | Purpose | When to Use |
 |---|---|---|
-| `docker/compose.yml` (default) | Base distributed topology (3 Solr + 3 ZK). | Production-ready deployments. |
+| `docker-compose.yml` (base) | Base distributed topology (3 Solr + 3 ZK). | Always included; production-ready deployments. |
 | `docker/compose.single-node.yml` | Single Solr node + single ZooKeeper. Lightweight. | Development, testing, resource-constrained VMs. |
 | `docker/compose.ssl.yml` | Adds nginx TLS certificate management via certbot. | HTTPS deployments; requires `NGINX_HOST`. |
 | `docker/compose.prod.yml` | Production hardening: larger limits, volume persistence, reserved memory. | Hardened production environments. |
@@ -163,9 +165,11 @@ If upgrading from Solr 9 (v2.3.0) to Solr 10 (v2.5.0+):
 ```bash
 # Download Solr 9 collections to a backup directory
 curl http://localhost:8983/solr/api/collections/books/backups -X POST -H 'Content-Type: application/json' \
-  -u admin:SolrRocks \
+  -u ${SOLR_ADMIN_USER}:${SOLR_ADMIN_PASS} \
   -d '{"name": "books_backup_pre_v2.5"}'
 ```
+
+Replace `${SOLR_ADMIN_USER}` and `${SOLR_ADMIN_PASS}` with the credentials from your `.env` file.
 
 3. **Update topology if necessary:** If upgrading single-node, keep `SOLR_TOPOLOGY=single-node` and `SOLR_NUM_SHARDS=1`.
 
