@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DEPRECATED: See scripts/MIGRATION.md for the replacement command
+# DEPRECATED: See scripts/MIGRATION.md for replacements and migration guidance
 # =============================================================================
 # Aithena BCDR — Tier 1: Critical Data Backup
 # =============================================================================
