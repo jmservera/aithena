@@ -4,8 +4,6 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-source "$ROOT/scripts/lib/build-services.sh"
-
 if [[ -n "${NO_COLOR:-}" || ! -t 1 ]]; then
   RED=""
   GREEN=""
@@ -212,8 +210,6 @@ print_help_build() {
 Usage: ./manage.sh build [service...]
 
 Build all services or only the named services.
-When a requested service maps to src/<service>/pyproject.toml + Dockerfile,
-manage.sh runs 'uv sync' first so new buildable services are discovered automatically.
 Equivalent to:
   docker compose $(join_by ' ' "${COMPOSE_FILE_ARGS[@]}") build [service...]
 EOF
@@ -235,7 +231,7 @@ print_help_health() {
 Usage: ./manage.sh health
 
 Show a concise health summary based on 'docker compose ps --format json'.
-Returns a non-zero exit code when any running service is unhealthy.
+Returns a non-zero exit code when any service is not healthy, running, or completed.
 EOF
 }
 
@@ -305,6 +301,16 @@ render_compose_status() {
   local mode="$1"
   local one_shot_csv
   local compose_ps_json
+
+  if ! have_command python3; then
+    if [[ "$mode" == "status" ]]; then
+      warn "python3 not found; falling back to 'docker compose ps' output for status."
+      compose ps
+      return 0
+    fi
+    die "python3 is required for './manage.sh health'. Install python3 or use 'docker compose ps' for a basic status view."
+  fi
+
   one_shot_csv="$(join_by ',' "${ONE_SHOT_SERVICES[@]}")"
   compose_ps_json="$(compose ps --format json)"
 
@@ -335,6 +341,13 @@ def load_items(payload: str):
 
 items = load_items(raw)
 
+if not items:
+    if mode == "health":
+        print("No containers found for the selected compose files.")
+        sys.exit(1)
+    print("No containers found for the selected compose files.")
+    sys.exit(0)
+
 def value(item, *keys):
     for key in keys:
         if item.get(key) not in (None, ""):
@@ -353,8 +366,10 @@ def classify(item):
         return "healthy"
     if health:
         return health
-    if state in {"running", "created"}:
+    if state == "running":
         return "running"
+    if state == "created":
+        return "created"
     if state.startswith("restarting"):
         return "restarting"
     if state.startswith("exited"):
@@ -409,8 +424,6 @@ print("  ".join("-" * width for width in widths))
 for row in rows:
     print(fmt(row))
 
-if bad_rows:
-    sys.exit(1)
 PY
 }
 
@@ -440,22 +453,6 @@ cmd_build() {
   if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     print_command_help build
     return 0
-  fi
-
-  local artifact_dir="${BUILDALL_ARTIFACT_DIR:-${ROOT}/.test-artifacts}"
-  local log_timestamp="${BUILDALL_LOG_TIMESTAMP:-$(date -u +"%Y%m%dT%H%M%SZ")}"
-  local -a failures=()
-  local -a prep_dirs=()
-
-  aithena_load_dotenv "$ROOT"
-  aithena_export_build_metadata "$ROOT"
-  mapfile -t prep_dirs < <(aithena_discover_python_service_dirs_for_targets "$ROOT" "$@")
-  aithena_prepare_python_services "$ROOT" "$artifact_dir" "$log_timestamp" failures "${prep_dirs[@]}"
-
-  if [[ ${#failures[@]} -gt 0 ]]; then
-    warn "Skipping docker compose build because service preparation failed."
-    aithena_print_failure_summary failures
-    return 1
   fi
 
   info "Building services with compose files: $(compose_target_summary)"

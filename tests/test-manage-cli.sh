@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# This smoke test is intended to run from `make test`; until #1747 merges, invoke it directly.
 FIXTURE_DIR="$ROOT/tests/fixtures/manage-cli"
 ARTIFACT_DIR="$ROOT/.test-artifacts/manage-cli"
 PROJECT_NAME="manage-cli-$RANDOM-$$"
@@ -43,6 +44,7 @@ run_manage() {
 }
 
 bash -n "$ROOT/manage.sh"
+[[ -x "$ROOT/manage.sh" ]] || fail "manage.sh should be executable"
 
 run_manage --help >"$ARTIFACT_DIR/help.txt"
 grep -Fq "Core commands:" "$ARTIFACT_DIR/help.txt" || fail "main help should list commands"
@@ -104,6 +106,10 @@ run_manage down >"$ARTIFACT_DIR/down.txt"
 
 if docker compose -f "$FIXTURE_DIR/docker-compose.yml" -p "$PROJECT_NAME" ps --services --status running | grep -q .; then
   fail "down should stop all running services"
+fi
+
+if run_manage health >"$ARTIFACT_DIR/health-down.txt" 2>&1; then
+  fail "health should fail when no containers are running"
 fi
 
 echo "OK: manage.sh subcommands work against the fixture compose stack"
