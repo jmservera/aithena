@@ -1,0 +1,309 @@
+# Configuration Guide
+
+This is the canonical reference for configuring Aithena. All deployment and operational configuration guidance should originate from this document or reference back to it.
+
+## Quick Start
+
+### Initial Setup
+
+1. Run the first-run installer to generate `.env` and create auth storage:
+   ```bash
+   python3 -m installer
+   ```
+
+2. The installer prompts for:
+   - Environment (Development or Production)
+   - GPU detection (auto-detects NVIDIA and Intel GPUs)
+   - SSL setup (optional Let's Encrypt)
+   - Book library path
+   - Public origin
+   - Admin credentials
+
+3. The installer writes `.env`, bootstraps the SQLite auth database, and generates `./start.sh`.
+
+### Securing `.env`
+
+The `.env` file contains sensitive credentials (JWT secret, RabbitMQ credentials, Redis password):
+
+```bash
+chmod 600 .env
+```
+
+## Environment Variables by Service
+
+### `document-lister`
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RABBITMQ_HOST` | `rabbitmq` | RabbitMQ hostname |
+| `REDIS_HOST` | `redis` | Redis hostname |
+| `QUEUE_NAME` | `shortembeddings` | Queue/routing key for discovered documents |
+| `BASE_PATH` | `/data/documents/` | Directory scanned inside the container |
+| `DOCUMENT_WILDCARD` | `*.pdf` | File pattern to scan |
+| `POLL_INTERVAL` | `60` | Seconds between filesystem scans |
+
+**Tuning scan frequency:**
+- Adjust `POLL_INTERVAL` (in seconds) to balance responsiveness vs. filesystem load.
+- Example: `POLL_INTERVAL=30` for responsive indexing on small libraries; `POLL_INTERVAL=300` for large deployments.
+
+### `document-indexer`
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RABBITMQ_HOST` | `rabbitmq` | RabbitMQ hostname |
+| `REDIS_HOST` | `redis` | Redis hostname |
+| `QUEUE_NAME` | `shortembeddings` | Queue consumed by the indexer |
+| `BASE_PATH` | `/data/documents/` | Root path for source documents |
+| `SOLR_HOST` | `solr` | Primary Solr hostname |
+| `SOLR_PORT` | `8983` | Primary Solr port |
+| `SOLR_COLLECTION` | `books` | Target Solr collection |
+| `EMBEDDINGS_HOST` | `embeddings-server` | Embeddings service hostname |
+| `EMBEDDINGS_PORT` | `8080` | Embeddings service port |
+| `THUMBNAIL_DIR` | `/data/thumbnails` | Writable directory for document thumbnails (v1.15.0+) |
+
+**Scaling document indexing:**
+- Increase indexer replicas in `docker-compose.yml` to parallelize PDF extraction.
+- Example: `replicas: 3` for 3 concurrent indexers.
+
+### `solr-search`
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `8080` | API listen port |
+| `SOLR_URL` | `http://solr:8983/solr` | Base Solr URL |
+| `SOLR_COLLECTION` | `books` | Collection used for search |
+| `BASE_PATH` | `/data/documents` | Base path for document downloads |
+| `CORS_ORIGINS` | `http://localhost:5173` | Allowed dev origin (development only) |
+| `EMBEDDINGS_URL` | `http://embeddings-server:8080/v1/embeddings/` | Embeddings endpoint |
+| `EMBEDDINGS_TIMEOUT` | `120` | Max wait for query embeddings before degrading to keyword |
+| `DEFAULT_SEARCH_MODE` | `keyword` | Default API search mode (`keyword`, `semantic`, or `hybrid`) |
+| `RRF_K` | `60` | Reciprocal-rank fusion damping constant for hybrid ranking |
+| `VECTOR_QUANTIZATION` | `none` | Embedding precision: `none` (float32) or `int8` (signed-byte quantization) |
+| `KNN_FIELD` | `embedding_v` | Dense-vector field for semantic/hybrid search (auto-switches to `embedding_byte_v` if `VECTOR_QUANTIZATION=int8`) |
+| `MAX_UPLOAD_SIZE_MB` | `50` | Maximum upload file size in MB (v0.6.0+) |
+| `UPLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE` | `10` | Upload rate limit: requests per minute per IP (v0.6.0+) |
+| `UPLOAD_DIR` | `/data/uploads/` | Writable directory for uploaded files (v0.6.0+) |
+| `EXPOSE_CONTAINER_STATS` | `false` | Enable `/v1/admin/containers` endpoint (v0.7.0+) |
+| `AUTH_DB_PATH` | `/data/auth/users.db` | SQLite auth database path (v0.11.0+) |
+| `AUTH_JWT_SECRET` | installer-generated | JWT signing secret (v0.11.0+) |
+| `AUTH_JWT_TTL` | `24h` | Session lifetime for issued JWTs (v0.11.0+) |
+| `AUTH_COOKIE_NAME` | `aithena_auth` | Cookie name for browser auth (v0.11.0+) |
+| `LOG_LEVEL` | `INFO` | Service logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+
+### `embeddings-server`
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `8080` | Embeddings service listen port |
+| `DEVICE` | `auto` | Device selection: `auto` (auto-fallback to CPU), `cpu`, `cuda`, or `xpu` (v1.17.0+) |
+| `BACKEND` | `torch` | Inference backend: `torch` (NVIDIA/CPU) or `openvino` (Intel GPU/CPU) (v1.17.0+) |
+
+### Infrastructure Services
+
+#### RabbitMQ
+- `RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6` — Memory utilization threshold
+- `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000` — Consumer timeout
+
+#### Solr nodes
+- `SOLR_MODULES=extraction,langid` — Enables Tika PDF extraction and language detection
+- `ZK_HOST=zoo1:2181,zoo2:2181,zoo3:2181` — ZooKeeper ensemble (for SolrCloud)
+- `SOLR_SECURITY_MANAGER_ENABLED=false` (v1.19.0+) — Suppresses Solr 9.7 deprecation warning
+
+#### ZooKeeper nodes
+- `ZOO_4LW_COMMANDS_WHITELIST` — Four-letter word commands allowed
+- `ZOO_MY_ID` — ZooKeeper server ID
+- `ZOO_SERVERS` — Ensemble configuration
+
+#### solr-init (v1.19.0+)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SOLR_NUM_SHARDS` | `1` | Number of shards at collection creation (immutable after creation) |
+| `SOLR_REPLICATION_FACTOR` | `3` | Replication factor at creation (immutable after creation) |
+
+> **Important:** These variables only take effect when `solr-init` creates the collection for the first time. To change topology on an existing deployment, delete and recreate the collection (triggering a full re-index). See [Deployment Topologies](../deployment-topologies.md) for migration guidance.
+
+## Host-Mounted Volumes
+
+`docker-compose.yml` defines the document library volume:
+
+- **Volume name:** `document-data`
+- **Container path:** `/data/documents`
+- **Host path:** `${BOOKS_PATH:-/data/booklibrary}` (configured by installer)
+
+All services using `/data/documents` read from the same mounted library root.
+
+## Docker Compose Overlays
+
+Aithena uses overlay files to compose configurations for different deployment scenarios:
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Base services (always included) |
+| `docker/compose.dev-ports.yml` | Development: builds from source, exposes debug ports |
+| `docker/compose.prod.yml` | Production: pre-built GHCR images, optimized memory |
+| `docker/compose.gpu-nvidia.yml` | NVIDIA GPU support |
+| `docker/compose.gpu-intel.yml` | Intel GPU support |
+| `docker/compose.ssl.yml` | TLS termination (production) |
+| `docker/compose.single-node.yml` | Single-node SolrCloud topology |
+| `docker/compose.e2e.yml` | E2E test fixtures |
+| `docker/compose.ci-ports.yml` | CI ephemeral volumes/tmpfs (v2.3.0+) |
+
+### Example Compose Chains
+
+**Development (build, debug ports, embedded volumes):**
+```bash
+docker compose -f docker-compose.yml -f docker/compose.dev-ports.yml up -d --build
+```
+
+**Production (GHCR images, prod memory, NVIDIA GPU, SSL):**
+```bash
+docker compose -f docker-compose.yml -f docker/compose.prod.yml \
+  -f docker/compose.gpu-nvidia.yml -f docker/compose.ssl.yml up -d
+```
+
+**Production (single-node topology):**
+```bash
+docker compose -f docker-compose.yml -f docker/compose.prod.yml \
+  -f docker/compose.single-node.yml up -d
+```
+
+**E2E Testing:**
+```bash
+docker compose -f docker-compose.yml -f docker/compose.e2e.yml up -d
+```
+
+For detailed topology options, see [Deployment Topologies](../deployment-topologies.md).
+
+## Search Configuration
+
+### Search Modes
+
+`solr-search` supports three request modes:
+
+| Mode | Description |
+|------|-------------|
+| `keyword` | BM25 full-text search only |
+| `semantic` | Embeddings + Solr kNN only |
+| `hybrid` | BM25 + kNN merged with Reciprocal Rank Fusion (RRF) |
+
+### Tuning Search
+
+- **Default mode:** Set `DEFAULT_SEARCH_MODE` (or clients pass `mode` query parameter per-request)
+- **Hybrid ranking:** Adjust `RRF_K` (default `60`) to control how aggressively hybrid mode favors top-ranked documents
+- **Quantization:** Set `VECTOR_QUANTIZATION=int8` to use signed-byte vector storage (reduces memory ~4×, slight recall/latency tradeoff)
+- **kNN field:** Override `KNN_FIELD` to use custom dense-vector fields
+- **HNSW tuning:** Pass `efSearchScaleFactor` per-request (Solr 10+) to improve recall at the cost of latency
+  - Example: `GET /v1/search?q=historia&mode=semantic&efSearchScaleFactor=2.0`
+- **Embeddings timeout:** `EMBEDDINGS_TIMEOUT` (default `120` seconds) controls how long semantic/hybrid requests wait before degrading to keyword
+
+## Language Detection
+
+Language metadata comes from two coordinated sources:
+
+1. **Solr `langid`** — Content-based detection written to `language_detected_s`
+2. **Document-Indexer** — Folder-name inspection written to `language_s`
+
+Recognized top-level folder names: `ca`, `es`, `fr`, `en`, `la`.
+
+The search API reads `language_detected_s` first, falling back to `language_s` for facets and normalization.
+
+## RabbitMQ Configuration
+
+### Health Checks
+
+RabbitMQ includes startup hardening:
+
+- Health check command: `rabbitmqctl ping`
+- Interval: 10 seconds
+- Timeout: 30 seconds
+- Retries: 12 (fail after ~120 seconds)
+- Start period: 30 seconds (allow booting)
+
+### Memory Management
+
+- `RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6` — RabbitMQ stops accepting messages when memory usage exceeds 60% of available RAM
+- Adjust based on available memory and expected queue depth
+
+## GPU Acceleration (v1.17.0+)
+
+### NVIDIA GPU
+
+```bash
+docker compose -f docker-compose.yml -f docker/compose.prod.yml \
+  -f docker/compose.gpu-nvidia.yml up -d
+```
+
+Set environment variables in `.env`:
+```bash
+DEVICE=cuda
+BACKEND=torch
+```
+
+### Intel GPU (Arc, Data Center GPU Flex)
+
+```bash
+docker compose -f docker-compose.yml -f docker/compose.prod.yml \
+  -f docker/compose.gpu-intel.yml up -d
+```
+
+Set environment variables in `.env`:
+```bash
+DEVICE=xpu
+BACKEND=openvino
+```
+
+For WSL2 Intel GPU, see [Intel GPU on WSL2 Guide](../guides/intel-gpu-wsl2.md).
+
+### Auto-Detection
+
+`DEVICE=auto` automatically detects available GPUs (CUDA, Intel XPU) and falls back to CPU if none are found.
+
+## Logging
+
+All services respect the `LOG_LEVEL` environment variable (default: `INFO`). Valid levels:
+- `DEBUG` — Verbose diagnostic output
+- `INFO` — Normal operational logging
+- `WARNING` — Warning and error messages only
+- `ERROR` — Error messages only
+
+Set globally in `.env` or per-service in `docker-compose.yml`.
+
+## Secrets Management
+
+### In Development
+
+Store secrets in `.env` (locally sourced by Docker Compose):
+```bash
+AUTH_JWT_SECRET=your-secret-here
+RABBITMQ_USER=guest
+RABBITMQ_PASS=guest
+```
+
+### In Production
+
+Avoid hardcoding secrets in `.env`. Use Docker secrets or host-based secret management:
+
+```yaml
+secrets:
+  jwt_secret:
+    file: /run/secrets/jwt_secret
+  
+services:
+  solr-search:
+    secrets:
+      - jwt_secret
+    environment:
+      AUTH_JWT_SECRET: /run/secrets/jwt_secret
+```
+
+Or use environment variable references from host-managed credential systems.
+
+## References
+
+For related guidance:
+- **[Admin Manual](../admin-manual.md)** — Operational procedures and troubleshooting
+- **[Deployment Topologies](../deployment-topologies.md)** — Architecture options and capacity planning
+- **[Deployment Sizing Guide](../deployment/sizing-guide.md)** — Hardware requirements and scaling
+- **[GPU Troubleshooting](../guides/gpu-troubleshooting.md)** — GPU-specific issues
+- **[Intel GPU on WSL2](../guides/intel-gpu-wsl2.md)** — WSL2-specific GPU setup

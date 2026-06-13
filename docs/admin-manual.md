@@ -364,141 +364,18 @@ The page logic supports both a direct restore action and a test-restore action. 
 
 ## Configuration
 
-### Host-mounted volume
+**For complete configuration reference, see [Configuration Guide](config/README.md).**
 
-`docker-compose.yml` defines the document library volume like this:
+The canonical guide covers:
+- Environment variables by service
+- Docker Compose overlays for different deployment scenarios
+- Search mode tuning (keyword, semantic, hybrid)
+- GPU acceleration setup
+- Language detection
+- RabbitMQ and infrastructure service configuration
+- Secrets management
 
-- volume name: `document-data`
-- container path: `/data/documents`
-- host path: `${BOOKS_PATH:-/data/booklibrary}`
-
-That means every service using `/data/documents` is reading from the same mounted library root.
-
-### Key environment variables by service
-
-#### `document-lister`
-
-| Variable | Value in Compose | Purpose |
-|---|---|---|
-| `RABBITMQ_HOST` | `rabbitmq` | RabbitMQ hostname |
-| `REDIS_HOST` | `redis` | Redis hostname |
-| `QUEUE_NAME` | `shortembeddings` | Queue/routing key for discovered documents |
-| `BASE_PATH` | `/data/documents/` | Directory scanned inside the container |
-| `DOCUMENT_WILDCARD` | `*.pdf` | File pattern to scan |
-| `POLL_INTERVAL` | `60` | Seconds between scans |
-
-#### `document-indexer`
-
-| Variable | Value in Compose | Purpose |
-|---|---|---|
-| `RABBITMQ_HOST` | `rabbitmq` | RabbitMQ hostname |
-| `REDIS_HOST` | `redis` | Redis hostname |
-| `QUEUE_NAME` | `shortembeddings` | Queue consumed by the indexer |
-| `BASE_PATH` | `/data/documents/` | Root path for source documents |
-| `SOLR_HOST` | `solr` | Primary Solr hostname |
-| `SOLR_PORT` | `8983` | Primary Solr port |
-| `SOLR_COLLECTION` | `books` | Target collection |
-| `EMBEDDINGS_HOST` | `embeddings-server` | Embeddings service hostname |
-| `EMBEDDINGS_PORT` | `8085` | Embeddings service port |
-| `THUMBNAIL_DIR` | `/data/thumbnails` | Writable directory for generated document thumbnails (v1.15.0+) |
-
-#### `solr-search`
-
-| Variable | Value in Compose | Purpose |
-|---|---|---|
-| `PORT` | `8080` | API listen port |
-| `SOLR_URL` | `http://solr:8983/solr` | Base Solr URL |
-| `SOLR_COLLECTION` | `books` | Collection used for search |
-| `BASE_PATH` | `/data/documents` | Base path for document downloads |
-| `CORS_ORIGINS` | `http://localhost:5173` | Allowed dev origin |
-| `EMBEDDINGS_URL` | `http://embeddings-server:8001/v1/embeddings/` | Embeddings endpoint |
-| `EMBEDDINGS_TIMEOUT` | `120` | Max wait for query embeddings before semantic/hybrid degrade to keyword |
-| `DEFAULT_SEARCH_MODE` | `keyword` | Default API search mode |
-| `RRF_K` | `60` | Reciprocal-rank fusion damping constant for hybrid ranking |
-| `VECTOR_QUANTIZATION` | `none` | Embedding precision mode. Set `int8` to use signed-byte vector storage (`ScalarQuantizedDenseVectorField bits=7` on Solr 10, `DenseVectorField vectorEncoding=BYTE` on Solr 9). |
-| `KNN_FIELD` | `embedding_v` (`embedding_byte_v` when `VECTOR_QUANTIZATION=int8`) | Dense-vector field used by the semantic/hybrid kNN leg |
-| `UPLOAD_MAX_SIZE_MB` | `50` | Maximum upload file size (v0.6.0+) |
-| `UPLOAD_RATE_LIMIT` | `10` | Uploads per minute per IP (v0.6.0+) |
-| `UPLOAD_STAGING_DIR` | `/data/uploads/` | Temporary upload staging area (v0.6.0+) |
-| `EXPOSE_CONTAINER_STATS` | `false` | Enable `/v1/admin/containers` endpoint (v0.7.0+) |
-| `AUTH_DB_PATH` | `/data/auth/users.db` | SQLite auth database path inside the container (v0.11.0+) |
-| `AUTH_JWT_SECRET` | installer-generated | JWT signing secret required at startup (v0.11.0+) |
-| `AUTH_JWT_TTL` | `24h` | Session lifetime for issued JWTs (v0.11.0+) |
-| `AUTH_COOKIE_NAME` | `aithena_auth` | Cookie name used for browser auth (v0.11.0+) |
-
-#### Infrastructure services
-
-- `rabbitmq` sets `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000`
-- `embeddings-server` sets `PORT=8085`
-- Solr nodes set `SOLR_MODULES=extraction,langid`, `ZK_HOST=zoo1:2181,zoo2:2181,zoo3:2181`, and `SOLR_SECURITY_MANAGER_ENABLED=false` (v1.19.0+, suppresses Solr 9.7 deprecation warning)
-- ZooKeeper nodes set `ZOO_4LW_COMMANDS_WHITELIST`, `ZOO_MY_ID`, and `ZOO_SERVERS`
-
-#### `solr-init` (v1.19.0+)
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `SOLR_NUM_SHARDS` | `1` | Number of shards for the `books` collection. Only applies at initial collection creation. |
-| `SOLR_REPLICATION_FACTOR` | `3` | Replication factor (number of copies per shard). Only applies at initial collection creation. |
-
-> **Important:** These variables only take effect when `solr-init` creates the collection for the first time. To change topology on an existing deployment you must delete and recreate the collection, which triggers a full re-index. See [Deployment Updates for v1.19.0](#deployment-updates-for-v1190) and the [sizing guide](deployment/sizing-guide.md) for guidance.
-
-### RabbitMQ startup hardening (v0.5.0)
-
-The Compose definition now pins RabbitMQ to:
-
-- `rabbitmq:3.13-management`
-
-It also adds a more realistic health check:
-
-- command: `rabbitmqctl ping`
-- `interval: 10s`
-- `timeout: 30s`
-- `retries: 12`
-- `start_period: 30s`
-
-Additional runtime settings now include:
-
-- `RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6`
-- `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 3600000000`
-
-Operationally, this means RabbitMQ is given time to finish booting before Compose marks it unhealthy, and dependent services can safely rely on `service_healthy` ordering.
-
-### Search mode and hybrid tuning
-
-`solr-search` supports three request modes:
-
-- `keyword` — BM25 / edismax only
-- `semantic` — embeddings + Solr kNN only
-- `hybrid` — BM25 plus kNN, merged with Reciprocal Rank Fusion (RRF)
-
-Operators can tune the search path with these controls:
-
-- `DEFAULT_SEARCH_MODE` sets the API default when clients do not pass a `mode` query parameter.
-- Clients can switch modes per request with `GET /v1/search?mode=keyword|semantic|hybrid`.
-- `RRF_K` controls how aggressively hybrid mode favors top-ranked documents from each leg.
-- `VECTOR_QUANTIZATION=int8` selects the signed-byte `embedding_byte_v` field by default; leave unset for float32 `embedding_v`.
-- `KNN_FIELD` overrides the Solr dense-vector field used by semantic and hybrid search.
-- `efSearchScaleFactor` is a per-request query parameter for Solr 10 semantic and HNSW hybrid searches. It defaults to `1.0`, must be greater than `0`, and Solr computes `efSearch = efSearchScaleFactor × topK`. Higher values can improve HNSW recall at the cost of latency; validate against your corpus before raising it globally in clients. Example: `GET /v1/search?q=historia&mode=semantic&efSearchScaleFactor=2.0`.
-- `EMBEDDINGS_TIMEOUT` controls how long semantic/hybrid requests wait before falling back to keyword results.
-
-Hybrid currently uses equal contribution from the BM25 and semantic legs through standard RRF. There are no separate per-leg weight environment variables today.
-
-### Language detection (v0.5.0)
-
-Language metadata now comes from two coordinated sources:
-
-1. **Solr langid** writes content-based detection into `language_detected_s`.
-2. **document-indexer** inspects folder names and writes recognized ISO 639-1 language folders into `language_s`.
-
-Examples of recognized top-level folders include `ca`, `es`, `fr`, `en`, and `la`.
-
-Why this matters:
-
-- prior to the fix, Solr's langid processor was aligned to the wrong field name,
-- folder-based language hints were not being captured at all,
-- the search API now reads language values with a `language_detected_s` first / `language_s` fallback for filters and normalized results.
-
-This improves language facets and search filters for libraries organized as `<language>/<category>/<author>/file.pdf`.
+This section focuses on deployment-specific procedures. For configuration details, refer to the [Configuration Guide](config/README.md).
 
 ## Deployment Updates for v0.6.0 (PDF Upload, Security Scanning, Docker Hardening)
 
