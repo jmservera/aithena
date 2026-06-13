@@ -1,21 +1,9 @@
+ARG BASE_IMAGE=aithena:base
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-# ---------- build stage ----------
-FROM python:3.14.5-alpine AS builder
-
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-WORKDIR /app
-
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --native-tls
-
-COPY . .
-
-# ---------- runtime stage ----------
-FROM python:3.14.5-alpine AS runtime
+FROM ${BASE_IMAGE}
 
 ARG VERSION
 ARG GIT_COMMIT
@@ -29,31 +17,24 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 ENV VERSION=${VERSION} \
     GIT_COMMIT=${GIT_COMMIT} \
     BUILD_DATE=${BUILD_DATE} \
-    PYTHONUNBUFFERED=1
+    RABBITMQ_HOST=localhost \
+    RABBITMQ_PORT=5672 \
+    REDIS_HOST=localhost \
+    REDIS_PORT=6379 \
+    DOCUMENT_WILDCARD=*.pdf \
+    QUEUE_NAME=new_documents \
+    EXCHANGE_NAME=documents \
+    HEALTHCHECK_MODE=process \
+    HEALTHCHECK_PROCESS=document_lister
 
-WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --native-tls
 
-RUN apk add --no-cache procps su-exec
-
-RUN addgroup -S -g 1000 app && adduser -S -u 1000 -G app app
-
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/document_lister /app/document_lister
-
-RUN mkdir -p /data/documents && chown -R app:app /app /data/documents
-
+COPY document_lister /app/document_lister
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-ENV PATH="/app/.venv/bin:${PATH}"
-
-ENV RABBITMQ_HOST="localhost"
-ENV RABBITMQ_PORT=5672
-ENV REDIS_HOST="localhost"
-ENV REDIS_PORT=6379
-ENV DOCUMENT_WILDCARD="*.pdf"
-ENV QUEUE_NAME="new_documents"
-ENV EXCHANGE_NAME="documents"
+RUN chmod +x /app/entrypoint.sh \
+    && mkdir -p /data/documents \
+    && chown -R app:app /app /data/documents
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["python", "-m", "document_lister"]

@@ -93,6 +93,7 @@ See [Release Process Overview](#release-process-overview) below for full details
 - [User Manual](docs/user-manual.md)
 - [Admin Manual](docs/admin-manual.md)
 - [Test Infrastructure Guide](docs/testing/README.md)
+- [Shared Python Base Image](docs/architecture/python-base-image.md)
 - [Deployment Sizing Guide](docs/deployment/sizing-guide.md)
 - [i18n Contributor Guide](docs/guides/i18n-guide.md)
 - [Security Baseline](docs/security/baseline-v0.6.0.md)

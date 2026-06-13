@@ -169,12 +169,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "document_lister"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
     restart: on-failure
     stop_grace_period: 10s
     deploy:
@@ -246,12 +240,6 @@ services:
         condition: service_healthy
       solr-init:
         condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "document_indexer"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
     volumes:
       - document-data:/data/documents:ro
       - thumbnail-data:/data/thumbnails
@@ -280,12 +268,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     deploy:
       resources:
         limits:

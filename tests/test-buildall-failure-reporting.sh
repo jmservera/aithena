@@ -27,6 +27,7 @@ cp "$ROOT/buildall.sh" "$SANDBOX/repo/buildall.sh"
 mkdir -p "$SANDBOX/repo/scripts/lib"
 cp "$ROOT/scripts/lib/build-services.sh" "$SANDBOX/repo/scripts/lib/build-services.sh"
 printf 'test-version\n' > "$SANDBOX/repo/VERSION"
+touch "$SANDBOX/repo/Dockerfile.base"
 
 for service in service-a service-b; do
   touch "$SANDBOX/repo/src/$service/pyproject.toml"
@@ -50,6 +51,10 @@ chmod +x "$SANDBOX/bin/uv"
 
 cat > "$SANDBOX/bin/docker" <<'SH'
 #!/usr/bin/env bash
+if [ "$1" = "build" ]; then
+  echo "simulated base image build success"
+  exit 0
+fi
 echo "docker should not run after a service preparation failure" >&2
 exit 99
 SH
@@ -87,6 +92,10 @@ chmod +x "$SANDBOX/bin/uv"
 cat > "$SANDBOX/bin/docker" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+if [ "$1" = "build" ]; then
+  echo "simulated base image build success"
+  exit 0
+fi
 if [ "$1 $2 $3 $4" != "compose up --build -d" ]; then
   echo "unexpected docker arguments: $*" >&2
   exit 2
