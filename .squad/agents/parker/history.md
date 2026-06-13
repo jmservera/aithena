@@ -30,6 +30,8 @@ Parker owns Python backend services: PDF processing, metadata extraction, file w
 
 ## Learnings
 
+- **2026-06-13:** Root test orchestration stays maintainable when Python services are discovered from `src/*/pyproject.toml` and optional Playwright/stress targets are gated on directory presence; validate with `make help` and a targeted backend run.
+
 - **2026-06-03:** Pre-release connection-warning analyzers can false-positive on `reconnect` in filenames/search URLs or expected Solr readiness loops. Require reconnect language to describe connection behavior, while keeping real dependency failures visible.
 - **2026-05-31:** CI E2E 429s came from duplicate `/v1/auth/login`; Playwright should reuse workflow-minted `E2E_API_TOKEN`. Retry only exact transient 429s, not catch-all failures.
 - **2026-05-31:** Local backend E2E validation is expected when Docker/Playwright are available. Compose chain: base + `compose.single-node.yml` + `compose.dev-ports.yml` + `compose.e2e.yml`; installer must generate auth/Solr/Rabbit secrets first.
