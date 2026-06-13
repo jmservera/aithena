@@ -108,4 +108,8 @@ if docker compose -f "$FIXTURE_DIR/docker-compose.yml" -p "$PROJECT_NAME" ps --s
   fail "down should stop all running services"
 fi
 
+if run_manage health >"$ARTIFACT_DIR/health-down.txt" 2>&1; then
+  fail "health should fail when no containers are running"
+fi
+
 echo "OK: manage.sh subcommands work against the fixture compose stack"

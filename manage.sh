@@ -341,6 +341,13 @@ def load_items(payload: str):
 
 items = load_items(raw)
 
+if not items:
+    if mode == "health":
+        print("No containers found for the selected compose files.")
+        sys.exit(1)
+    print("No containers found for the selected compose files.")
+    sys.exit(0)
+
 def value(item, *keys):
     for key in keys:
         if item.get(key) not in (None, ""):
