@@ -257,6 +257,36 @@ docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compos
 
 Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
 
+### manage.sh quick reference
+
+The repository root now includes a discoverable wrapper for common Compose operations:
+
+```bash
+./manage.sh --help
+./manage.sh up
+./manage.sh status
+./manage.sh logs nginx
+./manage.sh shell solr sh
+./manage.sh health
+./manage.sh reset
+```
+
+Core subcommands:
+
+| Command | What it does |
+|---------|---------------|
+| `./manage.sh up [service]` | Starts the configured stack in detached mode |
+| `./manage.sh down` | Stops and removes the configured stack |
+| `./manage.sh build [service]` | Builds all services or a specific service |
+| `./manage.sh logs [service]` | Streams logs (`--no-follow` prints once) |
+| `./manage.sh health` | Summarizes service health and exits non-zero on unhealthy containers |
+| `./manage.sh test` | Runs `make test` when available, otherwise falls back to `.squad/scripts/verify.sh --all` |
+| `./manage.sh status` | Shows container state, health, and published ports |
+| `./manage.sh shell <service> [command]` | Opens a shell or runs a one-shot command inside a container |
+| `./manage.sh reset` | Runs `down -v --remove-orphans`, then rebuilds images |
+
+`manage.sh` automatically follows the compose file chain from the generated `start.sh` when present. For automation or isolated testing, override it with `AITHENA_COMPOSE_FILES=file1:file2` or standard `COMPOSE_FILE=file1:file2`.
+
 ### Compose File Layout
 
 | File | Purpose |
