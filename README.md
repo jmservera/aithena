@@ -279,7 +279,7 @@ Core subcommands:
 | `./manage.sh down` | Stops and removes the configured stack |
 | `./manage.sh build [service]` | Builds all services or a specific service |
 | `./manage.sh logs [service]` | Streams logs (`--no-follow` prints once) |
-| `./manage.sh health` | Summarizes service health and exits non-zero on unhealthy containers |
+| `./manage.sh health` | Summarizes service health and exits non-zero when a service is not healthy, running, or completed |
 | `./manage.sh test` | Runs `make test` when available, otherwise falls back to `.squad/scripts/verify.sh --all` |
 | `./manage.sh status` | Shows container state, health, and published ports |
 | `./manage.sh shell <service> [command]` | Opens a shell or runs a one-shot command inside a container |

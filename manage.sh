@@ -231,7 +231,7 @@ print_help_health() {
 Usage: ./manage.sh health
 
 Show a concise health summary based on 'docker compose ps --format json'.
-Returns a non-zero exit code when any running service is unhealthy.
+Returns a non-zero exit code when any service is not healthy, running, or completed.
 EOF
 }
 
