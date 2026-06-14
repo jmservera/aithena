@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Python service bootstrap guide** — Adds `docs/guides/new-service-bootstrap.md` with the standard checklist for creating a new Python service on top of `aithena:base`, wiring Compose, and exposing the service to repo automation (#1751)
+
+### Changed
+
+- **Deployment and build docs refreshed for Phase 3 Docker patterns** — Admin, configuration, production, and release docs now explain the shared `Dockerfile.base`, trimmed Python service Dockerfiles, dynamic Python service discovery in `scripts/lib/build-services.sh`, and the root `Makefile` validation targets (#1741, #1744, #1748, #1749, #1751)
+- **Health-check guidance aligned with image-based checks** — Operator docs now point at the validated shared healthcheck pattern for `aithena:base` services and the existing container health validation runbooks (#1750, #1751)
+
+### Deprecated
+
+- **Legacy root scripts remain deprecated** — Docs now direct operators to `./start.sh`, `./buildall.sh`, `docker compose ...`, `.squad/scripts/verify.sh`, and the `Makefile` instead of adding new dependencies on root `scripts/` helpers (#1742, #1751)
+
 ## [2.5.0] — 2026-06-06
 
 **Release highlights: Solr 10 production-ready migration, enhanced embeddings infrastructure, and comprehensive security hardening.**

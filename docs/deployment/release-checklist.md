@@ -22,38 +22,24 @@ This guide defines the canonical release process for Aithena. **All releases MUS
 
 ### [ ] Verify All Tests Pass on `dev`
 
-Run the full test suite on your local `dev` branch:
+Run the canonical repo validation entrypoints on your local `dev` branch:
 
-**Frontend (aithena-ui):**
 ```bash
-cd src/aithena-ui
-npm ci
-npm run lint
-npm run format:check
-npm run build
-npm test
+.squad/scripts/verify.sh --all
+make lint
+make test
 ```
 
-**Python Services:**
+Use focused reruns only when you need to isolate a failure:
+
 ```bash
-# solr-search
-cd src/solr-search && uv run pytest -v --tb=short && uv run ruff check .
-
-# document-indexer
-cd src/document-indexer && uv run pytest -v --tb=short && uv run ruff check .
-
-# document-lister
-cd src/document-lister && uv run pytest -v --tb=short && uv run ruff check .
-
-# embeddings-server
-cd src/embeddings-server && uv run pytest -v --tb=short && uv run ruff check .
+make test-solr-search
+make test-document-indexer
+make test-document-lister
+make test-ui-unit
 ```
 
-**Integration E2E Tests:**
-```bash
-# These run in CI, but you should verify they pass before release
-# Check the "Docker Compose integration + E2E" job in the main branch CI
-```
+**Integration E2E Tests:** these run in CI; confirm the relevant GitHub Actions jobs are green before cutting a release.
 
 ### [ ] Container Startup Verification (MANDATORY)
 
@@ -102,6 +88,8 @@ for svc in embeddings-server embeddings-server-e5 solr-search document-indexer d
   fi
 done
 ```
+
+`./buildall.sh` is the canonical local rebuild path. It auto-discovers Python services from `src/*/Dockerfile` + `pyproject.toml`, prepares them with `uv sync`, builds `aithena:base`, and then runs `docker compose up --build -d`.
 
 **If any container fails to start, DO NOT proceed with the release.** Fix the issue on `dev` first.
 
@@ -580,7 +568,7 @@ git push origin vX.Y.Z
 **Cause:** A Dockerfile has a syntax error or missing dependency.
 
 **Fix:**
-1. Run `buildall.sh` locally to reproduce the error
+1. Run `./buildall.sh` locally to reproduce the error (this also rebuilds `aithena:base`)
 2. Fix the Dockerfile on `dev`
 3. Create a follow-up commit and push to `dev`
 4. The PR will re-run CI checks
@@ -608,7 +596,7 @@ git push origin vX.Y.Z
 - **Release workflow definition:** `.github/workflows/release.yml`
 - **Pre-release validation:** `.github/workflows/pre-release-validation.yml`
 - **Docker images:** Each service has a `src/<service>/Dockerfile`
-- **Build process:** `buildall.sh`
+- **Build process:** `./buildall.sh`, root `Makefile`, and `scripts/lib/build-services.sh`
 - **Security baseline:** `docs/security/baseline-exceptions.md`
 - **Deployment guide:** `docs/deployment/production.md`
 
@@ -631,4 +619,3 @@ git push origin vX.Y.Z
 **Last Updated:** 2026-03-22 by Ripley (Lead)
 
 **Process Validation:** Follow this checklist exactly. Deviations cause release failures. If you discover a gap in this document, update it after the release.
-
