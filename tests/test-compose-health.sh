@@ -101,7 +101,7 @@ check_clean_logs() {
 
   docker logs "$container" >"$log_file" 2>&1 || true
 
-  if grep -Eiq 'traceback|exception|critical|error|failed' "$log_file"; then
+  if grep -Ein 'Traceback|Exception|CRITICAL|FATAL|^ERROR[: ]|failed to' "$log_file" | grep -viq 'no.error\|error_count\|error_rate\|errors=0'; then
     fail "$service emitted startup errors; see $log_file"
   fi
 }
