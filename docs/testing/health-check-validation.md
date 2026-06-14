@@ -1,11 +1,11 @@
 # Health Check Validation for Shared Docker Base
 
 Issue: `#1750`
-Branch: `squad/1750-validate-health-checks`
 
 ## Scope
 
-Validated the Python services that now inherit from `aithena:base`:
+This report covers **shared health-check mechanism validation** for the Python
+service images that now inherit from `aithena:base`:
 
 - `document-indexer`
 - `document-lister`
@@ -13,14 +13,26 @@ Validated the Python services that now inherit from `aithena:base`:
 
 `embeddings-server` was intentionally excluded because it keeps its own base image.
 
+This validation is intentionally narrower than a full integration run:
+
+- it verifies that the shared Docker base health-check command is present and works
+- it verifies that the affected images build and transition to `healthy`
+- it does **not** validate end-to-end service-to-service connectivity across the full stack
+
+Full-stack dependency and connectivity coverage remains the responsibility of the existing integration / E2E workflow.
+
 ## Commands Run
 
 ```bash
-docker compose --profile production config > /dev/null
+docker compose config > /dev/null
 docker build -f Dockerfile.base -t aithena:base .
 docker compose build document-indexer document-lister solr-search
 tests/test-compose-health.sh
 ```
+
+Note: the repository does not define a `production` profile in `docker-compose.yml`.
+If production-topology validation is needed, use the dedicated production compose
+file (`docker/compose.prod.yml`) rather than `--profile production`.
 
 ## Health Check Behavior
 
@@ -47,15 +59,17 @@ Image timing settings were identical across services:
 
 ## Test Results
 
-`tests/test-compose-health.sh` starts only the three Python service images, waits up to 60 seconds for Docker health to turn `healthy`, checks startup logs for errors, and cleans up containers automatically.
+`tests/test-compose-health.sh` starts only the three affected Python service images,
+waits up to 60 seconds for Docker health to turn `healthy`, checks startup logs for
+errors, and cleans up containers automatically.
 
 Observed results:
 
 | Service | Result | Time to healthy |
 |---|---|---|
 | `document-indexer` | healthy | 6s |
-| `document-lister` | healthy | 5s |
-| `solr-search` | healthy | 6s |
+| `document-lister` | healthy | 8s |
+| `solr-search` | healthy | 7s |
 
 Startup log review found no `error`, `failed`, `exception`, `critical`, or `traceback` output for any of the three containers.
 
@@ -63,7 +77,7 @@ Startup log review found no `error`, `failed`, `exception`, `critical`, or `trac
 
 No regression was observed versus the pre-shared-base Dockerfiles:
 
-- `docker compose` production config still validates
+- `docker compose config` still validates for the default compose file
 - all three service images still build successfully
 - entrypoint/command wiring still allows each image to become healthy under its configured probe mode
 - the shared base adds health checks without introducing startup log noise
@@ -71,4 +85,5 @@ No regression was observed versus the pre-shared-base Dockerfiles:
 ## Notes
 
 - This validation intentionally did **not** start Solr, ZooKeeper, Redis, RabbitMQ, or the rest of the full stack.
+- Service-to-service connectivity was therefore out of scope for this isolated health-check validation and is covered by the existing integration test workflow.
 - For the isolated `solr-search` health-check test, the script runs a minimal local HTTP server in the container and overrides `HEALTHCHECK_URL` to `/` so the shared HTTP probe can be validated without external dependencies.

@@ -44,6 +44,12 @@ require_image() {
     fail "missing image $image; build it first"
 }
 
+get_health_logs() {
+  local container="$1"
+
+  docker inspect --format '{{if .State.Health}}{{range .State.Health.Log}}{{println .Output}}{{end}}{{end}}' "$container"
+}
+
 wait_for_health() {
   local service="$1"
   local container="$2"
@@ -63,8 +69,11 @@ wait_for_health() {
         echo "OK: $service became healthy in ${elapsed}s"
         return 0
         ;;
+      none)
+        fail "$service container has no Docker healthcheck configured"
+        ;;
       unhealthy)
-        health_output="$(docker inspect --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' "$container")"
+        health_output="$(get_health_logs "$container")"
         fail "$service became unhealthy: ${health_output:-no health output}"
         ;;
       *)
@@ -76,7 +85,7 @@ wait_for_health() {
     esac
 
     if [ "$(date +%s)" -ge "$deadline" ]; then
-      health_output="$(docker inspect --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' "$container")"
+      health_output="$(get_health_logs "$container")"
       fail "$service did not become healthy within 60s: ${health_output:-no health output}"
     fi
 
