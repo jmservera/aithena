@@ -339,7 +339,7 @@ jobs:
           {
             echo ""
             echo "--- Freeing runner disk space for large OpenVINO image pull ---"
-            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
             docker system prune -af || true
             echo ""
             echo "--- Disk usage after cleanup ---"
