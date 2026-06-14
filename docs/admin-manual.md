@@ -49,6 +49,17 @@ Current shipped behavior:
 
 This reduces startup races where the lister, indexer, or admin tools could come up before the queue or cache was actually ready.
 
+### Python service image architecture (Phase 3)
+
+The standard Python services now share a single root-level base image, `Dockerfile.base`, and keep service Dockerfiles thin by using `FROM aithena:base`.
+
+- `Dockerfile.base` carries the common Python 3.12 runtime, `uv`, shared OS packages, the `app` user, and the shared Docker healthcheck helper.
+- Service Dockerfiles only add service-specific dependencies, source files, and runtime defaults such as `HEALTHCHECK_MODE=http` or `HEALTHCHECK_MODE=process`.
+- `./buildall.sh` auto-discovers Python services through `scripts/lib/build-services.sh`, runs `uv sync` for each service with both a `Dockerfile` and `pyproject.toml`, builds `aithena:base`, then runs `docker compose up --build -d`.
+- The root `Makefile` is the canonical validation entrypoint for repo-wide checks: `make lint`, `make format`, `make test`, plus per-service targets such as `make test-solr-search`.
+
+See the [shared Python base image architecture note](architecture/python-base-image.md) for the image contract and [New Python service bootstrap](guides/new-service-bootstrap.md) for the add-a-service checklist.
+
 ## Host Prerequisites
 
 Before starting the Docker Compose stack, apply the following kernel tuning on the **Docker host**.
