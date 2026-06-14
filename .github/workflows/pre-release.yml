@@ -321,10 +321,41 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare OpenVINO smoke diagnostics
+        run: |
+          {
+            echo "=== OpenVINO smoke diagnostics ==="
+            echo "Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo ""
+            echo "--- Disk usage before cleanup ---"
+            df -h
+            echo ""
+            echo "--- Docker disk usage before cleanup ---"
+            docker system df || true
+          } | tee openvino-smoke-output.txt
+
+      - name: Free runner disk space for OpenVINO image
+        run: |
+          {
+            echo ""
+            echo "--- Freeing runner disk space for large OpenVINO image pull ---"
+            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
+            docker system prune -af || true
+            echo ""
+            echo "--- Disk usage after cleanup ---"
+            df -h
+            echo ""
+            echo "--- Docker disk usage after cleanup ---"
+            docker system df || true
+          } | tee -a openvino-smoke-output.txt
+
       - name: Pull OpenVINO image
         env:
           RC_TAG: ${{ needs.prepare.outputs.full_tag }}-openvino
-        run: docker pull "ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}"
+        run: |
+          set -o pipefail
+          docker pull "ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}" \
+            2>&1 | tee -a openvino-smoke-output.txt
 
       - name: Run OpenVINO permissions smoke test
         id: smoke
@@ -335,7 +366,7 @@ jobs:
           chmod +x e2e/smoke-openvino-permissions.sh
           ./e2e/smoke-openvino-permissions.sh \
             "ghcr.io/jmservera/aithena-embeddings-server:${RC_TAG}" \
-            2>&1 | tee openvino-smoke-output.txt
+            2>&1 | tee -a openvino-smoke-output.txt
 
       - name: Dump container logs on failure
         if: failure()
