@@ -13,6 +13,7 @@ fi
 
 ARTIFACT_DIR="$ROOT/.test-artifacts/compose-health-checks"
 SUMMARY_FILE="$ARTIFACT_DIR/summary.txt"
+IMAGE_PREFIX="${COMPOSE_PROJECT_NAME:-aithena}"
 mkdir -p "$ARTIFACT_DIR"
 
 containers=()
@@ -135,9 +136,9 @@ start_http_service() {
   printf '%s\t%s\t%s\n' "$service" "$container" "$(date +%s)"
 }
 
-require_image aithena-document-indexer:latest
-require_image aithena-document-lister:latest
-require_image aithena-solr-search:latest
+require_image "${IMAGE_PREFIX}-document-indexer:latest"
+require_image "${IMAGE_PREFIX}-document-lister:latest"
+require_image "${IMAGE_PREFIX}-solr-search:latest"
 
 : > "$SUMMARY_FILE"
 echo "service	status	elapsed" >> "$SUMMARY_FILE"
@@ -146,9 +147,9 @@ while IFS=$'\t' read -r service container start_ts; do
   wait_for_health "$service" "$container" "$start_ts"
   check_clean_logs "$service" "$container"
 done < <(
-  start_process_service document-indexer aithena-document-indexer:latest document_indexer
-  start_process_service document-lister aithena-document-lister:latest document_lister
-  start_http_service solr-search aithena-solr-search:latest
+  start_process_service document-indexer "${IMAGE_PREFIX}-document-indexer:latest" document_indexer
+  start_process_service document-lister "${IMAGE_PREFIX}-document-lister:latest" document_lister
+  start_http_service solr-search "${IMAGE_PREFIX}-solr-search:latest"
 )
 
 echo ""
