@@ -5,6 +5,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 def fail(message: str) -> int:
@@ -13,9 +14,11 @@ def fail(message: str) -> int:
 
 
 def check_http(url: str, timeout: float) -> int:
+    if urlparse(url).scheme not in {"http", "https"}:
+        return fail(f"http healthcheck only supports http/https URLs: {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "aithena-healthcheck/1.0"})  # noqa: S310
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310  # noqa: S310
             status = getattr(response, "status", response.getcode())
     except urllib.error.URLError as exc:
         return fail(f"http healthcheck failed for {url}: {exc}")
