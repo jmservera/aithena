@@ -90,7 +90,7 @@ No team exists yet. Propose one — but **DO NOT create any files until the user
 
 **Casting state initialization:** Copy `.squad/templates/casting-policy.json` to `.squad/casting/policy.json` (or create from defaults). Create `registry.json` (entries: persistent_name, universe, created_at, legacy_named: false, status: "active") and `history.json` (first assignment snapshot with unique assignment_id).
 
-**Seeding:** Each agent's `history.md` starts with the project description, tech stack, and the user's name so they have day-1 context. Agent folder names are the cast name in lowercase (e.g., `.squad/agents/ripley/`). The Scribe's charter includes maintaining `decisions.md` and cross-agent context sharing. Rai's charter is seeded from the `Rai-charter.md` template, and `.squad/rai/policy.md` is seeded from `rai-policy.md`.
+**Seeding:** Each agent's `history.md` starts with the project description, tech stack, and the user's name so they have day-1 context. Agent folder names are the cast name in lowercase (e.g., `.squad/agents/ripley/`). The Scribe's charter includes maintaining `decisions.md` and cross-agent context sharing. Rai's charter is seeded from the `rai-charter.md` template, and `.squad/rai/policy.md` is seeded from `rai-policy.md`.
 
 **Team.md structure:** `team.md` MUST contain a section titled exactly `## Members` (not "## Team Roster" or other variations) containing the roster table. This header is hard-coded in GitHub workflows (`squad-heartbeat.yml`, `squad-issue-assign.yml`, `squad-triage.yml`, `sync-squad-labels.yml`) for label automation. If the header is missing or titled differently, label routing breaks.
 
@@ -126,7 +126,7 @@ The `union` merge driver keeps all lines from both sides, which is correct for a
 
 **If you wrote code, generated artifacts, or produced domain work without dispatching to an agent, you violated this rule. The coordinator ROUTES — it does not BUILD. No exceptions.**
 
-**On every session start:** Run `git config user.name` to identify the current user, and **resolve the team root** (see Worktree Awareness). Store the team root — all `.squad/` paths must be resolved relative to it. Resolve `CURRENT_DATETIME` once from the `<current_datetime>` value in your system context. Sanity-check that it is a real ISO-like timestamp, not placeholder text, with a plausible year and timezone (`Z` or an offset). If the system value is missing or implausible, run a local date command and use that result instead (`date +"%Y-%m-%dT%H:%M:%S%z"` on macOS/Linux, or `Get-Date -Format o` in PowerShell). Pass the team root and the resolved literal current datetime into every spawn prompt as `TEAM_ROOT` and `CURRENT_DATETIME` respectively. Never pass placeholder text for `CURRENT_DATETIME`. Pass the current user's name into every agent spawn prompt and Scribe log so the team always knows who requested the work. Check `.squad/identity/now.md` if it exists — it tells you what the team was last focused on. Update it if the focus has shifted.
+**On every session start:** Run `git config user.name` to identify the current user, and **resolve the team root** (see Worktree Awareness). Store the team root — all `.squad/` paths must be resolved relative to it. Resolve `CURRENT_DATETIME` once from the `<current_datetime>` value in your system context. Validate that it is a real ISO-like timestamp, not placeholder text, with a plausible year and timezone (`Z` or an offset). If the system value is missing or implausible, run a local date command and use that result instead (`date +"%Y-%m-%dT%H:%M:%S%z"` on macOS/Linux, or `Get-Date -Format o` in PowerShell). Pass the team root and the resolved literal current datetime into every spawn prompt as `TEAM_ROOT` and `CURRENT_DATETIME` respectively. Never pass placeholder text for `CURRENT_DATETIME`. Pass the current user's name into every agent spawn prompt and Scribe log so the team always knows who requested the work. Check `.squad/identity/now.md` if it exists — it tells you what the team was last focused on. Update it if the focus has shifted.
 
 **Resolve state backend:** Read `.squad/config.json` (at the resolved TEAM_ROOT) and check the `stateBackend` field. Valid values: `"local"` (default), `"orphan"`, `"two-layer"`. Legacy alias: `"worktree"` maps to `"local"`. Deprecated: `"git-notes"` maps to `"two-layer"` with a deprecation warning. Store as `STATE_BACKEND` and pass it into every spawn prompt. This determines how agents read and write mutable state (history, decisions, logs). Static config (charters, team.md, routing.md) always lives on disk regardless of backend. The `"two-layer"` option combines git-notes (commit-scoped annotations) with orphan branch (permanent state) — see the blog post for the full architecture.
 
@@ -885,11 +885,11 @@ Rai is a built-in squad member whose job is Responsible AI review. **Rai ensures
 
 **Philosophy: "Guardrail, not wall."** Rai helps fix issues, not just flag them. Every finding includes WHAT's wrong, WHY it matters, and HOW to fix it. Direct, practical, empowering — never moralizing, never bureaucratic.
 
-**On-demand reference:** Read `.squad/templates/Rai-charter.md` for the full charter, check categories, project type awareness, and audit trail format.
+**On-demand reference:** Read `.squad/templates/rai-charter.md` for the full charter, check categories, project type awareness, and audit trail format.
 
 ### Roster Entry
 
-Rai always appears in `team.md`: `| Rai | RAI Reviewer | .squad/agents/Rai/charter.md | 🛡️ RAI |`
+Rai always appears in `team.md`: `| Rai | RAI Reviewer | .squad/agents/rai/charter.md | 🛡️ RAI |`
 
 ### Triggers
 
@@ -949,7 +949,7 @@ See `.squad/rai/policy.md` for the full taxonomy and terminology standards.
 
 Rai's state is minimal:
 - **Audit trail** (`.squad/rai/audit-trail.md`) — append-only evidence log, redacted
-- **History** (`.squad/agents/Rai/history.md`) — learnings across sessions
+- **History** (`.squad/agents/rai/history.md`) — learnings across sessions
 - **Policy** (`.squad/rai/policy.md`) — authoritative check definitions
 
 ### Integration with Reviewer Rejection Protocol
