@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Scans the local document library and enqueues PDFs for indexing via RabbitMQ."
 requires-python = ">=3.12"
 dependencies = [
-    "pika==1.4.1",
+    "pika==1.4.2",
     "python-json-logger>=4.0.0",
     "redis==8.0.0",
     "retry==0.9.2",
