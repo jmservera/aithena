@@ -6,7 +6,7 @@
 #   docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 #
 # Usage (production / GHCR images):
-#   docker compose -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
+#   docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
 #
 # The base compose files run HTTP-only on port 80. This overlay adds:
 #   - Port 443 on nginx
@@ -40,7 +40,7 @@ services:
       - certbot-data-www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     networks:
-      - frontend
+      - default
 
 volumes:
   certbot-data-conf:

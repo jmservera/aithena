@@ -25,6 +25,7 @@ export RABBITMQ_INDEXER_PASS="${RABBITMQ_INDEXER_PASS:-indexer_test_pass}"
 export RABBITMQ_SEARCH_PASS="${RABBITMQ_SEARCH_PASS:-search_test_pass}"
 export ADMIN_API_KEY="${ADMIN_API_KEY:-admin-test-key}"
 export AUTH_JWT_SECRET="${AUTH_JWT_SECRET:-compose-security-test-secret}"
+export NGINX_HOST="${NGINX_HOST:-aithena.example.com}"
 export AUTH_DB_DIR="${AUTH_DB_DIR:-$ARTIFACT_DIR/auth}"
 mkdir -p "$AUTH_DB_DIR"
 
@@ -109,5 +110,37 @@ check_compose "single-node CI topology" \
 
 check_compose "production topology" \
   -f docker/compose.prod.yml
+
+# Regression check for the certbot "undefined network" defect (issue #1852):
+# both supported SSL overlay combinations must resolve to a network that is
+# actually declared somewhere in the merged Compose config.
+check_compose "dev + ssl topology" \
+  -f docker-compose.yml \
+  -f docker/compose.ssl.yml
+
+check_compose "production + ssl topology" \
+  -f docker-compose.yml \
+  -f docker/compose.prod.yml \
+  -f docker/compose.ssl.yml
+
+check_compose "production + ssl + gpu-nvidia topology" \
+  -f docker/compose.prod.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.gpu-nvidia.yml
+
+check_compose "production + ssl + gpu-intel topology" \
+  -f docker/compose.prod.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.gpu-intel.yml
+
+check_compose "dev + ssl + single-node topology" \
+  -f docker-compose.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.single-node.yml
+
+check_compose "production + ssl + single-node topology" \
+  -f docker/compose.prod.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.single-node.yml
 
 rm -rf "$ARTIFACT_DIR"
