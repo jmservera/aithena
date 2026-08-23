@@ -194,6 +194,7 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
       SOLR_READONLY_USER=smoketest-read \
       SOLR_READONLY_PASS=smoketest-read-pass \
       BOOKS_PATH="$ARTIFACT_DIR/booklibrary" \
+      NGINX_HOST=smoketest.example.com \
       docker compose "${COMPOSE_ARGS[@]}" config >"$COMPOSE_ENV_OUTPUT" 2>&1; then
       fail "docker compose config failed for: ${combo}"
       cat "$COMPOSE_ENV_OUTPUT"
