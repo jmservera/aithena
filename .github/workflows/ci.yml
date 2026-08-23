@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build: ${{ steps.filter.outputs.build }}
+      package: ${{ steps.filter.outputs.package }}
     steps:
       - name: Check for build-relevant changes
         id: filter
@@ -30,12 +31,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           NON_BUILD='^(\.squad/|\.github/(ISSUE_TEMPLATE|agents)/|docs/|[^/]*\.md$|LICENSE$|\.gitattributes$|\.gitignore$)'
+          # Narrower than NON_BUILD: the release archive built by
+          # scripts/build-release-package.sh includes README.md and docs/,
+          # so a docs-only PR can still change the shipped package. Only
+          # exclude paths that genuinely never affect the release archive.
+          NON_PACKAGE='^(\.squad/|\.github/(ISSUE_TEMPLATE|agents)/|\.gitattributes$|\.gitignore$)'
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             if ! CHANGED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
               --paginate --jq '.[].filename'); then
               echo "Failed to fetch changed files — running all checks"
               echo "build=true" >> "$GITHUB_OUTPUT"
+              echo "package=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           elif [ "${{ github.event_name }}" = "push" ] && \
@@ -44,14 +51,17 @@ jobs:
               --jq '.files[].filename' 2>/dev/null || echo "FORCE_BUILD")
             if [ "$CHANGED" = "FORCE_BUILD" ]; then
               echo "build=true" >> "$GITHUB_OUTPUT"
+              echo "package=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           else
             echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "package=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           BUILD_FILES=$(echo "$CHANGED" | grep -v -E "$NON_BUILD" || true)
+          PACKAGE_FILES=$(echo "$CHANGED" | grep -v -E "$NON_PACKAGE" || true)
 
           if [ -n "$BUILD_FILES" ]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -59,6 +69,14 @@ jobs:
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
             echo "⏭️ No build-relevant changes — skipping tests"
+          fi
+
+          if [ -n "$PACKAGE_FILES" ]; then
+            echo "package=true" >> "$GITHUB_OUTPUT"
+            echo "Release-package-relevant changes detected"
+          else
+            echo "package=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ No release-package-relevant changes — skipping archive smoke test"
           fi
 
   document-indexer-tests:
@@ -296,6 +314,25 @@ jobs:
       - name: Validate buildall failure reporting
         run: bash tests/test-buildall-failure-reporting.sh
 
+  release-package-smoke:
+    name: Release package smoke test
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Build, extract, and validate the release archive
+        run: bash tests/test-release-package-smoke.sh
+
+      - name: Validate destructive-path safeguards in build-release-package.sh
+        run: bash tests/test-build-release-package-safety.sh
+
   all-tests-passed:
     name: All tests passed
     if: always()
@@ -311,6 +348,7 @@ jobs:
       - compose-security-regression
       - solr-image-reference-regression
       - buildall-failure-reporting-regression
+      - release-package-smoke
     steps:
       - name: Evaluate results
         env:
@@ -324,13 +362,14 @@ jobs:
           COMPOSE_SECURITY_RESULT: ${{ needs.compose-security-regression.result }}
           SOLR_IMAGE_REFS_RESULT: ${{ needs.solr-image-reference-regression.result }}
           BUILDALL_RESULT: ${{ needs.buildall-failure-reporting-regression.result }}
+          RELEASE_PACKAGE_SMOKE_RESULT: ${{ needs.release-package-smoke.result }}
           BUILD_NEEDED: ${{ needs.changes.outputs.build }}
         run: |
           if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
             echo "❌ Change detection failed"
             exit 1
           fi
-          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT" "$COMPOSE_SECURITY_RESULT" "$SOLR_IMAGE_REFS_RESULT" "$BUILDALL_RESULT"; do
+          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT" "$COMPOSE_SECURITY_RESULT" "$SOLR_IMAGE_REFS_RESULT" "$BUILDALL_RESULT" "$RELEASE_PACKAGE_SMOKE_RESULT"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "❌ One or more required jobs failed"
               exit 1

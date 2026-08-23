@@ -8,7 +8,7 @@ This is the canonical reference for configuring Aithena. All deployment and oper
 
 1. Run the first-run installer to generate `.env` and create auth storage:
    ```bash
-   python3 -m installer
+   ./installer/run.sh
    ```
 
 2. The installer prompts for:

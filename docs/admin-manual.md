@@ -108,8 +108,8 @@ export BOOKS_PATH=/absolute/path/to/your/booklibrary
 Before starting the stack, bootstrap the runtime configuration and auth storage:
 
 ```bash
-python3 -m installer
-# or: python3 installer/setup.py --library-path /absolute/path/to/books \
+./installer/run.sh
+# or: uv run installer/setup.py --library-path /absolute/path/to/books \
 #       --admin-user admin --admin-password 'change-me' --origin http://localhost
 ```
 
@@ -239,7 +239,7 @@ docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
 
 #### Start with NVIDIA
 ```bash
-docker compose -f docker-compose.yml -f docker/compose.gpu-nvidia.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-nvidia.yml up -d
 ```
 
 ### Intel GPU Setup
@@ -276,7 +276,7 @@ clinfo | head -20
 
 #### Start with Intel
 ```bash
-docker compose -f docker-compose.yml -f docker/compose.gpu-intel.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d
 ```
 
 ### WSL2 GPU Passthrough (Windows)
@@ -298,7 +298,7 @@ Quick reference:
 2. Run `wsl --update` to ensure latest WSL2 kernel
 3. Inside WSL, add Intel GPU repositories and install runtime packages
 4. Verify: `clinfo | head -20` should show your Intel GPU
-5. Use the Intel override: `docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
+5. Use the Intel override: `docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
 
 ### Verification
 
@@ -638,8 +638,8 @@ Preferred workflow:
 
 1. Re-run the installer:
    ```bash
-   python3 -m installer
-   python3 -m installer --reset  # when you need to rebuild auth storage and rotate generated secrets
+   ./installer/run.sh
+   ./installer/run.sh --reset  # when you need to rebuild auth storage and rotate generated secrets
    ```
 2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER` and `RABBITMQ_PASS`.
 3. Recreate every dependent service so clients reconnect with the new credentials:
@@ -707,7 +707,7 @@ conn.commit()
 "
 ```
 
-Or use the installer: `python3 -m installer --reset`
+Or use the installer: `./installer/run.sh --reset`
 
 ### Degraded-mode semantic search behavior
 
@@ -1164,7 +1164,7 @@ v1.3.0 requires authentication for the embedded admin dashboard. Users must log 
 Re-run the installer to set admin credentials:
 
 ```bash
-python3 -m installer --reset
+./installer/run.sh --reset
 ```
 
 ### Circuit breaker for Redis and Solr
@@ -1421,7 +1421,7 @@ v1.5.0 includes an automated install script that configures the production envir
 **Basic installation:**
 
 ```bash
-python3 installer/setup.py \
+./installer/run.sh \
   --library-path /absolute/path/to/books \
   --admin-user admin \
   --admin-password 'secure-password' \
@@ -1456,13 +1456,13 @@ Re-run anytime to update credentials, change log level, or reset authentication:
 
 ```bash
 # Update admin password
-python3 installer/setup.py --reset --admin-password 'new-password'
+./installer/run.sh --reset --admin-password 'new-password'
 
 # Change log level for all services
-python3 installer/setup.py --log-level DEBUG
+./installer/run.sh --log-level DEBUG
 
 # Verify configuration without making changes
-python3 installer/setup.py --dry-run
+./installer/run.sh --dry-run
 ```
 
 ### Production environment configuration
@@ -3469,7 +3469,7 @@ If you need diacritic-sensitive search, set `SOLR_ASCII_FOLDING=false` in `.env`
 For production deployments, use the provided SSL Compose file:
 
 ```bash
-docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
 ```
 
 This configuration:
@@ -3858,8 +3858,8 @@ When no RC number is specified, the workflow queries ghcr.io for existing RC tag
 Pull and start the RC stack using the production Compose file:
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml pull
-VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.yml -f docker/compose.prod.yml pull
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 Substitute `1.16.0-rc.1` with the actual RC tag you want to test. The `VERSION` environment variable overrides the image tag used by the production Compose file.
@@ -3881,12 +3881,12 @@ If an RC reveals a blocking issue:
 
 1. Stop the RC stack:
    ```bash
-   docker compose -f docker/compose.prod.yml down
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml down
    ```
 2. Pull and restart the previous release:
    ```bash
-   VERSION=1.15.0 docker compose -f docker/compose.prod.yml pull
-   VERSION=1.15.0 docker compose -f docker/compose.prod.yml up -d
+   VERSION=1.15.0 docker compose -f docker-compose.yml -f docker/compose.prod.yml pull
+   VERSION=1.15.0 docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
    ```
 
 ### HF_TOKEN security note
@@ -4976,7 +4976,7 @@ v2.2.0 is a **maintenance release** with volume-migration guidance for operators
 
 1. **Prod overlay volume migration (Phase 1c, #1616)** — `docker/compose.prod.yml` is updated to use Docker-managed volumes for the remaining prod-overlay storage paths, and the release notes now reflect that migration work.
 2. **Solr-init replication factor cap (#1544)** — Single-node deployments with a stale `SOLR_REPLICATION_FACTOR` value higher than 1 will no longer produce a RED collection on startup.
-3. **Existing installer path remains the current one** — This release does not add a new remote bootstrap script; continue using the repo's current installer flow (`python3 -m installer` / `python3 installer/setup.py`).
+3. **Existing installer path remains the current one** — This release does not add a new remote bootstrap script; continue using the repo's current installer flow (`./installer/run.sh`).
 
 **Breaking Changes:** Existing prod-overlay deployments that rely on bind-mounted storage should expect a manual migration step if they want to preserve data. Do not assume existing bind-mounted state is carried forward automatically.
 
@@ -5037,9 +5037,7 @@ The `solr-init` inline entrypoint in `docker-compose.yml` now caps `SOLR_REPLICA
 Use the existing installer flow documented in this repository:
 
 ```bash
-python3 -m installer
-# or
-python3 installer/setup.py
+./installer/run.sh
 ```
 
 The current installer path generates `.env`, auth storage, and `start.sh` for the existing Compose stack. Existing deployments can keep using the current manual `docker compose` workflow; re-running the installer is only needed when you want to regenerate runtime files or rotate credentials.

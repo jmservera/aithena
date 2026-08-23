@@ -128,8 +128,7 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
 
 1. **Run the first-run installer** to generate `.env`, create the auth database, and seed the admin user:
    ```bash
-   python3 -m installer
-   # or: python3 installer/setup.py
+   ./installer/run.sh
    ```
 
    The installer prompts for the book library path, admin credentials, and the public origin URL.
@@ -138,7 +137,7 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
    secure values in place.
    For non-interactive environments (CI/scripts), use flags:
    ```bash
-   python3 installer/setup.py \
+   ./installer/run.sh \
      --library-path /path/to/books \
      --admin-user admin \
      --admin-password secret \
@@ -194,8 +193,8 @@ Docker Compose automatically orchestrates startup based on `depends_on` health c
 To rotate the JWT secret, RabbitMQ password, Redis password, or bootstrap admin password, re-run the installer before restarting:
 
 ```bash
-python3 -m installer          # interactive — keeps existing secrets unless they match insecure placeholders
-python3 -m installer --reset  # recreate auth DB and rotate generated secrets
+./installer/run.sh          # interactive — keeps existing secrets unless they match insecure placeholders
+./installer/run.sh --reset  # recreate auth DB and rotate generated secrets
 ```
 
 If you prefer to rotate service credentials manually, generate strong replacements (for example with `openssl rand -base64 32`), update `.env`, and then recreate every service that connects to Redis or RabbitMQ:
@@ -591,7 +590,7 @@ nginx reloads every 6 hours to pick up renewed certificates.
 Before going to production, verify:
 
 - [ ] Memory overcommit configured (`vm.overcommit_memory = 1`)
-- [ ] `python3 -m installer` completed successfully — `.env` written, auth DB created, and generated secrets reviewed
+- [ ] `./installer/run.sh` completed successfully — `.env` written, auth DB created, and generated secrets reviewed
 - [ ] Volume directories created with correct ownership
 - [ ] Firewall configured (only 80/443 public, block all other ports)
 - [ ] SSL certificates configured in nginx if public-facing (see [Enable HTTPS](#enable-https) below)

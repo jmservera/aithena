@@ -264,42 +264,24 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Create release package
+      - name: Build release package
         env:
           VERSION: ${{ needs.validate-tag.outputs.version }}
         run: |
-          mkdir -p release-package/installer
-          
-          # Core production files
-          cp docker/compose.prod.yml release-package/
-          cp .env.example release-package/
-          cp README.md release-package/
-          cp LICENSE release-package/
-          cp VERSION release-package/
-          
-          # Installer scripts
-          cp -r installer/* release-package/installer/
-          
-          # Documentation
-          mkdir -p release-package/docs
-          cp docs/quickstart.md release-package/docs/
-          cp docs/user-manual.md release-package/docs/
-          cp docs/admin-manual.md release-package/docs/
-          
-          # Required configuration files for nginx, solr, and rabbitmq
-          mkdir -p release-package/src/nginx
-          mkdir -p release-package/src/solr
-          mkdir -p release-package/src/rabbitmq
-          cp -r src/nginx/* release-package/src/nginx/
-          cp -r src/solr/books release-package/src/solr/
-          cp src/solr/add-conf-overlay.sh release-package/src/solr/
-          cp src/rabbitmq/rabbitmq.conf release-package/src/rabbitmq/
-          
-          # Create tarball
-          tar -czf "aithena-v${VERSION}-release.tar.gz" -C release-package .
-          
-          # Generate checksum
-          sha256sum "aithena-v${VERSION}-release.tar.gz" > "aithena-v${VERSION}-release.tar.gz.sha256"
+          bash scripts/build-release-package.sh \
+            --version "$VERSION" \
+            --archive "aithena-v${VERSION}-release.tar.gz" \
+            --checksum
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          enable-cache: false
+
+      - name: Smoke-test the built archive before publishing
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: bash tests/test-release-package-smoke.sh --archive "aithena-v${VERSION}-release.tar.gz"
 
       - name: Upload release package as artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

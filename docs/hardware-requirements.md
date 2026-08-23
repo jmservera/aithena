@@ -412,7 +412,7 @@ Use this checklist before deploying Aithena to a new host:
 - [ ] `vm.max_map_count` is set to 262144 or higher
 - [ ] Docker Engine 24.0+ and Compose V2 are installed
 - [ ] (Optional) NVIDIA Container Toolkit is installed if using GPU
-- [ ] `python3 -m installer` has been run to generate `.env`, auth storage, and JWT secret
+- [ ] `./installer/run.sh` has been run to generate `.env`, auth storage, and JWT secret
 - [ ] Firewall allows inbound traffic on port 80 (and 443 if using TLS)
 - [ ] No outbound internet access is required at runtime
 - [ ] Sufficient disk space is available for the source PDF library plus stack volumes
