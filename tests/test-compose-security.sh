@@ -123,4 +123,19 @@ check_compose "production + ssl topology" \
   -f docker/compose.prod.yml \
   -f docker/compose.ssl.yml
 
+check_compose "production + ssl + gpu-nvidia topology" \
+  -f docker/compose.prod.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.gpu-nvidia.yml
+
+check_compose "production + ssl + gpu-intel topology" \
+  -f docker/compose.prod.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.gpu-intel.yml
+
+check_compose "dev + ssl + single-node topology" \
+  -f docker-compose.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.single-node.yml
+
 rm -rf "$ARTIFACT_DIR"
