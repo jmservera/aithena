@@ -200,6 +200,10 @@ python3 scripts/benchmark/compare_quantization.py \
   --output results/benchmark-1344-quantization-comparison.json
 ```
 
+If the local `solr-search` API has authentication enabled, pass a short-lived
+JWT with `--token "$AUTH_TOKEN"` to both `run_benchmark.py` invocations. Do not
+publish reports that only contain HTTP 401 errors as recall evidence.
+
 ## Solr 9.7 vs Solr 10 Paired Comparison (#1354)
 
 Use `compare_solr_versions.py` after collecting two reports with matching
