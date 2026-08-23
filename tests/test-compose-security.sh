@@ -138,4 +138,9 @@ check_compose "dev + ssl + single-node topology" \
   -f docker/compose.ssl.yml \
   -f docker/compose.single-node.yml
 
+check_compose "production + ssl + single-node topology" \
+  -f docker/compose.prod.yml \
+  -f docker/compose.ssl.yml \
+  -f docker/compose.single-node.yml
+
 rm -rf "$ARTIFACT_DIR"
