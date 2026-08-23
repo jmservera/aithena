@@ -108,8 +108,8 @@ export BOOKS_PATH=/absolute/path/to/your/booklibrary
 Before starting the stack, bootstrap the runtime configuration and auth storage:
 
 ```bash
-python3 -m installer
-# or: python3 installer/setup.py --library-path /absolute/path/to/books \
+./installer/run.sh
+# or: ./installer/run.sh --library-path /absolute/path/to/books \
 #       --admin-user admin --admin-password 'change-me' --origin http://localhost
 ```
 
@@ -5037,9 +5037,9 @@ The `solr-init` inline entrypoint in `docker-compose.yml` now caps `SOLR_REPLICA
 Use the existing installer flow documented in this repository:
 
 ```bash
-python3 -m installer
-# or
-python3 installer/setup.py
+./installer/run.sh
+# or, if you already manage uv/aithena-common yourself:
+uv run installer/setup.py
 ```
 
 The current installer path generates `.env`, auth storage, and `start.sh` for the existing Compose stack. Existing deployments can keep using the current manual `docker compose` workflow; re-running the installer is only needed when you want to regenerate runtime files or rotate credentials.

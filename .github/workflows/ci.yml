@@ -296,6 +296,22 @@ jobs:
       - name: Validate buildall failure reporting
         run: bash tests/test-buildall-failure-reporting.sh
 
+  release-package-smoke:
+    name: Release package smoke test
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Build, extract, and smoke-test the release package
+        run: bash tests/test-release-package-smoke.sh
+
   all-tests-passed:
     name: All tests passed
     if: always()
@@ -311,6 +327,7 @@ jobs:
       - compose-security-regression
       - solr-image-reference-regression
       - buildall-failure-reporting-regression
+      - release-package-smoke
     steps:
       - name: Evaluate results
         env:
@@ -324,13 +341,14 @@ jobs:
           COMPOSE_SECURITY_RESULT: ${{ needs.compose-security-regression.result }}
           SOLR_IMAGE_REFS_RESULT: ${{ needs.solr-image-reference-regression.result }}
           BUILDALL_RESULT: ${{ needs.buildall-failure-reporting-regression.result }}
+          RELEASE_PACKAGE_SMOKE_RESULT: ${{ needs.release-package-smoke.result }}
           BUILD_NEEDED: ${{ needs.changes.outputs.build }}
         run: |
           if [ "$CHANGES_RESULT" = "failure" ] || [ "$CHANGES_RESULT" = "cancelled" ]; then
             echo "❌ Change detection failed"
             exit 1
           fi
-          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT" "$COMPOSE_SECURITY_RESULT" "$SOLR_IMAGE_REFS_RESULT" "$BUILDALL_RESULT"; do
+          for result in "$INDEXER_RESULT" "$SEARCH_RESULT" "$UI_RESULT" "$LISTER_RESULT" "$EMBEDDINGS_RESULT" "$LINT_RESULT" "$COMPOSE_SECURITY_RESULT" "$SOLR_IMAGE_REFS_RESULT" "$BUILDALL_RESULT" "$RELEASE_PACKAGE_SMOKE_RESULT"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "❌ One or more required jobs failed"
               exit 1

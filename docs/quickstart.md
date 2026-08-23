@@ -7,7 +7,7 @@ This guide provides step-by-step instructions for deploying Aithena in a product
 - Linux server with Docker Engine 20.10+ and Docker Compose v2+
 - At least 8 GB RAM (16 GB recommended)
 - 50 GB available disk space
-- Python 3.11+ (for running the installer)
+- [uv](https://docs.astral.sh/uv/) (for running the installer — installs with `curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - Network access to GitHub Container Registry (ghcr.io) for pulling images
 
 ## Installation Steps
@@ -15,7 +15,8 @@ This guide provides step-by-step instructions for deploying Aithena in a product
 ### 1. Extract the Release Package
 
 ```bash
-tar -xzf aithena-v{version}-release.tar.gz
+mkdir aithena-v{version}-release
+tar -xzf aithena-v{version}-release.tar.gz -C aithena-v{version}-release
 cd aithena-v{version}-release
 ```
 
@@ -24,7 +25,7 @@ cd aithena-v{version}-release
 The installer will guide you through the initial setup and generate secure secrets:
 
 ```bash
-python3 -m installer
+./installer/run.sh
 ```
 
 The installer will prompt you for:
@@ -199,7 +200,7 @@ docker compose -f docker/compose.prod.yml logs <service-name>
 ```
 
 Common issues:
-- **Missing .env file**: Run `python3 -m installer` to generate configuration
+- **Missing .env file**: Run `./installer/run.sh` to generate configuration
 - **Permission errors**: Check volume mount points in `/source/volumes`
 - **Port conflicts**: Ensure ports 80, 443 are available
 
@@ -247,14 +248,14 @@ ls -lh ~/.local/share/aithena/auth/users.db
 Reset the admin password:
 
 ```bash
-python3 -m installer --reset --admin-password "new-secure-password"
+./installer/run.sh --reset --admin-password "new-secure-password"
 ```
 
 ## Security Hardening
 
 ### Production Checklist
 
-- [ ] Change all default passwords (run `python3 -m installer` to regenerate secrets)
+- [ ] Change all default passwords (run `./installer/run.sh` to regenerate secrets)
 - [ ] Restrict `.env` file permissions: `chmod 600 .env`
 - [ ] Enable HTTPS with valid TLS certificates
 - [ ] Configure firewall rules (allow only 80/443 from internet)

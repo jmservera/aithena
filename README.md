@@ -221,9 +221,10 @@ See [**Deployment Topologies Guide**](docs/deployment-topologies.md) for detaile
 Generate `.env`, create the auth database, and seed the initial admin user:
 
 ```bash
-python3 -m installer
-# or: python3 installer/setup.py
+./installer/run.sh
 ```
+
+This works the same way from a source checkout or an extracted release package: it uses [`uv`](https://docs.astral.sh/uv/) to resolve the installer's `aithena-common` dependency in an isolated environment, so you don't need to `pip install` anything system-wide first. If you already have `uv` set up as a project dependency, `uv run installer/setup.py` is equivalent. Plain `python3 -m installer` / `python3 installer/setup.py` only work if `aithena_common` (and its `argon2-cffi` dependency) are already importable by your `python3`.
 
 The installer guides you through:
 1. **Environment** — Development or Production
@@ -259,7 +260,7 @@ docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compos
 
 **For complete configuration options**, see the [Configuration Guide](docs/config/README.md).
 
-Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
+Need automation instead of prompts? Run `./installer/run.sh --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
 
 ### Legacy `scripts/` directory
 
