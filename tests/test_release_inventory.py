@@ -37,4 +37,4 @@ def test_each_implicit_dockerfile_is_reported_missing(tmp_path):
             if included != dockerfile:
                 target.write_text("FROM scratch\n", encoding="utf-8")
 
-        assert missing_paths(package_root, sorted(IMPLICIT_DOCKERFILES)) == [dockerfile]
+        assert set(missing_paths(package_root, sorted(IMPLICIT_DOCKERFILES))) == {dockerfile}

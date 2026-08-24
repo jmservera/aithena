@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 def _norm(path: str) -> str | None:
+    """Return a safe repository-relative path, or None for absolute/escaping paths."""
     if os.path.isabs(path):
         return None
     normalized = os.path.normpath(path).replace(os.sep, "/")

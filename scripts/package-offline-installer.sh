@@ -647,7 +647,14 @@ for compose_file in "${compose_files[@]}"; do
   compose_args+=( -f "$compose_file" )
 done
 
-mapfile -t PACKAGE_DOCKERFILES < <(python3 "$REPO_ROOT/scripts/release_inventory.py" "${compose_files[@]}")
+PACKAGE_DOCKERFILES=()
+if ! dockerfile_inventory_output="$(python3 "$REPO_ROOT/scripts/release_inventory.py" "${compose_files[@]}")"; then
+  error "Failed to discover Dockerfiles from compose build contexts."
+  exit 1
+fi
+while IFS= read -r dockerfile_path; do
+  [[ -n "$dockerfile_path" ]] && PACKAGE_DOCKERFILES+=("$dockerfile_path")
+done <<< "$dockerfile_inventory_output"
 if [[ "${#PACKAGE_DOCKERFILES[@]}" -eq 0 ]]; then
   error "No Dockerfiles discovered from compose build contexts."
   exit 1
