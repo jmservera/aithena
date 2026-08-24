@@ -14,7 +14,7 @@ This consolidates three older sources of truth into one file:
 
 ## What stays the same
 
-- The installer still generates the real `.env` and auth database with `python3 -m installer`.
+- The installer still generates the real `.env` and auth database with `./installer/run.sh`.
 - Existing `.env` files do not need to be regenerated if they already contain working secrets.
 - `docker compose` and the production/offline package layouts still read the same variable names.
 

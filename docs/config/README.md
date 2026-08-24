@@ -8,7 +8,7 @@ This is the canonical reference for configuring Aithena. All deployment and oper
 
 1. Run the first-run installer to generate `.env` and create auth storage:
    ```bash
-   python3 -m installer
+   ./installer/run.sh
    ```
 
 2. The installer prompts for:
@@ -151,15 +151,36 @@ Aithena uses overlay files to compose configurations for different deployment sc
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.yml` | Base services (always included) |
-| `docker/compose.dev-ports.yml` | Development: builds from source, exposes debug ports |
+| `docker-compose.yml` | Base services — **always the first `-f`** |
 | `docker/compose.prod.yml` | Production: pre-built GHCR images, optimized memory |
 | `docker/compose.gpu-nvidia.yml` | NVIDIA GPU support |
 | `docker/compose.gpu-intel.yml` | Intel GPU support |
 | `docker/compose.ssl.yml` | TLS termination (production) |
 | `docker/compose.single-node.yml` | Single-node SolrCloud topology |
-| `docker/compose.e2e.yml` | E2E test fixtures |
-| `docker/compose.ci-ports.yml` | CI ephemeral volumes/tmpfs (v2.3.0+) |
+| `docker/compose.solr10.yml` | Explicit Solr 10 runtime pin (default runtime) |
+| `docker/compose.solr9.yml` | Solr 9.7 rollback overlay (temporary rollback only) |
+| `docker/compose.dev-ports.yml` | **Development only:** builds from source, exposes debug ports |
+| `docker/compose.ci-ports.yml` | **CI only:** host ports needed by automated tests |
+| `docker/compose.e2e.yml` | **Test only:** E2E fixtures; disables nginx |
+
+All of the overlays above ship in the release archive, including the
+development/CI/test-only ones (marked in bold), so runbooks that reference them
+keep working from an extracted package. Do not use the development/CI/test-only
+overlays for a production deployment.
+
+**Ordering rule:** always list the root `docker-compose.yml` first, then
+`docker/compose.prod.yml`, then GPU, then SSL, then topology overlays:
+
+```bash
+docker compose -f docker-compose.yml -f docker/compose.prod.yml \
+  -f docker/compose.gpu-nvidia.yml -f docker/compose.ssl.yml \
+  -f docker/compose.single-node.yml up -d
+```
+
+Passing an overlay as the *first* `-f` file (for example starting the chain with
+`docker/compose.prod.yml` instead of `docker-compose.yml`) is incorrect: it drops
+the base service definitions and resolves `./src/...` bind mounts against the
+wrong directory.
 
 ### Example Compose Chains
 

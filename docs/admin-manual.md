@@ -108,8 +108,8 @@ export BOOKS_PATH=/absolute/path/to/your/booklibrary
 Before starting the stack, bootstrap the runtime configuration and auth storage:
 
 ```bash
-python3 -m installer
-# or: python3 installer/setup.py --library-path /absolute/path/to/books \
+./installer/run.sh
+# or: ./installer/run.sh --library-path /absolute/path/to/books \
 #       --admin-user admin --admin-password 'change-me' --origin http://localhost
 ```
 
@@ -298,7 +298,7 @@ Quick reference:
 2. Run `wsl --update` to ensure latest WSL2 kernel
 3. Inside WSL, add Intel GPU repositories and install runtime packages
 4. Verify: `clinfo | head -20` should show your Intel GPU
-5. Use the Intel override: `docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
+5. Use the Intel override: `docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
 
 ### Verification
 
@@ -638,8 +638,8 @@ Preferred workflow:
 
 1. Re-run the installer:
    ```bash
-   python3 -m installer
-   python3 -m installer --reset  # when you need to rebuild auth storage and rotate generated secrets
+   ./installer/run.sh
+   ./installer/run.sh --reset  # when you need to rebuild auth storage and rotate generated secrets
    ```
 2. If you manage service credentials manually, update `.env` with strong replacements for `RABBITMQ_USER` and `RABBITMQ_PASS`.
 3. Recreate every dependent service so clients reconnect with the new credentials:
@@ -707,7 +707,7 @@ conn.commit()
 "
 ```
 
-Or use the installer: `python3 -m installer --reset`
+Or use the installer: `./installer/run.sh --reset`
 
 ### Degraded-mode semantic search behavior
 
@@ -1164,7 +1164,7 @@ v1.3.0 requires authentication for the embedded admin dashboard. Users must log 
 Re-run the installer to set admin credentials:
 
 ```bash
-python3 -m installer --reset
+./installer/run.sh --reset
 ```
 
 ### Circuit breaker for Redis and Solr
@@ -1421,7 +1421,7 @@ v1.5.0 includes an automated install script that configures the production envir
 **Basic installation:**
 
 ```bash
-python3 installer/setup.py \
+./installer/run.sh \
   --library-path /absolute/path/to/books \
   --admin-user admin \
   --admin-password 'secure-password' \
@@ -1452,18 +1452,17 @@ python3 installer/setup.py \
 
 **Re-running the script:**
 
-Re-run anytime to update credentials, change log level, or reset authentication:
+Re-run anytime to update credentials or reset authentication:
 
 ```bash
 # Update admin password
-python3 installer/setup.py --reset --admin-password 'new-password'
+./installer/run.sh --reset --admin-password 'new-password'
 
-# Change log level for all services
-python3 installer/setup.py --log-level DEBUG
-
-# Verify configuration without making changes
-python3 installer/setup.py --dry-run
+# Re-run interactively to review every prompt again
+./installer/run.sh
 ```
+
+Service log levels are configured in `.env` (see the configuration reference), not through installer flags.
 
 ### Production environment configuration
 
@@ -1535,7 +1534,7 @@ v1.5.0 validates that all persistent data survives container restarts.
 
 3. Run smoke tests to verify data persistence:
    ```bash
-   docker compose -f docker-compose.smoke.yml up --abort-on-container-exit
+   docker compose -f docker-compose.yml -f docker/compose.e2e.yml up --abort-on-container-exit
    ```
 
 4. The smoke test suite validates:
@@ -1589,7 +1588,7 @@ docker compose exec rabbitmq curl -s http://localhost:15672/api/healthchecks/nod
 2. Wait 30 seconds for Solr init to complete
 3. Check all services: `docker compose ps` (all should show `healthy`)
 4. Access UI: `https://aithena.example.com/` and log in
-5. Run smoke tests: `docker compose -f docker-compose.smoke.yml up --abort-on-container-exit`
+5. Run smoke tests: `docker compose -f docker-compose.yml -f docker/compose.e2e.yml up --abort-on-container-exit`
 6. Verify search works: Execute a known search query
 7. Check admin dashboard: Access `/admin/` after login
 
@@ -3858,8 +3857,8 @@ When no RC number is specified, the workflow queries ghcr.io for existing RC tag
 Pull and start the RC stack using the production Compose file:
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml pull
-VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.yml -f docker/compose.prod.yml pull
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 Substitute `1.16.0-rc.1` with the actual RC tag you want to test. The `VERSION` environment variable overrides the image tag used by the production Compose file.
@@ -3881,12 +3880,12 @@ If an RC reveals a blocking issue:
 
 1. Stop the RC stack:
    ```bash
-   docker compose -f docker/compose.prod.yml down
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml down
    ```
 2. Pull and restart the previous release:
    ```bash
-   VERSION=1.15.0 docker compose -f docker/compose.prod.yml pull
-   VERSION=1.15.0 docker compose -f docker/compose.prod.yml up -d
+   VERSION=1.15.0 docker compose -f docker-compose.yml -f docker/compose.prod.yml pull
+   VERSION=1.15.0 docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
    ```
 
 ### HF_TOKEN security note
@@ -4317,7 +4316,7 @@ v1.18.0 includes a comprehensive backup and restore system for production deploy
 
 #### Getting started
 
-1. Review the [Disaster Recovery Runbook](guides/disaster-recovery-runbook.md) for operational procedures
+1. Review the [Disaster Recovery Runbook](admin/disaster-recovery-runbook.md) for operational procedures
 2. Trigger a test backup:
    ```bash
    docker compose exec solr-search backup-orchestrator.py --test
@@ -4422,7 +4421,7 @@ Existing deployments can upgrade with a standard `docker compose pull && docker 
 
 - `docs/user-manual.md` — new Folder Facets section, collections UI fix note
 - `docs/admin-manual.md` — this Deployment Updates section, Backup & DR sections
-- `docs/guides/disaster-recovery-runbook.md` — new comprehensive backup/restore operational guide
+- `docs/admin/disaster-recovery-runbook.md` — new comprehensive backup/restore operational guide
 
 ---
 
@@ -4433,7 +4432,7 @@ Existing deployments can upgrade with a standard `docker compose pull && docker 
 v1.18.1 is a **patch release** addressing two critical bugs:
 
 1. **Solr Auth Role Assignment (#1332)** — Fixed admin user role overwriting that broke security operations
-2. **Installer CWD Independence (#1330)** — Made `uv run installer/setup.py` work from any directory
+2. **Installer CWD Independence (#1330)** — Made `./installer/run.sh` work from any directory
 
 **Upgrade path:** `docker compose pull && docker compose up -d --force-recreate solr`
 
@@ -4467,18 +4466,18 @@ The admin user should have roles: `["superadmin", "admin", "search", "index"]`
 ### Installer CWD Independence Fix
 
 **Problem:**  
-Running `uv run installer/setup.py` from the repository root failed with `ModuleNotFoundError: No module named 'aithena_common'` because `uv` resolves dependencies from the current working directory's `pyproject.toml`, and the repo root lacks one.
+Running `./installer/run.sh` from the repository root failed with `ModuleNotFoundError: No module named 'aithena_common'` because `uv` resolves dependencies from the current working directory's `pyproject.toml`, and the repo root lacks one.
 
 **Fix:**  
 Added PEP 723 inline script metadata to `installer/setup.py` so `uv run` knows about the `aithena-common` dependency regardless of CWD.
 
 **Verification:**
 ```bash
-# From repo root (now works):
-uv run installer/setup.py --help
+# From the repo root or an extracted release package:
+./installer/run.sh --help
 
-# From installer/ directory (existing behavior preserved):
-cd installer && uv run setup.py --help
+# From inside the installer/ directory:
+./run.sh --help
 ```
 
 **Impact:** Users can now run the installer from any directory without encountering import errors.
@@ -4833,7 +4832,7 @@ The installer (`setup.py`) now generates `start.sh` with a compose override chai
 
 **Required action:** Re-run the installer:
 ```bash
-python3 setup.py
+./installer/run.sh
 ```
 Or manually update your compose commands to include the appropriate override files (see new `start.sh` for the correct chain).
 
@@ -4913,7 +4912,7 @@ v2.0.0 includes preparatory work for the upcoming Solr 10 migration:
 
 4. **Re-run the installer** (recommended):
    ```bash
-   python3 setup.py
+   ./installer/run.sh
    ```
 
 5. **Restart all services:**
@@ -4976,7 +4975,7 @@ v2.2.0 is a **maintenance release** with volume-migration guidance for operators
 
 1. **Prod overlay volume migration (Phase 1c, #1616)** — `docker/compose.prod.yml` is updated to use Docker-managed volumes for the remaining prod-overlay storage paths, and the release notes now reflect that migration work.
 2. **Solr-init replication factor cap (#1544)** — Single-node deployments with a stale `SOLR_REPLICATION_FACTOR` value higher than 1 will no longer produce a RED collection on startup.
-3. **Existing installer path remains the current one** — This release does not add a new remote bootstrap script; continue using the repo's current installer flow (`python3 -m installer` / `python3 installer/setup.py`).
+3. **Existing installer path remains the current one** — This release does not add a new remote bootstrap script; continue using the repo's current installer flow (`./installer/run.sh`).
 
 **Breaking Changes:** Existing prod-overlay deployments that rely on bind-mounted storage should expect a manual migration step if they want to preserve data. Do not assume existing bind-mounted state is carried forward automatically.
 
@@ -5037,9 +5036,7 @@ The `solr-init` inline entrypoint in `docker-compose.yml` now caps `SOLR_REPLICA
 Use the existing installer flow documented in this repository:
 
 ```bash
-python3 -m installer
-# or
-python3 installer/setup.py
+./installer/run.sh
 ```
 
 The current installer path generates `.env`, auth storage, and `start.sh` for the existing Compose stack. Existing deployments can keep using the current manual `docker compose` workflow; re-running the installer is only needed when you want to regenerate runtime files or rotate credentials.

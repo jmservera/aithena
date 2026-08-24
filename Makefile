@@ -41,7 +41,7 @@ UI_TEST_TARGETS += test-ui-e2e
 endif
 endif
 
-ALL_TEST_TARGETS := test-backend
+ALL_TEST_TARGETS := test-backend test-release-package
 
 ifneq ($(HAS_UI),no)
 ALL_TEST_TARGETS += test-ui
@@ -53,7 +53,7 @@ ALL_TEST_TARGETS += test-stress-python
 endif
 endif
 
-.PHONY: help test test-backend test-ui test-ui-unit test-ui-e2e test-playwright test-e2e test-e2e-python test-stress test-stress-python lint format lint-ui format-ui $(PYTHON_TEST_TARGETS) $(PYTHON_LINT_TARGETS) $(PYTHON_FORMAT_TARGETS)
+.PHONY: help test test-backend test-release-package test-installer test-ui test-ui-unit test-ui-e2e test-playwright test-e2e test-e2e-python test-stress test-stress-python lint format lint-ui format-ui $(PYTHON_TEST_TARGETS) $(PYTHON_LINT_TARGETS) $(PYTHON_FORMAT_TARGETS)
 
 help: ## List available targets
 	@printf "\nAvailable targets:\n\n"
@@ -81,6 +81,16 @@ help: ## List available targets
 test: $(ALL_TEST_TARGETS) ## Run all available test suites
 
 test-backend: $(PYTHON_TEST_TARGETS) ## Run pytest for all Python backend services
+
+test-installer: ## Run the installer unit tests
+	@echo "==> Running installer tests"
+	@cd installer && $(PYTEST_CMD) $(PYTEST_ARGS)
+
+test-release-package: test-installer ## Build, extract, and validate the release archive (+ path-safety regressions)
+	@echo "==> Running release package smoke test"
+	@bash tests/test-release-package-smoke.sh
+	@echo "==> Running release package path-safety tests"
+	@bash tests/test-build-release-package-safety.sh
 
 test-ui: $(UI_TEST_TARGETS) ## Run UI Vitest suite; include Playwright with E2E=1
 

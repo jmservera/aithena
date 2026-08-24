@@ -16,15 +16,20 @@ This guide provides step-by-step instructions for deploying Aithena in a product
 
 ```bash
 tar -xzf aithena-v{version}-release.tar.gz
-cd aithena-v{version}-release
+cd aithena-v{version}
 ```
+
+The archive always unpacks into a single `aithena-v{version}/` directory that
+contains the root `docker-compose.yml`, every supported `docker/compose.*.yml`
+overlay, the installer, and all Compose build contexts and bind-mounted config
+files, so no additional downloads are required.
 
 ### 2. Run the Installer
 
 The installer will guide you through the initial setup and generate secure secrets:
 
 ```bash
-python3 -m installer
+./installer/run.sh
 ```
 
 The installer will prompt you for:
@@ -64,8 +69,8 @@ sudo chown -R $USER:$USER /source/volumes
 Pull the images and start all services:
 
 ```bash
-docker compose -f docker/compose.prod.yml pull
-docker compose -f docker/compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.prod.yml pull
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 ### 5. Monitor Startup
@@ -73,13 +78,13 @@ docker compose -f docker/compose.prod.yml up -d
 Check service health:
 
 ```bash
-docker compose -f docker/compose.prod.yml ps
+docker compose -f docker-compose.yml -f docker/compose.prod.yml ps
 ```
 
 View logs for a specific service:
 
 ```bash
-docker compose -f docker/compose.prod.yml logs -f <service-name>
+docker compose -f docker-compose.yml -f docker/compose.prod.yml logs -f <service-name>
 ```
 
 The startup sequence:
@@ -132,7 +137,7 @@ Place PDF files in the configured book library path (e.g., `/data/booklibrary`).
 Monitor indexing progress:
 
 ```bash
-docker compose -f docker/compose.prod.yml logs -f document-indexer
+docker compose -f docker-compose.yml -f docker/compose.prod.yml logs -f document-indexer
 ```
 
 ### Configure Resource Limits
@@ -146,7 +151,7 @@ The production compose file includes default resource limits. Adjust these in `d
 After modifying limits, restart the affected service:
 
 ```bash
-docker compose -f docker/compose.prod.yml up -d --force-recreate <service-name>
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d --force-recreate <service-name>
 ```
 
 ## Backup and Maintenance
@@ -168,7 +173,7 @@ BACKUP_DIR=/backup/aithena/$(date +%Y%m%d)
 mkdir -p "$BACKUP_DIR"
 
 # Stop indexing to ensure consistency
-docker compose -f docker/compose.prod.yml stop document-indexer document-lister
+docker compose -f docker-compose.yml -f docker/compose.prod.yml stop document-indexer document-lister
 
 # Backup volumes
 tar -czf "$BACKUP_DIR/solr-data.tar.gz" /source/volumes/solr-data*
@@ -177,16 +182,16 @@ cp ~/.local/share/aithena/auth/users.db "$BACKUP_DIR/"
 cp .env "$BACKUP_DIR/"
 
 # Resume indexing
-docker compose -f docker/compose.prod.yml start document-indexer document-lister
+docker compose -f docker-compose.yml -f docker/compose.prod.yml start document-indexer document-lister
 ```
 
 ### Update to a New Release
 
-1. Stop the current stack: `docker compose -f docker/compose.prod.yml down`
+1. Stop the current stack: `docker compose -f docker-compose.yml -f docker/compose.prod.yml down`
 2. Extract the new release package
 3. Copy your `.env` file to the new release directory
-4. Pull updated images: `docker compose -f docker/compose.prod.yml pull`
-5. Start the new version: `docker compose -f docker/compose.prod.yml up -d`
+4. Pull updated images: `docker compose -f docker-compose.yml -f docker/compose.prod.yml pull`
+5. Start the new version: `docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d`
 
 ## Troubleshooting
 
@@ -195,11 +200,11 @@ docker compose -f docker/compose.prod.yml start document-indexer document-lister
 Check logs for the failing service:
 
 ```bash
-docker compose -f docker/compose.prod.yml logs <service-name>
+docker compose -f docker-compose.yml -f docker/compose.prod.yml logs <service-name>
 ```
 
 Common issues:
-- **Missing .env file**: Run `python3 -m installer` to generate configuration
+- **Missing .env file**: Run `./installer/run.sh` to generate configuration
 - **Permission errors**: Check volume mount points in `/source/volumes`
 - **Port conflicts**: Ensure ports 80, 443 are available
 
@@ -219,7 +224,7 @@ All nodes should respond with `imok`.
 Check Solr cluster status:
 
 ```bash
-docker compose -f docker/compose.prod.yml exec solr curl -s 'http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json' | jq .
+docker compose -f docker-compose.yml -f docker/compose.prod.yml exec solr curl -s 'http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS&wt=json' | jq .
 ```
 
 ### Indexing not progressing
@@ -227,13 +232,13 @@ docker compose -f docker/compose.prod.yml exec solr curl -s 'http://localhost:89
 Check RabbitMQ queue status:
 
 ```bash
-docker compose -f docker/compose.prod.yml exec rabbitmq rabbitmqctl list_queues
+docker compose -f docker-compose.yml -f docker/compose.prod.yml exec rabbitmq rabbitmqctl list_queues
 ```
 
 Verify `document-lister` is scanning the library:
 
 ```bash
-docker compose -f docker/compose.prod.yml logs document-lister | grep "Scanning"
+docker compose -f docker-compose.yml -f docker/compose.prod.yml logs document-lister | grep "Scanning"
 ```
 
 ### Authentication issues
@@ -247,14 +252,14 @@ ls -lh ~/.local/share/aithena/auth/users.db
 Reset the admin password:
 
 ```bash
-python3 -m installer --reset --admin-password "new-secure-password"
+./installer/run.sh --reset --admin-password "new-secure-password"
 ```
 
 ## Security Hardening
 
 ### Production Checklist
 
-- [ ] Change all default passwords (run `python3 -m installer` to regenerate secrets)
+- [ ] Change all default passwords (run `./installer/run.sh` to regenerate secrets)
 - [ ] Restrict `.env` file permissions: `chmod 600 .env`
 - [ ] Enable HTTPS with valid TLS certificates
 - [ ] Configure firewall rules (allow only 80/443 from internet)

@@ -64,8 +64,30 @@ git push origin v1.2.3
   1. **Tag format validation** — must match `vX.Y.Z` (stable semver, no pre-release)
   2. **Main branch validation** — verifies the tagged commit is reachable from `main` via the GitHub API. Tags on any other branch (e.g., `dev`, feature branches) are **rejected**
   3. **Docker image build and push** — all six service images pushed to GitHub Container Registry (ghcr.io) with semver tags
-  4. **Release package** — production Docker Compose config, installer scripts, and documentation packaged as a tarball with SHA256 checksum
+  4. **Release package** — `scripts/build-release-package.sh` builds the tarball (plus SHA256 checksum) from a manifest derived from the Compose configuration and the shipped documentation, then `tests/test-release-package-smoke.sh --require-docker` extracts and validates that exact archive **before** it is uploaded. A smoke-test failure fails `package-release`, which blocks `github-release`.
   5. **GitHub Release** — created with auto-generated notes and the release package attached
+
+### Building and validating the package locally
+
+```bash
+# Build the archive somewhere outside the repository (the script refuses paths
+# inside the checkout, inside any registered git worktree, $HOME, or /).
+scripts/build-release-package.sh --output-dir "$(mktemp -d)"
+
+# Inspect the derived manifest without building
+scripts/build-release-package.sh --print-manifest
+
+# Full local gate (also wired into `make test-release-package`,
+# `make test`, and .squad/scripts/verify.sh)
+bash tests/test-release-package-smoke.sh
+bash tests/test-build-release-package-safety.sh
+```
+
+The archive unpacks into a single `aithena-v<version>/` directory and contains
+the root `docker-compose.yml`, every `docker/compose.*.yml` overlay, the
+installer (`./installer/run.sh`), `src/aithena-common`, every Compose build
+context/Dockerfile/bind mount, and the operator documentation set with all local
+links resolvable inside the archive.
 
 ## Enforcement Rules
 

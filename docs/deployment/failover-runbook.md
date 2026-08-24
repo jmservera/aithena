@@ -6,7 +6,7 @@ This runbook covers operator recovery for the Docker Compose deployment defined 
 
 ## Preconditions
 
-- Run `python3 -m installer` before the first `docker compose up` so `.env`, `AUTH_DB_DIR`, `AUTH_DB_PATH`, and the SQLite auth DB exist.
+- Run `./installer/run.sh` before the first `docker compose up` so `.env`, `AUTH_DB_DIR`, `AUTH_DB_PATH`, and the SQLite auth DB exist.
 - Use the base `docker-compose.yml` for full failover drills. `docker/compose.e2e.yml` intentionally disables `nginx`, so it is not suitable for the nginx outage scenario. If your deployment uses SSL, add `-f docker/compose.ssl.yml` to include the certbot sidecar.
 - Use `docker compose ps` and container health checks to confirm process-level readiness.
 - Use the status probe below for application-level confirmation:

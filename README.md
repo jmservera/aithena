@@ -221,8 +221,7 @@ See [**Deployment Topologies Guide**](docs/deployment-topologies.md) for detaile
 Generate `.env`, create the auth database, and seed the initial admin user:
 
 ```bash
-python3 -m installer
-# or: python3 installer/setup.py
+./installer/run.sh
 ```
 
 The installer guides you through:
@@ -259,7 +258,7 @@ docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compos
 
 **For complete configuration options**, see the [Configuration Guide](docs/config/README.md).
 
-Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
+Need automation instead of prompts? Run `./installer/run.sh --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
 
 ### Legacy `scripts/` directory
 

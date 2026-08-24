@@ -22,7 +22,7 @@ This manual explains how to use Aithena as a reader or library user. For setup, 
 
 **v1.18.0 adds folder path facets for hierarchical search filtering:** new "📁 Folder" facet in the search sidebar lets you filter by document location in the library structure. Collections now display books using the same card/list components as the Library, creating a consistent reading experience. See [Folder Facets (v1.18.0)](#folder-facets-v1180) below.
 
-**v1.18.1 patch:** Fixes the installer `ModuleNotFoundError` when running `uv run installer/setup.py` from the repo root (now works from any directory). See [v1.18.1 Release Notes](release-notes/v1.18.1.md).
+**v1.18.1 patch:** Fixes the installer `ModuleNotFoundError` when running the installer from the repo root (now works from any directory; today's entry point is `./installer/run.sh`). See [v1.18.1 Release Notes](release-notes/v1.18.1.md).
 
 **v1.19.0 patch:** Suppresses startup deprecation warnings from Solr 9.7 Security Manager and RabbitMQ 4.x, cleaning up container logs. No user-facing changes. See [v1.19.0 Release Notes](release-notes/v1.19.0.md).
 

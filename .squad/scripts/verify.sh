@@ -44,6 +44,21 @@ done
 PYTHON_SERVICES=(document-indexer document-lister embeddings-server solr-search admin)
 NODE_SERVICES=(aithena-ui)
 
+# Files whose change requires re-validating the release package end to end.
+PACKAGE_PATTERNS='^(scripts/build-release-package\.sh|scripts/release_inventory\.py|tests/test-release-package-smoke\.sh|tests/test-build-release-package-safety\.sh|installer/|docker-compose\.yml|docker/compose[^/]*\.yml|README\.md|CHANGELOG\.md|MIGRATION\.md|docs/|\.github/workflows/(ci|release)\.yml|Makefile)'
+
+changed_files_list() {
+  local changed_files
+  changed_files=$(git diff --cached --name-only 2>/dev/null || true)
+  if [ -z "$changed_files" ]; then
+    changed_files=$(git diff --name-only origin/dev 2>/dev/null || true)
+  fi
+  if [ -z "$changed_files" ]; then
+    changed_files=$(git diff --name-only HEAD 2>/dev/null || true)
+  fi
+  echo "$changed_files"
+}
+
 # Determine which services have changes (staged or unstaged vs origin/dev)
 changed_services() {
   local changed_files
@@ -85,13 +100,7 @@ else
   read -ra TARGETS <<< "$(changed_services)"
 fi
 
-if [ ${#TARGETS[@]} -eq 0 ]; then
-  echo -e "${GREEN}✅ No changed services detected. Nothing to verify.${NC}"
-  echo "   Use --all to check everything, or --service <name> for a specific service."
-  exit 0
-fi
-
-echo "🔍 Verifying: ${TARGETS[*]}"
+echo "🔍 Verifying: ${TARGETS[*]:-<no service changes>}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 run_check() {
@@ -199,6 +208,30 @@ for svc in "${TARGETS[@]}"; do
     FAILURES+=("Unknown service: $svc")
   fi
 done
+
+# Release package gates — run whenever packaging, installer, Compose, or
+# shipped documentation changes, so a developer sees archive/safety failures
+# before the commit lands (never silently skipped in aggregate runs).
+package_changed() {
+  [ "$CHECK_ALL" = true ] && return 0
+  changed_files_list | grep -qE "$PACKAGE_PATTERNS"
+}
+
+if [ "$LINT_ONLY" = false ] && package_changed; then
+  echo ""
+  echo "━━━ release package ━━━"
+  run_check "release package: shellcheck" bash -c 'if command -v shellcheck >/dev/null 2>&1; then shellcheck scripts/build-release-package.sh tests/test-release-package-smoke.sh tests/test-build-release-package-safety.sh installer/run.sh; else bash -n scripts/build-release-package.sh && bash -n tests/test-release-package-smoke.sh && bash -n tests/test-build-release-package-safety.sh && bash -n installer/run.sh; fi'
+  run_check "release package: installer pytest" bash -c 'cd installer && uv run pytest --tb=short -q'
+  run_check "release package: archive smoke test" bash tests/test-release-package-smoke.sh
+  run_check "release package: destructive-path safety tests" bash tests/test-build-release-package-safety.sh
+elif [ "$LINT_ONLY" = false ]; then
+  SKIPPED+=("release package tests (no packaging, installer, Compose, or docs changes)")
+fi
+
+if [ ${#TARGETS[@]} -eq 0 ] && [ ${#FAILURES[@]} -eq 0 ] && ! package_changed; then
+  echo -e "${GREEN}✅ No changed services detected. Nothing to verify.${NC}"
+  echo "   Use --all to check everything, or --service <name> for a specific service."
+fi
 
 # Summary
 echo ""

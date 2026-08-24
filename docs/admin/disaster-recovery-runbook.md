@@ -2,7 +2,7 @@
 
 _Last updated:_ 2025-07-18
 _Owner:_ Brett (Infrastructure)
-_PRD reference:_ [`docs/prd/bcdr-plan.md`](../prd/bcdr-plan.md) — Section 5
+_PRD reference:_ [`docs/prd/completed/bcdr-plan.md`](../prd/completed/bcdr-plan.md) — Section 5
 
 ---
 
@@ -15,7 +15,7 @@ the step-by-step procedure for that path. After every recovery, complete the
 
 > **Prerequisite knowledge:** familiarity with Docker Compose, the Aithena
 > service architecture, and the backup/restore scripts documented in the
-> [admin manual](../admin-manual.md) and [BCDR PRD](../prd/bcdr-plan.md).
+> [admin manual](../admin-manual.md) and [BCDR PRD](../prd/completed/bcdr-plan.md).
 
 ---
 

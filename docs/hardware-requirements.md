@@ -128,25 +128,24 @@ The embeddings server loads the `sentence-transformers/distiluse-base-multilingu
 
 ### 3.3 GPU Configuration
 
-To enable GPU passthrough, add a `docker-compose.gpu.yml` override:
+GPU passthrough ships as a Compose overlay — there is no file to write by hand.
+Use `docker/compose.gpu-nvidia.yml` for NVIDIA (CUDA) hosts or
+`docker/compose.gpu-intel.yml` for Intel (oneAPI/Level Zero) hosts.
 
-```yaml
-services:
-  embeddings-server:
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-```
-
-Launch with:
+Launch a production stack with NVIDIA acceleration:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-nvidia.yml up -d
 ```
+
+Intel hosts (including WSL2, see the [Intel GPU on WSL2 guide](guides/intel-gpu-wsl2.md)):
+
+```bash
+docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d
+```
+
+The installer selects the matching overlay automatically when you answer the GPU
+question (or pass `--gpu nvidia` / `--gpu intel`) and writes it into `./start.sh`.
 
 **Minimum GPU requirements:**
 
@@ -412,7 +411,7 @@ Use this checklist before deploying Aithena to a new host:
 - [ ] `vm.max_map_count` is set to 262144 or higher
 - [ ] Docker Engine 24.0+ and Compose V2 are installed
 - [ ] (Optional) NVIDIA Container Toolkit is installed if using GPU
-- [ ] `python3 -m installer` has been run to generate `.env`, auth storage, and JWT secret
+- [ ] `./installer/run.sh` has been run to generate `.env`, auth storage, and JWT secret
 - [ ] Firewall allows inbound traffic on port 80 (and 443 if using TLS)
 - [ ] No outbound internet access is required at runtime
 - [ ] Sufficient disk space is available for the source PDF library plus stack volumes
