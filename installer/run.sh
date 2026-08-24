@@ -15,9 +15,9 @@
 # Python environment, in this order:
 #
 #   1. Already importable (a preinstalled/offline environment) → run directly.
-#   2. `uv` available → `uv run --project installer` (resolves the local
+#   2. `AITHENA_INSTALLER_VENV` or a project-local `.venv` → use its python.
+#   3. `uv` available → `uv run --project installer` (resolves the local
 #      `src/aithena-common` path dependency from installer/uv.lock).
-#   3. `AITHENA_INSTALLER_VENV` or a project-local `.venv` → use its python.
 #   4. Otherwise → actionable error explaining how to bootstrap.
 #
 # Offline/air-gapped installs keep working: set AITHENA_INSTALLER_OFFLINE=1 to

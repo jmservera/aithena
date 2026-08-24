@@ -720,7 +720,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doc-rewrites":
         _, rewrites = doc_closure(repo_root)
         for doc, raw, target in rewrites:
-            print(f"{doc}\t{raw}\t{target}\t{GITHUB_BLOB_BASE}/{target}")
+            base_url = GITHUB_TREE_BASE if (repo_root / target).is_dir() else GITHUB_BLOB_BASE
+            print(f"{doc}\t{raw}\t{target}\t{base_url}/{target.rstrip('/')}")
         return 0
 
     if args.command == "compose-deps":
