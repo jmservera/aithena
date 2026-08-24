@@ -71,6 +71,8 @@ def test_run_sh_continues_to_next_python_candidate(tmp_path: Path):
 
 
 def test_run_sh_fails_actionably_after_all_candidates_exhausted(tmp_path: Path):
+    (tmp_path / "dirname").symlink_to("/usr/bin/dirname")
+    (tmp_path / "cat").symlink_to("/usr/bin/cat")
     _write_executable(
         tmp_path / "python3",
         "#!/usr/bin/env bash\n"
@@ -78,9 +80,9 @@ def test_run_sh_fails_actionably_after_all_candidates_exhausted(tmp_path: Path):
         "exit 42\n",
     )
     env = _base_env(tmp_path)
-    env["PATH"] = f"{tmp_path}:/usr/bin:/bin"
+    env["PATH"] = str(tmp_path)
 
-    completed = subprocess.run([str(RUN_SH)], env=env, capture_output=True, check=False, text=True)
+    completed = subprocess.run(["/usr/bin/bash", str(RUN_SH)], env=env, capture_output=True, check=False, text=True)
 
     assert completed.returncode == 1
     assert "Install uv and rerun" in completed.stderr

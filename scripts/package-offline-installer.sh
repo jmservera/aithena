@@ -647,8 +647,14 @@ for compose_file in "${compose_files[@]}"; do
   compose_args+=( -f "$compose_file" )
 done
 
+RELEASE_INVENTORY="$REPO_ROOT/scripts/release_inventory.py"
+if [[ ! -f "$RELEASE_INVENTORY" ]]; then
+  error "Release inventory helper not found: $RELEASE_INVENTORY"
+  exit 1
+fi
+
 PACKAGE_DOCKERFILES=()
-if ! dockerfile_inventory_output="$(python3 "$REPO_ROOT/scripts/release_inventory.py" "${compose_files[@]}")"; then
+if ! dockerfile_inventory_output="$(python3 "$RELEASE_INVENTORY" "${compose_files[@]}")"; then
   error "Failed to discover Dockerfiles from compose build contexts."
   exit 1
 fi
@@ -659,7 +665,7 @@ if [[ "${#PACKAGE_DOCKERFILES[@]}" -eq 0 ]]; then
   error "No Dockerfiles discovered from compose build contexts."
   exit 1
 fi
-python3 "$REPO_ROOT/scripts/release_inventory.py" --check-root "$REPO_ROOT" "${compose_files[@]}"
+python3 "$RELEASE_INVENTORY" --check-root "$REPO_ROOT" "${compose_files[@]}"
 
 step "Discovering images from docker compose"
 mapfile -t DISCOVERED_IMAGES < <(compose_env "${compose_args[@]}" config --images | sort -u)
