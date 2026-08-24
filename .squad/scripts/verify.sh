@@ -200,6 +200,61 @@ for svc in "${TARGETS[@]}"; do
   fi
 done
 
+# Release packaging checks (if scripts/build-release-package.sh changed)
+check_release_packaging() {
+  local changed_files
+  changed_files=$(git diff --cached --name-only 2>/dev/null || true)
+  if [ -z "$changed_files" ]; then
+    changed_files=$(git diff --name-only origin/dev 2>/dev/null || true)
+  fi
+  
+  # Check if release-related files changed
+  if echo "$changed_files" | grep -qE '^(scripts/(build-release-package|release_inventory)|tests/test-release-package|docker-compose\.yml|docker/compose\.|installer/)'; then
+    echo ""
+    echo "━━━ release-packaging ━━━"
+    
+    # Syntax checks
+    run_check "release_inventory.py: syntax" python3 -m py_compile scripts/release_inventory.py
+    run_check "build-release-package.sh: syntax" bash -n scripts/build-release-package.sh
+    run_check "test-release-package-smoke.sh: syntax" bash -n tests/test-release-package-smoke.sh
+    
+    # Verify inventory can run
+    if command -v docker >/dev/null 2>&1; then
+      run_check "release_inventory.py: docker compose config" \
+        python3 scripts/release_inventory.py --compose-dir . --format json >/dev/null
+    fi
+    
+    # Generated install.sh bash -n check (if it exists)
+    if [ -f "installer/install.sh" ]; then
+      run_check "generated installer/install.sh: bash -n" bash -n installer/install.sh
+    fi
+    
+    # Smoke test if not in --lint-only mode
+    if [ "$LINT_ONLY" != true ] && command -v docker >/dev/null 2>&1; then
+      run_check "release-package: smoke test" bash tests/test-release-package-smoke.sh
+    fi
+  fi
+}
+
+check_release_packaging
+
+# Root pytest import robustness (if changed)
+check_root_tests() {
+  local changed_files
+  changed_files=$(git diff --cached --name-only 2>/dev/null || true)
+  if [ -z "$changed_files" ]; then
+    changed_files=$(git diff --name-only origin/dev 2>/dev/null || true)
+  fi
+  
+  if echo "$changed_files" | grep -qE '^(src/aithena-common/|installer/|tests/)'; then
+    if [ "$LINT_ONLY" != true ] && python3 -m pytest --collect-only >/dev/null 2>&1; then
+      run_check "root: pytest collection" python3 -m pytest --collect-only
+    fi
+  fi
+}
+
+check_root_tests
+
 # Summary
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
