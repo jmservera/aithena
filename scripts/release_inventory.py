@@ -141,6 +141,7 @@ COMPOSE_ENV_DEFAULTS: dict[str, str] = {
     "BOOKS_PATH": "/var/empty/aithena-books",
     "BOOK_LIBRARY_PATH": "/var/empty/aithena-books",
     "AUTH_DB_DIR": "/var/empty/aithena-auth",
+    "NGINX_HOST": "aithena.invalid",
     "HF_TOKEN": "release-inventory-placeholder",
     "RABBITMQ_ADMIN_USER": "admin",
     "RABBITMQ_ADMIN_PASS": "release-inventory-placeholder",  # noqa: S106 — placeholder, not a credential
@@ -459,7 +460,9 @@ def compose_config_yaml(repo_root: Path, compose_files: Sequence[str]) -> dict[s
         loader = _compose_loader()
         try:
             with path.open(encoding="utf-8") as handle:
-                document = yaml.load(handle, Loader=loader)  # noqa: S506 — custom SafeLoader subclass
+                # The loader is a SafeLoader subclass that only adds the Compose
+                # !override/!reset tags; no arbitrary objects can be built.
+                document = yaml.load(handle, Loader=loader)  # noqa: S506  # nosec B506
         except yaml.YAMLError as exc:
             raise InventoryError(f"{compose_file}: unparseable Compose YAML: {exc}") from exc
         if document is None:

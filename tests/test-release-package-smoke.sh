@@ -350,6 +350,7 @@ if [[ "$DOCKER_AVAILABLE" -eq 1 ]]; then
     BOOKS_PATH="$WORK_DIR/books"
     BOOK_LIBRARY_PATH="$WORK_DIR/books"
     HF_TOKEN=smoke-placeholder
+    NGINX_HOST=aithena.invalid
     SOLR_ADMIN_USER=solr_admin
     SOLR_ADMIN_PASS=smoke-placeholder
     SOLR_READONLY_USER=solr_read
