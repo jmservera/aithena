@@ -159,7 +159,8 @@ _ComposeLoader.add_multi_constructor("!", _compose_tag)
 
 def load_compose(path: Path) -> dict:
     with path.open(encoding="utf-8") as handle:
-        data = yaml.load(handle, Loader=_ComposeLoader)  # noqa: S506 - constrained loader
+        # _ComposeLoader is a SafeLoader subclass; it only tolerates Compose merge tags.
+        data = yaml.load(handle, Loader=_ComposeLoader)  # noqa: S506  # nosec B506
     return data if isinstance(data, dict) else {}
 
 

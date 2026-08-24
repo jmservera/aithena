@@ -268,7 +268,12 @@ if [[ "$DOCKER_OK" -eq 1 ]]; then
     args=()
     # shellcheck disable=SC2086  # deliberate word splitting of the combination
     for file in $combo; do args+=(-f "$file"); done
-    if ( cd "$PKG" && docker compose "${args[@]}" config >/dev/null 2>"$WORK_DIR/compose.err" ); then
+    combo_env=()
+    if [[ "$combo" == *compose.ssl.yml* ]]; then
+      # The SSL overlay deliberately requires an operator-provided domain.
+      combo_env=(NGINX_HOST=aithena.example.com)
+    fi
+    if ( cd "$PKG" && env "${combo_env[@]}" docker compose "${args[@]}" config >/dev/null 2>"$WORK_DIR/compose.err" ); then
       pass "docker compose config: $combo"
     else
       fail "docker compose config failed: $combo — $(tail -3 "$WORK_DIR/compose.err" | tr '\n' ' ')"
