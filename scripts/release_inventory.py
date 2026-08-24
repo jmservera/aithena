@@ -624,12 +624,38 @@ def resolve_copy_sources(
 # ---------------------------------------------------------------------------
 
 
+def services_with_explicit_dockerfile(repo_root: Path, compose_files: Sequence[str]) -> set[str]:
+    """Return services whose Compose *source* declares ``build.dockerfile``.
+
+    ``docker compose config`` normalises the model and always emits an explicit
+    ``dockerfile`` key, so implicitness has to be read from the source files.
+    """
+    explicit: set[str] = set()
+    loader = _compose_loader()
+    for compose_file in compose_files:
+        path = repo_root / compose_file
+        with path.open(encoding="utf-8") as handle:
+            # Same SafeLoader subclass as the deterministic fallback parser.
+            document = yaml.load(handle, Loader=loader)  # noqa: S506  # nosec B506
+        if not isinstance(document, dict):
+            continue
+        services = document.get("services")
+        if not isinstance(services, Mapping):
+            continue
+        for name, service in services.items():
+            build = service.get("build") if isinstance(service, Mapping) else None
+            if isinstance(build, Mapping) and isinstance(build.get("dockerfile"), str):
+                explicit.add(str(name))
+    return explicit
+
+
 def service_build_context(
     repo_root: Path,
     service_name: str,
     build: Any,
     *,
     base: Path,
+    implicit_services: frozenset[str] = frozenset(),
 ) -> BuildContext:
     origin = f"service {service_name}"
     if isinstance(build, str):
@@ -647,7 +673,7 @@ def service_build_context(
     context_relative = repo_relative(repo_root, context_raw, base=base, origin=origin)
     _require_exists(repo_root, context_relative, origin)
 
-    implicit = dockerfile_raw is None
+    implicit = dockerfile_raw is None or service_name in implicit_services
     if implicit:
         dockerfile_relative = "Dockerfile" if context_relative == "." else f"{context_relative}/Dockerfile"
     else:
@@ -747,6 +773,9 @@ def collect_inventory(
         model, source = load_compose_model(repo_root, list(combination), require_docker=require_docker)
         sources.add(source)
         origin_prefix = " + ".join(combination)
+        # Implicitness is a property of the Compose *source*, not of the
+        # normalised model that ``docker compose config`` returns.
+        explicit_services = services_with_explicit_dockerfile(repo_root, list(combination))
         services = model.get("services") or {}
         if not isinstance(services, Mapping):
             raise InventoryError(f"{origin_prefix}: Compose model has no usable services mapping")
@@ -757,7 +786,13 @@ def collect_inventory(
             origin = f"{origin_prefix}: service {service_name}"
             build = service.get("build")
             if build is not None:
-                context = service_build_context(repo_root, service_name, build, base=repo_root)
+                context = service_build_context(
+                    repo_root,
+                    service_name,
+                    build,
+                    base=repo_root,
+                    implicit_services=frozenset(set(services) - explicit_services),
+                )
                 contexts[(context.context, context.dockerfile)] = context
 
             for raw_source in _iter_volume_sources(service):

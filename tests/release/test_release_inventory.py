@@ -358,3 +358,47 @@ def test_cli_paths_rejects_unknown_keys(tmp_path: Path) -> None:
     inventory_path = tmp_path / "inventory.json"
     inventory_path.write_text(json.dumps({"required_paths": ["a"]}), encoding="utf-8")
     assert ri.main(["paths", "--inventory", str(inventory_path), "--key", "nope"]) == 2
+
+
+def test_normalised_dockerfile_key_is_still_implicit(tmp_path: Path) -> None:
+    """``docker compose config`` always emits build.dockerfile; that must not
+    turn a context-relative Dockerfile into an explicit one."""
+    context = tmp_path / "svc"
+    context.mkdir()
+    (context / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+
+    normalised_build = {"context": str(context), "dockerfile": "Dockerfile"}
+    from_model = ri.service_build_context(
+        tmp_path,
+        "svc",
+        normalised_build,
+        base=tmp_path,
+        implicit_services=frozenset({"svc"}),
+    )
+    assert from_model.implicit is True
+    assert from_model.dockerfile == "svc/Dockerfile"
+
+    declared = ri.service_build_context(tmp_path, "svc", normalised_build, base=tmp_path)
+    assert declared.implicit is False
+
+
+def test_services_with_explicit_dockerfile_reads_the_source_files(tmp_path: Path) -> None:
+    (tmp_path / "compose.yml").write_text(
+        "services:\n"
+        "  implicit-svc:\n"
+        "    build:\n"
+        "      context: ./a\n"
+        "  explicit-svc:\n"
+        "    build:\n"
+        "      context: ./b\n"
+        "      dockerfile: b/Dockerfile\n"
+        "  no-build-svc:\n"
+        "    image: busybox\n",
+        encoding="utf-8",
+    )
+    assert ri.services_with_explicit_dockerfile(tmp_path, ["compose.yml"]) == {"explicit-svc"}
+
+
+def test_repository_solr_search_is_the_only_explicit_dockerfile() -> None:
+    explicit = ri.services_with_explicit_dockerfile(REPO_ROOT, ["docker-compose.yml"])
+    assert explicit == {"solr-search"}
