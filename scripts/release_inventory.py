@@ -379,6 +379,19 @@ def _compose_loader() -> type:
     return ComposeYamlLoader
 
 
+def _load_compose_document(path: Path) -> Any:
+    """Parse a Compose file with the Compose-aware ``SafeLoader`` subclass.
+
+    The loader is instantiated directly instead of going through ``yaml.load``
+    so that no unsafe-loader construction exists in the code base at all.
+    """
+    loader = _compose_loader()(path.read_text(encoding="utf-8"))
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
+
+
 #: Service keys whose sequences Compose merges (rather than replaces) across
 #: overlays.  ``volumes`` is merged on the container-side target, everything
 #: else on the literal entry.
@@ -457,12 +470,8 @@ def compose_config_yaml(repo_root: Path, compose_files: Sequence[str]) -> dict[s
     merged: dict[str, Any] = {}
     for compose_file in compose_files:
         path = repo_root / compose_file
-        loader = _compose_loader()
         try:
-            with path.open(encoding="utf-8") as handle:
-                # The loader is a SafeLoader subclass that only adds the Compose
-                # !override/!reset tags; no arbitrary objects can be built.
-                document = yaml.load(handle, Loader=loader)  # noqa: S506  # nosec B506
+            document = _load_compose_document(path)
         except yaml.YAMLError as exc:
             raise InventoryError(f"{compose_file}: unparseable Compose YAML: {exc}") from exc
         if document is None:
@@ -631,12 +640,12 @@ def services_with_explicit_dockerfile(repo_root: Path, compose_files: Sequence[s
     ``dockerfile`` key, so implicitness has to be read from the source files.
     """
     explicit: set[str] = set()
-    loader = _compose_loader()
     for compose_file in compose_files:
         path = repo_root / compose_file
-        with path.open(encoding="utf-8") as handle:
-            # Same SafeLoader subclass as the deterministic fallback parser.
-            document = yaml.load(handle, Loader=loader)  # noqa: S506  # nosec B506
+        try:
+            document = _load_compose_document(path)
+        except yaml.YAMLError as exc:
+            raise InventoryError(f"{compose_file}: unparseable Compose YAML: {exc}") from exc
         if not isinstance(document, dict):
             continue
         services = document.get("services")
