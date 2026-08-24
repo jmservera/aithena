@@ -16,7 +16,7 @@ def _norm(path: str) -> str | None:
     normalized = os.path.normpath(path).replace(os.sep, "/")
     if normalized == ".":
         return "."
-    if normalized == "" or normalized.startswith("../") or normalized == "..":
+    if normalized.startswith("../") or normalized == "..":
         return None
     return normalized.removeprefix("./")
 
