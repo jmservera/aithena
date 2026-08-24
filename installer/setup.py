@@ -26,10 +26,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
-from aithena_common.auth_db import find_user as _common_find_user
-from aithena_common.auth_db import init_auth_db
-from aithena_common.passwords import hash_password
-
 ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_AUTH_DB_PATH = Path.home() / ".local" / "share" / "aithena" / "auth" / "users.db"
@@ -187,6 +183,24 @@ def normalize_origin(raw_value: str) -> str:
     if cleaned_path:
         raise ValueError("Origin must not include a path")
     return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def init_auth_db(db_path: Path) -> None:
+    from aithena_common.auth_db import init_auth_db as _init_auth_db  # noqa: PLC0415
+
+    _init_auth_db(db_path)
+
+
+def hash_password(password: str) -> str:
+    from aithena_common.passwords import hash_password as _hash_password  # noqa: PLC0415
+
+    return _hash_password(password)
+
+
+def _common_find_user(db_path: Path, username: str) -> dict[str, str | int] | None:
+    from aithena_common.auth_db import find_user as _find_user  # noqa: PLC0415
+
+    return _find_user(db_path, username)
 
 
 def bootstrap_admin_user(
@@ -804,14 +818,20 @@ def _unquote_env_value(value: str) -> str:
 
 def ensure_runtime_dependencies(argv: list[str]) -> None:
     try:
-        from aithena_common.passwords import hash_password as _probe  # noqa: PLC0415, F401
+        import argon2 as _argon2_probe  # noqa: PLC0415, F401
+        import aithena_common as _aithena_common_probe  # noqa: PLC0415, F401
     except ImportError as exc:
         if os.environ.get("AITHENA_INSTALLER_UV") == "1":
-            raise RuntimeError("aithena-common is not installed. Run `cd installer && uv sync` first.") from exc
+            raise RuntimeError(
+                "Installer Python dependencies are not installed. Run `cd installer && uv sync` first."
+            ) from exc
 
         uv_executable = shutil.which("uv")
         if uv_executable is None:
-            raise RuntimeError("aithena-common is not installed and uv is not available.") from exc
+            raise RuntimeError(
+                "Installer Python dependencies are not installed and uv is not available. "
+                "Install uv or run `cd installer && python3 -m pip install -e ../src/aithena-common argon2-cffi`."
+            ) from exc
 
         completed = subprocess.run(  # noqa: S603
             [

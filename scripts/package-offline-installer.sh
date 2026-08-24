@@ -107,7 +107,7 @@ case "$EMBEDDINGS_VARIANT" in
     ;;
 esac
 
-for cmd in docker gzip tar df awk sort stat; do
+for cmd in docker gzip tar df awk sort stat python3; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     error "Required command not found: $cmd"
     exit 1
@@ -289,14 +289,19 @@ generate_install_script() {
   local install_script_path="$PACKAGE_DIR/install.sh"
   local compose_files_bash=""
   local omitted_images_bash=""
+  local dockerfile_paths_bash=""
   local file
   local image
+  local dockerfile_path
 
   for file in "${PACKAGE_CONFIG_FILES[@]}"; do
     compose_files_bash+="  \"${file}\"\n"
   done
   for image in "${OMITTED_IMAGE_REFS[@]}"; do
     omitted_images_bash+="  \"${image}\"\n"
+  done
+  for dockerfile_path in "${PACKAGE_DOCKERFILES[@]}"; do
+    dockerfile_paths_bash+="  \"${dockerfile_path}\"\n"
   done
 
   cat > "$install_script_path" <<EOF_INSTALL
@@ -318,6 +323,9 @@ $(printf '%b' "$compose_files_bash"))
 )
 OMITTED_IMAGES=(
 $(printf '%b' "$omitted_images_bash"))
+)
+DOCKERFILE_PATHS=(
+$(printf '%b' "$dockerfile_paths_bash"))
 )
 
 RED='\033[0;31m'
@@ -431,6 +439,12 @@ done
 step "Validating package contents"
 [[ -d "\$CONFIG_DIR" ]] || { error "Missing config directory: \$CONFIG_DIR"; exit 1; }
 [[ -d "\$IMAGES_DIR" ]] || { error "Missing images directory: \$IMAGES_DIR"; exit 1; }
+for dockerfile_path in "\${DOCKERFILE_PATHS[@]}"; do
+  [[ -f "\$CONFIG_DIR/\$dockerfile_path" ]] || {
+    error "Missing Dockerfile required by Compose build context: \$dockerfile_path"
+    exit 1
+  }
+done
 info "Package version: \$VERSION"
 
 if [[ "\$SKIP_LOAD" -eq 0 ]]; then
@@ -633,6 +647,13 @@ for compose_file in "${compose_files[@]}"; do
   compose_args+=( -f "$compose_file" )
 done
 
+mapfile -t PACKAGE_DOCKERFILES < <(python3 "$REPO_ROOT/scripts/release_inventory.py" "${compose_files[@]}")
+if [[ "${#PACKAGE_DOCKERFILES[@]}" -eq 0 ]]; then
+  error "No Dockerfiles discovered from compose build contexts."
+  exit 1
+fi
+python3 "$REPO_ROOT/scripts/release_inventory.py" --check-root "$REPO_ROOT" "${compose_files[@]}"
+
 step "Discovering images from docker compose"
 mapfile -t DISCOVERED_IMAGES < <(compose_env "${compose_args[@]}" config --images | sort -u)
 
@@ -762,6 +783,9 @@ cp "$REPO_ROOT/VERSION" "$PACKAGE_DIR/VERSION"
 
 step "Copying runtime config files"
 for path in "${PACKAGE_CONFIG_BIND_PATHS[@]}"; do
+  copy_path "$path"
+done
+for path in "${PACKAGE_DOCKERFILES[@]}"; do
   copy_path "$path"
 done
 
