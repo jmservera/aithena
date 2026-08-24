@@ -221,9 +221,15 @@ See [**Deployment Topologies Guide**](docs/deployment-topologies.md) for detaile
 Generate `.env`, create the auth database, and seed the initial admin user:
 
 ```bash
-python3 -m installer
-# or: python3 installer/setup.py
+./installer/run.sh
 ```
+
+`./installer/run.sh` is the single documented entrypoint. It works from a clone
+and from an extracted release package, picks the first Python interpreter that
+can actually import `aithena_common`, and falls back to `uv run` when none can.
+Add `--offline` to keep `uv` from reaching the network. The underlying module
+entrypoints (`python3 -m installer`, `python3 installer/setup.py`) still work
+when you manage the dependencies yourself.
 
 The installer guides you through:
 1. **Environment** — Development or Production
@@ -259,7 +265,7 @@ docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compos
 
 **For complete configuration options**, see the [Configuration Guide](docs/config/README.md).
 
-Need automation instead of prompts? Run `python3 installer/setup.py --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
+Need automation instead of prompts? Run `./installer/run.sh --help` for non-interactive flags such as `--library-path`, `--admin-user`, `--admin-password`, `--origin`, `--environment`, `--gpu`, `--ssl`, and `--domain`.
 
 ### Legacy `scripts/` directory
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -14,9 +15,24 @@ if _INSTALLER_DIR not in sys.path:
     sys.path.insert(0, _INSTALLER_DIR)
 
 
+def _setup_module_importable() -> bool:
+    """Return True when installer/setup.py can be imported in this environment."""
+    try:
+        importlib.import_module("setup")
+    except ImportError:
+        return False
+    return True
+
+
 @pytest.fixture(autouse=True)
 def _mock_auth_helpers():
     """Mock aithena_common functions so tests don't need the real package installed."""
+    if not _setup_module_importable():
+        # Tests that do not touch setup.py (for example the run.sh entrypoint
+        # regressions) must still run without the aithena-common runtime.
+        yield
+        return
+
     fake_hash = lambda pw: f"hashed:{pw}"  # noqa: E731
     fake_init = lambda db_path: None  # noqa: E731
     with (

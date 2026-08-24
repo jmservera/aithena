@@ -264,42 +264,46 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Create release package
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          # Caching is disabled here: this job publishes release artifacts, so a
+          # poisoned cache must not be able to influence them.
+          enable-cache: false
+
+      - name: Install packaging dependencies
+        run: python -m pip install --upgrade pip pyyaml pytest ./src/aithena-common
+
+      - name: Validate the release package builder
+        run: |
+          make test-release-pytest RELEASE_PYTEST_ARGS='-v --tb=short'
+          make test-release-safety
+
+      - name: Build the release package
         env:
           VERSION: ${{ needs.validate-tag.outputs.version }}
         run: |
-          mkdir -p release-package/installer
-          
-          # Core production files
-          cp docker/compose.prod.yml release-package/
-          cp .env.example release-package/
-          cp README.md release-package/
-          cp LICENSE release-package/
-          cp VERSION release-package/
-          
-          # Installer scripts
-          cp -r installer/* release-package/installer/
-          
-          # Documentation
-          mkdir -p release-package/docs
-          cp docs/quickstart.md release-package/docs/
-          cp docs/user-manual.md release-package/docs/
-          cp docs/admin-manual.md release-package/docs/
-          
-          # Required configuration files for nginx, solr, and rabbitmq
-          mkdir -p release-package/src/nginx
-          mkdir -p release-package/src/solr
-          mkdir -p release-package/src/rabbitmq
-          cp -r src/nginx/* release-package/src/nginx/
-          cp -r src/solr/books release-package/src/solr/
-          cp src/solr/add-conf-overlay.sh release-package/src/solr/
-          cp src/rabbitmq/rabbitmq.conf release-package/src/rabbitmq/
-          
-          # Create tarball
-          tar -czf "aithena-v${VERSION}-release.tar.gz" -C release-package .
-          
-          # Generate checksum
+          set -euo pipefail
+          OUTPUT_DIR="${RUNNER_TEMP}/release-artifacts"
+          mkdir -p "$OUTPUT_DIR"
+          scripts/build-release-package.sh \
+            --output-dir "$OUTPUT_DIR" \
+            --version "$VERSION" \
+            --require-docker
+          # Publish under the documented release asset name.
+          cp "${OUTPUT_DIR}/aithena-${VERSION}.tar.gz" "aithena-v${VERSION}-release.tar.gz"
           sha256sum "aithena-v${VERSION}-release.tar.gz" > "aithena-v${VERSION}-release.tar.gz.sha256"
+
+      - name: Smoke test the published release artifact
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        # Validates the exact file that is uploaded as the release asset.
+        run: bash tests/test-release-package-smoke.sh --require-docker --archive "aithena-v${VERSION}-release.tar.gz"
 
       - name: Upload release package as artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

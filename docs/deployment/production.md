@@ -565,7 +565,7 @@ certbot, use the `docker/compose.ssl.yml` overlay:
    docker compose -f docker-compose.yml -f docker/compose.ssl.yml up -d
 
    # Production (GHCR images)
-   docker compose -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.ssl.yml up -d
    ```
 
 3. **Obtain the initial certificate:**

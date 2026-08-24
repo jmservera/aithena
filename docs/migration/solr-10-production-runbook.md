@@ -178,7 +178,7 @@ Overseer behavior.
 
 ```bash
 # Verify production compose renders Overseer disabled on every Solr node
-docker compose -f docker/compose.prod.yml config --format json | \
+docker compose -f docker-compose.yml -f docker/compose.prod.yml config --format json | \
   python3 -c 'import json,sys; d=json.load(sys.stdin); print({s:d["services"][s]["environment"]["SOLR_OPTS"] for s in ("solr","solr2","solr3")})'
 ```
 

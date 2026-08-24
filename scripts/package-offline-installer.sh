@@ -11,6 +11,7 @@ PACKAGE_NAME="aithena-offline-${DATE_STAMP}"
 PACKAGE_DIR="${OUTPUT_ROOT}/${PACKAGE_NAME}"
 ARCHIVE_PATH="${OUTPUT_ROOT}/${PACKAGE_NAME}.tar.gz"
 DRY_RUN=0
+EMIT_SCRIPTS_ONLY=""
 WITHOUT_EMBEDDINGS=0
 EMBEDDINGS_VARIANT="torch"
 
@@ -58,6 +59,8 @@ Options:
   --without-embeddings         Omit the embeddings image from the package
   --embeddings-variant VALUE   torch (default) or openvino
   --output-dir DIR             Output directory (default: staging/)
+  --emit-scripts-only DIR      Generate install.sh/start.sh/README.md into DIR
+                               and exit (no Docker required; used by tests)
   --help, -h                   Show this help text
 
 Notes:
@@ -79,6 +82,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --embeddings-variant)
       EMBEDDINGS_VARIANT="${2:-}"
+      shift 2
+      ;;
+    --emit-scripts-only)
+      EMIT_SCRIPTS_ONLY="${2:-}"
       shift 2
       ;;
     --output-dir)
@@ -107,16 +114,18 @@ case "$EMBEDDINGS_VARIANT" in
     ;;
 esac
 
-for cmd in docker gzip tar df awk sort stat; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    error "Required command not found: $cmd"
+if [[ -z "$EMIT_SCRIPTS_ONLY" ]]; then
+  for cmd in docker gzip tar df awk sort stat; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      error "Required command not found: $cmd"
+      exit 1
+    fi
+  done
+
+  if ! docker compose version >/dev/null 2>&1; then
+    error "Docker Compose v2 plugin not found."
     exit 1
   fi
-done
-
-if ! docker compose version >/dev/null 2>&1; then
-  error "Docker Compose v2 plugin not found."
-  exit 1
 fi
 
 bytes_to_human() {
@@ -293,10 +302,10 @@ generate_install_script() {
   local image
 
   for file in "${PACKAGE_CONFIG_FILES[@]}"; do
-    compose_files_bash+="  \"${file}\"\n"
+    compose_files_bash+="$(printf '  %q\n' "$file")"$'\n'
   done
-  for image in "${OMITTED_IMAGE_REFS[@]}"; do
-    omitted_images_bash+="  \"${image}\"\n"
+  for image in "${OMITTED_IMAGE_REFS[@]+"${OMITTED_IMAGE_REFS[@]}"}"; do
+    omitted_images_bash+="$(printf '  %q\n' "$image")"$'\n'
   done
 
   cat > "$install_script_path" <<EOF_INSTALL
@@ -314,11 +323,9 @@ LIBRARY_PATH=""
 NON_INTERACTIVE=0
 
 COMPOSE_FILES=(
-$(printf '%b' "$compose_files_bash"))
-)
+${compose_files_bash})
 OMITTED_IMAGES=(
-$(printf '%b' "$omitted_images_bash"))
-)
+${omitted_images_bash})
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -613,6 +620,25 @@ ${PACKAGE_NAME}/
 \`\`\`
 EOF_README
 }
+
+if [[ -n "$EMIT_SCRIPTS_ONLY" ]]; then
+  if [[ "$EMBEDDINGS_VARIANT" == "openvino" ]]; then
+    PACKAGE_CONFIG_FILES+=("docker-compose.gpu-intel.yml")
+  fi
+  OMITTED_IMAGE_REFS=()
+  if [[ "$WITHOUT_EMBEDDINGS" -eq 1 ]]; then
+    OMITTED_IMAGE_REFS=("ghcr.io/jmservera/aithena-embeddings-server:latest")
+  fi
+  PACKAGE_DIR="$EMIT_SCRIPTS_ONLY"
+  mkdir -p "$PACKAGE_DIR/scripts"
+  generate_install_script
+  generate_start_script
+  generate_readme
+  bash -n "$PACKAGE_DIR/install.sh"
+  bash -n "$PACKAGE_DIR/scripts/start.sh"
+  info "Generated package scripts in $PACKAGE_DIR"
+  exit 0
+fi
 
 compose_files=("${DEFAULT_COMPOSE_FILES[@]}")
 if [[ "$EMBEDDINGS_VARIANT" == "openvino" ]]; then

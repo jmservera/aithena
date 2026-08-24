@@ -19,6 +19,10 @@ PLAYWRIGHT_CMD ?= npx playwright test
 PLAYWRIGHT_ARGS ?=
 STRESS_PYTEST_CMD ?= python -m pytest
 STRESS_PYTEST_ARGS ?= -v --tb=short --timeout=600
+RELEASE_PYTEST_CMD ?= pytest
+RELEASE_PYTEST_ARGS ?= --tb=short -q
+RELEASE_TEST_DIRS ?= tests/release installer/tests/test_run_sh.py
+RELEASE_SMOKE_ARGS ?=
 
 HAS_UI := $(if $(wildcard $(UI_DIR)/package.json),yes,no)
 HAS_E2E := $(if $(wildcard $(E2E_DIR)/pytest.ini),yes,no)
@@ -41,7 +45,7 @@ UI_TEST_TARGETS += test-ui-e2e
 endif
 endif
 
-ALL_TEST_TARGETS := test-backend
+ALL_TEST_TARGETS := test-backend test-release
 
 ifneq ($(HAS_UI),no)
 ALL_TEST_TARGETS += test-ui
@@ -53,13 +57,17 @@ ALL_TEST_TARGETS += test-stress-python
 endif
 endif
 
-.PHONY: help test test-backend test-ui test-ui-unit test-ui-e2e test-playwright test-e2e test-e2e-python test-stress test-stress-python lint format lint-ui format-ui $(PYTHON_TEST_TARGETS) $(PYTHON_LINT_TARGETS) $(PYTHON_FORMAT_TARGETS)
+.PHONY: help test test-backend test-release test-release-pytest test-release-smoke test-release-safety lint-release format-release test-ui test-ui-unit test-ui-e2e test-playwright test-e2e test-e2e-python test-stress test-stress-python lint format lint-ui format-ui $(PYTHON_TEST_TARGETS) $(PYTHON_LINT_TARGETS) $(PYTHON_FORMAT_TARGETS)
 
 help: ## List available targets
 	@printf "\nAvailable targets:\n\n"
 	@printf "  %-22s %s\n" "help" "List available targets"
 	@printf "  %-22s %s\n" "test" "Run backend and default UI suites (E2E=1, STRESS=1 to opt in)"
 	@printf "  %-22s %s\n" "test-backend" "Run pytest for all Python backend services"
+	@printf "  %-22s %s\n" "test-release" "Run release packaging tests (inventory, installer, smoke, safety)"
+	@printf "  %-22s %s\n" "test-release-pytest" "Run release packaging unit tests"
+	@printf "  %-22s %s\n" "test-release-smoke" "Build and smoke test the release artifact"
+	@printf "  %-22s %s\n" "test-release-safety" "Run release builder destructive-safety tests"
 	@if [ "$(HAS_UI)" != "no" ]; then printf "  %-22s %s\n" "test-ui" "Run UI Vitest suite (set E2E=1 to include Playwright)"; fi
 	@if [ "$(HAS_UI)" != "no" ]; then printf "  %-22s %s\n" "test-ui-unit" "Run UI Vitest suite"; fi
 	@if [ "$(HAS_E2E)" != "no" ]; then printf "  %-22s %s\n" "test-e2e" "Run Python and browser end-to-end suites"; fi
@@ -82,6 +90,28 @@ test: $(ALL_TEST_TARGETS) ## Run all available test suites
 
 test-backend: $(PYTHON_TEST_TARGETS) ## Run pytest for all Python backend services
 
+test-release: test-release-pytest test-release-smoke test-release-safety ## Run every release packaging check
+
+test-release-pytest: ## Run release packaging and installer entrypoint unit tests
+	@echo "==> Running release packaging unit tests"
+	@$(RELEASE_PYTEST_CMD) $(RELEASE_PYTEST_ARGS) $(RELEASE_TEST_DIRS)
+
+test-release-smoke: ## Build the release artifact and smoke test the extracted package
+	@echo "==> Building and smoke testing the release package"
+	@bash tests/test-release-package-smoke.sh $(RELEASE_SMOKE_ARGS)
+
+test-release-safety: ## Assert the release builder never deletes caller data
+	@echo "==> Running release package destructive-safety tests"
+	@bash tests/test-build-release-package-safety.sh
+
+lint-release: ## Lint the release packaging tooling
+	@ruff check scripts/release_inventory.py scripts/release_docs.py tests/release installer/tests
+	@shellcheck scripts/build-release-package.sh scripts/package-offline-installer.sh installer/run.sh \
+		tests/test-release-package-smoke.sh tests/test-build-release-package-safety.sh
+
+format-release: ## Format the release packaging tooling
+	@ruff format scripts/release_inventory.py scripts/release_docs.py tests/release installer/tests
+
 test-ui: $(UI_TEST_TARGETS) ## Run UI Vitest suite; include Playwright with E2E=1
 
 test-e2e: test-e2e-python test-ui-e2e ## Run Python and browser end-to-end suites
@@ -90,9 +120,9 @@ test-playwright: test-ui-e2e ## Alias for Playwright end-to-end tests
 
 test-stress: test-stress-python ## Alias for Python stress tests
 
-lint: $(PYTHON_LINT_TARGETS) $(UI_LINT_TARGETS) ## Run Ruff and ESLint
+lint: $(PYTHON_LINT_TARGETS) $(UI_LINT_TARGETS) lint-release ## Run Ruff and ESLint
 
-format: $(PYTHON_FORMAT_TARGETS) $(UI_FORMAT_TARGETS) ## Run Ruff format and Prettier
+format: $(PYTHON_FORMAT_TARGETS) $(UI_FORMAT_TARGETS) format-release ## Run Ruff format and Prettier
 
 test-ui-unit: ## Run UI Vitest suite
 	@echo "==> Running UI unit tests (Vitest)"

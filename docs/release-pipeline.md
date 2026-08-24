@@ -25,6 +25,7 @@ All feature work happens on branches created from `dev`.
   - Change detection (skips tests for docs-only changes)
   - Unit tests for all six services (document-indexer, solr-search, aithena-ui, admin, document-lister, embeddings-server)
   - Python lint (ruff)
+  - Release package tests (inventory, builder safety, artifact smoke test) — always run, including for docs-only changes, because the archive ships documentation
   - Gate job: `All tests passed` (required status check)
 
 ### Stage 2: Release Preparation PR to `dev`
@@ -64,7 +65,7 @@ git push origin v1.2.3
   1. **Tag format validation** — must match `vX.Y.Z` (stable semver, no pre-release)
   2. **Main branch validation** — verifies the tagged commit is reachable from `main` via the GitHub API. Tags on any other branch (e.g., `dev`, feature branches) are **rejected**
   3. **Docker image build and push** — all six service images pushed to GitHub Container Registry (ghcr.io) with semver tags
-  4. **Release package** — production Docker Compose config, installer scripts, and documentation packaged as a tarball with SHA256 checksum
+  4. **Release package** — `scripts/build-release-package.sh` builds the source release archive (`aithena-<version>.tar.gz`, archive root `aithena-<version>/`) from the Compose-derived inventory, then the packaging job re-runs the release unit, safety and smoke tests against the real artifact. See [Release packaging](deployment/release-packaging.md).
   5. **GitHub Release** — created with auto-generated notes and the release package attached
 
 ## Enforcement Rules
