@@ -319,7 +319,7 @@ docker exec embeddings-server ls -la /usr/lib/wsl | head -10
 | Check | Fix |
 |-------|-----|
 | `clinfo` shows no devices | Run steps 3–4 above (install GPU repositories and runtime) |
-| `/dev/dxg` not in container | Verify docker-compose override is being used: `docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml config \| grep -A5 devices` |
+| `/dev/dxg` not in container | Verify docker-compose override is being used: `docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml config \| grep -A5 devices` |
 | `/usr/lib/wsl` is empty or missing | Mount is not present; check override file has `volumes: - /usr/lib/wsl:/usr/lib/wsl:ro` |
 | Permission denied on `/dev/dxg` | Run Docker daemon as root or configure group access (complex in WSL2; normally not required) |
 
@@ -427,7 +427,7 @@ docker compose restart embeddings-server
 
 3. If not present, ensure the command includes the override:
    ```bash
-   docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml config | ...
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml config | ...
    ```
 
 4. Alternatively, set environment explicitly:
@@ -491,10 +491,10 @@ If GPU issues become blocking:
 
 ```bash
 # Remove the override — runs on CPU
-docker compose -f docker/compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 
 # Or explicitly:
-DEVICE=cpu docker compose -f docker/compose.prod.yml up -d
+DEVICE=cpu docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 CPU mode is always stable and requires no GPU driver setup.

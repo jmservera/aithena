@@ -298,7 +298,7 @@ Quick reference:
 2. Run `wsl --update` to ensure latest WSL2 kernel
 3. Inside WSL, add Intel GPU repositories and install runtime packages
 4. Verify: `clinfo | head -20` should show your Intel GPU
-5. Use the Intel override: `docker compose -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
+5. Use the Intel override: `docker compose -f docker-compose.yml -f docker/compose.prod.yml -f docker/compose.gpu-intel.yml up -d`
 
 ### Verification
 
@@ -3858,8 +3858,8 @@ When no RC number is specified, the workflow queries ghcr.io for existing RC tag
 Pull and start the RC stack using the production Compose file:
 
 ```bash
-VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml pull
-VERSION=1.16.0-rc.1 docker compose -f docker/compose.prod.yml up -d
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.yml -f docker/compose.prod.yml pull
+VERSION=1.16.0-rc.1 docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
 ```
 
 Substitute `1.16.0-rc.1` with the actual RC tag you want to test. The `VERSION` environment variable overrides the image tag used by the production Compose file.
@@ -3881,12 +3881,12 @@ If an RC reveals a blocking issue:
 
 1. Stop the RC stack:
    ```bash
-   docker compose -f docker/compose.prod.yml down
+   docker compose -f docker-compose.yml -f docker/compose.prod.yml down
    ```
 2. Pull and restart the previous release:
    ```bash
-   VERSION=1.15.0 docker compose -f docker/compose.prod.yml pull
-   VERSION=1.15.0 docker compose -f docker/compose.prod.yml up -d
+   VERSION=1.15.0 docker compose -f docker-compose.yml -f docker/compose.prod.yml pull
+   VERSION=1.15.0 docker compose -f docker-compose.yml -f docker/compose.prod.yml up -d
    ```
 
 ### HF_TOKEN security note

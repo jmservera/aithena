@@ -43,6 +43,11 @@ done
 
 PYTHON_SERVICES=(document-indexer document-lister embeddings-server solr-search admin)
 NODE_SERVICES=(aithena-ui)
+# Pseudo-services that live outside src/ but still have deterministic gates.
+PSEUDO_SERVICES=(release-packaging)
+
+# Paths that make the release packaging gate relevant.
+RELEASE_PATH_PATTERN='^(scripts/(release_inventory\.py|release_docs\.py|build-release-package\.sh|package-offline-installer\.sh)|installer/|tests/release/|tests/test-release-package-smoke\.sh|tests/test-build-release-package-safety\.sh|docker-compose\.yml|docker/compose\..*\.yml|pytest\.ini|Makefile|README\.md|docs/)' 
 
 # Determine which services have changes (staged or unstaged vs origin/dev)
 changed_services() {
@@ -73,6 +78,10 @@ changed_services() {
     done
   fi
 
+  if echo "$changed_files" | grep -qE "$RELEASE_PATH_PATTERN"; then
+    services+=(release-packaging)
+  fi
+
   echo "${services[@]}"
 }
 
@@ -80,7 +89,7 @@ changed_services() {
 if [ ${#SPECIFIC_SERVICES[@]} -gt 0 ]; then
   TARGETS=("${SPECIFIC_SERVICES[@]}")
 elif [ "$CHECK_ALL" = true ]; then
-  TARGETS=("${PYTHON_SERVICES[@]}" "${NODE_SERVICES[@]}")
+  TARGETS=("${PYTHON_SERVICES[@]}" "${NODE_SERVICES[@]}" "${PSEUDO_SERVICES[@]}")
 else
   read -ra TARGETS <<< "$(changed_services)"
 fi
@@ -136,6 +145,49 @@ check_python_service() {
   else
     SKIPPED+=("$svc: pytest (no pyproject.toml)")
   fi
+}
+
+# Release packaging checks (issue #1854 acceptance gates)
+check_release_packaging() {
+  local python_targets=(
+    scripts/release_inventory.py
+    scripts/release_docs.py
+    tests/release
+    installer/tests
+  )
+  local shell_targets=(
+    installer/run.sh
+    scripts/build-release-package.sh
+    scripts/package-offline-installer.sh
+    tests/test-release-package-smoke.sh
+    tests/test-build-release-package-safety.sh
+  )
+
+  # The documented installer entrypoint is installer/run.sh — there is no
+  # installer/install.sh, and the gate must never look for one.
+  if [ -x installer/run.sh ]; then
+    echo -e "${GREEN}  ✅ installer entrypoint present: installer/run.sh${NC}"
+  else
+    echo -e "${RED}  ❌ missing executable installer entrypoint: installer/run.sh${NC}"
+    FAILURES+=("release-packaging: installer/run.sh missing or not executable")
+  fi
+
+  run_check "release-packaging: ruff check" ruff check "${python_targets[@]}"
+  run_check "release-packaging: ruff format --check" ruff format --check "${python_targets[@]}"
+
+  if command -v shellcheck > /dev/null 2>&1; then
+    run_check "release-packaging: shellcheck" shellcheck "${shell_targets[@]}"
+  else
+    SKIPPED+=("release-packaging: shellcheck (not installed)")
+  fi
+
+  if [ "$LINT_ONLY" = true ]; then
+    return
+  fi
+
+  run_check "release-packaging: pytest" pytest --tb=short -q tests/release installer/tests/test_run_sh.py
+  run_check "release-packaging: builder safety" bash tests/test-build-release-package-safety.sh
+  run_check "release-packaging: artifact smoke" bash tests/test-release-package-smoke.sh
 }
 
 # Node service checks
@@ -194,6 +246,8 @@ for svc in "${TARGETS[@]}"; do
     check_python_service "$svc"
   elif [[ " ${NODE_SERVICES[*]} " =~ " $svc " ]]; then
     check_node_service "$svc"
+  elif [ "$svc" = "release-packaging" ]; then
+    check_release_packaging
   else
     echo -e "${RED}  Unknown service: $svc${NC}"
     FAILURES+=("Unknown service: $svc")
