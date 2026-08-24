@@ -665,7 +665,10 @@ if [[ "${#PACKAGE_DOCKERFILES[@]}" -eq 0 ]]; then
   error "No Dockerfiles discovered from compose build contexts."
   exit 1
 fi
-python3 "$RELEASE_INVENTORY" --check-root "$REPO_ROOT" "${compose_files[@]}"
+if ! python3 "$RELEASE_INVENTORY" --check-root "$REPO_ROOT" "${compose_files[@]}"; then
+  error "Compose build-context Dockerfile validation failed."
+  exit 1
+fi
 
 step "Discovering images from docker compose"
 mapfile -t DISCOVERED_IMAGES < <(compose_env "${compose_args[@]}" config --images | sort -u)

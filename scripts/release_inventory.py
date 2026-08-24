@@ -9,13 +9,13 @@ import sys
 from pathlib import Path
 
 
-def _norm(path: str) -> str | None:
+def _norm(path: str, *, allow_current: bool = True) -> str | None:
     """Return a safe repository-relative path, or None for absolute/escaping paths."""
     if os.path.isabs(path):
         return None
     normalized = os.path.normpath(path).replace(os.sep, "/")
     if normalized == ".":
-        return "."
+        return "." if allow_current else None
     if normalized.startswith("../") or normalized == "..":
         return None
     return normalized.removeprefix("./")
@@ -94,7 +94,7 @@ def dockerfiles_for_compose(compose_files: list[Path]) -> list[str]:
             context = _norm(build.get("context", "."))
             if context is None:
                 continue
-            dockerfile = _norm(build.get("dockerfile", "Dockerfile"))
+            dockerfile = _norm(build.get("dockerfile", "Dockerfile"), allow_current=False)
             if dockerfile is None:
                 continue
             dockerfile_path = _norm(str(Path(context) / dockerfile))

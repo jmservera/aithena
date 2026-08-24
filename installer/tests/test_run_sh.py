@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -71,8 +72,12 @@ def test_run_sh_continues_to_next_python_candidate(tmp_path: Path):
 
 
 def test_run_sh_fails_actionably_after_all_candidates_exhausted(tmp_path: Path):
-    (tmp_path / "dirname").symlink_to("/usr/bin/dirname")
-    (tmp_path / "cat").symlink_to("/usr/bin/cat")
+    dirname = shutil.which("dirname")
+    cat = shutil.which("cat")
+    assert dirname is not None
+    assert cat is not None
+    (tmp_path / "dirname").symlink_to(dirname)
+    (tmp_path / "cat").symlink_to(cat)
     _write_executable(
         tmp_path / "python3",
         "#!/usr/bin/env bash\n"
