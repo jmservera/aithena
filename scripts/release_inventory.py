@@ -29,6 +29,7 @@ def _strip_value(value: str) -> str:
 
 
 def _iter_builds(compose_file: Path) -> list[dict[str, str]]:
+    """Extract build mappings using the small Compose subset needed by release tests."""
     builds: list[dict[str, str]] = []
     lines = compose_file.read_text(encoding="utf-8").splitlines()
     in_services = False
