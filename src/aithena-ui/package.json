@@ -19,7 +19,7 @@
     "lucide-react": "^1.17.0",
     "react": "19.2.7",
     "react-dom": "^19.2.7",
-    "react-intl": "^10.1.1",
+    "react-intl": "^10.1.13",
     "react-router-dom": "^7.13.2"
   },
   "devDependencies": {
