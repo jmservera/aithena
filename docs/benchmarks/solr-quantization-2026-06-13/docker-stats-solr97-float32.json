@@ -1,0 +1,87 @@
+{
+  "timestamp": "2026-06-12T22:30:00Z",
+  "solr_version": "9.7.0",
+  "quantization": "float32",
+  "stats": [
+    {
+      "container": "aithena-document-indexer-1",
+      "cpu": "0.00%",
+      "mem_usage": "137.2MiB / 2GiB",
+      "mem_perc": "6.70%",
+      "net_io": "210MB / 289MB",
+      "block_io": "27.6MB / 0B"
+    },
+    {
+      "container": "aithena-aithena-ui-1",
+      "cpu": "0.00%",
+      "mem_usage": "7.414MiB / 256MiB",
+      "mem_perc": "2.90%",
+      "net_io": "6.38kB / 126B",
+      "block_io": "2.28MB / 4.1kB"
+    },
+    {
+      "container": "aithena-solr-search-1",
+      "cpu": "0.11%",
+      "mem_usage": "79MiB / 512MiB",
+      "mem_perc": "15.43%",
+      "net_io": "3.12MB / 3.54MB",
+      "block_io": "27.4MB / 0B"
+    },
+    {
+      "container": "aithena-solr-1",
+      "cpu": "0.27%",
+      "mem_usage": "1.047GiB / 2GiB",
+      "mem_perc": "52.37%",
+      "net_io": "303MB / 31.9MB",
+      "block_io": "124MB / 925MB"
+    },
+    {
+      "container": "aithena-document-lister-1",
+      "cpu": "0.02%",
+      "mem_usage": "56.58MiB / 256MiB",
+      "mem_perc": "22.10%",
+      "net_io": "707MB / 181MB",
+      "block_io": "20.5MB / 107MB"
+    },
+    {
+      "container": "aithena-redis-commander-1",
+      "cpu": "0.00%",
+      "mem_usage": "31.77MiB / 256MiB",
+      "mem_perc": "12.41%",
+      "net_io": "589kB / 485kB",
+      "block_io": "7.91MB / 0B"
+    },
+    {
+      "container": "aithena-redis-1",
+      "cpu": "0.44%",
+      "mem_usage": "18.06MiB / 512MiB",
+      "mem_perc": "3.53%",
+      "net_io": "183MB / 557MB",
+      "block_io": "11.5MB / 163MB"
+    },
+    {
+      "container": "aithena-rabbitmq-1",
+      "cpu": "0.36%",
+      "mem_usage": "120.8MiB / 1GiB",
+      "mem_perc": "11.80%",
+      "net_io": "2.12MB / 2.15MB",
+      "block_io": "33.1MB / 229kB"
+    },
+    {
+      "container": "aithena-zoo1-1",
+      "cpu": "0.08%",
+      "mem_usage": "421.4MiB / 512MiB",
+      "mem_perc": "82.31%",
+      "net_io": "26.6MB / 38.9MB",
+      "block_io": "28.5MB / 50.8MB"
+    },
+    {
+      "container": "aithena-embeddings-server-1",
+      "cpu": "0.11%",
+      "mem_usage": "1.958GiB / 3GiB",
+      "mem_perc": "65.26%",
+      "net_io": "22.2MB / 205MB",
+      "block_io": "1.13GB / 0B"
+    }
+  ]
+}

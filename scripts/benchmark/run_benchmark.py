@@ -417,6 +417,7 @@ def run_benchmark(
     timeout: float = 30.0,
     token: str | None = None,
     run_metadata: dict[str, Any] | None = None,
+    delay: float = 0.0,
 ) -> BenchmarkReport:
     """Execute the full benchmark suite and return a report."""
     queries = load_queries(queries_path)
@@ -451,6 +452,9 @@ def run_benchmark(
                 token=token,
             )
             report.results.append(result)
+
+            if delay > 0:
+                time.sleep(delay)
 
     report.summary = compute_summary(report.results)
     return report
@@ -507,6 +511,12 @@ def main() -> None:
         help="Bearer token for authenticated APIs (default: none)",
     )
     parser.add_argument("--run-label", help="Human-readable run label, e.g. solr9-float32")
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.5,
+        help="Delay in seconds between queries (default: 0.5)",
+    )
     parser.add_argument("--solr-version", help="Solr version under test, e.g. 9.7 or 10.0")
     parser.add_argument(
         "--vector-quantization-mode",
@@ -554,6 +564,7 @@ def main() -> None:
         timeout=args.timeout,
         token=args.token,
         run_metadata=run_metadata,
+        delay=args.delay,
     )
 
     # Human-readable summary to stdout

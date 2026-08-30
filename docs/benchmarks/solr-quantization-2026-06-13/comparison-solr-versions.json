@@ -1,0 +1,121 @@
+{
+  "solr9_report": "/tmp/benchmark-solr97-float32.json",
+  "solr10_report": "/tmp/benchmark-solr10-float32.json",
+  "evidence": {
+    "valid": false,
+    "failures": [
+      "missing_corpus_metadata",
+      "solr9_version_mismatch",
+      "missing_vector_quantization_mode"
+    ],
+    "solr9_host": {
+      "node": "jmsquad-1",
+      "system": "Linux",
+      "release": "6.17.0-1011-azure",
+      "machine": "x86_64",
+      "processor": "x86_64"
+    },
+    "solr10_host": {
+      "node": "jmsquad-1",
+      "system": "Linux",
+      "release": "6.17.0-1011-azure",
+      "machine": "x86_64",
+      "processor": "x86_64"
+    },
+    "solr9_corpus": {},
+    "solr10_corpus": {
+      "id": "benchmark-20260612T205519Z",
+      "document_count": 1502,
+      "bytes": 21440935
+    },
+    "expected_solr9_version": "9.7",
+    "expected_solr10_version": "10",
+    "solr9_version": null,
+    "solr10_version": "10.0",
+    "solr9_vector_quantization_mode": null,
+    "solr10_vector_quantization_mode": "none"
+  },
+  "mode_comparisons": [
+    {
+      "mode": "hybrid",
+      "solr9_query_count": 30,
+      "solr10_query_count": 30,
+      "solr9_error_count": 0,
+      "solr10_error_count": 0,
+      "solr9_mean_latency_ms": 101.0563,
+      "solr10_mean_latency_ms": 96.6083,
+      "solr9_p95_latency_ms": 221.01,
+      "solr10_p95_latency_ms": 204.92,
+      "p95_delta_pct": -7.2802
+    },
+    {
+      "mode": "keyword",
+      "solr9_query_count": 30,
+      "solr10_query_count": 30,
+      "solr9_error_count": 0,
+      "solr10_error_count": 0,
+      "solr9_mean_latency_ms": 51.0423,
+      "solr10_mean_latency_ms": 46.335,
+      "solr9_p95_latency_ms": 120.61,
+      "solr10_p95_latency_ms": 152.75,
+      "p95_delta_pct": 26.6479
+    },
+    {
+      "mode": "semantic",
+      "solr9_query_count": 30,
+      "solr10_query_count": 30,
+      "solr9_error_count": 0,
+      "solr10_error_count": 0,
+      "solr9_mean_latency_ms": 70.5693,
+      "solr10_mean_latency_ms": 69.0353,
+      "solr9_p95_latency_ms": 101.18,
+      "solr10_p95_latency_ms": 94.1,
+      "p95_delta_pct": -6.9974
+    }
+  ],
+  "resource_comparison": {
+    "solr9_memory_bytes": null,
+    "solr10_memory_bytes": null,
+    "memory_reduction_factor": null,
+    "solr9_startup_seconds": null,
+    "solr10_startup_seconds": null,
+    "startup_speedup_factor": null,
+    "solr9_index_build_seconds": null,
+    "solr10_index_build_seconds": null,
+    "indexing_speedup_factor": null,
+    "solr9_vector_indexing_seconds": null,
+    "solr10_vector_indexing_seconds": null,
+    "vector_indexing_speedup_factor": null,
+    "solr9_throughput_qps": null,
+    "solr10_throughput_qps": null,
+    "throughput_factor": null,
+    "solr9_concurrency": null,
+    "solr10_concurrency": null,
+    "solr9_vector_quantization_mode": null,
+    "solr10_vector_quantization_mode": "none"
+  },
+  "claims": {
+    "memory_4x": {
+      "factor": null,
+      "status": "insufficient_evidence",
+      "target_factor": 4.0
+    },
+    "indexing_40x": {
+      "factor": null,
+      "status": "insufficient_evidence",
+      "target_factor": 40.0
+    }
+  },
+  "regressions": [
+    {
+      "type": "latency_p95",
+      "mode": "keyword",
+      "delta_pct": 26.6479,
+      "threshold_pct": 20.0
+    }
+  ],
+  "failed_query_ids": {
+    "solr9": [],
+    "solr10": []
+  }
+}
