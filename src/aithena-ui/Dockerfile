@@ -22,7 +22,7 @@ ENV VERSION=${VERSION} \
 RUN npm run build
 
 # ---------- runtime stage ----------
-FROM nginx:1.31.1-alpine AS runtime
+FROM nginx:1.31.5-alpine AS runtime
 
 ARG VERSION
 ARG GIT_COMMIT
